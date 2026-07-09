@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            w.id,\n            w.workspace_id,\n            w.name,\n            w.endpoint_url,\n            w.signing_secret,\n            w.headers,\n            w.status,\n            w.is_valid,\n            w.created_by_user_id,\n            w.created_at,\n            w.updated_at,\n            w.deleted_at,\n            w.rule\n        FROM webhook w\n        WHERE w.id = $1\n          AND w.deleted_at IS NULL\n        ",
+  "query": "\n        SELECT\n            w.id,\n            w.workspace_id,\n            w.name,\n            w.endpoint_url,\n            w.signing_secret,\n            w.headers,\n            w.status,\n            w.is_valid,\n            w.created_by_user_id,\n            w.created_at,\n            w.updated_at,\n            w.deleted_at,\n            w.filters\n        FROM webhook w\n        WHERE w.id = $1\n          AND w.deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       },
       {
         "ordinal": 12,
-        "name": "rule",
+        "name": "filters",
         "type_info": "Jsonb"
       }
     ],
@@ -90,5 +90,5 @@
       false
     ]
   },
-  "hash": "848c7af0d60329aaee7bca5ad6c771d971197200816018eabb15ae456a448b1d"
+  "hash": "cc37bd1f7c61dc4f15e72880577d363ca24b1abe3c8cd286735a26db5bc856d5"
 }

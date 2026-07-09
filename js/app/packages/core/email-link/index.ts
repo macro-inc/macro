@@ -6,7 +6,12 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
-import { emailClient, SHARED_INBOX_CONFLICT_CODE } from '@service-email/client';
+import {
+  ALREADY_INITIALIZED_CODE,
+  emailClient,
+  NO_GMAIL_GRANT_CODE,
+  SHARED_INBOX_CONFLICT_CODE,
+} from '@service-email/client';
 import type {
   ListLinksResponse,
   ResyncResponse,
@@ -38,6 +43,8 @@ export function useEmailLinksStatus() {
 type EmailInitError =
   /** The email link has already been initialized*/
   | { tag: 'AlreadyInitialized' }
+  /** No Gmail grant to provision from — scope declined at consent or grant removed. */
+  | { tag: 'NoGmailGrant' }
   /** The mailbox is already connected by another user; confirm to share it. */
   | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
   | { tag: 'FailedToInitialize'; message: string };
@@ -90,11 +97,12 @@ function initEmailLink(args?: {
         };
         return err<void, EmailInitError>(conflictError);
       }
-      const badRequestError = initResult.error.find(
-        // TODO: this is cope but seems like error.code not being set correctly
-        (e) => e.message.includes('400')
-      );
-      const error: EmailInitError = badRequestError
+      if (initResult.error.some((e) => e.code === NO_GMAIL_GRANT_CODE)) {
+        return err<void, EmailInitError>({ tag: 'NoGmailGrant' });
+      }
+      const error: EmailInitError = initResult.error.some(
+        (e) => e.code === ALREADY_INITIALIZED_CODE
+      )
         ? { tag: 'AlreadyInitialized' }
         : { tag: 'FailedToInitialize', message: 'Failed to initialize' };
       return err<void, EmailInitError>(error);

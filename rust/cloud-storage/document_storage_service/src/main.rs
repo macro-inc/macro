@@ -589,6 +589,29 @@ async fn main() -> anyhow::Result<()> {
         webhook_service,
         webhook_rate_limiter,
     );
+
+    // Webhook event ingestion: consume document and channel broker events and
+    // fan them out to matching webhooks (per-event handlers are stubs for now).
+    let webhook_ingestion_service =
+        webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
+            entity_access_service.clone(),
+        );
+    let webhook_consumer_brokers = config.kafka_brokers.as_ref().to_string();
+    tokio::spawn(async move {
+        loop {
+            if let Err(e) = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
+                &webhook_consumer_brokers,
+                webhook_ingestion_service.clone(),
+                std::future::pending::<()>(),
+            )
+            .await
+            {
+                tracing::error!(error = ?e, "webhook event consumer exited");
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    });
+
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved.

@@ -1,11 +1,144 @@
 //! Domain models for properties.
 
+use entity_access::domain::models::{
+    AccessLevel, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
+
+/// Map a properties entity type onto the entity type used by the access
+/// control system. Tasks are stored as documents, so the mapping collapses
+/// Task into Document; [`PropertiesAccessReceipt`] preserves the original type.
+pub fn access_entity_type(entity_type: EntityType) -> AccessEntityType {
+    match entity_type {
+        EntityType::Document => AccessEntityType::Document,
+        EntityType::Chat => AccessEntityType::Chat,
+        EntityType::Project => AccessEntityType::Project,
+        EntityType::Thread => AccessEntityType::EmailThread,
+        EntityType::Channel => AccessEntityType::Channel,
+        // Tasks are stored as documents, so they share document permissions.
+        EntityType::Task => AccessEntityType::Document,
+        // CRM company access is resolved from the owning team's membership.
+        EntityType::Company => AccessEntityType::CrmCompany,
+        EntityType::User => AccessEntityType::User,
+    }
+}
+
+/// Proof that a caller holds (at least) permission `T` on one entity.
+///
+/// Wraps the [`EntityAccessReceipt`] minted by the permission adapter together
+/// with the original properties entity type, which the access-control mapping
+/// loses (Task maps to Document). Every entity-scoped
+/// [`PropertiesService`](super::service::PropertiesService) method takes one of
+/// these, so an unchecked call cannot compile.
+#[derive(Debug, Clone)]
+pub struct PropertiesAccessReceipt<T: RequiredPermission> {
+    receipt: EntityAccessReceipt<T>,
+    entity_id: String,
+    entity_type: EntityType,
+}
+
+/// Proof of view (or better) access to one entity.
+pub type ViewReceipt = PropertiesAccessReceipt<ViewAccessLevel>;
+/// Proof of edit (or better) access to one entity.
+pub type EditReceipt = PropertiesAccessReceipt<EditAccessLevel>;
+
+impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
+    /// Wrap a minted access receipt, keeping the original properties entity
+    /// type. Only the permission adapter constructs these.
+    pub(crate) fn new(receipt: EntityAccessReceipt<T>, entity_type: EntityType) -> Self {
+        let entity_id = receipt.entity().entity_id.clone();
+        Self {
+            receipt,
+            entity_id,
+            entity_type,
+        }
+    }
+
+    /// The entity this receipt grants access to.
+    pub fn entity_id(&self) -> &str {
+        &self.entity_id
+    }
+
+    /// The properties entity type this receipt grants access to.
+    pub fn entity_type(&self) -> EntityType {
+        self.entity_type
+    }
+
+    /// How the caller was authenticated.
+    pub fn auth(&self) -> &EntityAccessAuth {
+        self.receipt.auth()
+    }
+
+    /// The authenticated user this receipt was minted for, if any
+    /// (`None` for internal and anonymous-public access).
+    pub fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self.receipt.auth() {
+            EntityAccessAuth::Authenticated(user) => Some(user),
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+        }
+    }
+
+    /// Dangerously mint a receipt for an internal (service-to-service or
+    /// worker) caller without an access check.
+    /// **NOTE** Use only for machine flows that operate outside a user
+    /// session; never to bypass a user's permission check.
+    pub fn dangerously_assert_internal(entity_id: &str, entity_type: EntityType) -> Self {
+        Self {
+            receipt: EntityAccessReceipt::dangerously_assert_internal_user(
+                entity_id,
+                access_entity_type(entity_type),
+            ),
+            entity_id: entity_id.to_string(),
+            entity_type,
+        }
+    }
+
+    /// Dangerously mint a receipt for an authenticated user without the
+    /// underlying access check. **NOTE** Intended for tests, and for callers
+    /// that have already verified the user's access to the entity through
+    /// another authoritative seam (e.g. a CRM team-scoped listing) — never as
+    /// a way to skip a check that hasn't happened.
+    pub fn dangerously_assert_authenticated_user(
+        user_id: MacroUserIdStr<'static>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Self {
+        Self {
+            receipt: EntityAccessReceipt::dangerously_assert_authenticated_user(
+                user_id,
+                entity_id,
+                access_entity_type(entity_type),
+            ),
+            entity_id: entity_id.to_string(),
+            entity_type,
+        }
+    }
+
+    /// Mint a receipt from a resolved permission, validating it satisfies `T`.
+    /// Only the permission adapter constructs these.
+    pub(crate) fn try_from_permission(
+        auth: EntityAccessAuth,
+        entity_id: &str,
+        entity_type: EntityType,
+        access_level: AccessLevel,
+    ) -> Result<Self, entity_access::domain::models::AccessError> {
+        let receipt = EntityAccessReceipt::try_new(
+            auth,
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type: access_entity_type(entity_type),
+            },
+            EntityPermission::AccessLevel { access_level },
+        )?;
+        Ok(Self::new(receipt, entity_type))
+    }
+}
 
 /// Key identifying the properties attached to one entity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

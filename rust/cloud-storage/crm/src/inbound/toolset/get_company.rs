@@ -4,7 +4,10 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
-    models::{AccessError, Entity, EntityAccessReceipt, EntityType, ViewAccessLevel},
+    models::{
+        AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType, TeamRole,
+        ViewAccessLevel,
+    },
     ports::EntityAccessService,
 };
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
@@ -202,17 +205,42 @@ where
             .map_err(crm_error)?
             .ok_or_else(|| crm_error(CrmError::CompanyNotFoundForTeam))?;
 
+        // Asserted rather than minted: view access to this company was just
+        // verified above via `get_crm_entity_permission_with_team`.
+        let properties_access =
+            properties::PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+                request_context.user_id.clone(),
+                &company_id,
+                PropertyEntityType::Company,
+            );
         let properties = service_context
             .properties
-            .get_entity_properties_with_definitions(&company_id, PropertyEntityType::Company)
+            .get_entity_properties_with_definitions(&properties_access)
             .await
             .map_err(|e| ToolCallError {
                 description: "failed to load company properties".to_string(),
                 internal_error: e.into(),
             })?;
 
+        // `get_crm_entity_permission_with_team` resolved `team_id` from the
+        // ownership row that granted access, so the caller's membership of
+        // that team is proven; Member is the floor every member satisfies.
+        let team_receipt = EntityAccessReceipt::try_new_authenticated_user(
+            request_context.user_id.clone(),
+            Entity {
+                entity_id: team_id.to_string(),
+                entity_type: EntityType::Team,
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        )
+        .map_err(|e| ToolCallError {
+            description: "failed to verify access to the CRM company".to_string(),
+            internal_error: e.into(),
+        })?;
         let stage_catalog =
-            load_stage_option_catalog(&*service_context.properties, team_id).await?;
+            load_stage_option_catalog(&*service_context.properties, &team_receipt).await?;
         let crm_props = extract_company_crm_props(&properties, &stage_catalog);
 
         let name = record.name.clone();

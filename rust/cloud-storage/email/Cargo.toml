@@ -8,6 +8,7 @@ version = "0.1.0"
 all = [
   "ai_tools",
   "gmail_token",
+  "http_client",
   "inbound",
   "outbound",
   "ports",
@@ -34,6 +35,7 @@ axum = [
   "models_pagination/axum",
 ]
 gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
+http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "dep:email_db_client", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
@@ -70,6 +72,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
+reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

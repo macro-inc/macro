@@ -31,6 +31,13 @@ pub async fn delete_message_with_tx(
         threads::update::sync_thread_calendar_flag(&mut *tx, message.thread_db_id).await?;
     }
 
+    // Callers that skip the metadata recompute (draft discard) still need
+    // is_signal refreshed — the deleted message may have been the thread's
+    // only signal message, and macro drafts get no Gmail echo.
+    if !deleted_thread && !update_thread_metadata {
+        threads::update::sync_thread_signal_flag(&mut *tx, message.thread_db_id).await?;
+    }
+
     if deleted_thread {
         Ok(Some(message.thread_db_id))
     } else {

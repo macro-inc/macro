@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { CreateWebhookRequestHeaders } from './createWebhookRequestHeaders';
+import type { Vec } from './vec';
 import type { WebhookScope } from './webhookScope';
 
 /**
@@ -13,11 +15,11 @@ import type { WebhookScope } from './webhookScope';
 export interface CreateWebhookRequest {
   /** HTTPS endpoint URL. */
   endpoint_url: string;
+  /** Typed filters used to match events and optional entity ids. */
+  filters: Vec;
   headers?: CreateWebhookRequestHeaders;
   /** Display name. */
   name: string;
-  /** Rule definition used to match events. */
-  rule: unknown;
   /** Scope that owns the webhook. */
   scope: WebhookScope;
 }

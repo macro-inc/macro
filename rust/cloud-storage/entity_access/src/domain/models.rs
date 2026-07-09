@@ -281,9 +281,10 @@ pub struct EntityAccessReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> EntityAccessReceipt<T> {
-    /// Creates an access receipt for an authenticated user after validating the provided permission.
-    pub fn try_new_authenticated_user(
-        user_id: MacroUserIdStr<'static>,
+    /// Creates an access receipt for the given auth after validating the
+    /// provided permission against the required level `T`.
+    pub fn try_new(
+        auth: EntityAccessAuth,
         entity: Entity,
         entity_permission: EntityPermission,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -292,11 +293,24 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
         }
 
         Ok(EntityAccessReceipt {
-            auth: EntityAccessAuth::Authenticated(user_id),
+            auth,
             entity,
             entity_permission,
             _marker: PhantomData,
         })
+    }
+
+    /// Creates an access receipt for an authenticated user after validating the provided permission.
+    pub fn try_new_authenticated_user(
+        user_id: MacroUserIdStr<'static>,
+        entity: Entity,
+        entity_permission: EntityPermission,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Self::try_new(
+            EntityAccessAuth::Authenticated(user_id),
+            entity,
+            entity_permission,
+        )
     }
 
     /// get the authenticated user or error

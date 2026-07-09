@@ -168,16 +168,6 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <span class="ph-no-capture text-ink-extra-muted text-xs">
-              <ProjectBreadCrumb
-                entity={entity()}
-                onClick={props.onProjectClick}
-              />
-            </span>
-          )}
-        </Show>
         <Show
           when={
             props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
@@ -246,6 +236,16 @@ export function WideLayout(props: LayoutProps) {
               entityType={EntityType.CHAT}
               properties={entity().properties}
             />
+          )}
+        </Show>
+        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <span class="ph-no-capture text-ink-extra-muted text-xs">
+              <ProjectBreadCrumb
+                entity={entity()}
+                onClick={props.onProjectClick}
+              />
+            </span>
           )}
         </Show>
       </Entity.Slot>

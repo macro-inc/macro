@@ -72,6 +72,21 @@ function emailFetch<T extends ObjectLike = never>(
  */
 export const SHARED_INBOX_CONFLICT_CODE = 'SHARED_INBOX_CONFLICT' as const;
 
+/** Error code `init` returns (HTTP 400) when the inbox is already provisioned. */
+export const ALREADY_INITIALIZED_CODE = 'ALREADY_INITIALIZED' as const;
+
+/**
+ * Error code `init` returns (HTTP 400) when the user holds no Gmail grant to
+ * provision from — the Gmail scope was declined at consent or the grant was
+ * removed. The add-inbox flow re-runs consent and clears it.
+ */
+export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
+
+type InitErrorCode =
+  | typeof SHARED_INBOX_CONFLICT_CODE
+  | typeof ALREADY_INITIALIZED_CODE
+  | typeof NO_GMAIL_GRANT_CODE;
+
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
  * couldn't be fetched/rehosted and would render broken for recipients. The whole
@@ -89,33 +104,43 @@ export const emailClient = {
     const query = params.toString();
     const path = query ? `/email/init?${query}` : '/email/init';
 
-    return fetchWithToken<EmptyResponse, typeof SHARED_INBOX_CONFLICT_CODE>(
-      `${emailHost}${path}`,
-      {
-        method: 'POST',
-        // A custom handler replaces safeFetch's default status mapping, so non-409
-        // statuses fall back to the same HTTP_ERROR shape callers already branch on.
-        errorResponseHandler: async (response) => {
-          if (response.status === 409) {
-            const body = (await response
-              .json()
-              .catch(() => null)) as SharedInboxConflictResponse | null;
-            return {
-              code: SHARED_INBOX_CONFLICT_CODE,
-              // The caller formats the prompt; the fields it needs ride along as JSON.
-              message: JSON.stringify({
-                emailAddress: body?.email_address ?? '',
-                existingOwnerEmail: body?.existing_owner_email ?? '',
-              }),
-            };
-          }
+    return fetchWithToken<EmptyResponse, InitErrorCode>(`${emailHost}${path}`, {
+      method: 'POST',
+      // A custom handler replaces safeFetch's default status mapping. 409 carries
+      // the shared-inbox conflict fields and 400 a machine-readable code; other
+      // statuses fall back to the same HTTP_ERROR shape callers already branch on.
+      errorResponseHandler: async (response) => {
+        if (response.status === 409) {
+          const body = (await response
+            .json()
+            .catch(() => null)) as SharedInboxConflictResponse | null;
           return {
-            code: 'HTTP_ERROR',
-            message: `HTTP error! status: ${response.status}`,
+            code: SHARED_INBOX_CONFLICT_CODE,
+            // The caller formats the prompt; the fields it needs ride along as JSON.
+            message: JSON.stringify({
+              emailAddress: body?.email_address ?? '',
+              existingOwnerEmail: body?.existing_owner_email ?? '',
+            }),
           };
-        },
-      }
-    );
+        }
+        if (response.status === 400) {
+          const body = (await response.json().catch(() => null)) as {
+            code?: string;
+            message?: string;
+          } | null;
+          if (
+            body?.code === ALREADY_INITIALIZED_CODE ||
+            body?.code === NO_GMAIL_GRANT_CODE
+          ) {
+            return { code: body.code, message: body.message ?? '' };
+          }
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
+    });
   },
   async getThread(args: {
     offset?: number;

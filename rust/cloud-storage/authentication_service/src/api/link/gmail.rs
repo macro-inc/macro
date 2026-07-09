@@ -22,7 +22,7 @@ use crate::api::{
 mod test;
 
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
-const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
+pub(in crate::api) const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
 const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic";
 const FREE_INBOX_LIMIT: i64 = 2;
 

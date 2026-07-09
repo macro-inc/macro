@@ -1,6 +1,7 @@
 //! Unit tests for PropertiesServiceImpl using mockall-generated repo.
 
 use super::service_impl::PropertiesServiceImpl;
+use crate::domain::model::{EditReceipt, PropertiesAccessReceipt, ViewReceipt};
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
     service::PropertiesService,
@@ -14,12 +15,41 @@ use models_properties::{
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-/// Creates a mock permission service with default expectations for entity edit permission checks.
+fn caller_user_id() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
+}
+
+/// An edit receipt for the test caller, minted without an access check.
+fn edit_receipt(entity_id: &str, entity_type: EntityType) -> EditReceipt {
+    PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+        caller_user_id(),
+        entity_id,
+        entity_type,
+    )
+}
+
+/// A view receipt for the test caller, minted without an access check.
+fn view_receipt(entity_id: &str, entity_type: EntityType) -> ViewReceipt {
+    PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+        caller_user_id(),
+        entity_id,
+        entity_type,
+    )
+}
+
+/// Creates a mock permission service that mints edit receipts for any entity.
 fn create_mock_permission_service() -> MockPermissionService {
     let mut perm_checker = MockPermissionService::new();
     perm_checker
-        .expect_check_entity_edit_permission()
-        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+        .expect_mint_edit_receipt()
+        .returning(|_, entity_id, entity_type| {
+            let receipt = PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+                caller_user_id(),
+                entity_id,
+                entity_type,
+            );
+            Box::pin(async move { Ok(receipt) })
+        });
     perm_checker
 }
 
@@ -53,11 +83,8 @@ async fn test_set_system_property_status_complete_happy_path() {
         None::<MockNotificationService>,
     );
 
-    let entity_id = "e1";
-    let entity_type = EntityType::Document;
-
     service
-        .set_system_property_status_complete(entity_id, entity_type)
+        .set_system_property_status_complete(&edit_receipt("e1", EntityType::Document))
         .await
         .unwrap();
 
@@ -77,7 +104,7 @@ async fn test_set_system_property_status_complete_error_path() {
     );
 
     let err = service
-        .set_system_property_status_complete("e1", EntityType::Document)
+        .set_system_property_status_complete(&edit_receipt("e1", EntityType::Document))
         .await
         .unwrap_err();
 
@@ -85,8 +112,31 @@ async fn test_set_system_property_status_complete_error_path() {
 }
 
 // ============================================================================
-// link_parent_task unit tests
+// task relationship (Parent Task / Subtasks) unit tests
 // ============================================================================
+
+fn parent_task_value(parent_id: Uuid) -> models_properties::api::requests::SetPropertyValue {
+    models_properties::api::requests::SetPropertyValue::EntityReference {
+        reference: models_properties::shared::EntityReference {
+            entity_type: EntityType::Task,
+            entity_id: parent_id.to_string(),
+            specific_message_id: None,
+        },
+    }
+}
+
+fn subtasks_value(subtask_ids: &[Uuid]) -> models_properties::api::requests::SetPropertyValue {
+    models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+        references: subtask_ids
+            .iter()
+            .map(|id| models_properties::shared::EntityReference {
+                entity_type: EntityType::Task,
+                entity_id: id.to_string(),
+                specific_message_id: None,
+            })
+            .collect(),
+    }
+}
 
 #[tokio::test]
 async fn test_link_parent_task_delegates_to_repo() {
@@ -106,7 +156,11 @@ async fn test_link_parent_task_delegates_to_repo() {
     );
 
     service
-        .link_parent_task(task_id, Some(parent_id))
+        .handle_task_relationship_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(parent_id)),
+        )
         .await
         .unwrap();
 }
@@ -127,7 +181,46 @@ async fn test_link_parent_task_clear_parent() {
         None::<MockNotificationService>,
     );
 
-    service.link_parent_task(task_id, None).await.unwrap();
+    service
+        .handle_task_relationship_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            None,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_link_parent_task_requires_edit_on_parent() {
+    // Linking mutates the parent's Subtasks property, so edit access to the
+    // parent is required: a failed mint on the parent must deny the link and
+    // never touch the repo.
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_link_parent_task().times(0);
+
+    let mut perm_service = MockPermissionService::new();
+    perm_service
+        .expect_mint_edit_receipt()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+
+    let service =
+        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let err = service
+        .handle_task_relationship_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(Uuid::from_u128(0xF00D))),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
 }
 
 #[tokio::test]
@@ -144,16 +237,16 @@ async fn test_link_parent_task_error_propagates() {
     );
 
     let err = service
-        .link_parent_task(Uuid::nil(), Some(Uuid::nil()))
+        .handle_task_relationship_property(
+            &edit_receipt(&Uuid::nil().to_string(), EntityType::Task),
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(Uuid::nil())),
+        )
         .await
         .unwrap_err();
 
     assert_eq!(err.to_string(), "link failed");
 }
-
-// ============================================================================
-// link_subtasks unit tests
-// ============================================================================
 
 #[tokio::test]
 async fn test_link_subtasks_delegates_to_repo() {
@@ -176,7 +269,11 @@ async fn test_link_subtasks_delegates_to_repo() {
     );
 
     service
-        .link_subtasks(task_id, vec![subtask_1, subtask_2])
+        .handle_task_relationship_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::SUBTASKS_UUID,
+            Some(subtasks_value(&[subtask_1, subtask_2])),
+        )
         .await
         .unwrap();
 }
@@ -197,7 +294,43 @@ async fn test_link_subtasks_clear_all() {
         None::<MockNotificationService>,
     );
 
-    service.link_subtasks(task_id, vec![]).await.unwrap();
+    service
+        .handle_task_relationship_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::SUBTASKS_UUID,
+            None,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_link_subtasks_requires_edit_on_subtasks() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_link_subtasks().times(0);
+
+    let mut perm_service = MockPermissionService::new();
+    perm_service
+        .expect_mint_edit_receipt()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+
+    let service =
+        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let err = service
+        .handle_task_relationship_property(
+            &edit_receipt(&task_id.to_string(), EntityType::Task),
+            SystemPropertyKey::SUBTASKS_UUID,
+            Some(subtasks_value(&[Uuid::from_u128(0xF00D)])),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
 }
 
 #[tokio::test]
@@ -213,7 +346,11 @@ async fn test_link_subtasks_error_propagates() {
     );
 
     let err = service
-        .link_subtasks(Uuid::nil(), vec![Uuid::nil()])
+        .handle_task_relationship_property(
+            &edit_receipt(&Uuid::nil().to_string(), EntityType::Task),
+            SystemPropertyKey::SUBTASKS_UUID,
+            Some(subtasks_value(&[Uuid::nil()])),
+        )
         .await
         .unwrap_err();
 
@@ -243,7 +380,7 @@ async fn test_get_property_value_returns_value_when_exists() {
     );
 
     let result = service
-        .get_property_value("e1", EntityType::Document, prop_id)
+        .get_property_value(&view_receipt("e1", EntityType::Document), prop_id)
         .await
         .unwrap();
 
@@ -264,7 +401,7 @@ async fn test_get_property_value_returns_none_when_not_attached() {
     );
 
     let result = service
-        .get_property_value("e1", EntityType::Document, Uuid::nil())
+        .get_property_value(&view_receipt("e1", EntityType::Document), Uuid::nil())
         .await
         .unwrap();
 
@@ -285,7 +422,7 @@ async fn test_get_property_value_error_path() {
     );
 
     let err = service
-        .get_property_value("e1", EntityType::Document, Uuid::nil())
+        .get_property_value(&view_receipt("e1", EntityType::Document), Uuid::nil())
         .await
         .unwrap_err();
 
@@ -321,7 +458,10 @@ async fn test_get_system_property_value_returns_value_when_exists() {
     );
 
     let result = service
-        .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
+        .get_system_property_value(
+            &view_receipt("e1", EntityType::Document),
+            SystemPropertyKey::Status,
+        )
         .await
         .unwrap();
 
@@ -347,7 +487,10 @@ async fn test_get_system_property_value_returns_none_when_not_attached() {
     );
 
     let result = service
-        .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
+        .get_system_property_value(
+            &view_receipt("e1", EntityType::Document),
+            SystemPropertyKey::Status,
+        )
         .await
         .unwrap();
 
@@ -368,11 +511,133 @@ async fn test_get_system_property_value_error_path() {
     );
 
     let err = service
-        .get_system_property_value("e1", EntityType::Document, SystemPropertyKey::Status)
+        .get_system_property_value(
+            &view_receipt("e1", EntityType::Document),
+            SystemPropertyKey::Status,
+        )
         .await
         .unwrap_err();
 
     assert_eq!(err.to_string(), "db error");
+}
+
+// ============================================================================
+// receipt minting unit tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_mint_edit_receipt_no_permission_service() {
+    let repo = MockPropertiesRepo::new();
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .mint_edit_receipt(&caller_user_id(), "doc1", EntityType::Document)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionServiceNotConfigured
+    ));
+}
+
+#[tokio::test]
+async fn test_mint_edit_receipt_denied() {
+    let repo = MockPropertiesRepo::new();
+    let mut perm_service = MockPermissionService::new();
+    perm_service
+        .expect_mint_edit_receipt()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+
+    let service =
+        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
+
+    let err = service
+        .mint_edit_receipt(&caller_user_id(), "doc1", EntityType::Document)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
+}
+
+// ============================================================================
+// delete_entity_property unit tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_delete_entity_property_rejects_receipt_for_other_entity() {
+    let mut repo = MockPropertiesRepo::new();
+    let entity_property_id = Uuid::from_u128(0xC3);
+
+    repo.expect_lookup_entity_property().returning(move |_| {
+        Box::pin(async move {
+            Ok(Some(models_properties::EntityPropertyReference {
+                entity_id: "other-entity".to_string(),
+                entity_type: EntityType::Document,
+                property_definition_id: Uuid::from_u128(0xA1),
+            }))
+        })
+    });
+    repo.expect_delete_entity_property().times(0);
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .delete_entity_property(
+            &edit_receipt("doc1", EntityType::Document),
+            entity_property_id,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
+}
+
+#[tokio::test]
+async fn test_delete_entity_property_happy_path() {
+    let mut repo = MockPropertiesRepo::new();
+    let entity_property_id = Uuid::from_u128(0xC3);
+
+    repo.expect_lookup_entity_property().returning(move |_| {
+        Box::pin(async move {
+            Ok(Some(models_properties::EntityPropertyReference {
+                entity_id: "doc1".to_string(),
+                entity_type: EntityType::Document,
+                property_definition_id: Uuid::from_u128(0xA1),
+            }))
+        })
+    });
+    repo.expect_delete_entity_property()
+        .withf(move |id| *id == entity_property_id)
+        .returning(|_| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    service
+        .delete_entity_property(
+            &edit_receipt("doc1", EntityType::Document),
+            entity_property_id,
+        )
+        .await
+        .unwrap();
 }
 
 // ============================================================================
@@ -447,7 +712,7 @@ async fn test_handle_task_assignee_permissions_no_service() {
 
     assert!(matches!(
         err,
-        crate::domain::error::PropertiesErr::PermissionDenied
+        crate::domain::error::PropertiesErr::PermissionServiceNotConfigured
     ));
 }
 
@@ -559,7 +824,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
 
     let assigned_by = MacroUserIdStr::parse_from_str(&assigned_by).unwrap();
     service
-        .handle_task_assignee_notifications(task_id, &assignees, &assigned_by)
+        .handle_task_assignee_notifications(task_id, &assignees, Some(&assigned_by))
         .await
         .unwrap();
 }
@@ -641,6 +906,26 @@ async fn test_handle_task_assignee_notifications_empty_assignees() {
     .await;
 }
 
+#[tokio::test]
+async fn test_handle_task_assignee_notifications_internal_write_skips() {
+    // Internal (machine) writes have no assigning user and must not notify.
+    let repo = MockPropertiesRepo::new();
+    let mut notif_service = MockNotificationService::new();
+    notif_service.expect_send_task_assigned().times(0);
+
+    let service =
+        PropertiesServiceImpl::new(repo, None::<MockPermissionService>, Some(notif_service));
+
+    service
+        .handle_task_assignee_notifications(
+            Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
+            &[MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap()],
+            None,
+        )
+        .await
+        .unwrap();
+}
+
 // ============================================================================
 // handle_task_assignees_property integration tests
 // ============================================================================
@@ -695,7 +980,7 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
 
     let assigned_by = MacroUserIdStr::parse_from_str(&assigned_by).unwrap();
     service
-        .handle_task_assignees_property(&entity_id, value, &assigned_by)
+        .handle_task_assignees_property(&entity_id, value, Some(&assigned_by))
         .await
         .unwrap();
 }
@@ -716,7 +1001,7 @@ async fn test_handle_task_assignees_property_clearing_assignees() {
         .handle_task_assignees_property(
             &entity_id,
             None,
-            &MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap(),
+            Some(&MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap()),
         )
         .await
         .unwrap();
@@ -725,10 +1010,6 @@ async fn test_handle_task_assignees_property_clearing_assignees() {
 // ============================================================================
 // add/remove_entity_property_option unit tests
 // ============================================================================
-
-fn caller_user_id() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
-}
 
 fn multi_select_definition(id: Uuid, is_multi_select: bool) -> PropertyDefinition {
     PropertyDefinition {
@@ -773,9 +1054,7 @@ async fn test_add_entity_property_option_happy_path() {
 
     service
         .add_entity_property_option(
-            &caller_user_id(),
-            "doc1",
-            EntityType::Document,
+            &edit_receipt("doc1", EntityType::Document),
             def_id,
             option_id,
         )
@@ -800,9 +1079,7 @@ async fn test_add_entity_property_option_rejects_single_select() {
 
     let err = service
         .add_entity_property_option(
-            &caller_user_id(),
-            "doc1",
-            EntityType::Document,
+            &edit_receipt("doc1", EntityType::Document),
             def_id,
             Uuid::from_u128(0xB2),
         )
@@ -835,9 +1112,7 @@ async fn test_add_entity_property_option_rejects_invalid_option() {
 
     let err = service
         .add_entity_property_option(
-            &caller_user_id(),
-            "doc1",
-            EntityType::Document,
+            &edit_receipt("doc1", EntityType::Document),
             def_id,
             Uuid::from_u128(0xB2),
         )
@@ -847,32 +1122,6 @@ async fn test_add_entity_property_option_rejects_invalid_option() {
     assert!(matches!(
         err,
         crate::domain::error::PropertiesErr::Validation(_)
-    ));
-}
-
-#[tokio::test]
-async fn test_add_entity_property_option_no_permission_service() {
-    let repo = MockPropertiesRepo::new();
-    let service = PropertiesServiceImpl::new(
-        repo,
-        None::<MockPermissionService>,
-        None::<MockNotificationService>,
-    );
-
-    let err = service
-        .add_entity_property_option(
-            &caller_user_id(),
-            "doc1",
-            EntityType::Document,
-            Uuid::from_u128(0xA1),
-            Uuid::from_u128(0xB2),
-        )
-        .await
-        .unwrap_err();
-
-    assert!(matches!(
-        err,
-        crate::domain::error::PropertiesErr::PermissionDenied
     ));
 }
 
@@ -899,9 +1148,7 @@ async fn test_remove_entity_property_option_happy_path() {
 
     service
         .remove_entity_property_option(
-            &caller_user_id(),
-            "doc1",
-            EntityType::Document,
+            &edit_receipt("doc1", EntityType::Document),
             def_id,
             option_id,
         )

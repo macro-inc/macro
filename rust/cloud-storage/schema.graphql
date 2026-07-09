@@ -446,6 +446,45 @@ type GraphqlSoupCrmCompany {
 	notifications: [GraphqlSoupNotification!]!
 }
 
+enum GraphqlSoupDataType {
+	"""
+	Boolean true/false values.
+	"""
+	BOOLEAN
+	"""
+	Date and time values.
+	"""
+	DATE
+	"""
+	Numeric values.
+	"""
+	NUMBER
+	"""
+	String/text values.
+	"""
+	STRING
+	"""
+	Select property with numeric options.
+	"""
+	SELECT_NUMBER
+	"""
+	Select property with string options.
+	"""
+	SELECT_STRING
+	"""
+	Tag property - user- or team-scoped colored labels (always multi-select).
+	"""
+	TAG
+	"""
+	Entity reference property.
+	"""
+	ENTITY
+	"""
+	Link value Property.
+	"""
+	LINK
+}
+
 type GraphqlSoupDocument {
 	id: ID!
 	name: String!
@@ -570,9 +609,21 @@ enum GraphqlSoupEntityType {
 	"""
 	FOREIGN_ENTITY
 	"""
-	Unknown or unsupported entity type.
+	User entity
 	"""
-	UNKNOWN
+	USER
+	"""
+	Team entity
+	"""
+	TEAM
+	"""
+	Static File
+	"""
+	STATIC_FILE
+	"""
+	crm contact
+	"""
+	CRM_CONTACT
 }
 
 type GraphqlSoupForeignEntity {
@@ -631,9 +682,9 @@ type GraphqlSoupProperty {
 	"""
 	propertyDefinitionId: ID!
 	displayName: String!
-	dataType: String!
+	dataType: GraphqlSoupDataType!
 	isMultiSelect: Boolean!
-	specificEntityType: String
+	specificEntityType: GraphqlSoupPropertyEntityType
 	isSystem: Boolean!
 	isMetadata: Boolean!
 	value: GraphqlSoupPropertyValue
@@ -644,8 +695,19 @@ GraphQL entity reference stored in a property value.
 """
 type GraphqlSoupPropertyEntityReference {
 	entityId: String!
-	entityType: String!
+	entityType: GraphqlSoupPropertyEntityType!
 	specificMessageId: ID
+}
+
+enum GraphqlSoupPropertyEntityType {
+	CHANNEL
+	CHAT
+	COMPANY
+	DOCUMENT
+	PROJECT
+	TASK
+	THREAD
+	USER
 }
 
 """

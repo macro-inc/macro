@@ -5,6 +5,7 @@ import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
+import { usePreviewPaneVisiblity } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -27,11 +28,14 @@ import { useSoup } from '../../soup-context';
 export function SoupFiltersBar() {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
+
   const [filterDropdownOpen, setFilterDropdownOpen] = createSignal(false);
 
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
   const soup = useSoup();
+
+  const { isWideSplitPanel } = usePreviewPaneVisiblity();
 
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
@@ -108,13 +112,19 @@ export function SoupFiltersBar() {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
+        <Tooltip
+          hotkey={
+            isWideSplitPanel() ? TOKENS.unifiedList.togglePreview : undefined
+          }
+          label={isWideSplitPanel() ? 'Preview' : 'No space for preview'}
+        >
           <Button
             onClick={togglePreview}
             variant="base"
             size="sm"
             depth={2}
             class="bg-surface"
+            disabled={!isWideSplitPanel()}
           >
             {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
             <span>Preview</span>

@@ -33,7 +33,9 @@ impl CustomerRepositoryImpl {
             .await
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
-        if subscription.status != stripe::SubscriptionStatus::Active {
+        if subscription.status != stripe::SubscriptionStatus::Active
+            && subscription.status != stripe::SubscriptionStatus::Trialing
+        {
             return Err(CustomerError::SubscriptionNotActive);
         }
 
