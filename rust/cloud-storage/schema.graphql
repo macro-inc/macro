@@ -291,25 +291,73 @@ input GraphqlPropertiesExpr @oneOf {
 	literal: GraphqlPropertiesLiteral
 }
 
+"""
+GraphQL input for matching a property value on an entity.
+"""
 input GraphqlPropertiesLiteral {
+	"""
+	Property definition id to match.
+	"""
 	propertyDefinitionId: ID!
+	"""
+	Optional entity type scope for the property match.
+	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	Value to compare against the property.
+	"""
 	value: GraphqlPropertyMatchValue!
 }
 
+"""
+GraphQL entity type supported by property filters.
+"""
 enum GraphqlPropertyEntityType {
+	"""
+	Channel entity.
+	"""
 	CHANNEL
+	"""
+	Chat entity.
+	"""
 	CHAT
+	"""
+	Company entity.
+	"""
 	COMPANY
+	"""
+	Document entity.
+	"""
 	DOCUMENT
+	"""
+	Project entity.
+	"""
 	PROJECT
+	"""
+	Task entity.
+	"""
 	TASK
+	"""
+	Thread entity.
+	"""
 	THREAD
+	"""
+	User entity.
+	"""
 	USER
 }
 
+"""
+GraphQL input value used when matching a property.
+"""
 input GraphqlPropertyMatchValue @oneOf {
+	"""
+	Select option id to match.
+	"""
 	selectOption: ID
+	"""
+	Entity reference id to match.
+	"""
 	entityRef: String
 }
 
@@ -446,6 +494,48 @@ type GraphqlSoupCrmCompany {
 	notifications: [GraphqlSoupNotification!]!
 }
 
+"""
+GraphQL representation of supported Soup property data types.
+"""
+enum GraphqlSoupDataType {
+	"""
+	Boolean true/false values.
+	"""
+	BOOLEAN
+	"""
+	Date and time values.
+	"""
+	DATE
+	"""
+	Numeric values.
+	"""
+	NUMBER
+	"""
+	String/text values.
+	"""
+	STRING
+	"""
+	Select property with numeric options.
+	"""
+	SELECT_NUMBER
+	"""
+	Select property with string options.
+	"""
+	SELECT_STRING
+	"""
+	Tag property - user- or team-scoped colored labels (always multi-select).
+	"""
+	TAG
+	"""
+	Entity reference property.
+	"""
+	ENTITY
+	"""
+	Link value Property.
+	"""
+	LINK
+}
+
 type GraphqlSoupDocument {
 	id: ID!
 	name: String!
@@ -570,9 +660,21 @@ enum GraphqlSoupEntityType {
 	"""
 	FOREIGN_ENTITY
 	"""
-	Unknown or unsupported entity type.
+	User entity.
 	"""
-	UNKNOWN
+	USER
+	"""
+	Team entity.
+	"""
+	TEAM
+	"""
+	Static file entity.
+	"""
+	STATIC_FILE
+	"""
+	CRM contact entity.
+	"""
+	CRM_CONTACT
 }
 
 type GraphqlSoupForeignEntity {
@@ -631,9 +733,9 @@ type GraphqlSoupProperty {
 	"""
 	propertyDefinitionId: ID!
 	displayName: String!
-	dataType: String!
+	dataType: GraphqlSoupDataType!
 	isMultiSelect: Boolean!
-	specificEntityType: String
+	specificEntityType: GraphqlSoupPropertyEntityType
 	isSystem: Boolean!
 	isMetadata: Boolean!
 	value: GraphqlSoupPropertyValue
@@ -644,8 +746,46 @@ GraphQL entity reference stored in a property value.
 """
 type GraphqlSoupPropertyEntityReference {
 	entityId: String!
-	entityType: String!
+	entityType: GraphqlSoupPropertyEntityType!
 	specificMessageId: ID
+}
+
+"""
+GraphQL entity type supported by Soup properties.
+"""
+enum GraphqlSoupPropertyEntityType {
+	"""
+	Channel entity.
+	"""
+	CHANNEL
+	"""
+	Chat entity.
+	"""
+	CHAT
+	"""
+	Company entity.
+	"""
+	COMPANY
+	"""
+	Document entity.
+	"""
+	DOCUMENT
+	"""
+	Project entity.
+	"""
+	PROJECT
+	"""
+	Task entity.
+	"""
+	TASK
+	"""
+	Thread entity.
+	"""
+	THREAD
+	"""
+	User entity.
+	"""
+	USER
 }
 
 """

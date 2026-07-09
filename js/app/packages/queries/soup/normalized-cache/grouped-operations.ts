@@ -1,5 +1,5 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
-import type { InfiniteData } from '@tanstack/solid-query';
+import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 
 import { queryClient } from '../../client';
@@ -173,18 +173,17 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     const meta = getSoupQueryMeta(query.meta);
     if (!meta.groupBy || meta.groupKey == null) continue;
 
-    const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
+    const filter = meta.itemFilter;
+    const nextGroupKeys =
+      filter && !filter(entity)
+        ? []
+        : computeGroupKeysForItem(entity, meta.groupBy);
     if (nextGroupKeys === undefined) {
       queryClient.invalidateQueries({ queryKey: query.queryKey });
       continue;
     }
 
-    const filter = meta.itemFilter;
-    let shouldHave = nextGroupKeys.includes(meta.groupKey);
-
-    if (filter && !filter(entity)) {
-      shouldHave = false;
-    }
+    const shouldHave = nextGroupKeys.includes(meta.groupKey);
 
     let changed = false;
 
@@ -360,12 +359,16 @@ export function removeGroupedPage(
 }
 
 /** Removes items from all expanded group queries while preserving unaffected pages. */
-export function removeGroupQueries(entityIds: Set<string>) {
+export function removeGroupQueries(
+  entityIds: Set<string>,
+  keyFilter?: (key: QueryKey) => boolean
+) {
   const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
   });
 
   for (const query of queries) {
+    if (keyFilter && !keyFilter(query.queryKey)) continue;
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
     if (!prev?.pages?.length) continue;
 

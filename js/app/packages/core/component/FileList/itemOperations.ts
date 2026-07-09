@@ -253,7 +253,8 @@ export async function bulkDelete(
 export async function moveToFolder(args: {
   itemType: ItemType;
   id: string;
-  folderId: string;
+  /** null removes the item from its folder */
+  folderId: string | null;
 }): Promise<boolean> {
   const { itemType, id, folderId } = args;
   const accessLevel = await getItemAccessLevel({ itemType, id });
@@ -263,24 +264,25 @@ export async function moveToFolder(args: {
 
   let result;
   switch (itemType) {
+    // Storage/chat backends clear the folder on empty string; email on null.
     case 'document': {
       result = await storageServiceClient.editDocument({
         documentId: id,
-        projectId: folderId,
+        projectId: folderId ?? '',
       });
       break;
     }
     case 'project': {
       result = await storageServiceClient.projects.edit({
         id,
-        projectParentId: folderId,
+        projectParentId: folderId ?? '',
       });
       break;
     }
     case 'chat': {
       result = await cognitionApiServiceClient.editChatProject({
         chat_id: id,
-        project_id: folderId,
+        project_id: folderId ?? '',
       });
       break;
     }

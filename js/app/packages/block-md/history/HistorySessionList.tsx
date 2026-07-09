@@ -3,7 +3,7 @@ import type { HistorySession } from '@service-sync/client';
 import { cn } from '@ui';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
 import { buildActivityRows } from './activityRows';
-import { userColor } from './utils';
+import { userColor, userLabel } from './utils';
 
 type HistorySessionListProps = {
   sessions: readonly HistorySession[];
@@ -14,7 +14,7 @@ type HistorySessionListProps = {
 
 function UserName(props: { userId: string }) {
   const { firstName } = useDisplayNameParts(tryMacroId(props.userId));
-  return <>{firstName()}</>;
+  return <>{firstName() || userLabel(props.userId)}</>;
 }
 
 const MAX_NAMED = 3;
@@ -83,7 +83,7 @@ export function HistorySessionList(props: HistorySessionListProps) {
                     <For each={row.userIds.slice(0, MAX_NAMED)}>
                       {(userId) => (
                         <span
-                          class="size-2 rounded-full ring-1 ring-surface"
+                          class="size-2 rounded-full ring ring-surface"
                           style={{ 'background-color': userColor(userId) }}
                         />
                       )}

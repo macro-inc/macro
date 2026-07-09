@@ -47,7 +47,7 @@ type DateRangeFieldName =
 
 type CompiledFieldName = Exclude<
   FieldName,
-  'properties' | 'tagFilters' | DateRangeFieldName
+  'properties' | 'tagFilters' | 'tagFilterMode' | DateRangeFieldName
 >;
 
 const AST = {
@@ -378,12 +378,16 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
-  // Tags: one OR group across every selected tag, regardless of which
+  // Tags: one group across every selected tag, regardless of which
   // definition owns it. Pushed as a single propf entry so it ANDs with the
-  // status/priority groups but ORs internally (match any selected tag).
+  // status/priority groups. Internally the group ORs (match any selected
+  // tag) unless tagFilterMode is 'all', which ANDs the per-tag literals.
   const includeTags = state.include.tagFilters ?? [];
   if (includeTags.length) {
-    byTarget.propf.push(AST.or(includeTags.map(propertyToAst)));
+    const tagAsts = includeTags.map(propertyToAst);
+    byTarget.propf.push(
+      state.include.tagFilterMode === 'all' ? AST.and(tagAsts) : AST.or(tagAsts)
+    );
   }
 
   pushDateRangeFiltersToTargets(byTarget, state.include, state.exclude);

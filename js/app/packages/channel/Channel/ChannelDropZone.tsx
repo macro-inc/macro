@@ -17,11 +17,6 @@ export function ChannelDropZone(props: ChannelDropZoneProps) {
     <div
       class="relative h-full flex flex-col"
       use:fileFolderDrop={{
-        onDragStart: (valid) => {
-          props.dragState.setIsDraggingOverChannel(true);
-          props.dragState.setIsValidChannelDrag(valid);
-        },
-        onDragEnd: () => props.dragState.setIsDraggingOverChannel(false),
         onDrop: (files, folders) => {
           handleFileFolderDrop(files, folders, (entries) => {
             void props.dragState.attachFilesToChannel?.(

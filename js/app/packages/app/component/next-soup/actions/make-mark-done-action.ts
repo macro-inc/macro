@@ -154,6 +154,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           ],
           duration: 3_000,
           stack: true,
+          hideOnMobile: true,
         });
       };
 

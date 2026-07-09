@@ -60,9 +60,13 @@ pub struct CrmCompany {
     /// `email_sync = false` (see
     /// [`crate::domain::service::CrmService::set_company_hidden`]).
     pub hidden: bool,
-    /// When the company was created
+    /// Earliest known email interaction with this company. Repository
+    /// read paths fill this from `crm_companies.first_interaction`, not
+    /// the row's lifecycle `created_at`.
     pub created_at: DateTime<Utc>,
-    /// When the company was last updated
+    /// Most recent known email interaction with this company. Repository
+    /// read paths fill this from `crm_companies.last_interaction`, not
+    /// the row's lifecycle `updated_at`.
     pub updated_at: DateTime<Utc>,
     /// All domains associated with this company
     pub domains: Vec<CrmDomain>,
@@ -262,6 +266,10 @@ pub enum CrmError {
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),
+    /// The request asks for hidden CRM rows but the caller's team role is
+    /// below admin/owner.
+    #[error("Querying hidden CRM companies requires admin/owner team role")]
+    AdminRoleRequired,
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

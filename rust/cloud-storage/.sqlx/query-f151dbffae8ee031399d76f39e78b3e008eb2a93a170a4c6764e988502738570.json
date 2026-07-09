@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                w.id,\n                w.workspace_id,\n                w.name,\n                w.endpoint_url,\n                w.signing_secret,\n                w.headers,\n                w.status,\n                w.is_valid,\n                w.created_by_user_id,\n                w.created_at,\n                w.updated_at,\n                w.deleted_at,\n                w.filters\n            FROM webhook w\n            WHERE w.workspace_id = ANY($1)\n              AND w.deleted_at IS NULL\n              AND w.status = 'active'\n              AND w.is_valid\n              AND w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))\n              AND jsonb_path_exists(\n                  w.filters,\n                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',\n                  jsonb_build_object('event', $2::text, 'id', $3::text)\n              )\n            ORDER BY w.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "workspace_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "endpoint_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "signing_secret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "headers",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_valid",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "filters",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "f151dbffae8ee031399d76f39e78b3e008eb2a93a170a4c6764e988502738570"
+}

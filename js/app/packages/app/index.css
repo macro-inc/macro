@@ -114,6 +114,10 @@
   /* Disable default tailwind color palette */
    --color-*: initial;
 
+  /* Match the hairline borders: make the default `ring` a 0.5px ring.
+     Explicit widths (ring, ring-2, …) are left untouched. */
+  --default-ring-width: 0.5px;
+
   /* Semantic Color names, use these when writing tailwind */
   --color-accent:          var(--a0);
   --color-accent-bg:       oklch(var(--a0) / 0.08);
@@ -122,7 +126,7 @@
   --color-surface:         var(--b0);
   --color-drop-shadow:     oklch(0.15 0 0 / 0.04);
   --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
-  
+
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
   --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--c0));
@@ -148,7 +152,7 @@
   --color-button:          var(--theme-button, var(--b0));
   /* Used for floating mobile navigation chrome */
   --color-chrome:          var(--theme-chrome, color-mix(in oklch, var(--color-menu) 85%, var(--color-active)));
-  
+
 
   /* Below are hardcoded colors */
   --color-failure:     oklch(0.637 0.237 25.331);
@@ -350,23 +354,6 @@
   }
 }
 
-@keyframes long-press-message-highlight {
-  from {
-    background-color: oklch(from var(--color-accent) l c h / 0%);
-    outline-color: transparent;
-    outline-offset: -1px;
-    outline-style: solid;
-    outline-width: 1px;
-  }
-  to {
-    background-color: oklch(from var(--color-accent) l c h / 5%);
-    outline-color: oklch(from var(--color-accent) l c h / 20%);
-    outline-offset: -1px;
-    outline-style: solid;
-    outline-width: 1px;
-  }
-}
-
 @keyframes typing-dot {
   0%   { transform: scale(1)   translateY(0   ); }
   50%  { transform: scale(1.5) translateY(-2px); }
@@ -376,11 +363,6 @@
 @keyframes indeterminate-bar {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
-}
-
-@keyframes long-press-accent-bar {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }
 
 /* Big hammer fix for cursor pointer. */
@@ -422,6 +404,38 @@ a {
 @utility optical-auto {
   font-variation-settings: unset;
   font-optical-sizing: auto;
+}
+
+/* Hairline borders app-wide. We override Tailwind's default 1px width utilities
+   so every border renders at 0.5px, including single-side borders, without
+   having to sprinkle a modifier on each element. Explicit widths (border-2,
+   border-4, …) are intentionally left untouched. */
+@utility border {
+  border-width: 0.5px;
+}
+@utility border-x {
+  border-inline-width: 0.5px;
+}
+@utility border-y {
+  border-block-width: 0.5px;
+}
+@utility border-s {
+  border-inline-start-width: 0.5px;
+}
+@utility border-e {
+  border-inline-end-width: 0.5px;
+}
+@utility border-t {
+  border-top-width: 0.5px;
+}
+@utility border-r {
+  border-right-width: 0.5px;
+}
+@utility border-b {
+  border-bottom-width: 0.5px;
+}
+@utility border-l {
+  border-left-width: 0.5px;
 }
 
 @utility hover-transition-bg {
@@ -533,6 +547,7 @@ a {
 
 @utility macro-message-width {
   max-width: 100%;
+  width: 100%;
   @media (min-width: 640px) {
     max-width: 800px;
     min-width: 250px;
@@ -597,23 +612,40 @@ a {
   opacity: 0 !important;
 }
 
-/* Channel message hover + non-selection highlight */
+/* Channel message hover + selection-cursor highlight */
 /* Suppressed on touch devices */
 /* Background-only — borders/rings are reserved for structural UI edges. */
-html:not([data-touch-device="true"]) [data-message][data-highlighted],
+[data-message][data-selected],
 html:not([data-touch-device="true"]) [data-message]:hover{
   @apply bg-ink/5 rounded-sm;
+}
+
+[data-message][data-targeted] {
+  @apply bg-accent/30 rounded-sm;
+}
+[data-message][data-selected][data-targeted],
+html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
+  @apply bg-accent/40 rounded-sm;
+}
+/*[data-message][data-targeted] > .message-accent-bar {
+  opacity: 1;
+}*/
+
+@keyframes long-press-message-highlight {
+  from {
+    background-color: oklch(from var(--color-ink) l c h / 0%);
+    border-radius: var(--radius-sm);
+  }
+  to {
+    background-color: oklch(from var(--color-ink) l c h / 10%);
+    border-radius: var(--radius-sm);
+  }
 }
 
 /* Channel message long-press animation */
 .channel-message-long-press-highlight [data-swipe-content],
 [data-message].channel-message-long-press-highlight{
   animation: long-press-message-highlight 400ms ease-in both;
-}
-
-[data-message].channel-message-long-press-highlight > .message-accent-bar,
-.channel-message-long-press-highlight [data-accent-bar] {
-  animation: long-press-accent-bar 400ms ease-in both;
 }
 
 /* Immediate touch feedback for mobile soup entity rows */

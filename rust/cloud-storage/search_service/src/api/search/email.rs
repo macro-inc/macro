@@ -80,7 +80,7 @@ pub(in crate::api::search) async fn enrich_emails(
         .map(|id| EntityReference::new(id.to_string(), EntityType::Thread))
         .collect();
     let properties_map: HashMap<String, Vec<SoupProperty>> =
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
             &ctx.db,
             &thread_entity_refs,
         )

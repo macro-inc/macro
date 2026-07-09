@@ -23,6 +23,8 @@ export type PropertyFilter = {
   value: string;
 };
 
+export type TagFilterMode = 'any' | 'all';
+
 export type ArrayFieldFilters = {
   documentId?: string[];
   fileType?: string[];
@@ -61,6 +63,9 @@ export type ArrayFieldFilters = {
 };
 
 export type ScalarFieldFilters = {
+  // How the selected tagFilters combine: 'any' (default when absent) matches
+  // items holding at least one selected tag, 'all' requires every one.
+  tagFilterMode?: TagFilterMode;
   documentSeen?: boolean;
   documentDone?: boolean;
   isEmailAttachment?: boolean;

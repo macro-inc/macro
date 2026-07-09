@@ -719,6 +719,7 @@
           sccache
           rustToolchain
           python3
+          vitejs
         ]
         ++ pkgs.lib.optionals isLinux [ mold ];
 
@@ -833,6 +834,11 @@
               CXXFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
               CFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
               CXXFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              # Default for local SQLx/cargo workflows so individual crates do
+              # not need their own .env files. The run-local/run-dev env
+              # resolver ignores this localhost default: run-dev needs
+              # Doppler's dev DATABASE_URL, run-local its container-side URL.
+              DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
             }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";

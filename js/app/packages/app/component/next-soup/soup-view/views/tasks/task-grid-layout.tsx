@@ -157,7 +157,7 @@ export function TaskGridLayout(props: LayoutProps) {
 
         <Entity.Slot
           placement="content"
-          class="ph-no-capture font-semibold truncate items-center gap-2 flex min-w-0"
+          class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
         >
           <div class="size-4 shrink-0">
             <Entity.Icon

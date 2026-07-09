@@ -22,7 +22,7 @@ path = "src/doppler_config.rs"
 connection_gateway = []
 default = ["connection_gateway", "delete_document_worker", "graphql", "location_check"]
 delete_document_worker = []
-graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:graphql_soup"]
+graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:complete_graph"]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
 location_check = []
@@ -74,7 +74,7 @@ favorites = { path = "../favorites", features = ["inbound", "postgres"] }
 foreign_entity = { path = "../foreign_entity", features = ["inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
-graphql_soup = { path = "../graphql_soup", optional = true }
+complete_graph = { path = "../complete_graph", optional = true }
 github = { path = "../github", default-features = false, features = [
   "axum",
   "inbound",
@@ -124,7 +124,6 @@ models_soup = { path = "../models_soup", features = ["schema"] }
 notification = { path = "../notification" }
 opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
-properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
 rate_limit = { path = "../rate_limit", default-features = false, features = ["axum"] }

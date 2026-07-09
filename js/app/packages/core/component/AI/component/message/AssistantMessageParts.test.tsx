@@ -15,6 +15,10 @@ const lifecycle = vi.hoisted(() => ({
   markdownMounts: 0,
   mcpCleanups: new Map<string, number>(),
   mcpMounts: new Map<string, number>(),
+  streamTailStateUpdates: [] as Array<{
+    state: unknown;
+    key: string | undefined;
+  }>,
   thinkingCleanups: 0,
   thinkingMounts: 0,
   toolCleanups: new Map<string, number>(),
@@ -24,6 +28,9 @@ const lifecycle = vi.hoisted(() => ({
 vi.mock('@core/component/AI/context', () => ({
   useChatContext: () => ({
     chatId: () => 'chat-1',
+    setStreamTailState: (state: unknown, key?: string) => {
+      lifecycle.streamTailStateUpdates.push({ state, key });
+    },
   }),
 }));
 
@@ -41,12 +48,23 @@ vi.mock(
     const solid = await vi.importActual<typeof import('solid-js')>('solid-js');
 
     return {
-      ChatMessageMarkdown: (props: { text: string }) => {
+      ChatMessageMarkdown: (props: {
+        text: string;
+        setStateRef?: (state: unknown, key?: string) => void;
+        stateRefKey?: string;
+      }) => {
         solid.onMount(() => {
           lifecycle.markdownMounts += 1;
         });
         solid.onCleanup(() => {
           lifecycle.markdownCleanups += 1;
+        });
+        solid.createEffect(() => {
+          const setStateRef = props.setStateRef;
+          const key = props.stateRefKey;
+          if (!setStateRef) return;
+          setStateRef(() => null, key);
+          solid.onCleanup(() => setStateRef(undefined, key));
         });
         return <div data-testid="markdown">{props.text}</div>;
       },
@@ -157,6 +175,7 @@ describe('AssistantMessageParts streaming identity', () => {
     lifecycle.markdownMounts = 0;
     lifecycle.mcpCleanups.clear();
     lifecycle.mcpMounts.clear();
+    lifecycle.streamTailStateUpdates = [];
     lifecycle.thinkingCleanups = 0;
     lifecycle.thinkingMounts = 0;
     lifecycle.toolCleanups.clear();
@@ -240,6 +259,67 @@ describe('AssistantMessageParts streaming identity', () => {
     expect(lifecycle.toolCleanups.get('tool-1') ?? 0).toBe(0);
     expect(lifecycle.mcpMounts.get('search')).toBe(1);
     expect(lifecycle.mcpCleanups.get('search') ?? 0).toBe(0);
+    disposeStream();
+  });
+
+  it('registers resumed markdown as the stream tail after a hidden tool response', async () => {
+    let append!: (item: ChatStream) => void;
+    let disposeStream!: () => void;
+    const data = createRoot((dispose) => {
+      disposeStream = dispose;
+      const [items, setItems] = createSignal<ChatStream[]>([]);
+      append = (item) => setItems((prev) => [...prev, item]);
+      return items;
+    });
+
+    render(() => <StreamedAssistantParts data={data} />);
+
+    append(response({ text: '```ts\n', type: 'text' }));
+    await waitFor(() =>
+      expect(
+        lifecycle.streamTailStateUpdates.some(
+          (update) =>
+            typeof update.state === 'function' &&
+            update.key === 'message-1:text:0'
+        )
+      ).toBe(true)
+    );
+
+    append(
+      response({
+        id: 'tool-1',
+        json: { query: 'mentions' },
+        name: 'Search',
+        type: 'toolCall',
+      })
+    );
+    await waitFor(() =>
+      expect(
+        lifecycle.streamTailStateUpdates.some(
+          (update) => update.state === undefined
+        )
+      ).toBe(true)
+    );
+
+    append(
+      response({
+        id: 'tool-1',
+        json: { results: [] },
+        name: 'Search',
+        type: 'toolCallResponseJson',
+      })
+    );
+
+    append(response({ text: '<m-document-mention>', type: 'text' }));
+    await waitFor(() =>
+      expect(
+        lifecycle.streamTailStateUpdates.some(
+          (update) =>
+            typeof update.state === 'function' &&
+            update.key === 'message-1:text:1'
+        )
+      ).toBe(true)
+    );
     disposeStream();
   });
 });

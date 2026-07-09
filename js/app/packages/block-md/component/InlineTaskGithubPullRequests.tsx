@@ -1,9 +1,12 @@
 import { GithubPullRequestStatusIcon } from '@app/component/side-panel';
 import { useBlockAliasedName, useBlockId } from '@core/block';
+import { TOKENS } from '@core/hotkey/tokens';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
 import GithubIcon from '@icon/mcp-github.svg';
+import GitBranch from '@phosphor/git-branch.svg';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
-import { Layer } from '@ui';
+import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 
@@ -70,14 +73,10 @@ function InlineTaskGithubPullRequestsContent(props: {
     !query.isError && query.isFetching && pullRequests().length === 0;
 
   return (
-    <Show
-      when={pullRequests().length > 0}
-      fallback={
-        <Show when={isWaitingForPullRequests()}>
-          <InlineTaskGithubPullRequestsSkeleton />
-        </Show>
-      }
-    >
+    <>
+      <Show when={isWaitingForPullRequests()}>
+        <InlineTaskGithubPullRequestsSkeleton />
+      </Show>
       <For each={pullRequests()}>
         {(pr) => {
           const name = pullRequestName(pr);
@@ -135,7 +134,20 @@ function InlineTaskGithubPullRequestsContent(props: {
           );
         }}
       </For>
-    </Show>
+      <Show when={!isWaitingForPullRequests() && pullRequests().length === 0}>
+        <Button
+          variant="ghost"
+          size="sm"
+          depth={2}
+          tooltip="Copy branch name"
+          hotkey={TOKENS.entity.action.copyBranchName}
+          class={cn(PILL_CLASS, 'bg-surface px-1.5')}
+          onClick={() => void copyBranchNameToClipboard(props.blockId)}
+        >
+          <GitBranch class="size-3 shrink-0" />
+        </Button>
+      </Show>
+    </>
   );
 }
 

@@ -17,6 +17,7 @@ publish = false
 [dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
+async-graphql = { version = "7", features = ["dataloader"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
@@ -82,6 +83,7 @@ num-integer = { version = "0.1", features = ["i128"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 percent-encoding = { version = "2" }
+phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
 phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 prost = { version = "0.12", features = ["prost-derive"] }
@@ -135,6 +137,7 @@ zeroize = { version = "1", features = ["derive"] }
 [build-dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
+async-graphql = { version = "7", features = ["dataloader"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
@@ -201,6 +204,7 @@ num-integer = { version = "0.1", features = ["i128"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 percent-encoding = { version = "2" }
+phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
 phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 prettyplease = { version = "0.2", default-features = false, features = ["verbatim"] }

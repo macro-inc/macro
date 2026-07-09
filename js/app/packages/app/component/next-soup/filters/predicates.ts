@@ -13,7 +13,7 @@ import {
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { NO_ASSIGNEE } from './configs/base';
+import { NO_ASSIGNEE, NO_STAGE } from './configs/base';
 
 function getPredicateNotifications(
   entity: EntityData,
@@ -158,19 +158,29 @@ export function crmCompanyHiddenFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company' && entity.hidden;
 }
 
-/** True when the company's Stage property matches the given option id. */
-export function hasCompanyStage(
-  entity: EntityData,
-  stageOptionId: string
-): boolean {
-  if (entity.type !== 'crm_company') return false;
-  return getCompanyStageOptionId(entity) === stageOptionId;
-}
-
-/** True when the company has no Stage set. */
-export function hasNoCompanyStage(entity: EntityData): boolean {
-  if (entity.type !== 'crm_company') return false;
-  return getCompanyStageOptionId(entity) === undefined;
+/**
+ * Stage filter for companies, driven by the view's stage selection
+ * (`ctx.stages`). `NO_STAGE` matches companies without a Stage set. Stage
+ * resolution goes through `resolveStage` (the team's active deal-stage
+ * set, from `ctx.resolveCompanyStage`) when supplied, so the filter
+ * buckets companies exactly like the kanban — legacy system-stage values
+ * included; otherwise it falls back to the raw system Stage value.
+ */
+export function companyStageFilter(
+  stageIds: () => string[] | undefined,
+  resolveStage?: (entity: EntityData) => string | undefined
+) {
+  return (entity: EntityData): boolean => {
+    const stages = stageIds();
+    if (!stages?.length) return true;
+    if (entity.type !== 'crm_company') return false;
+    const stageId = resolveStage
+      ? resolveStage(entity)
+      : getCompanyStageOptionId(entity);
+    return stages.some((id) =>
+      id === NO_STAGE ? stageId === undefined : stageId === id
+    );
+  };
 }
 
 /**

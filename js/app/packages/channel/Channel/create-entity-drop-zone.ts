@@ -1,6 +1,5 @@
-import type { EntityData, EntityDragData, EntityDragEvent } from '@entity';
+import type { EntityData, EntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { type Accessor, createMemo } from 'solid-js';
 
 export type EntityDropCoordinates = {
   clientX: number;
@@ -22,7 +21,6 @@ type CreateEntityDropZoneOptions = {
 
 type EntityDropZone = {
   droppable: ReturnType<typeof createDroppable>;
-  isDraggingOver: Accessor<boolean>;
 };
 
 export function createEntityDropZone(
@@ -48,22 +46,6 @@ export function createEntityDropZone(
     droppable.isActiveDroppable ||
     state?.active.droppable?.id === options.droppableId;
 
-  const entityDragData = createMemo(() => {
-    const draggable = state?.active.draggable;
-    if (!draggable) return;
-    const dragData = draggable.data;
-    if (!dragData || dragData.dragType !== 'entity') return;
-    return dragData as EntityDragData;
-  });
-
-  const isDraggingOver = createMemo(() => {
-    const dragData = entityDragData();
-    if (!dragData) return false;
-
-    const activeDroppable = state?.active.droppable;
-    return !!activeDroppable && activeDroppable.id === options.droppableId;
-  });
-
   onDragEnd((event: EntityDragEvent) => {
     const data = event.draggable?.data;
     if (!data || data.dragType !== 'entity') return;
@@ -88,5 +70,5 @@ export function createEntityDropZone(
     options.onDragEntityMove?.(coordinates);
   });
 
-  return { droppable, isDraggingOver };
+  return { droppable };
 }

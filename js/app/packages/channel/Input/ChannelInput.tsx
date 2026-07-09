@@ -335,7 +335,12 @@ export function ChannelInput(props: ChannelInputProps) {
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
-    focus: focusEditor,
+    focus: () => {
+      // A collapsed pill hides the editor; programmatic focus implies intent
+      // to type, so expand first.
+      collapsedInput.expand();
+      focusEditor();
+    },
     send: () => inputState.commands.send(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
     insertEntityMention,
@@ -362,8 +367,6 @@ export function ChannelInput(props: ChannelInputProps) {
       return markdownEditor.controls.isInlineMenuOpen();
     },
   });
-
-  const [isFocused, setIsFocused] = createSignal(false);
 
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
@@ -403,11 +406,8 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          setIsFocused(false);
           collapsedInput.collapse();
         }}
-        onFocusIn={() => setIsFocused(true)}
-        active={isFocused()}
         class={cn(
           'rounded-xl mobile:rounded-3xl mobile:island',
           isCollapsed() && 'hidden'

@@ -66,7 +66,10 @@ function MobileSearchInner() {
 
   const query = debouncedDependent(SearchState.query, 60);
 
-  const filteredItems = useCommandItems(query, SearchState.categoryFilter);
+  const filteredItems = useCommandItems(query, SearchState.categoryFilter, {
+    showSearchRow: false,
+    commandScopeCommands: SearchState.commandScopeCommands,
+  });
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);
 
@@ -86,6 +89,9 @@ function MobileSearchInner() {
             hideShadowedCommands: false,
             hideCommandsWithoutHotkeys: false,
             limitToCurrentScope: true,
+            // Commands run from taps, not keystrokes, so the search input
+            // being focused (virtual keyboard up) shouldn't filter them.
+            ignoreInputFocused: true,
           }
         );
         SearchState.setQuery('');
@@ -93,7 +99,10 @@ function MobileSearchInner() {
         return;
       }
 
-      // Regular command - close and run
+      // Regular command - close and run. Clear any active command scope so a
+      // quick reopen (within the reset threshold) doesn't restore a stale
+      // nested-command list.
+      SearchState.clearCommandScopeCommands();
       SearchState.close();
       SearchState.setQuery('');
       runCommand(command);
@@ -224,10 +233,22 @@ function SearchInputBar(props: { onBack: () => void }) {
         <input
           id="mobile-search-input"
           type="text"
+          enterkeyhint="search"
           class="h-full min-w-0 flex-1 border-0 bg-transparent text-ink outline-none ring-0 placeholder:text-ink-placeholder focus:outline-none focus:ring-0"
           placeholder="Search..."
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            // Enter (the keyboard's Search key) activates full-text search,
+            // same as the "Full-text search for ..." row. Not while an IME
+            // composition is being confirmed, and not while picking a nested
+            // command's options, where the input filters commands.
+            if (e.key !== 'Enter' || e.isComposing) return;
+            if (SearchState.isInCommandScope()) return;
+            SearchState.enableFullTextMode();
+            // Drop the virtual keyboard so the results get the full frame.
+            e.currentTarget.blur();
+          }}
         />
       </div>
     </div>
@@ -260,6 +281,8 @@ function ResultsContainer(props: {
   const heightOfNameMatchList = () => props.nameMatchItems.length * rowHeight();
   const showFullTextSearchButton = () => {
     if (SearchState.isFullTextMode()) return false;
+    // In a command scope the input filters nested commands, not search.
+    if (SearchState.isInCommandScope()) return false;
     // Always show when there are no name matches (rowHeight stays 0 since list isn't rendered)
     if (props.nameMatchItems.length === 0) return true;
     const rh = rowHeight();

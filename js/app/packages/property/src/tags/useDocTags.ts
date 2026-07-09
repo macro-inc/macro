@@ -27,6 +27,14 @@ function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
 }
 
+function compareTags(a: ResolvedTag, b: ResolvedTag): number {
+  return (
+    a.label.localeCompare(b.label) ||
+    a.scope.localeCompare(b.scope) ||
+    a.optionId.localeCompare(b.optionId)
+  );
+}
+
 function definitionDomain(
   definition: PropertyDefinitionDetailResponse
 ): PropertyDefinitionDomain {
@@ -87,7 +95,7 @@ function createDocTags(
         if (tag) resolved.push(tag);
       }
     }
-    return resolved;
+    return resolved.sort(compareTags);
   });
 
   const isApplied = (optionId: string): boolean =>

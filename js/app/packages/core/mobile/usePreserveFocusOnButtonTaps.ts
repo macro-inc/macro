@@ -36,7 +36,14 @@ export function usePreserveFocusOnButtonTaps(
 
       const target = e.target instanceof Element ? e.target : null;
       const button = target?.closest<HTMLElement>('button, [role="button"]');
-      if (!button || !container.contains(button)) return;
+      if (!button) return;
+      // Preserve focus for buttons inside the container, plus sibling regions
+      // that opt into the keyboard-safe zone (e.g. the input flag).
+      if (
+        !container.contains(button) &&
+        !button.closest('[data-keep-keyboard]')
+      )
+        return;
 
       e.preventDefault();
 

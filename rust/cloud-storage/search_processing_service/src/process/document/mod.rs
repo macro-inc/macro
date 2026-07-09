@@ -1,5 +1,4 @@
 use anyhow::Context;
-use model::document::FileTypeExt;
 use opensearch_client::OpensearchClient;
 use sqs_client::search::document::{DocumentId, SearchExtractorMessage};
 
@@ -24,11 +23,6 @@ pub async fn process_extract_text_message(
     document_storage_bucket: &str,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    if search_extractor_message.file_type.is_image() {
-        tracing::trace!("image file, ignoring");
-        return Ok(());
-    }
-
     raw_document::update_search_with_raw_document(
         opensearch_client,
         db,

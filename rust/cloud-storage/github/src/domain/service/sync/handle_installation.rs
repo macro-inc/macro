@@ -29,7 +29,6 @@ impl<
         let installation_id = event
             .installation_id()
             .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("missing installation.id")))?;
-        let installation_id_str = installation_id.to_string();
 
         let sender_github_user_id = event.sender_github_user_id().ok_or_else(|| {
             GithubError::Internal(anyhow::anyhow!("missing sender.id in installation event"))
@@ -37,17 +36,15 @@ impl<
 
         tracing::info!(installation_id, "processing installation created event");
 
-        let links = self
-            .repo
-            .get_macro_ids_by_github_user_ids(std::slice::from_ref(&sender_github_user_id))
+        // Always record the installer, even when no link exists yet: it lets a
+        // later github_links creation associate this installation retroactively.
+        self.repo
+            .upsert_installation_installer(&installation_id.to_string(), &sender_github_user_id)
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        let macro_ids = links
-            .get(&sender_github_user_id)
-            .cloned()
-            .unwrap_or_default();
-        if macro_ids.is_empty() {
+        let sources = self.sources_for_github_user(&sender_github_user_id).await?;
+        if sources.is_empty() {
             tracing::warn!(
                 installation_id,
                 "no github link found for sender, cannot associate installation with a source"
@@ -55,8 +52,26 @@ impl<
             return Ok(());
         }
 
-        // A GitHub account may be linked to several Macro users; associate the
-        // installation with the team/user source of every linked user.
+        self.associate_installation_with_sources(installation_id, &sources)
+            .await
+    }
+
+    /// Compute the Macro sources (teams or users) for every Macro user linked
+    /// to the given GitHub user. Returns an empty list when no link exists.
+    pub(crate) async fn sources_for_github_user(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Vec<GithubAppInstallationSource>, GithubError> {
+        let links = self
+            .repo
+            .get_macro_ids_by_github_user_ids(std::slice::from_ref(&github_user_id.to_string()))
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let macro_ids = links.get(github_user_id).cloned().unwrap_or_default();
+
+        // A GitHub account may be linked to several Macro users; collect the
+        // team/user source of every linked user.
         let mut seen = std::collections::HashSet::new();
         let mut sources = Vec::new();
         for macro_id in macro_ids {
@@ -68,8 +83,8 @@ impl<
 
             if team_ids.is_empty() {
                 tracing::info!(
-                    installation_id,
-                    "user has no teams, associating installation with user source"
+                    github_user_id,
+                    "user has no teams, using user source for installation association"
                 );
                 let source = GithubAppInstallationSource::User(macro_id);
                 if seen.insert(source.clone()) {
@@ -77,9 +92,9 @@ impl<
                 }
             } else {
                 tracing::info!(
-                    installation_id,
+                    github_user_id,
                     team_count = team_ids.len(),
-                    "associating installation with user teams"
+                    "using team sources for installation association"
                 );
                 for team_id in team_ids {
                     let source = GithubAppInstallationSource::Team(team_id);
@@ -90,12 +105,22 @@ impl<
             }
         }
 
+        Ok(sources)
+    }
+
+    /// Persist the installation-to-source associations and backfill open pull
+    /// requests visible to the installation.
+    pub(crate) async fn associate_installation_with_sources(
+        &self,
+        installation_id: u64,
+        sources: &[GithubAppInstallationSource],
+    ) -> Result<(), GithubError> {
         self.repo
-            .upsert_installation_sources(&installation_id_str, &sources)
+            .upsert_installation_sources(&installation_id.to_string(), sources)
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        self.backfill_open_pull_request_foreign_entities(installation_id, &sources)
+        self.backfill_open_pull_request_foreign_entities(installation_id, sources)
             .await?;
 
         Ok(())

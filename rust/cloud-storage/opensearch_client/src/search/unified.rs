@@ -84,6 +84,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
+            match_all_tags: args.document_search_args.match_all_tags,
         }
     }
 }
@@ -110,6 +111,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             importance: args.email_search_args.importance,
             subject_only: args.email_search_args.subject_only,
             tag_option_ids: args.email_search_args.tag_option_ids,
+            match_all_tags: args.email_search_args.match_all_tags,
         }
     }
 }
@@ -145,6 +147,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
             tag_option_ids: args.chat_search_args.tag_option_ids,
+            match_all_tags: args.chat_search_args.match_all_tags,
         }
     }
 }
@@ -178,6 +181,7 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
             ids_only: args.project_search_args.ids_only,
             project_ids: args.project_search_args.project_ids,
             tag_option_ids: args.project_search_args.tag_option_ids,
+            match_all_tags: args.project_search_args.match_all_tags,
         }
     }
 }
@@ -189,6 +193,7 @@ pub struct UnifiedChatSearchArgs {
     pub role: Vec<String>,
     pub ids_only: bool,
     pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -200,6 +205,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -217,6 +223,7 @@ pub struct UnifiedEmailSearchArgs {
     pub importance: Option<bool>,
     pub subject_only: bool,
     pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -243,6 +250,7 @@ pub struct UnifiedProjectSearchArgs {
     pub project_ids: Vec<String>,
     pub ids_only: bool,
     pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
 }
 
 /// Possible search result indices for unified search

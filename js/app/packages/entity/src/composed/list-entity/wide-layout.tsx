@@ -100,7 +100,7 @@ export function WideLayout(props: LayoutProps) {
       </Show>
       <Entity.Slot
         placement="content"
-        class="ph-no-capture font-semibold truncate items-center gap-2 flex"
+        class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
@@ -155,40 +155,18 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
-        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <span class="ph-no-capture text-ink-extra-muted text-xs">
-              <ProjectBreadCrumb
-                entity={entity()}
-                onClick={props.onProjectClick}
-              />
-            </span>
-          )}
-        </Show>
         <Show
           when={
-            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
+            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
           }
         >
-          <SharedBadge ownerId={props.entity.ownerId} />
-        </Show>
-        <Show when={isGithubPrEntity(props.entity) && props.entity}>
-          {(entity) => <GithubPullRequestPills entity={entity()} />}
-        </Show>
-        <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
-            <>
-              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-                <CallStatusBadge status={entity().status} />
-              </Show>
-              <span class="flex w-10 shrink-0 justify-end">
-                <CallParticipants participantIds={entity().participantIds} />
-              </span>
-            </>
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.PROJECT}
+              properties={entity().properties}
+            />
           )}
-        </Show>
-        <Show when={isTaskEntity(props.entity) && props.entity}>
-          {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
         <Show
           when={
@@ -225,19 +203,6 @@ export function WideLayout(props: LayoutProps) {
           )}
         </Show>
         <Show
-          when={
-            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
-          }
-        >
-          {(entity) => (
-            <RowTags
-              entityId={entity().id}
-              entityType={EntityType.PROJECT}
-              properties={entity().properties}
-            />
-          )}
-        </Show>
-        <Show
           when={rowTagsVisible() && isChatEntity(props.entity) && props.entity}
         >
           {(entity) => (
@@ -246,6 +211,41 @@ export function WideLayout(props: LayoutProps) {
               entityType={EntityType.CHAT}
               properties={entity().properties}
             />
+          )}
+        </Show>
+        <Show
+          when={
+            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
+          }
+        >
+          <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isGithubPrEntity(props.entity) && props.entity}>
+          {(entity) => <GithubPullRequestPills entity={entity()} />}
+        </Show>
+        <Show when={isCallEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <>
+              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
+                <CallStatusBadge status={entity().status} />
+              </Show>
+              <span class="flex w-10 shrink-0 justify-end">
+                <CallParticipants participantIds={entity().participantIds} />
+              </span>
+            </>
+          )}
+        </Show>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
+        </Show>
+        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <span class="ph-no-capture text-ink-extra-muted text-xs">
+              <ProjectBreadCrumb
+                entity={entity()}
+                onClick={props.onProjectClick}
+              />
+            </span>
           )}
         </Show>
       </Entity.Slot>

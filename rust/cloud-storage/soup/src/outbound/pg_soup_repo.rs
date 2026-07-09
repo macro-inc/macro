@@ -12,6 +12,7 @@ use crate::{
 };
 use either::Either;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
@@ -134,6 +135,18 @@ impl SoupRepo for PgSoupRepo {
         populate_properties(&self.pool.0, user_id, items)
     }
 
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
+        properties::outbound::property_definition_queries::get_caller_tag_definitions_with_options(
+            &self.pool.0,
+            user_id.as_ref(),
+        )
+        .await
+        .map_err(|e| sqlx::Error::Decode(e.into()))
+    }
+
     fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
@@ -188,14 +201,14 @@ pub(crate) async fn populate_properties(
 
     let property_ids = SystemPropertyKey::all_system_property_keys();
     let properties_map =
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
             property_ids,
-            Some(user_id.as_ref()),
+            Some(&user_id),
         )
         .await
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        .map_err(|e| sqlx::Error::Decode(e.into()))?;
 
     // `items` may repeat an id (one row per group it belongs to), so use
     // `.get()` not `.remove()` — every occurrence needs the props.

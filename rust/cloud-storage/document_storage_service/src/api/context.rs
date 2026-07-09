@@ -106,7 +106,7 @@ pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
 >;
 
-type DssEmailService = EmailServiceImpl<
+pub(crate) type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
@@ -129,6 +129,17 @@ pub(crate) type DssSoupService = SoupImpl<
 >;
 
 type DssSoupState = SoupRouterState<DssSoupService, DssEmailService, EntityAccessService>;
+
+/// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
+/// parameter lets GraphQL resolvers run the same axum extractors as the REST
+/// routes, lazily, against the stored request parts.
+#[cfg(feature = "graphql")]
+pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
+    DssSoupService,
+    DssEmailService,
+    EntityAccessService,
+    ApiContext,
+>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -174,14 +185,15 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
+        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
+
+        let access = self
+            .properties
+            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+            .await?;
+
         self.properties
-            .set_entity_property(
-                user_id,
-                entity_id,
-                models_properties::EntityType::Task,
-                property_definition_id,
-                value,
-            )
+            .set_entity_property(&access, property_definition_id, value)
             .await
             .map_err(Into::into)
     }
@@ -339,9 +351,9 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     #[cfg(feature = "graphql")]
-    pub graphql_soup_schema: graphql_soup::SharedSoupSchema<DssSoupService>,
+    pub graphql_soup_schema: DssGraphqlSoupSchema,
     #[cfg(feature = "graphql")]
-    pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
+    pub graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,
@@ -381,11 +393,10 @@ env_var! {
 
 impl From<&ApiContext> for PropertiesHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        PropertiesHandlerState {
-            db: ctx.db.clone(),
-            properties_service: ctx.properties_service.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
-        }
+        PropertiesHandlerState::new(
+            ctx.properties_service.clone(),
+            ctx.entity_access_service.clone(),
+        )
     }
 }
 
@@ -408,5 +419,16 @@ impl From<&ApiContext> for SearchHandlerState {
 impl FromRef<ApiContext> for SearchHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
         SearchHandlerState::from(ctx)
+    }
+}
+
+/// `#[derive(FromRef)]` only exposes direct field types, so hand the email
+/// router state out of the nested soup router state for extractors like
+/// `MultiEmailLinkExtractor` that key off `EmailRouterState`.
+impl FromRef<ApiContext>
+    for email::inbound::axum::previews_router::EmailRouterState<DssEmailService>
+{
+    fn from_ref(ctx: &ApiContext) -> Self {
+        FromRef::from_ref(&ctx.soup_router_state)
     }
 }

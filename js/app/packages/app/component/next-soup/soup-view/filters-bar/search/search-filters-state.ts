@@ -9,6 +9,7 @@ import {
   callStatusFromAttended,
   type FieldFilters,
   type PropertyFilter,
+  type TagFilterMode,
 } from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -26,14 +27,15 @@ export type SearchIndexId =
 export type SearchTypeValue = SearchIndexId | 'all';
 
 /** Search types where tag filtering applies: documents/tasks, emails, chats,
- * plus the mixed `all` view (tags there narrow the taggable result types and
- * leave the rest untouched). */
+ * folders, plus the mixed `all` view (tags there narrow the taggable result
+ * types and leave the rest untouched). */
 export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
   'all',
   'task',
   'document-or-file',
   'email',
   'agent',
+  'folders',
 ]);
 
 /**
@@ -71,8 +73,10 @@ export type SearchFiltersState = SearchFiltersSections & {
   // Selected tags. Applied only on the TAG_SEARCH_TYPES types and read live
   // from the compiled query, so they persist across those types but clear
   // when switching to a type where tags do not apply (channels/calls/etc).
-  // Each entry carries its owning definition id and option id; combined as one OR.
+  // Each entry carries its owning definition id and option id.
   tags: PropertyFilter[];
+  // How the selected tags combine: match any of them (default) or all.
+  tagMode: TagFilterMode;
 };
 
 export const DEFAULT_SECTIONS: SearchFiltersSections = {
@@ -100,6 +104,9 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   // silently empties a search narrowed to channels/calls.
   if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
     include.tagFilters = state.tags;
+    if (state.tagMode === 'all') {
+      include.tagFilterMode = 'all';
+    }
   }
 
   if (state.type === 'all') return { include, exclude };
@@ -201,6 +208,9 @@ export function createSearchFiltersController() {
   );
   const taskCreatedBy = createMemo(() => withoutNil(include().documentOwnerId));
   const tags = createMemo<PropertyFilter[]>(() => include().tagFilters ?? []);
+  const tagMode = createMemo<TagFilterMode>(
+    () => include().tagFilterMode ?? 'any'
+  );
 
   const currentSections = (): SearchFiltersSections => ({
     email: { importance: emailImportance(), inboxIds: emailInbox() },
@@ -221,6 +231,7 @@ export function createSearchFiltersController() {
   // switches (they compile only for TAG_SEARCH_TYPES, so `tags()` reads empty
   // on other types — snapshot them on switch-away so the selection survives).
   let stashedTags: PropertyFilter[] = [];
+  let stashedTagMode: TagFilterMode = 'any';
 
   const apply = (state: SearchFiltersState) =>
     batch(() => {
@@ -232,7 +243,13 @@ export function createSearchFiltersController() {
     });
 
   const applySections = (sections: Partial<SearchFiltersSections>) =>
-    apply({ type: type(), tags: tags(), ...currentSections(), ...sections });
+    apply({
+      type: type(),
+      tags: tags(),
+      tagMode: tagMode(),
+      ...currentSections(),
+      ...sections,
+    });
 
   const setType = (next: SearchTypeValue) => {
     const current = type();
@@ -264,9 +281,12 @@ export function createSearchFiltersController() {
 
     // Refresh the tag snapshot from the live value only while leaving a type
     // that compiles tags; other types read empty and would clobber it.
-    if (TAG_SEARCH_TYPES.has(current)) stashedTags = tags();
+    if (TAG_SEARCH_TYPES.has(current)) {
+      stashedTags = tags();
+      stashedTagMode = tagMode();
+    }
 
-    apply({ type: next, tags: stashedTags, ...stash });
+    apply({ type: next, tags: stashedTags, tagMode: stashedTagMode, ...stash });
   };
 
   return {
@@ -274,7 +294,20 @@ export function createSearchFiltersController() {
     setType,
     tags,
     setTags: (filters: PropertyFilter[]) =>
-      apply({ type: type(), tags: filters, ...currentSections() }),
+      apply({
+        type: type(),
+        tags: filters,
+        tagMode: tagMode(),
+        ...currentSections(),
+      }),
+    tagMode,
+    setTagMode: (mode: TagFilterMode) =>
+      apply({
+        type: type(),
+        tags: tags(),
+        tagMode: mode,
+        ...currentSections(),
+      }),
     emailImportance,
     setEmailImportance: (importance: boolean | undefined) =>
       applySections({ email: { importance, inboxIds: emailInbox() } }),

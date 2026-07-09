@@ -1,6 +1,7 @@
 use crate::api::ApiContext;
 use crate::utils::extract_email_with_response;
 use anyhow::Context;
+use authentication_service_client::error::AuthServiceClientError;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -25,10 +26,16 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Error, AsRefStr)]
 pub enum InitError {
     #[error("User is already initialized")]
     AlreadyInitialized,
+
+    #[error("No Gmail grant available to provision from")]
+    NoGmailGrant,
 
     #[error("Job limit exceeded")]
     TooManyJobs,
@@ -56,18 +63,41 @@ pub enum InitError {
     },
 }
 
-impl IntoResponse for InitError {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
-            InitError::AlreadyInitialized | InitError::BadRequest(_) | InitError::Parse(_) => {
-                StatusCode::BAD_REQUEST
-            }
+/// Stable machine-readable code for [`InitError::AlreadyInitialized`].
+pub const ALREADY_INITIALIZED_CODE: &str = "ALREADY_INITIALIZED";
+
+/// Stable machine-readable code for [`InitError::NoGmailGrant`].
+pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
+
+/// Structured 400 body carrying a machine-readable code. Clients branch on
+/// `code` instead of parsing the human message.
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+pub struct InitErrorCodeResponse {
+    /// Stable machine-readable error code.
+    pub code: String,
+    /// Human-readable explanation.
+    pub message: String,
+}
+
+impl InitError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            InitError::AlreadyInitialized
+            | InitError::NoGmailGrant
+            | InitError::BadRequest(_)
+            | InitError::Parse(_) => StatusCode::BAD_REQUEST,
             InitError::TooManyJobs => StatusCode::TOO_MANY_REQUESTS,
             InitError::EnqueueError | InitError::DatabaseError(_) | InitError::GmailError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             InitError::SharedInboxConflict { .. } => StatusCode::CONFLICT,
-        };
+        }
+    }
+}
+
+impl IntoResponse for InitError {
+    fn into_response(self) -> Response {
+        let status_code = self.status_code();
 
         match self {
             InitError::SharedInboxConflict {
@@ -80,6 +110,22 @@ impl IntoResponse for InitError {
                     email_address,
                     existing_owner_email,
                     existing_link_id,
+                }),
+            )
+                .into_response(),
+            InitError::AlreadyInitialized => (
+                status_code,
+                Json(InitErrorCodeResponse {
+                    code: ALREADY_INITIALIZED_CODE.to_string(),
+                    message: InitError::AlreadyInitialized.to_string(),
+                }),
+            )
+                .into_response(),
+            InitError::NoGmailGrant => (
+                status_code,
+                Json(InitErrorCodeResponse {
+                    code: NO_GMAIL_GRANT_CODE.to_string(),
+                    message: InitError::NoGmailGrant.to_string(),
                 }),
             )
                 .into_response(),
@@ -137,15 +183,37 @@ pub struct InitParams {
     operation_id = "init_user",
     responses(
             (status = 200, body=InitResponse),
-            (status = 400, body=ErrorResponse),
+            (status = 400, body=InitErrorCodeResponse),
             (status = 401, body=ErrorResponse),
             (status = 409, body=SharedInboxConflictResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_extractor), fields(user_id=user_extractor.user_context.user_id, fusionauth_user_id=user_extractor.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, user_extractor), fields(user_id=user_extractor.user_context.user_id, fusionauth_user_id=user_extractor.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    query: Query<InitParams>,
+    user_extractor: MacroUserExtractor,
+) -> Result<Response, InitError> {
+    // Init runs on every authentication, so its expected no-op outcomes (400s)
+    // must not error-log. The span skips the auto err event and the result is
+    // classified here, inside the span, where user fields still attach.
+    let result = init_user(ctx, query, user_extractor).await;
+    if let Err(e) = &result {
+        let status = e.status_code();
+        if status.is_server_error() {
+            tracing::error!(error = ?e, "init failed");
+        } else if status == StatusCode::TOO_MANY_REQUESTS {
+            tracing::warn!(error = %e, "init rate limited");
+        } else {
+            tracing::debug!(error = %e, "init declined");
+        }
+    }
+    result
+}
+
+async fn init_user(
+    ctx: ApiContext,
     Query(InitParams {
         link_id,
         force_share,
@@ -504,13 +572,8 @@ pub async fn handler(
 
         enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &email).await?;
 
-        let gmail_token = email_service::util::gmail::auth::fetch_gmail_token_no_cache(
-            &user_context,
-            &ctx.redis_client,
-            &ctx.auth_service_client,
-        )
-        .await
-        .map_err(|_| InitError::BadRequest("Failed to fetch Gmail token".to_string()))?;
+        let gmail_token =
+            fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &email).await?;
 
         let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
@@ -682,10 +745,25 @@ async fn register_watch_recovering(
                 .stop_watch(access_token)
                 .await
                 .context("Failed to stop stale Gmail watch before retry")?;
-            Ok(client.register_watch(access_token).await?)
+            client
+                .register_watch(access_token)
+                .await
+                .map_err(classify_watch_error)
         }
-        Err(e) => Err(e.into()),
+        Err(e) => Err(classify_watch_error(e)),
     }
+}
+
+/// Maps a watch-registration failure to its init error. Google refreshes tokens
+/// regardless of granted scopes, so a grant missing the Gmail scope passes the
+/// token fetch and is first rejected here with a 403 — an expected outcome
+/// (scope declined at consent), logged at debug so it doesn't page.
+fn classify_watch_error(e: GmailError) -> InitError {
+    if matches!(e, GmailError::Forbidden) {
+        tracing::debug!("gmail watch rejected for insufficient scope, no usable gmail grant");
+        return InitError::NoGmailGrant;
+    }
+    e.into()
 }
 
 /// Fetches a Gmail access token scoped to a specific linked email. Use this instead
@@ -707,10 +785,22 @@ async fn fetch_gmail_token_for_email(
 
     email::outbound::fetch_gmail_access_token_no_cache(&key, &conn, &ctx.auth_service_client)
         .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to fetch gmail token for linked email");
-            InitError::BadRequest("Failed to fetch Gmail token for linked email".to_string())
-        })
+        .map_err(classify_token_fetch_error)
+}
+
+/// Maps a token-fetch failure to its init error. A 404 from the auth service
+/// means no Gmail grant exists for the requested inbox — an expected outcome
+/// (scope declined or grant removed), logged at debug so it doesn't page.
+fn classify_token_fetch_error(e: anyhow::Error) -> InitError {
+    if matches!(
+        e.downcast_ref::<AuthServiceClientError>(),
+        Some(AuthServiceClientError::NotFound)
+    ) {
+        tracing::debug!(error=?e, "no gmail grant for requested inbox");
+        return InitError::NoGmailGrant;
+    }
+    tracing::error!(error=?e, "unable to fetch gmail token for requested inbox");
+    InitError::BadRequest("Failed to fetch Gmail token".to_string())
 }
 
 /// Upserts the `email_links` row and seeds the gmail history entry for an already-registered
