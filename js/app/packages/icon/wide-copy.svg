@@ -1,4 +1,4 @@
-<svg width="100%" height="100%" viewBox="0 -3 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" overflow="visible" xmlns="http://www.w3.org/2000/svg">
+<svg width="100%" height="100%" viewBox="0 -3 18 18" fill="none" stroke="currentColor" stroke-width="1.125" stroke-linecap="round" stroke-linejoin="round" overflow="visible" xmlns="http://www.w3.org/2000/svg">
 <path stroke-linecap="butt" d="M3.5625 3.5625L3.5625 2.0625A1.5 1.5 0 0 1 5.0625 0.5625L15.9375 0.5625A1.5 1.5 0 0 1 17.25 2.0625L17.25 6.9375A1.5 1.5 0 0 1 15.9375 8.4375L14.4375 8.4375"/>
 <rect x="0.75" y="3.5625" width="13.875" height="7.875" rx="1.5"/>
 </svg>

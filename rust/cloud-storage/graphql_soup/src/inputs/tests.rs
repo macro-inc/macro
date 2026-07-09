@@ -5,14 +5,10 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 use super::*;
 
-fn test_request_context() -> GraphqlSoupRequestContext {
-    GraphqlSoupRequestContext {
-        macro_user_id: MacroUserIdStr::parse_from_str("macro|user@example.com")
-            .unwrap()
-            .into_owned(),
-        link_ids: vec![],
-        team_receipt: None,
-    }
+fn test_macro_user_id() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user@example.com")
+        .unwrap()
+        .into_owned()
 }
 
 #[test]
@@ -25,7 +21,7 @@ fn maps_email_view_to_soup_request() {
         email_view: Some(GraphqlEmailView::Sent),
         filters: None,
     }
-    .into_request(&test_request_context())
+    .into_request(test_macro_user_id(), vec![])
     .unwrap();
 
     assert_eq!(request.email_preview_view.to_string(), "sent");
@@ -41,7 +37,7 @@ fn defaults_email_view_to_inbox() {
         email_view: None,
         filters: None,
     }
-    .into_request(&test_request_context())
+    .into_request(test_macro_user_id(), vec![])
     .unwrap();
 
     assert_eq!(request.email_preview_view.to_string(), "inbox");

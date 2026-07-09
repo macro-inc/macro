@@ -378,7 +378,7 @@ export function FloatingLinkMenu(props: {
           {(link) => (
             <ScopedPortal>
               <div
-                class="p-2 absolute top-0 left-0 z-10 bg-surface w-80 shadow-lg ring-edge-muted rounded-sm ring-1"
+                class="p-2 absolute top-0 left-0 z-10 bg-surface w-80 shadow-lg ring-edge-muted rounded-sm ring"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,

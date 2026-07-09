@@ -221,6 +221,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 multipleSplits() &&
                 !props.handle.isSpotLight()
               }
+              highlightColor="oklch(var(--a0l) var(--a0c) var(--a0h) / 0.5)"
               class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
               depth={isMobile() ? 0 : 1}
             >

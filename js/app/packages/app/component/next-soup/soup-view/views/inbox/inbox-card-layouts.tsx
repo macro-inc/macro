@@ -587,7 +587,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     const location = channelLocation(entity());
     const tag = getNotificationTag(props.item.notification);
 
-    let sender = isDM() ? entity().name || messageSenderName() : '';
+    const sender = isDM() ? entity().name || messageSenderName() : '';
     let action = '';
 
     if (tag === 'document_mention' && isDM()) {

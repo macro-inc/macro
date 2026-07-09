@@ -85,7 +85,7 @@ export const AnimatedSearchIcon = (props: {
           r="4.6875"
           fill="none"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
         />
 
         <line
@@ -95,7 +95,7 @@ export const AnimatedSearchIcon = (props: {
           x2="5.25"
           y2="13.5"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
 
@@ -106,7 +106,7 @@ export const AnimatedSearchIcon = (props: {
           x2="-.25"
           y2="5"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
 
@@ -117,7 +117,7 @@ export const AnimatedSearchIcon = (props: {
           x2="5.25"
           y2="0"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
 
@@ -128,7 +128,7 @@ export const AnimatedSearchIcon = (props: {
           x2="13.75"
           y2="5"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
       </g>

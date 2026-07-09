@@ -100,7 +100,7 @@ export function WideLayout(props: LayoutProps) {
       </Show>
       <Entity.Slot
         placement="content"
-        class="ph-no-capture font-semibold truncate items-center gap-2 flex"
+        class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />

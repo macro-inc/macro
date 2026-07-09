@@ -228,7 +228,7 @@ export default function IconGallery() {
                     onClick={() => setSelectedColor(color)}
                     class="size-2.5 rounded-[1px] transition-transform hover:scale-125"
                     classList={{
-                      'ring-1 ring-ink ring-offset-1':
+                      'ring ring-ink ring-offset-1':
                         selectedColor().value === color.value,
                     }}
                     style={{ background: color.css }}
@@ -243,7 +243,7 @@ export default function IconGallery() {
               <label
                 class="relative size-2.5 rounded-[1px] transition-transform hover:scale-125"
                 classList={{
-                  'ring-1 ring-ink ring-offset-1':
+                  'ring ring-ink ring-offset-1':
                     selectedColor().value === 'custom',
                 }}
                 style={{

@@ -1251,8 +1251,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
         <Resize.Zone direction="horizontal" gutter={0}>
           <Resize.Panel
             id="soup-list"
-            minSize={200}
-            maxSize={paneVisible() ? 840 : undefined}
+            minSize={300}
+            maxSize={paneVisible() ? 440 : undefined}
           >
             <SoupViewFileDropzone>
               <div
@@ -1608,10 +1608,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
           <Show when={paneVisible()}>
             <Resize.Panel
               id="soup-preview"
-              minSize={500}
+              minSize={0}
               target={{
                 kind: 'percent',
-                percent: isNewInboxEnabled() ? 75 : 70,
+                percent: isNewInboxEnabled() ? 55 : 70,
               }}
             >
               <div
