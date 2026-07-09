@@ -5164,6 +5164,7 @@
       "opensearch_client",
       "opensearch_query_builder",
       "prompt",
+      "properties",
       "rate_limit",
       "remote_env_var",
       "s3_key",
