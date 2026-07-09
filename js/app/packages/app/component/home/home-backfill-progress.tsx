@@ -1,14 +1,11 @@
+import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import {
   type BackfillProgress,
   getBackfillProgress,
 } from '@queries/email/backfill';
 import { useEmailLinksQuery } from '@queries/email/link';
-import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
-
-// TEMP PREVIEW: set to true to render an animated fake import for design review.
-// Remove this flag (and the preview block below) before shipping.
-const BACKFILL_PREVIEW = true;
+import { SyncStatus } from '@service-email/generated/schemas';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 
 /**
  * Slim inbox-import line for the home header. Shows a spinner, label, a thin
@@ -18,28 +15,17 @@ const BACKFILL_PREVIEW = true;
 export function HomeBackfillProgress() {
   const linksQuery = useEmailLinksQuery();
 
-  // TEMP PREVIEW: animated fake progress so the importing state can be reviewed.
-  const [preview, setPreview] = createSignal<BackfillProgress>({
-    completed: 480,
-    total: 840,
-    samples: [],
-  });
-  if (BACKFILL_PREVIEW) {
-    const timer = setInterval(() => {
-      setPreview((p) => ({
-        ...p,
-        completed: p.completed >= p.total ? 480 : p.completed + 8,
-      }));
-    }, 700);
-    onCleanup(() => clearInterval(timer));
-  }
-
-  const active = createMemo<BackfillProgress[]>(() => {
-    if (BACKFILL_PREVIEW) return [preview()];
-    return (linksQuery.data?.links ?? [])
+  const active = createMemo<BackfillProgress[]>(() =>
+    (linksQuery.data?.links ?? [])
       .map((link) => getBackfillProgress(link.id))
-      .filter((p): p is BackfillProgress => p !== undefined && p.total > 0);
-  });
+      .filter((p): p is BackfillProgress => p !== undefined && p.total > 0)
+  );
+
+  const isImporting = createMemo(() =>
+    (linksQuery.data?.links ?? []).some(
+      (link) => link.sync_status === SyncStatus.SYNCING
+    )
+  );
 
   const totals = createMemo(() => {
     const entries = active();
@@ -57,23 +43,32 @@ export function HomeBackfillProgress() {
   };
 
   return (
-    <Show when={active().length > 0}>
+    <Show when={active().length > 0 || isImporting()}>
       <div class="rounded-xl border border-edge-muted bg-active p-4">
         <div class="flex items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-2">
             <ArrowsClockwiseIcon class="size-3.5 shrink-0 animate-spin text-ink-muted" />
             <span class="text-sm text-ink">Importing your inbox</span>
           </div>
-          <span class="shrink-0 text-xs tabular-nums text-ink-muted">
-            {totals().completed.toLocaleString()} /{' '}
-            {totals().total.toLocaleString()}
-          </span>
+          <Show when={active().length > 0}>
+            <span class="shrink-0 text-xs tabular-nums text-ink-muted">
+              {totals().completed.toLocaleString()} /{' '}
+              {totals().total.toLocaleString()}
+            </span>
+          </Show>
         </div>
         <div class="mt-3 h-1 w-full overflow-hidden rounded-full bg-edge-muted">
-          <div
-            class="h-full rounded-full bg-ink transition-[width] duration-500 ease-out"
-            style={{ width: `${percent()}%` }}
-          />
+          <Switch>
+            <Match when={active().length > 0}>
+              <div
+                class="h-full rounded-full bg-ink transition-[width] duration-500 ease-out"
+                style={{ width: `${percent()}%` }}
+              />
+            </Match>
+            <Match when={isImporting()}>
+              <div class="h-full w-1/3 animate-pulse rounded-full bg-ink-muted" />
+            </Match>
+          </Switch>
         </div>
       </div>
     </Show>

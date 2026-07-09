@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
@@ -21,122 +22,14 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedSearchIcon } from '@icon/wide-search';
 import { Navigate } from '@solidjs/router';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  type JSX,
-  Show,
-} from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { $getRoot } from 'lexical';
+import { createEffect, createMemo } from 'solid-js';
 import { HomeBackfillProgress } from './home-backfill-progress';
-import { HomeHub } from './home-hub';
-import { dismissCard, isDismissed } from './home-prefs';
+import { HomeExamples } from './home-examples';
+import { GettingStartedSection, RecommendedSection } from './home-hub';
+import { createHomePreferences } from './home-prefs';
 import { HomeSectionBoundary } from './home-section-boundary';
-
-type HomeExample = {
-  icon: (props: { class?: string; triggerAnimation?: boolean }) => JSX.Element;
-  title: string;
-  description: string;
-  prompt: string;
-};
-
-const HOME_EXAMPLES: HomeExample[] = [
-  {
-    icon: AnimatedFileMdIcon,
-    title: 'Draft a document',
-    description: 'Start from an idea',
-    prompt: 'Help me draft a document about ',
-  },
-  {
-    icon: AnimatedEmailIcon,
-    title: 'Draft an email',
-    description: 'Reply or compose',
-    prompt: 'Help me draft an email to ',
-  },
-  {
-    icon: AnimatedSearchIcon,
-    title: 'Search & research',
-    description: 'Across your workspace',
-    prompt: 'Research and summarize everything we have about ',
-  },
-];
-
-function XIcon(props: { class?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class={props.class}
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
-
-function HomeExamples() {
-  const input = useChatInputContext();
-  const [hovered, setHovered] = createSignal<number | null>(null);
-
-  return (
-    <Show when={!isDismissed('examples')}>
-      <section>
-        <div class="mb-2 flex items-center justify-between px-1">
-          <span class="text-sm text-ink-muted">
-            Get started with some examples
-          </span>
-          <button
-            type="button"
-            class="rounded-md p-1 text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted"
-            aria-label="Dismiss examples"
-            onClick={() => dismissCard('examples')}
-          >
-            <XIcon class="size-3.5" />
-          </button>
-        </div>
-        <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-          <For each={HOME_EXAMPLES}>
-            {(example, i) => (
-              <button
-                type="button"
-                class="group flex flex-col gap-1 rounded-xl border border-edge-muted bg-active p-3 text-left transition-colors hover:bg-hover"
-                onClick={() => input.setPendingDraft(example.prompt)}
-                onMouseEnter={() => setHovered(i())}
-                onMouseLeave={() =>
-                  setHovered((prev) => (prev === i() ? null : prev))
-                }
-              >
-                <div class="flex items-center gap-2">
-                  <Dynamic
-                    component={example.icon}
-                    triggerAnimation={hovered() === i()}
-                    class="size-4 shrink-0 text-ink-muted transition-colors group-hover:text-accent"
-                  />
-                  <span class="text-sm font-medium text-ink">
-                    {example.title}
-                  </span>
-                </div>
-                <span class="truncate text-xs text-ink-muted">
-                  {example.description}
-                </span>
-              </button>
-            )}
-          </For>
-        </div>
-      </section>
-    </Show>
-  );
-}
 
 const MACRO_LOGO_PATH =
   'm6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z';
@@ -188,6 +81,7 @@ export function Home() {
 
 function HomeContent() {
   const user = useUserContext();
+  const preferences = createHomePreferences();
 
   const firstName = createMemo(() => {
     const name = user.author();
@@ -226,10 +120,10 @@ function HomeContent() {
       }</style>
 
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 md:pt-16">
+        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 mobile:pb-(--mobile-content-inset-bottom) md:pt-16">
           <header class="flex items-center gap-2.5">
             <AnimatedHeroLogo class="size-6 shrink-0 text-accent" />
-            <h1 class="text-2xl font-normal tracking-tight text-ink">
+            <h1 class="text-xl font-normal tracking-tight text-ink">
               {greeting()}, <span class="capitalize">{firstName()}</span>
             </h1>
           </header>
@@ -238,23 +132,25 @@ function HomeContent() {
             <HomeBackfillProgress />
           </HomeSectionBoundary>
 
-          <HomeSectionBoundary title="hub">
-            <HomeHub />
+          <HomeSectionBoundary title="recommendations" fallback={null}>
+            <RecommendedSection />
+          </HomeSectionBoundary>
+
+          <HomeSectionBoundary title="getting started" fallback={null}>
+            <GettingStartedSection preferences={preferences} />
           </HomeSectionBoundary>
 
           <HomeSectionBoundary title="examples">
-            <HomeExamples />
+            <HomeExamples preferences={preferences} />
           </HomeSectionBoundary>
         </div>
       </div>
 
-      <div class="shrink-0">
-        <div class="mx-auto w-full max-w-3xl px-4 pb-3 mobile:px-(--mobile-chrome-gutter) mobile:pb-(--mobile-content-inset-bottom)">
-          <div class="pointer-events-auto">
-            <HomeChatInput />
-          </div>
+      <FloatRegionOrInline region="accessory">
+        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto mobile:px-(--mobile-chrome-gutter) mobile:pb-0">
+          <HomeChatInput />
         </div>
-      </div>
+      </FloatRegionOrInline>
     </main>
   );
 }
@@ -277,8 +173,16 @@ const HomeChatInput = () => {
   });
 
   const applyDraft = (text: string) => {
-    editor.controls.setMarkdown(text);
-    requestAnimationFrame(() => editor.controls.focus());
+    const current = editor.controls.getMarkdown().trim();
+    editor.controls.setMarkdown(current ? `${current}\n\n${text}` : text);
+    requestAnimationFrame(() => {
+      editor.controls.focus();
+      // Focus lands at the start of the document; drafts are prompt prefixes,
+      // so the caret belongs at the end, ready to complete the sentence.
+      editor.controls.getLexical().update(() => {
+        $getRoot().selectEnd();
+      });
+    });
   };
 
   // Drafts requested from elsewhere on the home (e.g. a suggested action row).

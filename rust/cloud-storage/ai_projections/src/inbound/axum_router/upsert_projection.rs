@@ -3,16 +3,17 @@
 
 use axum::{Json, extract::State};
 use chrono::{DateTime, Utc};
+use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{
-    ai_projection_service::AiProjectionService,
+    ai_projection_service::{AiProjectionService, requires_professional_features},
     model::{
         Expiry, ProjectionStatus, RefreshCadence, TargetType, UpsertProjectionError,
         UpsertProjectionParams, UserAiProjection,
     },
 };
 
-use super::{AiProjectionRouterState, premium_user::PremiumUserExtractor};
+use super::AiProjectionRouterState;
 
 /// Request body for getting or creating an ai projection. The concrete target
 /// id is resolved from the authenticated user, so only the target type is sent.
@@ -97,13 +98,24 @@ impl From<UserAiProjection> for ProjectionStateResponse {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: AiProjectionService>(
     State(state): State<AiProjectionRouterState<T>>,
-    premium_user: PremiumUserExtractor,
+    user: MacroUserExtractor,
     Json(req): Json<UpsertProjectionRequest>,
 ) -> Result<Json<ProjectionStateResponse>, UpsertProjectionError> {
+    // Free-tier models are available to everyone; anything else (including
+    // the default smart model when no model is named) is premium-only.
+    if requires_professional_features(req.model.as_deref())
+        && !state
+            .service
+            .has_professional_features(&user.macro_user_id)
+            .await?
+    {
+        return Err(UpsertProjectionError::ProfessionalFeaturesRequired);
+    }
+
     let target_projection = state
         .service
         .upsert_projection(
-            &premium_user.macro_user_id,
+            &user.macro_user_id,
             UpsertProjectionParams {
                 id: req.id,
                 prompt: req.prompt,

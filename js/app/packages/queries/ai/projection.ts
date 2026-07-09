@@ -189,31 +189,44 @@ export function createAIProjection<Schema extends z.ZodType>(
   /** The projection result: schema-parsed object when a schema is set,
    * otherwise the raw text. Undefined until a result exists (stale results
    * remain visible while refreshing). */
-  const data = createMemo((): z.infer<Schema> | string | undefined => {
-    const raw = query.data?.data;
-    if (raw === null || raw === undefined) return undefined;
+  const parsedResult = createMemo(
+    (): {
+      data: z.infer<Schema> | string | undefined;
+      error?: string;
+    } => {
+      const raw = query.data?.data;
+      if (raw === null || raw === undefined) return { data: undefined };
 
-    const schema = options().schema;
-    if (!schema) return raw;
+      const schema = options().schema;
+      if (!schema) return { data: raw };
 
-    let json: unknown;
-    try {
-      json = JSON.parse(raw);
-    } catch (error) {
-      console.error('ai projection result is not valid JSON', error);
-      return undefined;
+      let json: unknown;
+      try {
+        json = JSON.parse(raw);
+      } catch (error) {
+        console.error('ai projection result is not valid JSON', error);
+        return {
+          data: undefined,
+          error: 'AI projection result is not valid JSON',
+        };
+      }
+
+      const parsed = schema.safeParse(json);
+      if (!parsed.success) {
+        console.error(
+          'ai projection result failed schema validation',
+          parsed.error
+        );
+        return {
+          data: undefined,
+          error: 'AI projection result failed schema validation',
+        };
+      }
+      return { data: parsed.data };
     }
+  );
 
-    const parsed = schema.safeParse(json);
-    if (!parsed.success) {
-      console.error(
-        'ai projection result failed schema validation',
-        parsed.error
-      );
-      return undefined;
-    }
-    return parsed.data;
-  });
+  const data = createMemo(() => parsedResult().data);
 
   const status = () => query.data?.status;
 
@@ -229,7 +242,11 @@ export function createAIProjection<Schema extends z.ZodType>(
       return current !== undefined && GENERATING_STATUSES.includes(current);
     },
     /** Materialization error (from the projection) or request error message. */
-    error: () => query.data?.error ?? query.error?.message ?? undefined,
+    error: () =>
+      query.data?.error ??
+      query.error?.message ??
+      parsedResult().error ??
+      undefined,
     /** Re-trigger generation, keeping stale data visible meanwhile. */
     refresh,
     /** The underlying tanstack query, for advanced use. */
