@@ -140,6 +140,8 @@
         '';
       };
 
+      gioTlsModulePath = "${pkgs.glib-networking}/lib/gio/modules";
+
       wrappedTauriDesktop = pkgs.symlinkJoin {
         name = "macro-tauri-desktop-${appVersion}";
         paths = [ tauri.app ];
@@ -165,8 +167,10 @@
                 pkgs.gst_all_1.gst-plugins-bad
                 pkgs.gst_all_1.gst-libav
                 pkgs.openssl
+                pkgs.glib-networking
               ]
             } \
+            --prefix GIO_EXTRA_MODULES : "${gioTlsModulePath}" \
             --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
             --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${
               lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
@@ -209,6 +213,7 @@
           #include <dirent.h>
           #include <stdio.h>
           #include <stdlib.h>
+          #include <sys/stat.h>
           #include <string.h>
           #include <unistd.h>
 
@@ -247,6 +252,37 @@
             closedir(dir);
           }
 
+          static void install_gio_tls_hook(const char *appdir) {
+            if (appdir == NULL) return;
+
+            size_t appdir_len = strlen(appdir);
+            char *hooks_dir = malloc(appdir_len + strlen("/apprun-hooks") + 1);
+            sprintf(hooks_dir, "%s/apprun-hooks", appdir);
+            mkdir(hooks_dir, 0755);
+
+            char *hook_path = malloc(strlen(hooks_dir) + strlen("/macro-gio-tls.sh") + 2);
+            sprintf(hook_path, "%s/macro-gio-tls.sh", hooks_dir);
+
+            FILE *hook = fopen(hook_path, "w");
+            if (hook != NULL) {
+              fputs("#! /usr/bin/env bash\n"
+                    "export APPDIR=\"''${APPDIR:-\"$(dirname \"$(realpath \"$0\")\")\"}\"\n"
+                    "gio_modules=\"$APPDIR/usr/lib/gio/modules\"\n"
+                    "if [ -d \"$gio_modules\" ]; then\n"
+                    "  case \":''${GIO_EXTRA_MODULES:-}:\" in\n"
+                    "    *:\"$gio_modules\":*) ;;\n"
+                    "    *) export GIO_EXTRA_MODULES=\"$gio_modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}\" ;;\n"
+                    "  esac\n"
+                    "fi\n",
+                    hook);
+              fclose(hook);
+              chmod(hook_path, 0755);
+            }
+
+            free(hook_path);
+            free(hooks_dir);
+          }
+
           int main(int argc, char **argv) {
             const char *appdir = NULL;
             for (int i = 1; i < argc; i++) {
@@ -257,6 +293,7 @@
               }
             }
             sanitize_appdir(appdir);
+            install_gio_tls_hook(appdir);
 
             char *slash = strrchr(argv[0], '/');
             if (slash != NULL) {
@@ -347,6 +384,7 @@
         pkgs.gst_all_1.gst-plugins-bad
         pkgs.gst_all_1.gst-libav
         pkgs.openssl
+        pkgs.glib-networking
       ];
       tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;
       tauriRuntimeClosure = pkgs.closureInfo {
@@ -364,6 +402,10 @@
           linux.appimage.files = {
             "/usr/bin/xdg-mime" = "${pkgs.xdg-utils}/bin/xdg-mime";
             "/usr/bin/xdg-open" = "${pkgs.xdg-utils}/bin/xdg-open";
+            "/usr/lib/gio/modules/giomodule.cache" = "${pkgs.glib-networking}/lib/gio/modules/giomodule.cache";
+            "/usr/lib/gio/modules/libgiognomeproxy.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiognomeproxy.so";
+            "/usr/lib/gio/modules/libgiognutls.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiognutls.so";
+            "/usr/lib/gio/modules/libgiolibproxy.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiolibproxy.so";
           };
         };
       };
