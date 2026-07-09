@@ -174,6 +174,10 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// required by the `Viewed*` sort variants (per-user
     /// `UserHistory` join); see
     /// [`CompaniesRepository::list_companies_for_soup`].
+    ///
+    /// `hidden = Some(true)` requires an admin/owner role on the
+    /// receipt; the service returns [`CrmError::AdminRoleRequired`]
+    /// otherwise.
     #[allow(clippy::too_many_arguments)]
     fn list_companies_for_soup(
         &self,
@@ -521,6 +525,9 @@ where
         cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
+        if hidden == Some(true) && !access.include_hidden() {
+            return Err(CrmError::AdminRoleRequired);
+        }
         let team_id = access.team_id();
         self.companies_repository
             .list_companies_for_soup(&team_id, user_id, company_ids, hidden, sort, cursor, limit)

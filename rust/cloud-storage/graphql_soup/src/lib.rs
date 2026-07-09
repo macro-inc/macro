@@ -4,7 +4,6 @@
 //! existing `soup` domain service without changing the existing REST API.
 #![deny(missing_docs)]
 
-mod auth;
 mod inputs;
 mod loaders;
 mod objects;
@@ -26,7 +25,6 @@ pub use objects::{
 };
 pub use request_context::GraphqlSoupRequestParts;
 pub use schema::{
-    SchemaOnlyEmailService, SchemaOnlyEntityAccessService, SchemaOnlySoupSchema,
-    SchemaOnlySoupService, SchemaOnlyState, SharedSoupSchema, SharedSoupService, SoupQueryRoot,
+    SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SharedSoupService, SoupQueryRoot,
     SoupSchema, build_schema, build_schema_from_arc, build_schema_with_service,
 };

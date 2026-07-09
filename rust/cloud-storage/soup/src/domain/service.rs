@@ -460,7 +460,10 @@ where
                 limit,
             )
             .await
-            .map_err(|_| SoupErr::CrmErr)?
+            .map_err(|err| match err {
+                crm::domain::model::CrmError::AdminRoleRequired => SoupErr::CrmAdminRequired,
+                _ => SoupErr::CrmErr,
+            })?
             .into_iter()
             .map(|company| SoupItem::CrmCompany(SoupCrmCompany::from(company)))
             .collect();
@@ -559,6 +562,19 @@ where
         let entity_filter = req.filters().clone();
         let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);
+
+        // CRM-scoped visibility (team-wide email scope or hidden CRM
+        // companies) requires a team receipt. Without this check the CRM
+        // sub-request would silently skip for no-team callers, disguising
+        // "no access" as "no data". The admin/owner role gate for hidden
+        // companies lives one layer down in the CRM service, derived from
+        // the receipt itself.
+        if let Some(ast) = req.entity_ast()
+            && (ast.requests_crm_scope() || ast.requests_crm_admin())
+            && team_receipt.is_none()
+        {
+            return Err(SoupErr::CrmTeamRequired);
+        }
 
         // Borrow before email's builder consumes team_receipt.
         let crm_company_request = req.build_crm_company_request(&team_receipt);

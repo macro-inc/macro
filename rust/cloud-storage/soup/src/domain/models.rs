@@ -369,7 +369,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     /// The request's entity filter ast, regardless of cursor position.
-    fn entity_ast(&self) -> Option<&EntityFilterAst> {
+    pub(crate) fn entity_ast(&self) -> Option<&EntityFilterAst> {
         match &self.cursor {
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
             SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
@@ -640,8 +640,8 @@ pub struct GetCrmCompaniesRequest {
     pub company_ids: Vec<Uuid>,
     /// Optional `crm_companies.hidden` filter. `None` = visible only
     /// (default); `Some(false)` = visible only (explicit); `Some(true)`
-    /// = hidden only. The admin/owner role check is enforced upstream
-    /// in soup's axum router before reaching this request.
+    /// = hidden only. The admin/owner role check is enforced by the CRM
+    /// service from `access` when this request is executed.
     pub hidden: Option<bool>,
     /// Which timestamp column to sort by.
     pub sort: CrmCompanyListSort,
@@ -794,6 +794,14 @@ pub enum SoupErr {
     /// CRM lookup failed.
     #[error("A CRM error has occurred, see logs for more details")]
     CrmErr,
+    /// The filter requested CRM-scoped data but the caller has no
+    /// qualifying team membership.
+    #[error("CRM-scoped queries require team membership")]
+    CrmTeamRequired,
+    /// The filter requested hidden CRM companies but the caller's team
+    /// role is below admin/owner.
+    #[error("Querying hidden CRM companies requires admin/owner team role")]
+    CrmAdminRequired,
     /// Foreign entity lookup failed.
     #[error(transparent)]
     ForeignEntityErr(#[from] ForeignEntityError),
