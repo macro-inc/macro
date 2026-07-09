@@ -21,11 +21,10 @@ export function HomeBackfillProgress() {
       .filter((p): p is BackfillProgress => p !== undefined && p.total > 0)
   );
 
-  const isImporting = createMemo(() =>
+  const isImporting = () =>
     (linksQuery.data?.links ?? []).some(
       (link) => link.sync_status === SyncStatus.SYNCING
-    )
-  );
+    );
 
   const totals = createMemo(() => {
     const entries = active();

@@ -48,9 +48,7 @@ export function HomeExamples(props: { preferences: HomePreferences }) {
     <Show when={!isMobile() && !props.preferences.isDismissed('examples')}>
       <section>
         <div class="mb-2 flex items-center justify-between px-1">
-          <span class="text-sm text-ink-muted">
-            Get started with some examples
-          </span>
+          <span class="text-sm text-ink-muted">Examples</span>
           <button
             type="button"
             class="rounded-md p-1 text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted"

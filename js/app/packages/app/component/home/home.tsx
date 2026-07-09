@@ -28,7 +28,7 @@ import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Navigate } from '@solidjs/router';
 import { $getRoot } from 'lexical';
-import { createEffect, createMemo } from 'solid-js';
+import { createEffect } from 'solid-js';
 import { HomeBackfillProgress } from './home-backfill-progress';
 import { HomeExamples } from './home-examples';
 import { GettingStartedSection, RecommendedSection } from './home-hub';
@@ -67,6 +67,13 @@ function AnimatedHeroLogo(props: { class?: string }) {
   );
 }
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function Home() {
   return (
     <ShowFeatureFlag
@@ -87,17 +94,12 @@ function HomeContent() {
   const user = useUserContext();
   const preferences = createHomePreferences();
 
-  const firstName = createMemo(() => {
+  const firstName = () => {
     const name = user.author();
     return name.includes('@') ? name.split('@')[0] : name.split(' ')[0];
-  });
+  };
 
-  const greeting = createMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  });
+  const greeting = getGreeting();
 
   return (
     <main class="relative flex h-full flex-col bg-surface">
@@ -128,7 +130,7 @@ function HomeContent() {
           <header class="flex items-center gap-2.5">
             <AnimatedHeroLogo class="size-6 shrink-0 text-accent" />
             <h1 class="text-xl font-normal tracking-tight text-ink">
-              {greeting()}, <span class="capitalize">{firstName()}</span>
+              {greeting}, <span class="capitalize">{firstName()}</span>
             </h1>
           </header>
 

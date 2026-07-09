@@ -226,13 +226,11 @@ export function createAIProjection<Schema extends z.ZodType>(
     }
   );
 
-  const data = createMemo(() => parsedResult().data);
-
   const status = () => query.data?.status;
 
   return {
     /** Parsed result (see above). */
-    data,
+    data: () => parsedResult().data,
     /** The projection lifecycle status (`cold`/`loading`/`ready`/...). */
     status,
     /** True while the initial fetch or a server-side generation is in flight. */

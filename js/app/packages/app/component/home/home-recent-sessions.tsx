@@ -2,14 +2,13 @@ import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filte
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EntityIcon } from '@core/component/EntityIcon';
-import type { DateValue } from '@core/util/date';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import {
   type SoupItemsQueryArgs,
   useSoupItemsQuery,
 } from '@queries/soup/items';
-import { createMemo, For, Show } from 'solid-js';
-import { ROW } from './home-rows';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { ErrorBoundary, For, Show, Suspense } from 'solid-js';
 
 const DEFAULT_LIMIT = 3;
 
@@ -19,29 +18,14 @@ const RECENT_CHATS_ARGS: SoupItemsQueryArgs = {
   body: { ...QUERY_FILTERS_BASE, chat_filters: undefined },
 };
 
-/** Compact "22h" / "2w" style age, like a terminal session list. */
-function timeAgo(value: DateValue): string {
-  const date = value instanceof Date ? value : new Date(value);
-  const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return 'now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
-  return `${Math.floor(days / 7)}w`;
-}
-
 /** The user's most recently updated AI chats, newest first. */
 export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
   const query = useSoupItemsQuery(() => RECENT_CHATS_ARGS);
-  return createMemo(() =>
+  return () =>
     (query.data ?? [])
       .filter((entity) => entity.type === 'chat')
       .filter((chat) => chat.name)
-      .slice(0, limit)
-  );
+      .slice(0, limit);
 }
 
 /**
@@ -50,6 +34,16 @@ export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
  * Renders nothing when there are no sessions.
  */
 export function RecentSessionsSection(props: { limit?: number }) {
+  return (
+    <ErrorBoundary fallback={() => null}>
+      <Suspense fallback={null}>
+        <RecentSessionsContent limit={props.limit} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+function RecentSessionsContent(props: { limit?: number }) {
   const sessions = useRecentChatSessions(props.limit);
   const splitPanel = useSplitPanel();
 
@@ -75,7 +69,7 @@ export function RecentSessionsSection(props: { limit?: number }) {
             {(session) => (
               <button
                 type="button"
-                class={ROW}
+                class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
                 onClick={() => openChat(session.id)}
               >
                 <EntityIcon targetType="chat" size="xs" />
@@ -85,7 +79,9 @@ export function RecentSessionsSection(props: { limit?: number }) {
                 <Show when={session.updatedAt}>
                   {(updatedAt) => (
                     <span class="shrink-0 text-xs tabular-nums text-ink-extra-muted">
-                      {timeAgo(updatedAt())}
+                      {formatDistanceToNowStrict(updatedAt(), {
+                        addSuffix: true,
+                      })}
                     </span>
                   )}
                 </Show>

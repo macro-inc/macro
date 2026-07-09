@@ -14,7 +14,6 @@ import { z } from 'zod';
 export const recommendedActions = [
   'reply_now',
   'reply_later',
-  'delegate',
   'review',
   'discuss',
 ] as const;
@@ -97,6 +96,7 @@ const RECOMMENDATION_PROMPT = [
   "You are an executive assistant triaging a busy professional's unified inbox — emails, channel messages, mentions, document shares, and tasks.",
   `Gather non-email candidates by calling ListNotifications exactly once with limit ${TRIAGE_INPUT_LIMIT}, done false, no seen filter, and includeTypes ["message", "channel", "document", "project", "chat", "call", "task", "github"]. Never use notification rows to decide whether an email is active or read. Do not mark, modify, or dismiss any notifications.`,
   `Gather email candidates by calling ListEntities exactly once with includeTypes ["email"], emailView "inbox", emailPreset "signal", and limit ${TRIAGE_INPUT_LIMIT}. This is the canonical email source: inboxVisible determines whether an email is active and isRead is its read state. Do not look up or validate emails through ListNotifications.`,
+  "Use your memory of the user's role, priorities, collaborators, and current work to decide what is important to them. Memory is ranking context only; every recommended entity must still come from the tool results.",
   `Pick AT MOST ${MAX_RECOMMENDATIONS} items genuinely worth acting on right now with an AI assistant's help, ranked most important first. When nothing qualifies, return an empty list — never pad it with weak items.`,
   'Pick at most one item per email thread, channel, or pull request: collapse related notifications into the single most actionable item.',
   'Skip email drafts, cold sales outreach, recruiting spam, newsletters, and pure FYIs. Prefer items where the AI can do real work: draft a reply, summarize a long thread, review a document, follow up on a request.',
@@ -119,7 +119,7 @@ export function pickRecommendations(
 ): RecommendedItem[] | undefined {
   const items = (value: HomeRecommendations | string | undefined) => {
     if (value === undefined || typeof value === 'string') return undefined;
-    return value.items.slice(0, MAX_RECOMMENDATIONS);
+    return value.items;
   };
 
   return items(primary) ?? items(fallback);

@@ -17,14 +17,13 @@ import {
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useNavigate } from '@solidjs/router';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import type { HomePreferences } from './home-prefs';
-import { ROW, SetupRow, STATIC_ROW } from './home-rows';
+import { SetupRow } from './home-rows';
 
 const STATUS: Record<RecommendedAction, { label: string; accent: boolean }> = {
   reply_now: { label: 'Reply now', accent: true },
   reply_later: { label: 'Reply later', accent: false },
-  delegate: { label: 'Delegate', accent: false },
   review: { label: 'Review', accent: false },
   discuss: { label: 'Discuss', accent: false },
 };
@@ -52,7 +51,7 @@ export function RecommendedSection() {
   const emailLinks = useEmailLinksQuery();
   const recommendations = createHomeRecommendations();
 
-  const view = createMemo(() =>
+  const view = () =>
     deriveRecommendedView({
       loading: emailLinks.isLoading || recommendations.isLoading(),
       failed:
@@ -60,8 +59,7 @@ export function RecommendedSection() {
         recommendations.hasError(),
       items: recommendations.items(),
       emailLinked: (emailLinks.data?.links.length ?? 0) > 0,
-    })
-  );
+    });
   const items = () => {
     const current = view();
     return current.kind === 'items' ? current.items : [];
@@ -99,14 +97,14 @@ export function RecommendedSection() {
             <For each={[0, 1, 2]}>
               {() => (
                 <div
-                  class={`${STATIC_ROW} h-14 animate-pulse bg-hover/40`}
+                  class="group flex h-14 w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-hover/40 px-4 py-3 text-left animate-pulse"
                   aria-hidden="true"
                 />
               )}
             </For>
           </Match>
           <Match when={view().kind === 'error'}>
-            <div class={STATIC_ROW}>
+            <div class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left">
               <div class="min-w-0 flex-1">
                 <div class="text-sm font-medium text-ink">
                   Recommendations are unavailable
@@ -137,7 +135,7 @@ export function RecommendedSection() {
           <Match when={view().kind === 'connect-inbox'}>
             <button
               type="button"
-              class={ROW}
+              class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
               onClick={() => openSettings('Email')}
             >
               <div class="min-w-0 flex-1">
@@ -156,7 +154,7 @@ export function RecommendedSection() {
             </button>
           </Match>
           <Match when={view().kind === 'caught-up'}>
-            <div class={`${STATIC_ROW} text-sm text-ink-muted`}>
+            <div class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left text-sm text-ink-muted">
               You're all caught up.
             </div>
           </Match>
@@ -171,13 +169,13 @@ function useConnectionsCount() {
   const emailLinks = useEmailLinksQuery();
   const mcpServers = useMcpServersQuery();
 
-  return createMemo(() => {
+  return () => {
     const inboxes = emailLinks.data?.links.length ?? 0;
     const servers = (mcpServers.data ?? []).filter(
       (server) => server.authenticated
     ).length;
     return inboxes + servers;
-  });
+  };
 }
 
 /** Onboarding rows. Hidden on mobile. */
@@ -240,7 +238,11 @@ function RecommendedRow(props: {
 }) {
   const status = () => STATUS[props.item.action];
   return (
-    <button type="button" class={ROW} onClick={props.onSelect}>
+    <button
+      type="button"
+      class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
+      onClick={props.onSelect}
+    >
       <div class="min-w-0 flex-1">
         <div class="truncate text-sm font-medium text-ink">
           {props.item.title}

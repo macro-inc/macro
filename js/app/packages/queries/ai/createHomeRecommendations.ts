@@ -1,6 +1,6 @@
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useHasPermission } from '@core/context/user';
-import { type Accessor, createMemo } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import {
   buildRecommendationPrompt,
   pickRecommendations,
@@ -54,9 +54,7 @@ export function createHomeRecommendations(
     enabled: smartEnabled(),
   }));
 
-  const items = createMemo(() =>
-    pickRecommendations(smart.data(), fast.data())
-  );
+  const items = () => pickRecommendations(smart.data(), fast.data());
 
   const retry = async () => {
     if (!enabled()) return;
