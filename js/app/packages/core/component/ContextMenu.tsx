@@ -304,7 +304,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-menu ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-menu ring ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;

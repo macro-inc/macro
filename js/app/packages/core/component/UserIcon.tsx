@@ -174,7 +174,7 @@ export function UserIcon(props: UserIconProps) {
         <Avatar
           size={size()}
           class={cn(
-            'bg-surface text-accent ring-1 ring-edge-muted',
+            'bg-surface text-accent ring ring-edge-muted',
             props.class
           )}
         >

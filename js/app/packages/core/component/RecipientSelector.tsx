@@ -601,7 +601,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
         class={cn(
           'ph-no-capture w-full text-sm offset-2 bg-surface rounded-2xl',
-          !props.hideBorder && 'ring-1 ring-edge',
+          !props.hideBorder && 'ring ring-edge',
           !props.noPadding && 'p-2',
           props.class
         )}
