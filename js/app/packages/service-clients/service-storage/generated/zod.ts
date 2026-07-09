@@ -9194,6 +9194,10 @@ export const postItemsSoupBody = zod
       )
       .optional()
       .describe('property-based filters applied across entity types'),
+    tag_filter_mode: zod
+      .enum(['any', 'all'])
+      .optional()
+      .describe('How multiple `tag_option_ids` combine when filtering.'),
     tag_option_ids: zod
       .array(zod.string())
       .optional()

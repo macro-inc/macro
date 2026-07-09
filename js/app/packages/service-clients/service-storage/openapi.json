@@ -14166,6 +14166,10 @@
             },
             "description": "property-based filters applied across entity types"
           },
+          "tag_filter_mode": {
+            "$ref": "#/components/schemas/TagFilterMode",
+            "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
+          },
           "tag_option_ids": {
             "type": "array",
             "items": {
@@ -19299,6 +19303,11 @@
             "type": "string"
           }
         }
+      },
+      "TagFilterMode": {
+        "type": "string",
+        "description": "How multiple `tag_option_ids` combine when filtering.",
+        "enum": ["any", "all"]
       },
       "TaskFilters": {
         "type": "object",

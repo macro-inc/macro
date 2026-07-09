@@ -267,6 +267,7 @@ export * from './simpleUnifiedSearchResponseBaseItemOneOfSevenAllOf';
 export * from './simpleUnifiedSearchResponseBaseItemOneOfSevenAllOfType';
 export * from './soupProperty';
 export * from './soupPropertyValue';
+export * from './tagFilterMode';
 export * from './taskFilters';
 export * from './taskFiltersIncludeCbmAtmNc';
 export * from './unifiedSearchParams';

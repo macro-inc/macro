@@ -120,6 +120,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         ids_only: false,
         subject_only: false,
         tag_option_ids: vec![],
+        match_all_tags: false,
     }
     .into();
 
@@ -158,6 +159,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         ids_only: false,
         subject_only: false,
         tag_option_ids: vec![],
+        match_all_tags: false,
     }
     .into();
 

@@ -399,6 +399,7 @@ export const SoupView = (props: SoupViewProps) => {
     if (!query?.include?.tagFilters?.length) return query;
     const include = { ...query.include };
     delete include.tagFilters;
+    delete include.tagFilterMode;
     return { ...query, include };
   };
 

@@ -522,18 +522,28 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // Active tag option ids, used to gate optimistic websocket inserts so an
-  // active tag filter is honored even on the grouped render path.
+  // Active tag option ids and combine mode, used to gate optimistic websocket
+  // inserts so an active tag filter is honored even on the grouped render path.
   const activeTagOptionIds = createMemo(() =>
     (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
   );
+  const activeTagFilterMode = () =>
+    queryFilters.state.include.tagFilterMode ?? 'any';
 
   const soupItemMatchesActiveFilters = (
     item: SoupApiItem,
     view: ListView | undefined
   ): boolean => {
     if (!soupItemMatchesListView(item, view)) return false;
-    if (!soupItemMatchesTagFilter(item, activeTagOptionIds())) return false;
+    if (
+      !soupItemMatchesTagFilter(
+        item,
+        activeTagOptionIds(),
+        activeTagFilterMode()
+      )
+    ) {
+      return false;
+    }
 
     return soup.predicates.test(
       mapApiSoupItemToEntity(item) as SoupEntity,
@@ -618,13 +628,14 @@ export const SoupViewContextProvider: FlowComponent<
     let transformed = items();
     const ctx = getFilterContext();
     const tagOptionIds = activeTagOptionIds();
+    const tagFilterMode = activeTagFilterMode();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
         continue;
       }
-      if (!entityMatchesTagFilter(entity, tagOptionIds)) {
+      if (!entityMatchesTagFilter(entity, tagOptionIds, tagFilterMode)) {
         continue;
       }
       next.push(entity);

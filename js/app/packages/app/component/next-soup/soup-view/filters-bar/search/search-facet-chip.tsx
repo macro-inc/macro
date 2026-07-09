@@ -1,3 +1,4 @@
+import type { TagFilterMode } from '@app/component/next-soup/filters/filter-store/types';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Combobox } from '@kobalte/core/combobox';
 import XIcon from '@phosphor/x.svg';
@@ -11,7 +12,7 @@ import {
   Switch,
 } from 'solid-js';
 import { SearchableMultiSelect } from '../searchable-multi-select';
-import type { FacetOption, SearchFacetVM } from './search-facets';
+import type { FacetModeVM, FacetOption, SearchFacetVM } from './search-facets';
 
 interface SearchFacetChipProps {
   facet: SearchFacetVM;
@@ -94,6 +95,37 @@ const SingleValueSegment = (props: {
   );
 };
 
+const MODE_OPTIONS: { id: TagFilterMode; label: string }[] = [
+  { id: 'any', label: 'include any of' },
+  { id: 'all', label: 'include all of' },
+];
+
+const ModeSegment = (props: { mode: FacetModeVM }) => (
+  <Dropdown>
+    <Dropdown.Trigger
+      variant="ghost"
+      class="inline-flex items-center px-2 h-auto! text-ink-muted hover:bg-ink/5 active:bg-ink/8 rounded-none"
+    >
+      {MODE_OPTIONS.find((o) => o.id === props.mode.value())?.label}
+    </Dropdown.Trigger>
+    <Dropdown.Content class="shadow-menu">
+      <Dropdown.Group>
+        <For each={MODE_OPTIONS}>
+          {(option) => (
+            <Dropdown.Item
+              onSelect={() => props.mode.onSelect(option.id)}
+              closeOnSelect
+            >
+              <span class="flex-1 truncate">{option.label}</span>
+              <SingleSelectCheck active={props.mode.value() === option.id} />
+            </Dropdown.Item>
+          )}
+        </For>
+      </Dropdown.Group>
+    </Dropdown.Content>
+  </Dropdown>
+);
+
 const MultiValueSegment = (props: {
   facet: Extract<SearchFacetVM, { kind: 'multi' }>;
 }) => {
@@ -139,6 +171,21 @@ export const SearchFacetChip = (props: SearchFacetChipProps) => (
       </span>
 
       <ChipDivider />
+
+      <Show
+        when={
+          props.facet.kind === 'multi' &&
+          props.facet.mode?.visible() &&
+          props.facet.mode
+        }
+      >
+        {(mode) => (
+          <>
+            <ModeSegment mode={mode()} />
+            <ChipDivider />
+          </>
+        )}
+      </Show>
 
       <Switch>
         <Match when={props.facet.kind === 'single' && props.facet}>

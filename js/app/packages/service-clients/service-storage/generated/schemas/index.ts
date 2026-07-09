@@ -956,6 +956,7 @@ export * from './soupThreadReplyEditedAt';
 export * from './string';
 export * from './successResponse';
 export * from './syncServiceVersionID';
+export * from './tagFilterMode';
 export * from './taskFilters';
 export * from './taskFiltersIncludeCbmAtmNc';
 export * from './teamRole';
