@@ -3,9 +3,10 @@
 //! Backfills the denormalized `email_threads.is_signal` column: for each
 //! user, flags every thread that has at least one non-TRASH message matching
 //! the importance heuristic (email_filters sender overrides, category
-//! labels, drafts). Only ever sets the flag to true — steady-state
+//! labels, drafts). By default only ever sets the flag to true — steady-state
 //! maintenance (including clearing it) is handled by update_thread_metadata
-//! in `email_db_client` and the `email` crate.
+//! in `email_db_client` and the `email` crate. Set `FULL_RECOMPUTE=true` to
+//! also clear stale true flags (full bidirectional recompute per link).
 //!
 //! ## Required Environment Variables:
 //! - `DATABASE_URL`: The connection string for the PostgreSQL database.
@@ -13,7 +14,9 @@
 //! ## Optional Environment Variables:
 //! - `MACRO_IDS`: Comma-separated macro IDs to backfill. When unset, every
 //!   user with an email link is processed.
-//! - `CONCURRENCY`: Number of users processed concurrently (defaults to 10).
+//! - `CONCURRENCY`: Number of users processed concurrently (defaults to 1).
+//! - `FULL_RECOMPUTE`: When `true`, recomputes both directions instead of
+//!   the default set-true-only pass (defaults to false).
 
 mod config;
 mod process;
@@ -50,11 +53,12 @@ async fn main() -> anyhow::Result<()> {
         config.concurrency
     );
 
+    let full_recompute = config.full_recompute;
     let results: Vec<(String, anyhow::Result<u64>)> = stream::iter(macro_ids)
         .map(|macro_id| {
             let db_pool = db_pool.clone();
             async move {
-                let result = process::process_macro_id(&db_pool, &macro_id).await;
+                let result = process::process_macro_id(&db_pool, &macro_id, full_recompute).await;
                 (macro_id, result)
             }
         })

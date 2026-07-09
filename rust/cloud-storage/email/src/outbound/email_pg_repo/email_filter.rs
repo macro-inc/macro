@@ -29,9 +29,9 @@ impl From<EmailFilterRow> for EmailFilter {
 
 /// Upsert an email filter by address. If a filter for this link+address already
 /// exists, update its `is_important` value.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(conn), err)]
 pub async fn upsert_email_filter_by_address(
-    pool: &PgPool,
+    conn: &mut sqlx::PgConnection,
     link_id: Uuid,
     email_address: &str,
     is_important: bool,
@@ -47,7 +47,7 @@ pub async fn upsert_email_filter_by_address(
         email_address,
         is_important,
     )
-    .fetch_one(pool)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.into())
@@ -55,9 +55,9 @@ pub async fn upsert_email_filter_by_address(
 
 /// Upsert an email filter by domain. If a filter for this link+domain already
 /// exists, update its `is_important` value.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(conn), err)]
 pub async fn upsert_email_filter_by_domain(
-    pool: &PgPool,
+    conn: &mut sqlx::PgConnection,
     link_id: Uuid,
     email_domain: &str,
     is_important: bool,
@@ -73,7 +73,7 @@ pub async fn upsert_email_filter_by_domain(
         email_domain,
         is_important,
     )
-    .fetch_one(pool)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.into())
@@ -88,9 +88,9 @@ pub struct DeletedEmailFilterTarget {
 
 /// Delete an email filter by its ID, scoped to a link. Returns the deleted
 /// filter's sender target, or `None` if no row matched.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(conn), err)]
 pub async fn delete_email_filter(
-    pool: &PgPool,
+    conn: &mut sqlx::PgConnection,
     filter_id: Uuid,
     link_id: Uuid,
 ) -> Result<Option<DeletedEmailFilterTarget>, sqlx::Error> {
@@ -100,7 +100,7 @@ pub async fn delete_email_filter(
         filter_id,
         link_id,
     )
-    .fetch_optional(pool)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(|r| DeletedEmailFilterTarget {
@@ -114,13 +114,20 @@ pub async fn delete_email_filter(
 /// email_filters change, since the override feeds the signal heuristic.
 /// The recompute mirrors sync_thread_signal_flag (thread.rs) / the
 /// Importance(true) predicate in the dynamic query builder.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(conn), err)]
 pub async fn resync_signal_flags_for_sender(
-    pool: &PgPool,
+    conn: &mut sqlx::PgConnection,
     link_id: Uuid,
     email_address: Option<&str>,
     email_domain: Option<&str>,
 ) -> Result<u64, sqlx::Error> {
+    // The scope filter below ANDs both targets, so passing both would only
+    // match contacts satisfying address AND domain at once.
+    debug_assert!(
+        email_address.is_some() ^ email_domain.is_some(),
+        "expected exactly one filter target"
+    );
+
     let result = sqlx::query!(
         r#"
         WITH affected AS MATERIALIZED (
@@ -239,7 +246,7 @@ pub async fn resync_signal_flags_for_sender(
         email_address,
         email_domain,
     )
-    .execute(pool)
+    .execute(conn)
     .await?;
 
     Ok(result.rows_affected())

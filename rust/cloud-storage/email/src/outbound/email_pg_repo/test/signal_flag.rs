@@ -116,3 +116,86 @@ async fn delete_draft_message_syncs_signal_flag(pool: Pool<Postgres>) -> anyhow:
     assert!(!fetch_signal(&pool, THREAD_DRAFT_SIGNAL).await?);
     Ok(())
 }
+
+const THREAD_SAME_DOMAIN: &str = "00000000-0000-0000-0000-00000000e205";
+
+// The fan-out resync applies address-beats-domain precedence: muting a
+// domain flips all its threads, and an address-important exception flips
+// only that sender's threads back.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
+)]
+async fn address_exception_beats_domain_mute_via_filter_mutations(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let link_id = Uuid::parse_str(LINK_ID)?;
+
+    repo.upsert_email_filter(
+        link_id,
+        UpsertEmailFilterInput {
+            email_address: None,
+            email_domain: Some("example.com".to_string()),
+            is_important: false,
+        },
+    )
+    .await?;
+    assert!(!fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
+    assert!(!fetch_signal(&pool, THREAD_SAME_DOMAIN).await?);
+
+    repo.upsert_email_filter(
+        link_id,
+        UpsertEmailFilterInput {
+            email_address: Some("plain@example.com".to_string()),
+            email_domain: None,
+            is_important: true,
+        },
+    )
+    .await?;
+    assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
+    assert!(!fetch_signal(&pool, THREAD_SAME_DOMAIN).await?);
+
+    Ok(())
+}
+
+// Deleting a domain mute resyncs the whole domain's threads; a coexisting
+// address-important exception keeps its sender signal throughout.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
+)]
+async fn deleting_domain_filter_keeps_address_exception(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let link_id = Uuid::parse_str(LINK_ID)?;
+
+    let domain_filter = repo
+        .upsert_email_filter(
+            link_id,
+            UpsertEmailFilterInput {
+                email_address: None,
+                email_domain: Some("example.com".to_string()),
+                is_important: false,
+            },
+        )
+        .await?;
+    repo.upsert_email_filter(
+        link_id,
+        UpsertEmailFilterInput {
+            email_address: Some("plain@example.com".to_string()),
+            email_domain: None,
+            is_important: true,
+        },
+    )
+    .await?;
+    assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
+    assert!(!fetch_signal(&pool, THREAD_SAME_DOMAIN).await?);
+
+    assert!(repo.delete_email_filter(domain_filter.id, link_id).await?);
+    assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
+    assert!(fetch_signal(&pool, THREAD_SAME_DOMAIN).await?);
+
+    Ok(())
+}

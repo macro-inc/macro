@@ -3,8 +3,13 @@ use sqlx::types::Uuid;
 /// Flags every thread on one of the user's links that has at least one
 /// non-TRASH message matching the importance heuristic. One statement per
 /// link keeps transactions small and the progress output per-mailbox.
-/// Returns the number of threads flagged.
-pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Result<u64> {
+/// With `full_recompute`, stale true flags are also cleared (clear + re-set
+/// in one transaction per link). Returns the number of threads flagged.
+pub async fn process_macro_id(
+    pool: &sqlx::PgPool,
+    macro_id: &str,
+    full_recompute: bool,
+) -> anyhow::Result<u64> {
     let link_ids: Vec<Uuid> =
         sqlx::query_scalar!("SELECT id FROM email_links WHERE macro_id = $1", macro_id)
             .fetch_all(pool)
@@ -17,6 +22,26 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
 
     let mut total_flagged = 0u64;
     for link_id in link_ids {
+        let mut tx = pool.begin().await?;
+
+        // Full recompute: clear everything first so the set-true pass below
+        // yields exactly the heuristic verdict. Same transaction, so readers
+        // never observe the intermediate all-false state.
+        if full_recompute {
+            let cleared = sqlx::query!(
+                r#"
+                UPDATE email_threads
+                SET is_signal = false
+                WHERE link_id = $1 AND is_signal
+                "#,
+                link_id
+            )
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+            println!("[{macro_id}] link {link_id}: cleared {cleared} flags for recompute");
+        }
+
         // Mirrors sync_thread_signal_flag (email_db_client/threads/update.rs)
         // and the Importance(true) predicate in the dynamic query builder.
         let flagged = sqlx::query!(
@@ -115,9 +140,11 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
             "#,
             link_id
         )
-        .execute(pool)
+        .execute(&mut *tx)
         .await?
         .rows_affected();
+
+        tx.commit().await?;
 
         // Prefix with the user so interleaved concurrent output stays readable.
         println!("[{macro_id}] link {link_id}: flagged {flagged} threads");
