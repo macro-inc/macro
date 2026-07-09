@@ -358,12 +358,12 @@ impl EmailRepo for EmailPgRepo {
     async fn delete_email_filter(&self, filter_id: Uuid, link_id: Uuid) -> Result<bool, Self::Err> {
         let deleted = email_filter::delete_email_filter(&self.pool, filter_id, link_id).await?;
 
-        if let Some((address, domain)) = &deleted {
+        if let Some(target) = &deleted {
             email_filter::resync_signal_flags_for_sender(
                 &self.pool,
                 link_id,
-                address.as_deref(),
-                domain.as_deref(),
+                target.email_address.as_deref(),
+                target.email_domain.as_deref(),
             )
             .await?;
         }

@@ -79,15 +79,21 @@ pub async fn upsert_email_filter_by_domain(
     Ok(row.into())
 }
 
+/// Sender target (address or domain) of a deleted email filter, returned so
+/// the caller can resync affected threads' signal flags.
+pub struct DeletedEmailFilterTarget {
+    pub email_address: Option<String>,
+    pub email_domain: Option<String>,
+}
+
 /// Delete an email filter by its ID, scoped to a link. Returns the deleted
-/// filter's (email_address, email_domain) so the caller can resync affected
-/// threads' signal flags, or `None` if no row matched.
+/// filter's sender target, or `None` if no row matched.
 #[tracing::instrument(skip(pool), err)]
 pub async fn delete_email_filter(
     pool: &PgPool,
     filter_id: Uuid,
     link_id: Uuid,
-) -> Result<Option<(Option<String>, Option<String>)>, sqlx::Error> {
+) -> Result<Option<DeletedEmailFilterTarget>, sqlx::Error> {
     let row = sqlx::query!(
         r#"DELETE FROM email_filters WHERE id = $1 AND link_id = $2
         RETURNING email_address, email_domain"#,
@@ -97,7 +103,10 @@ pub async fn delete_email_filter(
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| (r.email_address, r.email_domain)))
+    Ok(row.map(|r| DeletedEmailFilterTarget {
+        email_address: r.email_address,
+        email_domain: r.email_domain,
+    }))
 }
 
 /// Recomputes `email_threads.is_signal` for every thread in the link with a
