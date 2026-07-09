@@ -154,7 +154,12 @@ use anyhow::Result;
 use instance::Instance;
 use stage::Stage;
 
-const AUX_SERVICE_IMAGES: &[&str] = &[
+const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexical_service"];
+
+/// The artifact-driven preview updater can refresh every Docker-built app
+/// service. Keep this separate so enabling local aux rebuilds does not make the
+/// existing `run_local` edit loop rebuild the AI worker too.
+const PREVIEW_AUX_SERVICE_IMAGES: &[&str] = &[
     "websocket_service",
     "sync_service",
     "lexical_service",
@@ -175,6 +180,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode.label(),
         instance.name()
     ));
+    if !stage.is_dry_run() {
+        stack::clear_state(&instance)?;
+    }
 
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a
@@ -234,7 +242,13 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         frontend::start(&stage, &instance, mode)?
     };
 
-    summary::print(mode, &instance, &env, &frontend::url(&instance));
+    summary::print(
+        mode,
+        &instance,
+        &env,
+        &frontend::url(&instance),
+        &mailpit::direct_ui_url(&instance),
+    );
 
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
@@ -509,6 +523,17 @@ fn recreate_aux_service_containers(
     up.args(["up", "-d", "--force-recreate", "--no-deps"])
         .args(AUX_SERVICE_IMAGES);
     stage.run("Recreating auxiliary service containers", &mut up)
+}
+
+fn recreate_preview_aux_service_containers(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+) -> Result<()> {
+    let mut up = compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps"])
+        .args(PREVIEW_AUX_SERVICE_IMAGES);
+    stage.run("Recreating preview auxiliary services", &mut up)
 }
 
 /// How the local infra reaches its initialized state on bring-up.

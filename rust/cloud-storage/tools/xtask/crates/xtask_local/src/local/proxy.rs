@@ -46,9 +46,14 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
     } else {
         STATIC_FILE_DEV
     };
+    let mailpit_block = if static_frontend && mode.spec().runs_local_infra {
+        MAILPIT_ROUTE
+    } else {
+        ""
+    };
     let frontend_block = if static_frontend { FRONTEND_STATIC } else { "" };
     format!(
-        "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{static_block}{frontend_block}{CADDY_TAIL}",
+        "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}",
         routes = service_routes()
     )
 }
@@ -116,7 +121,9 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
         uri strip_prefix /sync
         reverse_proxy sync-service:8787
     }
-    # Mailpit serves itself under /mailpit (MP_WEBROOT), so no prefix strip —
+"#;
+
+const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WEBROOT), so no prefix strip —
     # this is how a headless/preview stack reads its passwordless login codes.
     handle /mailpit/* {
         reverse_proxy mailpit:8025

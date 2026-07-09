@@ -9,6 +9,11 @@ set -euo pipefail
 log() { echo "[preview] $*"; }
 
 t_boot=$(date +%s)
+# A hard loss during a hot update cannot run its EXIT trap. The full immutable
+# boot is the recovery boundary, so clear any abandoned volume-backed lock.
+state_dir=/var/lib/docker/.macro-preview
+mkdir -p "$state_dir"
+rmdir "$state_dir/update.lock" 2>/dev/null || true
 log "starting inner dockerd"
 dockerd >/var/log/dockerd.log 2>&1 &
 
@@ -83,8 +88,6 @@ docker logs -t --tail 40 macro-authentication-service-1 2>&1 \
 # Commit the compatibility marker only after the restored stack is healthy.
 # It lives beside (not inside) Docker's own data on the persistent volume, so
 # CI can distinguish a hot-updatable machine from an absent/partial/old deploy.
-state_dir=/var/lib/docker/.macro-preview
-mkdir -p "$state_dir"
 install -m 0644 /srv/macro/deployment.json "$state_dir/deployment.json.next"
 mv -f "$state_dir/deployment.json.next" "$state_dir/deployment.json"
 log "stack ready — proxy serving on :8090"

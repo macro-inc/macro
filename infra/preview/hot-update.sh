@@ -91,7 +91,7 @@ export MACRO_REPO_ROOT=/srv/macro/repo
 export MACRO_STACK_SNAPSHOT_DIR=/srv/macro/artifacts/snapshots
 
 apply_args=(
-  stack apply
+  stack update
   --binaries-dir "$staging/binaries"
   --json
 )

@@ -47,6 +47,26 @@ fn legacy_stack_state_has_no_binaries_dir() {
 }
 
 #[test]
+fn clearing_state_invalidates_a_previous_headless_stack() {
+    let instance =
+        Instance::derive(Some(&format!("state-clear-{}", std::process::id())), None).unwrap();
+    write_state(
+        &instance,
+        &StackState {
+            mode: "local".to_string(),
+            frontend: "static".to_string(),
+            binaries_dir: None,
+        },
+    )
+    .unwrap();
+    assert!(read_state(&instance).is_some());
+    clear_state(&instance).unwrap();
+    assert!(read_state(&instance).is_none());
+    clear_state(&instance).unwrap();
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
 fn compares_binary_contents_not_just_size() {
     let root = std::env::temp_dir().join(format!("macro-stack-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);

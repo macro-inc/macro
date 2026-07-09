@@ -92,7 +92,7 @@ pub fn generate(
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
-        add_local_infra(&mut services, instance);
+        add_local_infra(&mut services, instance, static_frontend);
     }
 
     let compose = dct::Compose {
@@ -180,7 +180,11 @@ fn add_proxy_service(
 /// Add the local-only companion infra services (FusionAuth override + Mailpit)
 /// and, for named instances, the remapped infra ports. LocalStack is added
 /// separately (it runs in every mode), so it is not included here.
-fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instance: &Instance) {
+fn add_local_infra(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    instance: &Instance,
+    static_frontend: bool,
+) {
     // FusionAuth: repoint at the generated kickstart (volumes replaced via tag).
     let mut fusionauth = dct::Service {
         environment: kv(&[(
@@ -202,19 +206,21 @@ fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instan
     }
     services.insert("fusionauth".to_string(), Some(fusionauth));
 
-    // Mailpit (also on `auth` so FusionAuth can deliver passwordless codes).
-    // MP_WEBROOT serves the UI under /mailpit so the proxy can expose it on the
-    // single origin — a headless/preview stack has no other way to read the
-    // passwordless login codes.
+    // Mailpit is also on `auth` so FusionAuth can deliver passwordless codes.
+    // Only headless mode moves its UI under the proxy-friendly /mailpit root;
+    // attached run_local preserves the existing direct UI at port 8025.
+    let mut mailpit_env = vec![
+        ("MP_SMTP_AUTH_ACCEPT_ANY", "1"),
+        ("MP_SMTP_AUTH_ALLOW_INSECURE", "1"),
+    ];
+    if static_frontend {
+        mailpit_env.push(("MP_WEBROOT", "/mailpit"));
+    }
     services.insert(
         "mailpit".to_string(),
         Some(dct::Service {
             image: Some(MAILPIT_IMAGE.to_string()),
-            environment: kv(&[
-                ("MP_SMTP_AUTH_ACCEPT_ANY", "1"),
-                ("MP_SMTP_AUTH_ALLOW_INSECURE", "1"),
-                ("MP_WEBROOT", "/mailpit"),
-            ]),
+            environment: kv(&mailpit_env),
             ports: dct::Ports::Short(vec![
                 format!("{}:1025", instance.port(Port::MailpitSmtp)),
                 format!("{}:8025", instance.port(Port::MailpitUi)),

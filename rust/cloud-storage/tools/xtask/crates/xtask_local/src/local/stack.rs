@@ -66,38 +66,26 @@ pub struct UpdateArgs {
     pub instance: InstanceArgs,
     #[command(flatten)]
     pub env: EnvArgs,
-    /// Also rebuild + restage the static frontend and restart the proxy.
+    /// Also rebuild + restage the static frontend and recreate the proxy.
     #[arg(long)]
     pub frontend: bool,
     /// Stage this prebuilt frontend dist instead of building (implies --frontend).
     #[arg(long)]
     pub frontend_dist: Option<PathBuf>,
+    /// Apply this complete prebuilt binary set instead of invoking Cargo.
+    #[arg(long, conflicts_with = "build_aux_services")]
+    pub binaries_dir: Option<PathBuf>,
     /// Rebuild the Docker-built auxiliary services (sync, websocket, lexical).
     #[arg(long)]
     pub build_aux_services: bool,
+    /// Recreate registry-refreshed preview auxiliary services without building.
+    #[arg(long, hide = true, requires = "binaries_dir")]
+    pub recreate_aux_services: bool,
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
-}
-
-#[derive(Args, Clone)]
-pub struct ApplyArgs {
-    #[command(flatten)]
-    pub instance: InstanceArgs,
-    #[command(flatten)]
-    pub env: EnvArgs,
-    /// Directory containing a complete prebuilt local-service binary set.
-    #[arg(long)]
-    pub binaries_dir: PathBuf,
-    /// Prebuilt frontend dist to stage and serve (omitting leaves it unchanged).
-    #[arg(long)]
-    pub frontend_dist: Option<PathBuf>,
-    /// Recreate the Docker-built auxiliary services after their image tags were
-    /// updated externally (the Fly hot-update path pulls them from the registry).
-    #[arg(long)]
-    pub recreate_aux_services: bool,
     /// Print a machine-readable summary as the final line.
-    #[arg(long)]
+    #[arg(long, hide = true, requires = "binaries_dir")]
     pub json: bool,
 }
 
@@ -162,6 +150,18 @@ fn read_state(instance: &Instance) -> Option<StackState> {
     serde_json::from_str(&raw).ok()
 }
 
+/// Invalidate headless ownership before another flow replaces this instance.
+/// State is written again only after a full headless stack passes its health
+/// gate, so failed, infra-only, and interactive replacements cannot inherit it.
+pub(super) fn clear_state(instance: &Instance) -> Result<()> {
+    let path = state_path(instance);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("removing {}", path.display())),
+    }
+}
+
 /// `cargo x stack up` — bring the whole stack up and return, leaving only
 /// Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
@@ -175,6 +175,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
         mode.label(),
         instance.name()
     ));
+    if !stage.is_dry_run() {
+        clear_state(&instance)?;
+    }
 
     // Same full-delete/full-create overlap as `run_stack`: tear the previous
     // stack down in the background while the host-side build runs.
@@ -289,7 +292,12 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
     } else {
         "(disabled — --no-frontend)".to_string()
     };
-    summary::print(mode, &instance, &env, &frontend_url);
+    let mailpit_url = if static_frontend {
+        mailpit::proxy_ui_url(&instance)
+    } else {
+        mailpit::direct_ui_url(&instance)
+    };
+    summary::print(mode, &instance, &env, &frontend_url, &mailpit_url);
     stage.note(&format!(
         "  headless: `just stack status`, `just stack update`, `just stack down`{}",
         instance_suffix(&instance)
@@ -328,89 +336,37 @@ pub fn update(args: &UpdateArgs) -> Result<()> {
         args.env.no_doppler,
         args.env.env_file.as_deref(),
     )?;
-    let target = arch::detect()?;
-    super::rebuild_and_reload(
-        &stage,
-        mode,
-        &instance,
-        &env,
-        target,
-        args.build_aux_services,
-    )?;
+    let changed = if let Some(source) = args.binaries_dir.as_deref() {
+        let changed = apply_prebuilt_binaries(mode, &state, source)?;
+        if args.recreate_aux_services {
+            super::recreate_preview_aux_service_containers(&stage, &instance, &env)?;
+        }
+        if !changed.is_empty() {
+            super::reload_services(&stage, &instance, &changed)?;
+        }
+        changed
+    } else {
+        let target = arch::detect()?;
+        super::rebuild_and_reload(
+            &stage,
+            mode,
+            &instance,
+            &env,
+            target,
+            args.build_aux_services,
+        )?;
+        Vec::new()
+    };
 
     if args.frontend || args.frontend_dist.is_some() {
-        if state.frontend != "static" {
-            bail!(
-                "this stack was brought up without a static frontend (--no-frontend); \
-                 re-run `just stack up` to serve one"
-            );
-        }
-        frontend::build_static(&stage, &instance, args.frontend_dist.as_deref())?;
-        // The proxy serves the staged dir via a bind mount; restart it so Caddy
-        // drops any open handles onto the replaced tree.
-        let mut restart = Command::new("docker");
-        restart
-            .args(["restart", "-t", "0"])
-            .arg(format!("{}-proxy-1", instance.project_name()));
-        stage.run("Reloading proxy (frontend bundle)", &mut restart)?;
+        reload_static_frontend(
+            &stage,
+            &instance,
+            &env,
+            &state,
+            args.frontend_dist.as_deref(),
+        )?;
     }
-    Ok(())
-}
-
-/// Apply CI-built artifacts to a running headless stack. Unlike [`update`],
-/// this never invokes Cargo or Bun: it compares the supplied binaries against
-/// the stable bind-mounted directory, atomically replaces only changed files,
-/// and restarts only their containers. The frontend proxy is recreated (not
-/// merely restarted) because replacing the staged directory changes the bind
-/// mount's inode.
-pub fn apply(args: &ApplyArgs) -> Result<()> {
-    let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    let Some(state) = read_state(&instance) else {
-        bail!(
-            "no stack state at {} — a prebuilt update requires a running headless stack",
-            state_path(&instance).display()
-        );
-    };
-    let mode = mode_from_label(&state.mode)?;
-    let destination = state.binaries_dir.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "stack state predates prebuilt updates — perform a full stack up before applying"
-        )
-    })?;
-    let source = super::build::BinariesDir::classify(&args.binaries_dir)?;
-    source.validate(&super::inventory::local_binaries())?;
-
-    let env = env_layer::resolve(
-        mode,
-        &instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-    )?;
-    let mut changed = Vec::new();
-    for service in super::inventory::services_for_mode(mode) {
-        if replace_binary_if_changed(source.host_dir(), destination, service.cargo_bin)? {
-            changed.push(service);
-        }
-    }
-
-    if args.recreate_aux_services {
-        super::recreate_aux_service_containers(&stage, &instance, &env)?;
-    }
-    if !changed.is_empty() {
-        super::reload_services(&stage, &instance, &changed)?;
-    }
-
-    if let Some(frontend_dist) = args.frontend_dist.as_deref() {
-        if state.frontend != "static" {
-            bail!("this stack was brought up without a static frontend");
-        }
-        frontend::build_static(&stage, &instance, Some(frontend_dist))?;
-        let mut up = super::compose_cmd(&instance, &env);
-        up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
-        stage.run("Recreating proxy (frontend bundle)", &mut up)?;
-    }
-
     if mode.spec().wait_backend_before_frontend {
         frontend::wait_backend_ready(&stage, &instance)?;
     }
@@ -419,12 +375,55 @@ pub fn apply(args: &ApplyArgs) -> Result<()> {
             "{}",
             serde_json::to_string(&json!({
                 "changed_services": changed.iter().map(|s| s.compose_name).collect::<Vec<_>>(),
-                "frontend_updated": args.frontend_dist.is_some(),
+                "frontend_updated": args.frontend || args.frontend_dist.is_some(),
                 "aux_services_recreated": args.recreate_aux_services,
             }))?
         );
     }
     Ok(())
+}
+
+fn apply_prebuilt_binaries(
+    mode: Mode,
+    state: &StackState,
+    binaries_dir: &Path,
+) -> Result<Vec<&'static super::inventory::RustService>> {
+    let destination = state.binaries_dir.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "stack state predates prebuilt updates — perform a full stack up before updating"
+        )
+    })?;
+    let source = super::build::BinariesDir::classify(binaries_dir)?;
+    source.validate(&super::inventory::local_binaries())?;
+    let mut changed = Vec::new();
+    for service in super::inventory::services_for_mode(mode) {
+        if replace_binary_if_changed(source.host_dir(), destination, service.cargo_bin)? {
+            changed.push(service);
+        }
+    }
+
+    Ok(changed)
+}
+
+fn reload_static_frontend(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+    state: &StackState,
+    frontend_dist: Option<&Path>,
+) -> Result<()> {
+    if state.frontend != "static" {
+        bail!(
+            "this stack was brought up without a static frontend (--no-frontend); \
+             re-run `just stack up` to serve one"
+        );
+    }
+    frontend::build_static(stage, instance, frontend_dist)?;
+    // build_static replaces the staged directory, so the container must be
+    // recreated to establish a bind mount to the new inode.
+    let mut up = super::compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
+    stage.run("Recreating proxy (frontend bundle)", &mut up)
 }
 
 fn replace_binary_if_changed(
@@ -565,7 +564,7 @@ pub fn down(args: &DownArgs) -> Result<()> {
         return super::stop(&args.instance);
     }
     super::destroy(&args.instance)?;
-    let _ = std::fs::remove_file(state_path(&instance));
+    clear_state(&instance)?;
     Ok(())
 }
 
@@ -757,6 +756,13 @@ pub fn snapshot_status(args: &SnapshotArgs) -> Result<()> {
 
 /// The machine-readable endpoint block `up --json` and `status --json` share.
 fn summary_json(mode: Mode, instance: &Instance, static_frontend: bool) -> serde_json::Value {
+    let mailpit_url = mode.spec().runs_local_infra.then(|| {
+        if static_frontend {
+            mailpit::proxy_ui_url(instance)
+        } else {
+            mailpit::direct_ui_url(instance)
+        }
+    });
     json!({
         "instance": instance.name(),
         "project": instance.project_name(),
@@ -764,7 +770,7 @@ fn summary_json(mode: Mode, instance: &Instance, static_frontend: bool) -> serde
         "proxy_url": proxy::url(instance),
         "frontend_url": static_frontend.then(|| frontend::static_url(instance)),
         "fusionauth_url": format!("http://localhost:{}", instance.port(Port::FusionAuth)),
-        "mailpit_url": mailpit::ui_url(instance),
+        "mailpit_url": mailpit_url,
         "localstack_url": format!("http://localhost:{}", instance.port(Port::LocalStack)),
         "postgres_url": format!(
             "postgres://user:password@localhost:{}/macrodb",

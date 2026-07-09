@@ -78,8 +78,13 @@ fn static_frontend_block_is_opt_in() {
     assert!(headless.contains("root * /srv/frontend"));
     assert!(headless.contains("try_files {path} /index.html"));
     assert!(headless.contains("redir / /app/ 302"));
+    assert!(headless.contains("handle /mailpit/*"));
 
     let attached = caddyfile(Mode::Local, false);
     assert!(!attached.contains("/srv/frontend"));
     assert!(!attached.contains("redir / /app/ 302"));
+    assert!(!attached.contains("handle /mailpit/*"));
+
+    let headless_dev = caddyfile(Mode::Dev, true);
+    assert!(!headless_dev.contains("handle /mailpit/*"));
 }

@@ -54,8 +54,6 @@ pub enum StackCmd {
     Up(super::stack::UpArgs),
     /// Rebuild binaries (and optionally the frontend) and reload what changed.
     Update(super::stack::UpdateArgs),
-    /// Apply prebuilt binaries/frontend to a running stack without rebuilding.
-    Apply(super::stack::ApplyArgs),
     /// Report the instance's containers, health, and URLs (`--json` for machines).
     Status(super::stack::StatusArgs),
     /// Publish the stack's single origin via a Cloudflare quick tunnel.
@@ -107,11 +105,10 @@ pub struct RunArgs {
     pub env: EnvArgs,
     #[command(flatten)]
     pub build: BuildArgs,
-    /// Do not start the frontend dev server.
+    /// Do not start or serve the frontend.
     #[arg(long)]
     pub no_frontend: bool,
-    /// Stream subprocess output and show per-step timings (e.g. on `r`, the
-    /// build vs reload split instead of one folded line).
+    /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
 }
@@ -185,7 +182,6 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Stack(cmd) => match cmd {
             StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
             StackCmd::Update(a) => super::stack::update(&a),
-            StackCmd::Apply(a) => super::stack::apply(&a),
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Expose(a) => super::stack::expose(&a),
             StackCmd::Down(a) => super::stack::down(&a),

@@ -4,12 +4,19 @@ use console::Style;
 
 use super::env_layer::ResolvedEnv;
 use super::instance::{Instance, Port};
-use super::{Mode, mailpit, proxy};
+use super::{Mode, proxy};
 
 /// Print the mode/instance/endpoints block after a successful startup.
 /// `frontend_url` differs by flow: the dev-server origin for `run_local`, the
-/// proxy-served bundle for headless `stack up`.
-pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv, frontend_url: &str) {
+/// proxy-served bundle for headless `stack up`; `mailpit_url` follows the same
+/// direct-versus-single-origin distinction.
+pub fn print(
+    mode: Mode,
+    instance: &Instance,
+    env: &ResolvedEnv,
+    frontend_url: &str,
+    mailpit_url: &str,
+) {
     let key = Style::new().dim();
     let link = Style::new().cyan();
     let row = |k: &str, v: String| {
@@ -61,7 +68,7 @@ pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv, frontend_url: &
             "fusionauth",
             format!("http://localhost:{}", instance.port(Port::FusionAuth)),
         );
-        row("mailpit", mailpit::ui_url(instance));
+        row("mailpit", mailpit_url.to_string());
         row(
             "localstack",
             format!("http://localhost:{}", instance.port(Port::LocalStack)),
