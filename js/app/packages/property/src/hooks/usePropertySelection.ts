@@ -24,7 +24,10 @@ export function usePropertySelection(
         property.id &&
         !existingIds.has(property.id) &&
         // COMPANY entity properties not yet implemented
-        property.specificEntityType !== 'COMPANY'
+        property.specificEntityType !== 'COMPANY' &&
+        // Tag definitions are managed through the dedicated Tags UI, never the
+        // generic property pickers.
+        (property.valueType as string) !== 'TAG'
     );
 
     // Then apply search filter
