@@ -6,6 +6,7 @@ import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -54,6 +55,10 @@ type PullGesture = {
  * so the virtualizer's scroll math is unaffected.
  */
 export function PullToRefresh(props: {
+  /** Element the gesture attaches to and that translates with the pull.
+   * Usually the scroll container, but a non-scrollable element (e.g. an
+   * empty state) works too — its scrollTop reads 0, so pulls always start
+   * from rest. */
   scrollContainer: Accessor<HTMLElement | undefined>;
   onRefresh: () => Promise<unknown>;
 }) {
@@ -172,8 +177,14 @@ export function PullToRefresh(props: {
     if (wasPulling) retract();
   };
 
+  // Dedupe by element identity: the accessor may re-evaluate for reactive
+  // reasons that leave the element unchanged (e.g. a fallback target derived
+  // from fetch state), and re-running the effect would reset the transform
+  // mid-refresh — a visible bounce.
+  const scrollContainer = createMemo(() => props.scrollContainer());
+
   createEffect(
-    on(props.scrollContainer, (el) => {
+    on(scrollContainer, (el) => {
       if (!el) return;
 
       el.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -191,6 +202,10 @@ export function PullToRefresh(props: {
       });
 
       onCleanup(() => {
+        // The target can swap mid-gesture (empty state ↔ list when a refresh
+        // lands rows); the old element takes its listeners with it, so drop
+        // the gesture here or the phase wedges in 'pulling'.
+        onTouchCancel();
         el.style.transform = '';
         el.style.transition = '';
         el.removeEventListener('touchstart', onTouchStart);
