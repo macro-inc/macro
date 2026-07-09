@@ -55,7 +55,21 @@ Use this safe wrapper so the direnv command is never run on unsupported systems:
 
 ```bash
 if { [ -e /etc/NIXOS ] || ( [ -f /etc/os-release ] && . /etc/os-release && [ "${ID:-}" = "nixos" ] ); } && command -v direnv >/dev/null 2>&1; then
-  echo -e "use flake\nwatch_file nix/*.nix" > .envrc
+  [ -f .envrc ] || : > .envrc
+
+  ensure_envrc_line() {
+    local line="$1"
+
+    if ! grep -qxF "$line" .envrc; then
+      if [ -s .envrc ] && [ "$(tail -c 1 .envrc)" != "" ]; then
+        printf '\n' >> .envrc
+      fi
+      printf '%s\n' "$line" >> .envrc
+    fi
+  }
+
+  ensure_envrc_line "use flake"
+  ensure_envrc_line "watch_file nix/*.nix"
   direnv allow
   echo "direnv-setup-ran"
 else
