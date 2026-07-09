@@ -171,10 +171,17 @@ function formatToolCall(
   const { output } = call;
 
   if (call.toolName === 'dispatch') {
-    const { edits } = call.input as { edits: TraceDispatchEdit[] };
+    const input = call.input as { edits?: TraceDispatchEdit[] };
+    const edits = Array.isArray(input.edits) ? input.edits : [];
     lines.push(`**dispatch** — ${edits.length} edit(s)`);
-    lines.push('');
-    lines.push(formatDispatchArgs({ edits }, codesPerEdit, editTraces, t0));
+    if (edits.length === 0 && input.edits == null) {
+      lines.push('```json');
+      lines.push(JSON.stringify(call.input, null, 2));
+      lines.push('```');
+    } else {
+      lines.push('');
+      lines.push(formatDispatchArgs({ edits }, codesPerEdit, editTraces, t0));
+    }
     if (output != null) {
       const res = String(output);
       const docStart = res.indexOf('<document>');
