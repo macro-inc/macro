@@ -180,6 +180,30 @@ export type EntityItem =
        */
       id: string;
       /**
+       * Whether the thread currently belongs in the inbox.
+       */
+      inboxVisible: boolean;
+      /**
+       * Whether the thread contains a draft.
+       */
+      isDraft: boolean;
+      /**
+       * Whether the thread has been read.
+       */
+      isRead: boolean;
+      /**
+       * Sender email address, when present.
+       */
+      senderEmail?: string | null;
+      /**
+       * Sender display name, when present.
+       */
+      senderName?: string | null;
+      /**
+       * Preview text from the thread's latest relevant message.
+       */
+      snippet?: string | null;
+      /**
        * Email subject, when present.
        */
       subject?: string | null;

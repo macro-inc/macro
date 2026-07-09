@@ -1,12 +1,10 @@
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useHasPermission } from '@core/context/user';
-import type { UnifiedNotification } from '@notifications/types';
 import { type Accessor, createMemo } from 'solid-js';
 import {
   buildRecommendationPrompt,
   pickRecommendations,
   recommendationSchema,
-  triageableNotifications,
 } from './homeRecommendations';
 import { createAIProjection } from './projection';
 
@@ -17,25 +15,21 @@ const FAST_MODEL = 'anthropic/claude-haiku-4-5';
 
 /**
  * Fast + smart recommendation projections. The static prompt instructs the
- * agent to gather the current user's notifications through ListNotifications;
- * the client notification accessor gates generation and validates returned ids.
+ * agent to gather non-email items through ListNotifications and emails through
+ * ListEntities, which preserves each entity type's canonical inbox semantics.
  *
  * Two projections share one prompt and schema and differ only in model: the
  * fast one (Haiku, free tier) generates inline for immediate paint; the smart
  * one (server default, premium-gated) replaces it when it lands, and is
  * skipped entirely for users without professional features.
  *
- * All reference validation and view selection logic is pure and lives in
- * `homeRecommendations.ts`; this hook only wires it to the projections.
+ * Result selection is pure and lives in `homeRecommendations.ts`; this hook
+ * only wires it to the projections.
  */
-export function createHomeRecommendations(args: {
-  notifications: Accessor<readonly UnifiedNotification[]>;
-  enabled?: Accessor<boolean>;
-}) {
-  const relevant = createMemo(() =>
-    triageableNotifications(args.notifications())
-  );
-  const enabled = () => (args.enabled?.() ?? true) && relevant().length > 0;
+export function createHomeRecommendations(
+  args: { enabled?: Accessor<boolean> } = {}
+) {
+  const enabled = () => args.enabled?.() ?? true;
 
   const isPremium = useHasPermission(PERMISSION_IDS.READ_PROFESSIONAL_FEATURES);
   const smartEnabled = () => enabled() && isPremium();
@@ -61,7 +55,7 @@ export function createHomeRecommendations(args: {
   }));
 
   const items = createMemo(() =>
-    pickRecommendations(smart.data(), fast.data(), relevant())
+    pickRecommendations(smart.data(), fast.data())
   );
 
   const retry = async () => {
