@@ -461,7 +461,9 @@ services:
     # worker is run normally — wrangler/esbuild bundles it first). loro-crdt
     # stays external: bundling it emits its .wasm as a second output file
     # (breaking --outfile) and mis-wires the wasm instantiation at runtime.
-    command: ["sh", "-c", "bun build src/server.ts --target=bun --external loro-crdt --outfile=/tmp/server.js && exec bun /tmp/server.js"]
+    # The bundle must live under /app: bun resolves the external loro-crdt
+    # import relative to the bundle's path, so it needs /app/node_modules.
+    command: ["sh", "-c", "bun build src/server.ts --target=bun --external loro-crdt --outfile=/app/server.bundle.js && exec bun /app/server.bundle.js"]
     environment:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
