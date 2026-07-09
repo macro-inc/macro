@@ -13,7 +13,11 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { ENABLE_HOME_OVERRIDE } from '@core/constant/featureFlags';
+import {
+  ENABLE_HOME_OVERRIDE,
+  ENABLE_HOME_RECOMMENDATIONS_FLAG,
+  ENABLE_HOME_RECOMMENDATIONS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -132,9 +136,14 @@ function HomeContent() {
             <HomeBackfillProgress />
           </HomeSectionBoundary>
 
-          <HomeSectionBoundary title="recommendations" fallback={null}>
-            <RecommendedSection />
-          </HomeSectionBoundary>
+          <ShowFeatureFlag
+            key={ENABLE_HOME_RECOMMENDATIONS_FLAG}
+            enabledOverride={ENABLE_HOME_RECOMMENDATIONS_OVERRIDE}
+          >
+            <HomeSectionBoundary title="recommendations" fallback={null}>
+              <RecommendedSection />
+            </HomeSectionBoundary>
+          </ShowFeatureFlag>
 
           <HomeSectionBoundary title="getting started" fallback={null}>
             <GettingStartedSection preferences={preferences} />
