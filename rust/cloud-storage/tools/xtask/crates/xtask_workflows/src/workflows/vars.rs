@@ -44,9 +44,15 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 /// `--target x86_64-unknown-linux-gnu.2.36`, so their sccache entries hash
 /// differently and never serve this job — and they don't persist the cargo
 /// target dir at all, so a volume from the shared pool almost never carries
-/// one. A dedicated low-concurrency pool means the same volume (with this
-/// job's target dir + zigbuild sccache) comes back run after run.
+/// one. A dedicated low-concurrency pool gives the job's target dir and init
+/// snapshots the best chance of a zero-copy hit; Rust objects use the durable
+/// remote sccache below instead of depending on this volume's placement.
 pub const PREVIEW_CACHE_TAG: &str = "fly-preview";
+
+/// Durable Namespace remote sccache shared by Fly preview jobs. Unlike the
+/// local cache volume, this has an artifact-backed cold tier, so a job placed
+/// on a runner that has never seen the volume can still reuse Rust objects.
+pub const PREVIEW_SCCACHE_NAME: &str = "fly-preview";
 
 /// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
 /// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
@@ -60,8 +66,9 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
 
 /// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
-/// on the preview cache volume so an unchanged init key skips the whole infra
-/// bake and produces byte-identical snapshot layers in the VM image.
+/// on the preview cache volume for the zero-copy fast path; the workflow also
+/// backs each content-addressed snapshot up to Namespace artifact storage so a
+/// cache-volume miss does not force another infra bake.
 pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
 
 /// Max on-disk size for the sccache cache. Larger than the setup default since

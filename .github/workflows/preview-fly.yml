@@ -30,7 +30,6 @@ jobs:
       with:
         cache: rust
         path: |-
-          /home/runner/.cache/sccache
           /nix
           ${{ github.workspace }}/rust/cloud-storage/target
           /home/runner/.cache/macro-preview-snapshots
@@ -47,10 +46,18 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-    - name: Point sccache at the cache volume
+    - name: Configure Namespace remote sccache
       run: |-
-        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
-        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+        set -euo pipefail
+        env_file="$RUNNER_TEMP/namespace-sccache.env"
+        if nsc cache sccache setup --cache_name fly-preview > "$env_file"; then
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
     - name: Build service binaries
       run: |
         cargo x zigbuild
@@ -72,6 +79,38 @@ jobs:
         set -euo pipefail
         mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
         status=$(just stack snapshot --json | tail -n 1)
+        key=$(echo "$status" | jq -r '.key')
+        root=$(echo "$status" | jq -r '.root')
+        artifact="macro-preview/init-snapshots/${key}.tar"
+        archive="$RUNNER_TEMP/init-snapshot-${key}.tar"
+        artifact_hit=
+
+        # The Namespace cache-volume pool has an onboarding period where a
+        # runner can receive an empty fork. Artifact storage is the durable
+        # fallback: restore into a temporary directory and only publish it to
+        # the live store after validating the embedded manifest through xtask.
+        if ! echo "$status" | jq -e '.present' >/dev/null; then
+          restored="$RUNNER_TEMP/restored-init-snapshot"
+          rm -rf "$restored"
+          mkdir -p "$restored"
+          if nsc artifact download "$artifact" "$archive" \
+              && tar -xf "$archive" -C "$restored" \
+              && [ -f "$restored/$key/manifest.json" ]; then
+            rm -rf "$root/$key"
+            cp -a "$restored/$key" "$root/$key"
+            status=$(just stack snapshot --json | tail -n 1)
+            if echo "$status" | jq -e '.present' >/dev/null; then
+              artifact_hit=1
+              echo "init snapshot artifact hit: $status"
+            else
+              rm -rf "$root/$key"
+              echo "downloaded init snapshot failed validation; baking cold" >&2
+            fi
+          else
+            echo "init snapshot artifact miss; baking cold" >&2
+          fi
+        fi
+
         if echo "$status" | jq -e '.present' >/dev/null; then
           echo "init snapshot cache hit: $status"
           cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
@@ -80,6 +119,16 @@ jobs:
           just stack up --infra-only --no-doppler --no-build
           status=$(just stack snapshot --json | tail -n 1)
           echo "$status" | jq -e '.present' >/dev/null
+        fi
+
+        # Seed artifact storage from either a volume hit or a cold bake. Avoid
+        # uploading another version when the artifact already exists; a race
+        # between concurrent PRs is harmless and must not fail the preview.
+        if [ -z "$artifact_hit" ] && ! nsc artifact describe "$artifact" >/dev/null 2>&1; then
+          snap_dir=$(echo "$status" | jq -r '.dir')
+          tar -cf "$archive" -C "$root" "$(basename "$snap_dir")"
+          nsc artifact upload "$archive" "$artifact" --expires_in 720h \
+            || echo "warning: failed to upload init snapshot artifact" >&2
         fi
         echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
     - name: Dump stack diagnostics

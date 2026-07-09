@@ -52,7 +52,7 @@ use crate::api::context::{
     ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
     MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 mod api;
 mod config;
@@ -62,20 +62,37 @@ mod rate_limit_config;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
+    let startup_started = Instant::now();
+    let mut previous_step = startup_started;
     let env = Environment::new_or_prod();
 
+    // One SDK config is sufficient for every AWS client in this process. Apart
+    // from avoiding repeated provider-chain work, the timings below make any
+    // slow local/preview endpoint discovery visible in the Fly deploy log.
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    startup_step(startup_started, &mut previous_step, "load AWS SDK config");
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    startup_step(
+        startup_started,
+        &mut previous_step,
+        "load environment config",
+    );
 
     let internal_api_key = config.internal_api_key.clone();
 
     let stripe_webhook_secret = secretsmanager_client
         .get_maybe_secret_value(env, StripeWebhookSecretKey::new()?)
         .await?;
+    startup_step(
+        startup_started,
+        &mut previous_step,
+        "load Stripe webhook secret",
+    );
 
     tracing::trace!("initialized config");
 
@@ -91,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
         .connect(&config.database_url)
         .await
         .context("could not connect to db")?;
+    startup_step(startup_started, &mut previous_step, "connect to Postgres");
 
     tracing::trace!(
         min_connections,
@@ -102,6 +120,11 @@ async fn main() -> anyhow::Result<()> {
     let macro_api_token_private_key = secretsmanager_client
         .get_maybe_secret_value(config.environment, MacroApiTokenPrivateSecretKey::new()?)
         .await?;
+    startup_step(
+        startup_started,
+        &mut previous_step,
+        "load Macro API token key",
+    );
 
     let fusionauth_api_key = match config.environment {
         Environment::Local => config.fusionauth_api_key_secret_key.to_string().clone(),
@@ -138,6 +161,11 @@ async fn main() -> anyhow::Result<()> {
             .context("unable to get google client secret")?
             .to_string(),
     };
+    startup_step(
+        startup_started,
+        &mut previous_step,
+        "load auth provider secrets",
+    );
 
     let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id.to_string(),
@@ -167,13 +195,18 @@ async fn main() -> anyhow::Result<()> {
 
     // `from_env` routes to local SMTP (Mailpit) when SMTP_HOST is set, else SES.
     let ses_client = ses_client::Ses::from_env(
-        aws_sdk_sesv2::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        aws_sdk_sesv2::Client::new(&aws_config),
         &config.environment.to_string(),
     );
 
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    startup_step(
+        startup_started,
+        &mut previous_step,
+        "initialize JWT validation",
+    );
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
         .context("failed to create redis client")?;
@@ -181,6 +214,7 @@ async fn main() -> anyhow::Result<()> {
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection")?;
+    startup_step(startup_started, &mut previous_step, "connect to Redis");
 
     let notification_queue = macro_queues::NotificationIngressQueue::new();
     let search_event_queue = macro_queues::SearchEventQueue::new();
@@ -195,12 +229,10 @@ async fn main() -> anyhow::Result<()> {
     };
     tracing::trace!("initialized notification ingress service");
 
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &macro_aws_config::get_macro_aws_config().await,
-    ))
-    .search_event_queue(&search_event_queue)
-    .email_link_manager_queue(&link_manager_queue)
-    .email_backfill_queue(&email_backfill_queue);
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .search_event_queue(&search_event_queue)
+        .email_link_manager_queue(&link_manager_queue)
+        .email_backfill_queue(&email_backfill_queue);
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
@@ -304,6 +336,12 @@ async fn main() -> anyhow::Result<()> {
     let entity_access_service_impl =
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
 
+    startup_step(
+        startup_started,
+        &mut previous_step,
+        "assemble service dependencies",
+    );
+
     api::setup_and_serve(
         ApiContext {
             db,
@@ -355,6 +393,17 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+fn startup_step(startup_started: Instant, previous_step: &mut Instant, step: &'static str) {
+    let now = Instant::now();
+    tracing::info!(
+        step,
+        elapsed_ms = now.duration_since(*previous_step).as_millis() as u64,
+        total_ms = now.duration_since(startup_started).as_millis() as u64,
+        "authentication startup step"
+    );
+    *previous_step = now;
 }
 
 // SAFETY: this is not a secret value

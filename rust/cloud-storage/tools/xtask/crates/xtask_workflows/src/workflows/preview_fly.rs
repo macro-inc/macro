@@ -62,7 +62,7 @@ fn deploy() -> Job {
             "github.event.pull_request.head.repo.full_name == github.repository && \
              contains(github.event.pull_request.labels.*.name, 'preview')",
         ))
-        // Dedicated cache volume pool (nix store + sccache + cargo target):
+        // Dedicated cache volume pool (nix store + cargo target + snapshots):
         // see PREVIEW_CACHE_TAG for why sharing the check/test jobs' pool was
         // measured cold on both layers (different --target = disjoint sccache
         // keys, and their volumes never carry a cargo target dir).
@@ -119,7 +119,9 @@ fn deploy() -> Job {
         ))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
-        .add_step(steps::pin_sccache_dir())
+        .add_step(steps::configure_namespace_sccache(
+            vars::PREVIEW_SCCACHE_NAME,
+        ))
         .add_step(
             Step::new("Build service binaries")
                 .run(indoc::indoc! {r#"
@@ -190,17 +192,52 @@ fn dump_boot_timings() -> Step<Run> {
 /// because the justfile enables the `local-stack` feature the Kafka
 /// provisioning needs.
 ///
-/// The store lives on the cache volume (MACRO_STACK_SNAPSHOT_DIR), so when the
-/// init inputs are unchanged the snapshot is already there and the entire
-/// bring-up is skipped — only the generated compose override (which `up` would
-/// have written, and the mirror step reads) still needs producing. The final
-/// `snapshot --json` line lands in $RUNNER_TEMP for the stage step, which
-/// ships exactly that key's directory.
+/// The store lives on the cache volume (MACRO_STACK_SNAPSHOT_DIR) for a
+/// zero-copy hit. Every content-addressed snapshot is also stored as one tar in
+/// Namespace artifact storage, keyed by the same hash. Cache-volume onboarding
+/// misses therefore download the exact snapshot instead of paying for a full
+/// init again. Artifact access is an optimization: download/upload failures
+/// fall back to the existing volume/cold-bake behavior.
+///
+/// The final `snapshot --json` line lands in $RUNNER_TEMP for the stage step,
+/// which ships exactly that key's directory.
 fn bake_snapshot() -> Step<Run> {
     Step::new("Bake init snapshot").run(indoc::indoc! {r#"
         set -euo pipefail
         mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
         status=$(just stack snapshot --json | tail -n 1)
+        key=$(echo "$status" | jq -r '.key')
+        root=$(echo "$status" | jq -r '.root')
+        artifact="macro-preview/init-snapshots/${key}.tar"
+        archive="$RUNNER_TEMP/init-snapshot-${key}.tar"
+        artifact_hit=
+
+        # The Namespace cache-volume pool has an onboarding period where a
+        # runner can receive an empty fork. Artifact storage is the durable
+        # fallback: restore into a temporary directory and only publish it to
+        # the live store after validating the embedded manifest through xtask.
+        if ! echo "$status" | jq -e '.present' >/dev/null; then
+          restored="$RUNNER_TEMP/restored-init-snapshot"
+          rm -rf "$restored"
+          mkdir -p "$restored"
+          if nsc artifact download "$artifact" "$archive" \
+              && tar -xf "$archive" -C "$restored" \
+              && [ -f "$restored/$key/manifest.json" ]; then
+            rm -rf "$root/$key"
+            cp -a "$restored/$key" "$root/$key"
+            status=$(just stack snapshot --json | tail -n 1)
+            if echo "$status" | jq -e '.present' >/dev/null; then
+              artifact_hit=1
+              echo "init snapshot artifact hit: $status"
+            else
+              rm -rf "$root/$key"
+              echo "downloaded init snapshot failed validation; baking cold" >&2
+            fi
+          else
+            echo "init snapshot artifact miss; baking cold" >&2
+          fi
+        fi
+
         if echo "$status" | jq -e '.present' >/dev/null; then
           echo "init snapshot cache hit: $status"
           cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
@@ -209,6 +246,16 @@ fn bake_snapshot() -> Step<Run> {
           just stack up --infra-only --no-doppler --no-build
           status=$(just stack snapshot --json | tail -n 1)
           echo "$status" | jq -e '.present' >/dev/null
+        fi
+
+        # Seed artifact storage from either a volume hit or a cold bake. Avoid
+        # uploading another version when the artifact already exists; a race
+        # between concurrent PRs is harmless and must not fail the preview.
+        if [ -z "$artifact_hit" ] && ! nsc artifact describe "$artifact" >/dev/null 2>&1; then
+          snap_dir=$(echo "$status" | jq -r '.dir')
+          tar -cf "$archive" -C "$root" "$(basename "$snap_dir")"
+          nsc artifact upload "$archive" "$artifact" --expires_in 720h \
+            || echo "warning: failed to upload init snapshot artifact" >&2
         fi
         echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
     "#})

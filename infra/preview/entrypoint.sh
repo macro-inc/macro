@@ -72,8 +72,11 @@ t0=$(date +%s)
 
 log "stack up took $(($(date +%s) - t0))s (boot total $(($(date +%s) - t_boot))s)"
 # The backend health gate is the longest stack-up phase; surface the auth
-# service's own timestamped startup log so the wait is attributable from the
-# CI boot-timings step (which greps [preview] out of `flyctl logs`).
+# service's step timings plus its timestamped tail so the wait is attributable
+# from the CI boot-timings step (which greps [preview] out of `flyctl logs`).
+docker logs -t macro-authentication-service-1 2>&1 \
+  | grep 'authentication startup step' \
+  | sed 's/^/[preview][auth-startup] /' || true
 docker logs -t --tail 40 macro-authentication-service-1 2>&1 \
   | sed 's/^/[preview][auth] /' || true
 log "stack ready — proxy serving on :8090"
