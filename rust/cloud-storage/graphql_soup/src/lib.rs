@@ -24,8 +24,9 @@ pub use objects::{
     GraphqlSoupNotification, GraphqlSoupProject, GraphqlSoupProperty,
     GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue, SoupPage,
 };
-pub use request_context::GraphqlSoupRequestContext;
+pub use request_context::GraphqlSoupRequestParts;
 pub use schema::{
-    SchemaOnlySoupSchema, SchemaOnlySoupService, SharedSoupSchema, SharedSoupService,
-    SoupQueryRoot, SoupSchema, build_schema, build_schema_from_arc, build_schema_with_service,
+    SchemaOnlyEmailService, SchemaOnlyEntityAccessService, SchemaOnlySoupSchema,
+    SchemaOnlySoupService, SchemaOnlyState, SharedSoupSchema, SharedSoupService, SoupQueryRoot,
+    SoupSchema, build_schema, build_schema_from_arc, build_schema_with_service,
 };

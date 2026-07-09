@@ -26,8 +26,6 @@ use models_pagination::{Base64Str, CursorWithValAndFilter, SimpleSortMethod};
 use soup::domain::models::{SoupQuery, SoupRequest, SoupType};
 use uuid::Uuid;
 
-use crate::request_context::GraphqlSoupRequestContext;
-
 /// Input for `Query.soup`.
 #[derive(async_graphql::InputObject)]
 pub struct SoupInput {
@@ -49,7 +47,8 @@ pub struct SoupInput {
 impl SoupInput {
     pub(crate) fn into_request(
         self,
-        request_context: &GraphqlSoupRequestContext,
+        macro_user_id: MacroUserIdStr<'static>,
+        link_ids: Vec<Uuid>,
     ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
         let filter = self
             .filters
@@ -80,14 +79,14 @@ impl SoupInput {
             },
             limit: self.limit.unwrap_or(20).min(500),
             cursor,
-            user: request_context.macro_user_id.clone(),
+            user: macro_user_id,
             email_preview_view: self
                 .email_view
                 .map(GraphqlEmailView::as_preview_view_str)
                 .unwrap_or("inbox")
                 .parse()
                 .map_err(async_graphql::Error::new)?,
-            link_ids: request_context.link_ids.clone(),
+            link_ids,
         })
     }
 }

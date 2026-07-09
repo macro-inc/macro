@@ -1,18 +1,34 @@
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use macro_user_id::user_id::MacroUserIdStr;
-use uuid::Uuid;
+use axum::{extract::FromRequestParts, http::request::Parts};
 
-/// Request-scoped data required to execute a Soup GraphQL query.
+/// Request-scoped HTTP request parts for a Soup GraphQL query.
 ///
-/// The embedding Axum/service layer remains responsible for authentication and
-/// for resolving inbox link IDs. This keeps `graphql_soup` independent from the
-/// existing REST extractors.
-#[derive(Clone)]
-pub struct GraphqlSoupRequestContext {
-    /// Authenticated Macro user executing the request.
-    pub macro_user_id: MacroUserIdStr<'static>,
-    /// Link IDs available to the request.
-    pub link_ids: Vec<Uuid>,
-    /// Optional team access receipt used for CRM-scoped queries.
-    pub team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+/// Resolvers run axum `FromRequestParts` extractors against these parts on
+/// demand instead of the embedding service loading everything upfront. This
+/// keeps per-request work lazy: a query that never touches email links or
+/// CRM scope never pays for resolving them.
+///
+/// Extraction results that should be computed once per request should be
+/// wrapped in `axum_extra::extract::Cached`, which memoizes inside the parts'
+/// extensions exactly like the REST routes do.
+pub struct GraphqlSoupRequestParts {
+    parts: tokio::sync::Mutex<Parts>,
+}
+
+impl GraphqlSoupRequestParts {
+    /// Wrap the parts of the incoming HTTP request.
+    pub fn new(parts: Parts) -> Self {
+        Self {
+            parts: tokio::sync::Mutex::new(parts),
+        }
+    }
+
+    /// Run an axum extractor against the stored request parts.
+    pub async fn extract_with_state<T, St>(&self, state: &St) -> Result<T, T::Rejection>
+    where
+        T: FromRequestParts<St>,
+        St: Send + Sync,
+    {
+        let mut parts = self.parts.lock().await;
+        T::from_request_parts(&mut parts, state).await
+    }
 }
