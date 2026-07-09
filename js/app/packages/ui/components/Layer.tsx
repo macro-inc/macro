@@ -18,8 +18,8 @@ export function Layer(props: LayerProps) {
 
   // As Layer depth increases, Borders should get lighter slower than surfaces. So we multiple them by this.
   const BORDER_SCALAR = 0.4;
-  // If --b0 is black, or near black, we need to set a min step to get appropriate contrast
-  const nearBlackStepMin = () => ((props.depth ?? 0) > 0 ? 0.19 : 0);
+  // For pure black mobile theme, we need to set a min step to get appropriate contrast
+  const nearBlackStepMin = () => ((props.depth ?? 0) > 0 && isMobile() ? 0.19 : 0);
 
   return (
     <div
