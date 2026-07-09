@@ -8,7 +8,7 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
-use graphql_soup::GraphqlSoupRequestParts;
+use complete_graph::GraphqlSoupRequestParts;
 use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 pub(crate) fn router() -> Router<ApiContext> {
@@ -54,16 +54,16 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
         .into_response();
     };
 
-    let property_reader: std::sync::Arc<dyn graphql_soup::SoupPropertyEdgeReader> =
+    let property_reader: std::sync::Arc<dyn complete_graph::SoupPropertyEdgeReader> =
         state.properties_service.clone();
     let request = request
         .data(GraphqlSoupRequestParts::new(parts))
         .data(state.clone())
-        .data(graphql_soup::entity_properties_loader(
+        .data(complete_graph::entity_properties_loader(
             macro_user_id.clone(),
             property_reader,
         ))
-        .data(graphql_soup::entity_notifications_loader(
+        .data(complete_graph::entity_notifications_loader(
             macro_user_id,
             state.graphql_notification_reader.clone(),
         ));

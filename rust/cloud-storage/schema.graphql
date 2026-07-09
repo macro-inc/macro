@@ -609,19 +609,19 @@ enum GraphqlSoupEntityType {
 	"""
 	FOREIGN_ENTITY
 	"""
-	User entity
+	User entity.
 	"""
 	USER
 	"""
-	Team entity
+	Team entity.
 	"""
 	TEAM
 	"""
-	Static File
+	Static file entity.
 	"""
 	STATIC_FILE
 	"""
-	crm contact
+	CRM contact entity.
 	"""
 	CRM_CONTACT
 }
