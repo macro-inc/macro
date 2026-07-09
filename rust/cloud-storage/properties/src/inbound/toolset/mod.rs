@@ -1,6 +1,7 @@
 //! Toolset inbound adapter for the Properties service.
 
 mod get_entity_properties;
+mod list_tags;
 mod set_entity_property;
 
 #[cfg(test)]
@@ -11,6 +12,7 @@ use ai_toolset::AsyncToolCollection;
 use std::sync::Arc;
 
 pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};
+pub use list_tags::{ListTags, ListTagsResponse};
 pub use set_entity_property::{SetEntityProperty, SetEntityPropertyResponse};
 
 /// Service context for properties AI tools.
@@ -44,4 +46,5 @@ where
     AsyncToolCollection::new()
         .add_tool::<GetEntityProperties, PropertiesToolContext<T>>()
         .add_tool::<SetEntityProperty, PropertiesToolContext<T>>()
+        .add_tool::<ListTags, PropertiesToolContext<T>>()
 }

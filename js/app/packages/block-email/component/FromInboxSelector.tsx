@@ -42,6 +42,9 @@ export function FromInboxSelector(props: {
   links: FromInbox[];
   activeLinkId: string | undefined;
   onSelect: (linkId: string) => void;
+  compact?: boolean;
+  class?: string;
+  portalScope?: 'local';
 }) {
   const activeInbox = () =>
     props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
@@ -49,6 +52,43 @@ export function FromInboxSelector(props: {
     [...props.links].sort((a, b) =>
       a.email_address.localeCompare(b.email_address)
     );
+
+  if (props.compact) {
+    return (
+      <Show when={activeInbox()}>
+        {(active) => (
+          <Show
+            when={props.links.length > 1}
+            fallback={<span class={props.class}>{active().email_address}</span>}
+          >
+            <Dropdown>
+              <Dropdown.Trigger
+                class={`inline-flex min-w-0 max-w-full items-center gap-1 ${props.class ?? ''}`}
+              >
+                <span class="min-w-0 truncate">{active().email_address}</span>
+                <ChevronDown class="size-3 shrink-0" />
+              </Dropdown.Trigger>
+              <Dropdown.Content portalScope={props.portalScope}>
+                <Dropdown.Group>
+                  <For each={sortedLinks()}>
+                    {(inbox) => (
+                      <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
+                        <FromInboxOption inbox={inbox} />
+                        <Show when={inbox.id === props.activeLinkId}>
+                          <Check class="size-3.5 shrink-0" />
+                        </Show>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+          </Show>
+        )}
+      </Show>
+    );
+  }
+
   return (
     <Show when={activeInbox()}>
       {(active) => (
@@ -69,7 +109,7 @@ export function FromInboxSelector(props: {
               </Show>
               <ChevronDown class="size-3 shrink-0" />
             </Dropdown.Trigger>
-            <Dropdown.Content>
+            <Dropdown.Content portalScope={props.portalScope}>
               <Dropdown.Group>
                 <For each={sortedLinks()}>
                   {(inbox) => (

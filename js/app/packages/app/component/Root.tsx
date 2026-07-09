@@ -106,7 +106,6 @@ import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { SettingsRoute } from './settings/SettingsRoute';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
@@ -265,13 +264,6 @@ const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
-  // Settings is its own place (`/settings/:tab`) rather than a layout split, so
-  // it's linkable without dragging the workspace layout into the URL. The static
-  // prefix outranks the `/*splits` splat.
-  {
-    path: '/settings/:tab?',
-    component: SettingsRoute,
-  },
   /** BEGIN - APP ROUTES */
   {
     path: '/inbox',

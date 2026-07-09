@@ -5,7 +5,7 @@ import {
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import type { EntityData } from '@entity';
+import { type EntityData, getEntityProjectId } from '@entity';
 import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
@@ -16,6 +16,7 @@ import {
   optimisticUpdateSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
 import { callServiceClient } from '@service-call/client';
@@ -158,6 +159,114 @@ export function createMoveToProjectDssEntityMutation() {
       invalidateAfterMove([id], project.id, type === 'project', failed);
     },
   }));
+}
+
+export function createBulkRemoveFromProjectDssEntityMutation() {
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return (
+      type !== 'chat' &&
+      type !== 'document' &&
+      type !== 'project' &&
+      type !== 'email'
+    );
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({ entities }: { entities: EntityData[] }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      const results = await Promise.all(
+        entities.map((entity) =>
+          moveToFolder({
+            itemType: entity.type as 'document' | 'chat' | 'project' | 'email',
+            id: entity.id,
+            folderId: null,
+          })
+        )
+      );
+
+      if (results.some((r) => !r)) {
+        throw new Error(`One or more DSS items failed to move`);
+      }
+
+      return { success: true };
+    },
+
+    onMutate: async ({ entities }: { entities: EntityData[] }) => {
+      const moveableEntities = entities.filter(
+        (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
+          e.type === 'document' || e.type === 'chat' || e.type === 'email'
+      );
+      const txns = moveableEntities.map((e) => {
+        const current = getSoupEntityById(e.id);
+        const tag = e.type === 'email' ? 'emailThread' : e.type;
+        return optimisticUpdateSoupEntity({
+          tag,
+          data: { id: e.id, projectId: null },
+          frecency_score: current?.frecency_score ?? 0,
+        });
+      });
+
+      // Drop the rows from the source folders' views right away; other views
+      // keep the entities
+      const sourceProjectIds = [
+        ...new Set(
+          entities.flatMap((e) => {
+            const projectId =
+              getEntityProjectId(e) || getSoupEntityProjectId(e.id);
+            return projectId ? [projectId] : [];
+          })
+        ),
+      ];
+      txns.push(
+        removeSoupEntitiesFromQueriesReferencing(
+          new Set(entities.map((e) => e.id)),
+          sourceProjectIds
+        )
+      );
+
+      return { txns, sourceProjectIds };
+    },
+
+    onSettled: (data, error, { entities }, context) => {
+      const failed = data?.success === false || !!error;
+      if (failed) {
+        // Reverse order: each txn's snapshot captures the previous txns' writes
+        context?.txns.toReversed().forEach((txn) => txn.rollback());
+        console.error(
+          `Failed to remove dss items from folder`,
+          entities,
+          error
+        );
+        toast.failure('Failed to remove items from folder');
+      }
+
+      // Queries still containing the entities
+      for (const entity of entities) {
+        invalidateSoupEntity(entity.id);
+      }
+      // The source folders' views no longer contain the entities after the
+      // optimistic removal, so match them by project id in the key
+      invalidateSoupQueriesReferencing(context?.sourceProjectIds ?? []);
+      queryClient.invalidateQueries({ queryKey: ['entity'] });
+      // Removed projects' breadcrumbs (and nested projects') change too
+      if (entities.some((e) => e.type === 'project')) {
+        queryClient.invalidateQueries({ queryKey: ['project'] });
+      }
+    },
+  }));
+}
+
+/** Source project of a soup-cached entity ('project' items nest it as parentId). */
+function getSoupEntityProjectId(entityId: string): string | undefined {
+  const cached = getSoupEntityById(entityId);
+  if (!cached) return undefined;
+  if (cached.tag === 'project') return cached.data.parentId ?? undefined;
+  if ('projectId' in cached.data) return cached.data.projectId ?? undefined;
+  return undefined;
 }
 
 export function createBulkCopyDssEntityMutation() {

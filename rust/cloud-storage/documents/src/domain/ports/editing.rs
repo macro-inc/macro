@@ -35,4 +35,9 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_token: &DocumentPermissionToken,
         instructions: &str,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
+
+    /// Delete all AI edit trace records for `document_id`. Called during
+    /// document deletion so traces (which hold full document content) don't
+    /// outlive the document.
+    fn delete_traces(&self, document_id: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 }

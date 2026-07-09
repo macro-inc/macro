@@ -145,24 +145,11 @@ export function useLeaveCallMutation() {
   }));
 }
 
-export function useCallRecordQuery(
-  callId: Accessor<string>,
-  options?: {
-    /** Gate the fetch (e.g. until a virtualized card settles in view). */
-    enabled?: Accessor<boolean>;
-    /** How long cached data counts as fresh for this observer (ms). */
-    staleTime?: number;
-    /** How long unobserved data stays cached (ms). */
-    gcTime?: number;
-  }
-) {
+export function useCallRecordQuery(callId: Accessor<string>) {
   return useQuery(() => ({
     queryKey: callKeys.record(callId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.getCallRecord(callId())),
-    enabled: options?.enabled ? options.enabled() : true,
-    staleTime: options?.staleTime,
-    gcTime: options?.gcTime,
   }));
 }
 

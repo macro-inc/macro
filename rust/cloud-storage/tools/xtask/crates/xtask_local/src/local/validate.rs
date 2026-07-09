@@ -180,7 +180,7 @@ pub fn local_env(
             }
             match env.get("DATABASE_URL") {
                 None => failures.push("run-dev requires a dev DATABASE_URL (none found)".into()),
-                Some(v) if v.contains("@postgres:") || v.contains("localhost") => {
+                Some(v) if env_layer::is_local_database_url(v) => {
                     failures.push(format!(
                         "run-dev DATABASE_URL={v} points at local infra; expected a shared-dev host"
                     ));

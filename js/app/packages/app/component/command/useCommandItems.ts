@@ -19,7 +19,7 @@ import {
   type TimestampedItem,
 } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { getCommandLastUsedAt } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter, DisplayHotkeyStep } from './types';
@@ -250,7 +250,9 @@ function getSurfacedNestedCommands(commands: CommandWithInfo[]) {
  * selection modification commands (delete, mark done, etc.) would be filtered
  * out because their conditions check the soup's selection state.
  */
-function useCommandsList(): () => CommandItem[] {
+function useCommandsList(
+  commandScopeCommands: Accessor<CommandWithInfo[]>
+): () => CommandItem[] {
   const scopeId = activeScope() ?? '';
   const capturedCommands = getActiveCommandsFromScope(scopeId, {
     sortByScopeLevel: false,
@@ -268,7 +270,7 @@ function useCommandsList(): () => CommandItem[] {
 
   return createMemo(() => {
     // If we're in a command scope (multi-stage command), show those commands instead
-    const scopeCommands = CommandState.commandScopeCommands();
+    const scopeCommands = commandScopeCommands();
     if (scopeCommands.length > 0) {
       return commandsToItems(scopeCommands, {
         displayHotkeySequence: nestedCommandScopeDisplaySequence,
@@ -320,12 +322,11 @@ function useCommandsList(): () => CommandItem[] {
  * Hook to get items from QuickAccess organized by category.
  * Items are already sorted by recency from QuickAccess.
  */
-function useQuickAccessBuckets(): Record<
-  CategoryFilter,
-  () => CommandMenuItem[]
-> {
+function useQuickAccessBuckets(
+  commandScopeCommands: Accessor<CommandWithInfo[]>
+): Record<CategoryFilter, () => CommandMenuItem[]> {
   const quickAccess = useQuickAccess();
-  const commandsList = useCommandsList();
+  const commandsList = useCommandsList(commandScopeCommands);
   const entitiesList = quickAccess.useList(...exclude('person'));
 
   const allWithCommands = createMemo((): CommandMenuItem[] =>
@@ -351,13 +352,25 @@ function useQuickAccessBuckets(): Record<
 
 export function useCommandItems(
   query: () => string,
-  categoryFilter: () => CategoryFilter
+  categoryFilter: () => CategoryFilter,
+  options?: {
+    showSearchRow?: boolean;
+    /**
+     * Source of multi-stage command-scope commands. Defaults to the desktop
+     * command menu state; mobile search passes its own scope state.
+     */
+    commandScopeCommands?: Accessor<CommandWithInfo[]>;
+  }
 ) {
-  const buckets = useQuickAccessBuckets();
+  const showSearchRow = options?.showSearchRow ?? true;
+  const commandScopeCommands =
+    options?.commandScopeCommands ?? CommandState.commandScopeCommands;
+
+  const buckets = useQuickAccessBuckets(commandScopeCommands);
 
   // When in command scope or entity action mode, always show commands regardless of category filter
   const categoryItems = () => {
-    if (CommandState.commandScopeCommands().length > 0) {
+    if (commandScopeCommands().length > 0) {
       return buckets.commands();
     }
     if (CommandState.isEntityActionMode()) {
@@ -378,8 +391,9 @@ export function useCommandItems(
   });
 
   const shouldShowSearchRow = (q: string) => {
+    if (!showSearchRow) return false;
     if (!q.trim()) return false;
-    if (CommandState.commandScopeCommands().length > 0) return false;
+    if (commandScopeCommands().length > 0) return false;
     if (CommandState.isEntityActionMode()) return false;
     return SEARCHABLE_CATEGORIES.has(categoryFilter());
   };
@@ -391,7 +405,7 @@ export function useCommandItems(
     if (
       q.trim().length <= 3 &&
       categoryFilter() === 'all' &&
-      CommandState.commandScopeCommands().length === 0 &&
+      commandScopeCommands().length === 0 &&
       !CommandState.isEntityActionMode()
     ) {
       const trimmedQuery = q.trim();
@@ -405,7 +419,9 @@ export function useCommandItems(
         const rest = ranked.filter((item) => !topCommandIds.has(item.id));
 
         return [
-          ...(trimmedQuery ? [makeSearchItem(q, categoryFilter())] : []),
+          ...(trimmedQuery && showSearchRow
+            ? [makeSearchItem(q, categoryFilter())]
+            : []),
           ...topCommands,
           ...rest,
         ];

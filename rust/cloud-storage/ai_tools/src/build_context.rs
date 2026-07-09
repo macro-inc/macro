@@ -193,6 +193,9 @@ pub async fn build_tool_service_context_from_env(
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -281,6 +284,9 @@ pub async fn build_tool_service_context_from_env(
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs_client,
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -350,6 +356,7 @@ pub async fn build_tool_service_context_from_env(
         chat_tool_context,
         channel_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
+        crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),

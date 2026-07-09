@@ -14,6 +14,7 @@ macro_rules! secret {
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CACHIX_AUTH_TOKEN);
+secret!(CLOUDFLARE_API_TOKEN);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DD_WEB_APP_TOKEN);
@@ -26,6 +27,10 @@ secret!(POSTHOG_API_KEY);
 secret!(PULUMI_ACCESS_TOKEN);
 secret!(SEGMENT_WRITE_KEY);
 secret!(SEGMENT_WRITE_KEY_PRODUCTION);
+
+/// Cloudflare account id. A repo *variable* (not a secret), matching the
+/// hand-written `deploy-lexical-service.yml`.
+pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is

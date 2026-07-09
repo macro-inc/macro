@@ -124,7 +124,6 @@ models_soup = { path = "../models_soup", features = ["schema"] }
 notification = { path = "../notification" }
 opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
-properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
 rate_limit = { path = "../rate_limit", default-features = false, features = ["axum"] }

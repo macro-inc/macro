@@ -27,6 +27,7 @@ import {
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { splitPanelLayer } from '../split-layout/layers';
 import {
   SidePanelContext,
   type SidePanelContextType,
@@ -108,6 +109,7 @@ function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
     setIsOpen,
     toggle,
     isNarrow,
+    setOpenSectionIds: setOpenIds,
   };
 
   return (
@@ -172,15 +174,22 @@ function SidePanelLayoutInner(
           maxSize={SIDE_MAX_PX}
           index={1}
         >
-          <SidePanelOutlet
-            sections={props.sections}
-            openIds={props.openIds}
-            setOpenIds={props.setOpenIds}
-          />
+          <div class={cn('relative size-full', splitPanelLayer.controls)}>
+            <SidePanelOutlet
+              sections={props.sections}
+              openIds={props.openIds}
+              setOpenIds={props.setOpenIds}
+            />
+          </div>
         </Resize.Panel>
       </Show>
       <Show when={showOverlay()}>
-        <div class="absolute inset-0 z-10 flex flex-col bg-surface">
+        <div
+          class={cn(
+            'absolute inset-0 flex flex-col bg-surface',
+            splitPanelLayer.controls
+          )}
+        >
           <Scroll>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
@@ -353,6 +362,7 @@ function useSidePanel() {
     toggle: ctx.toggle,
     isNarrow: ctx.isNarrow,
     hasSections: ctx.hasSections,
+    setOpenSectionIds: ctx.setOpenSectionIds,
   };
 }
 

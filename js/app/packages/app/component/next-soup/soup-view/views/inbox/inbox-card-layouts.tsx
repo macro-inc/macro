@@ -543,45 +543,55 @@ function BaseCard(props: {
 export function ChannelCardLayout(props: InboxCardLayoutProps) {
   const entity = createMemo(() => props.item.entity);
 
-  const senderId = () => {
+  const messageSenderId = createMemo(() => {
     const value = props.item.entity;
 
     if (value.type !== 'channel') return;
 
     const latestSender = value.latestRootMessage?.senderId;
 
-    if (value.channelType === 'direct_message') {
-      const otherParticipant = value.participantIds?.filter(
-        (i) => i !== value.ownerId
-      )?.[0];
-
-      return latestSender ?? otherParticipant ?? 'Unknown';
-    }
-
     return latestSender;
-  };
+  });
 
-  const senderName = createSenderDisplayName(senderId);
+  const messageSenderName = createSenderDisplayName(messageSenderId);
+
   const currentUserId = useUserId();
-  const senderLabel = () =>
-    senderId() === currentUserId() ? 'You' : senderName();
 
   const isDM = createMemo(() => {
     const value = entity();
     return value.type === 'channel' && value.channelType === 'direct_message';
   });
 
+  const senderAvatarId = createMemo(() => {
+    if (!isDM()) {
+      return messageSenderId();
+    }
+
+    const value = props.item.entity;
+
+    if (value.type !== 'channel') return;
+
+    const participant = value.participantIds?.filter(
+      (id) => id !== currentUserId()
+    )[0];
+
+    if (!participant) return;
+
+    return participant;
+  });
+
+  const senderLabel = () =>
+    messageSenderId() === currentUserId() ? 'You' : messageSenderName();
+
   const text = createMemo(() => {
     const location = channelLocation(entity());
     const tag = getNotificationTag(props.item.notification);
 
-    let sender = isDM() ? entity().name || senderName() : '';
+    const sender = isDM() ? entity().name || messageSenderName() : '';
     let action = '';
 
     if (tag === 'document_mention' && isDM()) {
       action = 'shared a document with you';
-    } else if (tag === 'channel_message_send' && isDM()) {
-      action = 'sent you a message';
     }
 
     const content = itemContent(entity(), props.item.notification);
@@ -607,7 +617,9 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
         <Show
           when={!isDM()}
           fallback={
-            <InboxCard.Icon fallback={<InboxAvatar senderId={senderId()} />} />
+            <InboxCard.Icon
+              fallback={<InboxAvatar senderId={senderAvatarId()} />}
+            />
           }
         >
           <InboxCard.Icon
@@ -632,9 +644,10 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
         <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1 text-sm">
           <InboxCard.Content class="truncate">
-            <Show when={!isDM()}>
+            <Show when={senderLabel()}>
               <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
             </Show>
+
             <Show when={text().content?.trim()}>
               {(value) => (
                 <StaticMarkdown

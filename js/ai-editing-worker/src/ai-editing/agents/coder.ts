@@ -3,11 +3,13 @@ import type { LexicalSession } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
+import { buildPrompt } from './coder-prompt';
 import {
   createImBlockedTool,
   createReadDocumentTool,
   createRunCodeTool,
 } from '../tools';
+import { EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunTaskDeps } from './types';
 
 export type { RunTaskDeps } from './types';
@@ -39,6 +41,7 @@ export async function coder(
         sleep: deps.sleep,
         runner: deps.runner,
         onOps: deps.onOps,
+        onRunCode: deps.onRunCode,
       }),
       readDocument: createReadDocumentTool({ session }),
       reportBlocked: createImBlockedTool(
@@ -46,24 +49,8 @@ export async function coder(
         false
       ),
     },
+    providerOptions: EDIT_PROVIDER_OPTIONS,
     abortSignal: deps.signal,
   });
 }
 
-function buildPrompt(
-  task: string,
-  context: string,
-  snippets?: Record<string, string>
-): string {
-  const snippetBlock =
-    snippets && Object.keys(snippets).length > 0
-      ? [
-          '\n\nSnippets (access as `snippets.KEY` in your code -- do NOT re-embed as string literals):',
-          '```js',
-          `const snippets = \n${JSON.stringify(snippets, null, 2)}`,
-          '```',
-        ].join('\n')
-      : '';
-  const contextBlock = `\n\nRelevant region of the document:\n<document>\n${context}\n</document>`;
-  return `Carry out this edit task in full:\n${task}${snippetBlock}${contextBlock}`;
-}

@@ -1,6 +1,7 @@
 use crate::{MatchType, SearchHighlight, SearchOn, SearchResponse, SearchResponseItem};
 use chrono::{DateTime, Utc};
 use item_filters::ProjectFilters;
+use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -48,13 +49,18 @@ pub struct ProjectMetadata {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-/// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
-/// timestamps in opensearch as they would require us to update the project record
-/// every time the project updates (specifically for updated_at and viewed_at)
+/// ProjectSearchResponseItem object with project metadata we fetch from macrodb.
+/// The index carries created_at/updated_at for ranking, but viewed_at is
+/// per-user and deleted_at changes without a reindex, so metadata stays
+/// database-sourced.
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the project doesn't exist in the database.
     pub metadata: Option<ProjectMetadata>,
+    /// Entity properties (e.g. tags) on the project.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: ProjectSearchResponseItem,
 }

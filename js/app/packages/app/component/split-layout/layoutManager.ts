@@ -86,11 +86,17 @@ function getAliasOrType(content: SplitContent): string {
 }
 
 /**
- * The `type/id` URL pair for a split's content. The docked settings panel is
- * stored internally as the `component/settings` content, but it serializes as
+ * The `type/id` URL pair for a split's content. The settings panel is stored
+ * internally as `component/settings` content, but serializes as
  * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
- * settings page is open — matching the full-page `/settings/:tab` route. Reads
- * the active-tab signal, so the URL updates reactively as the tab changes.
+ * settings page is open. Reads the active-tab signal, so the URL updates
+ * reactively as the tab changes. `decodePairs` maps `settings/<tab>` back to
+ * the internal `component/settings` content on the way in.
+ *
+ * This applies on mobile too: settings docks as a split there, and now that
+ * settings is no longer a standalone `/settings/:tab` route, `settings/<tab>`
+ * is claimed by the split layout like any other split — so there's no reason
+ * to keep the tab out of the URL.
  */
 function contentUrlSegments(content: SplitContent): string[] {
   if (content.type === 'component' && content.id === 'settings') {
@@ -151,6 +157,7 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
+  | 'fork'
   | null;
 
 export type SplitState = {
@@ -352,6 +359,9 @@ export type SplitManager = {
 
   /** Close all popover splits */
   closeAllPopovers: () => void;
+
+  /** Splits not excluded by the current exclusion filter, in order. */
+  getVisibleSplits: () => SplitState[];
 
   /** Count of splits not excluded by the current exclusion filter. */
   getVisibleSplitCount: () => number;
@@ -1353,6 +1363,8 @@ export function createSplitLayout(
     return id ? getSplit(id) : undefined;
   };
 
+  const getVisibleSplits = () => state.splits.filter((s) => !isExcluded(s));
+
   return {
     splits: () => state.splits,
     activeSplitId: () => state.activeSplitId,
@@ -1383,8 +1395,8 @@ export function createSplitLayout(
     closeAllPopovers,
     popovers: () => state.popovers,
     canAppendSplit,
-    getVisibleSplitCount: () =>
-      state.splits.filter((s) => !isExcluded(s)).length,
+    getVisibleSplits,
+    getVisibleSplitCount: () => getVisibleSplits().length,
     setExclusionFilter: (fn) => {
       exclusionFilter = fn;
     },

@@ -1,12 +1,12 @@
-use crate::api::properties::{
+use models_properties::api;
+use properties::inbound::axum_router::{
     definitions::{ListPropertiesQuery, PropertyDefinitionResponse},
     entities::{
-        EntityPropertiesResponse, EntityQueryParams, SetEntityPropertyRequest,
-        types::BulkEntityPropertiesRequest,
+        BulkEntityPropertiesRequest, EntityPropertiesResponse, EntityQueryParams,
+        SetEntityPropertyRequest,
     },
     tags::{EnsureTagSetRequest, TagScope, TagSetResponse},
 };
-use models_properties::api;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -16,23 +16,23 @@ use utoipa::OpenApi;
     ),
     paths(
         // Property definitions
-        crate::api::properties::definitions::list::list_properties,
-        crate::api::properties::definitions::create::create_property_definition,
-        crate::api::properties::definitions::delete::delete_property_definition,
+        properties::inbound::axum_router::definitions::list_properties,
+        properties::inbound::axum_router::definitions::create_property_definition,
+        properties::inbound::axum_router::definitions::delete_property_definition,
         // Property options
-        crate::api::properties::options::get::get_property_options,
-        crate::api::properties::options::create::add_property_option,
-        crate::api::properties::options::update::update_property_option,
-        crate::api::properties::options::delete::delete_property_option,
-        crate::api::properties::tags::list_tags,
-        crate::api::properties::tags::ensure_tag_set,
+        properties::inbound::axum_router::options::get_property_options,
+        properties::inbound::axum_router::options::add_property_option,
+        properties::inbound::axum_router::options::update_property_option,
+        properties::inbound::axum_router::options::delete_property_option,
+        properties::inbound::axum_router::tags::list_tags,
+        properties::inbound::axum_router::tags::ensure_tag_set,
         // Entity properties
-        crate::api::properties::entities::get::get_entity_properties,
-        crate::api::properties::entities::get_bulk::get_bulk_entity_properties,
-        crate::api::properties::entities::set::set_entity_property,
-        crate::api::properties::entities::option::add_entity_property_option,
-        crate::api::properties::entities::option::remove_entity_property_option,
-        crate::api::properties::entities::delete_property::delete_entity_property,
+        properties::inbound::axum_router::entities::get_entity_properties,
+        properties::inbound::axum_router::entities::get_bulk_entity_properties,
+        properties::inbound::axum_router::entities::set_entity_property,
+        properties::inbound::axum_router::entities::add_entity_property_option,
+        properties::inbound::axum_router::entities::remove_entity_property_option,
+        properties::inbound::axum_router::entities::delete_entity_property,
     ),
     components(
         schemas(

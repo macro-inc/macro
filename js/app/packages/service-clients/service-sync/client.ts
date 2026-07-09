@@ -69,6 +69,20 @@ type MetadataResponse = {
   }>;
 };
 
+export type HistorySession = {
+  userId: string;
+  startMs: number;
+  endMs: number;
+  count: number;
+};
+
+/** A single frontier op-id — structurally a `SyncServiceVersionID`, so it can
+ * be passed straight to the copy/fork path. */
+export type HistoryVersionId = {
+  peer: string;
+  counter: number;
+};
+
 export const syncServiceClient = {
   async wakeup(args: { documentId: string }) {
     await syncFetch(`/document/${args.documentId}/wakeup`, {

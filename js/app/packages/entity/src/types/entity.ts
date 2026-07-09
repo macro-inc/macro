@@ -114,6 +114,7 @@ export type ChannelThreadEntity = EntityBase & {
 export type ChatEntity = EntityBase & {
   type: 'chat';
   projectId?: string;
+  properties?: SoupProperty[];
 };
 
 /** Named sub types - 'task' and 'snippet' */
@@ -192,6 +193,7 @@ export type EmailEntity = EntityBase & {
 export type ProjectEntity = EntityBase & {
   type: 'project';
   projectId?: string;
+  properties?: SoupProperty[];
 };
 
 export type CallStatus = StorageCallStatus;
@@ -355,7 +357,7 @@ export const isChannelThreadEntity = (
   return entity.type === 'channel_thread';
 };
 
-const _isChatEntity = (entity: EntityData): entity is ChatEntity => {
+export const isChatEntity = (entity: EntityData): entity is ChatEntity => {
   return entity.type === 'chat';
 };
 
@@ -363,7 +365,9 @@ export const isEmailEntity = (entity: EntityData): entity is EmailEntity => {
   return entity.type === 'email';
 };
 
-const _isProjectEntity = (entity: EntityData): entity is ProjectEntity => {
+export const isProjectEntity = (
+  entity: EntityData
+): entity is ProjectEntity => {
   return entity.type === 'project';
 };
 

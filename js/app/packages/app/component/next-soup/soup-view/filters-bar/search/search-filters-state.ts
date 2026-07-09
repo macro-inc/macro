@@ -25,13 +25,16 @@ export type SearchIndexId =
 
 export type SearchTypeValue = SearchIndexId | 'all';
 
-/** Search types where tag filtering applies: documents/tasks plus the mixed
- * `all` view (tags there narrow the taggable result types and leave the
- * rest untouched). */
+/** Search types where tag filtering applies: documents/tasks, emails, chats,
+ * folders, plus the mixed `all` view (tags there narrow the taggable result
+ * types and leave the rest untouched). */
 export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
   'all',
   'task',
   'document-or-file',
+  'email',
+  'agent',
+  'folders',
 ]);
 
 /**
@@ -66,9 +69,9 @@ export type SearchFiltersSections = {
 
 export type SearchFiltersState = SearchFiltersSections & {
   type: SearchTypeValue;
-  // Selected tags. Applied only on the all/document/task types (TAG_SEARCH_TYPES)
-  // and read live from the compiled query, so they persist across those types
-  // but clear when switching to a type where tags do not apply (email/channels/etc).
+  // Selected tags. Applied only on the TAG_SEARCH_TYPES types and read live
+  // from the compiled query, so they persist across those types but clear
+  // when switching to a type where tags do not apply (channels/calls/etc).
   // Each entry carries its owning definition id and option id; combined as one OR.
   tags: PropertyFilter[];
 };
@@ -94,8 +97,8 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   const include: FieldFilters = { ...baseline.include };
   const exclude: FieldFilters = { ...baseline.exclude };
 
-  // Tags apply on the all/document/task types only, so a tag filter never
-  // silently empties a search narrowed to emails/channels/calls.
+  // Tags apply on the TAG_SEARCH_TYPES types only, so a tag filter never
+  // silently empties a search narrowed to channels/calls.
   if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
     include.tagFilters = state.tags;
   }

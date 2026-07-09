@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
+  useSidePanel,
 } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -17,7 +18,10 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_HISTORY_COMPONENT,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
@@ -25,6 +29,7 @@ import { type DateValue, formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
@@ -52,6 +57,9 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { useHistory } from '../../history/HistoryContext';
+import { HistoryScrubber } from '../../history/HistoryScrubber';
+import { HistorySessionList } from '../../history/HistorySessionList';
 import { mdStore } from '../../signal/markdownBlockData';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
@@ -102,6 +110,11 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
+      <Show when={ENABLE_HISTORY_COMPONENT()}>
+        <SidePanel.Section id="history" title="History" defaultOpen order={35}>
+          <HistorySectionContent />
+        </SidePanel.Section>
+      </Show>
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
@@ -109,6 +122,77 @@ export function MarkdownSidePanelSections(
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
     </>
+  );
+}
+
+function HistorySectionContent() {
+  const history = useHistory();
+  const sidePanel = useSidePanel();
+  const [showSessions, setShowSessions] = createSignal(false);
+
+  createEffect(() => {
+    if (history.isOpen()) {
+      sidePanel?.setOpenSectionIds(['history']);
+    }
+  });
+  const isShowingSessions = () => history.isOpen() || showSessions();
+
+  const totalEdits = createMemo(() => {
+    const sessions = history.sessions();
+    if (!sessions) return 0;
+    return sessions.reduce((sum, s) => sum + s.count, 0);
+  });
+
+  return (
+    <Show
+      when={
+        !history.loading.sessions() && totalEdits() > 1 && history.sessions()
+      }
+      fallback={<p class="text-xs text-ink-muted">No history yet</p>}
+    >
+      {(sessions) => (
+        <div class="hidden min-w-0 overflow-hidden md:block">
+          <HistoryScrubber compact />
+          <Show when={sessions().length > 0}>
+            <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
+              <button
+                type="button"
+                aria-expanded={isShowingSessions()}
+                class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                onClick={() => {
+                  history.enter();
+                  setShowSessions(true);
+                }}
+              >
+                <CaretRightIcon
+                  class={cn(
+                    'size-3 shrink-0 transition-transform duration-90',
+                    isShowingSessions() && 'rotate-90'
+                  )}
+                />
+                <span>
+                  {isShowingSessions() ? 'Activity' : 'Show activity'}
+                </span>
+              </button>
+              <Show when={isShowingSessions()}>
+                <HistorySessionList
+                  sessions={sessions()}
+                  selectedAt={history.selectedAt}
+                  onSelect={history.enter}
+                  onViewSessionDiff={(session) => {
+                    if (history.diff.session()?.startMs === session.startMs) {
+                      history.diff.clear();
+                    } else {
+                      history.diff.view(session);
+                    }
+                  }}
+                />
+              </Show>
+            </div>
+          </Show>
+        </div>
+      )}
+    </Show>
   );
 }
 
@@ -451,7 +535,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
       <SidePanel.Section
         id="references"
         title={<SidePanel.CountTitle label="References" count={count()} />}
-        order={50}
+        order={33}
       >
         <div class="text-xs">
           <References documentId={props.documentId} />

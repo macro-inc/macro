@@ -25,7 +25,10 @@ import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
-import { deduplicateEntities } from '@app/component/next-soup/utils';
+import {
+  deduplicateEntities,
+  scopeChannelNotificationsForEntity,
+} from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
@@ -36,6 +39,7 @@ import {
   soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useDealStages } from '@companies/crm/deal-stages';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   ENABLE_GRAPHQL_SOUP_FLAG,
@@ -54,6 +58,7 @@ import {
   toNotificationEntity,
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -124,6 +129,8 @@ interface SoupViewContextValues {
   setAssigneeFilter: Setter<string[]>;
   ownerFilter: Accessor<string[]>;
   setOwnerFilter: Setter<string[]>;
+  stageFilter: Accessor<string[]>;
+  setStageFilter: Setter<string[]>;
   inboxFilter: Accessor<string[] | undefined>;
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
@@ -277,6 +284,10 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.ownerFilter',
     { default: [] }
   );
+  const [stageFilter, setStageFilter] = useEntryState<string[]>(
+    'soup.stageFilter',
+    { default: [] }
+  );
   const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
     INBOX_FILTER_ENTRY_KEY,
     { default: undefined }
@@ -336,18 +347,30 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  // Clear the owner sub-filter when leaving the CRM company presets
+  // Clear the owner/stage sub-filters when leaving the CRM company presets
   createEffect(() => {
     if (
       !soup.predicates.isActive('crm-company-active') &&
       !soup.predicates.isActive('crm-company-hidden')
     ) {
       setOwnerFilter([]);
+      setStageFilter([]);
     }
   });
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+
+  // Active deal-stage set (team-customized when present). Drives the
+  // Customers view's stage grouping, stage filter and group labels.
+  const dealStages = useDealStages();
+
+  // `resolveStage` takes the minimal company shape; widen it to any soup
+  // entity (non-companies resolve to undefined since they carry no stage).
+  const resolveCompanyStage = (entity: EntityData): string | undefined =>
+    dealStages.resolveStage(
+      entity as Parameters<typeof dealStages.resolveStage>[0]
+    );
 
   const activeListView = createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
@@ -393,7 +416,13 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const applyInboxThreadFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
+    if (!isNewInbox()) {
+      return {
+        ...state,
+        include: { ...state.include, channelThreadId: [NIL_UUID] },
+      };
+    }
+
     const id = userId();
     if (!id) return state;
     return {
@@ -419,23 +448,10 @@ export const SoupViewContextProvider: FlowComponent<
         documentSeen: seen,
         emailSeen: seen,
         channelSeen: seen,
-        channelThreadSeen: seen,
+        // channelThreadSeen: seen,
         chatSeen: seen,
         folderSeen: seen,
-      },
-    };
-  };
-
-  // The inbox only surfaces missed calls. The preset NILs `callId` to exclude
-  // calls entirely, so drop that exclusion and filter to missed status instead.
-  const applyInboxCallFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
-    const { callId: _callId, ...include } = state.include;
-    return {
-      ...state,
-      include: {
-        ...include,
-        callStatus: 'MISSED',
+        foreignEntitySeen: seen,
       },
     };
   };
@@ -444,7 +460,6 @@ export const SoupViewContextProvider: FlowComponent<
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
-    next = applyInboxCallFilter(next);
     return next;
   };
 
@@ -488,15 +503,21 @@ export const SoupViewContextProvider: FlowComponent<
     notificationSource,
     assignees: assigneeFilter(),
     owners: ownerFilter(),
+    stages: stageFilter(),
+    resolveCompanyStage,
   });
 
   const attachNotifications = (entity: EntityData) => {
+    const notifications = useNotificationsForEntity(
+      notificationSource,
+      toNotificationEntity(entity)
+    );
     return {
       ...entity,
-      notifications: useNotificationsForEntity(
-        notificationSource,
-        toNotificationEntity(entity)
-      ),
+      notifications: () =>
+        isNewInbox()
+          ? scopeChannelNotificationsForEntity(entity, notifications())
+          : notifications(),
     };
   };
 
@@ -519,7 +540,7 @@ export const SoupViewContextProvider: FlowComponent<
     () => {
       const view = activeListView();
       return {
-        enabled: !search.isSearching(),
+        enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
           itemFilter: (item) =>
@@ -671,8 +692,28 @@ export const SoupViewContextProvider: FlowComponent<
   const hasNextGroupPage = (groupKey: string) =>
     groupQueryFor(groupKey)?.hasNextPage() ?? false;
 
+  // True when grouping by the canonical Stage id (the "group by Stage"
+  // presets always use the system definition id, even when the team's own
+  // stage set is active).
+  const isStageGrouping = () => {
+    const field = groupByField();
+    return (
+      field?.type === 'property' &&
+      field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STAGE
+    );
+  };
+
+  // Group-key → label, preferring the active deal-stage set for stage
+  // groupings (custom option ids are unknown to the static option table).
+  const resolveGroupLabel = (key: string): string | undefined => {
+    if (isStageGrouping()) {
+      return dealStages.stageLabel(key) ?? getPropertyOptionLabel(key);
+    }
+    return getPropertyOptionLabel(key);
+  };
+
   const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
-    const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
+    const resolvedLabel = resolveGroupLabel(group.key) ?? group.label;
     return {
       key: group.key,
       value: group.key,
@@ -718,9 +759,14 @@ export const SoupViewContextProvider: FlowComponent<
     if (enabled() && isClientPropertyGroup() && !search.isSearching()) {
       const definitionId =
         field?.type === 'property' ? field.propertyDefinitionId : '';
+      // Stage grouping resolves through the active deal-stage set so legacy
+      // system-stage values land in the matching custom-stage bucket.
+      const isStage = definitionId === SYSTEM_PROPERTY_IDS.STAGE;
       const buckets = new Map<string, SoupEntity[]>();
       for (const entity of entities()) {
-        const key = clientPropertyGroupKey(entity, definitionId);
+        const key = isStage
+          ? (resolveCompanyStage(entity) ?? '')
+          : clientPropertyGroupKey(entity, definitionId);
         const bucket = buckets.get(key);
         if (bucket) {
           bucket.push(entity);
@@ -729,7 +775,9 @@ export const SoupViewContextProvider: FlowComponent<
         }
       }
 
-      const stageOrder = COMPANY_STAGE_OPTIONS.map((o) => o.value as string);
+      const stageOrder = isStage
+        ? dealStages.stages().map((stage) => stage.id)
+        : COMPANY_STAGE_OPTIONS.map((o) => o.value as string);
       const order = [...buckets.keys()].sort((a, b) => {
         if (a === '') return 1;
         if (b === '') return -1;
@@ -741,8 +789,8 @@ export const SoupViewContextProvider: FlowComponent<
             (bStage === -1 ? stageOrder.length : bStage)
           );
         }
-        const aLabel = getPropertyOptionLabel(a) ?? a;
-        const bLabel = getPropertyOptionLabel(b) ?? b;
+        const aLabel = resolveGroupLabel(a) ?? a;
+        const bLabel = resolveGroupLabel(b) ?? b;
         return aLabel.localeCompare(bLabel);
       });
 
@@ -753,7 +801,7 @@ export const SoupViewContextProvider: FlowComponent<
         const groupMeta: GroupMeta = {
           key,
           value: key,
-          label: key === '' ? 'Not set' : (getPropertyOptionLabel(key) ?? key),
+          label: key === '' ? 'Not set' : (resolveGroupLabel(key) ?? key),
           count: groupEntities.length,
           isExpanded: () => soup.grouping.isExpanded(key),
           toggle: () => soup.grouping.toggle(key),
@@ -948,6 +996,8 @@ export const SoupViewContextProvider: FlowComponent<
     setAssigneeFilter,
     ownerFilter,
     setOwnerFilter,
+    stageFilter,
+    setStageFilter,
     inboxFilter,
     setInboxFilter,
     activeTab,

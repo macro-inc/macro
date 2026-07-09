@@ -14,12 +14,12 @@
 pub mod domain;
 
 pub use domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
-pub use macro_event_topics::{MacroDocumentsTopic, MacroExampleTopic, Topic};
+pub use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroExampleTopic, Topic};
 
 #[cfg(feature = "ports")]
 pub use domain::ports::{EventPublisher, MacroEventBroker};
 #[cfg(feature = "ports")]
-pub use domain::service::MacroEventBrokerService;
+pub use domain::service::{MacroEventBrokerService, NoopMacroEventBroker};
 #[cfg(feature = "outbound")]
 pub use outbound::kafka_event_publisher::KafkaEventPublisher;
 #[cfg(feature = "outbound")]

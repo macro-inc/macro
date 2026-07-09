@@ -4,16 +4,21 @@ import { $getId } from '../../../lexical-core/plugins/nodeIdPlugin';
 import { mockAwarenessSource } from './awareness/awareness-source';
 import { Doc } from './doc/doc';
 import { DocumentEditor } from './editor/document-editor';
-import { type CodeRunner, docIds, runEditorCode } from './runtime';
+import {
+  type CodeRunner,
+  docIds,
+  runEditorCode,
+  type SnippetSource,
+} from './runtime';
 
 // In-process executor for unit tests: the QuickJS sandbox's wasm import doesn't
 // resolve under bun test, so tests run the snippet via `new Function`. Production
 // always goes through `runInSandbox`. The id pool mirrors what the host injects.
-const newFunctionRunner: CodeRunner = (validIds, code) => {
+const newFunctionRunner: CodeRunner = (validIds, code, snippets) => {
   const refs = Array.from({ length: 128 }, (_, i) => `ref-${i + 1}`);
   const editor = new DocumentEditor({ validIds, refs });
   // eslint-disable-next-line no-new-func
-  new Function('editor', code)(editor);
+  new Function('editor', 'snippets', code)(editor, snippets ?? {});
   return editor.drain();
 };
 
@@ -38,7 +43,11 @@ function topIds(session: LexicalSession): string[] {
 }
 
 /** Run a snippet end-to-end (editor → ops → queue → real Doc), no timers/awareness delay. */
-async function runCode(session: LexicalSession, code: string): Promise<string> {
+async function runCode(
+  session: LexicalSession,
+  code: string,
+  snippets?: SnippetSource
+): Promise<string> {
   return runEditorCode({
     session,
     doc: new Doc(session),
@@ -46,6 +55,7 @@ async function runCode(session: LexicalSession, code: string): Promise<string> {
     runner: newFunctionRunner,
     awarenessSource: mockAwarenessSource(),
     sleep: () => Promise.resolve(),
+    snippets,
   });
 }
 
@@ -97,6 +107,57 @@ describe('runtime — end to end against real Lexical', () => {
     );
     expect(serializeWithXml(session)).toContain('<h3');
     expect(serializeWithXml(session)).toContain('beta');
+  });
+});
+
+describe('runtime — snippet settling', () => {
+  it('resolves pending snippets before the code runs', async () => {
+    const { session, ids } = build('first');
+    const summary = await runCode(
+      session,
+      `editor.insertParagraphAfter('${ids[0]}', snippets.intro);`,
+      {
+        intro: {
+          brief: 'one line',
+          promise: new Promise((resolve) =>
+            setTimeout(() => resolve('composed later'), 5)
+          ),
+        },
+      }
+    );
+    expect(summary).toBe('ok');
+    expect(serializeWithXml(session)).toContain('composed later');
+  });
+
+  it('mixes verbatim strings and pending snippets', async () => {
+    const { session, ids } = build('first');
+    const summary = await runCode(
+      session,
+      `editor.insertParagraphAfter('${ids[0]}', snippets.a + ' ' + snippets.b);`,
+      {
+        a: 'verbatim',
+        b: { brief: 'x', promise: Promise.resolve('pending') },
+      }
+    );
+    expect(summary).toBe('ok');
+    expect(serializeWithXml(session)).toContain('verbatim pending');
+  });
+
+  it('reports a failed snippet by key and applies nothing', async () => {
+    const { session, ids } = build('untouched');
+    const before = serializeWithXml(session);
+    const summary = await runCode(
+      session,
+      `editor.insertParagraphAfter('${ids[0]}', snippets.bad);`,
+      {
+        bad: {
+          brief: 'x',
+          promise: Promise.reject(new Error('model unavailable')),
+        },
+      }
+    );
+    expect(summary).toBe('error: snippet "bad" failed: model unavailable');
+    expect(serializeWithXml(session)).toBe(before);
   });
 });
 

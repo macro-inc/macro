@@ -1,0 +1,12 @@
+[package]
+edition = "2024"
+name = "loops_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

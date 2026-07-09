@@ -7,6 +7,7 @@
 
 import type { BTreeMap } from './bTreeMap';
 import type { String } from './string';
+import type { Vec } from './vec';
 import type { WebhookDeletedAt } from './webhookDeletedAt';
 import type { WebhookStatus } from './webhookStatus';
 
@@ -22,6 +23,8 @@ export interface Webhook {
   deleted_at?: WebhookDeletedAt;
   /** HTTPS endpoint URL. */
   endpoint_url: string;
+  /** Typed filters used to match events and optional entity ids. */
+  filters: Vec;
   /** Custom delivery headers, after decryption by the repository. */
   headers: BTreeMap;
   /** Webhook id. */
@@ -30,8 +33,6 @@ export interface Webhook {
   is_valid: boolean;
   /** Display name. */
   name: string;
-  /** Event matching rule. */
-  rule: unknown;
   /** Webhook lifecycle status. */
   status: WebhookStatus;
   /** Update timestamp. */

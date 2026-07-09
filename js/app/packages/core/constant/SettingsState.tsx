@@ -2,39 +2,12 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
-
-export type SettingsTab =
-  | 'Account'
-  | 'Billing'
-  | 'Subscription'
-  | 'Organization'
-  | 'Appearance'
-  | 'Mobile'
-  | 'AI Memory'
-  | 'Inbox'
-  | 'Shortcuts'
-  | 'Mobile App'
-  | 'Agent'
-  | 'Team'
-  | 'Connected'
-  | 'Email'
-  | 'GitHub'
-  | 'Admin';
-
-// Where "Back to app" (and move-to-split) should return to: the layout the user
-// was on when they opened settings. Undefined when settings was deep-linked, in
-// which case we fall back to DEFAULT_ROUTE.
-const [settingsReturnTo, setSettingsReturnTo] = createSignal<string>();
-
-const SETTINGS_PATH = '/settings';
-
-const settingsPathFor = (tab: SettingsTab) =>
-  `${SETTINGS_PATH}/${settingsTabToSlug(tab)}`;
 
 /**
  * Strip the router base from a `location.pathname` (which includes it, e.g.
@@ -50,11 +23,29 @@ const toBaseRelative = (pathname: string) => {
   return pathname;
 };
 
-/** Whether a `location.pathname` (base included) is the settings route. */
-export const isSettingsPath = (pathname: string) => {
-  const path = toBaseRelative(pathname);
-  return path === SETTINGS_PATH || path.startsWith(`${SETTINGS_PATH}/`);
-};
+export type SettingsTab =
+  | 'Account'
+  | 'Billing'
+  | 'Subscription'
+  | 'Organization'
+  | 'Appearance'
+  | 'Mobile'
+  | 'AI Memory'
+  | 'Inbox'
+  | 'Shortcuts'
+  | 'Mobile App'
+  | 'Agent'
+  | 'Team'
+  | 'CRM'
+  | 'Connected'
+  | 'Email'
+  | 'GitHub'
+  | 'Admin';
+
+// Where "Back to app" (and move-to-split) should return to: the layout the user
+// was on when they opened settings. Undefined when settings was deep-linked, in
+// which case we fall back to DEFAULT_ROUTE.
+const [settingsReturnTo, setSettingsReturnTo] = createSignal<string>();
 
 /**
  * Drop a settings split from a split-layout path, if present. Handles both the
@@ -93,12 +84,31 @@ export const settingsTabFromSplitPath = (
   return undefined;
 };
 
+/**
+ * Whether settings is the only visible split — the "clobbered" mode that
+ * looks and behaves like the old fullscreen route (app sidebar hidden,
+ * settings owns its own back/move-to-split affordances). Mobile is excluded:
+ * its swipe layout always reports a visible count of 1 for the active split
+ * (the backgrounded split is excluded from that count), which would
+ * otherwise misidentify every mobile settings-open as "solo".
+ */
+export const isSoloSettings = () => {
+  if (isMobile()) return false;
+  const splitManager = globalSplitManager();
+  if (!splitManager) return false;
+  // Derive the sole split from the visible set (not `splits()[0]`) so the
+  // count check and the identity check agree even if an exclusion filter ever
+  // hides a split ahead of settings.
+  const visible = splitManager.getVisibleSplits();
+  if (visible.length !== 1) return false;
+  const [sole] = visible;
+  return sole?.content.type === 'component' && sole.content.id === 'settings';
+};
+
 export const useSettingsState = () => {
-  const { openWithSplit } = useSplitLayout();
+  const { openWithSplit, replaceAllSplits } = useSplitLayout();
   const navigate = useNavigate();
   const location = useLocation();
-
-  const isOnSettingsRoute = () => isSettingsPath(location.pathname);
 
   const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
@@ -110,10 +120,6 @@ export const useSettingsState = () => {
   };
 
   const splitOpen = createMemo(() => getSettingsSplit() !== undefined);
-
-  // Settings are considered open whether shown as the full-page route or docked
-  // in a split.
-  const isOpen = createMemo(() => isOnSettingsRoute() || splitOpen());
 
   const focusSettingsPanel = () => {
     if (isTouchDevice()) return;
@@ -127,25 +133,44 @@ export const useSettingsState = () => {
     }, 10);
   };
 
-  // Default activation: navigate to the settings route (both desktop and
-  // mobile). Remember where we came from so "Back to app" can return there.
-  // Opening without a specific tab always lands on Account rather than the
-  // last-viewed page — a fresh open shouldn't resume a prior session's tab.
-  const openSettings = (tab?: SettingsTab) => {
-    if (!isOnSettingsRoute()) {
-      setSettingsReturnTo(toBaseRelative(location.pathname));
-    }
-    navigate(settingsPathFor(tab ?? 'Account'));
+  // Capture the current layout (minus any settings split) as where "Back to
+  // app"/"Move to split" should return to, then clobber every other split so
+  // settings becomes the sole one. Shared by opening settings fresh and by
+  // collapsing a docked-alongside layout back down to solo.
+  const collapseToSoloSettings = (tab: SettingsTab) => {
+    setSettingsReturnTo(stripSettingsSplit(toBaseRelative(location.pathname)));
+    setActiveTabId(tab);
+    replaceAllSplits({ type: 'component', id: 'settings' });
   };
 
-  // Switch the active settings page. On the route this is a URL change (so the
-  // page is reflected/shareable); in a split it's just the in-memory signal.
-  const selectTab = (tab: SettingsTab) => {
-    if (isOnSettingsRoute()) {
-      navigate(settingsPathFor(tab), { replace: true });
-    } else {
-      setActiveTabId(tab);
+  // Default activation. On mobile, dock settings into the split layout so it
+  // inherits the split navigation chrome (back button, swipe-back gesture) —
+  // the solo-settings chrome's exit affordances all live in desktop-only UI.
+  // On desktop, clobber down to a lone settings split, remembering where we
+  // came from so "Back to app" can return there. Opening without a specific
+  // tab always lands on Account rather than the last-viewed page — a fresh
+  // open shouldn't resume a prior session's tab. Re-invoking while settings
+  // is already showing (solo or docked alongside other splits) just switches
+  // the tab rather than re-clobbering the layout.
+  const openSettings = (tab?: SettingsTab) => {
+    if (isMobile()) {
+      openSettingsInSplit(tab ?? 'Account');
+      return;
     }
+    if (splitOpen()) {
+      setActiveTabId(tab ?? 'Account');
+      return;
+    }
+    collapseToSoloSettings(tab ?? 'Account');
+  };
+
+  // Switch the active settings page. The split's URL segment is derived
+  // reactively from `activeTabId` (see `contentUrlSegments`), so the
+  // layout's bidirectional URL sync reflects this automatically — no
+  // explicit navigation needed, whether settings is solo or docked alongside
+  // other splits.
+  const selectTab = (tab: SettingsTab) => {
+    setActiveTabId(tab);
   };
 
   // Opt-in: dock settings into the split layout (the pre-route behavior).
@@ -173,16 +198,17 @@ export const useSettingsState = () => {
   };
 
   const closeSettings = () => {
-    if (isOnSettingsRoute()) {
+    if (isSoloSettings()) {
       navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
       return;
     }
     removeSettingsSplit();
   };
 
-  // Promote the route into the split layout: rebuild the layout we came from and
-  // dock settings into it as a `settings/<tab>` pair. Navigating straight to the
-  // composed path avoids racing the split manager's mount.
+  // Dock settings alongside the layout we came from: rebuild that layout and
+  // add settings back as a `settings/<tab>` split. Navigating straight to the
+  // composed path (rather than mutating splits directly) lets the URL→layout
+  // sync rebuild everything in one pass.
   const moveSettingsToSplit = (tab?: SettingsTab) => {
     if (tab) setActiveTabId(tab);
     // Strip any settings split already in the target layout before re-adding
@@ -194,19 +220,18 @@ export const useSettingsState = () => {
     navigate(`${base}/settings/${settingsTabToSlug(activeTabId())}`);
   };
 
-  // Pop the docked split back out into the full-page route. The return layout is
-  // the current path minus the settings split, so "Back to app" lands correctly.
-  const moveSettingsToFullscreen = (tab?: SettingsTab) => {
-    if (tab) setActiveTabId(tab);
-    setSettingsReturnTo(stripSettingsSplit(toBaseRelative(location.pathname)));
-    navigate(settingsPathFor(tab ?? activeTabId()));
+  // Collapse a docked-alongside layout back down to a lone settings split.
+  // The return layout is the current path minus the settings split, so "Back
+  // to app" / "Move to split" land correctly.
+  const moveSettingsToSolo = (tab?: SettingsTab) => {
+    collapseToSoloSettings(tab ?? activeTabId());
   };
 
   // Focus-aware toggle: bring settings to the user rather than destroying it,
   // and only close when settings is what they're actually looking at.
   const toggleSettings = () => {
-    // Route takes priority: if it's the current page, leave it.
-    if (isOnSettingsRoute()) {
+    // Solo takes priority: if it's the only thing showing, leave it.
+    if (isSoloSettings()) {
       closeSettings();
       return;
     }
@@ -225,19 +250,18 @@ export const useSettingsState = () => {
       return;
     }
 
-    // Nothing open → open the route.
+    // Nothing open → open settings (solo split on desktop, docked on mobile).
     openSettings();
   };
 
   return {
-    settingsOpen: isOpen,
-    settingsSplitOpen: splitOpen,
+    settingsOpen: splitOpen,
     openSettings,
     openSettingsInSplit,
     selectTab,
     closeSettings,
     moveSettingsToSplit,
-    moveSettingsToFullscreen,
+    moveSettingsToSolo,
     activeTabId,
     setActiveTabId,
     toggleSettings,

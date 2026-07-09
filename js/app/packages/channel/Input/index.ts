@@ -22,6 +22,7 @@ export {
   DiscardDraftAction,
   ToggleFormatAction,
 } from './InputActions';
+export { InputFlag } from './InputFlag';
 export { Layout } from './Layout';
 export { createMentionsTracker } from './mentions-tracker';
 export type {

@@ -1,4 +1,4 @@
-//! Database layer types - used only by properties_db_client.
+//! Database layer types - used only by the properties crate's outbound adapters.
 //!
 //! These structs directly map to database tables and include all database fields.
 //! They should not be exposed outside of the db_client.

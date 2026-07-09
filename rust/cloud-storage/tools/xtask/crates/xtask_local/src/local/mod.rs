@@ -578,7 +578,7 @@ fn bring_up_infra(
     let waited: &[&str] = if spec.runs_local_infra {
         &["postgres", "redis", "search", "kafka", "localstack"]
     } else {
-        &["redis", "localstack"]
+        &["redis", "kafka", "localstack"]
     };
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--wait").args(waited);

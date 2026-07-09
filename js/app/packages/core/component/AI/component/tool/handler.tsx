@@ -6,6 +6,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { getThreadHandler } from './GetThread';
@@ -13,6 +14,7 @@ import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
+import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
 import {
@@ -54,12 +56,15 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
+  ListCompanies: listCompaniesHandler,
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListNotifications: listNotificationsHandler,
+  ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,

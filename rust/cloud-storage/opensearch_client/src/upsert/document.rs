@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
+use super::properties::IndexedProperty;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// Relation name for parent docs in the join field.
@@ -10,27 +11,6 @@ const PARENT_RELATION: &str = "document";
 
 /// Relation name for child (chunk) docs in the join field.
 const CHILD_RELATION: &str = "chunk";
-
-/// A denormalized entity property indexed on the parent doc so search can
-/// filter by it. `values` holds every equality-filterable value (select
-/// options, entity refs, links, text, bool); `number_value`/`date_value`
-/// are split out only because they need range + sort semantics that keyword
-/// can't provide. Always queried scoped by `definition_id`.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct IndexedProperty {
-    /// The property definition id this value belongs to.
-    pub definition_id: String,
-    /// Every equality-filterable value as a keyword: select-option UUIDs,
-    /// entity-reference ids, links, text, bool as "true"/"false".
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub values: Vec<String>,
-    /// Numeric value (e.g. story points) — range + sort.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub number_value: Option<f64>,
-    /// Date value as epoch milliseconds (e.g. due date) — range + sort.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_value: Option<i64>,
-}
 
 /// The arguments for upserting a document into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -296,6 +276,49 @@ pub(crate) async fn upsert_document(
     }
 
     tracing::trace!(id=%child_id, parent=%parent_id, "document upserted successfully");
+    Ok(())
+}
+
+/// Builds the 2-line bulk body for a parent-only write: one `index` op
+/// (routing = parent _id = document_id) followed by the parent doc body.
+fn parent_only_bulk_body(args: &UpsertDocumentArgs) -> Vec<String> {
+    let parent_id = args.document_id.as_str();
+    let parent_action = serde_json::json!({
+        "index": {
+            "_id": parent_id,
+            "routing": parent_id,
+        }
+    });
+    vec![parent_action.to_string(), parent_doc_body(args).to_string()]
+}
+
+/// Upsert only the parent doc for a document with no indexable content
+/// (e.g. archives, media). Writes the same full-overwrite parent body as
+/// the chunked paths — `node_id`/`content` on `args` are ignored — and
+/// touches no children.
+#[tracing::instrument(skip(client), err)]
+pub(crate) async fn upsert_parent_document(
+    client: &opensearch::OpenSearch,
+    args: &UpsertDocumentArgs,
+    index_override: Option<&str>,
+) -> Result<()> {
+    let index = resolve_destination(index_override);
+    let bulk_body = parent_only_bulk_body(args);
+
+    let result =
+        super::bulk_upsert_to_index(client, index, bulk_body, "upsert_parent_document").await?;
+
+    if result.failed > 0 {
+        return Err(OpensearchClientError::Unknown {
+            details: format!(
+                "upsert_parent_document had {} failures: {:?}",
+                result.failed, result.errors
+            ),
+            method: Some("upsert_parent_document".to_string()),
+        });
+    }
+
+    tracing::trace!(parent=%args.document_id, "parent document upserted successfully");
     Ok(())
 }
 

@@ -64,6 +64,7 @@ fn check() -> Job {
             "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
         ))
         .add_env(("RUSTDOCFLAGS", "-Dwarnings"))
+        .add_env(("SQLX_OFFLINE", "true"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())

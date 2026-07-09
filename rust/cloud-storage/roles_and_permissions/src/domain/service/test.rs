@@ -27,7 +27,7 @@ impl UserRepository for MockUserRepository {
 #[derive(Debug, Clone, Default)]
 struct MockUserRolesAndPermissionsRepository {
     add_roles_to_user_calls: Arc<Mutex<usize>>,
-    remove_roles_from_user_calls: Arc<Mutex<usize>>,
+    removed_roles_from_user_calls: Arc<Mutex<Vec<Vec<RoleId>>>>,
 }
 
 impl MockUserRolesAndPermissionsRepository {
@@ -36,7 +36,11 @@ impl MockUserRolesAndPermissionsRepository {
     }
 
     pub fn get_remove_roles_from_user_calls(&self) -> usize {
-        *self.remove_roles_from_user_calls.lock().unwrap()
+        self.removed_roles_from_user_calls.lock().unwrap().len()
+    }
+
+    pub fn get_removed_roles_from_user_calls(&self) -> Vec<Vec<RoleId>> {
+        self.removed_roles_from_user_calls.lock().unwrap().clone()
     }
 }
 
@@ -70,11 +74,53 @@ impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository
     async fn remove_roles_from_user(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-        _role_ids: &[RoleId],
+        role_ids: &[RoleId],
     ) -> Result<(), UserRolesAndPermissionsError> {
-        *self.remove_roles_from_user_calls.lock().unwrap() += 1;
+        self.removed_roles_from_user_calls
+            .lock()
+            .unwrap()
+            .push(role_ids.to_vec());
         Ok(())
     }
+}
+
+async fn assert_payment_failure_status_removes_subscription_roles(
+    subscription_status: SubscriptionStatus,
+) -> anyhow::Result<()> {
+    let mock_user_repository = MockUserRepository::default();
+    let mock_user_roles_and_permissions_repository =
+        MockUserRolesAndPermissionsRepository::default();
+
+    let user_service = UserRolesAndPermissionsServiceImpl::new(
+        mock_user_roles_and_permissions_repository.clone(),
+        mock_user_repository,
+    );
+
+    user_service
+        .update_user_roles_and_permissions_for_subscription(
+            Email::parse_from_str("UsEr@uSeR.com")?.lowercase(),
+            subscription_status,
+            ProductTier::Opus,
+        )
+        .await?;
+
+    assert_eq!(
+        mock_user_roles_and_permissions_repository.get_removed_roles_from_user_calls(),
+        vec![vec![RoleId::ProfessionalSubscriber, RoleId::SubOpus]]
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_payment_failure_statuses_past_due_removes_roles() -> anyhow::Result<()> {
+    assert_payment_failure_status_removes_subscription_roles(SubscriptionStatus::PastDue).await
+}
+
+#[tokio::test]
+async fn test_payment_failure_statuses_incomplete_expired_removes_roles() -> anyhow::Result<()> {
+    assert_payment_failure_status_removes_subscription_roles(SubscriptionStatus::IncompleteExpired)
+        .await
 }
 
 #[tokio::test]

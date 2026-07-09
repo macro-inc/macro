@@ -365,7 +365,7 @@ function PropertyValueEditor(props: {
     value: string | number | boolean | Date | EntityReference
   ) => {
     const type = propertyType();
-    if (!type) return;
+    if (!type || type === 'TAG') return;
     let apiValues = toPropertyApiValue({ valueType: type }, value);
     if (!apiValues) return;
     props.onSave(apiValues);

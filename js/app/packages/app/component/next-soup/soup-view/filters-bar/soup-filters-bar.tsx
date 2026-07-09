@@ -5,6 +5,7 @@ import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
+import { usePreviewPaneVisiblity } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -27,11 +28,14 @@ import { useSoup } from '../../soup-context';
 export function SoupFiltersBar() {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
+
   const [filterDropdownOpen, setFilterDropdownOpen] = createSignal(false);
 
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
   const soup = useSoup();
+
+  const { isWideSplitPanel } = usePreviewPaneVisiblity();
 
   const togglePreview = () => {
     const currentPreview = soup.previewEntity();
@@ -78,15 +82,6 @@ export function SoupFiltersBar() {
     return content.type === 'component' && content.id === 'search';
   });
 
-  // The calls view has no sort/group/filter chips, so its toolbar would hold
-  // only the preview button — skip both toolbar portals there so the empty
-  // bar collapses entirely (SplitPanel hides a toolbar with no content).
-  // Space still toggles the preview via the hotkey above.
-  const isCallsView = createMemo(() => {
-    const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'calls';
-  });
-
   // The new inbox hides sort (it's fixed to updated_at for this view).
   const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
     enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
@@ -102,36 +97,40 @@ export function SoupFiltersBar() {
 
   return (
     <Show when={!isMobile()}>
-      <Show when={!isCallsView()}>
-        <SplitToolbarLeft>
-          <div class="flex items-start gap-1 min-w-0 flex-1">
-            <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
-              <Show when={!isNewInbox()}>
-                <SoupViewContextSort />
-              </Show>
-              <SoupViewContextGroup />
-              <UnifiedFilterDropdown
-                open={filterDropdownOpen}
-                onOpenChange={setFilterDropdownOpen}
-              />
+      <SplitToolbarLeft>
+        <div class="flex items-start gap-1 min-w-0 flex-1">
+          <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
+            <Show when={!isNewInbox()}>
+              <SoupViewContextSort />
             </Show>
-          </div>
-        </SplitToolbarLeft>
-        <SplitToolbarRight>
-          <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
-            <Button
-              onClick={togglePreview}
-              variant="base"
-              size="sm"
-              depth={2}
-              class="bg-surface"
-            >
-              {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
-              <span>Preview</span>
-            </Button>
-          </Tooltip>
-        </SplitToolbarRight>
-      </Show>
+            <SoupViewContextGroup />
+            <UnifiedFilterDropdown
+              open={filterDropdownOpen}
+              onOpenChange={setFilterDropdownOpen}
+            />
+          </Show>
+        </div>
+      </SplitToolbarLeft>
+      <SplitToolbarRight>
+        <Tooltip
+          hotkey={
+            isWideSplitPanel() ? TOKENS.unifiedList.togglePreview : undefined
+          }
+          label={isWideSplitPanel() ? 'Preview' : 'No space for preview'}
+        >
+          <Button
+            onClick={togglePreview}
+            variant="base"
+            size="sm"
+            depth={2}
+            class="bg-surface"
+            disabled={!isWideSplitPanel()}
+          >
+            {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
+            <span>Preview</span>
+          </Button>
+        </Tooltip>
+      </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
       <Show when={!isSearchView()}>
         <SoupActiveFiltersBar

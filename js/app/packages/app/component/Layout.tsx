@@ -1,5 +1,6 @@
 import {
   AppSidebar,
+  GoToHotkeys,
   type SidebarState,
 } from '@app/component/app-sidebar/sidebar';
 import {
@@ -11,7 +12,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSettingsPath } from '@core/constant/SettingsState';
+import { isSoloSettings } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
@@ -28,6 +29,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { AddInboxDialog, isAddInboxDialogOpen } from './AddInboxDialog';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
@@ -78,12 +80,9 @@ export function Layout(props: RouteSectionProps) {
       !isMobile() &&
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname) &&
-      // Settings is a full-cover route with its own tab nav — hide app chrome.
-      !isSettingsPath(location.pathname)
+      // Settings-as-the-sole-split has its own tab nav — hide app chrome.
+      !isSoloSettings()
   );
-  createEffect(() => {
-    console.log('VIZ', sidebarVisible());
-  });
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -141,6 +140,7 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
           <GlobalShortcuts />
           <Show when={!isMobile()}>
+            <GoToHotkeys />
             <Suspense>
               <FavoritesCommands />
               <CommandMenu />
@@ -153,6 +153,9 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
+          <Show when={isAddInboxDialogOpen()}>
+            <AddInboxDialog />
+          </Show>
         </Show>
         <Show
           when={

@@ -15,13 +15,13 @@ function getViewportHeight() {
 }
 
 function resetVirtualKeyboardState() {
-  setVirtualKeyboardVisible(false);
-  setVirtualKeyboardHeight(0);
   document.documentElement.style.setProperty('--dvh', '1dvh');
   document.documentElement.style.setProperty(
     '--virtual-keyboard-height',
     '0px'
   );
+  setVirtualKeyboardVisible(false);
+  setVirtualKeyboardHeight(0);
 }
 
 function createActiveElementPolling(onActiveElementLost: () => void) {
@@ -74,8 +74,6 @@ export function useAppSquishHandlers() {
     );
 
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
-      setVirtualKeyboardVisible(true);
-      setVirtualKeyboardHeight(event.detail?.height ?? 0);
       activeElementPolling.start();
       const newViewportHeight =
         (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
@@ -85,6 +83,8 @@ export function useAppSquishHandlers() {
         '--virtual-keyboard-height',
         `${event.detail?.height ?? 0}px`
       );
+      setVirtualKeyboardVisible(true);
+      setVirtualKeyboardHeight(event.detail?.height ?? 0);
     };
 
     const handleKeyboardWillHide = () => {
@@ -178,12 +178,12 @@ export function useAppSquishHandlers() {
 
       const viewportHeight = getViewportHeight();
       if (viewportHeight < viewportHeightBeforeFocus) {
-        setVirtualKeyboardVisible(true);
         activeElementPolling.start();
         syncViewportHeight();
         setTimeout(() => {
           window.scrollTo(0, 0);
         });
+        setVirtualKeyboardVisible(true);
       }
     };
 

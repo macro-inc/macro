@@ -52,10 +52,9 @@ export function MessageContainer(props: MessageContainerProps) {
     context.messages.replyingToMessageId() === props.message.db_id;
 
   const showInlineReplyInput = createMemo(() => {
+    if (isMobile()) return false;
     if (!props.isLastMessage) return showReply() || !!draftChild();
-    return (
-      !isMobile() && (context.messages.bottomReplyOpen() || !!draftChild())
-    );
+    return context.messages.bottomReplyOpen() || !!draftChild();
   });
 
   const showDesktopLastReplyControls = createMemo(
@@ -219,6 +218,11 @@ export function MessageContainer(props: MessageContainerProps) {
           message={props.message}
           isFocused={props.isFocused}
           onClick={handleExpand}
+          onFocus={() => {
+            if (props.message.db_id) {
+              context.messages.setFocused(props.message.db_id);
+            }
+          }}
         />
       }
     >
@@ -226,7 +230,7 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg overflow-hidden p-2 ring"
+            class="relative rounded-lg overflow-hidden p-2 ring scroll-m-px"
             classList={{
               'bg-active/60 ring-edge': props.isFocused,
               'bg-ink-muted/4 ring-transparent': !props.isFocused,
@@ -267,6 +271,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <Message.Body>
                 <EmailMessageBody
                   message={props.message}
+                  personalSenders={context.messages.personalSenders}
                   isBodyExpanded={isBodyExpanded}
                   setExpandedMessageBody={(id) =>
                     context.messages.setExpandedBodyId(id, true)

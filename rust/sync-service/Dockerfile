@@ -1,4 +1,7 @@
-FROM rust:1.90-bookworm
+# Builder: compiles the worker (Rust -> wasm + JS shim). Nothing from this
+# stage's toolchain (rustc, clang, npm dev deps, the cargo target dir) is
+# needed at runtime, so it all stays here.
+FROM rust:1.90-bookworm AS builder
 
 # Install Node.js 22.x
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
@@ -56,6 +59,25 @@ COPY . .
 
 # Build the actual application
 RUN worker-build --release
+
+# Runtime: wrangler dev serving the prebuilt worker. Needs node + the
+# production npm deps (wrangler brings miniflare/workerd along), the built
+# worker, the wrangler config, and the D1 migrations — nothing else.
+FROM node:22-bookworm-slim
+
+# curl for the compose healthcheck; ca-certificates for wrangler's TLS.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY wrangler.docker.toml ./
+COPY database/ database/
+COPY --from=builder /app/build build/
 
 EXPOSE 8787
 

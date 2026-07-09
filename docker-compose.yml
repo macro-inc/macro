@@ -429,7 +429,9 @@ services:
       - "8933:8933"
     volumes:
       - ./js:/app
-      - /app/ai-editing-worker/.wrangler
+      # .wrangler (incl. the local D1 trace shard) persists to the host via the
+      # ./js mount above, so `bun run traces --env local --local` works from the
+      # host without docker exec. An anonymous volume used to shadow this path.
     depends_on:
       - sync_service
     networks:

@@ -310,7 +310,7 @@ function DiscussionMessageView(props: {
         <Message.Root
           message={messageData()}
           actions={props.actions}
-          highlighted={props.isHighlighted}
+          selected={props.isHighlighted}
         >
           <Message.Layout class="pt-(--regular-message-padding-t)">
             <Message.Slot placement="icon">

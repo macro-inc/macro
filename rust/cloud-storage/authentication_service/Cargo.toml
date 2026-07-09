@@ -44,6 +44,7 @@ chrono = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
 cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
+email = { path = "../email", features = ["http_client"] }
 doppleganger = { workspace = true }
 email_db_client = { path = "../email_db_client" }
 email_validator = { path = "../email_validator" }
@@ -60,6 +61,7 @@ github = { path = "../github", default-features = false, features = [
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
+loops_client = { path = "../loops_client" }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
