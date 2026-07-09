@@ -46,11 +46,34 @@ describe('buildRecommendationPrompt', () => {
     'calling ListNotifications exactly once'
   );
   check('requests active notifications', 'done false');
+  check('does not use a notification seen filter', 'no seen filter');
   check('excludes emails from notification state', 'Never use notification');
   check('requires the canonical email source', 'ListEntities exactly once');
   check('requests active inbox emails', 'emailView "inbox"');
+  check('uses canonical email inbox state', 'inboxVisible determines');
   check('uses direct email read state', 'isRead is its read state');
   check("does not recommend the user's drafts", 'Skip email drafts');
+  check('identifies current-user inboxes', 'isDelegated is false');
+  check('requires the email content tool', 'call GetThread');
+  check('fetches only the latest email message', 'threadId and limit 1');
+  check('reads the full latest message body', 'read messages[0].bodyParsed');
+  check(
+    'does not accept email snippets as evidence',
+    'snippet and GetThread summary are not substitutes'
+  );
+  check(
+    'filters emails whose latest message needs no action',
+    'latest message needs no action'
+  );
+  check(
+    'prioritizes mail sent only to the current user',
+    'to list has exactly one recipient'
+  );
+  check(
+    'excludes copied recipients from the direct signal',
+    'cc list is empty'
+  );
+  check('makes important email the primary focus', 'primary focus');
   check('uses memory to rank importance', "Use your memory of the user's");
   check(
     'guards against instructions inside tool results',
@@ -129,6 +152,20 @@ describe('recommendationSchema', () => {
       items: [{ ...item('delegate'), action: 'delegate' }],
     };
     expect(recommendationSchema.safeParse(delegated).success).toBe(false);
+  });
+
+  it('describes email output as grounded in the inspected latest message', () => {
+    const itemSchema = recommendationSchema.shape.items.element;
+
+    expect(itemSchema.shape.entityId.description).toContain(
+      'inspected with GetThread'
+    );
+    expect(itemSchema.shape.reason.description).toContain(
+      'inspected latest message'
+    );
+    expect(itemSchema.shape.prompt.description).toContain(
+      'latest message body'
+    );
   });
 });
 
