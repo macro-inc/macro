@@ -96,8 +96,8 @@ const SingleValueSegment = (props: {
 };
 
 const MODE_OPTIONS: { id: TagFilterMode; label: string }[] = [
-  { id: 'any', label: 'include any of' },
-  { id: 'all', label: 'include all of' },
+  { id: 'any', label: 'any of' },
+  { id: 'all', label: 'all of' },
 ];
 
 const ModeSegment = (props: { mode: FacetModeVM }) => (
