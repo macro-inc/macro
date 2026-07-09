@@ -31,7 +31,7 @@ use uuid::Uuid;
 /// function, so importance tests exercise the heuristic → flag → query chain
 /// end-to-end instead of trusting hand-written fixture verdicts.
 async fn sync_all_signal_flags(pool: &Pool<Postgres>) -> anyhow::Result<()> {
-    let thread_ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM email_threads")
+    let thread_ids: Vec<Uuid> = sqlx::query_scalar!("SELECT id FROM email_threads")
         .fetch_all(pool)
         .await?;
     let mut conn = pool.acquire().await?;

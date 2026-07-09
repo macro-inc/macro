@@ -34,7 +34,7 @@ fn mode_noun(mode: config::BackfillMode) -> &'static str {
     match mode {
         config::BackfillMode::SetTrueOnly => "flagged",
         // FullRecompute clears first: the count is threads that ended true.
-        config::BackfillMode::FullRecompute => "computed signal",
+        config::BackfillMode::FullRecompute => "computed as signal",
         config::BackfillMode::Verify => "mismatched",
     }
 }
