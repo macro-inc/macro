@@ -240,9 +240,6 @@ function LayoutInner(props: RouteSectionProps) {
               }}
             />
           </Show>
-          <Show when={sidebarCollapsed() && sidebarOverlayOpen()}>
-            <div class="fixed inset-0 z-side-panel-layout bg-modal-overlay" />
-          </Show>
           <Show when={sidebarCollapsed()}>
             <div
               class="fixed left-0 inset-y-0 z-modal-content w-[8px]"

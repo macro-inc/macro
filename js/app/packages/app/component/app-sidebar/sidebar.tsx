@@ -85,6 +85,7 @@ import { useLocation } from '@solidjs/router';
 import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
 import {
   type Component,
+  type ComponentProps,
   createEffect,
   createMemo,
   createSignal,
@@ -510,7 +511,26 @@ const SidebarDropdownLink = (
 ) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
+  const location = useLocation();
   const [isHovering, setIsHovering] = createSignal(false);
+  let contextMenuOpen = false;
+
+  const isActive = () => {
+    const activeContent = globalSplitManager()?.activeSplit()?.content();
+    if (!activeContent) {
+      return location.pathname.split('/').filter(Boolean).includes(props.id);
+    }
+    return activeContent.id === props.id;
+  };
+
+  const handleContextMenuOpenChange = (open: boolean) => {
+    contextMenuOpen = open;
+    props.onContextMenuOpenChange?.(open);
+  };
+
+  onCleanup(() => {
+    if (contextMenuOpen) props.onContextMenuOpenChange?.(false);
+  });
 
   const open = (newSplit = false) => {
     analytics.track('sidebar_click', { view: props.id });
@@ -535,26 +555,13 @@ const SidebarDropdownLink = (
   const openInCurrentSplit = () => open(false);
   const openFullscreen = () => open(false)?.toggleSpotlight(true);
 
-  return (
-    <ContextMenu onOpenChange={props.onContextMenuOpenChange}>
-      <ContextMenu.Trigger class="contents">
-        <Dropdown.Item
-          class="min-h-8 gap-2 px-2.5 text-[13px]"
-          onMouseEnter={() => setIsHovering(true)}
-          onMouseLeave={() => setIsHovering(false)}
-          onSelect={openInCurrentSplit}
-        >
-          <Show when={props.icon}>
-            <div class="shrink-0 [&_svg]:size-3.5">
-              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-            </div>
-          </Show>
-          <span class="min-w-0 flex-1 truncate text-ink">{props.label}</span>
-          <Hotkey token={props.hotkeyToken} theme="subtle" class="ml-6" />
-        </Dropdown.Item>
-      </ContextMenu.Trigger>
+  const ContextMenuTriggerItem = (
+    triggerProps: ComponentProps<typeof ContextMenu.Trigger>
+  ) => (
+    <ContextMenu onOpenChange={handleContextMenuOpenChange}>
+      <ContextMenu.Trigger {...triggerProps} />
       <ContextMenu.Portal>
-        <ContextMenuContent class="text-xs text-ink-muted">
+        <ContextMenuContent class="z-tool-tip! text-xs text-ink-muted">
           <MenuItem
             text="Open in new split"
             onClick={openInNewSplit}
@@ -565,6 +572,29 @@ const SidebarDropdownLink = (
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
+  );
+
+  return (
+    <Dropdown.Item
+      as={ContextMenuTriggerItem}
+      class={cn(
+        'min-h-8 gap-2 px-2.5 text-[13px]',
+        isActive() &&
+          'bg-ink/6 text-ink hover:bg-ink/6 data-highlighted:bg-ink/6'
+      )}
+      data-active={isActive() ? '' : undefined}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onSelect={openInCurrentSplit}
+    >
+      <Show when={props.icon}>
+        <div class="shrink-0 [&_svg]:size-3.5">
+          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+        </div>
+      </Show>
+      <span class="min-w-0 flex-1 truncate text-ink">{props.label}</span>
+      <Hotkey token={props.hotkeyToken} theme="subtle" class="ml-6" />
+    </Dropdown.Item>
   );
 };
 
@@ -851,6 +881,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const middleScrollSize = createElementSize(middleScrollRef);
   const [overlayPointerInside, setOverlayPointerInside] = createSignal(false);
   const [overlayDropdownOpen, setOverlayDropdownOpen] = createSignal(false);
+  const [workspaceContextMenuOpen, setWorkspaceContextMenuOpen] =
+    createSignal(false);
   let middleScrollFrame: number | undefined;
   let middleScrollObserver: MutationObserver | undefined;
   let overlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -893,6 +925,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
       setOverlayDropdownOpen(false);
       if (!overlayPointerInside()) requestOverlayClose();
     }, SIDEBAR_MAX_WIDTH_TRANSITION_MS);
+  };
+
+  const handleWorkspaceContextMenuOpenChange = (open: boolean) => {
+    setWorkspaceContextMenuOpen(open);
+    handleOverlayDropdownOpenChange(open);
   };
 
   const updateMiddleScrollShadows = () => {
@@ -955,7 +992,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     dropdown: () => (
       <SidebarDropdownLink
         {...link}
-        onContextMenuOpenChange={handleOverlayDropdownOpenChange}
+        onContextMenuOpenChange={handleWorkspaceContextMenuOpenChange}
       />
     ),
   });
@@ -1057,6 +1094,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       cancelOverlayClose();
       setOverlayPointerInside(false);
       setOverlayDropdownOpen(false);
+      setWorkspaceContextMenuOpen(false);
     }
   });
 
@@ -1077,7 +1115,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           !overlayOpen() &&
           'left-0 inset-y-0 h-full max-w-0 w-0 opacity-0 pointer-events-none -translate-x-2',
         isOverlayExpanded() &&
-          'left-1.5 inset-y-0 h-full max-w-60 w-60 opacity-100 translate-x-0 rounded-xl shadow-menu ring-1 ring-edge-muted'
+          'left-0 inset-y-0 h-full max-w-60 w-60 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
       )}
       data-expanded={isExpandedView()}
       data-slim={isSlim()}
@@ -1143,6 +1181,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             visibleCount={3}
             onOpenChange={scheduleMiddleScrollUpdate}
             onDropdownOpenChange={handleOverlayDropdownOpenChange}
+            dropdownInteractionDisabled={workspaceContextMenuOpen()}
           />
 
           <Suspense>

@@ -179,7 +179,7 @@ const FavoritesGroup = (props: {
         <ul class="min-h-0 overflow-hidden flex flex-col gap-0.5">
           <SortableProvider ids={keys()}>
             <For each={props.favorites}>
-              {(favorite, index) => (
+              {(favorite) => (
                 <li
                   class={cn(
                     'w-full transition-[opacity,transform] duration-200 ease-out',
@@ -187,11 +187,6 @@ const FavoritesGroup = (props: {
                       ? 'opacity-100 translate-y-0'
                       : 'opacity-0 -translate-y-2'
                   )}
-                  style={{
-                    'transition-delay': expanded()
-                      ? `${index() * 30}ms`
-                      : '0ms',
-                  }}
                 >
                   <FavoriteRow
                     favorite={favorite}

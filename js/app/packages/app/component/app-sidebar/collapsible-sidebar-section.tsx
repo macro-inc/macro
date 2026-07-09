@@ -18,6 +18,7 @@ export function CollapsibleSidebarSection(props: {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   onDropdownOpenChange?: (open: boolean) => void;
+  dropdownInteractionDisabled?: boolean;
 }) {
   const [open, setOpen] = createSignal(props.defaultOpen ?? true);
   let openChangeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -101,7 +102,14 @@ export function CollapsibleSidebarSection(props: {
                 </div>
                 <span class="whitespace-nowrap">More</span>
               </Dropdown.Trigger>
-              <Dropdown.Content class="min-w-52 shadow-menu">
+              <Dropdown.Content
+                class={cn(
+                  'min-w-52 shadow-menu',
+                  props.dropdownInteractionDisabled &&
+                    'pointer-events-none [&_[data-highlighted]]:bg-transparent!'
+                )}
+                inert={props.dropdownInteractionDisabled || undefined}
+              >
                 <Dropdown.Group>
                   <For each={overflowItems()}>{(item) => item.dropdown()}</For>
                   <Show when={props.dropdownFooter}>
