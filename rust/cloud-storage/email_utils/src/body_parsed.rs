@@ -58,8 +58,15 @@ pub fn html_to_plaintext(html: &str) -> Option<String> {
 }
 
 fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<String> {
-    match config.string_from_read(html.as_bytes(), usize::MAX) {
-        Ok(text) => {
+    // html2text panics on some malformed-but-real email HTML (e.g. a table
+    // rowspan overhanging past the last row, or rowspan="0"). A panic here
+    // takes down the whole message-processing worker, so contain it and treat
+    // the body as unparseable instead.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        config.string_from_read(html.as_bytes(), usize::MAX)
+    }));
+    match result {
+        Ok(Ok(text)) => {
             let trimmed = text
                 .lines()
                 .map(|line| line.trim())
@@ -68,7 +75,14 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
                 .join("\n");
             Some(trimmed)
         }
-        Err(_) => None,
+        Ok(Err(_)) => None,
+        Err(_) => {
+            tracing::warn!(
+                html_len = html.len(),
+                "html2text panicked converting email body"
+            );
+            None
+        }
     }
 }
 
@@ -159,6 +173,25 @@ mod tests {
             html_to_plaintext("<div>Thanks</div><div>Alice</div>"),
             Some("Thanks\nAlice".to_string())
         );
+    }
+
+    #[test]
+    fn test_rowspan_overhang_does_not_panic() {
+        // html2text 0.15.x panicked with "capacity overflow" on a rowspan
+        // extending past the last table row (tot_width underflow).
+        let body = Some("<table><th rowspan=\"5\"><tr>".to_string());
+        let result = compute_body_parsed_linkless(true, &body);
+        assert_eq!(result, Some(String::new()));
+    }
+
+    #[test]
+    fn test_rowspan_zero_does_not_panic() {
+        // html2text panics with a divide-by-zero on rowspan="0" (still
+        // unfixed upstream as of 0.16.5). The catch_unwind wrapper must
+        // contain it and treat the body as unparseable.
+        let body = Some("<table><td rowspan=\"0\">x".to_string());
+        let result = compute_body_parsed_linkless(true, &body);
+        assert_eq!(result, None);
     }
 
     #[test]
