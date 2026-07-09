@@ -463,6 +463,9 @@ fn build_query(
         builder.push("t.viewed_at,");
     }
 
+    // The is_important output column reflects Gmail's IMPORTANT label — a
+    // different notion from the Importance filter, which reads the
+    // denormalized email_threads.is_signal heuristic.
     builder.push(
         r#"
             t.project_id,

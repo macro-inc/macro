@@ -156,7 +156,13 @@ pub async fn process_macro_id(
         tx.commit().await?;
 
         // Prefix with the user so interleaved concurrent output stays readable.
-        println!("[{macro_id}] link {link_id}: flagged {flagged} threads");
+        // FullRecompute clears first, so its count is "threads that ended
+        // true", not rows changed.
+        if mode == BackfillMode::FullRecompute {
+            println!("[{macro_id}] link {link_id}: computed {flagged} signal threads");
+        } else {
+            println!("[{macro_id}] link {link_id}: flagged {flagged} threads");
+        }
         total += flagged;
     }
 

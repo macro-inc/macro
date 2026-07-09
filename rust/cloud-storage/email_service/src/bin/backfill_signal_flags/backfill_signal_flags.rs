@@ -29,6 +29,16 @@ use futures::stream::{self, StreamExt};
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
 
+/// What the per-link count means in log lines, per mode.
+fn mode_noun(mode: config::BackfillMode) -> &'static str {
+    match mode {
+        config::BackfillMode::SetTrueOnly => "flagged",
+        // FullRecompute clears first: the count is threads that ended true.
+        config::BackfillMode::FullRecompute => "computed signal",
+        config::BackfillMode::Verify => "mismatched",
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Loading configuration...");
@@ -72,11 +82,7 @@ async fn main() -> anyhow::Result<()> {
                 Ok(count) => println!(
                     "=== Completed {macro_id} ({}/{total_users}): {count} threads {} ===",
                     index + 1,
-                    if mode == config::BackfillMode::Verify {
-                        "mismatched"
-                    } else {
-                        "flagged"
-                    }
+                    mode_noun(mode)
                 ),
                 Err(e) => println!(
                     "=== Failed {macro_id} ({}/{total_users}): {e:?} ===",
@@ -97,11 +103,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!(
         "\n=== All macro IDs processed: {total} threads {}, {} failures ===",
-        if mode == config::BackfillMode::Verify {
-            "mismatched"
-        } else {
-            "flagged"
-        },
+        mode_noun(mode),
         failures.len()
     );
     if !failures.is_empty() {
