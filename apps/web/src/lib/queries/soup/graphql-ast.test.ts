@@ -65,6 +65,17 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('maps channel thread participant filters', () => {
+    const input = makeGraphqlSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: { cthf: { l: { Participant: 'macro|user@example.com' } } } as never,
+    });
+
+    expect(input.filters?.channelThreadFilter).toEqual({
+      literal: { participant: 'macro|user@example.com' },
+    });
+  });
+
   it('throws for REST-only file association literals so callers can fall back', () => {
     expect(() =>
       makeInput({

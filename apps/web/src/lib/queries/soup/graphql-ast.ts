@@ -336,6 +336,8 @@ function mapChannelThreadLiteral(
     case 'RootSender':
     case 'Sender':
       return { rootSender: mapString(value, 'rootSender') };
+    case 'Participant':
+      return { participant: mapString(value, 'participant') };
     case 'NotificationDone':
       return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'NotificationSeen':
