@@ -150,6 +150,7 @@ jobs:
         # is pure file shuffling — drop it.
         unset LD_LIBRARY_PATH
         ctx=preview-ctx
+        rm -rf "$ctx"
         mkdir -p "$ctx/repo" "$ctx/artifacts/binaries" "$ctx/bin"
         # The minimal repo layout xtask reads at runtime — including every
         # snapshot-key input, byte-identical to this checkout, so the VM's
@@ -176,9 +177,31 @@ jobs:
         snap_dir=$(jq -r '.dir' "$RUNNER_TEMP/preview-snapshot.json")
         mkdir -p "$ctx/artifacts/snapshots"
         cp -a "$snap_dir" "$ctx/artifacts/snapshots/"
+        snapshot_key=$(jq -r '.key' "$RUNNER_TEMP/preview-snapshot.json")
+        runtime_key=$(cd "$ctx/repo" \
+          && find . -type f -print0 \
+          | sort -z \
+          | xargs -0 sha256sum \
+          | sha256sum \
+          | cut -d ' ' -f 1)
+        frontend_key=$(cd "$ctx/artifacts/frontend-dist" \
+          && find . -type f -print0 \
+          | sort -z \
+          | xargs -0 sha256sum \
+          | sha256sum \
+          | cut -d ' ' -f 1)
+        jq -n \
+          --arg snapshot_key "$snapshot_key" \
+          --arg runtime_key "$runtime_key" \
+          --arg frontend_key "$frontend_key" \
+          --arg commit "${{ github.sha }}" \
+          '{format: 1, snapshot_key: $snapshot_key, runtime_key: $runtime_key, frontend_key: $frontend_key, commit: $commit}' \
+          > "$ctx/deployment.json"
         cp -p rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
+        cp -p infra/preview/hot-update.sh "$ctx/bin/hot-update"
         cp -p infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp -p infra/preview/Dockerfile "$ctx/Dockerfile"
+        cp -p infra/preview/update.Dockerfile "$ctx/update.Dockerfile"
     - name: Setup flyctl
       uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
     - name: Deploy to Fly
@@ -192,9 +215,17 @@ jobs:
           echo "FLY_ORG is not set (repo variable or secret with the Fly org slug)" >&2
           exit 1
         fi
-        # `|| true`: the create fails once the app exists; real failures
-        # (auth, org) surface on the very next flyctl call.
-        flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
+
+        app_existed=
+        if flyctl status --app "$APP_NAME" >/dev/null 2>&1; then
+          app_existed=1
+        else
+          # A transient status error must not turn an existing app into a
+          # hard create failure: create, then prove the app is reachable.
+          flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+            || flyctl status --app "$APP_NAME" >/dev/null
+        fi
+
         # A read-only, app-scoped, time-boxed pull token so the machine's
         # inner dockerd can pull the mirrored stack images from this app's
         # registry repo — and nothing else (PR code can read machine
@@ -210,22 +241,42 @@ jobs:
         now=$(date +%s)
         pull_token=$(printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
           "$app_id" $((now - 60)) $((now + 604800)) | flyctl tokens attenuate)
-        flyctl secrets set --app "$APP_NAME" --stage \
-          "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
-          "REGISTRY_PULL_TOKEN=$pull_token"
-        # The volume behind fly.toml's /var/lib/docker mount (see the
-        # comment there). `volumes create` is not idempotent — guard it.
-        if ! flyctl volumes list --app "$APP_NAME" --json \
-             | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
-          flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
-        fi
-        # Machines created before the volume existed can't take the
-        # [mounts] config update — recreate them.
-        flyctl machine list --app "$APP_NAME" --json \
-          | jq -r '.[] | select((.config.mounts // []) | length == 0) | .id' \
-          | while read -r id; do
-              [ -z "$id" ] || flyctl machine destroy "$id" --app "$APP_NAME" --force || true
+
+        snapshot_key=$(jq -r '.key' "$RUNNER_TEMP/preview-snapshot.json")
+        runtime_key=$(jq -r '.runtime_key' preview-ctx/deployment.json)
+        mode=bootstrap
+        machine_id=
+        if [ -n "$app_existed" ]; then
+          mode=rehydrate
+          machine_id=$(flyctl machine list --app "$APP_NAME" --json \
+            | jq -r '[.[] | select((.config.mounts // []) | length > 0)][0].id // empty')
+          if [ -n "$machine_id" ]; then
+            # A suspended preview needs demand before SSH is reachable.
+            curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
+            for _ in $(seq 1 12); do
+              marker=$(flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
+                --quiet --command 'if [ -f /var/lib/docker/.macro-preview/deployment.json ]; then cat /var/lib/docker/.macro-preview/deployment.json; else echo __NO_MARKER__; fi' \
+                2>/dev/null || true)
+              if echo "$marker" | jq -e \
+                  --arg key "$snapshot_key" \
+                  --arg runtime "$runtime_key" \
+                  '.format == 1 and .snapshot_key == $key and .runtime_key == $runtime and (.frontend_key | type == "string")' \
+                  >/dev/null 2>&1; then
+                mode=hot
+                break
+              fi
+              # SSH succeeded and returned a marker (or proved it absent):
+              # incompatibility is real, not a wake-up race.
+              if [ "$marker" = __NO_MARKER__ ] \
+                  || echo "$marker" | jq -e '.format != null' >/dev/null 2>&1; then
+                break
+              fi
+              sleep 5
             done
+          fi
+        fi
+        echo "preview deployment mode: $mode (snapshot $snapshot_key)"
+
         flyctl auth docker
         registry="registry.fly.io/$APP_NAME"
         # Mirror every stack image into the app's registry repo instead of
@@ -281,15 +332,61 @@ jobs:
               done
               exit 1' < "$RUNNER_TEMP/push-refs.txt"
         fi
+
+        push_image() {
+          image_to_push=$1
+          for _ in 1 2 3; do
+            if docker push "$image_to_push"; then return 0; fi
+            echo "docker push failed for $image_to_push, retrying" >&2
+            sleep 15
+          done
+          return 1
+        }
+
+        if [ "$mode" = hot ]; then
+          update_image="$registry:update-${{ github.sha }}"
+          docker build -f preview-ctx/update.Dockerfile -t "$update_image" preview-ctx
+          push_image "$update_image"
+          token_file="$RUNNER_TEMP/registry-pull-token"
+          printf '%s' "$pull_token" > "$token_file"
+          chmod 600 "$token_file"
+          hot_rc=0
+          flyctl ssh sftp put "$token_file" /tmp/macro-registry-token \
+            --app "$APP_NAME" --machine "$machine_id" --mode 0600 \
+            || hot_rc=$?
+          if [ "$hot_rc" = 0 ]; then
+            hot_command="/srv/macro/bin/hot-update '$update_image' /tmp/macro-registry-token"
+            flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
+              --command "$hot_command" || hot_rc=$?
+          fi
+          if [ "$hot_rc" = 0 ]; then
+            echo "hot update completed without restarting the Fly machine"
+            exit 0
+          fi
+          echo "hot update failed (exit $hot_rc); falling back to full rehydrate" >&2
+          mode=rehydrate
+        fi
+
+        # Bootstrap/rehydrate refreshes app secrets and reconciles the
+        # persistent Docker volume before replacing the machine image.
+        flyctl secrets set --app "$APP_NAME" --stage \
+          "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
+          "REGISTRY_PULL_TOKEN=$pull_token"
+        if ! flyctl volumes list --app "$APP_NAME" --json \
+             | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+          flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
+        fi
+        # Machines created before the volume existed can't take the mounts
+        # config update. A destroyed/partial machine is recreated by deploy.
+        flyctl machine list --app "$APP_NAME" --json \
+          | jq -r '.[] | select((.config.mounts // []) | length == 0) | .id' \
+          | while read -r id; do
+              [ -z "$id" ] || flyctl machine destroy "$id" --app "$APP_NAME" --force || true
+            done
+
         image="$registry:${{ github.sha }}"
         docker build -t "$image" preview-ctx
-        pushed=""
-        for _ in 1 2 3; do
-          if docker push "$image"; then pushed=1; break; fi
-          echo "docker push failed, retrying" >&2
-          sleep 15
-        done
-        [ -n "$pushed" ]
+        push_image "$image"
         # Keep the machine in demand while it boots: with zero inbound
         # traffic, fly-proxy counts a health-failing machine as excess
         # capacity and suspends it mid-boot (observed mid-docker-load).

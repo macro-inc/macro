@@ -154,7 +154,12 @@ use anyhow::Result;
 use instance::Instance;
 use stage::Stage;
 
-const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexical_service"];
+const AUX_SERVICE_IMAGES: &[&str] = &[
+    "websocket_service",
+    "sync_service",
+    "lexical_service",
+    "ai_editing_worker",
+];
 
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {

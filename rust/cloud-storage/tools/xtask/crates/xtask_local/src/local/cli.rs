@@ -54,6 +54,8 @@ pub enum StackCmd {
     Up(super::stack::UpArgs),
     /// Rebuild binaries (and optionally the frontend) and reload what changed.
     Update(super::stack::UpdateArgs),
+    /// Apply prebuilt binaries/frontend to a running stack without rebuilding.
+    Apply(super::stack::ApplyArgs),
     /// Report the instance's containers, health, and URLs (`--json` for machines).
     Status(super::stack::StatusArgs),
     /// Publish the stack's single origin via a Cloudflare quick tunnel.
@@ -183,6 +185,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Stack(cmd) => match cmd {
             StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
             StackCmd::Update(a) => super::stack::update(&a),
+            StackCmd::Apply(a) => super::stack::apply(&a),
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Expose(a) => super::stack::expose(&a),
             StackCmd::Down(a) => super::stack::down(&a),

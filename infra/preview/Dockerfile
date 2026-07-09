@@ -8,7 +8,7 @@
 #               index helpers) — MACRO_REPO_ROOT points here
 #   artifacts/  binaries/ (zigbuild output), frontend-dist/ (same-origin
 #               bundle), snapshots/ (baked init snapshot)
-#   bin/xtask   prebuilt orchestrator (release, x86_64 glibc)
+#   bin/        prebuilt orchestrator + the in-place hot-update driver
 #   preload/    manifest of every image the stack runs (image ID -> local tag
 #               -> registry ref); the entrypoint pulls them from the app's Fly
 #               registry repo at boot, skipping whatever the machine's
@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
       gnupg \
+      jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Doppler CLI: the machine boots with a config-scoped service token
@@ -38,13 +39,14 @@ RUN curl -Ls --tlsv1.2 --proto "=https" https://cli.doppler.com/install.sh | sh
 # skip it. Everything after the first changed layer re-ships, so the pieces
 # that churn every deploy (frontend bundle, service binaries) go last.
 COPY entrypoint.sh /srv/macro/entrypoint.sh
+COPY deployment.json /srv/macro/deployment.json
 COPY repo/ /srv/macro/repo/
 COPY bin/ /srv/macro/bin/
 COPY artifacts/snapshots/ /srv/macro/artifacts/snapshots/
 COPY preload/ /srv/macro/preload/
 COPY artifacts/frontend-dist/ /srv/macro/artifacts/frontend-dist/
 COPY artifacts/binaries/ /srv/macro/artifacts/binaries/
-RUN chmod +x /srv/macro/entrypoint.sh /srv/macro/bin/xtask
+RUN chmod +x /srv/macro/entrypoint.sh /srv/macro/bin/xtask /srv/macro/bin/hot-update
 
 # Point the prebuilt xtask at the staged layout (its compiled-in paths refer to
 # the CI checkout) and at the baked snapshot store.

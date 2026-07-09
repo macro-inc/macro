@@ -79,5 +79,13 @@ docker logs -t macro-authentication-service-1 2>&1 \
   | sed 's/^/[preview][auth-startup] /' || true
 docker logs -t --tail 40 macro-authentication-service-1 2>&1 \
   | sed 's/^/[preview][auth] /' || true
+
+# Commit the compatibility marker only after the restored stack is healthy.
+# It lives beside (not inside) Docker's own data on the persistent volume, so
+# CI can distinguish a hot-updatable machine from an absent/partial/old deploy.
+state_dir=/var/lib/docker/.macro-preview
+mkdir -p "$state_dir"
+install -m 0644 /srv/macro/deployment.json "$state_dir/deployment.json.next"
+mv -f "$state_dir/deployment.json.next" "$state_dir/deployment.json"
 log "stack ready — proxy serving on :8090"
 exec sleep infinity

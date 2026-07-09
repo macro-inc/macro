@@ -22,9 +22,18 @@ is baked in CI** and the machine only restores:
 | Every Docker image, mirrored to the app's Fly registry repo | `docker pull` at boot — layer-dedup'd against the machine's persistent layer store, nothing built |
 
 Boot on a fresh machine ≈ image pulls + snapshot restore + JVM startup
-(a couple of minutes); a redeploy pulls only layers that changed; wake from
-suspend ≈ seconds. Pushes to the PR redeploy the app (a new machine, same
-URL).
+(a couple of minutes); wake from suspend ≈ seconds. Pushes to the PR choose one
+of three paths from the durable deployment marker on the Docker volume:
+
+- **bootstrap** — no app/machine yet: create everything and restore the snapshot;
+- **hot update** — the snapshot key, staged-runtime hash, and update protocol
+  are unchanged: pull a layer-deduplicated artifact carrier, atomically replace
+  changed binaries/frontend, and restart only affected containers without
+  restarting the Fly machine or infra;
+- **rehydrate** — compatibility changed, or a hot update fails: fall back to
+  the immutable full-image deploy and snapshot restore.
+
+The URL remains stable across all three paths.
 
 The whole product sits behind the stack's single-origin Caddy proxy
 (`:8090`), so one `internal_port` covers the frontend, APIs, WebSockets, and
