@@ -44,6 +44,7 @@ export function FromInboxSelector(props: {
   onSelect: (linkId: string) => void;
   compact?: boolean;
   class?: string;
+  portalScope?: 'local';
 }) {
   const activeInbox = () =>
     props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
@@ -67,7 +68,7 @@ export function FromInboxSelector(props: {
                 <span class="min-w-0 truncate">{active().email_address}</span>
                 <ChevronDown class="size-3 shrink-0" />
               </Dropdown.Trigger>
-              <Dropdown.Content>
+              <Dropdown.Content portalScope={props.portalScope}>
                 <Dropdown.Group>
                   <For each={sortedLinks()}>
                     {(inbox) => (
@@ -108,7 +109,7 @@ export function FromInboxSelector(props: {
               </Show>
               <ChevronDown class="size-3 shrink-0" />
             </Dropdown.Trigger>
-            <Dropdown.Content>
+            <Dropdown.Content portalScope={props.portalScope}>
               <Dropdown.Group>
                 <For each={sortedLinks()}>
                   {(inbox) => (

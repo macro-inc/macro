@@ -12623,11 +12623,15 @@
       "CreateWebhookRequest": {
         "type": "object",
         "description": "Request to create a webhook.",
-        "required": ["scope", "name", "endpoint_url", "rule"],
+        "required": ["scope", "name", "endpoint_url", "filters"],
         "properties": {
           "endpoint_url": {
             "type": "string",
             "description": "HTTPS endpoint URL."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/Vec",
+            "description": "Typed filters used to match events and optional entity ids."
           },
           "headers": {
             "oneOf": [
@@ -12643,9 +12647,6 @@
           "name": {
             "type": "string",
             "description": "Display name."
-          },
-          "rule": {
-            "description": "Rule definition used to match events."
           },
           "scope": {
             "$ref": "#/components/schemas/WebhookScope",
@@ -16338,6 +16339,17 @@
             "type": ["string", "null"],
             "description": "HTTPS endpoint URL."
           },
+          "filters": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Vec",
+                "description": "Typed filters used to match events and optional entity ids."
+              }
+            ]
+          },
           "headers": {
             "oneOf": [
               {
@@ -16352,9 +16364,6 @@
           "name": {
             "type": ["string", "null"],
             "description": "Display name."
-          },
-          "rule": {
-            "description": "Rule definition used to match events."
           },
           "status": {
             "oneOf": [
@@ -19693,6 +19702,31 @@
           }
         }
       },
+      "Vec": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "Event and optional entity-id constraints used to match webhook deliveries.",
+          "required": ["events"],
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Event names matched by this filter."
+            },
+            "ids": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              },
+              "description": "Entity ids matched by this filter. When absent, the filter matches all entity ids."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
       "View": {
         "type": "object",
         "required": [
@@ -19768,7 +19802,7 @@
           "created_by_user_id",
           "created_at",
           "updated_at",
-          "rule"
+          "filters"
         ],
         "properties": {
           "created_at": {
@@ -19789,6 +19823,10 @@
             "type": "string",
             "description": "HTTPS endpoint URL."
           },
+          "filters": {
+            "$ref": "#/components/schemas/Vec",
+            "description": "Typed filters used to match events and optional entity ids."
+          },
           "headers": {
             "$ref": "#/components/schemas/BTreeMap",
             "description": "Custom delivery headers, after decryption by the repository."
@@ -19805,9 +19843,6 @@
             "type": "string",
             "description": "Display name."
           },
-          "rule": {
-            "description": "Event matching rule."
-          },
           "status": {
             "$ref": "#/components/schemas/WebhookStatus",
             "description": "Webhook lifecycle status."
@@ -19822,6 +19857,28 @@
             "description": "Owning workspace id."
           }
         }
+      },
+      "WebhookFilter": {
+        "type": "object",
+        "description": "Event and optional entity-id constraints used to match webhook deliveries.",
+        "required": ["events"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event names matched by this filter."
+          },
+          "ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity ids matched by this filter. When absent, the filter matches all entity ids."
+          }
+        },
+        "additionalProperties": false
       },
       "WebhookScope": {
         "type": "string",

@@ -6,8 +6,14 @@
 //!
 //! - database tables for event ingestion, webhooks, deliveries, and delivery
 //!   attempts;
+//! - a typed `filters` model for matching webhook deliveries, shaped as an
+//!   array of objects such as
+//!   `[{"events": ["document.created"], "ids": ["doc_123"]}]`, where
+//!   `ids` is optional and an absent `ids` field matches all entity ids;
 //! - a repository that can create, get, patch, and update webhook validity via
-//!   `is_valid`;
+//!   `is_valid`; it can also list active webhooks whose typed `filters` match
+//!   an event with
+//!   `domain::ports::WebhookRepo::list_active_webhooks_matching_event`;
 //! - inbound handlers for `POST /webhooks`, `PATCH /webhooks/{webhook_id}`, and
 //!   `POST /webhooks/{webhook_id}/validate`;
 //! - validation that sends a signed `webhook.validation.test` event and persists

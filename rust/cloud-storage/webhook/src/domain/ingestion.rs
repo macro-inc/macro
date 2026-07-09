@@ -1,17 +1,18 @@
 //! Webhook event ingestion: broker events in, matching webhooks out.
 //!
-//! [`WebhookEventIngestionService`] is the inbound port driven by broker
+//! `WebhookEventIngestionService` is the inbound port driven by broker
 //! consumers (see `crate::inbound::kafka_consumer`). It is intentionally
-//! separate from [`WebhookService`](super::ports::WebhookService), which is
-//! the CRUD surface for webhook creation and edits.
+//! separate from `WebhookService`, which is the CRUD surface for webhook
+//! creation and edits.
 //!
 //! Event handling is not implemented yet: every handler below is a stub that
 //! only logs the event. The planned flow for each event is:
 //! 1. resolve the users that can see the event's entity via
-//!    [`EntityAccessService::get_users_by_entity`] (see
-//!    [`WebhookEventIngestionServiceImpl::users_with_access`]);
-//! 2. load those users' active webhooks and match each webhook's `rule`
-//!    against the event;
+//!    `EntityAccessService::get_users_by_entity` (see
+//!    `WebhookEventIngestionServiceImpl::users_with_access`);
+//! 2. call `WebhookRepo::list_active_webhooks_matching_event` to load those
+//!    users' active webhooks whose typed `filters` match the event name and
+//!    entity id;
 //! 3. enqueue a delivery for every match.
 
 #[cfg(test)]

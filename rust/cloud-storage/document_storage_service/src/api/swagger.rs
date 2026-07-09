@@ -527,6 +527,7 @@ use utoipa::OpenApi;
             webhook::domain::models::PatchWebhookRequest,
             webhook::domain::models::ValidateWebhookResponse,
             webhook::domain::models::Webhook,
+            webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
 
             DocumentSubType,

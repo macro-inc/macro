@@ -61,5 +61,6 @@ export function usePreviewPaneVisiblity() {
     paneVisible: previewPaneVisible,
     placeholderVisible: previewPlaceholderVisible,
     previewVisible,
+    isWideSplitPanel,
   };
 }

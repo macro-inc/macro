@@ -50,6 +50,9 @@ export function InlineTaskProperties() {
       .map((id) => props.find((p) => p.propertyDefinitionId === id))
       .filter((p): p is Property => p !== undefined);
   });
+  const shouldShowRow = createMemo(
+    () => blockName === 'task' || inlineProperties().length > 0
+  );
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
@@ -66,7 +69,7 @@ export function InlineTaskProperties() {
 
   return (
     <Suspense>
-      <Show when={inlineProperties().length > 0}>
+      <Show when={shouldShowRow()}>
         <PropertiesProvider
           entityType={entityType}
           canEdit={canEdit()}
