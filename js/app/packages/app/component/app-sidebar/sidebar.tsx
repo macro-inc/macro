@@ -598,40 +598,6 @@ const SidebarDropdownLink = (
   );
 };
 
-/**
- * Compact icon-only button for the sidebar header row. Encapsulates the hover
- * signal so animated icons play on hover, mirroring `SidebarActionButton`.
- */
-const SidebarHeaderIconButton = (props: {
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
-  label: string;
-  hotkey?: HotkeyToken | HotkeyToken[];
-  disabled?: boolean;
-  onClick: (event: MouseEvent) => void;
-  onMouseDown?: (event: MouseEvent) => void;
-}) => {
-  const [hovering, setHovering] = createSignal(false);
-  return (
-    <Button
-      class="rounded-md"
-      size="icon-sm"
-      label={props.label}
-      hotkey={props.hotkey}
-      disabled={props.disabled}
-      onClick={props.onClick}
-      onMouseDown={props.onMouseDown}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-    >
-      <Dynamic
-        component={props.icon}
-        class="size-3.5!"
-        triggerAnimation={hovering()}
-      />
-    </Button>
-  );
-};
-
 const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -664,7 +630,9 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   };
 
   return (
-    <SidebarHeaderIconButton
+    <Button
+      size="icon-sm"
+      class="[&_svg]:size-4!"
       label="Search"
       hotkey={props.link.hotkeyToken}
       onMouseDown={(e) => {
@@ -672,8 +640,9 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
         e.preventDefault();
       }}
       onClick={openSearch}
-      icon={MagnifyingGlassIcon}
-    />
+    >
+      <MagnifyingGlassIcon />
+    </Button>
   );
 };
 
@@ -1145,7 +1114,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             )}
           </Show>
         </div>
-        <div class="flex shrink-0 items-center gap-0.5">
+        <div class="flex shrink-0 items-center">
           <SidebarCreateMenu
             isSlim={isSlim}
             variant="icon"

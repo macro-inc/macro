@@ -120,8 +120,8 @@ export const SidebarCreateMenu = (props: {
         <Dropdown.Trigger
           as={Button}
           variant="ghost"
-          class="rounded-md"
           size="icon-sm"
+          class="[&_svg]:size-4!"
           label="Create"
           hotkey={TOKENS.global.createCommand}
           onMouseDown={(e: MouseEvent) => {
@@ -129,7 +129,7 @@ export const SidebarCreateMenu = (props: {
             e.preventDefault();
           }}
         >
-          <PlusIcon class="size-3.5!" />
+          <PlusIcon />
         </Dropdown.Trigger>
       </Show>
       <Dropdown.Content class="min-w-52 shadow-menu">
