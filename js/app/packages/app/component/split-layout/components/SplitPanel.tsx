@@ -148,6 +148,14 @@ export function SplitPanel(props: SplitPanelProps) {
       isSoloSettings()
   );
 
+  const hasFocusedSplitBorder = createMemo(
+    () =>
+      !isMobile() &&
+      props.active &&
+      multipleSplits() &&
+      !props.handle.isSpotLight()
+  );
+
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
@@ -215,13 +223,11 @@ export function SplitPanel(props: SplitPanelProps) {
             tabindex={-1}
           >
             <Panel
-              active={
-                !isMobile() &&
-                props.active &&
-                multipleSplits() &&
-                !props.handle.isSpotLight()
+              edgeColor={
+                hasFocusedSplitBorder()
+                  ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
+                  : undefined
               }
-              highlightColor="oklch(var(--a0l) var(--a0c) var(--a0h) / 0.5)"
               class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
               depth={isMobile() ? 0 : 1}
             >
