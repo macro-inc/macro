@@ -18,6 +18,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useNavigate } from '@solidjs/router';
 import { For, Match, Show, Switch } from 'solid-js';
+import { replaceHomeComposerSelection } from './home-composer-selection';
 import type { HomePreferences } from './home-prefs';
 import { SetupRow } from './home-rows';
 
@@ -66,13 +67,13 @@ export function RecommendedSection() {
   };
 
   const selectRecommendation = (item: RecommendedItem) => {
-    if (ATTACHABLE_ENTITY_TYPES.has(item.entityType)) {
-      input.attachments.addAttachment({
-        entity_id: item.entityId,
-        entity_type: item.entityType,
-      });
-    }
-    input.setPendingDraft(item.prompt);
+    replaceHomeComposerSelection(
+      input,
+      item.prompt,
+      ATTACHABLE_ENTITY_TYPES.has(item.entityType)
+        ? [{ entity_id: item.entityId, entity_type: item.entityType }]
+        : undefined
+    );
   };
 
   const retry = () => {

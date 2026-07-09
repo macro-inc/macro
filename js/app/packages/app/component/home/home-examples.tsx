@@ -6,6 +6,7 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import XIcon from '@phosphor/x.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { replaceHomeComposerSelection } from './home-composer-selection';
 import type { HomePreferences } from './home-prefs';
 
 type HomeExample = {
@@ -64,7 +65,9 @@ export function HomeExamples(props: { preferences: HomePreferences }) {
               <button
                 type="button"
                 class="group flex flex-col gap-1 rounded-xl border border-edge-muted bg-active p-3 text-left transition-colors hover:bg-hover"
-                onClick={() => input.setPendingDraft(example.prompt)}
+                onClick={() =>
+                  replaceHomeComposerSelection(input, example.prompt)
+                }
                 onMouseEnter={() => setHovered(i())}
                 onMouseLeave={() =>
                   setHovered((prev) => (prev === i() ? null : prev))

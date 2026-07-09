@@ -30,6 +30,7 @@ import { Navigate } from '@solidjs/router';
 import { $getRoot } from 'lexical';
 import { createEffect } from 'solid-js';
 import { HomeBackfillProgress } from './home-backfill-progress';
+import { replaceHomeComposerDraft } from './home-composer-selection';
 import { HomeExamples } from './home-examples';
 import { GettingStartedSection, RecommendedSection } from './home-hub';
 import { createHomePreferences } from './home-prefs';
@@ -184,8 +185,7 @@ const HomeChatInput = () => {
   });
 
   const applyDraft = (text: string) => {
-    const current = editor.controls.getMarkdown().trim();
-    editor.controls.setMarkdown(current ? `${current}\n\n${text}` : text);
+    replaceHomeComposerDraft(editor.controls, text);
     requestAnimationFrame(() => {
       editor.controls.focus();
       // Focus lands at the start of the document; drafts are prompt prefixes,
