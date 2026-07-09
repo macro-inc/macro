@@ -50,7 +50,6 @@ import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { TaskCopyBranchButton } from './TaskCopyBranchButton';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
