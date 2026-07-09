@@ -239,7 +239,7 @@ export const SoupViewContextProvider: FlowComponent<
   );
   onCleanup(predicatesCaptorTeardown);
 
-  const invalidateCache = () => {
+  const trimToFirstPage = () => {
     const groupBy = serverGroupByField();
 
     queryClient.setQueryData(
@@ -263,19 +263,19 @@ export const SoupViewContextProvider: FlowComponent<
   const queryFilters: QueryStore = {
     ...store,
     set: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.set(query);
     },
     replace: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.replace(query);
     },
     add: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.add(query);
     },
     remove: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.remove(query);
     },
   };
@@ -1005,9 +1005,7 @@ export const SoupViewContextProvider: FlowComponent<
       refresh: async () => {
         if (!enabled()) return;
 
-        // Drop the pages beyond the first (same trim as filter changes) so a
-        // deep-scrolled list doesn't refetch every loaded page sequentially.
-        invalidateCache();
+        trimToFirstPage();
 
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: soupKeys._def }),

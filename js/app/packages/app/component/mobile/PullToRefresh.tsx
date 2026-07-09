@@ -1,11 +1,12 @@
 import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
-import Spinner from '@phosphor/spinner.svg';
+import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
 import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
   createSignal,
+  on,
   onCleanup,
   Show,
 } from 'solid-js';
@@ -15,17 +16,18 @@ const DIRECTIONALITY_THRESHOLD = 5;
 /** Finger-to-indicator damping while pulling. */
 const PULL_RESISTANCE = 0.5;
 /** Damped pull distance (px) past which releasing triggers a refresh. */
-const PULL_THRESHOLD = 70;
-/** Damped pull cap — overdragging stretches the indicator up to here. */
-const PULL_MAX = 110;
-/** Indicator badge diameter (px). Keep in sync with the size-9 class below. */
-const INDICATOR_SIZE = 36;
-/** Gap between the mobile chrome inset and the indicator's resting spot. */
-const INDICATOR_REST_MARGIN = 8;
-/** Retract transition length. Keep in sync with the duration-250 class below. */
+const PULL_THRESHOLD = 60;
+/** Slope the overdrag damping settles at — deep overdrag keeps moving at
+ * this fraction of the base rate instead of hitting a hard stop. */
+const OVERDRAG_RESISTANCE = 0.25;
+/** Damped px over which the overdrag resistance fades in: the pull's slope
+ * eases from 1 down to OVERDRAG_RESISTANCE across roughly this distance,
+ * so crossing the threshold has no felt kink. */
+const OVERDRAG_FADE = 40;
+/** Retract transition length (ms). */
 const SETTLE_MS = 250;
 /** Spin floor so near-instant refreshes still read as a completed refresh. */
-const MIN_REFRESH_SPIN_MS = 400;
+const MIN_REFRESH_SPIN_MS = 200;
 
 type PullPhase = 'idle' | 'pulling' | 'refreshing' | 'settling';
 
@@ -42,9 +44,11 @@ type PullGesture = {
  * released, spins until `onRefresh` settles. Renders nothing off mobile.
  *
  * Mount inside a `position: relative` wrapper of the scroll container. The
- * badge hides above the wrapper's top edge and drops to just below the
- * floating mobile chrome (`--mobile-content-inset-top`), so the list itself
- * never moves — which keeps the virtualizer's scroll math untouched.
+ * badge sits parked just below the floating mobile chrome
+ * (`--mobile-content-inset-top`) and paints beneath the list; the pull
+ * translates the scroll container down, and the opaque rows sliding away
+ * are what reveal it. A transform leaves layout and scrollTop untouched,
+ * so the virtualizer's scroll math is unaffected.
  */
 export function PullToRefresh(props: {
   scrollContainer: Accessor<HTMLElement | undefined>;
@@ -118,10 +122,17 @@ export function PullToRefresh(props: {
     // scrolling (the container is already at its top).
     if (e.cancelable) e.preventDefault();
 
-    const damped = Math.min(
-      Math.max(dy - DIRECTIONALITY_THRESHOLD, 0) * PULL_RESISTANCE,
-      PULL_MAX
-    );
+    const base = Math.max(dy - DIRECTIONALITY_THRESHOLD, 0) * PULL_RESISTANCE;
+    // Exponential blend past the threshold: slope starts at 1 and eases
+    // toward OVERDRAG_RESISTANCE, so the extra resistance fades in instead
+    // of kicking in abruptly.
+    const over = Math.max(base - PULL_THRESHOLD, 0);
+    const damped =
+      Math.min(base, PULL_THRESHOLD) +
+      OVERDRAG_RESISTANCE * over +
+      (1 - OVERDRAG_RESISTANCE) *
+        OVERDRAG_FADE *
+        (1 - Math.exp(-over / OVERDRAG_FADE));
     const wasArmed = pull() >= PULL_THRESHOLD;
     setPull(damped);
     if (damped >= PULL_THRESHOLD !== wasArmed) hapticImpact('light');
@@ -144,50 +155,62 @@ export function PullToRefresh(props: {
     if (wasPulling) retract();
   };
 
-  createEffect(() => {
-    const el = props.scrollContainer();
-    if (!el) return;
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+  createEffect(
+    on(props.scrollContainer, (el) => {
+      if (!el) return;
 
-    onCleanup(() => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-      el.removeEventListener('touchcancel', onTouchCancel);
-    });
-  });
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: false });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+      el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+
+      // The list follows the finger: translate the scroll container by the
+      // damped pull, tracking directly while pulling and easing back
+      // otherwise (mirroring the badge's settle transition).
+      createEffect(() => {
+        el.style.transform = pull() > 0 ? `translateY(${pull()}px)` : '';
+        el.style.transition =
+          phase() === 'pulling' ? '' : `transform ${SETTLE_MS}ms ease-out`;
+      });
+
+      onCleanup(() => {
+        el.style.transform = '';
+        el.style.transition = '';
+        el.removeEventListener('touchstart', onTouchStart);
+        el.removeEventListener('touchmove', onTouchMove);
+        el.removeEventListener('touchend', onTouchEnd);
+        el.removeEventListener('touchcancel', onTouchCancel);
+      });
+    })
+  );
 
   const progress = () => Math.min(pull() / PULL_THRESHOLD, 1);
-  // Past the threshold the badge keeps drifting, but only by extra pixels —
-  // the inset-relative travel is pinned at the resting spot.
-  const overdrag = () => Math.max(0, pull() - PULL_THRESHOLD) * 0.5;
   const isRefreshing = () => phase() === 'refreshing';
 
   return (
     <Show when={isMobile()}>
+      {/* No z-index: the badge paints beneath the list (later positioned
+          sibling), so the opaque rows translating down are what reveal it. */}
       <div
-        class="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center"
+        class="pointer-events-none absolute inset-x-0 flex justify-center"
+        style={{
+          top: 'var(--mobile-content-inset-top, 0px)',
+        }}
         aria-hidden
       >
         <div
-          class={cn(
-            'island flex size-9 items-center justify-center rounded-full',
-            phase() !== 'pulling' &&
-              'transition-[transform,opacity] duration-250 ease-out'
-          )}
+          class="flex items-center justify-center rounded-full"
           style={{
-            transform: `translateY(calc((var(--mobile-content-inset-top, 0px) + ${
-              INDICATOR_REST_MARGIN + INDICATOR_SIZE
-            }px) * ${progress()} + ${overdrag() - INDICATOR_SIZE}px))`,
             opacity: Math.min(progress() * 1.5, 1),
+            transition:
+              phase() === 'pulling'
+                ? undefined
+                : `opacity ${SETTLE_MS}ms ease-out`,
           }}
         >
           <Spinner
-            class={cn('size-4.5', isRefreshing() && 'animate-spin')}
+            class={cn('size-7', isRefreshing() && 'animate-spin')}
             style={
               isRefreshing()
                 ? undefined
