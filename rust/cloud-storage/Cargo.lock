@@ -15426,6 +15426,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "percent-encoding",
+ "phf 0.13.1",
  "phf_shared 0.10.0",
  "phf_shared 0.13.1",
  "prettyplease",
