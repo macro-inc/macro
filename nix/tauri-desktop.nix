@@ -211,6 +211,7 @@
         buildPhase = ''
           cat > linuxdeploy-wrapper.c <<'EOF'
           #include <dirent.h>
+          #include <errno.h>
           #include <stdio.h>
           #include <stdlib.h>
           #include <sys/stat.h>
@@ -252,35 +253,67 @@
             closedir(dir);
           }
 
-          static void install_gio_tls_hook(const char *appdir) {
-            if (appdir == NULL) return;
+          static int install_gio_tls_hook(const char *appdir) {
+            if (appdir == NULL) {
+              fprintf(stderr, "cannot install TLS hook: missing --appdir\n");
+              return 1;
+            }
 
             size_t appdir_len = strlen(appdir);
             char *hooks_dir = malloc(appdir_len + strlen("/apprun-hooks") + 1);
+            if (hooks_dir == NULL) {
+              perror("malloc TLS hook directory");
+              return 1;
+            }
             sprintf(hooks_dir, "%s/apprun-hooks", appdir);
-            mkdir(hooks_dir, 0755);
+            if (mkdir(hooks_dir, 0755) != 0 && errno != EEXIST) {
+              perror("mkdir TLS hook directory");
+              free(hooks_dir);
+              return 1;
+            }
 
             char *hook_path = malloc(strlen(hooks_dir) + strlen("/macro-gio-tls.sh") + 2);
+            if (hook_path == NULL) {
+              perror("malloc TLS hook path");
+              free(hooks_dir);
+              return 1;
+            }
             sprintf(hook_path, "%s/macro-gio-tls.sh", hooks_dir);
 
             FILE *hook = fopen(hook_path, "w");
-            if (hook != NULL) {
-              fputs("#! /usr/bin/env bash\n"
-                    "export APPDIR=\"''${APPDIR:-\"$(dirname \"$(realpath \"$0\")\")\"}\"\n"
-                    "gio_modules=\"$APPDIR/usr/lib/gio/modules\"\n"
-                    "if [ -d \"$gio_modules\" ]; then\n"
-                    "  case \":''${GIO_EXTRA_MODULES:-}:\" in\n"
-                    "    *:\"$gio_modules\":*) ;;\n"
-                    "    *) export GIO_EXTRA_MODULES=\"$gio_modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}\" ;;\n"
-                    "  esac\n"
-                    "fi\n",
-                    hook);
-              fclose(hook);
-              chmod(hook_path, 0755);
+            if (hook == NULL) {
+              perror("fopen TLS hook");
+              free(hook_path);
+              free(hooks_dir);
+              return 1;
+            }
+
+            int failed = 0;
+            if (fputs("#! /usr/bin/env bash\n"
+                      "export APPDIR=\"''${APPDIR:-\"$(dirname \"$(realpath \"$0\")\")\"}\"\n"
+                      "gio_modules=\"$APPDIR/usr/lib/gio/modules\"\n"
+                      "if [ -d \"$gio_modules\" ]; then\n"
+                      "  case \":''${GIO_EXTRA_MODULES:-}:\" in\n"
+                      "    *:\"$gio_modules\":*) ;;\n"
+                      "    *) export GIO_EXTRA_MODULES=\"$gio_modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}\" ;;\n"
+                      "  esac\n"
+                      "fi\n",
+                      hook) == EOF) {
+              perror("write TLS hook");
+              failed = 1;
+            }
+            if (fclose(hook) != 0) {
+              perror("close TLS hook");
+              failed = 1;
+            }
+            if (!failed && chmod(hook_path, 0755) != 0) {
+              perror("chmod TLS hook");
+              failed = 1;
             }
 
             free(hook_path);
             free(hooks_dir);
+            return failed;
           }
 
           int main(int argc, char **argv) {
@@ -293,7 +326,9 @@
               }
             }
             sanitize_appdir(appdir);
-            install_gio_tls_hook(appdir);
+            if (install_gio_tls_hook(appdir) != 0) {
+              return 1;
+            }
 
             char *slash = strrchr(argv[0], '/');
             if (slash != NULL) {
