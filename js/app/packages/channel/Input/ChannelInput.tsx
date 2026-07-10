@@ -23,7 +23,7 @@ import {
 import type { EntityData } from '@entity';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, cn, Surface } from '@ui';
-import { $getRoot } from 'lexical';
+import { $addUpdateTag, $getRoot, SKIP_DOM_SELECTION_TAG } from 'lexical';
 import {
   type Accessor,
   createSignal,
@@ -50,11 +50,13 @@ import type {
   InputHandle,
   InputPersistenceKey,
   InputSnapshot,
+  RestoreSnapshotOptions,
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import { $selectContentEnd } from './utils/select-content-end';
 import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
@@ -180,16 +182,24 @@ export function ChannelInput(props: ChannelInputProps) {
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
-        options?: { focus?: boolean };
+        options?: RestoreSnapshotOptions;
       }
     | undefined;
   let pendingFocus = false;
 
   const applySnapshot = (
     snapshot: InputSnapshot,
-    options?: { focus?: boolean }
+    options?: RestoreSnapshotOptions
   ) => {
     markdownEditor.controls.setMarkdown(snapshot.value);
+    if (options?.cursor === 'end') {
+      // Skip the DOM-selection sync so an unfocused restore doesn't steal
+      // focus; the caret is applied when the editor is next focused.
+      lexicalEditor().update(() => {
+        $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+        $selectContentEnd();
+      });
+    }
     attachmentTracker.setAttachments(snapshot.attachments);
     mentionsTracker.setMentions(snapshot.mentions);
     if (options?.focus !== false) markdownEditor.controls.focus();

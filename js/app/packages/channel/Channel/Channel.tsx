@@ -352,6 +352,7 @@ export function Channel(props: ChannelProps) {
     requestAnimationFrame(() => {
       state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot, {
         focus: false,
+        cursor: 'end',
       });
       state.replyInputFocusRequest.request();
     });

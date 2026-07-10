@@ -81,6 +81,17 @@ export type InputCommands = {
   removeAttachment: (attachment: InputAttachmentData) => void;
 };
 
+export type RestoreSnapshotOptions = {
+  focus?: boolean;
+  /**
+   * `'end'` moves the caret to the end of the restored content — on an
+   * empty trailing paragraph when the content ends in a non-paragraph
+   * block (e.g. a quote-reply's blockquote), so typing starts on its own
+   * line instead of inside the block.
+   */
+  cursor?: 'end';
+};
+
 export type InputHandle = {
   clear: () => void;
   focus: () => void;
@@ -88,7 +99,7 @@ export type InputHandle = {
   attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (
     snapshot: InputSnapshot,
-    options?: { focus?: boolean }
+    options?: RestoreSnapshotOptions
   ) => void;
   /**
    * Inserts a mention for a dragged soup entity into the editor. Only provided

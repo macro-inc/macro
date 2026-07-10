@@ -55,7 +55,10 @@ function EditableThreadInner() {
         };
         setReplyInputState(nextSnapshot);
         requestAnimationFrame(() => {
-          replyInputHandle()?.restoreSnapshot(nextSnapshot, { focus: false });
+          replyInputHandle()?.restoreSnapshot(nextSnapshot, {
+            focus: false,
+            cursor: 'end',
+          });
           ctx.replyInputFocusRequest.request();
         });
       } else {
