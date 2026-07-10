@@ -286,7 +286,9 @@ function ChannelGroupItem(props: {
       >
         <Show
           when={isDM() && senderId()}
-          fallback={<EntityIcon targetType="channel" size="xs" class="size-3.5" />}
+          fallback={
+            <EntityIcon targetType="channel" size="xs" class="size-3.5" />
+          }
         >
           <UserIcon
             id={senderId()!}
@@ -372,9 +374,7 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
   return notifications.filter((n) => !n.viewed_at && !n.done);
 }
 
-function ChannelGroupDropdownItem(props: {
-  group: ChannelGroup;
-}) {
+function ChannelGroupDropdownItem(props: { group: ChannelGroup }) {
   const senderName = useSenderName(props.group.latestSenderId);
   const count = () => props.group.notifications.length;
   const displayName = () => {
@@ -393,7 +393,9 @@ function ChannelGroupDropdownItem(props: {
     >
       <Show
         when={props.group.isDM && props.group.latestSenderId}
-        fallback={<EntityIcon targetType="channel" size="xs" class="size-3.5" />}
+        fallback={
+          <EntityIcon targetType="channel" size="xs" class="size-3.5" />
+        }
       >
         <UserIcon
           id={props.group.latestSenderId!}

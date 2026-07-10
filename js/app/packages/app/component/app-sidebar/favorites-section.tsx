@@ -6,14 +6,14 @@ import {
 } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { navigateToChannelMessage } from '@block-channel/utils/link';
-import { ReadonlyThread } from '@channel/StandaloneThread';
 import {
   favoriteIconType,
   favoriteSplitContent,
   useFavoriteDisplayName,
   useFavoriteDmRecipientId,
 } from '@app/util/favorites';
+import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { ReadonlyThread } from '@channel/StandaloneThread';
 import {
   ContextMenuContent,
   MenuGroup,
@@ -147,7 +147,10 @@ function FavoriteChannelHoverCard(
         flip={true}
         gutter={4}
       >
-        <KobalteTooltip.Trigger class="inline-flex items-center w-full" as="div">
+        <KobalteTooltip.Trigger
+          class="inline-flex items-center w-full"
+          as="div"
+        >
           {props.children}
         </KobalteTooltip.Trigger>
         <KobalteTooltip.Portal>
@@ -453,10 +456,7 @@ const FavoriteRow = (props: {
     >
       <ContextMenu onOpenChange={setContextMenuOpen}>
         <ContextMenu.Trigger class="w-full h-7">
-          <Show
-            when={isUnreadChannelFavorite()}
-            fallback={row}
-          >
+          <Show when={isUnreadChannelFavorite()} fallback={row}>
             <FavoriteChannelHoverCard
               channelId={props.favorite.entityId}
               notifications={props.notifications()}
