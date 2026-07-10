@@ -563,7 +563,11 @@ const SidebarSectionMenu = (props: {
   onToggle: (id: SidebarSectionLinkId) => void;
   onOpenChange?: (open: boolean) => void;
 }) => (
-  <Dropdown placement="right-start" gutter={8} onOpenChange={props.onOpenChange}>
+  <Dropdown
+    placement="right-start"
+    gutter={8}
+    onOpenChange={props.onOpenChange}
+  >
     <Dropdown.Trigger
       variant="ghost"
       class="opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5"
@@ -601,7 +605,11 @@ const SidebarTryItemMenu = (props: {
   onDismiss: () => void;
   onOpenChange?: (open: boolean) => void;
 }) => (
-  <Dropdown placement="right-start" gutter={8} onOpenChange={props.onOpenChange}>
+  <Dropdown
+    placement="right-start"
+    gutter={8}
+    onOpenChange={props.onOpenChange}
+  >
     <Dropdown.Trigger
       variant="ghost"
       class="shrink-0 opacity-0 group-hover/shortcut:pointer-events-auto group-hover/shortcut:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5 pointer-events-none"
@@ -1296,7 +1304,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onScroll={updateMiddleScrollShadows}
           class="size-full overflow-y-auto flex flex-col gap-3"
         >
-          <Show when={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS).length > 0}>
+          <Show
+            when={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS).length > 0}
+          >
             <CollapsibleSidebarSection
               label="Conversations"
               items={communicationsItems()}
@@ -1348,7 +1358,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
               onOpenChange={scheduleMiddleScrollUpdate}
             />
           </Show>
-
         </div>
         <div
           class={cn(
