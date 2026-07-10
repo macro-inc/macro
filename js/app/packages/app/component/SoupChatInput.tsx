@@ -1,5 +1,4 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { useSoup } from '@app/component/next-soup/soup-context';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
@@ -28,7 +27,6 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 function SoupChatInputInner() {
   const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
-  const soup = useSoup();
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
@@ -126,7 +124,7 @@ function SoupChatInputInner() {
     <div
       ref={containerRef}
       class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
-      classList={{ hidden: !!soup.previewEntity() }}
+      classList={{ hidden: splitPanelContext.previewState[0]() }}
       style={{
         'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
       }}
