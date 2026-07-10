@@ -1,6 +1,8 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
+use entity_access::domain::models::ViewAccessLevel;
+use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::SoupProperty;
 
@@ -42,10 +44,29 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
     ) -> Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report>;
 }
 
+/// GraphQL property reader backed by the properties domain service and the
+/// canonical entity access service.
+pub struct PropertiesSoupPropertyEdgeReader<P, A> {
+    properties_service: Arc<P>,
+    entity_access_service: Arc<A>,
+}
+
+impl<P, A> PropertiesSoupPropertyEdgeReader<P, A> {
+    /// Create a property edge reader from the services supplied by the
+    /// application composition root.
+    pub fn new(properties_service: Arc<P>, entity_access_service: Arc<A>) -> Self {
+        Self {
+            properties_service,
+            entity_access_service,
+        }
+    }
+}
+
 #[async_trait::async_trait]
-impl<T> SoupPropertyEdgeReader for T
+impl<P, A> SoupPropertyEdgeReader for PropertiesSoupPropertyEdgeReader<P, A>
 where
-    T: properties::PropertiesService,
+    P: properties::PropertiesService,
+    A: EntityAccessService,
 {
     async fn get_properties(
         &self,
@@ -65,10 +86,21 @@ where
             let Some(entity_type) = key.property_entity_type()? else {
                 continue;
             };
-            match self
-                .mint_view_receipt(Some(user_id), &key.entity_id, entity_type)
-                .await
-            {
+            let access_receipt = self
+                .entity_access_service
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    user_id,
+                    None,
+                    &key.entity_id,
+                    properties::access_entity_type(entity_type),
+                )
+                .await;
+            match access_receipt.and_then(|receipt| {
+                properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
+                    receipt,
+                    entity_type,
+                )
+            }) {
                 Ok(receipt) => receipts.push(receipt),
                 Err(err) => {
                     tracing::debug!(
@@ -86,6 +118,7 @@ where
         }
 
         let properties_by_entity = self
+            .properties_service
             .get_bulk_entity_properties(&receipts, Vec::new())
             .await
             .map_err(|err| rootcause::report!(err))?;

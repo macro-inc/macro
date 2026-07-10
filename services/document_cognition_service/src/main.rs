@@ -273,8 +273,11 @@ async fn main() -> anyhow::Result<()> {
     };
     let properties_service =
         ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
-    let task_properties_service =
-        ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        db.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -342,7 +345,8 @@ async fn main() -> anyhow::Result<()> {
 
     let search_service_client = Arc::new(search_service_client);
 
-    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
+    let properties_tool_context =
+        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
 
     tracing::info!("initialized properties tool context");
 

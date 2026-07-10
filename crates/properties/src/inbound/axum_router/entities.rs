@@ -13,6 +13,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::api::SetPropertyValue;
@@ -24,6 +25,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
+use super::extract::{mint_authenticated_receipt, mint_view_receipt};
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
@@ -253,10 +255,13 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
     // permission to view.
     let mut receipts = Vec::with_capacity(request.entities.len());
     for entity_ref in &request.entities {
-        match state
-            .properties_service
-            .mint_view_receipt(Some(&user), &entity_ref.entity_id, entity_ref.entity_type)
-            .await
+        match mint_view_receipt(
+            state.entity_access_service.as_ref(),
+            Some(&user),
+            &entity_ref.entity_id,
+            entity_ref.entity_type,
+        )
+        .await
         {
             Ok(receipt) => receipts.push(receipt),
             Err(e) => {
@@ -533,10 +538,13 @@ pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService
         .await?
         .ok_or(PropertiesErr::EntityPropertyNotFound)?;
 
-    let access = state
-        .properties_service
-        .mint_edit_receipt(&user, &property_info.entity_id, property_info.entity_type)
-        .await?;
+    let access = mint_authenticated_receipt::<EditAccessLevel, A>(
+        state.entity_access_service.as_ref(),
+        &user,
+        &property_info.entity_id,
+        property_info.entity_type,
+    )
+    .await?;
 
     state
         .properties_service

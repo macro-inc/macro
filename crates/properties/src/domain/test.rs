@@ -522,52 +522,6 @@ async fn test_get_system_property_value_error_path() {
 }
 
 // ============================================================================
-// receipt minting unit tests
-// ============================================================================
-
-#[tokio::test]
-async fn test_mint_edit_receipt_no_permission_service() {
-    let repo = MockPropertiesRepo::new();
-    let service = PropertiesServiceImpl::new(
-        repo,
-        None::<MockPermissionService>,
-        None::<MockNotificationService>,
-    );
-
-    let err = service
-        .mint_edit_receipt(&caller_user_id(), "doc1", EntityType::Document)
-        .await
-        .unwrap_err();
-
-    assert!(matches!(
-        err,
-        crate::domain::error::PropertiesErr::PermissionServiceNotConfigured
-    ));
-}
-
-#[tokio::test]
-async fn test_mint_edit_receipt_denied() {
-    let repo = MockPropertiesRepo::new();
-    let mut perm_service = MockPermissionService::new();
-    perm_service
-        .expect_mint_edit_receipt()
-        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
-
-    let service =
-        PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
-
-    let err = service
-        .mint_edit_receipt(&caller_user_id(), "doc1", EntityType::Document)
-        .await
-        .unwrap_err();
-
-    assert!(matches!(
-        err,
-        crate::domain::error::PropertiesErr::PermissionDenied
-    ));
-}
-
-// ============================================================================
 // delete_entity_property unit tests
 // ============================================================================
 

@@ -55,7 +55,10 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
     };
 
     let property_reader: std::sync::Arc<dyn complete_graph::SoupPropertyEdgeReader> =
-        state.properties_service.clone();
+        std::sync::Arc::new(complete_graph::PropertiesSoupPropertyEdgeReader::new(
+            state.properties_service.clone(),
+            state.entity_access_service.clone(),
+        ));
     let request = request
         .data(GraphqlSoupRequestParts::new(parts))
         .data(state.clone())

@@ -8,7 +8,8 @@ mod objects;
 
 pub use inputs::{GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr};
 pub use loaders::{
-    EntityPropertiesKey, EntityPropertiesLoader, SoupPropertyEdgeReader, entity_properties_loader,
+    EntityPropertiesKey, EntityPropertiesLoader, PropertiesSoupPropertyEdgeReader,
+    SoupPropertyEdgeReader, entity_properties_loader,
 };
 pub use objects::{
     GraphqlSoupProperty, GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue,

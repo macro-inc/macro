@@ -5965,6 +5965,7 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-trait",
+ "entity_access",
  "filter_ast",
  "graphql_common",
  "item_filters",

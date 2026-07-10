@@ -1,9 +1,13 @@
 //! GetEntityProperties tool for reading properties attached to an entity.
 
-use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
+use crate::domain::model::{
+    EntityPropertyInfo, PropertiesAccessReceipt, PropertyOptionInfo, access_entity_type,
+};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use entity_access::domain::models::ViewAccessLevel;
+use entity_access::domain::ports::EntityAccessService;
 use models_properties::PropertyOwner;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
@@ -107,16 +111,17 @@ pub struct GetEntityPropertiesResponse {
 }
 
 #[async_trait]
-impl<T> AsyncTool<PropertiesToolContext<T>> for GetEntityProperties
+impl<T, A> AsyncTool<PropertiesToolContext<T, A>> for GetEntityProperties
 where
     T: PropertiesService,
+    A: EntityAccessService,
 {
     type Output = GetEntityPropertiesResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, entity_id=%self.entity_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<PropertiesToolContext<T>>,
+        service_context: ServiceContext<PropertiesToolContext<T, A>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Get entity properties");
@@ -124,14 +129,27 @@ where
         let entity_type = EntityType::from(self.entity_type);
 
         // Prove the requesting user can view the entity before reading anything.
-        let access = service_context
-            .service
-            .mint_view_receipt(Some(&request_context.user_id), &self.entity_id, entity_type)
+        let entity_access_receipt = service_context
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                &request_context.user_id,
+                None,
+                &self.entity_id,
+                access_entity_type(entity_type),
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: "You do not have access to this entity".to_string(),
                 internal_error: e.into(),
             })?;
+        let access = PropertiesAccessReceipt::try_from_entity_access_receipt(
+            entity_access_receipt,
+            entity_type,
+        )
+        .map_err(|e| ToolCallError {
+            description: "Unable to validate entity access".to_string(),
+            internal_error: e.into(),
+        })?;
 
         let props = service_context
             .service

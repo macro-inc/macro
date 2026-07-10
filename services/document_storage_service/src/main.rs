@@ -406,6 +406,7 @@ async fn main() -> anyhow::Result<()> {
         TaskPropertiesAdapter {
             system_properties: system_properties_service.clone(),
             properties: properties_service.clone(),
+            entity_access_service: entity_access_service.clone(),
         },
         connection_service,
         entity_access_management_service.clone(),

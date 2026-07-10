@@ -223,32 +223,6 @@ where
     N: NotificationService,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
-    #[tracing::instrument(skip(self), fields(user_id = ?user_id, entity_id = %entity_id, entity_type = ?entity_type))]
-    async fn mint_view_receipt(
-        &self,
-        user_id: Option<&MacroUserIdStr<'_>>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> Result<ViewReceipt, PropertiesErr> {
-        self.permission_service()?
-            .mint_view_receipt(user_id, entity_id, entity_type)
-            .await
-            .map_err(|_| PropertiesErr::PermissionDenied)
-    }
-
-    #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type))]
-    async fn mint_edit_receipt(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> Result<EditReceipt, PropertiesErr> {
-        self.permission_service()?
-            .mint_edit_receipt(user_id, entity_id, entity_type)
-            .await
-            .map_err(|_| PropertiesErr::PermissionDenied)
-    }
-
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()))]
     async fn set_system_property_status_complete(
         &self,

@@ -1,9 +1,12 @@
 //! SetEntityProperty tool for updating property values on entities.
 
+use crate::domain::model::{PropertiesAccessReceipt, access_entity_type};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::shared::EntityReference;
@@ -189,9 +192,10 @@ pub struct SetEntityPropertyResponse {
 }
 
 #[async_trait]
-impl<T> AsyncTool<PropertiesToolContext<T>> for SetEntityProperty
+impl<T, A> AsyncTool<PropertiesToolContext<T, A>> for SetEntityProperty
 where
     T: PropertiesService,
+    A: EntityAccessService,
 {
     type Output = SetEntityPropertyResponse;
 
@@ -206,7 +210,7 @@ where
     )]
     async fn call(
         &self,
-        service_context: ServiceContext<PropertiesToolContext<T>>,
+        service_context: ServiceContext<PropertiesToolContext<T, A>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!("Set entity property");
@@ -215,14 +219,27 @@ where
         let set_value = self.to_set_property_value();
 
         // Prove the requesting user can edit the entity before writing anything.
-        let access = service_context
-            .service
-            .mint_edit_receipt(&request_context.user_id, &self.entity_id, entity_type)
+        let entity_access_receipt = service_context
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &request_context.user_id,
+                None,
+                &self.entity_id,
+                access_entity_type(entity_type),
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: "You do not have edit access to this entity".to_string(),
                 internal_error: e.into(),
             })?;
+        let access = PropertiesAccessReceipt::try_from_entity_access_receipt(
+            entity_access_receipt,
+            entity_type,
+        )
+        .map_err(|e| ToolCallError {
+            description: "Unable to validate entity access".to_string(),
+            internal_error: e.into(),
+        })?;
 
         // Delta mode: add/remove specific options atomically so concurrent
         // edits to the same multi-select value are never overwritten.
