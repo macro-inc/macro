@@ -8,8 +8,8 @@ import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
-import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
+import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isMobile } from '@core/mobile/isMobile';
@@ -90,16 +90,18 @@ export function MessageContainer(props: MessageContainerProps) {
 
   const senderMacroId = createMemo(() => getSenderMacroId(props.message));
 
+  const senderIconProps = createMemo<UserIconProps>(() => {
+    const senderId = senderMacroId();
+    const photoUrl = props.message.from?.photo_url ?? undefined;
+    if (senderId) return { id: senderId, photoUrl };
+    return { email: props.message.from?.email ?? '', photoUrl };
+  });
+
   const isBodyExpanded = createMemo(() => {
     return props.isExpanded;
   });
 
-  const isNewMessage = createMemo(() => {
-    return (
-      props.message.labels.find((l) => l.provider_label_id === 'UNREAD') !==
-      undefined
-    );
-  });
+
 
   // Hide attachments that are referenced in inline images
   const inlineContentIds = createMemo(() => {
@@ -230,45 +232,45 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg overflow-hidden p-2 ring scroll-m-px"
+            class="relative rounded-lg overflow-hidden p-4 ring"
+            style={{ '--user-icon-width': '1rem' }}
             classList={{
-              'bg-active/60 ring-edge': props.isFocused,
-              'bg-ink-muted/4 ring-transparent': !props.isFocused,
+              'bg-accent ring-transparent': props.isTarget,
+              'bg-active/60 ring-edge': !props.isTarget && props.isFocused,
+              'bg-ink-muted/4 ring-transparent':
+                !props.isTarget && !props.isFocused,
             }}
+            data-message-body-id={props.message.db_id}
+            tabIndex={0}
           >
-            <Message
-              id={props.message.db_id ?? undefined}
-              focused={false}
-              isFirstMessage={true}
-              isLastMessage={props.isLastMessage}
-              senderId={senderMacroId()}
-              senderPhotoUrl={props.message.from?.photo_url ?? undefined}
-              isNewMessage={isNewMessage()}
-              isTarget={props.isTarget}
-              hasReplyInputBelow={true}
-              hideConnectors
-              disableHoverBackground
-              hasThreadChildren={showInlineReplyArea()}
-            >
-              <Message.TopBar>
-                <EmailMessageTopBar
-                  message={props.message}
-                  focused={props.isFocused}
-                  setExpandedBodyId={context.messages.setExpandedBodyId}
-                  isBodyExpanded={isBodyExpanded}
-                  expandedHeader={expandedHeader}
-                  setExpandedHeader={setExpandedHeader}
-                  setFocusedMessageId={context.messages.setFocused}
-                  setShowReply={setShowReply}
-                  isLastMessage={props.isLastMessage}
-                  hiddenActions={
-                    !context.permissions().isOwner
-                      ? ['reply', 'reply-all', 'forward']
-                      : undefined
-                  }
-                />
-              </Message.TopBar>
-              <Message.Body>
+            <div class="flex flex-col min-w-0 gap-2">
+              <EmailMessageTopBar
+                message={props.message}
+                focused={props.isFocused}
+                setExpandedBodyId={context.messages.setExpandedBodyId}
+                isBodyExpanded={isBodyExpanded}
+                expandedHeader={expandedHeader}
+                setExpandedHeader={setExpandedHeader}
+                setFocusedMessageId={context.messages.setFocused}
+                setShowReply={setShowReply}
+                isLastMessage={props.isLastMessage}
+                hiddenActions={
+                  !context.permissions().isOwner
+                    ? ['reply', 'reply-all', 'forward']
+                    : undefined
+                }
+                avatar={
+                  <div class="shrink-0 flex justify-center items-center size-6">
+                    <UserIcon
+                      {...senderIconProps()}
+                      isDeleted={false}
+                      size="fill"
+                      suppressClick={true}
+                    />
+                  </div>
+                }
+              />
+              <div class="ph-no-capture text-sm text-ink pr-4">
                 <EmailMessageBody
                   message={props.message}
                   personalSenders={context.messages.personalSenders}
@@ -280,7 +282,7 @@ export function MessageContainer(props: MessageContainerProps) {
                   isFirstMessageInThread={props.isFirstMessage}
                   isFocused={props.isFocused}
                 />
-              </Message.Body>
+              </div>
               {/* Image attachments */}
               <Show when={imageAttachmentsWithSfs().length > 0}>
                 <div class="flex flex-wrap gap-2 mt-2">
@@ -354,31 +356,35 @@ export function MessageContainer(props: MessageContainerProps) {
                   </For>
                 </div>
               </Show>
-            </Message>
+            </div>
             <Show when={showInlineReplyArea()}>
-              <div class={cn('relative border-t border-edge-muted')}>
+              <div class={cn('relative -mx-4 mb-0 border-t border-edge-muted')}>
                 <Show when={props.isLastMessage && !isMobile()}>
                   <FloatingInputLoader
                     isLoading={context.query.isFetching}
                     loadingText="Loading messages"
                   />
                 </Show>
-                <Switch>
-                  <Match when={showInlineReplyInput()}>
-                    <EmailInput
-                      replyingTo={() => props.message}
-                      setShowReply={setShowReply}
-                      draft={draftChild()}
-                      markdownDomRef={
-                        props.isLastMessage ? props.markdownDomRef : undefined
-                      }
-                      unframed
-                    />
-                  </Match>
-                  <Match when={props.isLastMessage && !isMobile()}>
-                    <BottomReplyButtons lastMessage={props.message} />
-                  </Match>
-                </Switch>
+                <div class="px-4">
+                  <Switch>
+                    <Match when={showInlineReplyInput()}>
+                      <EmailInput
+                        replyingTo={() => props.message}
+                        setShowReply={setShowReply}
+                        draft={draftChild()}
+                        markdownDomRef={
+                          props.isLastMessage
+                            ? props.markdownDomRef
+                            : undefined
+                        }
+                        unframed
+                      />
+                    </Match>
+                    <Match when={props.isLastMessage && !isMobile()}>
+                      <BottomReplyButtons lastMessage={props.message} />
+                    </Match>
+                  </Switch>
+                </div>
               </div>
             </Show>
           </div>

@@ -502,7 +502,7 @@ function EmailContent(props: EmailViewProps) {
 
   onMount(() => {
     registerEmailHotkeys(scopeId(), {
-      replyToFocusedMessage: () => openHotkeyTarget('reply'),
+      replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       blockSender: context.blockSender,
       markDone: context.archiveThread,
@@ -529,7 +529,7 @@ function EmailContent(props: EmailViewProps) {
         return openEmailReplyComposerForMessage({
           ctx: context,
           message: target.message,
-          replyType: 'reply',
+          replyType: 'reply-all',
           isLastMessage: target.isLastMessage,
         });
       }

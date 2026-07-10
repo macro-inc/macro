@@ -1,7 +1,4 @@
-import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
-import { useEmail } from '@core/context/user';
-import ArrowBendDoubleUpLeft from '@phosphor/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
@@ -24,9 +21,6 @@ export function MessageActions(props: {
 }) {
   const ctx = useEmailContext();
   const formRegistry = getEmailFormRegistry();
-  const userEmail = useEmail();
-  const shouldShowReplyAll = () =>
-    isReplyAllEligible(props.message, userEmail() ?? '');
 
   const canShowActions = () => {
     if (!props.showActions) return false;
@@ -62,23 +56,10 @@ export function MessageActions(props: {
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
           class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
-          onClick={onChangeReplyType('reply')}
+          onClick={onChangeReplyType('reply-all')}
           tooltip="Reply"
         >
           <ArrowBendUpLeft class="size-3.5" />
-        </Button>
-      </Show>
-      <Show
-        when={
-          shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
-        }
-      >
-        <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
-          onClick={onChangeReplyType('reply-all')}
-          tooltip="Reply all"
-        >
-          <ArrowBendDoubleUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>

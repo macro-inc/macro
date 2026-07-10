@@ -33,6 +33,27 @@ function FromInboxOption(props: { inbox: FromInbox }) {
   );
 }
 
+function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
+  const [name] = useDisplayName(emailToMacroId(props.inbox.email_address));
+  const label = () => name() || props.inbox.email_address;
+
+  return (
+    <div class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-2 overflow-hidden items-center bg-active rounded-full text-ink">
+      <UserIcon
+        {...inboxIconProps(props.inbox.email_address)}
+        photoUrl={props.inbox.photo_url ?? undefined}
+        size="sm"
+        suppressClick
+        class="shrink-0"
+      />
+      <p class="text-sm whitespace-nowrap truncate max-w-60">{label()}</p>
+      <Show when={props.selectable}>
+        <ChevronDown class="size-3 shrink-0 text-ink-muted" />
+      </Show>
+    </div>
+  );
+}
+
 /**
  * Lets the user pick which linked inbox a compose/reply sends from. Renders an
  * identical "from" chip in every composer: the active inbox's icon, name, and
@@ -43,6 +64,7 @@ export function FromInboxSelector(props: {
   activeLinkId: string | undefined;
   onSelect: (linkId: string) => void;
   compact?: boolean;
+  pill?: boolean;
   class?: string;
   portalScope?: 'local';
 }) {
@@ -67,6 +89,45 @@ export function FromInboxSelector(props: {
               >
                 <span class="min-w-0 truncate">{active().email_address}</span>
                 <ChevronDown class="size-3 shrink-0" />
+              </Dropdown.Trigger>
+              <Dropdown.Content portalScope={props.portalScope}>
+                <Dropdown.Group>
+                  <For each={sortedLinks()}>
+                    {(inbox) => (
+                      <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
+                        <FromInboxOption inbox={inbox} />
+                        <Show when={inbox.id === props.activeLinkId}>
+                          <Check class="size-3.5 shrink-0" />
+                        </Show>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+          </Show>
+        )}
+      </Show>
+    );
+  }
+
+  if (props.pill) {
+    return (
+      <Show when={activeInbox()}>
+        {(active) => (
+          <Show
+            when={props.links.length > 1}
+            fallback={
+              <div class={props.class}>
+                <FromInboxPill inbox={active()} selectable={false} />
+              </div>
+            }
+          >
+            <Dropdown>
+              <Dropdown.Trigger
+                class={`inline-flex min-w-0 max-w-full ${props.class ?? ''}`}
+              >
+                <FromInboxPill inbox={active()} selectable={true} />
               </Dropdown.Trigger>
               <Dropdown.Content portalScope={props.portalScope}>
                 <Dropdown.Group>

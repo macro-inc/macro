@@ -1,14 +1,14 @@
 import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
+import { UserIcon } from '@core/component/UserIcon';
+import { inboxIconProps } from '@core/component/inboxIcon';
 import { useEmail } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import ArrowBendDoubleUpLeft from '@phosphor/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
-import { type Component, Show } from 'solid-js';
-import { isReplyAllEligible } from '../util/recipientConversion';
+import type { Component } from 'solid-js';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
@@ -42,10 +42,7 @@ function ReplyActionButton(props: {
 export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
   const ctx = useEmailContext();
   const formRegistry = getEmailFormRegistry();
-  const userEmail = useEmail();
-
-  const shouldShowReplyAll = () =>
-    isReplyAllEligible(props.lastMessage, userEmail() ?? '');
+  const currentUserEmail = useEmail();
 
   const open = (type: ReplyType) =>
     createCallback(() => {
@@ -60,6 +57,31 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
       });
     });
 
+  const currentUserIconProps = () => {
+    const email = currentUserEmail();
+    return email ? inboxIconProps(email) : { email: '' };
+  };
+
+  if (!isMobile()) {
+    return (
+      <div class="flex w-full items-center pt-4">
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-ink-placeholder hover:text-ink-muted"
+          onClick={open('reply-all')}
+        >
+          <UserIcon
+            {...currentUserIconProps()}
+            size="md"
+            showTooltip={false}
+            suppressClick
+          />
+          <span class="truncate">Reply...</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <FloatRegionOrInline region="accessory">
       <div class="w-full p-2 pb-2 pt-4 mobile:px-(--mobile-chrome-gutter) mobile:py-0">
@@ -67,15 +89,8 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
           <ReplyActionButton
             icon={ArrowBendUpLeft}
             label="Reply"
-            onClick={open('reply')}
+            onClick={open('reply-all')}
           />
-          <Show when={shouldShowReplyAll()}>
-            <ReplyActionButton
-              icon={ArrowBendDoubleUpLeft}
-              label="Reply all"
-              onClick={open('reply-all')}
-            />
-          </Show>
           <ReplyActionButton
             icon={ArrowBendUpRight}
             label="Forward"

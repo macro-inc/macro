@@ -68,7 +68,7 @@ const EMPTY_FORM_STATE: EmailFormState = {
     cc: [],
     bcc: [],
   },
-  replyType: 'reply',
+  replyType: 'reply-all',
   withQuotedText: false,
   subject: '',
   markdownBody: '',

@@ -7,11 +7,6 @@ import {
   MAX_ATTACHMENTS_BYTES_SIZE,
 } from '@block-email/constants';
 import { addUserMentionToCc } from '@block-email/util/mentionToCc';
-import { FormatButtons } from '@channel/Input/FormatButtons';
-import {
-  applyInlineFormat,
-  applyNodeFormat,
-} from '@channel/Input/utils/formatting';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -33,7 +28,6 @@ import {
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { observedSize } from '@core/directive/observedSize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -49,18 +43,11 @@ import {
   $removeAllWatermarkNodes,
 } from '@lexical-core';
 import { logger } from '@observability';
-import ReplyAll from '@phosphor/arrow-bend-double-up-left.svg';
-import Reply from '@phosphor/arrow-bend-up-left.svg';
-import Forward from '@phosphor/arrow-bend-up-right.svg';
-
 import ChevronDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Quotes from '@phosphor/quotes.svg';
 
-import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
@@ -96,8 +83,6 @@ import { isIOS } from '@solid-primitives/platform';
 import {
   Button,
   cn,
-  Dropdown,
-  HoverCard,
   Layer,
   SendButton,
   Surface,
@@ -145,7 +130,6 @@ import { FromInboxSelector } from './FromInboxSelector';
 
 false && fileFolderDrop;
 false && fileSelector;
-false && observedSize;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -155,20 +139,6 @@ const getRecipientDisplayName = (item: EmailRecipient): string => {
     case 'custom':
       return item.data.email;
   }
-};
-
-// Shared constants for recipient display - used in both measurement and rendering
-const MAX_VISIBLE_RECIPIENTS = 3;
-const RECIPIENT_SEPARATOR = ',\u00A0'; // comma + non-breaking space
-const MORE_SUFFIX_TEMPLATE = '+99 more'; // worst-case for measurement
-
-// Build the display text for a recipient (used for measurement)
-const buildRecipientText = (
-  prefix: string,
-  displayName: string,
-  showSeparator: boolean
-): string => {
-  return prefix + displayName + (showSeparator ? RECIPIENT_SEPARATOR : '');
 };
 
 type RecipientFieldId = 'to' | 'cc' | 'bcc';
@@ -218,159 +188,6 @@ function RecipientDropRow(props: {
       onDrop={handleDrop}
     >
       {props.children}
-    </div>
-  );
-}
-
-function TruncatedRecipientList(props: {
-  toRecipients: EmailRecipient[];
-  ccRecipients: EmailRecipient[];
-  bccRecipients: EmailRecipient[];
-  onClick: () => void;
-}) {
-  let measureRef: HTMLSpanElement | undefined;
-
-  const [visibleCount, setVisibleCount] = createSignal<number>(0);
-  const [containerRect, setContainerRect] = createSignal<DOMRect | undefined>();
-
-  // Combine all recipients into a flat list with group info for display
-  const allRecipients = createMemo(() => {
-    const result: { recipient: EmailRecipient; prefix: string }[] = [];
-
-    // Add "to" recipients
-    props.toRecipients.forEach((r, i) => {
-      const prefix = i === 0 ? 'to ' : '';
-      result.push({ recipient: r, prefix });
-    });
-
-    // Add "cc" recipients (show "cc" prefix only if no "to" recipients)
-    props.ccRecipients.forEach((r, i) => {
-      const prefix = i === 0 && props.toRecipients.length === 0 ? 'cc ' : '';
-      result.push({ recipient: r, prefix });
-    });
-
-    // Add "bcc" recipients with label
-    props.bccRecipients.forEach((r, i) => {
-      const prefix = i === 0 ? 'bcc ' : '';
-      result.push({ recipient: r, prefix });
-    });
-
-    return result;
-  });
-
-  const totalCount = createMemo(() => allRecipients().length);
-
-  // Measure text width using hidden element
-  const measureText = (text: string): number => {
-    if (!measureRef) return 0;
-    measureRef.textContent = text;
-    return measureRef.offsetWidth;
-  };
-
-  // Calculate how many recipients fit in the container
-  const calculateVisibleCount = () => {
-    const width = containerRect()?.width ?? 0;
-    if (width <= 0 || !measureRef) return;
-
-    const recipients = allRecipients();
-    if (recipients.length === 0) {
-      setVisibleCount(0);
-      return;
-    }
-
-    // Reserve space for "+N more" suffix
-    const moreTextWidth = measureText(MORE_SUFFIX_TEMPLATE);
-    const availableWidth = width - moreTextWidth;
-
-    let usedWidth = 0;
-    let count = 0;
-
-    const maxRecipients = Math.min(recipients.length, MAX_VISIBLE_RECIPIENTS);
-    for (let i = 0; i < maxRecipients; i++) {
-      const { recipient, prefix } = recipients[i];
-      const displayName = getRecipientDisplayName(recipient);
-      // Show separator if not the last recipient OR if there will be hidden recipients
-      const showSeparator = i < recipients.length - 1;
-      const text = buildRecipientText(prefix, displayName, showSeparator);
-      const textWidth = measureText(text);
-
-      // Check if this recipient fits (always show at least one)
-      if (usedWidth + textWidth <= availableWidth || i === 0) {
-        usedWidth += textWidth;
-        count++;
-      } else {
-        break;
-      }
-    }
-
-    setVisibleCount(count);
-  };
-
-  // Recalculate visible count when size or recipients change
-  createEffect(() => {
-    // Track dependencies
-    containerRect();
-    allRecipients();
-    // Use requestAnimationFrame to ensure measurement element is ready
-    requestAnimationFrame(() => {
-      calculateVisibleCount();
-    });
-  });
-
-  const visibleRecipients = createMemo(() => {
-    return allRecipients().slice(0, visibleCount());
-  });
-
-  const hiddenCount = createMemo(() => {
-    return totalCount() - visibleCount();
-  });
-
-  return (
-    <div
-      use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap min-w-0"
-      onclick={props.onClick}
-    >
-      {/* Hidden measurement element - must have same font styles */}
-      <span
-        ref={measureRef}
-        class="absolute invisible whitespace-nowrap text-sm"
-        aria-hidden="true"
-      />
-
-      <Show
-        when={totalCount() > 0}
-        fallback={<span class="text-failure-ink">Recipients required</span>}
-      >
-        <For each={visibleRecipients()}>
-          {(item, index) => (
-            <>
-              <HoverCard
-                content={
-                  <div class="text-xs select-text cursor-text">
-                    {item.recipient.data.email}
-                  </div>
-                }
-              >
-                <span class="shrink-0">
-                  {item.prefix}
-                  {getRecipientDisplayName(item.recipient)}
-                </span>
-              </HoverCard>
-              <Show
-                when={
-                  index() < visibleRecipients().length - 1 || hiddenCount() > 0
-                }
-              >
-                <span>{RECIPIENT_SEPARATOR}</span>
-              </Show>
-            </>
-          )}
-        </For>
-        <Show when={hiddenCount() > 0}>
-          <span class="text-ink-muted shrink-0">+{hiddenCount()} more</span>
-        </Show>
-      </Show>
     </div>
   );
 }
@@ -539,9 +356,6 @@ export function BaseInput(props: {
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
-  const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
-    props.newMessage ?? false
-  );
   const [toRef, setToRef] = createSignal<HTMLInputElement>();
   const [ccRef, setCcRef] = createSignal<HTMLInputElement>();
   const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
@@ -1091,7 +905,6 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => composeContainerRef);
-  const [isFocused, setIsFocused] = createSignal(false);
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
@@ -1572,6 +1385,21 @@ export function BaseInput(props: {
     isMobileDrawer() ? replySignatureHtml() : undefined;
   const footerSignatureHtml = () =>
     isMobileDrawer() ? undefined : replySignatureHtml();
+  const replyingToSummary = () => {
+    const recipients = [
+      ...form().recipients().to,
+      ...form().recipients().cc,
+      ...form().recipients().bcc,
+    ];
+    const firstRecipient = recipients[0];
+    const action =
+      effectiveReplyType() === 'forward' ? 'Forwarding' : 'Replying to';
+    if (!firstRecipient) return action;
+
+    const remainingCount = recipients.length - 1;
+    const suffix = remainingCount > 0 ? ` + ${remainingCount}` : '';
+    return `${action} ${getRecipientDisplayName(firstRecipient)}${suffix}`;
+  };
   const mobileRecipientSelectorClass =
     'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:min-w-0! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder';
   const mobileDrawerRowClass =
@@ -1625,89 +1453,18 @@ export function BaseInput(props: {
     </Button>
   );
 
-  const ReplyTypeDropdown = (dropdownProps?: {
-    triggerVariant?: 'ghost' | 'base';
-    triggerSize?: 'sm' | 'md';
-    triggerClass?: string;
-    iconOnly?: boolean;
-  }) => (
-    <Dropdown>
-      <Dropdown.Trigger
-        as={Button}
-        size={dropdownProps?.triggerSize ?? 'md'}
-        variant={dropdownProps?.triggerVariant}
-        class={dropdownProps?.triggerClass}
-        noTouchResize={dropdownProps?.iconOnly}
-      >
-        <Switch>
-          <Match when={effectiveReplyType() === 'reply'}>
-            <Reply class="size-4 shrink-0" />
-            <Show when={!dropdownProps?.iconOnly}>
-              <span>Reply</span>
-            </Show>
-          </Match>
-
-          <Match when={effectiveReplyType() === 'reply-all'}>
-            <ReplyAll class="size-4 shrink-0" />
-            <Show when={!dropdownProps?.iconOnly}>
-              <span>Reply All</span>
-            </Show>
-          </Match>
-          <Match when={effectiveReplyType() === 'forward'}>
-            <Forward class="size-4 shrink-0" />
-            <Show when={!dropdownProps?.iconOnly}>
-              <span>Forward</span>
-            </Show>
-          </Match>
-        </Switch>
-        <ChevronDown class="size-3" />
-      </Dropdown.Trigger>
-      <Dropdown.Content portalScope={isMobileDrawer() ? 'local' : undefined}>
-        <Dropdown.Group>
-          <Dropdown.Item onSelect={() => form().setReplyType('reply')}>
-            <Reply class="size-4 shrink-0" />
-            <span class="flex-1 truncate">Reply</span>
-          </Dropdown.Item>
-          <Show
-            when={
-              (props.replyingTo()?.to.length ?? 0) +
-                (props.replyingTo()?.cc.length ?? 0) >
-              1
-            }
-          >
-            <Dropdown.Item onSelect={() => form().setReplyType('reply-all')}>
-              <ReplyAll class="size-4 shrink-0" />
-              <span class="flex-1 truncate">Reply All</span>
-            </Dropdown.Item>
-          </Show>
-          <Dropdown.Item onSelect={() => form().setReplyType('forward')}>
-            <Forward class="size-4 shrink-0" />
-            <span class="flex-1 truncate">Forward</span>
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-
   return (
     <Surface
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-none' : 'rounded-xl'
+        props.unframed ? 'rounded-lg' : 'rounded-xl'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}
-      onFocusOut={(e) => {
-        const next = e.relatedTarget as Node | null;
-        if (next && e.currentTarget.contains(next)) return;
-        setIsFocused(false);
-      }}
-      onFocusIn={() => setIsFocused(true)}
       ref={(el) => {
         composeContainerRef = el;
       }}
-      active={isFocused()}
       depth={2}
       solid
     >
@@ -1746,50 +1503,38 @@ export function BaseInput(props: {
         when={isMobileDrawer()}
         fallback={
           <>
-            <div class="relative min-w-0 text-sm text-ink-muted flex items-center gap-2 wrap p-2 pt-4">
+            <div
+              class={cn(
+                'relative mb-4 min-w-0 text-sm text-ink-muted flex items-center gap-2 wrap',
+                !showExpandedRecipients() && 'py-3'
+              )}
+            >
               <Show
                 when={showExpandedRecipients()}
                 fallback={
-                  <>
-                    <ReplyTypeDropdown />
-                    <div
-                      class="flex flex-1 items-center gap-1.5 min-w-0 text-sm text-ink-muted"
+                  <div class="flex flex-1 min-w-0">
+                    <button
+                      type="button"
+                      class="flex w-full min-w-0 items-center gap-2 text-sm text-ink-muted"
                       onClick={() => setShowExpandedRecipients(true)}
                     >
-                      <Show
-                        when={!isMobile()}
-                        fallback={
-                          <PencilSimple class="size-4 shrink-0 text-ink-muted ml-auto" />
-                        }
-                      >
-                        <TruncatedRecipientList
-                          toRecipients={form().recipients().to}
-                          ccRecipients={form().recipients().cc}
-                          bccRecipients={form().recipients().bcc}
-                          onClick={() => setShowExpandedRecipients(true)}
-                        />
-                        <Show
-                          when={(emailLinksQuery.data?.links.length ?? 0) > 1}
-                        >
-                          <span class="shrink-0 text-ink-extra-muted">·</span>
-                          <span class="min-w-0 shrink-2 truncate">
-                            from {activeInboxEmail()}
-                          </span>
-                        </Show>
-                        <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
-                      </Show>
-                    </div>
-                  </>
+                      <span class="block min-w-0 flex-1 truncate text-left">
+                        {replyingToSummary()}
+                      </span>
+                      <CaretRight class="size-3 shrink-0 text-ink-extra-muted" />
+                    </button>
+                  </div>
                 }
               >
                 <div class="min-w-0 w-full">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <ReplyTypeDropdown />
-                    <div class="flex items-center gap-2 min-w-0 flex-1 py-1">
-                      <div class="text-sm shrink-0 text-ink-placeholder">
-                        from
+                  <div class="flex items-center gap-2 min-w-0 border-b border-edge-muted">
+                    <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
+                      <div class="w-14 shrink-0 text-sm text-ink-placeholder">
+                        From
                       </div>
                       <FromInboxSelector
+                        pill
+                        class="min-w-0"
                         links={emailLinksQuery.data?.links ?? []}
                         activeLinkId={activeLinkId()}
                         onSelect={persistDraftOnSenderSwitch}
@@ -2070,23 +1815,10 @@ export function BaseInput(props: {
           showExpandedRecipients() && 'mt-4'
         )}
       >
-        <Show when={showFormatRibbon()}>
-          <div class="flex flex-row w-full gap-2 items-center px-3 py-1.5">
-            <FormatButtons
-              selectionState={() => editorConfig.selection}
-              onInlineFormat={(format) => {
-                applyInlineFormat(editor(), format);
-              }}
-              onNodeFormat={(transform) => {
-                applyNodeFormat(editor(), transform);
-              }}
-            />
-          </div>
-        </Show>
         <div
           ref={setScrollContainer}
           class={cn(
-            'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1',
+            'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
             isMobileDrawer()
               ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
               : 'max-h-[calc(60*var(--dvh,1dvh))] overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]'
@@ -2144,9 +1876,9 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
-          <Show when={isMobileDrawer() && props.replyingTo()}>
+          <Show when={props.replyingTo()}>
             <div
-              class="shrink-0 pt-2 pb-1"
+              class="shrink-0 pt-1"
               data-corvu-no-drag=""
               onClick={(e) => e.stopPropagation()}
             >
@@ -2161,11 +1893,11 @@ export function BaseInput(props: {
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
-                  class="rounded-full bg-transparent"
+                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
                   pressed={form().replyAppended()}
                   onChange={toggleQuotedText}
                 >
-                  <DotsThree class="size-4" />
+                  <DotsThree />
                 </KToggleButton>
               </Tooltip>
             </div>
@@ -2240,40 +1972,12 @@ export function BaseInput(props: {
           {/* No fixed height: the send button (size-7.5) is taller than the icon
               buttons, and a fixed h-9 minus the vertical padding left it 4px short
               — with items-end it bled upward over the signature bar above. */}
-          <div class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-2 pb-2 pt-1.5">
+          <div class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5">
             <div class="flex flex-row items-center gap-1">
               <div class="relative flex">
                 <AttachButton />
               </div>
 
-              <Button
-                onclick={() => {
-                  setShowFormatRibbon(!showFormatRibbon());
-                }}
-                variant="ghost"
-                tooltip="Show formatting toolbar"
-                size="icon-sm"
-              >
-                <TextAa />
-              </Button>
-
-              <Tooltip
-                label={
-                  form().replyAppended()
-                    ? 'Hide quoted text'
-                    : 'Show quoted text'
-                }
-              >
-                <KToggleButton
-                  as={Button}
-                  size="icon-sm"
-                  pressed={form().replyAppended()}
-                  onChange={toggleQuotedText}
-                >
-                  <Quotes />
-                </KToggleButton>
-              </Tooltip>
-              <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}

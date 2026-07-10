@@ -329,7 +329,7 @@ function getAppendedReplyElement(
     styleTags?.forEach((style) => {
       quote.appendChild(style);
     });
-    quote.appendChild(innerDom.body);
+    quote.append(...Array.from(innerDom.body.childNodes));
   }
 
   wrapper.appendChild(quote);

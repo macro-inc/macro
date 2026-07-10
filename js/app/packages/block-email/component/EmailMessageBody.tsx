@@ -140,7 +140,12 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     // and fixed-width tables scroll, so a wide signature doesn't trip the
     // fit-to-width zoom below and shrink the whole message.
     const signatureContain = `.macro-email-signature{max-width:100%;overflow-x:auto;overflow-wrap:anywhere;}`;
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${fontOverride}`;
+    // Browser default blockquote margins apply on both sides. In long email
+    // reply chains that compounds into a narrow column, so keep quote nesting
+    // as a left indent only.
+    const quoteContain =
+      'blockquote{margin-block:0.75em!important;margin-inline-start:1.5em!important;margin-inline-end:0!important;max-width:100%!important;box-sizing:border-box;}';
+    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${quoteContain}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
@@ -304,7 +309,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   return (
     <div
-      class="ph-no-capture flex flex-col pt-1 max-sm:-ml-[calc(var(--user-icon-width)+var(--message-padding-x))]"
+      class="ph-no-capture flex flex-col pt-1"
       onPointerDown={() => {
         if (!props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBody(props.message.db_id);
@@ -344,7 +349,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
           <Match when={true}>{host()}</Match>
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
-          <div class="flex items-center mt-1.5">
+          <div class="flex items-center mt-1.5 mb-2">
             <Button
               variant="ghost"
               size="icon-sm"
