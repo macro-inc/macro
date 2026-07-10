@@ -29,6 +29,7 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@app/component/split-layout/layoutManager';
+import { InCallPanel, useCallContextOptional } from '@channel/Call';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -810,6 +811,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const currentTeamQuery = useCurrentTeamQuery();
+  const callCtx = useCallContextOptional();
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -1240,7 +1242,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
       </div>
 
-      <div class="shrink-0 w-full pt-2">
+      <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView() && callCtx?.isInCall()}>
+          <div data-ui="sidebar-in-call-panel">
+            <InCallPanel isSlim={() => false} />
+          </div>
+        </Show>
         <SidebarSettingsWidget
           isSlim={isSlim}
           onSelect={openSettingsTab}
