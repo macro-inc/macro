@@ -21,6 +21,7 @@ use item_filters::{
     EntityFilters,
     ast::{
         EntityFilterAst, ExpandErr,
+        call::CallLiteral,
         crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
         properties::{
@@ -391,7 +392,16 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_call_request(&self) -> Option<GetCallRecordsRequest> {
-        if self.properties_filter_blocks_propertyless() {
+        // A def-less tag filter (entity_type None on every literal) applies to
+        // calls, which carry tags; it is folded into the call filter below and
+        // rendered as a `properties.values` EXISTS by the call query. Any other
+        // active properties filter can't match a call, so the leg is skipped by
+        // the propertyless check.
+        let properties_filter = self
+            .entity_ast()
+            .and_then(|a| a.properties_filter.as_deref())
+            .filter(|p| properties_filter_can_apply_to(p, &[]));
+        if properties_filter.is_none() && self.properties_filter_blocks_propertyless() {
             return None;
         }
         Some(GetCallRecordsRequest {
@@ -400,7 +410,10 @@ impl SoupRequest<Option<EntityFilterAst>> {
             query: match &self.cursor {
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
-                    f.as_ref().and_then(|f| f.call_filter.clone()),
+                    with_call_properties_filter(
+                        f.as_ref().and_then(|f| f.call_filter.clone()),
+                        properties_filter,
+                    ),
                 )),
                 SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
@@ -411,7 +424,10 @@ impl SoupRequest<Option<EntityFilterAst>> {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
-                    filter: filter.as_ref().and_then(|f| f.call_filter.clone()),
+                    filter: with_call_properties_filter(
+                        filter.as_ref().and_then(|f| f.call_filter.clone()),
+                        properties_filter,
+                    ),
                 })),
                 // query by frecency not yet implemented for call records
                 SoupQuery::Frecency(_) => None,
@@ -622,6 +638,32 @@ fn map_properties_to_email(expr: &Expr<PropertiesLiteral>) -> Expr<EmailLiteral>
         Expr::Or(a, b) => Expr::or(map_properties_to_email(a), map_properties_to_email(b)),
         Expr::Not(a) => Expr::Not(Box::new(map_properties_to_email(a))),
         Expr::Literal(lit) => Expr::Literal(EmailLiteral::Property(lit.clone())),
+    }
+}
+
+/// ANDs a properties filter (mapped to [CallLiteral::Property] conditions) into
+/// the call filter tree, so the call query returns exactly the calls that also
+/// satisfy the tag filter.
+fn with_call_properties_filter(
+    tree: Option<Arc<Expr<CallLiteral>>>,
+    properties_filter: Option<&Expr<PropertiesLiteral>>,
+) -> Option<Arc<Expr<CallLiteral>>> {
+    let Some(propf) = properties_filter else {
+        return tree;
+    };
+    let mapped = map_properties_to_call(propf);
+    Some(Arc::new(match tree {
+        Some(tree) => Expr::and((*tree).clone(), mapped),
+        None => mapped,
+    }))
+}
+
+fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
+    match expr {
+        Expr::And(a, b) => Expr::and(map_properties_to_call(a), map_properties_to_call(b)),
+        Expr::Or(a, b) => Expr::or(map_properties_to_call(a), map_properties_to_call(b)),
+        Expr::Not(a) => Expr::Not(Box::new(map_properties_to_call(a))),
+        Expr::Literal(lit) => Expr::Literal(CallLiteral::Property(lit.clone())),
     }
 }
 

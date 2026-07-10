@@ -3,7 +3,7 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{CallFilters, CallStatus, ast::ExpandErr};
+use crate::{CallFilters, CallStatus, ast::ExpandErr, ast::properties::PropertiesLiteral};
 
 /// the possible literal values in a call filter ast
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -18,6 +18,10 @@ pub enum CallLiteral {
     Status(CallStatus),
     /// whether the requesting user attended the call
     Attended(bool),
+    /// entity-property (e.g. tag) condition on the call. Produced internally
+    /// by soup when a def-less tag filter is folded into the call leg; never
+    /// sent by clients.
+    Property(PropertiesLiteral),
 }
 
 impl ExpandFrame<CallLiteral> for CallFilters {
