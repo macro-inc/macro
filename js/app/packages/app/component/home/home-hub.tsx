@@ -1,8 +1,17 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChatInputContext } from '@core/component/AI/context';
+import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
+import type { Entity } from '@core/types';
+import {
+  compositeEntity,
+  fetchNotificationsForEntities,
+  openNotification,
+} from '@notifications';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -18,6 +27,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { useNavigate } from '@solidjs/router';
 import { For, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import { replaceHomeComposerSelection } from './home-composer-selection';
 import type { HomePreferences } from './home-prefs';
 import { SetupRow } from './home-rows';
@@ -46,6 +56,7 @@ const ATTACHABLE_ENTITY_TYPES = new Set<RecommendedItem['entityType']>([
  */
 export function RecommendedSection() {
   const input = useChatInputContext();
+  const notificationSource = useGlobalNotificationSource();
   const { openSettings } = useSettingsState();
   const navigate = useNavigate();
 
@@ -74,6 +85,42 @@ export function RecommendedSection() {
         ? [{ entity_id: item.entityId, entity_type: item.entityType }]
         : undefined
     );
+  };
+
+  const openRecommendation = async (item: RecommendedItem) => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+
+    const entity = { id: item.entityId, type: item.entityType } as Entity;
+    let notification =
+      notificationSource.notificationsByEntity()[compositeEntity(entity)]?.[0];
+    if (!notification) {
+      notification = (await fetchNotificationsForEntities([entity]))[0];
+    }
+
+    if (notification) {
+      const result = await openNotification(notification, splitManager);
+      if (result.isOk()) {
+        await notificationSource.markAsRead(notification);
+        return;
+      }
+    }
+
+    match(item.entityType)
+      .with('email_thread', () =>
+        splitManager.openWithSplit(
+          { type: 'email', id: item.entityId },
+          { activate: true }
+        )
+      )
+      .with('channel', 'chat', 'call', 'project', (entityType) =>
+        splitManager.openWithSplit(
+          { type: entityType, id: item.entityId },
+          { activate: true }
+        )
+      )
+      .with('document', () => navigate(LIST_VIEW_PATHS.documents))
+      .otherwise(() => navigate(LIST_VIEW_PATHS.inbox));
   };
 
   const retry = () => {
@@ -129,6 +176,7 @@ export function RecommendedSection() {
                 <RecommendedRow
                   item={item}
                   onSelect={() => selectRecommendation(item)}
+                  onOpen={() => void openRecommendation(item)}
                 />
               )}
             </For>
@@ -236,31 +284,65 @@ export function GettingStartedSection(props: { preferences: HomePreferences }) {
 function RecommendedRow(props: {
   item: RecommendedItem;
   onSelect: () => void;
+  onOpen: () => void;
 }) {
   const status = () => STATUS[props.item.action];
   return (
-    <button
-      type="button"
-      class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
-      onClick={props.onSelect}
-    >
-      <div class="min-w-0 flex-1">
-        <div class="truncate text-sm font-medium text-ink">
-          {props.item.title}
+    <div class="group flex w-full items-stretch overflow-hidden rounded-xl border border-edge-muted bg-active transition-colors hover:border-edge">
+      <div class="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3">
+        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface text-ink-muted">
+          <EntityIcon
+            targetType={recommendedIconType(props.item.entityType)}
+            size="xs"
+          />
         </div>
-        <div class="truncate text-xs text-ink-muted">
-          {props.item.source} · {props.item.reason}
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-medium text-ink">
+            {props.item.title}
+          </div>
+          <div class="mt-1 truncate text-xs text-ink-muted">
+            {props.item.source} · {props.item.reason}
+          </div>
         </div>
       </div>
-      <span
-        class={`flex shrink-0 items-center gap-2 text-sm ${status().accent ? 'text-accent' : 'text-ink-muted'}`}
-      >
-        <span
-          class={`size-1.5 rounded-full ${status().accent ? 'bg-accent' : 'bg-ink-muted'}`}
-        />
-        {status().label}
-      </span>
-      <ChevronRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
-    </button>
+      <div class="flex shrink-0 items-center gap-1 px-3 py-3">
+        <button
+          type="button"
+          class="rounded-lg px-2 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          onClick={props.onSelect}
+          aria-label={`${status().label} with AI about ${props.item.title}`}
+        >
+          {status().label}
+        </button>
+        <button
+          type="button"
+          class="rounded-lg px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          onClick={(event) => {
+            event.stopPropagation();
+            props.onOpen();
+          }}
+          aria-label={`Open ${props.item.title}`}
+        >
+          Open
+        </button>
+      </div>
+    </div>
   );
+}
+
+function recommendedIconType(entityType: RecommendedItem['entityType']) {
+  switch (entityType) {
+    case 'email_thread':
+      return getEntityIconType({ type: 'email' });
+    case 'channel':
+      return getEntityIconType({ type: 'channel' });
+    case 'chat':
+      return getEntityIconType({ type: 'chat' });
+    case 'document':
+      return getEntityIconType({ type: 'document' });
+    case 'project':
+      return getEntityIconType({ type: 'project' });
+    default:
+      return 'default' as const;
+  }
 }
