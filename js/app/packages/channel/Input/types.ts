@@ -84,12 +84,14 @@ export type InputCommands = {
 export type RestoreSnapshotOptions = {
   focus?: boolean;
   /**
-   * `'end'` moves the caret to the end of the restored content — on an
-   * empty trailing paragraph when the content ends in a non-paragraph
-   * block (e.g. a quote-reply's blockquote), so typing starts on its own
-   * line instead of inside the block.
+   * `'trailing-paragraph'` places the caret at the end of the restored
+   * content's trailing paragraph, appending an empty one when the content
+   * ends in a non-paragraph block (e.g. a quote-reply's blockquote) — so
+   * typing never extends the block itself. With `focus: false` the caret
+   * is placed when the input is next focused programmatically (e.g. via a
+   * focus request), so the restore itself never steals focus.
    */
-  cursor?: 'end';
+  cursor?: 'trailing-paragraph';
 };
 
 export type InputHandle = {

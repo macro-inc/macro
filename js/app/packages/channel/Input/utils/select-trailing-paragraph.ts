@@ -13,7 +13,7 @@ import { $createParagraphNode, $getRoot, $isParagraphNode } from 'lexical';
  *
  * Must be called inside `editor.update()`.
  */
-export function $selectContentEnd(): void {
+export function $selectTrailingParagraph(): void {
   const lastChild = $getRoot().getLastChild();
   if ($isParagraphNode(lastChild)) {
     lastChild.selectEnd();

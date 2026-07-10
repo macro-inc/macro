@@ -14,7 +14,7 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { describe, expect, test } from 'vitest';
-import { $selectContentEnd } from '../utils/select-content-end';
+import { $selectTrailingParagraph } from '../utils/select-trailing-paragraph';
 
 function createTestEditor(): LexicalEditor {
   const editor = createEditor({
@@ -55,7 +55,7 @@ describe('$selectContentEnd', () => {
         const quote = $createQuoteNode();
         quote.append($createTextNode('quoted message'));
         $getRoot().clear().append(quote);
-        $selectContentEnd();
+        $selectTrailingParagraph();
       },
       { discrete: true }
     );
@@ -79,7 +79,7 @@ describe('$selectContentEnd', () => {
         const draft = $createParagraphNode();
         draft.append($createTextNode('draft'));
         $getRoot().clear().append(quote, draft);
-        $selectContentEnd();
+        $selectTrailingParagraph();
       },
       { discrete: true }
     );
@@ -101,7 +101,7 @@ describe('$selectContentEnd', () => {
     editor.update(
       () => {
         $getRoot().clear();
-        $selectContentEnd();
+        $selectTrailingParagraph();
       },
       { discrete: true }
     );

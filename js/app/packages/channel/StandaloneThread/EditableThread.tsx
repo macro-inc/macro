@@ -57,7 +57,7 @@ function EditableThreadInner() {
         requestAnimationFrame(() => {
           replyInputHandle()?.restoreSnapshot(nextSnapshot, {
             focus: false,
-            cursor: 'end',
+            cursor: 'trailing-paragraph',
           });
           ctx.replyInputFocusRequest.request();
         });
