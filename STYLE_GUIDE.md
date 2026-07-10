@@ -58,7 +58,9 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-13** `[types]` Model tri-state data (not-loaded / missing / present) as one flat
   enum, not nested `Option`s or ad-hoc flags. (#4527)
 - **CS-14** `[cfg]` All env access goes through `macro_env_var` / `macro_config` — never
-  `std::env::var`, never hand-rolled wrappers; use `MaybeEnvVar` for optional vars.
+  `std::env::var`, never hand-rolled wrappers; use `MaybeEnvVar` for optional vars. The
+  same goes for AWS config instantiation (`macro_aws_config`) and tracing subscriber
+  setup (`macro_entrypoint`): use the shared crates.
   (#4306, #4334, #4380 · enforced: clippy `disallowed-methods` · also: CLAUDE.md)
 - **CS-15** `[cfg]` Fail fast: validate config at service instantiation, not deep inside
   request handling — a missing env var should kill startup, not a request. (#4077, #4156)
@@ -66,7 +68,7 @@ TypeScript · `[ui]` UI / UX conventions
   already statically names the missing variable. (#4156)
 - **CS-17** `[cfg]` Doppler secret key names must exactly match the env var name
   referenced in code. (#4525)
-- **CS-18** `[cfg]` New AI-service secrets are plain env vars, not
+- **CS-18** `[cfg]` All new environment variables are plain env vars, not
   `LocalOrRemote`/doppler-wrapped; non-secret config goes in Doppler as raw values, not
   AWS Secrets Manager secrets. (#4305, #4525)
 - **CS-19** `[err]` Give third-party errors their own variant — don't collapse e.g. a
@@ -121,14 +123,17 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-39** `[sec]` Pin third-party GitHub Actions to a commit SHA, not a movable tag.
   (#4276)
 - **CS-40** `[rust]` Repeated literals become named consts. (#4020)
-- **CS-41** `[rust]` `#[expect(...)]` over `#[allow(...)]`, placed on the narrowest item
-  it applies to. (#4396, #4647)
+- **CS-41** `[rust]` Don't use `#[allow(...)]` — use `#[expect(..., reason = "...")]`
+  on the narrowest item it applies to; `allow` silently rots when the lint stops firing,
+  `expect` warns. (#4396, #4647)
 - **CS-42** `[rust]` Don't re-state trait bounds already implied by a supertrait. (#4276)
 - **CS-43** `[rust]` Use the smallest sufficient integer type — a version counter that
   can't plausibly pass 255 is a `u8`. (#4396)
 - **CS-44** `[rust]` Large inline strings belong in files — use `include_str!`. (#4156)
 - **CS-45** `[rust]` CLI binaries use `clap`, not hand-rolled arg parsing. (#3678)
-- **CS-46** `[rust]` Prefer `anyhow::bail!` for early error returns. (also: CLAUDE.md)
+- **CS-46** `[rust]` Use `rootcause` for error handling in new code — it's preferred
+  over `anyhow` these days. In code that's still on anyhow, prefer `bail!` for early
+  error returns. ⚠️ Supersedes the anyhow-only note in `rust/cloud-storage/CLAUDE.md`.
 - **CS-47** `[perf]` Keep latency-critical services thin: push bytes directly instead of
   round-tripping through presigned URLs or extra services; dispatch non-blocking
   background work with `wait_until`. (#3781)
