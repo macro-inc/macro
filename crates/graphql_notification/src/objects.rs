@@ -62,25 +62,21 @@ impl GraphqlSoupNotification {
 
 /// Load the notifications attached to the given entity via the
 /// [`EntityNotificationsLoader`] stored in the GraphQL context.
-pub fn load_entity_notifications<'a, R>(
+pub async fn load_entity_notifications<'a, R>(
     ctx: &'a Context<'a>,
-    entity_type: model_entity::EntityType,
-    entity_id: String,
-) -> Pin<Box<dyn Future<Output = async_graphql::Result<Vec<GraphqlSoupNotification>>> + Send + 'a>>
+    entity: model_entity::Entity<'static>,
+) -> async_graphql::Result<Vec<GraphqlSoupNotification>>
 where
     R: SoupNotificationEdgeReader,
 {
-    Box::pin(async move {
-        let loader = ctx.data::<DataLoader<EntityNotificationsLoader<R>>>()?;
-        let key = (entity_type, entity_id);
-        let notifications = loader
-            .load_one::<(model_entity::EntityType, String)>(key)
-            .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?
-            .unwrap_or_default();
-        Ok(notifications
-            .into_iter()
-            .map(GraphqlSoupNotification)
-            .collect())
-    })
+    let loader = ctx.data::<DataLoader<EntityNotificationsLoader<R>>>()?;
+    let notifications = loader
+        .load_one::<model_entity::Entity<'static>>(entity)
+        .await
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?
+        .unwrap_or_default();
+    Ok(notifications
+        .into_iter()
+        .map(GraphqlSoupNotification)
+        .collect())
 }

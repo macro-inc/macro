@@ -6,6 +6,7 @@ use notification::domain::models::{
     UserNotificationRow,
     request::{NotificationEntityRef, NotificationItemType},
 };
+use rootcause::markers::{Cloneable, Dynamic};
 
 type OwnedEntity = model_entity::Entity<'static>;
 
@@ -34,7 +35,7 @@ pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
     fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
-        keys: Vec<OwnedEntity>,
+        keys: &[OwnedEntity],
     ) -> impl Future<
         Output = Result<
             HashMap<OwnedEntity, Vec<UserNotificationRow<serde_json::Value>>>,
@@ -50,7 +51,7 @@ where
     async fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
-        keys: Vec<OwnedEntity>,
+        keys: &[OwnedEntity],
     ) -> Result<HashMap<OwnedEntity, Vec<UserNotificationRow<serde_json::Value>>>, rootcause::Report>
     {
         let mut result = keys
@@ -100,10 +101,13 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
     async fn get_notifications(
         &self,
         _user_id: MacroUserIdStr<'static>,
-        keys: Vec<OwnedEntity>,
+        keys: &[OwnedEntity],
     ) -> Result<HashMap<OwnedEntity, Vec<UserNotificationRow<serde_json::Value>>>, rootcause::Report>
     {
-        Ok(keys.into_iter().map(|key| (key, Vec::new())).collect())
+        Ok(keys
+            .into_iter()
+            .map(|key| (key.clone(), Vec::new()))
+            .collect())
     }
 }
 
@@ -120,36 +124,22 @@ impl<R> EntityNotificationsLoader<R> {
     }
 }
 
-impl<R> Loader<(model_entity::EntityType, String)> for EntityNotificationsLoader<R>
+impl<R> Loader<model_entity::Entity<'static>> for EntityNotificationsLoader<R>
 where
     R: SoupNotificationEdgeReader,
 {
     type Value = Vec<UserNotificationRow<serde_json::Value>>;
-    type Error = Arc<rootcause::Report>;
+    type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(
         &self,
-        keys: &[(model_entity::EntityType, String)],
-    ) -> Result<HashMap<(model_entity::EntityType, String), Self::Value>, Self::Error> {
-        let owned_keys = keys
-            .iter()
-            .map(|(entity_type, entity_id)| entity_type.with_entity_string(entity_id.clone()))
-            .collect();
-        let mut loaded = self
+        keys: &[model_entity::Entity<'static>],
+    ) -> Result<HashMap<model_entity::Entity<'static>, Self::Value>, Self::Error> {
+        Ok(self
             .reader
-            .get_notifications(self.user_id.clone(), owned_keys)
+            .get_notifications(self.user_id.clone(), keys)
             .await
-            .map_err(Arc::new)?;
-
-        Ok(keys
-            .iter()
-            .cloned()
-            .map(|key| {
-                let owned_key = key.0.with_entity_string(key.1.clone());
-                let value = loaded.remove(&owned_key).unwrap_or_default();
-                (key, value)
-            })
-            .collect())
+            .map_err(|e| e.into_cloneable())?)
     }
 }
 

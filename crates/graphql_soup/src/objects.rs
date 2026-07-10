@@ -230,8 +230,7 @@ where
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::Document,
-            self.0.id.to_string(),
+            model_entity::EntityType::Document.with_entity_string(self.0.id.to_string()),
         )
         .await
     }
