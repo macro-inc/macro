@@ -2279,7 +2279,7 @@ export function BaseInput(props: {
               // Quoted thread collapses behind the "⋯" pill below
               // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
               // variants turn the underscore in .macro_quote into a space)
-              !isMobileDrawer() && quoteCollapsed() && 'quote-collapsed',
+              quoteCollapsed() && 'quote-collapsed',
               isDragging() && 'blur'
             )}
             disabled={sendMutation.isPending}
@@ -2293,11 +2293,7 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
-          <Show
-            when={
-              !isMobileDrawer() && form().replyAppended() && quoteCollapsed()
-            }
-          >
+          <Show when={form().replyAppended() && quoteCollapsed()}>
             <div class="flex items-center py-1.5">
               <Button
                 variant="ghost"
@@ -2314,7 +2310,14 @@ export function BaseInput(props: {
               </Button>
             </div>
           </Show>
-          <Show when={isMobileDrawer() && props.replyingTo()}>
+          <Show
+            when={
+              isMobileDrawer() &&
+              props.replyingTo() &&
+              // The collapse pill above already covers this state
+              !(form().replyAppended() && quoteCollapsed())
+            }
+          >
             <div
               class="shrink-0 pt-2 pb-1"
               data-corvu-no-drag=""
