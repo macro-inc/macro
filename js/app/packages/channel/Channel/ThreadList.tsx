@@ -246,12 +246,17 @@ export function ThreadList(props: ThreadListProps) {
       case 'index': {
         const targetIndex = resolveTargetIndex(target);
         if (targetIndex < 0) return true; // target gone, nothing to verify
-        const currentIndex = handle.findItemIndex(
-          handle.scrollOffset + insets().start
-        );
-        // Consider correct if the target is within a reasonable range of
-        // the current viewport (within ±5 items accounts for alignment).
-        return Math.abs(currentIndex - targetIndex) <= 5;
+        // Correct when the target item intersects the usable viewport.
+        // Comparing item indexes against the top-of-viewport item breaks for
+        // center/end alignment — a target near the end of the list rests in
+        // the lower half of the viewport, so a fixed index distance from the
+        // top item reports a perfect landing as a miss.
+        const itemTop = handle.getItemOffset(targetIndex);
+        const itemBottom = itemTop + handle.getItemSize(targetIndex);
+        const viewportTop = handle.scrollOffset + insets().start;
+        const viewportBottom =
+          handle.scrollOffset + handle.viewportSize - insets().end;
+        return itemBottom > viewportTop && itemTop < viewportBottom;
       }
     }
   };
