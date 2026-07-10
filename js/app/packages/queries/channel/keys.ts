@@ -25,6 +25,9 @@ export const channelKeys = createQueryKeys('channel', {
   threadReplies: (channelID: string, messageID: string) => ({
     queryKey: [channelID, messageID],
   }),
+  resolveMessage: (channelID: string, messageID: string) => ({
+    queryKey: [channelID, messageID],
+  }),
   activity: null,
   listChannels: null,
 });

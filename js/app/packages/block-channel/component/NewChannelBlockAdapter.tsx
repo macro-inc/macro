@@ -46,6 +46,11 @@ import { useChannelName, useChannelType } from '@core/context/channels';
 import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useActiveCallQuery } from '@queries/call/call';
+import {
+  fetchResolvedChannelMessage,
+  findThreadIdInChannelMessages,
+  findTopLevelMessageInChannelMessages,
+} from '@queries/channel/channel-messages';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
@@ -309,6 +314,47 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     };
   };
 
+  // A mention/link to a thread reply may carry only the message id (the reply)
+  // without its thread id. Left as-is `convertTargetMessage` would treat that
+  // reply as a top-level message, which never loads, so the target is never
+  // highlighted. When only a message id is present, resolve it: a thread reply
+  // targets its parent thread with the reply id, a top-level message stays as
+  // itself. An explicit thread id is already unambiguous, so trust it.
+  const resolveTargetMessage = async (
+    params: ChannelTargetMessageParams
+  ): Promise<ChannelPropsTargetMessage> => {
+    const messageId = params[URL_PARAMS.message] as string | undefined;
+    const threadId = params[URL_PARAMS.thread] as string | undefined;
+    if (threadId || !messageId) return convertTargetMessage(params);
+
+    // Cache-first: an already-open channel has the clicked message warm, so a
+    // plain send (the common inbox-row click) or a reply in a loaded thread
+    // preview resolves synchronously with no roundtrip. Only a genuinely
+    // unknown id — an old mention/link opening a cold channel — pays a resolve.
+    if (findTopLevelMessageInChannelMessages(channelId, messageId)) {
+      return { targetMessageId: messageId, targetMessageReplyId: undefined };
+    }
+    const cachedThreadId = findThreadIdInChannelMessages(channelId, messageId);
+    if (cachedThreadId) {
+      return {
+        targetMessageId: cachedThreadId,
+        targetMessageReplyId: messageId,
+      };
+    }
+
+    const resolved = await fetchResolvedChannelMessage(
+      channelId,
+      messageId
+    ).catch(() => undefined);
+    if (resolved?.kind === 'threadReply') {
+      return {
+        targetMessageId: resolved.thread_id,
+        targetMessageReplyId: messageId,
+      };
+    }
+    return { targetMessageId: messageId, targetMessageReplyId: undefined };
+  };
+
   // The Messages tab may not have mounted yet (e.g. right after the split
   // opens). Wait for its handle via the orchestrator's availability primitive.
   const awaitMessagesHandle = async () => {
@@ -328,7 +374,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       }
 
       const { targetMessageId, targetMessageReplyId } =
-        convertTargetMessage(params);
+        await resolveTargetMessage(params);
 
       if (targetMessageId) {
         setActiveTab(DEFAULT_CHANNEL_TAB);

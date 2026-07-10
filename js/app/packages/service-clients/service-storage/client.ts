@@ -231,6 +231,7 @@ export type { ApiChannelContextMessage } from './generated/schemas/apiChannelCon
 export type { ApiChannelMessage } from './generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
+export type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
 export type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 
