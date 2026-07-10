@@ -1,18 +1,27 @@
 use super::*;
-use ::webhook::domain::models::WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION;
+use crate::domain::models::WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION;
 use aws_sdk_sqs::{
     Client, Config,
     config::{Credentials, Region},
 };
 use serde_json::json;
 
-fn test_sqs() -> SQS {
+fn test_client() -> Client {
     let config = Config::builder()
         .behavior_version_latest()
         .credentials_provider(Credentials::new("test", "test", None, None, "test"))
         .region(Region::new("us-east-1"))
         .build();
-    SQS::new(Client::from_conf(config))
+    Client::from_conf(config)
+}
+
+fn test_queue(queue_url: &str, max_messages: i32, wait_time_seconds: i32) -> SqsWebhookQueue {
+    SqsWebhookQueue::new(
+        test_client(),
+        queue_url.to_string(),
+        max_messages,
+        wait_time_seconds,
+    )
 }
 
 fn sample_message() -> WebhookEventQueueMessage {
@@ -37,76 +46,12 @@ fn sample_message() -> WebhookEventQueueMessage {
 }
 
 #[test]
-fn webhook_queue_configuration_requires_queue_name_or_url() {
-    let error = test_sqs().webhook_event_queue_url().unwrap_err();
+fn webhook_queue_retains_its_configuration() {
+    let queue = test_queue("webhook-event-queue.fifo", 10, 20);
 
-    assert_eq!(error.to_string(), "webhook_event_queue is not configured");
-
-    let error = test_sqs()
-        .webhook_event_queue("  ")
-        .webhook_event_queue_url()
-        .unwrap_err();
-
-    assert_eq!(error.to_string(), "webhook_event_queue cannot be empty");
-}
-
-#[test]
-fn webhook_receive_configuration_requires_poll_settings() {
-    let sqs = test_sqs().webhook_event_queue("webhook-event-queue.fifo");
-    let error = sqs.webhook_receive_configuration().unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "webhook_event_queue_max_messages is not configured",
-    );
-
-    let sqs = sqs.webhook_event_queue_max_messages(10);
-    let error = sqs.webhook_receive_configuration().unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "webhook_event_queue_wait_time_seconds is not configured",
-    );
-}
-
-#[test]
-fn webhook_receive_configuration_enforces_sqs_limits() {
-    let error = test_sqs()
-        .webhook_event_queue("webhook-event-queue.fifo")
-        .webhook_event_queue_max_messages(11)
-        .webhook_event_queue_wait_time_seconds(20)
-        .webhook_receive_configuration()
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "webhook_event_queue_max_messages must be between 1 and 10",
-    );
-
-    let error = test_sqs()
-        .webhook_event_queue("webhook-event-queue.fifo")
-        .webhook_event_queue_max_messages(10)
-        .webhook_event_queue_wait_time_seconds(21)
-        .webhook_receive_configuration()
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "webhook_event_queue_wait_time_seconds must be between 0 and 20",
-    );
-}
-
-#[test]
-fn webhook_receive_configuration_retains_valid_poll_settings() {
-    let sqs = test_sqs()
-        .webhook_event_queue("webhook-event-queue.fifo")
-        .webhook_event_queue_max_messages(10)
-        .webhook_event_queue_wait_time_seconds(20);
-
-    assert_eq!(
-        sqs.webhook_receive_configuration().unwrap(),
-        WebhookReceiveConfiguration {
-            queue_url: "webhook-event-queue.fifo",
-            max_messages: 10,
-            wait_time_seconds: 20,
-        },
-    );
+    assert_eq!(queue.queue_url, "webhook-event-queue.fifo");
+    assert_eq!(queue.max_messages, 10);
+    assert_eq!(queue.wait_time_seconds, 20);
 }
 
 #[test]

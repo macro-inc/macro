@@ -27,19 +27,15 @@ document_text_extractor = []
 email = ["uuid", "models_email", "dep:email", "gmail"]
 gmail = ["model", "models_email", "uuid"]
 organization_retention = []
-search = ["chrono", "model", "uuid", "futures", "dep:channels"]
+search = ["chrono", "model", "uuid", "futures"]
 sfs_delete = []
 sfs_uploader = []
 upload_extractor = []
-webhook = ["dep:webhook"]
 
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
-channels = { path = "../channels", default-features = false, features = [
-  "ports",
-], optional = true }
 email = { path = "../email", features = ["ports"], optional = true }
 model = { path = "../model", optional = true }
 models_ai_projection = { path = "../models_ai_projection", optional = true }
@@ -51,7 +47,4 @@ strum = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 uuid = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-webhook = { path = "../webhook", default-features = false, features = [
-  "ports",
-], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

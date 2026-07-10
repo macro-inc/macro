@@ -30,9 +30,6 @@ pub mod search;
 #[cfg(feature = "upload_extractor")]
 pub mod upload_extractor;
 
-#[cfg(feature = "webhook")]
-pub mod webhook;
-
 use aws_sdk_sqs as sqs;
 
 pub const MAX_BATCH_SIZE: usize = 10;
@@ -92,12 +89,6 @@ pub struct SQS {
     email_sfs_uploader_queue: Option<String>,
     #[cfg(feature = "sfs_delete")]
     email_sfs_delete_queue: Option<String>,
-    #[cfg(feature = "webhook")]
-    webhook_event_queue: Option<String>,
-    #[cfg(feature = "webhook")]
-    webhook_event_queue_max_messages: Option<i32>,
-    #[cfg(feature = "webhook")]
-    webhook_event_queue_wait_time_seconds: Option<i32>,
 }
 
 impl SQS {
@@ -138,12 +129,6 @@ impl SQS {
             email_sfs_uploader_queue: None,
             #[cfg(feature = "sfs_delete")]
             email_sfs_delete_queue: None,
-            #[cfg(feature = "webhook")]
-            webhook_event_queue: None,
-            #[cfg(feature = "webhook")]
-            webhook_event_queue_max_messages: None,
-            #[cfg(feature = "webhook")]
-            webhook_event_queue_wait_time_seconds: None,
         }
     }
 }

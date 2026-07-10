@@ -147,7 +147,6 @@ sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",
   "search",
-  "webhook",
 ] }
 sqs_worker = { path = "../sqs_worker" }
 sync_service_client = { path = "../sync_service_client" }

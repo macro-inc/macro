@@ -35,6 +35,7 @@ ingestion = [
   "ports",
 ]
 outbound = [
+  "dep:aws-sdk-sqs",
   "dep:hex",
   "dep:hmac",
   "dep:reqwest",
@@ -50,6 +51,7 @@ worker = ["dep:tokio", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }

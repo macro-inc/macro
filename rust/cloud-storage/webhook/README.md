@@ -199,9 +199,11 @@ Webhook receivers should use `X-Macro-Event-Id` as an idempotency key.
 | Production | `webhook-event-queue-prod.fifo` |
 
 `OVERRIDE_WEBHOOK_EVENT_QUEUE` takes precedence over the environment default.
-Set it to the full queue URL when connecting to LocalStack. From the repository
-root, the canonical local orchestrator provisions the FIFO queue and exports
-this value automatically:
+The webhook crate's `outbound::SqsWebhookQueue` owns FIFO sends, polling,
+acknowledgment, and visibility changes; the shared `sqs_client` is unchanged.
+Set the override to the full queue URL when connecting to LocalStack. From the
+repository root, the canonical local orchestrator provisions the FIFO queue and
+exports this value automatically:
 
 ```sh
 just run_local --no-frontend
@@ -219,7 +221,7 @@ Use a targeted `RUST_LOG` filter while diagnosing ingestion or delivery, for
 example:
 
 ```text
-RUST_LOG=info,webhook=trace,sqs_client::webhook=trace
+RUST_LOG=info,webhook=trace,webhook::outbound::sqs_queue=trace
 ```
 
 Ingestion spans expose event ID/name, entity type/ID, accessor count, workspace
