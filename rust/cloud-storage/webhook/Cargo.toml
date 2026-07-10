@@ -29,6 +29,7 @@ ingestion = [
   "dep:channels",
   "dep:documents",
   "dep:entity_access",
+  "dep:futures",
   "dep:macro_event_broker",
   "dep:uuid",
   "ports",
@@ -56,6 +57,7 @@ documents = { path = "../documents", default-features = false, optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }
+futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
 macro_env = { path = "../macro_env", optional = true }

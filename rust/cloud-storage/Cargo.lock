@@ -14870,6 +14870,7 @@ dependencies = [
  "chrono",
  "documents",
  "entity_access",
+ "futures",
  "hex",
  "hmac 0.12.1",
  "macro_db_migrator",
