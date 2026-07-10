@@ -1,12 +1,14 @@
 import { ListPropertyValue } from '@app/component/next-soup/soup-view/views/tasks/list-property-value';
-import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
-import { type MediaItem, mapMediaItems } from '@channel/Media/media-items';
+import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
-import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import {
+  createTheme,
+  twoLineClampMarkdownTheme,
+  unifiedListMarkdownTheme,
+} from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
@@ -28,6 +30,7 @@ import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
 import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
+import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
@@ -37,18 +40,9 @@ import {
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { senderFromStorageId } from '@queries/channel/message-sender';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { stringToItemType } from '@service-storage/client';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
-import {
-  createMemo,
-  createSignal,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard, type InboxCardAttachment } from './InboxCard';
@@ -529,6 +523,20 @@ function BaseCard(props: {
   );
 }
 
+const inlineWrappingMarkdownTheme = createTheme(
+  {
+    root: 'md inline pr-[2px] cursor-default',
+    paragraph: 'md-p text-[1em] inline',
+  },
+  twoLineClampMarkdownTheme
+);
+
+/** Fallback shown in place of message text when a message is just attachments. */
+const attachmentSummary = (count: number): string | undefined =>
+  count <= 0
+    ? undefined
+    : `sent ${count === 1 ? 'an' : count} ${plural('attachment', count)}`;
+
 export function ChannelCardLayout(props: InboxCardLayoutProps) {
   const entity = createMemo(() => props.item.entity);
 
@@ -569,21 +577,28 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     return participant;
   });
 
-  const senderLabel = () =>
-    messageSenderId() === currentUserId() ? 'You' : messageSenderName();
+  const senderLabel = () => {
+    if (messageSenderId() === currentUserId()) return 'You';
+    return isDM() ? undefined : messageSenderName();
+  };
 
   const text = createMemo(() => {
-    const location = channelLocation(entity());
+    const value = entity();
+    const location = channelLocation(value);
     const tag = getNotificationTag(props.item.notification);
 
-    const sender = isDM() ? entity().name || messageSenderName() : '';
+    const sender = isDM() ? value.name || messageSenderName() : '';
     let action = '';
 
     if (tag === 'document_mention' && isDM()) {
       action = 'shared a document with you';
     }
 
-    const content = itemContent(entity(), props.item.notification);
+    const content = itemContent(value, props.item.notification);
+    const latestMessage =
+      value.type === 'channel' ? value.latestRootMessage : undefined;
+
+    const contentIsAttachmentSummary = !content?.trim() && !!latestMessage;
 
     return {
       title: buildActionLabel({
@@ -591,7 +606,8 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
         action,
         location,
       }),
-      content,
+      content: contentIsAttachmentSummary ? attachmentSummary(1) : content,
+      contentIsAttachmentSummary,
     };
   });
 
@@ -630,19 +646,24 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           </InboxCard.Title>
         </InboxCard.Header>
 
-        <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1 text-sm">
-          <InboxCard.Content class="truncate">
+        <div class="col-start-2 row-start-2 min-w-0 text-sm">
+          <InboxCard.Content class="line-clamp-2 min-h-[2lh] whitespace-normal">
             <Show when={senderLabel()}>
               <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
             </Show>
 
             <Show when={text().content?.trim()}>
               {(value) => (
-                <StaticMarkdown
-                  markdown={value()}
-                  singleLine
-                  theme={unifiedListMarkdownTheme}
-                />
+                <>
+                  <Show when={text().contentIsAttachmentSummary}>
+                    <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
+                  </Show>
+                  <StaticMarkdown
+                    markdown={value()}
+                    singleLine
+                    theme={inlineWrappingMarkdownTheme}
+                  />
+                </>
               )}
             </Show>
           </InboxCard.Content>
@@ -698,12 +719,6 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
-/** Fallback shown in place of message text when a message is just attachments. */
-const attachmentSummary = (count: number): string | undefined =>
-  count <= 0
-    ? undefined
-    : `sent ${count === 1 ? 'an' : count} ${plural('attachment', count)}`;
-
 export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const isLatestNotificationReply = createMemo(() => {
     const notification = props.item.notification;
@@ -751,46 +766,13 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const originalSenderLabel = () =>
     originalSenderId() === currentUserId() ? 'You' : originalSenderName();
 
-  // Media (images/videos) render in a clickable grid backed by the shared
-  // media viewer; non-media attachments keep their entity-preview tiles.
-  const mediaItems = createMemo<MediaItem[]>(() => {
-    if (
-      isLatestNotificationReply() ||
-      props.item.entity.type !== 'channel_thread'
-    )
-      return [];
-    return mapMediaItems(props.item.entity.attachments);
-  });
-
-  const fileAttachments = createMemo<InboxCardAttachment[]>(() => {
-    if (
-      isLatestNotificationReply() ||
-      props.item.entity.type !== 'channel_thread'
-    )
-      return [];
-    return props.item.entity.attachments
-      .filter((attachment) => mapMediaItems([attachment]).length === 0)
-      .map(
-        (attachment): InboxCardAttachment => ({
-          id: attachment.entity_id,
-          fallback: () => (
-            <ItemPreview
-              id={attachment.entity_id}
-              type={stringToItemType(attachment.entity_type)}
-            />
-          ),
-        })
-      );
-  });
-
-  const [viewerOpen, setViewerOpen] = createSignal(false);
-  const [viewerIndex, setViewerIndex] = createSignal(0);
-
   const text = createMemo(() => {
     if (props.item.entity.type !== 'channel_thread') {
       return {
         title: '',
         content: '',
+        contentIsAttachmentSummary: false,
+        contextIsAttachmentSummary: false,
       };
     }
 
@@ -801,18 +783,32 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
     let content: string | undefined;
     let context: string | undefined;
+    let contentIsAttachmentSummary = false;
+    let contextIsAttachmentSummary = false;
     if (metadata?.tag === 'channel_message_reply') {
       // Current message is the reply; the quoted context is the original (root).
       content = metadata.content.messageContent;
+      if (!content.trim()) {
+        const reply = props.item.entity.thread.preview.find(
+          (candidate) => candidate.id === metadata.content.messageId
+        );
+        // Empty channel messages must contain at least one attachment. The
+        // preview gives us the exact count when that reply is included.
+        content = attachmentSummary(reply?.attachments.length || 1);
+        contentIsAttachmentSummary = true;
+      }
       const original = props.item.entity.content.trim();
       context = original.length
         ? original
         : attachmentSummary(rootAttachments.length);
+      contextIsAttachmentSummary = !original.length && !!context;
     } else {
       // Root message: fall back to an attachment summary when it has no text.
       content = itemContent(props.item.entity, props.item.notification);
       if (!content?.trim()) {
-        content = attachmentSummary(rootAttachments.length) ?? content;
+        const summary = attachmentSummary(rootAttachments.length);
+        content = summary ?? content;
+        contentIsAttachmentSummary = !!summary;
       }
     }
 
@@ -820,34 +816,36 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       title: location,
       context,
       content,
+      contentIsAttachmentSummary,
+      contextIsAttachmentSummary,
     };
   });
 
   return (
-    <>
-      <InboxCard.Root
-        dimmed={!props.item.unread}
-        selected={props.selected}
-        highlighted={props.highlighted}
-        onClick={props.onClick}
-      >
-        <div class="col-start-1 row-start-2">
-          <InboxCard.Icon
-            fallback={
-              <ActionBubble tag={getNotificationTag(props.item.notification)} />
-            }
-          ></InboxCard.Icon>
-        </div>
-        <InboxCard.Body class="contents">
-          <div class={cn('col-start-2 row-start-2')}>
-            <InboxCard.Header class="self-center">
-              <InboxCard.Title class="flex items-center gap-1">
-                {text().title}
-              </InboxCard.Title>
-            </InboxCard.Header>
+    <InboxCard.Root
+      dimmed={!props.item.unread}
+      selected={props.selected}
+      highlighted={props.highlighted}
+      onClick={props.onClick}
+    >
+      <div class="col-start-1 row-start-2">
+        <InboxCard.Icon
+          fallback={
+            <ActionBubble tag={getNotificationTag(props.item.notification)} />
+          }
+        ></InboxCard.Icon>
+      </div>
+      <InboxCard.Body class="contents">
+        <div class={cn('col-start-2 row-start-2')}>
+          <InboxCard.Header class="self-center">
+            <InboxCard.Title class="flex items-center gap-1">
+              {text().title}
+            </InboxCard.Title>
+          </InboxCard.Header>
 
-            {/* For replies, show the original message being replied to first,
+          {/* For replies, show the original message being replied to first,
               with a left bar marking it as the quoted original. */}
+          <div class="min-h-[2lh]">
             <Show when={isLatestNotificationReply() && text().context?.trim()}>
               {(context) => (
                 <div class="flex min-w-0 items-center gap-1 border-l-2 border-edge-muted pl-2">
@@ -855,6 +853,9 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                     {originalSenderLabel()}:
                   </span>
                   <InboxCard.Content class="truncate text-sm text-ink/60">
+                    <Show when={text().contextIsAttachmentSummary}>
+                      <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
+                    </Show>
                     <StaticMarkdown
                       markdown={context()}
                       singleLine
@@ -865,56 +866,44 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
               )}
             </Show>
 
-            <div class="flex min-w-0 items-center gap-1">
+            <InboxCard.Content
+              class={cn(
+                'text-sm text-ink/60',
+                isLatestNotificationReply()
+                  ? 'truncate'
+                  : 'line-clamp-2 whitespace-normal'
+              )}
+            >
               <Show when={!isDM()}>
-                <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
-                  {senderLabel()}:
-                </span>
+                <span class="mr-1 whitespace-nowrap">{senderLabel()}:</span>
               </Show>
               <Show when={text().content?.trim()}>
                 {(value) => (
-                  <InboxCard.Content class="truncate text-sm text-ink/60">
+                  <>
+                    <Show when={text().contentIsAttachmentSummary}>
+                      <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
+                    </Show>
                     <StaticMarkdown
                       markdown={value()}
                       singleLine
-                      theme={unifiedListMarkdownTheme}
+                      theme={
+                        isLatestNotificationReply()
+                          ? unifiedListMarkdownTheme
+                          : inlineWrappingMarkdownTheme
+                      }
                     />
-                  </InboxCard.Content>
+                  </>
                 )}
               </Show>
-            </div>
+            </InboxCard.Content>
           </div>
-
-          <Show when={mediaItems().length || fileAttachments().length}>
-            <div class="col-start-2 row-start-3 flex min-w-0 flex-col gap-2">
-              <Show when={mediaItems().length}>
-                <InboxCard.Attachments
-                  items={mediaItems()}
-                  onOpen={(index) => {
-                    setViewerIndex(index);
-                    setViewerOpen(true);
-                  }}
-                />
-              </Show>
-              <Show when={fileAttachments().length}>
-                <InboxCard.Attachments items={fileAttachments()} />
-              </Show>
-            </div>
-          </Show>
-        </InboxCard.Body>
-        <InboxTimestamp
-          timestamp={props.item.timestamp}
-          class="col-start-3 row-start-2 self-start justify-self-end"
-        />
-      </InboxCard.Root>
-      <MediaViewerDialog
-        items={mediaItems}
-        open={viewerOpen()}
-        onOpenChange={setViewerOpen}
-        currentIndex={viewerIndex}
-        onCurrentIndexChange={setViewerIndex}
+        </div>
+      </InboxCard.Body>
+      <InboxTimestamp
+        timestamp={props.item.timestamp}
+        class="col-start-3 row-start-2 self-start justify-self-end"
       />
-    </>
+    </InboxCard.Root>
   );
 }
 
