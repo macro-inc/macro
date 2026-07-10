@@ -77,14 +77,14 @@ function TypeButton(props: {
         <div class="flex flex-col gap-1 flex-1 min-w-0">
           <span
             class={`text-xs font-mono uppercase font-medium ${
-              props.isSelected ? 'text-black' : 'text-accent'
+              props.isSelected ? 'text-[black]' : 'text-accent'
             }`}
           >
             {label}
           </span>
           <span
             class={`text-xs font-mono truncate ${
-              props.isSelected ? 'text-black/70' : 'text-ink-muted'
+              props.isSelected ? 'text-[black]/70' : 'text-ink-muted'
             }`}
           >
             {props.type}
@@ -92,7 +92,7 @@ function TypeButton(props: {
         </div>
         <span
           class={`text-sm font-medium shrink-0 ${
-            props.isSelected ? 'text-black' : 'text-ink-muted'
+            props.isSelected ? 'text-[black]' : 'text-ink-muted'
           }`}
         >
           {props.count}
@@ -641,12 +641,12 @@ function PlaygroundContent() {
             >
               <div class="flex items-center justify-between">
                 <span
-                  class={`text-sm font-medium ${customMode() ? 'text-black' : 'text-accent'}`}
+                  class={`text-sm font-medium ${customMode() ? 'text-[black]' : 'text-accent'}`}
                 >
                   Custom Message Test
                 </span>
                 <span
-                  class={`text-xs ${customMode() ? 'text-black/70' : 'text-ink-muted'}`}
+                  class={`text-xs ${customMode() ? 'text-[black]/70' : 'text-ink-muted'}`}
                 >
                   Builder
                 </span>
@@ -766,7 +766,7 @@ export const BrowserNotificationPreview: Component<NotificationProps> = (
 
         {/* Content */}
         <div class="flex-1 min-w-0">
-          <div class="text-white font-medium text-sm mb-1 truncate">
+          <div class="text-[white] font-medium text-sm mb-1 truncate">
             {props.title}
           </div>
           <div class="text-[oklch(0.707_0.022_261.325)] text-sm line-clamp-2">

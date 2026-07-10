@@ -14,6 +14,7 @@ import {
   isAllowedTagName,
 } from '../nodes/ClassedBlockNode';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import { I_HTML_RENDER } from './htmlRender';
 import { I_EQUATION_NODE } from './katex';
 import {
   I_CONTACT_MENTION,
@@ -34,6 +35,7 @@ const REG_EXP_HTML_BLOCKQUOTE_TAG = /<\/?blockquote\b[^>]*>/gi;
 
 // Transformers used inside macro_quote blocks
 const MACRO_QUOTE_TRANSFORMERS = [
+  I_HTML_RENDER,
   ...CUSTOM_TRANSFORMERS,
   I_EQUATION_NODE,
   I_USER_MENTION,
@@ -45,6 +47,7 @@ const MACRO_QUOTE_TRANSFORMERS = [
 function htmlBlockquoteTransformers() {
   return [
     HTML_BLOCKQUOTE,
+    I_HTML_RENDER,
     ...CUSTOM_TRANSFORMERS,
     I_EQUATION_NODE,
     I_USER_MENTION,
@@ -234,7 +237,11 @@ export const I_MACRO_QUOTE: ElementTransformer = {
 
       const metadata = JSON.parse(metadataMatch[1]);
       const { tag, classes } = metadata;
-      if (typeof tag !== 'string' || !isAllowedTagName(tag) || !Array.isArray(classes)) {
+      if (
+        typeof tag !== 'string' ||
+        !isAllowedTagName(tag) ||
+        !Array.isArray(classes)
+      ) {
         throw new Error('Invalid macro-quote metadata');
       }
 

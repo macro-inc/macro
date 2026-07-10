@@ -50,11 +50,13 @@ import type {
   InputHandle,
   InputPersistenceKey,
   InputSnapshot,
+  RestoreSnapshotOptions,
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
@@ -180,19 +182,23 @@ export function ChannelInput(props: ChannelInputProps) {
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
-        options?: { focus?: boolean };
+        options?: RestoreSnapshotOptions;
       }
     | undefined;
   let pendingFocus = false;
+  // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
+  // Applied on the next programmatic focus rather than at restore time.
+  let pendingCursor: RestoreSnapshotOptions['cursor'];
 
   const applySnapshot = (
     snapshot: InputSnapshot,
-    options?: { focus?: boolean }
+    options?: RestoreSnapshotOptions
   ) => {
     markdownEditor.controls.setMarkdown(snapshot.value);
+    pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
     mentionsTracker.setMentions(snapshot.mentions);
-    if (options?.focus !== false) markdownEditor.controls.focus();
+    if (options?.focus !== false) focusEditorNow();
   };
 
   const flushPendingRestore = () => {
@@ -202,18 +208,26 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => applySnapshot(restore.snapshot, restore.options));
   };
 
+  const focusEditorNow = () => {
+    if (pendingCursor === 'trailing-paragraph') {
+      pendingCursor = undefined;
+      lexicalEditor().update(() => $selectTrailingParagraph());
+    }
+    markdownEditor.controls.focus();
+  };
+
   const focusEditor = () => {
     if (!isEditorConnected) {
       pendingFocus = true;
       return;
     }
-    markdownEditor.controls.focus();
+    focusEditorNow();
   };
 
   const flushPendingFocus = () => {
     if (!pendingFocus) return;
     pendingFocus = false;
-    queueMicrotask(() => markdownEditor.controls.focus());
+    queueMicrotask(() => focusEditorNow());
   };
 
   // Macro AI is mentionable in every channel. It is surfaced through the same

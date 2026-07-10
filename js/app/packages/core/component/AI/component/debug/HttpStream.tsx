@@ -141,8 +141,8 @@ export default function HttpStreamDebug() {
             class={cn(
               'text-sm px-2 py-1 rounded',
               connectionState() === WebsocketConnectionState.Open
-                ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800'
+                ? 'bg-success-bg text-success-ink'
+                : 'bg-failure-bg text-failure-ink'
             )}
           >
             {connectionState() === WebsocketConnectionState.Open
@@ -202,7 +202,7 @@ export default function HttpStreamDebug() {
 
         {/* Error */}
         <Show when={error()}>
-          <div class="text-sm p-2 bg-red-100 text-red-800 rounded">
+          <div class="text-sm p-2 bg-failure-bg text-failure-ink rounded">
             {error()}
           </div>
         </Show>
@@ -214,7 +214,7 @@ export default function HttpStreamDebug() {
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium">Response</span>
               <Show when={isStreaming()}>
-                <span class="text-sm text-blue-600 animate-pulse">
+                <span class="text-sm text-accent animate-pulse">
                   Streaming...
                 </span>
               </Show>
@@ -223,7 +223,7 @@ export default function HttpStreamDebug() {
               <Show
                 when={responseText()}
                 fallback={
-                  <div class="p-4 text-center text-sm text-gray-500">
+                  <div class="p-4 text-center text-sm text-ink-muted">
                     No response yet. Send a message to start streaming.
                   </div>
                 }
@@ -242,7 +242,7 @@ export default function HttpStreamDebug() {
                 Chunks ({chunks().length})
               </span>
               <Show when={isStreaming()}>
-                <span class="text-sm text-blue-600 animate-pulse">
+                <span class="text-sm text-accent animate-pulse">
                   Receiving...
                 </span>
               </Show>
@@ -251,7 +251,7 @@ export default function HttpStreamDebug() {
               <Show
                 when={chunks().length > 0}
                 fallback={
-                  <div class="p-4 text-center text-sm text-gray-500">
+                  <div class="p-4 text-center text-sm text-ink-muted">
                     No chunks yet. Send a message to start streaming.
                   </div>
                 }
@@ -259,7 +259,7 @@ export default function HttpStreamDebug() {
                 <For each={chunks()}>
                   {(chunk) => (
                     <div class="p-3 border-b border-edge last:border-b-0">
-                      <div class="text-xs text-gray-500 mb-1">
+                      <div class="text-xs text-ink-muted mb-1">
                         {chunk.timestamp.toLocaleTimeString()}
                       </div>
                       <pre class="text-xs font-mono whitespace-pre-wrap break-all">

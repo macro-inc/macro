@@ -668,6 +668,7 @@
           parallel
           docker-compose
           curl
+          kcat
           xz
           unzip
           zip

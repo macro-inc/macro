@@ -14,7 +14,7 @@ import type { PatchWebhookRequestStatus } from './patchWebhookRequestStatus';
  * Request to patch a webhook.
  */
 export interface PatchWebhookRequest {
-  /** HTTPS endpoint URL. */
+  /** Endpoint URL. HTTPS is required outside local environments. */
   endpoint_url?: PatchWebhookRequestEndpointUrl;
   filters?: PatchWebhookRequestFilters;
   headers?: PatchWebhookRequestHeaders;

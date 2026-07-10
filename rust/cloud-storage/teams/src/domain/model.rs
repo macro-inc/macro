@@ -425,7 +425,7 @@ pub enum RemoveUserFromTeamError {
     #[error("There is no subscription for the team")]
     NoSubscription,
     /// Underlying customer error
-    #[error("Underlying customer error")]
+    #[error("Underlying customer error {0}")]
     CustomerError(#[from] CustomerError),
     /// The user is the owner of the team
     #[error("Cannot remove owner")]
@@ -499,7 +499,7 @@ pub enum DeleteTeamError {
     #[error("Underlying team error")]
     TeamError(#[from] TeamError),
     /// Underlying customer error
-    #[error("Underlying customer error")]
+    #[error("Underlying customer error {0}")]
     CustomerError(#[from] CustomerError),
     /// Remove roles from user error
     #[error("Remove roles from user error")]
@@ -516,7 +516,7 @@ pub enum JoinTeamError {
     #[error("Underlying team error")]
     TeamError(#[from] TeamError),
     /// Underlying customer error
-    #[error("Underlying customer error")]
+    #[error("Underlying customer error {0}")]
     CustomerError(#[from] CustomerError),
     /// The user was not invited to the team
     #[error("User not invited")]
@@ -567,3 +567,6 @@ pub enum TeamCheckoutError {
     #[error("User already has an active subscription")]
     AlreadySubscribed,
 }
+
+#[cfg(test)]
+mod test;

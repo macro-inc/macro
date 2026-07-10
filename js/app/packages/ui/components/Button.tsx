@@ -36,7 +36,15 @@ export type ButtonProps = ButtonRootProps<'button'> &
     tooltipDisabled?: boolean;
   };
 
-export type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
+export type ButtonSize =
+  | 'xs'
+  | 'icon-xs'
+  | 'sm'
+  | 'icon-sm'
+  | 'md'
+  | 'icon-md'
+  | 'lg'
+  | 'icon-lg';
 
 export type ButtonVariant =
   | 'ghost'
@@ -63,6 +71,8 @@ const variantStyles: Record<ButtonVariant, string> = {
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
+  xs: '          p-1  [&_:where(svg)]:size-3 gap-1   text-xs',
+  'icon-xs': 'size-5   p-2.75  [&_:where(svg)]:size-4                  ',
   lg: '          p-2.5  [&_:where(svg)]:size-5 gap-2   text-base',
   md: '          p-2                           gap-1.5 text-sm  ' /* scuffed */,
   sm: 'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',

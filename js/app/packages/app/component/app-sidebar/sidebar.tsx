@@ -34,6 +34,7 @@ import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { InCallPanel, useCallContextOptional } from '@channel/Call';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
@@ -71,6 +72,7 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -110,6 +112,45 @@ interface SidebarItem {
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
 }
+
+type SidebarSectionLinkId =
+  | 'mail'
+  | 'channels'
+  | 'calls'
+  | 'documents'
+  | 'tasks'
+  | 'agents'
+  | 'companies';
+
+type SidebarSectionVisibility = Record<SidebarSectionLinkId, boolean>;
+
+type TryItemId = 'connect' | 'invite' | 'mobile';
+
+type TryItemVisibility = Record<TryItemId, boolean>;
+
+const COMMUNICATIONS_LINK_IDS = ['mail', 'channels', 'calls'] as const;
+const WORKSPACE_LINK_IDS = [
+  'documents',
+  'tasks',
+  'agents',
+  'companies',
+] as const;
+
+const DEFAULT_SECTION_VISIBILITY: SidebarSectionVisibility = {
+  mail: true,
+  channels: true,
+  calls: true,
+  documents: true,
+  tasks: true,
+  agents: true,
+  companies: true,
+};
+
+const DEFAULT_TRY_VISIBILITY: TryItemVisibility = {
+  connect: true,
+  invite: true,
+  mobile: true,
+};
 
 const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 
@@ -182,10 +223,10 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'channels',
-    label: 'Messages',
+    label: 'Channels',
     href: LIST_VIEW_PATHS.channels,
     icon: AnimatedChannelIcon,
-    hotkey: 'm',
+    hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
   ...(ENABLE_CRM
@@ -473,36 +514,127 @@ type SidebarShortcutLinkProps = {
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
   onClick: () => void;
   isSlim: () => boolean;
+  trailing?: JSX.Element;
 };
 
 const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
   return (
-    <NavRow
-      draggable={false}
-      class="h-7"
-      fullWidth
-      tooltipPlacement="right"
-      label={props.isSlim() ? props.label : undefined}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        props.onClick();
-      }}
-    >
-      <div class="relative size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
-        <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-      </div>
+    <div class="group/shortcut relative w-full">
+      <NavRow
+        draggable={false}
+        class={cn(
+          'h-7 group-hover/shortcut:bg-ink/3 group-hover/shortcut:text-ink',
+          props.trailing && !props.isSlim() && 'pr-8'
+        )}
+        fullWidth
+        tooltipPlacement="right"
+        label={props.isSlim() ? props.label : undefined}
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => setIsHovering(false)}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          props.onClick();
+        }}
+      >
+        <div class="relative size-5 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
+          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+        </div>
 
-      <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
-        <span class="whitespace-nowrap">{props.label}</span>
-      </div>
-    </NavRow>
+        <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
+          <span class="flex-1 min-w-0 whitespace-nowrap">{props.label}</span>
+        </div>
+      </NavRow>
+
+      <Show when={props.trailing && !props.isSlim()}>
+        <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+          {props.trailing}
+        </div>
+      </Show>
+    </div>
   );
 };
+
+const SidebarSectionMenu = (props: {
+  label: string;
+  options: { id: SidebarSectionLinkId; label: string; checked: boolean }[];
+  onToggle: (id: SidebarSectionLinkId) => void;
+  onOpenChange?: (open: boolean) => void;
+}) => (
+  <Dropdown
+    placement="right-start"
+    gutter={8}
+    onOpenChange={props.onOpenChange}
+  >
+    <Dropdown.Trigger
+      variant="ghost"
+      class="opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5"
+      label={`Customize ${props.label}`}
+      onMouseDown={(e: MouseEvent) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onClick={(e: MouseEvent) => e.stopPropagation()}
+    >
+      <DotsThreeIcon />
+    </Dropdown.Trigger>
+    <Dropdown.Content class="w-56 shadow-menu">
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Customize</Dropdown.GroupLabel>
+        <For each={props.options}>
+          {(option) => (
+            <Dropdown.CheckboxItem
+              checked={option.checked}
+              onChange={() => props.onToggle(option.id)}
+              closeOnSelect={false}
+            >
+              <span class="flex-1 truncate">{option.label}</span>
+            </Dropdown.CheckboxItem>
+          )}
+        </For>
+      </Dropdown.Group>
+    </Dropdown.Content>
+  </Dropdown>
+);
+
+const SidebarTryItemMenu = (props: {
+  label: string;
+  onDismiss: () => void;
+  onOpenChange?: (open: boolean) => void;
+}) => (
+  <Dropdown
+    placement="right-start"
+    gutter={8}
+    onOpenChange={props.onOpenChange}
+  >
+    <Dropdown.Trigger
+      variant="ghost"
+      class="shrink-0 opacity-0 group-hover/shortcut:pointer-events-auto group-hover/shortcut:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5 pointer-events-none"
+      label={`${props.label} options`}
+      onMouseDown={(e: MouseEvent) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onClick={(e: MouseEvent) => e.stopPropagation()}
+    >
+      <DotsThreeIcon />
+    </Dropdown.Trigger>
+    <Dropdown.Content class="w-40 shadow-menu">
+      <Dropdown.Group>
+        <Dropdown.Item
+          class="min-h-8 gap-2 px-2.5 text-[13px]"
+          onSelect={props.onDismiss}
+        >
+          <span class="flex-1 truncate text-ink">Dismiss</span>
+        </Dropdown.Item>
+      </Dropdown.Group>
+    </Dropdown.Content>
+  </Dropdown>
+);
 
 const SidebarDropdownLink = (
   props: SidebarItem & {
@@ -754,7 +886,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             />
           </Dropdown.Item>
           <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-red-500"
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-failure"
             onSelect={() => logout()}
           >
             <span class="size-5 flex items-center justify-center">
@@ -810,6 +942,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const currentTeamQuery = useCurrentTeamQuery();
+  const [sectionVisibility, setSectionVisibility] = makePersisted(
+    createSignal<SidebarSectionVisibility>(DEFAULT_SECTION_VISIBILITY),
+    { name: 'sidebar-section-visibility' }
+  );
+  const [tryVisibility, setTryVisibility] = makePersisted(
+    createSignal<TryItemVisibility>(DEFAULT_TRY_VISIBILITY),
+    { name: 'sidebar-try-visibility' }
+  );
+  const callCtx = useCallContextOptional();
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -850,8 +991,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const middleScrollSize = createElementSize(middleScrollRef);
   const [overlayPointerInside, setOverlayPointerInside] = createSignal(false);
   const [overlayDropdownOpen, setOverlayDropdownOpen] = createSignal(false);
-  const [workspaceContextMenuOpen, setWorkspaceContextMenuOpen] =
-    createSignal(false);
+  const [, setWorkspaceContextMenuOpen] = createSignal(false);
   let middleScrollFrame: number | undefined;
   let middleScrollObserver: MutationObserver | undefined;
   let overlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -972,79 +1112,98 @@ export const AppSidebar = (props: AppSidebarProps) => {
       .filter((link): link is SidebarItem => link !== undefined)
   );
 
-  const workspaceItems = createMemo(() =>
-    ['mail', 'documents', 'channels', 'tasks', 'calls', 'agents']
+  const sectionItemsFor = (ids: readonly SidebarSectionLinkId[]) =>
+    ids
+      .filter((id) => sectionVisibility()[id])
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
-      .map(toSectionItem)
+      .map(toSectionItem);
+
+  const communicationsItems = createMemo(() =>
+    sectionItemsFor(COMMUNICATIONS_LINK_IDS)
   );
+  const workspaceItems = createMemo(() => sectionItemsFor(WORKSPACE_LINK_IDS));
+
+  const toggleSectionVisibility = (id: SidebarSectionLinkId) => {
+    setSectionVisibility({
+      ...sectionVisibility(),
+      [id]: !sectionVisibility()[id],
+    });
+    scheduleMiddleScrollUpdate();
+  };
+
+  const dismissTryItem = (id: TryItemId) => {
+    setTryVisibility({ ...tryVisibility(), [id]: false });
+    scheduleMiddleScrollUpdate();
+  };
+
+  const sectionMenuOptionsFor = (ids: readonly SidebarSectionLinkId[]) =>
+    ids
+      .map((id) => findLink(id))
+      .filter((link): link is SidebarItem => link !== undefined)
+      .map((link) => ({
+        id: link.id as SidebarSectionLinkId,
+        label: link.label,
+        checked: sectionVisibility()[link.id as SidebarSectionLinkId],
+      }));
 
   const tryItems = createMemo<CollapsibleSidebarSectionItem[]>(() => {
     const items: CollapsibleSidebarSectionItem[] = [];
-    const connected = getSettingsTabItem('Connected');
-    if (connected && isTabAvailable('Connected')) {
+    const addTryItem = (
+      id: TryItemId,
+      label: string,
+      icon: Component<{ triggerAnimation?: boolean; class?: string }>,
+      onClick: () => void
+    ) => {
+      if (!tryVisibility()[id]) return;
+
+      const trailing = (
+        <SidebarTryItemMenu
+          label={label}
+          onDismiss={() => dismissTryItem(id)}
+          onOpenChange={handleWorkspaceContextMenuOpenChange}
+        />
+      );
+
       items.push({
-        id: 'connect',
+        id,
         visible: () => (
           <SidebarShortcutLink
-            label="Connect"
+            label={label}
             isSlim={isSlim}
-            onClick={() => openSettingsTab('Connected')}
-            icon={connected.icon}
+            onClick={onClick}
+            icon={icon}
+            trailing={trailing}
           />
         ),
         dropdown: () => (
           <SidebarShortcutLink
-            label="Connect"
+            label={label}
             isSlim={isSlim}
-            onClick={() => openSettingsTab('Connected')}
-            icon={connected.icon}
+            onClick={onClick}
+            icon={icon}
+            trailing={trailing}
           />
         ),
       });
+    };
+
+    const connected = getSettingsTabItem('Connected');
+    if (connected && isTabAvailable('Connected')) {
+      addTryItem('connect', 'Connect', connected.icon, () =>
+        openSettingsTab('Connected')
+      );
     }
 
-    items.push({
-      id: 'invite',
-      visible: () => (
-        <SidebarShortcutLink
-          label="Invite"
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-          icon={UsersThreeIcon}
-        />
-      ),
-      dropdown: () => (
-        <SidebarShortcutLink
-          label="Invite"
-          isSlim={isSlim}
-          onClick={() => setInviteModalOpen(true)}
-          icon={UsersThreeIcon}
-        />
-      ),
-    });
+    addTryItem('invite', 'Invite', UsersThreeIcon, () =>
+      setInviteModalOpen(true)
+    );
 
     const mobile = getSettingsTabItem('Mobile App');
     if (mobile && isTabAvailable('Mobile App')) {
-      items.push({
-        id: 'mobile',
-        visible: () => (
-          <SidebarShortcutLink
-            label="Mobile"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Mobile App')}
-            icon={mobile.icon}
-          />
-        ),
-        dropdown: () => (
-          <SidebarShortcutLink
-            label="Mobile"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Mobile App')}
-            icon={mobile.icon}
-          />
-        ),
-      });
+      addTryItem('mobile', 'Mobile', mobile.icon, () =>
+        openSettingsTab('Mobile App')
+      );
     }
     return items;
   });
@@ -1052,6 +1211,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   createEffect(() => {
     middleScrollSize.width;
     middleScrollSize.height;
+    communicationsItems().length;
     workspaceItems().length;
     tryItems().length;
     props.overlayOpen;
@@ -1144,14 +1304,39 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onScroll={updateMiddleScrollShadows}
           class="size-full overflow-y-auto flex flex-col gap-3"
         >
-          <CollapsibleSidebarSection
-            label="Workspace"
-            items={workspaceItems()}
-            visibleCount={3}
-            onOpenChange={scheduleMiddleScrollUpdate}
-            onDropdownOpenChange={handleOverlayDropdownOpenChange}
-            dropdownInteractionDisabled={workspaceContextMenuOpen()}
-          />
+          <Show
+            when={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS).length > 0}
+          >
+            <CollapsibleSidebarSection
+              label="Conversations"
+              items={communicationsItems()}
+              headerMenu={() => (
+                <SidebarSectionMenu
+                  label="Conversations"
+                  options={sectionMenuOptionsFor(COMMUNICATIONS_LINK_IDS)}
+                  onToggle={toggleSectionVisibility}
+                  onOpenChange={handleWorkspaceContextMenuOpenChange}
+                />
+              )}
+              onOpenChange={scheduleMiddleScrollUpdate}
+            />
+          </Show>
+
+          <Show when={sectionMenuOptionsFor(WORKSPACE_LINK_IDS).length > 0}>
+            <CollapsibleSidebarSection
+              label="Workspace"
+              items={workspaceItems()}
+              headerMenu={() => (
+                <SidebarSectionMenu
+                  label="Workspace"
+                  options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
+                  onToggle={toggleSectionVisibility}
+                  onOpenChange={handleWorkspaceContextMenuOpenChange}
+                />
+              )}
+              onOpenChange={scheduleMiddleScrollUpdate}
+            />
+          </Show>
 
           <Suspense>
             <FavoritesSection
@@ -1166,64 +1351,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
             onDropdownOpenChange={handleOverlayDropdownOpenChange}
           />
 
-          <CollapsibleSidebarSection
-            label="Try"
-            items={tryItems()}
-            visibleCount={3}
-            onOpenChange={scheduleMiddleScrollUpdate}
-            onDropdownOpenChange={handleOverlayDropdownOpenChange}
-          />
-
-          <Show
-            when={
-              !hasPaidAccess() &&
-              isExpandedView() &&
-              !premiumCardDismissed() &&
-              newPricingFF().enabled
-            }
-          >
-            <div class="w-full px-2">
-              <SidebarPromoCard
-                label="Upgrade to Premium"
-                description="Unlock MCP integrations, better AI models, and team collaboration."
-                onDismiss={() => {
-                  setPremiumCardDismissed(true);
-                  setPremiumHintVisible(true);
-                }}
-                primaryAction={{
-                  label: 'Upgrade',
-                  onClick: () => openSettingsTab('Billing'),
-                }}
-                secondaryAction={{
-                  label: 'Later',
-                  onClick: () => {
-                    setPremiumCardDismissed(true);
-                    setPremiumHintVisible(true);
-                  },
-                }}
-              />
-            </div>
-          </Show>
-          <Show
-            when={
-              !hasPaidAccess() &&
-              isExpandedView() &&
-              premiumHintVisible() &&
-              premiumCardDismissed() &&
-              newPricingFF().enabled
-            }
-          >
-            <div class="w-full px-2">
-              <SidebarPromoHint
-                title="Maybe later"
-                message="You can upgrade anytime from Account settings."
-                onDone={() => setPremiumHintVisible(false)}
-                secondaryAction={{
-                  label: 'Take me there',
-                  onClick: () => openSettingsTab('Account'),
-                }}
-              />
-            </div>
+          <Show when={tryItems().length > 0}>
+            <CollapsibleSidebarSection
+              label="Try"
+              items={tryItems()}
+              onOpenChange={scheduleMiddleScrollUpdate}
+            />
           </Show>
         </div>
         <div
@@ -1240,7 +1373,59 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
       </div>
 
-      <div class="shrink-0 w-full pt-2">
+      <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView() && callCtx?.isInCall()}>
+          <div data-ui="sidebar-in-call-panel">
+            <InCallPanel isSlim={() => false} />
+          </div>
+        </Show>
+        <Show
+          when={
+            !hasPaidAccess() &&
+            isExpandedView() &&
+            !premiumCardDismissed() &&
+            newPricingFF().enabled
+          }
+        >
+          <SidebarPromoCard
+            label="Upgrade to Premium"
+            description="Unlock MCP integrations, better AI models, and team collaboration."
+            onDismiss={() => {
+              setPremiumCardDismissed(true);
+              setPremiumHintVisible(true);
+            }}
+            primaryAction={{
+              label: 'Upgrade',
+              onClick: () => openSettingsTab('Billing'),
+            }}
+            secondaryAction={{
+              label: 'Later',
+              onClick: () => {
+                setPremiumCardDismissed(true);
+                setPremiumHintVisible(true);
+              },
+            }}
+          />
+        </Show>
+        <Show
+          when={
+            !hasPaidAccess() &&
+            isExpandedView() &&
+            premiumHintVisible() &&
+            premiumCardDismissed() &&
+            newPricingFF().enabled
+          }
+        >
+          <SidebarPromoHint
+            title="Maybe later"
+            message="You can upgrade anytime from Account settings."
+            onDone={() => setPremiumHintVisible(false)}
+            secondaryAction={{
+              label: 'Take me there',
+              onClick: () => openSettingsTab('Account'),
+            }}
+          />
+        </Show>
         <SidebarSettingsWidget
           isSlim={isSlim}
           onSelect={openSettingsTab}

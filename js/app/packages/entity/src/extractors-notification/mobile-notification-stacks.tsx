@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   getMostRecentNotification,
@@ -7,6 +6,10 @@ import {
   openNotification,
 } from '@notifications';
 import { cn } from '@ui';
+import {
+  SwipableRow,
+  SwipableRowContext,
+} from 'app/component/mobile/SwipableRow';
 import { createEffect, type JSX, useContext } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';
@@ -91,7 +94,7 @@ function MobileStackRow(props: {
   entity: WithNotification<EntityData>;
   entityRowConfig?: EntityRowConfig;
 }) {
-  const ctx = useContext(EntityRowContext);
+  const ctx = useContext(SwipableRowContext);
   const notificationSource = useGlobalNotificationSource();
   const { markStackAsDone } = useNotificationStackActions({
     stack: props.stack,
@@ -101,7 +104,7 @@ function MobileStackRow(props: {
   const unread = () => isNotificationUnread(props.stack);
 
   const handleSwipeLeft = async () => {
-    await ctx?.collapseEntity(stackEntityId());
+    await ctx?.collapseRow(stackEntityId());
     markStackAsDone();
   };
 
@@ -136,8 +139,8 @@ function MobileStackRow(props: {
   }
 
   return (
-    <EntityRow
-      entityId={stackEntityId()}
+    <SwipableRow
+      id={stackEntityId()}
       onSwipeLeft={handleSwipeLeft}
       swipeLeftColor={props.entityRowConfig?.swipeLeftColor}
       swipeLeftRevealedComponent={
@@ -154,7 +157,7 @@ function MobileStackRow(props: {
         unread={unread()}
         onClick={handleClick}
       />
-    </EntityRow>
+    </SwipableRow>
   );
 }
 

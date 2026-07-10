@@ -228,7 +228,7 @@ mentioning other documents).
 2. **Incremental Testing**: Run tests frequently to catch issues early
 3. **Fixture Management**: Update test fixtures when changing table structures
 4. **SQLX Workflow**: Schema changes require migration → prepare → test cycle
-5. **Axum Patterns**: Use Extension instead of State for handlers in this codebase
+5. **Axum Patterns**: Handlers take shared services via `State`, not `Extension` (see STYLE_GUIDE.md CS-30; this case study predates that convention)
 
 ### Index Strategy
 
@@ -251,8 +251,8 @@ The migration included comprehensive indexes:
 
 ### Rust Error Handling
 
-- Prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))`
-- Use `bail!` for early returns with errors - it's more concise and idiomatic
+- New code uses `rootcause` for error handling — it's preferred over `anyhow` (see STYLE_GUIDE.md CS-46)
+- In code still on anyhow: prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))` for early returns - it's more concise and idiomatic
 
 ### Documentation Requirements
 

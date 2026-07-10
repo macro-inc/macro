@@ -29,6 +29,7 @@ ingestion = [
   "dep:channels",
   "dep:documents",
   "dep:entity_access",
+  "dep:futures",
   "dep:macro_event_broker",
   "dep:uuid",
   "ports",
@@ -40,11 +41,13 @@ outbound = [
   "dep:sha2",
   "dep:macro_uuid",
   "dep:sqlx",
+  "dep:sqs_client",
   "dep:tokio",
   "dep:url",
   "ports",
 ]
 ports = ["dep:serde_json", "dep:url"]
+worker = ["dep:tokio", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -56,6 +59,7 @@ documents = { path = "../documents", default-features = false, optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }
+futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
 macro_env = { path = "../macro_env", optional = true }
@@ -72,6 +76,7 @@ serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"], optional = true }
 tracing = { workspace = true }

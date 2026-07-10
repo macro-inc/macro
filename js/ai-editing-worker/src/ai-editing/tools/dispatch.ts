@@ -1,20 +1,13 @@
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
 import type { coder } from '../agents';
-import type { snippet } from '../agents/snippet';
 import type { LexicalSession } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
 import type { DocumentOpQueueParams } from '../queue';
-import type { SnippetSource } from '../runtime';
 import type { TokenTracker } from '../token-tracker';
 import { numberLines, serializeWithXml } from '../utils';
 import type { RunCodeToolOptions } from './run-code';
-import {
-  launchSnippetSpecs,
-  SnippetSpecsSchema,
-  type SnippetTraceEntry,
-} from './snippets';
 
 export type { UsageEntry } from '../token-tracker';
 export { TokenTracker } from '../token-tracker';
@@ -67,7 +60,7 @@ function findBlocked(
   return null;
 }
 
-export function mergeRanges(
+function mergeRanges(
   ranges: Array<[number, number]>
 ): Array<[number, number]> {
   const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
@@ -80,7 +73,7 @@ export function mergeRanges(
   return merged;
 }
 
-export function indexXmlRanges(xml: string): {
+function indexXmlRanges(xml: string): {
   lines: string[];
   byId: Map<string, XmlNodeRange>;
 } {
@@ -198,25 +191,27 @@ export type Writer = {
   release: () => void;
 };
 
-/** Per-edit timing recorded by dispatch: the snippet windows, the writer's
- *  window, and when each of its `runCode` calls executed. Comparing a
- *  snippet's `resolvedAt` with the first `runCodeAt` shows whether the settle
- *  point actually waited or generation was fully masked by codegen. */
+/** Per-edit timing recorded by dispatch: the writer's window and when each of
+ *  its `runCode` calls executed. */
 export type DispatchEditTrace = {
-  snippets: SnippetTraceEntry[];
+  /** Set when this edit was launched from onInputAvailable, before execute ran.
+   *  Epoch ms. */
+  streamedAt?: number;
   coderStartedAt: number;
   coderFinishedAt: number;
   runCodeAt: number[];
 };
 
+/** One runCode invocation as recorded for the trace: the code plus any content
+ *  the writer composed and passed alongside it. */
+export type CoderRunCode = { code: string; snippets?: Record<string, string> };
+
 export type DispatchToolOptions = {
   session: LexicalSession;
   childModel: LanguageModel;
-  snippetModel: LanguageModel;
-  /** Stronger composition model used for `effort: "high"` snippet specs. */
-  snippetHighModel: LanguageModel;
   tracker: TokenTracker;
-  runSnippet: typeof snippet;
+  /** The user's original edit request, shown to every writer for tone/intent. */
+  request?: string;
   runner: RunCodeToolOptions['runner'];
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
@@ -226,20 +221,28 @@ export type DispatchToolOptions = {
   runTask: typeof coder;
   serialize?: (session: LexicalSession) => string;
   onOps?: RunCodeToolOptions['onOps'];
-  /** Called after each dispatch batch with the JS code blocks run by each coder. */
-  onCoderResult?: (codes: string[][]) => void;
-  /** Called after each dispatch batch with per-edit snippet + timing traces. */
-  onEditTrace?: (edits: DispatchEditTrace[]) => void;
+  /** Called after each dispatch call with the coder's runCode calls. */
+  onCoderResult?: (codes: CoderRunCode[]) => void;
+  /** Called after each dispatch call with the edit's timing trace. */
+  onEditTrace?: (edit: DispatchEditTrace) => void;
 };
+
+export const DispatchEditSchema = z.object({
+  editing_instruction: z
+    .string()
+    .describe(
+      'the changes you want applied to the document. writers see the user request and compose content themselves — describe the structural change and any shape/length constraints; include exact strings (quotes, ids, user-supplied text) verbatim when the writer must use them character-for-character'
+    ),
+});
+
+export type DispatchEdit = z.infer<typeof DispatchEditSchema>;
 
 export function createDispatchTool(opts: DispatchToolOptions) {
   const {
     session,
     childModel,
-    snippetModel,
-    snippetHighModel,
     tracker,
-    runSnippet,
+    request,
     params,
     typingAnimations,
     sleep,
@@ -252,100 +255,99 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     onEditTrace,
   } = opts;
   const serialize = opts.serialize ?? serializeWithXml;
-  return tool({
-    description:
-      'spawn a writer to carry out an edit instruction on the document',
-    inputSchema: z.object({
-      edits: z
-        .array(
-          z.object({
-            editing_instruction: z
-              .string()
-              .describe('mechanical changes you want applied to the document'),
-            snippets: z
-              .record(z.string(), z.string())
-              .optional()
-              .describe(
-                'verbatim text values injected as a `snippets` JS object the coder can use directly. all verbatim text goes here, so that the writer can paste it in'
-              ),
-            snippet_specs: SnippetSpecsSchema.optional().describe(
-              'content to be composed by a snippet writer while your writer works: key → brief (what to write, tone, expected shape/length), or `{ brief, effort: "high" }` to route to the stronger composition model. the writer references it as `snippets.KEY` like any verbatim snippet'
-            ),
-          })
-        )
-        .describe('edit instructions to run as one parallel batch'),
-    }),
-    execute: async ({ edits }) => {
-      const xml = serializeWithXml(session);
-      const contexts = edits.map((e) =>
-        computeContextRange(xml, e.editing_instruction)
-      );
-      const editTraces: DispatchEditTrace[] = [];
-      // Writers run concurrently (distinct cursors); each applies its own ops
-      // serially via editor.update, so the shared session never tears.
-      const results = await Promise.all(
-        edits.map(
-          async ({ editing_instruction, snippets, snippet_specs }, i) => {
-            const context = xmlWindow(xml, contexts[i]!);
-            const { pending, traces: snippetTraces } = launchSnippetSpecs({
-              specs: snippet_specs,
-              context,
-              snippetModel,
-              snippetHighModel,
-              tracker,
-              runSnippet,
-              signal,
-            });
-            const merged: SnippetSource = { ...snippets, ...pending };
-            const trace: DispatchEditTrace = {
-              snippets: snippetTraces,
-              coderStartedAt: Date.now(),
-              coderFinishedAt: 0,
-              runCodeAt: [],
-            };
-            editTraces[i] = trace;
-            const writer = await makeWriter();
-            const { doc, awarenessSource } = writer;
-            try {
-              return await runTask(session, editing_instruction, childModel, {
-                doc,
-                awarenessSource,
-                context,
-                snippets: merged,
-                params,
-                typingAnimations,
-                sleep,
-                signal,
-                runner,
-                onOps,
-                onRunCode: () => trace.runCodeAt.push(Date.now()),
-              });
-            } finally {
-              trace.coderFinishedAt = Date.now();
-              writer.release();
-            }
-          }
-        )
-      );
-      onEditTrace?.(editTraces);
-      const summaries = results.map((res, i) => {
-        tracker.add(childModel as { modelId: string }, res.totalUsage);
-        const blocked = findBlocked(res);
-        if (blocked) {
-          return `${i + 1}. ⚠ BLOCKED -- ${blocked.message}.`;
-        }
-        return `${i + 1}. ✓ APPLIED`;
+
+  type CoderRun = Awaited<ReturnType<typeof runTask>>;
+  type EditRun = { run: Promise<CoderRun>; trace: DispatchEditTrace };
+  // Coders already started from onInputAvailable, keyed by tool call id.
+  const calls = new Map<string, EditRun>();
+
+  async function runEdit(
+    edit: DispatchEdit,
+    trace: DispatchEditTrace
+  ): Promise<CoderRun> {
+    // Serialized at launch time so an edit launched early sees whatever earlier
+    // coders have already applied.
+    const xml = serializeWithXml(session);
+    const context = xmlWindow(
+      xml,
+      computeContextRange(xml, edit.editing_instruction)
+    );
+    const writer = await makeWriter();
+    const { doc, awarenessSource } = writer;
+    try {
+      return await runTask(session, edit.editing_instruction, childModel, {
+        doc,
+        awarenessSource,
+        context,
+        request,
+        params,
+        typingAnimations,
+        sleep,
+        signal,
+        runner,
+        onOps,
+        onRunCode: () => trace.runCodeAt.push(Date.now()),
       });
-      if (onCoderResult) {
-        const codes = results.map((res) =>
-          res.steps
+    } finally {
+      trace.coderFinishedAt = Date.now();
+      writer.release();
+    }
+  }
+
+  /** Start the edit if it isn't already running; return its run either way. */
+  function ensureLaunched(
+    toolCallId: string,
+    edit: DispatchEdit,
+    streamed: boolean
+  ): EditRun {
+    const existing = calls.get(toolCallId);
+    if (existing) return existing;
+    const trace: DispatchEditTrace = {
+      streamedAt: streamed ? Date.now() : undefined,
+      coderStartedAt: Date.now(),
+      coderFinishedAt: 0,
+      runCodeAt: [],
+    };
+    const entry: EditRun = { run: runEdit(edit, trace), trace };
+    // A streamed run can reject before `execute` awaits it; keep that rejection
+    // for the join instead of letting it escape as an unhandled rejection.
+    entry.run.catch(() => {});
+    calls.set(toolCallId, entry);
+    return entry;
+  }
+
+  return {
+    tool: tool({
+      description:
+        'spawn a writer for one edit instruction; call in parallel for independent edits',
+      inputSchema: DispatchEditSchema,
+      onInputAvailable: ({ input, toolCallId }) => {
+        ensureLaunched(toolCallId, input, true);
+      },
+      execute: async (edit, { toolCallId }) => {
+        const entry = ensureLaunched(toolCallId, edit, false);
+        calls.delete(toolCallId);
+        const result = await entry.run;
+        onEditTrace?.(entry.trace);
+        tracker.add(childModel as { modelId: string }, result.totalUsage);
+        const blocked = findBlocked(result);
+        const summary = blocked
+          ? `⚠ BLOCKED -- ${blocked.message}.`
+          : `✓ APPLIED`;
+        if (onCoderResult) {
+          const codes = result.steps
             .flatMap((step) => step.toolCalls)
             .filter((call) => call.toolName === 'runCode')
-            .map((call) => (call.input as { code: string }).code)
-        );
-        onCoderResult(codes);
-      }
-      return `${summaries.join('\n')}\n\n<document>\n${serialize(session)}\n</document>`;
-    },
-  });
+            .map((call) => {
+              const { code, snippets } = call.input as CoderRunCode;
+              return { code, snippets };
+            });
+          onCoderResult(codes);
+        }
+        return `${summary}\n\n<document>\n${serialize(session)}\n</document>`;
+      },
+    }),
+  };
 }
+
+export type DispatchTool = ReturnType<typeof createDispatchTool>;

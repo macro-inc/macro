@@ -30,7 +30,13 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
     <>
       <div ref={marker} style={{ display: 'contents' }} />
       <Portal mount={shadowContainer()}>
-        <div data-html-render="true" innerHTML={props.html} />
+        {/* contain: floats/positioned content in email HTML must size and
+            paint within this node, not over siblings below the editor */}
+        <div
+          data-html-render="true"
+          style={{ contain: 'layout' }}
+          innerHTML={props.html}
+        />
       </Portal>
     </>
   );

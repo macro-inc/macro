@@ -1,3 +1,4 @@
+import { $isListNode } from '@lexical/list';
 import {
   CHECK_LIST,
   type ElementTransformer,
@@ -6,7 +7,6 @@ import {
   type Transformer,
   UNORDERED_LIST,
 } from '@lexical/markdown';
-import { $isListNode } from '@lexical/list';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
 

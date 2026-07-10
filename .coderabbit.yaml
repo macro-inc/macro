@@ -166,9 +166,12 @@ reviews:
       enabled: true
       timeout_ms: 90000
 
-    # AST analysis
+    # AST analysis. rule_dirs points at the same custom rules that CI runs
+    # (sgconfig.yml at the repo root), so bot comments match CI failures.
     ast-grep:
       essential_rules: true
+      rule_dirs:
+        - "rules/ast-grep"
 
     # Disabled: not used in this repo
     ruff:
@@ -242,6 +245,7 @@ knowledge_base:
     filePatterns:
       - "**/CLAUDE.md"
       - "**/AGENTS.md"
+      - "STYLE_GUIDE.md"
       - "**/.cursor/rules/*.mdc"
       - "**/.cursor/commands/*.md"
 

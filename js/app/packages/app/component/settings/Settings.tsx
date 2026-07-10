@@ -1,4 +1,5 @@
 import { Billing } from '@app/component/settings/Billing';
+import { Bots } from '@app/component/settings/Bots';
 import { useLogout } from '@core/auth/logout';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
@@ -411,6 +412,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </Show>
                 <Show when={isCurrentTab('Agent')}>
                   <Agent />
+                </Show>
+                <Show when={isCurrentTab('Bots')}>
+                  <Suspense>
+                    <Bots />
+                  </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Admin')}>
                   <Admin />

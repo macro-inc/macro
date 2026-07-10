@@ -266,6 +266,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   inputRef?: (ref: HTMLInputElement) => void;
   inputId?: string;
   focusOnMount?: boolean;
+  /** Open the suggestions dropdown when the input gains focus (default true) */
+  openOnFocus?: boolean;
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
   noPadding?: boolean;
@@ -758,7 +760,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                     class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                     classList={{ 'ml-1': selectedLen() === 0 }}
-                    onFocus={() => setIsOpen(true)}
+                    onFocus={() => {
+                      if (props.openOnFocus ?? true) setIsOpen(true);
+                    }}
                     onKeyDown={(e) => {
                       if (
                         (e.key === 'a' && e.ctrlKey) ||

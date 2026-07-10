@@ -116,6 +116,10 @@ export type UnifiedSearchIndex =
  * offered to the model.
  */
 export type SearchMatchType = 'partial' | 'exact';
+/**
+ * How multiple tag filters combine when filtering items.
+ */
+export type TagMatch = 'any' | 'all';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -1063,9 +1067,10 @@ export interface ContentSearch {
    */
   query: string;
   /**
-   * Restrict results to items carrying at least one of the given tags (OR semantics). Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects) can match, so channels and call records are dropped while a tag filter is active.
+   * Restrict results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects) can match, so channels and call records are dropped while a tag filter is active.
    */
   tags?: TagFilter[] | null;
+  tagsMatch?: TagMatch;
 }
 /**
  * A tag selector in a tool request, matched by label against the caller's tag sets.
@@ -1812,9 +1817,10 @@ export interface ListEntities {
   };
   sortBy?: SortBy;
   /**
-   * Filter results to items carrying at least one of the given tags (OR semantics). Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, tasks, projects, emails, AI chats) can match a tag filter. Prefer this over hand-building a propf filter for tags.
+   * Filter results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, tasks, projects, emails, AI chats) can match a tag filter. Prefer this over hand-building a propf filter for tags.
    */
   tags?: TagFilter[] | null;
+  tagsMatch?: TagMatch;
 }
 /**
  * Response returned by the list entities AI tool.
@@ -2204,9 +2210,10 @@ export interface NameSearch {
    */
   name: string;
   /**
-   * Restrict results to items carrying at least one of the given tags (OR semantics). Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects) can match, so channels and call records are dropped while a tag filter is active.
+   * Restrict results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, emails, AI chats, projects) can match, so channels and call records are dropped while a tag filter is active.
    */
   tags?: TagFilter[] | null;
+  tagsMatch?: TagMatch;
 }
 /**
  * Metadata for a project fetched from the database

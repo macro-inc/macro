@@ -95,7 +95,7 @@ export function HistoryProvider(props: {
   // local scrubbing from it. The full snapshot (not updates) is required so
   // getAllChanges() carries the per-change timestamp metadata.
   const [historyDoc] = createResource(
-    () => props.documentId(),
+    () => (isOpen() ? props.documentId() : undefined),
     async (documentId) => {
       const result = await syncServiceClient.getSnapshot({ documentId });
       if (result.isErr()) throw new Error(String(result.error));
@@ -106,7 +106,9 @@ export function HistoryProvider(props: {
   );
 
   // Peer -> user mapping for labelling sessions; lightweight JSON.
-  const peerMap = useDocumentPeersQuery(props.documentId);
+  const peerMap = useDocumentPeersQuery(() =>
+    isOpen() ? props.documentId() : ''
+  );
 
   // AI peers are recognizable from the peer id alone (reserved block) and all
   // collapse into the single Macro identity. Checked before the peer map,

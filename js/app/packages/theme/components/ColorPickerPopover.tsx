@@ -18,7 +18,7 @@ import { ColorSwatch } from './ColorSwatch';
 const CHROMA_MAX = 0.37;
 
 const RING =
-  'pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_3px_oklch(0_0_0/0.4)]';
+  'pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[white] shadow-[0_1px_3px_oklch(0_0_0/0.4)]';
 
 /** 2D field: chroma on X (0 → max), lightness on Y (top = light). Drag sets both. */
 function ColorField(props: {
@@ -104,7 +104,7 @@ function HueSlider(props: { h: () => number; onH: (n: number) => void }) {
         {/* Kobalte positions the thumb on the main (vertical) axis via `bottom` +
             its own transform; we only center it horizontally and paint it. */}
         <Slider.Thumb
-          class="absolute left-1/2 -ml-[7px] size-3.5 rounded-full border-2 border-white shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none"
+          class="absolute left-1/2 -ml-[7px] size-3.5 rounded-full border-2 border-[white] shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none"
           style={{ 'background-color': `oklch(0.7 0.2 ${props.h()}deg)` }}
         >
           <Slider.Input />

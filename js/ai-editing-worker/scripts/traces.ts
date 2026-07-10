@@ -1,105 +1,104 @@
 #!/usr/bin/env bun
-import { $ } from "bun";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { renderTraceMarkdown, type TraceSession } from "../src/trace-log";
 
-// Each env has its own D1 database (see wrangler.toml).
-const DB_BY_ENV: Record<string, string> = {
-	local: "ai-editing-traces",
-	dev: "ai-editing-traces",
-	playground: "ai-editing-traces-playground",
-	prod: "ai-editing-traces-prod",
+const WORKER_URL_BY_ENV: Record<string, string> = {
+	local: "http://localhost:8933",
+	dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
+	playground: "https://ai-editing-worker-playground.macroverse.workers.dev",
+	prod: "https://ai-editing-worker.macroverse.workers.dev",
 };
 
-const { env, id, latest, local, json, _ } = await yargs(hideBin(process.argv))
-	.usage(
-		"$0 <document-id> [--env dev] [--id <trace-id> | --latest] [--json] [--local]\n\n" +
-			"Lists edit traces for a document; with --id/--latest dumps the full trace\n" +
-			"(rendered markdown by default, or raw structured JSON with --json).",
-	)
-	.help()
-	.option("env", {
-		type: "string",
-		default: "dev",
-		choices: Object.keys(DB_BY_ENV),
-		describe: "worker environment (selects the D1 database)",
-	})
-	.option("id", {
-		type: "string",
-		describe: "dump the full markdown for this trace id",
-	})
-	.option("latest", {
-		type: "boolean",
-		default: false,
-		describe: "dump the full markdown for the newest trace of the document",
-	})
-	.option("local", {
-		type: "boolean",
-		default: false,
-		describe: "query the local dev shard instead of the remote database",
-	})
-	.option("json", {
-		type: "boolean",
-		default: false,
-		describe:
-			"with --id/--latest, emit the raw structured JSON instead of rendered markdown",
-	})
-	.parse();
+const { env, id, latest, json, "worker-url": workerUrlOpt, _ } =
+	await yargs(hideBin(process.argv))
+		.usage(
+			"$0 <document-id> [--env dev] [--id <trace-id> | --latest] [--json] [--worker-url <url>]\n\n" +
+				"Lists edit traces for a document; with --id/--latest dumps the full trace\n" +
+				"(rendered markdown by default, or raw structured JSON with --json).\n\n" +
+				"Auth: reads INTERNAL_API_KEY from the environment.",
+		)
+		.help()
+		.option("env", {
+			type: "string",
+			default: "dev",
+			choices: Object.keys(WORKER_URL_BY_ENV),
+			describe: "worker environment",
+		})
+		.option("id", {
+			type: "string",
+			describe: "dump the full markdown for this trace id",
+		})
+		.option("latest", {
+			type: "boolean",
+			default: false,
+			describe: "dump the full markdown for the newest trace of the document",
+		})
+		.option("worker-url", {
+			type: "string",
+			describe: "override the worker base URL",
+		})
+		.option("json", {
+			type: "boolean",
+			default: false,
+			describe:
+				"with --id/--latest, emit the raw structured JSON instead of rendered markdown",
+		})
+		.parse();
 
 const documentId = _[0] as string | undefined;
-if (!documentId && !id) {
+if (!documentId) {
 	console.error(
 		"Usage: bun run scripts/traces.ts <document-id> [--env dev] [--id <trace-id> | --latest]",
 	);
 	process.exit(1);
 }
 
-const db = DB_BY_ENV[env]!;
-// The `local` env is only ever an on-disk SQLite shard (see wrangler.toml), so
-// there is no remote to hit — query it locally regardless of the --local flag.
-const location = local || env === "local" ? [] : ["--remote"];
-
-// Guard against breaking out of the SQL string literal. Ids are uuids / doc ids.
-function lit(value: string): string {
-	if (value.includes("'")) {
-		console.error(`invalid identifier: ${value}`);
-		process.exit(1);
-	}
-	return `'${value}'`;
+const apiKey = process.env.INTERNAL_API_KEY;
+if (!apiKey) {
+	console.error("INTERNAL_API_KEY env var is not set");
+	process.exit(1);
 }
 
-async function query(sql: string): Promise<Record<string, unknown>[]> {
-	const res =
-		await $`bunx wrangler d1 execute ${db} --env ${env} ${location} --json --command ${sql}`.quiet();
-	const parsed = JSON.parse(res.stdout.toString()) as [{ results: unknown[] }];
-	return parsed[0].results as Record<string, unknown>[];
+const workerBase = workerUrlOpt ?? WORKER_URL_BY_ENV[env]!;
+
+const res = await fetch(`${workerBase}/traces/${documentId}`, {
+	headers: { "x-internal-auth-key": apiKey },
+});
+if (!res.ok) {
+	console.error(`${res.status} ${res.statusText}: ${await res.text()}`);
+	process.exit(1);
 }
+
+const { traces } = (await res.json()) as {
+	documentId: string;
+	count: number;
+	traces: { id: string; createdAt: number; session: TraceSession }[];
+};
 
 if (id || latest) {
-	const where = id
-		? `id = ${lit(id)}`
-		: `document_id = ${lit(documentId!)} ORDER BY created_at DESC LIMIT 1`;
-	const rows = await query(`SELECT trace_json FROM edit_traces WHERE ${where}`);
-	if (rows.length === 0) {
+	const trace = id
+		? traces.find((t) => t.id === id)
+		: traces[0];
+	if (!trace) {
 		console.error("no matching trace");
 		process.exit(1);
 	}
-	const raw = String(rows[0]!.trace_json);
 	if (json) {
-		process.stdout.write(raw);
+		process.stdout.write(JSON.stringify(trace.session, null, 2));
 	} else {
-		process.stdout.write(
-			renderTraceMarkdown(JSON.parse(raw) as TraceSession),
-		);
+		process.stdout.write(renderTraceMarkdown(trace.session));
 	}
 } else {
-	const rows = await query(
-		`SELECT id, datetime(created_at/1000,'unixepoch') AS at_utc, length(trace_json) AS json_chars FROM edit_traces WHERE document_id = ${lit(documentId!)} ORDER BY created_at DESC`,
-	);
-	if (rows.length === 0) {
+	if (traces.length === 0) {
 		console.error("no traces for that document");
 		process.exit(1);
 	}
-	console.table(rows);
+	console.table(
+		traces.map((t) => ({
+			id: t.id,
+			at_utc: new Date(t.createdAt).toISOString(),
+			json_chars: JSON.stringify(t.session).length,
+		})),
+	);
 }

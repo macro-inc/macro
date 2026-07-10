@@ -8,7 +8,7 @@ import type { EntityReference } from '@property/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { HoverCard } from '@ui';
 import { For, Show } from 'solid-js';
-import { CallStatusBadge } from '../../components/Badges';
+import { CallChannelNameBadge, CallStatusBadge } from '../../components/Badges';
 import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
@@ -132,31 +132,25 @@ export function CallWideContent(props: {
   chars: number;
 }) {
   const hit = () => firstContentHit(props.entity);
+  const channelName = () => props.entity.channelName?.trim() || undefined;
   return (
     <>
       <span class="truncate">
         <CallRecordName entity={props.entity} />
       </span>
+      <Show when={channelName()}>
+        {(name) => <CallChannelNameBadge channelName={name()} />}
+      </Show>
       <Show
         when={hit()}
         fallback={
-          <>
-            <span class="text-ink-extra-muted font-medium truncate shrink-0">
-              <Show
-                when={props.entity.durationMs}
-                fallback={props.entity.isActive ? 'In progress' : ''}
-              >
-                {(ms) => formatCallDuration(ms())}
-              </Show>
-            </span>
-            <Show when={props.entity.summary}>
-              {(summary) => (
-                <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
-                  {summary()}
-                </span>
-              )}
-            </Show>
-          </>
+          <Show when={props.entity.summary}>
+            {(summary) => (
+              <span class="text-ink/50 font-medium truncate flex-1 min-w-0">
+                {summary()}
+              </span>
+            )}
+          </Show>
         }
       >
         {(h) => (

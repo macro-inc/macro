@@ -83,7 +83,7 @@ import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
 import { iosCursorScrollPlugin } from 'core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { $getRoot } from 'lexical';
+import { $addUpdateTag, $getRoot } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -346,6 +346,11 @@ export function BaseInput(props: {
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
+  // Gmail-style sizing: the composer opens compact and grows to the full cap
+  // once the user scrolls the content
+  const [composerExpanded, setComposerExpanded] = createSignal(false);
+  // Appended quoted thread starts hidden behind a "⋯" pill (desktop)
+  const [quoteCollapsed, setQuoteCollapsed] = createSignal(true);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -440,7 +445,11 @@ export function BaseInput(props: {
     form().setCapturedEditor(currentEditor);
     const html = initialHtml();
     if (html) {
-      setEditorStateFromHtml(currentEditor, html);
+      // Restore content without letting selection reconciliation grab focus
+      currentEditor.update(() => {
+        $addUpdateTag('skip-dom-selection');
+        setEditorStateFromHtml(currentEditor, html, true);
+      });
     }
   };
 
@@ -587,6 +596,52 @@ export function BaseInput(props: {
     }
   }
 
+  // Lexical setup after the quote append (decorator mounts, mutation flushes)
+  // keeps flushing stale selections into the editor, yanking focus out of the
+  // To field. While armed, bounce those grabs back to To; any deliberate user
+  // interaction (pointer, Tab/Escape, focus leaving the composer) disarms it.
+  let bounceEditorFocusGrabs = false;
+
+  onMount(() => {
+    const disarm = () => {
+      bounceEditorFocusGrabs = false;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' || e.key === 'Escape') disarm();
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      if (!bounceEditorFocusGrabs) return;
+      const target = e.target as Node;
+      if (!composeContainerRef?.contains(target)) {
+        disarm();
+        return;
+      }
+      if (scrollContainer()?.contains(target)) {
+        toRef()?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', disarm, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('focusin', onFocusIn, true);
+    onCleanup(() => {
+      document.removeEventListener('pointerdown', disarm, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('focusin', onFocusIn, true);
+    });
+  });
+
+  const focusForwardRecipients = () => {
+    setShowExpandedRecipients(true);
+    setTimeout(() => {
+      if (toRef()) {
+        bounceEditorFocusGrabs = true;
+        toRef()?.focus();
+      }
+      // After the quoted thread is appended, keep the send bar in view
+      bottomBarRef?.scrollIntoView({ block: 'nearest' });
+    }, 100);
+  };
+
   // Attach side-effect handlers on mount; they replay against current state
   onMount(() => {
     form().setOnDirty(() => {
@@ -594,16 +649,14 @@ export function BaseInput(props: {
     });
 
     form().setOnReplyTypeApplied((rt) => {
+      setComposerExpanded(false);
       if (rt === 'forward') {
-        setShowExpandedRecipients(true);
-        setTimeout(() => {
-          if (toRef()) {
-            toRef()?.focus();
-          }
-        }, 100);
+        setQuoteCollapsed(true);
+        focusForwardRecipients();
       } else if (rt === 'reply' || rt === 'reply-all') {
         setTimeout(() => {
           editor()?.focus();
+          bottomBarRef?.scrollIntoView({ block: 'nearest' });
         }, 100);
       }
     });
@@ -808,8 +861,15 @@ export function BaseInput(props: {
 
     if (form().replyType() !== requestReplyType) {
       form().setReplyType(requestReplyType);
+    } else if (requestReplyType === 'forward') {
+      // setReplyType is skipped when the type is unchanged, so land the
+      // cursor in the To field explicitly
+      focusForwardRecipients();
     }
-    form().setShouldFocusInput(true);
+    // Forwards focus the To field; focusing the editor would steal it back
+    if (requestReplyType !== 'forward') {
+      form().setShouldFocusInput(true);
+    }
     ctx.replyRequest.clear();
   });
 
@@ -897,6 +957,7 @@ export function BaseInput(props: {
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
+  let bottomBarRef: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => composeContainerRef);
 
   const sendEmail = async (markDone = false) => {
@@ -1212,6 +1273,12 @@ export function BaseInput(props: {
       form().setShouldFocusInput(false);
       return;
     }
+    // Forwards focus the To field; a stale flag consumed here after the
+    // editor mounts would move the caret into the editor body instead.
+    if (effectiveReplyType() === 'forward') {
+      form().setShouldFocusInput(false);
+      return;
+    }
     const ed = editor();
     if (!ed) return;
     requestAnimationFrame(() => {
@@ -1414,6 +1481,8 @@ export function BaseInput(props: {
 
     const currentlyAppended = form().replyAppended();
     form().setReplyAppended(!currentlyAppended);
+    // Explicitly showing quoted text via the toolbar reveals it uncollapsed
+    if (!currentlyAppended) setQuoteCollapsed(false);
 
     editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
       replyingTo,
@@ -1425,6 +1494,60 @@ export function BaseInput(props: {
       $getRoot().getFirstChild()?.selectStart();
     });
   };
+
+  const AttachmentsRow = (rowProps?: { class?: string }) => (
+    <Show when={form().attachments.list().length > 0}>
+      <div
+        class={cn(
+          'ph-no-capture shrink-0 flex gap-1 flex-wrap w-full py-2',
+          rowProps?.class
+        )}
+      >
+        <For each={form().attachments.list()}>
+          {(attachment) => (
+            <Switch>
+              <Match when={attachment.type === 'local' && attachment}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={{
+                      fileName: attachment().file.name,
+                      mimeType: attachment().file.type,
+                    }}
+                    removable
+                    onRemove={() => handleRemoveAttachment(attachment())}
+                  />
+                )}
+              </Match>
+              <Match when={attachment.type === 'remote' && attachment}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={{
+                      fileName: attachment().fileName,
+                      mimeType: attachment().contentType,
+                    }}
+                    removable
+                    onRemove={() => handleRemoveAttachment(attachment())}
+                  />
+                )}
+              </Match>
+              <Match when={attachment.type === 'forwarded' && attachment}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={{
+                      fileName: attachment().fileName,
+                      mimeType: attachment().mimeType,
+                    }}
+                    removable
+                    onRemove={() => handleRemoveAttachment(attachment())}
+                  />
+                )}
+              </Match>
+            </Switch>
+          )}
+        </For>
+      </div>
+    </Show>
+  );
 
   const AttachButton = (buttonProps?: {
     variant?: 'ghost' | 'base';
@@ -1572,6 +1695,7 @@ export function BaseInput(props: {
                       To
                     </div>
                     <RecipientSelector<EmailRecipient['kind']>
+                      openOnFocus={false}
                       class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
                       inputRef={setToRef}
                       options={ctx.recipientOptions}
@@ -1601,6 +1725,7 @@ export function BaseInput(props: {
                         Cc
                       </div>
                       <RecipientSelector<EmailRecipient['kind']>
+                        openOnFocus={false}
                         class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
                         inputRef={setCcRef}
                         options={ctx.recipientOptions}
@@ -1631,6 +1756,7 @@ export function BaseInput(props: {
                         Bcc
                       </div>
                       <RecipientSelector<EmailRecipient['kind']>
+                        openOnFocus={false}
                         class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
                         inputRef={setBccRef}
                         options={ctx.recipientOptions}
@@ -1682,6 +1808,7 @@ export function BaseInput(props: {
           >
             <div class="shrink-0 text-ink-placeholder">To:</div>
             <RecipientSelector<EmailRecipient['kind']>
+              openOnFocus={false}
               class={mobileRecipientSelectorClass}
               inputRef={setToRef}
               options={ctx.recipientOptions}
@@ -1724,6 +1851,7 @@ export function BaseInput(props: {
             >
               <div class="shrink-0 text-ink-placeholder">Cc:</div>
               <RecipientSelector<EmailRecipient['kind']>
+                openOnFocus={false}
                 class={mobileRecipientSelectorClass}
                 inputRef={setCcRef}
                 options={ctx.recipientOptions}
@@ -1752,6 +1880,7 @@ export function BaseInput(props: {
             >
               <div class="shrink-0 text-ink-placeholder">Bcc:</div>
               <RecipientSelector<EmailRecipient['kind']>
+                openOnFocus={false}
                 class={mobileRecipientSelectorClass}
                 inputRef={setBccRef}
                 options={ctx.recipientOptions}
@@ -1814,8 +1943,23 @@ export function BaseInput(props: {
             'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
             isMobileDrawer()
               ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
-              : 'max-h-[calc(60*var(--dvh,1dvh))] overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]'
+              : cn(
+                  'overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]',
+                  composerExpanded()
+                    ? // Cap to the thread viewport (minus composer chrome) so the
+                      // recipients row and send bar stay on screen together
+                      'max-h-[min(calc(60*var(--dvh,1dvh)),calc(var(--thread-height,9999px)-14rem))]'
+                    : 'max-h-56'
+                )
           )}
+          onScroll={(e) => {
+            if (composerExpanded() || e.currentTarget.scrollTop <= 0) return;
+            setComposerExpanded(true);
+            // Keep the send bar pinned while the box grows
+            requestAnimationFrame(() => {
+              bottomBarRef?.scrollIntoView({ block: 'nearest' });
+            });
+          }}
           onclick={() => {
             editor()?.focus();
           }}
@@ -1856,6 +2000,10 @@ export function BaseInput(props: {
             class={cn(
               'ph-no-capture cursor-text wrap-break-word text-ink h-auto overflow-visible',
               isMobileDrawer() ? 'text-[17px] leading-6' : 'text-sm',
+              // Quoted thread collapses behind the "⋯" pill below
+              // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
+              // variants turn the underscore in .macro_quote into a space)
+              quoteCollapsed() && 'quote-collapsed',
               isDragging() && 'blur'
             )}
             disabled={sendMutation.isPending}
@@ -1869,7 +2017,30 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
-          <Show when={props.replyingTo()}>
+          <Show when={form().replyAppended() && quoteCollapsed()}>
+            <div class="flex items-center py-1.5">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+                tooltip="Show quoted text"
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  setQuoteCollapsed(false);
+                  setComposerExpanded(true);
+                }}
+              >
+                <DotsThree />
+              </Button>
+            </div>
+          </Show>
+          <Show
+            when={
+              props.replyingTo() &&
+              // The collapse pill above already covers this state
+              !(form().replyAppended() && quoteCollapsed())
+            }
+          >
             <div
               class="shrink-0 pt-1"
               data-corvu-no-drag=""
@@ -1900,50 +2071,9 @@ export function BaseInput(props: {
               <MacroSignatureButton />
             </div>
           </Show>
-          <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
-            <For each={form().attachments.list()}>
-              {(attachment) => (
-                <Switch>
-                  <Match when={attachment.type === 'local' && attachment}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment().file.name,
-                          mimeType: attachment().file.type,
-                        }}
-                        removable
-                        onRemove={() => handleRemoveAttachment(attachment())}
-                      />
-                    )}
-                  </Match>
-                  <Match when={attachment.type === 'remote' && attachment}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment().fileName,
-                          mimeType: attachment().contentType,
-                        }}
-                        removable
-                        onRemove={() => handleRemoveAttachment(attachment())}
-                      />
-                    )}
-                  </Match>
-                  <Match when={attachment.type === 'forwarded' && attachment}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment().fileName,
-                          mimeType: attachment().mimeType,
-                        }}
-                        removable
-                        onRemove={() => handleRemoveAttachment(attachment())}
-                      />
-                    )}
-                  </Match>
-                </Switch>
-              )}
-            </For>
-          </div>
+          <Show when={isMobileDrawer()}>
+            <AttachmentsRow />
+          </Show>
           <Show when={scrollAreaSignatureHtml()}>
             {(html) => (
               <SignaturePreview
@@ -1954,6 +2084,8 @@ export function BaseInput(props: {
           </Show>
         </div>
         <Show when={!isMobileDrawer()}>
+          {/* Below the scroll area so quoted email content can never overlap it */}
+          <AttachmentsRow class="px-4" />
           <Show when={footerSignatureHtml()}>
             {(html) => (
               <SignaturePreview
@@ -1965,7 +2097,10 @@ export function BaseInput(props: {
           {/* No fixed height: the send button (size-7.5) is taller than the icon
               buttons, and a fixed h-9 minus the vertical padding left it 4px short
               — with items-end it bled upward over the signature bar above. */}
-          <div class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5">
+          <div
+            ref={bottomBarRef}
+            class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5"
+          >
             <div class="flex flex-row items-center gap-1">
               <div class="relative flex">
                 <AttachButton />

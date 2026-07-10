@@ -98,13 +98,25 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       : parsedBodyReplyless();
   };
 
+  // Sent-from-Macro messages strip the quoted thread from body_macro at send
+  // time, and the backend skips replyless trimming for "Fwd:" subjects — so a
+  // quote in the full html means there is hidden content regardless of
+  // body_replyless.
+  const bodyHtmlHasQuote = createMemo(() => {
+    const html = props.message.body_html_sanitized;
+    if (!html || !props.message.body_macro) return false;
+    const doc = new DOMParser().parseFromString(html.toString(), 'text/html');
+    return doc.body.querySelector('.macro_quote') !== null;
+  });
+
   const hasHiddenReplyStructure = () => {
     return (
       !isPlaintext() &&
-      ((bodyReplyless() &&
-        bodyReplyless().toString().replace(/\s+/g, '').length !==
-          props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
-            .length) ||
+      (bodyHtmlHasQuote() ||
+        (bodyReplyless() &&
+          bodyReplyless().toString().replace(/\s+/g, '').length !==
+            props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
+              .length) ||
         source()?.signature)
     );
   };

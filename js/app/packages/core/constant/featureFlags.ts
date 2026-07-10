@@ -510,3 +510,9 @@ export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
   'UNIFIED_CHANNEL_INPUT',
   false
 );
+
+// Bot management in Settings, channels, and the command menu. Override locally
+// with VITE_BOT_MANAGEMENT.
+export const BOT_MANAGEMENT_FLAG = 'bot-management';
+export const BOT_MANAGEMENT_OVERRIDE =
+  resolveFeatureFlag('BOT_MANAGEMENT', DEV_MODE_ENV) || undefined;

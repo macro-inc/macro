@@ -1,7 +1,8 @@
 use super::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookFilter,
-        WebhookFilters, WebhookScope, WebhookStatus, WebhookValidationResult,
+        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
+        WebhookEndpointSchemePolicy, WebhookFilter, WebhookFilters, WebhookScope, WebhookStatus,
+        WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
     service::WebhookServiceImpl,
@@ -350,6 +351,33 @@ async fn invalid_http_endpoint_is_rejected() {
     request.endpoint_url = "http://example.com/webhook".to_string();
 
     assert_bad_request(service.create_webhook(caller(), request).await);
+}
+
+#[tokio::test]
+async fn local_addresses_are_allowed_when_policy_permits_them() {
+    let service = WebhookServiceImpl::new_with_endpoint_scheme_policy(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        WebhookEndpointSchemePolicy::HttpAndHttps,
+    );
+
+    for endpoint_url in [
+        "http://localhost/webhook",
+        "http://127.0.0.1/webhook",
+        "http://10.1.2.3/webhook",
+        "http://[::1]/webhook",
+        "http://[fe80::1]/webhook",
+    ] {
+        let mut request = create_request();
+        request.endpoint_url = endpoint_url.to_string();
+
+        let webhook = service
+            .create_webhook(caller(), request)
+            .await
+            .expect("local address should be allowed");
+
+        assert_eq!(webhook.endpoint_url, endpoint_url);
+    }
 }
 
 #[tokio::test]

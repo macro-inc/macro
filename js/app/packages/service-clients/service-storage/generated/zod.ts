@@ -20029,7 +20029,9 @@ export const editProjectV2Response = zod.object({
  */
 export const createWebhookBody = zod
   .object({
-    endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    endpoint_url: zod
+      .string()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
     filters: zod.array(
       zod
         .object({
@@ -20073,7 +20075,10 @@ export const patchWebhookParams = zod.object({
 
 export const patchWebhookBody = zod
   .object({
-    endpoint_url: zod.string().nullish().describe('HTTPS endpoint URL.'),
+    endpoint_url: zod
+      .string()
+      .nullish()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
     filters: zod
       .union([
         zod.null(),
@@ -20119,7 +20124,9 @@ export const patchWebhookResponse = zod
       .datetime({})
       .nullish()
       .describe('Soft-delete timestamp.'),
-    endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    endpoint_url: zod
+      .string()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
     filters: zod.array(
       zod
         .object({

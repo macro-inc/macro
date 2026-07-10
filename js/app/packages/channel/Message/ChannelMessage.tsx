@@ -11,6 +11,7 @@ import { isUnifiedInputMode } from '../unified-input-mode';
 import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
+import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
 import type { MessageActions, MessageData } from './types';
 
 type ChannelMessageProps = {
@@ -199,46 +200,50 @@ export function ChannelMessage(props: ChannelMessageProps) {
   const isGrouped = () => props.listMeta?.isGroupedWithPrevious === true;
 
   return (
-    <Message.Root
-      message={props.message}
-      actions={props.actions}
-      selected={props.selected}
-      targeted={
-        props.targeted ||
-        // In unified-input mode the edit happens in the floating input; the
-        // accent bar marks the message it is bound to.
-        (isUnifiedInputMode() &&
-          isEditingMessage(props.messageEditor, props.message.id))
-      }
-      onClick={props.onClick}
-      ref={(el) =>
-        touchHandler(el, () => ({
-          touchClassName: 'channel-message-long-press-highlight',
-          // Yield to the native image callout when long-pressing an image.
-          skipSelectors: ['img'],
-          onLongPress: () => drawerManager?.open(props.message, props.actions),
-        }))
-      }
-    >
-      <Switch>
-        <Match when={props.message.deleted_at != null}>
-          <DeletedMessageLayout />
-        </Match>
-        <Match when={isGrouped()}>
-          <GroupedMessageLayout
-            channelId={props.channelId}
-            messageEditor={props.messageEditor}
-            participants={props.participants}
-          />
-        </Match>
-        <Match when={true}>
-          <RegularMessageLayout
-            channelId={props.channelId}
-            messageEditor={props.messageEditor}
-            participants={props.participants}
-          />
-        </Match>
-      </Switch>
-    </Message.Root>
+    <MaybeSwipeToReplyRow message={props.message} actions={props.actions}>
+      <Message.Root
+        class="w-full"
+        message={props.message}
+        actions={props.actions}
+        selected={props.selected}
+        targeted={
+          props.targeted ||
+          // In unified-input mode the edit happens in the floating input; the
+          // accent bar marks the message it is bound to.
+          (isUnifiedInputMode() &&
+            isEditingMessage(props.messageEditor, props.message.id))
+        }
+        onClick={props.onClick}
+        ref={(el) =>
+          touchHandler(el, () => ({
+            touchClassName: 'channel-message-long-press-highlight',
+            // Yield to the native image callout when long-pressing an image.
+            skipSelectors: ['img'],
+            onLongPress: () =>
+              drawerManager?.open(props.message, props.actions),
+          }))
+        }
+      >
+        <Switch>
+          <Match when={props.message.deleted_at != null}>
+            <DeletedMessageLayout />
+          </Match>
+          <Match when={isGrouped()}>
+            <GroupedMessageLayout
+              channelId={props.channelId}
+              messageEditor={props.messageEditor}
+              participants={props.participants}
+            />
+          </Match>
+          <Match when={true}>
+            <RegularMessageLayout
+              channelId={props.channelId}
+              messageEditor={props.messageEditor}
+              participants={props.participants}
+            />
+          </Match>
+        </Switch>
+      </Message.Root>
+    </MaybeSwipeToReplyRow>
   );
 }

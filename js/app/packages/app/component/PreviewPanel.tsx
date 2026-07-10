@@ -1,4 +1,4 @@
-import { getChannelParams } from '@block-channel/utils/link';
+import { navigateChannelEntityToTarget } from '@app/component/next-soup/utils';
 import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
@@ -7,7 +7,6 @@ import { throttledDependent } from '@core/util/debounce';
 import type { NonNullableFields } from '@core/util/withRequired';
 import {
   type EntityData,
-  isChannelMessageEntity,
   isGithubPrEntity,
   isSnippetEntity,
   isTaskEntity,
@@ -122,15 +121,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       setInteractedWith(false);
     }
 
-    const entity = props.selectedEntity;
-    if (isChannelMessageEntity(entity) || entity.type === 'channel_thread') {
-      const channelId = entity.channelId;
-      const messageId = entity.messageId;
-      const threadId = entity.threadId;
-      props.orchestrator.getBlockHandle(channelId).then((handle) => {
-        handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
-      });
-    }
+    void navigateChannelEntityToTarget(
+      props.selectedEntity,
+      props.orchestrator
+    );
 
     return id;
   }, props.selectedEntity.id);

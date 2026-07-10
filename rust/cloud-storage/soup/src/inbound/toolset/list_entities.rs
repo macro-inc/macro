@@ -26,7 +26,7 @@ use item_filters::{
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter};
+use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use models_soup::{SoupProperty, document::SoupDocumentSubType, item::SoupItem};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -449,16 +449,26 @@ inbox\"); call ListInboxes first to get the exact address. Only affects email re
     #[serde(default)]
     pub inbox: Option<String>,
 
-    /// Filter results to items carrying at least one of these tags.
+    /// Filter results to items carrying these tags.
     #[schemars(description = "\
-Filter results to items carrying at least one of the given tags (OR semantics). Each entry \
-names a tag by its label, matched case-insensitively against the user's own tags; only set \
-scope (\"personal\" or \"team\") when the user distinguishes between their personal and team \
-tags. An unknown label fails with the list of available tags — call ListTags first when \
-unsure what tags exist. Only taggable items (documents, tasks, projects, emails, AI chats) \
-can match a tag filter. Prefer this over hand-building a propf filter for tags.")]
+Filter results to items carrying the given tags — any of them by default, every one of them \
+with tagsMatch=\"all\". Each entry names a tag by its label, matched case-insensitively \
+against the user's own tags; only set scope (\"personal\" or \"team\") when the user \
+distinguishes between their personal and team tags. An unknown label fails with the list of \
+available tags — call ListTags first when unsure what tags exist. Only taggable items \
+(documents, tasks, projects, emails, AI chats) can match a tag filter. Prefer this over \
+hand-building a propf filter for tags.")]
     #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,
+
+    /// How multiple entries in `tags` combine.
+    #[schemars(description = "\
+How multiple entries in tags combine: \"any\" (the default) returns items carrying at least \
+one of the tags, \"all\" returns only items carrying every one of them. With \"all\", a label \
+that exists in both the personal and team sets is ambiguous — set scope on that entry to pick \
+one. Ignored unless tags is set.")]
+    #[serde(default)]
+    pub tags_match: TagMatch,
 
     /// Maximum number of items to return.
     #[schemars(description = "Maximum number of items to return. Defaults to 50; max 500.")]
@@ -613,12 +623,30 @@ where
             None
         } else {
             let sets = fetch_caller_tag_sets(&service_context, &request_context).await?;
-            let resolved = sets
-                .resolve_filters(self.tag_filters())
-                .map_err(|e| ToolCallError {
-                    description: e.to_string(),
-                    internal_error: anyhow::anyhow!(e),
-                })?;
+            // In all mode every filter must name exactly one tag — expanding
+            // an unscoped label across scopes would AND both variants in.
+            let resolved = match self.tags_match {
+                TagMatch::Any => {
+                    sets.resolve_filters(self.tag_filters())
+                        .map_err(|e| ToolCallError {
+                            description: e.to_string(),
+                            internal_error: anyhow::anyhow!(e),
+                        })?
+                }
+                TagMatch::All => sets
+                    .resolve_filters_unique(self.tag_filters())
+                    .map_err(|e| ToolCallError {
+                        description: e.to_string(),
+                        internal_error: anyhow::anyhow!(e),
+                    })?,
+            };
+            // Each resolved option becomes its own literal; the match mode
+            // picks how they combine (any = OR, all = AND across the item's
+            // tag properties, which may span definitions).
+            let combine = match self.tags_match {
+                TagMatch::Any => Expr::or,
+                TagMatch::All => Expr::and,
+            };
             let expr = resolved
                 .into_iter()
                 .map(|option| {
@@ -628,7 +656,7 @@ where
                         value: PropertyMatchValue::SelectOption(option.option_id),
                     })
                 })
-                .reduce(Expr::or);
+                .reduce(combine);
             tag_sets = Some(sets);
             expr
         };

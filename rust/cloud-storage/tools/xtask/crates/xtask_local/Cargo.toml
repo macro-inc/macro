@@ -33,9 +33,9 @@ rdkafka = { workspace = true, optional = true }
 # Docker Engine API client for the discrete container/image ops.
 bollard = "0.21"
 console = "0.15"
+indicatif = "0.18"
 docker-compose-types = { version = "0.24", features = ["indexmap"] }
 indexmap = { workspace = true }
-indicatif = "0.18"
 serde_yaml = { workspace = true }
 # Parse user-provided `--env-file` overlays. EnumIter derives the port list.
 dotenvy = { workspace = true }

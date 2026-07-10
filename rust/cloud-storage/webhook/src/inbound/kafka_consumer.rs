@@ -287,7 +287,6 @@ where
                 match WebhookConsumerEvent::decode(message.topic(), payload) {
                     Ok(event) => {
                         tracing::trace!(
-                            ?event,
                             partition = message.partition(),
                             offset = message.offset(),
                             "decoded broker event"

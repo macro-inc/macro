@@ -15,6 +15,7 @@ The writer has the complete API reference. Use this compact list to help yoursel
 
 - `convertToParagraph`, `convertToHeading`, `convertToQuote`, `convertToCodeBlock(id, language)`, `setLanguage(id, language)`
 - Code block language is required. Use `setLanguage(id, language)` to change an existing code block's language.
+- A type conversion gives the block a fresh id: the old id + `~vN` suffix (`b1` → `b1~v1`). Same block; use the latest id going forward.
 
 ## Lists
 

@@ -1,5 +1,8 @@
 //! Domain layer for webhooks.
 
+#[cfg(feature = "ports")]
+/// Webhook event delivery state machine and retry policy.
+pub mod delivery;
 #[cfg(feature = "ingestion")]
 /// Webhook event ingestion service.
 pub mod ingestion;

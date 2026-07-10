@@ -246,12 +246,17 @@ export function ThreadList(props: ThreadListProps) {
       case 'index': {
         const targetIndex = resolveTargetIndex(target);
         if (targetIndex < 0) return true; // target gone, nothing to verify
-        const currentIndex = handle.findItemIndex(
-          handle.scrollOffset + insets().start
-        );
-        // Consider correct if the target is within a reasonable range of
-        // the current viewport (within ±5 items accounts for alignment).
-        return Math.abs(currentIndex - targetIndex) <= 5;
+        // Correct when the target item intersects the usable viewport.
+        // Comparing item indexes against the top-of-viewport item breaks for
+        // center/end alignment — a target near the end of the list rests in
+        // the lower half of the viewport, so a fixed index distance from the
+        // top item reports a perfect landing as a miss.
+        const itemTop = handle.getItemOffset(targetIndex);
+        const itemBottom = itemTop + handle.getItemSize(targetIndex);
+        const viewportTop = handle.scrollOffset + insets().start;
+        const viewportBottom =
+          handle.scrollOffset + handle.viewportSize - insets().end;
+        return itemBottom > viewportTop && itemTop < viewportBottom;
       }
     }
   };
@@ -427,6 +432,25 @@ export function ThreadList(props: ThreadListProps) {
     });
   }
 
+  let disposed = false;
+
+  // A preview-pane mount can hand over the virtualizer before layout, with a
+  // zero-height viewport — the initial scroll then lands wherever and always
+  // needs the onScrollEnd retry. Wait (bounded) for a measured viewport.
+  function scrollOnMountWhenMeasured(
+    handle: VirtualizerHandle,
+    framesLeft = 30
+  ) {
+    if (disposed || initialScrollStarted) return;
+    if (handle.viewportSize > 0 || framesLeft <= 0) {
+      scrollOnMount(handle);
+      return;
+    }
+    requestAnimationFrame(() =>
+      scrollOnMountWhenMeasured(handle, framesLeft - 1)
+    );
+  }
+
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
@@ -474,6 +498,7 @@ export function ThreadList(props: ThreadListProps) {
         distanceFromBottom: getDistanceFromBottom(handle),
       });
       requestAnimationFrame(() => {
+        const offsetBeforeRetry = handle.scrollOffset;
         const retryScrolled = scrollToInitialTarget(
           handle,
           initialScrollTarget
@@ -482,7 +507,21 @@ export function ThreadList(props: ThreadListProps) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
           completeInitialScroll(handle);
+          return;
         }
+        // A retry that lands on the current position moves nothing, so no
+        // scroll events (and no onScrollEnd) follow. Finalize on the next
+        // frame or `didInitialScroll` stays false for the life of the mount,
+        // deadlocking everything gated on it (target navigation, scroll
+        // pagination, goToLatest).
+        requestAnimationFrame(() => {
+          if (didInitialScroll()) return;
+          if (handle.scrollOffset !== offsetBeforeRetry) return;
+          console.debug(
+            'ThreadList: retry did not move the scroll, completing'
+          );
+          completeInitialScroll(handle);
+        });
       });
       return;
     }
@@ -560,7 +599,10 @@ export function ThreadList(props: ThreadListProps) {
     }
   };
 
-  onCleanup(() => cancelPinToBottom?.());
+  onCleanup(() => {
+    disposed = true;
+    cancelPinToBottom?.();
+  });
 
   return (
     <>
@@ -596,7 +638,7 @@ export function ThreadList(props: ThreadListProps) {
               props.onNavigationReady(createNavigation(ref));
             }
             resetInitialScroll();
-            scrollOnMount(ref);
+            scrollOnMountWhenMeasured(ref);
           }}
           scrollRef={scrollRef}
           startMargin={insets().start}

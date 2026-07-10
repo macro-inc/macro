@@ -1,6 +1,7 @@
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{EntityReference, EntityType};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchResponseItem, ChatSearchResponseItemWithMetadata,
@@ -9,6 +10,7 @@ use models_soup::SoupProperty;
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
+use system_properties::SystemPropertyKey;
 
 /// Enriches chat search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
@@ -40,10 +42,16 @@ pub(in crate::api::search) async fn enrich_chats(
         .iter()
         .map(|id| EntityReference::new(id.to_string(), EntityType::Chat))
         .collect();
+    // Scope tags to the viewer so another user's personal tags never leak into
+    // the response. System properties still ride along via the key list.
+    let viewer_user_id = MacroUserIdStr::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?;
     let properties_map: HashMap<String, Vec<SoupProperty>> =
-        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             &ctx.db,
             &chat_entity_refs,
+            SystemPropertyKey::all_system_property_keys(),
+            Some(&viewer_user_id),
         )
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to fetch chat properties"))

@@ -188,7 +188,7 @@ impl IntoResponse for DeleteTeamError {
             DeleteTeamError::CustomerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "unable to delete team subscription".into(),
+                    message: "internal server error".into(),
                 }),
             ),
         }
@@ -205,6 +205,12 @@ impl IntoResponse for InviteUsersToTeamError {
                     message: "too many emails".into(),
                 }),
             ),
+            InviteUsersToTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -218,13 +224,21 @@ impl IntoResponse for InviteUsersToTeamError {
 
 impl IntoResponse for JoinTeamError {
     fn into_response(self) -> Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to join team".into(),
-            }),
-        )
-            .into_response()
+        match self {
+            JoinTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to join team".into(),
+                }),
+            ),
+        }
+        .into_response()
     }
 }
 
@@ -241,6 +255,12 @@ impl IntoResponse for RemoveTeamInviteError {
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: "user not in team".into(),
+                }),
+            ),
+            RemoveTeamInviteError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
                 }),
             ),
             _ => (
@@ -273,6 +293,12 @@ impl IntoResponse for RemoveUserFromTeamError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "user not in team".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
                 }),
             ),
             _ => (

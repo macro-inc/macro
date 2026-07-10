@@ -134,6 +134,7 @@ stop-databases:
 # Import LocalStack recipes
 import 'local_stack.just'
 import 'just/xtask.just'
+import 'just/check.just'
 
 # Sets up local database
 setup_local_dbs:

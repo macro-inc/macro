@@ -55,6 +55,8 @@ export function MessageList(props: MessageListProps) {
         '--thread-bottom-pad',
         `${Math.round(list.clientHeight * LAST_MESSAGE_REST_FRACTION)}px`
       );
+      // Lets the inline composer cap its height to the visible thread area
+      list.style.setProperty('--thread-height', `${list.clientHeight}px`);
     });
     observer.observe(list);
     onCleanup(() => observer.disconnect());

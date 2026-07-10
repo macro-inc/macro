@@ -1,12 +1,17 @@
 import { useRowTagsVisible } from '@app/component/next-soup/soup-view/filters-bar/search/search-tags-flag';
 import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { CallStatusBadge, SharedBadge } from '../../components/Badges';
+import {
+  CallDurationBadge,
+  CallStatusBadge,
+  SharedBadge,
+} from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -228,6 +233,20 @@ export function WideLayout(props: LayoutProps) {
             <>
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
                 <CallStatusBadge status={entity().status} />
+              </Show>
+              <Show
+                when={entity().durationMs}
+                fallback={
+                  <Show when={entity().isActive}>
+                    <CallDurationBadge duration="In progress" />
+                  </Show>
+                }
+              >
+                {(durationMs) => (
+                  <CallDurationBadge
+                    duration={formatCallDuration(durationMs())}
+                  />
+                )}
               </Show>
               <span class="flex w-10 shrink-0 justify-end">
                 <CallParticipants participantIds={entity().participantIds} />

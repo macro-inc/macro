@@ -1,40 +1,32 @@
-//! Webhook event ingestion: broker events in, matching webhooks out.
+//! Webhook event ingestion: broker events in, matching queue messages out.
 //!
 //! `WebhookEventIngestionService` is the inbound port driven by broker
 //! consumers (see `crate::inbound::kafka_consumer`). It is intentionally
 //! separate from `WebhookService`, which is the CRUD surface for webhook
 //! creation and edits.
-//!
-//! Event handling is not implemented yet: every handler below is a stub that
-//! only logs the event. The planned flow for each event is:
-//! 1. resolve the users that can see the event's entity via
-//!    `EntityAccessService::get_users_by_entity` (see
-//!    `WebhookEventIngestionServiceImpl::users_with_access`);
-//! 2. call `WebhookRepo::list_active_webhooks_matching_event` to load those
-//!    users' active webhooks whose typed `filters` match the event name and
-//!    entity id;
-//! 3. enqueue a delivery for every match.
 
 #[cfg(test)]
 mod test;
 
-use channels::domain::broker_events::{
-    ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMessageAttachmentCreatedMetadata,
-    ChannelMessageAttachmentRemovedMetadata, ChannelMessageDeletedMetadata,
-    ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata, ChannelParticipantAddedMetadata,
-    ChannelParticipantRemovedMetadata, ChannelTopicEvent, ChannelUpdatedMetadata,
+use crate::domain::{
+    models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
+    ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
-use documents::domain::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentTopicEvent,
-    DocumentUpdatedMetadata,
-};
+use channels::domain::broker_events::ChannelTopicEvent;
+use chrono::Utc;
+use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::{AccessError, EntityType};
 use entity_access::domain::ports::EntityAccessService;
+use futures::future::join_all;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
 use std::sync::Arc;
+use tracing::Instrument as _;
 use uuid::Uuid;
+
+const DOCUMENT_ENTITY_TYPE: &str = "document";
+const CHANNEL_ENTITY_TYPE: &str = "channel";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -42,31 +34,50 @@ pub enum WebhookEventIngestionError {
     /// Failed to resolve the users with access to the event's entity.
     #[error(transparent)]
     EntityAccess(#[from] AccessError),
-    /// Repository or adapter error.
-    #[error(transparent)]
-    Internal(#[from] anyhow::Error),
+    /// The event's entity identifier violates the broker contract.
+    #[error("invalid {entity_type} entity id: {entity_id}")]
+    InvalidEntityId {
+        /// Contract entity type.
+        entity_type: &'static str,
+        /// Invalid entity identifier.
+        entity_id: String,
+    },
+    /// The broker envelope could not be represented by the queue contract.
+    #[error("failed to serialize broker envelope: {0}")]
+    Serialization(#[from] serde_json::Error),
+    /// Failed to resolve personal and team webhook workspaces.
+    #[error("failed to resolve webhook workspaces: {0}")]
+    WorkspaceResolution(#[source] anyhow::Error),
+    /// Failed to find active webhooks matching the event.
+    #[error("failed to match active webhooks: {0}")]
+    Repository(#[source] anyhow::Error),
+    /// Failed to enqueue at least one matched webhook event.
+    #[error("failed to enqueue webhook event: {0}")]
+    Enqueue(#[source] anyhow::Error),
 }
 
 impl WebhookEventIngestionError {
     /// Whether retrying the same event could plausibly succeed.
     ///
-    /// Database errors from access resolution are transient: the lookup can be
-    /// retried once the database recovers, and the consumer holds off on
-    /// committing the event's offset until it does. Everything else — invalid
-    /// entity ids, unauthorized lookups, adapter bugs — is permanent, and
-    /// retrying would only repeat the failure.
+    /// Access resolution currently maps some PostgreSQL failures to
+    /// [`AccessError::Internal`], so that variant remains retryable alongside
+    /// explicit database, repository, workspace-resolution, and queue errors.
+    /// Invalid broker contracts are permanent and can be safely skipped.
     pub fn is_transient(&self) -> bool {
-        match self {
-            Self::EntityAccess(AccessError::DatabaseError(_)) => true,
-            Self::EntityAccess(_) | Self::Internal(_) => false,
-        }
+        matches!(
+            self,
+            Self::EntityAccess(AccessError::DatabaseError(_) | AccessError::Internal)
+                | Self::WorkspaceResolution(_)
+                | Self::Repository(_)
+                | Self::Enqueue(_)
+        )
     }
 }
 
 /// Inbound port for ingesting broker events for webhook delivery.
 ///
 /// One method per subscribed topic; each takes the decoded event envelope so
-/// implementations keep the `event_id` for delivery idempotency.
+/// implementations retain the `event_id` and complete original payload.
 pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     /// Ingest one `macro.documents` event envelope.
     fn ingest_document_event(
@@ -83,254 +94,209 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
 
 /// Webhook event ingestion service implementation.
 #[derive(Clone)]
-pub struct WebhookEventIngestionServiceImpl<A> {
+pub struct WebhookEventIngestionServiceImpl<A, R, Q> {
     entity_access_service: Arc<A>,
+    repository: R,
+    enqueuer: Q,
 }
 
-impl<A> WebhookEventIngestionServiceImpl<A> {
+impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
     /// Create a webhook event ingestion service.
-    pub fn new(entity_access_service: Arc<A>) -> Self {
+    pub fn new(entity_access_service: Arc<A>, repository: R, enqueuer: Q) -> Self {
         Self {
             entity_access_service,
+            repository,
+            enqueuer,
         }
     }
 }
 
-impl<A: EntityAccessService> WebhookEventIngestionServiceImpl<A> {
+impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+where
+    A: EntityAccessService,
+    R: WebhookRepo + WebhookWorkspaceResolver,
+    Q: WebhookEventEnqueuer,
+{
     /// Resolve the users that currently have access to an entity.
-    ///
-    /// This is the first step of webhook fan-out: the handlers below will use
-    /// it to find the users whose webhooks should be matched against an event.
     #[tracing::instrument(skip(self), err)]
     pub async fn users_with_access(
         &self,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, WebhookEventIngestionError> {
-        tracing::trace!(entity_id, ?entity_type, "resolving users with access");
-        let users = self
-            .entity_access_service
+        self.entity_access_service
             .get_users_by_entity(entity_id, entity_type)
+            .await
+            .map_err(WebhookEventIngestionError::EntityAccess)
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            event_id = %event.event_id,
+            event_name = %event.event_name,
+            entity_type = %event.entity_type,
+            entity_id = %event.entity_id,
+            accessor_count = tracing::field::Empty,
+            workspace_count = tracing::field::Empty,
+            match_count = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn ingest_normalized_event(
+        &self,
+        event: NormalizedWebhookEvent,
+        entity_type: EntityType,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let accessors = self
+            .users_with_access(&event.entity_id, entity_type)
             .await?;
-        tracing::trace!(
-            entity_id,
-            user_count = users.len(),
-            "resolved users with access"
-        );
-        Ok(users)
-    }
+        tracing::Span::current().record("accessor_count", accessors.len());
 
-    async fn handle_document_created(
-        &self,
-        event_id: Uuid,
-        metadata: DocumentCreatedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            document_id = %metadata.document_id,
-            "document.created: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
+        let workspace_ids = self
+            .repository
+            .resolve_workspace_ids(accessors)
+            .await
+            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
+        tracing::Span::current().record("workspace_count", workspace_ids.len());
 
-    async fn handle_document_updated(
-        &self,
-        event_id: Uuid,
-        metadata: DocumentUpdatedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            document_id = %metadata.document_id,
-            "document.updated: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
+        let webhooks = self
+            .repository
+            .list_active_webhooks_matching_event(
+                workspace_ids,
+                event.event_name.clone(),
+                event.entity_id.clone(),
+            )
+            .await
+            .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
+        tracing::Span::current().record("match_count", webhooks.len());
 
-    async fn handle_document_deleted(
-        &self,
-        event_id: Uuid,
-        metadata: DocumentDeletedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            document_id = %metadata.document_id,
-            "document.deleted: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
+        let enqueue_results = join_all(webhooks.into_iter().map(|webhook| {
+            let enqueuer = self.enqueuer.clone();
+            let webhook_id = webhook.id;
+            let message = WebhookEventQueueMessage::new(webhook_id.clone(), event.clone());
+            async move {
+                enqueuer
+                    .enqueue(message)
+                    .instrument(tracing::info_span!("enqueue_webhook_event", %webhook_id))
+                    .await
+                    .map_err(Into::into)
+            }
+        }))
+        .await;
 
-    async fn handle_document_copied(
-        &self,
-        event_id: Uuid,
-        metadata: DocumentCopiedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            document_id = %metadata.document_id,
-            source_document_id = %metadata.source_document_id,
-            "document.copied: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
+        for result in enqueue_results {
+            result.map_err(WebhookEventIngestionError::Enqueue)?;
+        }
 
-    async fn handle_channel_created(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelCreatedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            "channel.created: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_updated(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelUpdatedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            "channel.updated: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_deleted(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelDeletedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            "channel.deleted: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_message_posted(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelMessagePostedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            message_id = %metadata.message_id,
-            "channel.message_posted: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_message_patched(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelMessagePatchedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            message_id = %metadata.message_id,
-            "channel.message_patched: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_message_deleted(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelMessageDeletedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            message_id = %metadata.message_id,
-            "channel.message_deleted: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_message_attachment_created(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelMessageAttachmentCreatedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            message_id = %metadata.message_id,
-            "channel.message_attachment_created: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_message_attachment_removed(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelMessageAttachmentRemovedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            message_id = %metadata.message_id,
-            "channel.message_attachment_removed: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_participant_added(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelParticipantAddedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            "channel.participant_added: webhook ingestion not implemented yet"
-        );
-        Ok(())
-    }
-
-    async fn handle_channel_participant_removed(
-        &self,
-        event_id: Uuid,
-        metadata: ChannelParticipantRemovedMetadata,
-    ) -> Result<(), WebhookEventIngestionError> {
-        tracing::debug!(
-            %event_id,
-            channel_id = %metadata.channel_id,
-            "channel.participant_removed: webhook ingestion not implemented yet"
-        );
         Ok(())
     }
 }
 
-impl<A: EntityAccessService> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A> {
+fn normalized_document_event(
+    event: &Event<DocumentTopicEvent>,
+) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
+    let (event_name, entity_id) = match &event.event {
+        DocumentTopicEvent::Created(metadata) => ("document.created", &metadata.document_id),
+        DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
+        DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
+        DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
+    };
+
+    if Uuid::parse_str(entity_id).is_err() {
+        return Err(WebhookEventIngestionError::InvalidEntityId {
+            entity_type: DOCUMENT_ENTITY_TYPE,
+            entity_id: entity_id.clone(),
+        });
+    }
+
+    let broker_envelope = serde_json::to_value(event)?;
+    Ok(normalized_event(
+        event.event_id,
+        event.schema_version,
+        event_name,
+        DOCUMENT_ENTITY_TYPE,
+        entity_id,
+        broker_envelope,
+    ))
+}
+
+fn normalized_channel_event(
+    event: &Event<ChannelTopicEvent>,
+) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
+    let (event_name, channel_id) = match &event.event {
+        ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
+        ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
+        ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
+        ChannelTopicEvent::MessagePosted(metadata) => {
+            ("channel.message_posted", metadata.channel_id)
+        }
+        ChannelTopicEvent::MessagePatched(metadata) => {
+            ("channel.message_patched", metadata.channel_id)
+        }
+        ChannelTopicEvent::MessageDeleted(metadata) => {
+            ("channel.message_deleted", metadata.channel_id)
+        }
+        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
+            ("channel.message_attachment_created", metadata.channel_id)
+        }
+        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
+            ("channel.message_attachment_removed", metadata.channel_id)
+        }
+        ChannelTopicEvent::ParticipantAdded(metadata) => {
+            ("channel.participant_added", metadata.channel_id)
+        }
+        ChannelTopicEvent::ParticipantRemoved(metadata) => {
+            ("channel.participant_removed", metadata.channel_id)
+        }
+    };
+    let entity_id = channel_id.to_string();
+
+    let broker_envelope = serde_json::to_value(event)?;
+    Ok(normalized_event(
+        event.event_id,
+        event.schema_version,
+        event_name,
+        CHANNEL_ENTITY_TYPE,
+        &entity_id,
+        broker_envelope,
+    ))
+}
+
+fn normalized_event(
+    event_id: Uuid,
+    schema_version: u8,
+    event_name: &str,
+    entity_type: &str,
+    entity_id: &str,
+    broker_envelope: serde_json::Value,
+) -> NormalizedWebhookEvent {
+    NormalizedWebhookEvent {
+        event_id: event_id.to_string(),
+        schema_version,
+        event_name: event_name.to_string(),
+        entity_type: entity_type.to_string(),
+        entity_id: entity_id.to_string(),
+        ordering_key: entity_id.to_string(),
+        occurred_at: Utc::now(),
+        broker_envelope,
+    }
+}
+
+impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
+where
+    A: EntityAccessService,
+    R: WebhookRepo + WebhookWorkspaceResolver,
+    Q: WebhookEventEnqueuer,
+{
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(
         &self,
         event: Event<DocumentTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        tracing::trace!(?event, "ingesting document event");
-        let event_id = event.event_id;
-        match event.event {
-            DocumentTopicEvent::Created(metadata) => {
-                self.handle_document_created(event_id, metadata).await
-            }
-            DocumentTopicEvent::Updated(metadata) => {
-                self.handle_document_updated(event_id, metadata).await
-            }
-            DocumentTopicEvent::Deleted(metadata) => {
-                self.handle_document_deleted(event_id, metadata).await
-            }
-            DocumentTopicEvent::Copied(metadata) => {
-                self.handle_document_copied(event_id, metadata).await
-            }
-        }
+        let event = normalized_document_event(&event)?;
+        self.ingest_normalized_event(event, EntityType::Document)
+            .await
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
@@ -338,45 +304,8 @@ impl<A: EntityAccessService> WebhookEventIngestionService for WebhookEventIngest
         &self,
         event: Event<ChannelTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
-        tracing::trace!(?event, "ingesting channel event");
-        let event_id = event.event_id;
-        match event.event {
-            ChannelTopicEvent::Created(metadata) => {
-                self.handle_channel_created(event_id, metadata).await
-            }
-            ChannelTopicEvent::Updated(metadata) => {
-                self.handle_channel_updated(event_id, metadata).await
-            }
-            ChannelTopicEvent::Deleted(metadata) => {
-                self.handle_channel_deleted(event_id, metadata).await
-            }
-            ChannelTopicEvent::MessagePosted(metadata) => {
-                self.handle_channel_message_posted(event_id, metadata).await
-            }
-            ChannelTopicEvent::MessagePatched(metadata) => {
-                self.handle_channel_message_patched(event_id, metadata)
-                    .await
-            }
-            ChannelTopicEvent::MessageDeleted(metadata) => {
-                self.handle_channel_message_deleted(event_id, metadata)
-                    .await
-            }
-            ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-                self.handle_channel_message_attachment_created(event_id, metadata)
-                    .await
-            }
-            ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
-                self.handle_channel_message_attachment_removed(event_id, metadata)
-                    .await
-            }
-            ChannelTopicEvent::ParticipantAdded(metadata) => {
-                self.handle_channel_participant_added(event_id, metadata)
-                    .await
-            }
-            ChannelTopicEvent::ParticipantRemoved(metadata) => {
-                self.handle_channel_participant_removed(event_id, metadata)
-                    .await
-            }
-        }
+        let event = normalized_channel_event(&event)?;
+        self.ingest_normalized_event(event, EntityType::Channel)
+            .await
     }
 }

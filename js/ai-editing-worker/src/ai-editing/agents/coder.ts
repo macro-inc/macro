@@ -29,13 +29,12 @@ export async function coder(
     // Cap allows headroom for larger multi-part tasks and a few error retries.
     stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
     system: CHILD_SYSTEM,
-    prompt: buildPrompt(task, deps.context, deps.snippets),
+    prompt: buildPrompt(task, deps.context, deps.request),
     tools: {
       runCode: createRunCodeTool({
         session: session,
         doc: deps.doc,
         awarenessSource: deps.awarenessSource,
-        snippets: deps.snippets,
         params: deps.params,
         typingAnimations: deps.typingAnimations,
         sleep: deps.sleep,
@@ -53,4 +52,3 @@ export async function coder(
     abortSignal: deps.signal,
   });
 }
-

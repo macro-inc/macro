@@ -2,6 +2,7 @@ import type { Transformer } from '@lexical/markdown';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import { I_HTML_RENDER } from './htmlRender';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
   E_BLOCK_EQUATION_NODE,
@@ -53,6 +54,7 @@ export { isConversionOnlyTransformer };
 export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
   I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
+  I_HTML_RENDER,
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
@@ -118,6 +120,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
 export const ALL_TRANSFORMERS: Transformer[] = [
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
   I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
+  I_HTML_RENDER,
   E_PASTE_NODE,
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
