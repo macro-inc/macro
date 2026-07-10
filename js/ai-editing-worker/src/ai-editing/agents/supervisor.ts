@@ -92,6 +92,7 @@ export async function supervisor(
     providerOptions: EDIT_PROVIDER_OPTIONS,
     abortSignal: opts.signal,
     prepareStep: ({ stepNumber }) =>
+      // require that the very first thing it does is a tool call
       stepNumber === 0 ? { toolChoice: 'required' } : undefined,
     onStepFinish: () => {
       const now = Date.now();

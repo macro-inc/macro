@@ -60,7 +60,7 @@ function findBlocked(
   return null;
 }
 
-export function mergeRanges(
+function mergeRanges(
   ranges: Array<[number, number]>
 ): Array<[number, number]> {
   const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
@@ -73,7 +73,7 @@ export function mergeRanges(
   return merged;
 }
 
-export function indexXmlRanges(xml: string): {
+function indexXmlRanges(xml: string): {
   lines: string[];
   byId: Map<string, XmlNodeRange>;
 } {
