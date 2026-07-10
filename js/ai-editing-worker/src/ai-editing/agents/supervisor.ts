@@ -6,14 +6,7 @@ import INTERPRET from '../prompts/INTERPRET.md';
 import SHARED from '../prompts/SHARED.md';
 import SUPERVISOR from '../prompts/SUPERVISOR.md';
 import { TokenTracker } from '../token-tracker';
-import {
-  createDispatchTool,
-  createImBlockedTool,
-  DispatchEdit,
-  DispatchEditSchema,
-  StreamingToolInput,
-  ToolInputRouter,
-} from '../tools';
+import { createDispatchTool, createImBlockedTool } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
 import { interpreter } from './interpreter';
@@ -82,20 +75,6 @@ export async function supervisor(
     dispatch: dispatch.tool,
   };
 
-  // Launch each coder the moment its `edits[i]` element finishes streaming —
-  // the first edit starts while the supervisor is still writing the later ones.
-  const dispatchStream = new ToolInputRouter<DispatchEdit>(
-    'dispatch',
-    (toolCallId) =>
-      new StreamingToolInput<DispatchEdit>({
-        elementsField: 'edits',
-        onElement: (edit, index) => {
-          const parsed = DispatchEditSchema.safeParse(edit);
-          if (parsed.success) dispatch.launch(toolCallId, parsed.data, index);
-        },
-      })
-  );
-
   const intentBlock = intent ? `<intent>\n${intent}\n</intent>\n\n` : '';
   const prompt = `Request: ${request}\n\n${intentBlock}${docContext}`;
 
@@ -125,7 +104,6 @@ export async function supervisor(
     if (part.type === 'error') throw part.error;
     if (part.type === 'abort')
       throw opts.signal?.reason ?? new Error('edit session aborted');
-    await dispatchStream.handle(part);
   }
 
   const [steps, totalUsage, text] = await Promise.all([

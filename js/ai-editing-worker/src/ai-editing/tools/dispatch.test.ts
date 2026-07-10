@@ -134,7 +134,7 @@ function setup() {
   const session = createEditingSession();
   loadMarkdown(session, 'hello world');
   const tracker = new TokenTracker();
-  const editTraces: DispatchEditTrace[][] = [];
+  const editTraces: DispatchEditTrace[] = [];
   const tasks: string[] = [];
   // The request each coder received, to verify it reaches every writer.
   const requests: Array<string | undefined> = [];
@@ -155,7 +155,7 @@ function setup() {
       deps.onRunCode?.();
       return coderResult;
     },
-    onEditTrace: (edits) => editTraces.push(edits),
+    onEditTrace: (edit) => editTraces.push(edit),
   });
   return { ...dispatch, tracker, editTraces, tasks, requests };
 }
@@ -163,84 +163,63 @@ function setup() {
 const callOptions = { toolCallId: 't1', messages: [] };
 
 describe('dispatch -- writer inputs', () => {
-  it('passes the user request to every writer', async () => {
+  it('passes the user request to the writer', async () => {
     const { tool, requests } = setup();
     const out = await tool.execute?.(
-      {
-        edits: [
-          { editing_instruction: 'first edit' },
-          { editing_instruction: 'second edit' },
-        ],
-      },
+      { editing_instruction: 'first edit' },
       callOptions
     );
-    expect(out).toContain('1. ✓ APPLIED');
-    expect(out).toContain('2. ✓ APPLIED');
-    expect(requests).toEqual(['make it formal', 'make it formal']);
+    expect(out).toContain('✓ APPLIED');
+    expect(requests).toEqual(['make it formal']);
   });
 
-  it('records runCode timing in the per-edit trace', async () => {
+  it('records runCode timing in the trace', async () => {
     const { tool, editTraces } = setup();
     await tool.execute?.(
-      { edits: [{ editing_instruction: 'one edit' }] },
+      { editing_instruction: 'one edit' },
       callOptions
     );
-    const [trace] = editTraces[0]!;
-    expect(trace!.runCodeAt).toHaveLength(1);
-    expect(trace!.runCodeAt[0]).toBeGreaterThanOrEqual(trace!.coderStartedAt);
-    expect(trace!.coderFinishedAt).toBeGreaterThanOrEqual(trace!.runCodeAt[0]!);
+    const trace = editTraces[0]!;
+    expect(trace.runCodeAt).toHaveLength(1);
+    expect(trace.runCodeAt[0]).toBeGreaterThanOrEqual(trace.coderStartedAt);
+    expect(trace.coderFinishedAt).toBeGreaterThanOrEqual(trace.runCodeAt[0]!);
   });
 });
 
-describe('dispatch -- streamed launch', () => {
-  it('runs a streamed edit once; execute joins it and marks the trace', async () => {
-    const { tool, launch, editTraces, tasks } = setup();
+describe('dispatch -- onInputAvailable early launch', () => {
+  it('runs the edit once; execute joins it and marks the trace', async () => {
+    const { tool, editTraces, tasks } = setup();
     const edit = { editing_instruction: 'convert the paragraph to a heading' };
-    launch('t1', edit, 0);
-    const out = await tool.execute?.(
-      { edits: [edit] },
-      { toolCallId: 't1', messages: [] }
-    );
-    expect(out).toContain('1. ✓ APPLIED');
+    tool.onInputAvailable?.({ input: edit, toolCallId: 't1', messages: [] });
+    const out = await tool.execute?.(edit, { toolCallId: 't1', messages: [] });
+    expect(out).toContain('✓ APPLIED');
     expect(tasks).toEqual(['convert the paragraph to a heading']);
-    const [trace] = editTraces[0]!;
-    expect(trace!.streamedAt).toBeGreaterThan(0);
-    expect(trace!.coderFinishedAt).toBeGreaterThanOrEqual(trace!.streamedAt!);
+    const trace = editTraces[0]!;
+    expect(trace.streamedAt).toBeGreaterThan(0);
+    expect(trace.coderFinishedAt).toBeGreaterThanOrEqual(trace.streamedAt!);
   });
 
-  it('launches only streamed indexes early; execute starts the rest unmarked', async () => {
-    const { tool, launch, editTraces, tasks } = setup();
-    const first = { editing_instruction: 'first edit' };
-    const second = { editing_instruction: 'second edit' };
-    launch('t1', first, 0);
+  it('execute starts the coder if onInputAvailable did not fire', async () => {
+    const { tool, editTraces, tasks } = setup();
     await tool.execute?.(
-      { edits: [first, second] },
+      { editing_instruction: 'late edit' },
       { toolCallId: 't1', messages: [] }
     );
-    expect(tasks).toEqual(['first edit', 'second edit']);
-    const [a, b] = editTraces[0]!;
-    expect(a!.streamedAt).toBeGreaterThan(0);
-    expect(b!.streamedAt).toBeUndefined();
+    expect(tasks).toEqual(['late edit']);
+    expect(editTraces[0]!.streamedAt).toBeUndefined();
   });
 
-  it('launches a streamed element that was not yet launched at execute time', async () => {
-    const { tool, launch, tasks } = setup();
-    launch('t1', { editing_instruction: 'streamed edit' }, 0);
+  it('keeps calls from different tool call ids separate', async () => {
+    const { tool, tasks } = setup();
+    tool.onInputAvailable?.({
+      input: { editing_instruction: 'other edit' },
+      toolCallId: 'other-call',
+      messages: [],
+    });
     await tool.execute?.(
-      { edits: [{ editing_instruction: 'streamed edit' }] },
+      { editing_instruction: 'this edit' },
       { toolCallId: 't1', messages: [] }
     );
-    expect(tasks).toEqual(['streamed edit']);
-  });
-
-  it('keeps launches from different tool calls separate', async () => {
-    const { tool, launch, tasks } = setup();
-    launch('other-call', { editing_instruction: 'other batch edit' }, 0);
-    await tool.execute?.(
-      { edits: [{ editing_instruction: 'this batch edit' }] },
-      { toolCallId: 't1', messages: [] }
-    );
-    // both ran, but execute('t1') did not join or duplicate the other call's run
-    expect(tasks.sort()).toEqual(['other batch edit', 'this batch edit']);
+    expect(tasks.sort()).toEqual(['other edit', 'this edit']);
   });
 });

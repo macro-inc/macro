@@ -35,6 +35,6 @@ export type RunAgentOptions = {
   sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   onOps?: (ops: DocumentOp[]) => void;
-  onCoderResult?: (codes: CoderRunCode[][]) => void;
-  onEditTrace?: (edits: DispatchEditTrace[]) => void;
+  onCoderResult?: (codes: CoderRunCode[]) => void;
+  onEditTrace?: (edit: DispatchEditTrace) => void;
 };

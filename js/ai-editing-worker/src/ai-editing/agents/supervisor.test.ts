@@ -21,23 +21,15 @@ const usage: LanguageModelV3Usage = {
   outputTokens: { total: 5, text: 5, reasoning: undefined },
 };
 
-const EDITS = [
-  { editing_instruction: 'first edit: bold the paragraph' },
-  { editing_instruction: 'second edit: italicize the paragraph' },
-];
-const EDITS_JSON = JSON.stringify({ edits: EDITS });
+const EDIT_1 = { editing_instruction: 'first edit: bold the paragraph' };
+const EDIT_2 = { editing_instruction: 'second edit: italicize the paragraph' };
 
-/** Supervisor step 1: a dispatch call streamed in deltas, paced so the first
- *  `edits` element is complete (and the second begun) well before the call
- *  finishes. `events` records enqueue order to compare against coder starts. */
+/** Supervisor step 1: two parallel dispatch calls. Pauses between them and
+ *  awaits `onBetweenCalls` so the test can assert coder-1 started before
+ *  call-2 is dispatched, then lets the stream proceed. */
 function dispatchStepStream(
-  events: string[]
+  onBetweenCalls: () => Promise<void>
 ): ReadableStream<LanguageModelV3StreamPart> {
-  // Split mid-array: everything through `edits[0]` plus the opening of
-  // `edits[1]`, then the rest after a pause.
-  const splitAt = EDITS_JSON.indexOf('"second');
-  const head = EDITS_JSON.slice(0, splitAt);
-  const tail = EDITS_JSON.slice(splitAt);
   return new ReadableStream({
     async start(controller) {
       controller.enqueue({ type: 'stream-start', warnings: [] });
@@ -49,22 +41,32 @@ function dispatchStepStream(
       controller.enqueue({
         type: 'tool-input-delta',
         id: 'call-1',
-        delta: head,
-      });
-      // Yield long enough for the router to parse and launch edit 0.
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      events.push('final-deltas-enqueued');
-      controller.enqueue({
-        type: 'tool-input-delta',
-        id: 'call-1',
-        delta: tail,
+        delta: JSON.stringify(EDIT_1),
       });
       controller.enqueue({ type: 'tool-input-end', id: 'call-1' });
       controller.enqueue({
         type: 'tool-call',
         toolCallId: 'call-1',
         toolName: 'dispatch',
-        input: EDITS_JSON,
+        input: JSON.stringify(EDIT_1),
+      });
+      await onBetweenCalls();
+      controller.enqueue({
+        type: 'tool-input-start',
+        id: 'call-2',
+        toolName: 'dispatch',
+      });
+      controller.enqueue({
+        type: 'tool-input-delta',
+        id: 'call-2',
+        delta: JSON.stringify(EDIT_2),
+      });
+      controller.enqueue({ type: 'tool-input-end', id: 'call-2' });
+      controller.enqueue({
+        type: 'tool-call',
+        toolCallId: 'call-2',
+        toolName: 'dispatch',
+        input: JSON.stringify(EDIT_2),
       });
       controller.enqueue({
         type: 'finish',
@@ -100,19 +102,16 @@ function textStepStream(): ReadableStream<LanguageModelV3StreamPart> {
 
 describe('supervisor — streamed dispatch', () => {
   it('launches coders from streaming args before the dispatch call completes', async () => {
-    const events: string[] = [];
+    const coderStartCount = { value: 0 };
+    const { promise: coder1Started, resolve: resolveCoder1 } =
+      Promise.withResolvers<void>();
     let step = 0;
-    const supervisorModel = new MockLanguageModelV3({
-      modelId: 'supervisor-mock',
-      doStream: async () => ({
-        stream: step++ === 0 ? dispatchStepStream(events) : textStepStream(),
-      }),
-    });
     // Coders run against this; no tool calls, so each finishes in one step.
     const codingModel = new MockLanguageModelV3({
       modelId: 'coder-mock',
       doGenerate: async () => {
-        events.push('coder-started');
+        coderStartCount.value++;
+        resolveCoder1();
         return {
           content: [{ type: 'text' as const, text: 'done' }],
           finishReason: { unified: 'stop' as const, raw: undefined },
@@ -120,6 +119,19 @@ describe('supervisor — streamed dispatch', () => {
           warnings: [],
         };
       },
+    });
+    const supervisorModel = new MockLanguageModelV3({
+      modelId: 'supervisor-mock',
+      doStream: async () => ({
+        stream:
+          step++ === 0
+            ? dispatchStepStream(async () => {
+                // coder1 should start and complete before the supervisor is done
+                await coder1Started;
+                expect(coderStartCount.value).toBe(1);
+              })
+            : textStepStream(),
+      }),
     });
     const models = {
       supervisor: supervisorModel,
@@ -131,7 +143,7 @@ describe('supervisor — streamed dispatch', () => {
 
     const session = createEditingSession();
     loadMarkdown(session, 'hello world');
-    const editTraces: DispatchEditTrace[][] = [];
+    const editTraces: DispatchEditTrace[] = [];
 
     const result = await supervisor(session, 'make both edits', models, {
       borrowWriter: async () => ({
@@ -142,23 +154,16 @@ describe('supervisor — streamed dispatch', () => {
       runner: () => [],
       interpret: false,
       sleep: async () => {},
-      onEditTrace: (edits) => editTraces.push(edits),
+      onEditTrace: (edit) => editTraces.push(edit),
     });
 
-    // Edit 0's coder started while the dispatch args were still streaming.
-    const firstCoder = events.indexOf('coder-started');
-    const finalDeltas = events.indexOf('final-deltas-enqueued');
-    expect(firstCoder).toBeGreaterThanOrEqual(0);
-    expect(firstCoder).toBeLessThan(finalDeltas);
+    // Both coders ran exactly once (execute joined the onInputAvailable run).
+    expect(coderStartCount.value).toBe(2);
 
-    // Both coders ran exactly once (execute joined the streamed run).
-    expect(events.filter((e) => e === 'coder-started')).toHaveLength(2);
-
-    // The streamed launch is stamped into the per-edit trace.
-    expect(editTraces).toHaveLength(1);
-    const [first, second] = editTraces[0]!;
-    expect(first!.streamedAt).toBeGreaterThan(0);
-    expect(second).toBeDefined();
+    // The streamed launch is stamped into both traces.
+    expect(editTraces).toHaveLength(2);
+    expect(editTraces[0]!.streamedAt).toBeGreaterThan(0);
+    expect(editTraces[1]!.streamedAt).toBeGreaterThan(0);
 
     expect(result.text).toBe('All edits applied.');
     expect(result.steps).toHaveLength(2);

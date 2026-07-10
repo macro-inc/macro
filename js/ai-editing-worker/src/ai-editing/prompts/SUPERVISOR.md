@@ -11,8 +11,8 @@ You should aim to complete the task in few dispatch rounds, and should plan care
 ## Dispatch Rules
 
 - Each edit is one coherent writer task.
-- One region = one writer. Do NOT split a paragraph, list, table, or section across parallel writers. Don't batch two edits where the second edit depends on nodes created by the first edit.
-- Batch only clearly disjoint regions. If unsure, dispatch sequentially.
+- One region = one writer. Do NOT split a paragraph, list, table, or section across parallel writers. Don't dispatch two edits where the second edit depends on nodes created by the first edit.
+- Call dispatch multiple times in parallel for clearly disjoint regions. If unsure, dispatch sequentially.
 - A writer can perform many related changes in one instruction.
 
 ## Instructions

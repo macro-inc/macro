@@ -194,10 +194,8 @@ export type Writer = {
 /** Per-edit timing recorded by dispatch: the writer's window and when each of
  *  its `runCode` calls executed. */
 export type DispatchEditTrace = {
-  /** Set when this edit was launched from the streaming tool-call args, before
-   *  the full dispatch call finished generating. Epoch ms. Comparing it with
-   *  `coderStartedAt` on later edits in the batch shows how much head start
-   *  streaming bought. Absent when the edit launched at execute time. */
+  /** Set when this edit was launched from onInputAvailable, before execute ran.
+   *  Epoch ms. */
   streamedAt?: number;
   coderStartedAt: number;
   coderFinishedAt: number;
@@ -223,10 +221,10 @@ export type DispatchToolOptions = {
   runTask: typeof coder;
   serialize?: (session: LexicalSession) => string;
   onOps?: RunCodeToolOptions['onOps'];
-  /** Called after each dispatch batch with each coder's runCode calls. */
-  onCoderResult?: (codes: CoderRunCode[][]) => void;
-  /** Called after each dispatch batch with per-edit snippet + timing traces. */
-  onEditTrace?: (edits: DispatchEditTrace[]) => void;
+  /** Called after each dispatch call with the coder's runCode calls. */
+  onCoderResult?: (codes: CoderRunCode[]) => void;
+  /** Called after each dispatch call with the edit's timing trace. */
+  onEditTrace?: (edit: DispatchEditTrace) => void;
 };
 
 export const DispatchEditSchema = z.object({
@@ -260,25 +258,15 @@ export function createDispatchTool(opts: DispatchToolOptions) {
 
   type CoderRun = Awaited<ReturnType<typeof runTask>>;
   type EditRun = { run: Promise<CoderRun>; trace: DispatchEditTrace };
-  // Coders already started from the streaming args, keyed by tool call then
-  // edit index. `execute` drains its call's entry when it settles the batch.
-  const calls = new Map<string, Map<number, EditRun>>();
-
-  function callRuns(toolCallId: string): Map<number, EditRun> {
-    let runs = calls.get(toolCallId);
-    if (!runs) {
-      runs = new Map();
-      calls.set(toolCallId, runs);
-    }
-    return runs;
-  }
+  // Coders already started from onInputAvailable, keyed by tool call id.
+  const calls = new Map<string, EditRun>();
 
   async function runEdit(
     edit: DispatchEdit,
     trace: DispatchEditTrace
   ): Promise<CoderRun> {
-    // Serialized at launch time (not batch time) so an edit launched mid-stream
-    // sees whatever earlier coders have already applied.
+    // Serialized at launch time so an edit launched early sees whatever earlier
+    // coders have already applied.
     const xml = serializeWithXml(session);
     const context = xmlWindow(
       xml,
@@ -306,15 +294,13 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     }
   }
 
-  /** Start edit `index` if it isn't already running; return its run either way. */
+  /** Start the edit if it isn't already running; return its run either way. */
   function ensureLaunched(
     toolCallId: string,
-    index: number,
     edit: DispatchEdit,
     streamed: boolean
   ): EditRun {
-    const runs = callRuns(toolCallId);
-    const existing = runs.get(index);
+    const existing = calls.get(toolCallId);
     if (existing) return existing;
     const trace: DispatchEditTrace = {
       streamedAt: streamed ? Date.now() : undefined,
@@ -326,64 +312,41 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     // A streamed run can reject before `execute` awaits it; keep that rejection
     // for the join instead of letting it escape as an unhandled rejection.
     entry.run.catch(() => {});
-    runs.set(index, entry);
+    calls.set(toolCallId, entry);
     return entry;
   }
 
-  function createTool() {
-    return tool({
+  return {
+    tool: tool({
       description:
-        'spawn a writer per edit instruction; writers start on each instruction as it streams',
-      inputSchema: z.object({
-        edits: z
-          .array(DispatchEditSchema)
-          .describe('edit instructions to run as one parallel batch'),
-      }),
-      execute: async ({ edits }, { toolCallId }) => {
-        // Writers run concurrently (distinct cursors); each applies its own ops
-        // serially via editor.update, so the shared session never tears. Edits
-        // already launched from the stream are joined, the rest start here.
-        const entries = edits.map((edit, i) =>
-          ensureLaunched(toolCallId, i, edit, false)
-        );
+        'spawn a writer for one edit instruction; call in parallel for independent edits',
+      inputSchema: DispatchEditSchema,
+      onInputAvailable: ({ input, toolCallId }) => {
+        ensureLaunched(toolCallId, input, true);
+      },
+      execute: async (edit, { toolCallId }) => {
+        const entry = ensureLaunched(toolCallId, edit, false);
         calls.delete(toolCallId);
-        const results = await Promise.all(entries.map((e) => e.run));
-        onEditTrace?.(entries.map((e) => e.trace));
-        const summaries = results.map((res, i) => {
-          tracker.add(childModel as { modelId: string }, res.totalUsage);
-          const blocked = findBlocked(res);
-          if (blocked) {
-            return `${i + 1}. ⚠ BLOCKED -- ${blocked.message}.`;
-          }
-          return `${i + 1}. ✓ APPLIED`;
-        });
+        const result = await entry.run;
+        onEditTrace?.(entry.trace);
+        tracker.add(childModel as { modelId: string }, result.totalUsage);
+        const blocked = findBlocked(result);
+        const summary = blocked
+          ? `⚠ BLOCKED -- ${blocked.message}.`
+          : `✓ APPLIED`;
         if (onCoderResult) {
-          const codes = results.map((res) =>
-            res.steps
-              .flatMap((step) => step.toolCalls)
-              .filter((call) => call.toolName === 'runCode')
-              .map((call) => {
-                const { code, snippets } = call.input as CoderRunCode;
-                return { code, snippets };
-              })
-          );
+          const codes = result.steps
+            .flatMap((step) => step.toolCalls)
+            .filter((call) => call.toolName === 'runCode')
+            .map((call) => {
+              const { code, snippets } = call.input as CoderRunCode;
+              return { code, snippets };
+            });
           onCoderResult(codes);
         }
-        return `${summaries.join('\n')}\n\n<document>\n${serialize(session)}\n</document>`;
+        return `${summary}\n\n<document>\n${serialize(session)}\n</document>`;
       },
-    });
-  }
-
-  return {
-    tool: createTool(),
-    /** Launch one edit of a still-streaming dispatch call as soon as its array
-     *  element is complete, so its coder works while the supervisor is still
-     *  writing the rest of the batch. Elements that fail schema validation are
-     *  ignored (the SDK will reject the whole call and the supervisor retries).
-     *  Idempotent per (toolCallId, index); `execute` joins these runs. */
-    launch: (toolCallId: string, edit: DispatchEdit, index: number): void => {
-      ensureLaunched(toolCallId, index, edit, true);
-    },
+    }),
   };
 }
 

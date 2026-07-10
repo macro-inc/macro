@@ -99,9 +99,7 @@ export async function runEditSession(
   const workspace = new EditingWorkspace(manager, source, wal);
 
   const allOps: DocumentOp[] = [];
-  // code, per coder, per batch
   const coderCodeBlocks: CoderRunCode[][][] = [];
-  // snippet + timing traces, per edit, per batch
   const dispatchEditTraces: DispatchEditTrace[][] = [];
   const sessionId = crypto.randomUUID();
   const startedAt = new Date();
@@ -122,8 +120,8 @@ export async function runEditSession(
       interpret: args.interpret,
       runner: args.runner,
       onOps: (ops) => allOps.push(...ops),
-      onCoderResult: (codes) => coderCodeBlocks.push(codes),
-      onEditTrace: (edits) => dispatchEditTraces.push(edits),
+      onCoderResult: (codes) => coderCodeBlocks.push([codes]),
+      onEditTrace: (edit) => dispatchEditTraces.push([edit]),
     });
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
