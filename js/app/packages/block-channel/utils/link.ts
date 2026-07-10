@@ -17,19 +17,6 @@ export function getChannelParams(
   return params;
 }
 
-export function getUrlToMessage(
-  channelId: string,
-  messageId: string,
-  threadId?: string
-) {
-  const origin = window.location.origin;
-  let url = `${origin}/app/channel/${channelId}?${URL_PARAMS.message}=${messageId}`;
-  if (threadId) {
-    url += `&${URL_PARAMS.thread}=${threadId}`;
-  }
-  return url;
-}
-
 /**
  * Drive an (already-mounted) channel block to a target message through its
  * block handle. The shared last mile for every "go to a channel message"
