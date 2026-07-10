@@ -75,8 +75,9 @@ fn tag_filter_requires_all_distinguishes_and_from_or() {
     )));
     assert!(super::tag_filter_requires_all(&all));
     // A single option (or no filter) reads as ANY.
-    let single: LiteralTree<CallLiteral> =
-        Some(Arc::new(Expr::Literal(tag_property_literal(Uuid::from_u128(1)))));
+    let single: LiteralTree<CallLiteral> = Some(Arc::new(Expr::Literal(tag_property_literal(
+        Uuid::from_u128(1),
+    ))));
     assert!(!super::tag_filter_requires_all(&single));
     assert!(!super::tag_filter_requires_all(&None));
 }
