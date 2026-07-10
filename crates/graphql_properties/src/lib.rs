@@ -4,6 +4,7 @@
 
 mod inputs;
 mod loaders;
+mod mutations;
 mod objects;
 
 pub use inputs::{GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr};
@@ -11,6 +12,7 @@ pub use loaders::{
     EntityPropertiesKey, EntityPropertiesLoader, PropertiesSoupPropertyEdgeReader,
     SoupPropertyEdgeReader, entity_properties_loader,
 };
+pub use mutations::{EntityPropertyWriter, PropertiesEntityPropertyWriter, PropertiesMutationRoot};
 pub use objects::{
     GraphqlSoupProperty, GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue,
 };

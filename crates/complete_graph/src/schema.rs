@@ -3,7 +3,7 @@ mod test;
 
 use std::{marker::PhantomData, sync::Arc};
 
-use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
+use async_graphql::{Context, EmptySubscription, Object, Schema};
 use axum::extract::FromRef;
 use axum_extra::extract::Cached;
 use email::{
@@ -12,6 +12,7 @@ use email::{
 };
 use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService};
 use graphql_common::extract_part;
+use graphql_properties::PropertiesMutationRoot;
 use graphql_soup::{SharedSoupService, SoupInput, SoupPage, resolve_soup};
 use model_user::axum_extractor::MacroUserExtractor;
 use soup::domain::ports::{NoOpSoupService, SoupService};
@@ -22,7 +23,7 @@ use soup::domain::ports::{NoOpSoupService, SoupService};
 /// service, and `St` the embedding axum router state that can hand out the
 /// email router state and entity access service for the lazy extractors.
 pub type SoupSchema<S, E, EAS, St> =
-    Schema<SoupQueryRoot<S, E, EAS, St>, EmptyMutation, EmptySubscription>;
+    Schema<SoupQueryRoot<S, E, EAS, St>, PropertiesMutationRoot, EmptySubscription>;
 
 /// GraphQL Soup schema type backed by a shared soup service.
 pub type SharedSoupSchema<S, E, EAS, St> = SoupSchema<SharedSoupService<S>, E, EAS, St>;
@@ -93,7 +94,7 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        EmptyMutation,
+        PropertiesMutationRoot,
         EmptySubscription,
     )
     .finish()

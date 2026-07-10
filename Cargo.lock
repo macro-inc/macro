@@ -5965,6 +5965,7 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-trait",
+ "chrono",
  "entity_access",
  "filter_ast",
  "graphql_common",
@@ -5976,6 +5977,7 @@ dependencies = [
  "rootcause",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

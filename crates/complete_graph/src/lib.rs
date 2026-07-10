@@ -13,7 +13,8 @@ pub use graphql_notification::{
     entity_notifications_loader,
 };
 pub use graphql_properties::{
-    EntityPropertiesKey, EntityPropertiesLoader, PropertiesSoupPropertyEdgeReader,
+    EntityPropertiesKey, EntityPropertiesLoader, EntityPropertyWriter,
+    PropertiesEntityPropertyWriter, PropertiesMutationRoot, PropertiesSoupPropertyEdgeReader,
     SoupPropertyEdgeReader, entity_properties_loader,
 };
 pub use graphql_soup::SharedSoupService;

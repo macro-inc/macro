@@ -79,6 +79,21 @@ pub enum GraphqlPropertyEntityType {
     User,
 }
 
+impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
+    fn from(value: GraphqlPropertyEntityType) -> Self {
+        match value {
+            GraphqlPropertyEntityType::Channel => Self::Channel,
+            GraphqlPropertyEntityType::Chat => Self::Chat,
+            GraphqlPropertyEntityType::Company => Self::Company,
+            GraphqlPropertyEntityType::Document => Self::Document,
+            GraphqlPropertyEntityType::Project => Self::Project,
+            GraphqlPropertyEntityType::Task => Self::Task,
+            GraphqlPropertyEntityType::Thread => Self::Thread,
+            GraphqlPropertyEntityType::User => Self::User,
+        }
+    }
+}
+
 impl From<GraphqlPropertyEntityType> for PropertyEntityType {
     fn from(value: GraphqlPropertyEntityType) -> Self {
         match value {

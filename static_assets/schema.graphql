@@ -235,6 +235,12 @@ input GraphqlEntityFilterAst {
 	propertiesFilter: GraphqlPropertiesExpr
 }
 
+input GraphqlEntityReferenceInput {
+	entityType: GraphqlPropertyEntityType!
+	entityId: String!
+	specificMessageId: ID
+}
+
 input GraphqlForeignEntityBinaryExpr {
 	left: GraphqlForeignEntityExpr!
 	right: GraphqlForeignEntityExpr!
@@ -359,6 +365,19 @@ input GraphqlPropertyMatchValue @oneOf {
 	Entity reference id to match.
 	"""
 	entityRef: String
+}
+
+input GraphqlSetPropertyValue @oneOf {
+	boolean: Boolean
+	date: String
+	number: Float
+	string: String
+	selectOption: ID
+	multiSelectOption: [ID!]
+	entityReference: GraphqlEntityReferenceInput
+	multiEntityReference: [GraphqlEntityReferenceInput!]
+	link: String
+	multiLink: [String!]
 }
 
 enum GraphqlSharedEmailFilter {
@@ -818,6 +837,23 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
+type PropertiesMutationRoot {
+	"""
+	Set or attach one property on an entity.
+	"""
+	setEntityProperty(input: SetEntityPropertyInput!): Boolean!
+}
+
+input SetEntityPropertyInput {
+	entityType: GraphqlPropertyEntityType!
+	entityId: String!
+	propertyDefinitionId: ID!
+	"""
+	Omit or pass null to attach the property without a value.
+	"""
+	value: GraphqlSetPropertyValue
+}
+
 """
 Input for `Query.soup`.
 """
@@ -888,5 +924,6 @@ Directs the executor to skip this field or fragment when the `if` argument is tr
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: SoupQueryRoot
+	mutation: PropertiesMutationRoot
 }
 

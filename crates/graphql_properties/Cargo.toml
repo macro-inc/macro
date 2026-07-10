@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait = { workspace = true }
+chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
@@ -20,4 +21,5 @@ properties = { path = "../properties", default-features = false, features = [
 rootcause = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
