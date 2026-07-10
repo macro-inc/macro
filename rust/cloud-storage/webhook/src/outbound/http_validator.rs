@@ -152,9 +152,20 @@ pub(super) async fn validate_resolved_endpoint_url(
         ));
     };
 
-    let mut resolved = lookup_host((host.as_str(), port)).await.map_err(|_| {
-        EndpointValidationError::ResolutionFailure("webhook endpoint host could not be resolved")
-    })?;
+    let mut resolved =
+        match tokio::time::timeout(REQUEST_TIMEOUT, lookup_host((host.as_str(), port))).await {
+            Ok(Ok(resolved)) => resolved,
+            Ok(Err(_)) => {
+                return Err(EndpointValidationError::ResolutionFailure(
+                    "webhook endpoint host could not be resolved",
+                ));
+            }
+            Err(_) => {
+                return Err(EndpointValidationError::ResolutionFailure(
+                    "webhook endpoint host resolution timed out",
+                ));
+            }
+        };
     let mut saw_address = false;
     for address in resolved.by_ref() {
         saw_address = true;
