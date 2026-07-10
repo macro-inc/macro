@@ -233,15 +233,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
     // (which drops them) and attach them to the document search args below.
-    // Tags additionally apply to the emails index (thread properties
-    // denormalized onto every message doc) and the chats index (nested on
-    // the parent chat doc).
+    // Tags, by contrast, are indexed on every taggable source, each of which
+    // applies the tag filter itself (see the per-source gating below).
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
     let tag_option_ids = req.filters.tag_option_ids.clone();
     let match_all_tags = req.filters.tag_filter_mode == item_filters::TagFilterMode::All;
-    // Tags are only indexed for the documents, emails, and chats indexes.
-    // With a tag filter active every other source is dropped, so response
-    // pages contain only rows the filter was actually applied to.
+    // A tag filter keeps only the tag-indexed sources; channels and CRM drop
+    // out below (see should_include_channels), so response pages contain only
+    // rows the filter was actually applied to.
     let tags_active = !tag_option_ids.is_empty();
 
     // CRM is opt-in: it only runs when the caller resolved a team receipt
