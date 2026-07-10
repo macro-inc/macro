@@ -3,7 +3,10 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { getChannelParams } from '@block-channel/utils/link';
+import {
+  getChannelParams,
+  goToChannelMessage,
+} from '@block-channel/utils/link';
 import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -30,6 +33,7 @@ import {
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
+import { getChannelEntityTarget } from '../utils';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -185,23 +189,27 @@ export function createSoupEntityActions(): {
           entity.type === 'channel_message' ||
           entity.type === 'channel_thread'
         ) {
+          // Thread rows are keyed by their root; getChannelEntityTarget
+          // recovers the clicked reply from the driving notification so the
+          // new split lands on it rather than the root message.
+          const target = getChannelEntityTarget(entity) ?? {
+            messageId: entity.messageId,
+            threadId: entity.threadId,
+          };
           splitManager.createNewSplit({
             content: {
               type: 'channel',
               id: entity.channelId,
-              params: getChannelParams(entity.messageId, entity.threadId),
+              params: getChannelParams(target.messageId, target.threadId),
             },
             referredFrom: 'entity-actions-menu',
           });
 
-          const orchestrator = splitManager.getOrchestrator();
-          const blockHandle = await orchestrator.getBlockHandle(
+          await goToChannelMessage(
+            splitManager.getOrchestrator(),
             entity.channelId,
-            'channel'
-          );
-
-          await blockHandle?.goToLocationFromParams(
-            getChannelParams(entity.messageId, entity.threadId)
+            target.messageId,
+            target.threadId
           );
         } else if (entity.type === 'crm_company') {
           splitManager.createNewSplit({
