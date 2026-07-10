@@ -18,6 +18,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
@@ -27,7 +28,7 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import { Avatar, cn, Dropdown, NavRow, Surface, Tooltip } from '@ui';
+import { cn, Dropdown, NavRow, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -63,36 +64,6 @@ interface ChannelGroup {
   isDM: boolean;
   notifications: UnifiedNotification[];
   latestSenderId: string | null;
-}
-
-function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
-  const result = new Map<string, string>();
-  const firstLetterCount = new Map<string, number>();
-
-  for (const group of groups) {
-    if (group.isDM || !group.channelName) continue;
-    const first = group.channelName[0]?.toUpperCase() ?? '';
-    firstLetterCount.set(first, (firstLetterCount.get(first) ?? 0) + 1);
-  }
-
-  for (const group of groups) {
-    if (group.isDM || !group.channelName) continue;
-    const name = group.channelName;
-    const first = name[0]?.toUpperCase() ?? '';
-    const needsTwo = (firstLetterCount.get(first) ?? 0) > 1 && name.length > 1;
-    const letters = needsTwo ? first + name[1].toUpperCase() : first;
-    result.set(group.entityId, letters);
-  }
-
-  return result;
-}
-
-function ChannelLetterIcon(props: { letters: string; slim?: boolean }) {
-  return (
-    <Avatar size="sm" class="size-3.5 bg-ink-extra-muted/15 text-ink-muted">
-      <Avatar.Fallback>{props.letters}</Avatar.Fallback>
-    </Avatar>
-  );
 }
 
 function groupByChannel(
@@ -228,7 +199,6 @@ function ChannelGroupItem(props: {
   group: ChannelGroup;
   animate?: boolean;
   isSlim?: boolean;
-  channelLetters?: string;
   onFloatingOpenChange?: (open: boolean) => void;
 }) {
   const notificationSource = useGlobalNotificationSource();
@@ -252,9 +222,7 @@ function ChannelGroupItem(props: {
     if (props.group.isDM) {
       return senderName() ?? 'Direct Message';
     }
-    return props.group.channelName
-      ? `#${props.group.channelName}`
-      : 'Unknown Channel';
+    return props.group.channelName ?? 'Unknown Channel';
   };
 
   const latestNotification = () => props.group.notifications[0];
@@ -318,12 +286,7 @@ function ChannelGroupItem(props: {
       >
         <Show
           when={isDM() && senderId()}
-          fallback={
-            <ChannelLetterIcon
-              letters={props.channelLetters ?? '?'}
-              slim={isSlim()}
-            />
-          }
+          fallback={<EntityIcon targetType="channel" size="xs" class="size-3.5" />}
         >
           <UserIcon
             id={senderId()!}
@@ -411,15 +374,12 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
 
 function ChannelGroupDropdownItem(props: {
   group: ChannelGroup;
-  channelLetters?: string;
 }) {
   const senderName = useSenderName(props.group.latestSenderId);
   const count = () => props.group.notifications.length;
   const displayName = () => {
     if (props.group.isDM) return senderName() ?? 'Direct Message';
-    return props.group.channelName
-      ? `#${props.group.channelName}`
-      : 'Unknown Channel';
+    return props.group.channelName ?? 'Unknown Channel';
   };
   const latestNotification = () => props.group.notifications[0];
 
@@ -433,7 +393,7 @@ function ChannelGroupDropdownItem(props: {
     >
       <Show
         when={props.group.isDM && props.group.latestSenderId}
-        fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
+        fallback={<EntityIcon targetType="channel" size="xs" class="size-3.5" />}
       >
         <UserIcon
           id={props.group.latestSenderId!}
@@ -494,10 +454,6 @@ export const ChannelsUnreadWidget = (props: {
       .filter((g): g is ChannelGroup => g != null);
   });
 
-  const channelLettersMap = createMemo(() =>
-    computeChannelLetters(channelGroups())
-  );
-
   const isSlim = () => props.sidebarState === 'slim';
   const SLIM_MAX = 4;
   const slimVisible = () => channelGroups().slice(0, SLIM_MAX);
@@ -509,16 +465,10 @@ export const ChannelsUnreadWidget = (props: {
         <ChannelGroupItem
           group={group}
           animate={false}
-          channelLetters={channelLettersMap().get(group.entityId)}
           onFloatingOpenChange={props.onDropdownOpenChange}
         />
       ),
-      dropdown: () => (
-        <ChannelGroupDropdownItem
-          group={group}
-          channelLetters={channelLettersMap().get(group.entityId)}
-        />
-      ),
+      dropdown: () => <ChannelGroupDropdownItem group={group} />,
     }))
   );
 
@@ -542,12 +492,7 @@ export const ChannelsUnreadWidget = (props: {
           <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
             <For each={slimVisible()}>
               {(group) => (
-                <ChannelGroupItem
-                  group={group}
-                  animate={false}
-                  isSlim
-                  channelLetters={channelLettersMap().get(group.entityId)}
-                />
+                <ChannelGroupItem group={group} animate={false} isSlim />
               )}
             </For>
             <Show when={slimOverflow() > 0}>

@@ -1,8 +1,13 @@
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { FavoriteIcon } from '@app/component/FavoriteIcon';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { ReadonlyThread } from '@channel/StandaloneThread';
 import {
   favoriteIconType,
   favoriteSplitContent,
@@ -16,8 +21,11 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import { isChannelNotification } from '@notifications/notification-helpers';
+import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import {
@@ -33,8 +41,16 @@ import {
   SortableProvider,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { cn, NavRow } from '@ui';
-import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
+import { cn, NavRow, Surface } from '@ui';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 
 /**
  * Drag data carried by favorite row sortables. Distinct from `EntityDragData`
@@ -51,6 +67,103 @@ export type FavoriteDragData = {
   /** Read by the `pointerWithin` collision detector to skip collapsed rows. */
   isDropTargetDisabled: () => boolean;
 };
+
+const HOVER_PREVIEW_COUNT = 3;
+
+function getPreviewThreadRoots(notifications: UnifiedNotification[]): string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const notification of notifications) {
+    const { messageId, threadId } = getChannelNotificationParams(notification);
+    const rootId = threadId ?? messageId;
+    if (!rootId || seen.has(rootId)) continue;
+    seen.add(rootId);
+    roots.push(rootId);
+  }
+  return roots;
+}
+
+function FavoriteChannelHoverPreview(props: {
+  channelId: string;
+  notifications: UnifiedNotification[];
+}) {
+  const orchestrator = useGlobalBlockOrchestrator();
+  const roots = () => getPreviewThreadRoots(props.notifications);
+  const visible = () => roots().slice(0, HOVER_PREVIEW_COUNT).reverse();
+  const hiddenCount = () => roots().length - visible().length;
+
+  return (
+    <div class="w-90 min-h-12 max-h-96 overflow-y-auto overscroll-contain flex flex-col py-1">
+      <Show when={hiddenCount() > 0}>
+        <span class="px-3 py-1 text-xs text-ink-extra-muted">
+          +{hiddenCount()} earlier
+        </span>
+      </Show>
+      <For each={visible()}>
+        {(rootMessageId) => (
+          <ReadonlyThread
+            channelId={props.channelId}
+            messageId={rootMessageId}
+            onClickMessage={(clickedMessageId, e) => {
+              e.stopPropagation();
+              const isReply = clickedMessageId !== rootMessageId;
+              navigateToChannelMessage(
+                orchestrator,
+                props.channelId,
+                clickedMessageId,
+                isReply ? rootMessageId : undefined
+              );
+            }}
+          />
+        )}
+      </For>
+    </div>
+  );
+}
+
+function FavoriteChannelHoverCard(
+  props: ParentProps<{
+    channelId: string;
+    notifications: UnifiedNotification[];
+    disabled?: boolean;
+    onOpenChange?: (open: boolean) => void;
+  }>
+) {
+  const [hovered, setHovered] = createSignal(false);
+  const open = () => hovered() && !props.disabled;
+
+  createEffect(() => props.onOpenChange?.(open()));
+
+  return (
+    <Show when={!isTouchDevice()} fallback={props.children}>
+      <KobalteTooltip
+        open={open()}
+        onOpenChange={setHovered}
+        placement="right"
+        overflowPadding={16}
+        fitViewport={true}
+        closeDelay={250}
+        openDelay={1000}
+        flip={true}
+        gutter={4}
+      >
+        <KobalteTooltip.Trigger class="inline-flex items-center w-full" as="div">
+          {props.children}
+        </KobalteTooltip.Trigger>
+        <KobalteTooltip.Portal>
+          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)] menu-open-animation">
+            <Surface depth={3}>
+              <FavoriteChannelHoverPreview
+                channelId={props.channelId}
+                notifications={props.notifications}
+              />
+            </Surface>
+          </KobalteTooltip.Content>
+        </KobalteTooltip.Portal>
+      </KobalteTooltip>
+    </Show>
+  );
+}
 
 /**
  * Linear-style favorites for the expanded sidebar: a collapsible "Favorites"
@@ -288,6 +401,44 @@ const FavoriteRow = (props: {
     });
   };
 
+  const isUnreadChannelFavorite = () =>
+    props.favorite.entityType === 'channel' && props.notifications().length > 0;
+  const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
+  const [hoverPreviewOpen, setHoverPreviewOpen] = createSignal(false);
+
+  createEffect(() => {
+    props.onContextMenuOpenChange?.(contextMenuOpen() || hoverPreviewOpen());
+  });
+
+  const row = (
+    <NavRow
+      draggable={false}
+      disabled={props.disabled}
+      data-sidebar-favorite={favoriteEntityKey(
+        props.favorite.entityType,
+        props.favorite.entityId
+      )}
+      data-active={isActive() ? '' : undefined}
+      active={isActive()}
+      class="h-7"
+      fullWidth
+      onClick={open}
+    >
+      <div class="size-5 shrink-0 flex items-center justify-center">
+        <FavoriteIcon
+          favorite={props.favorite}
+          class={dmRecipientId() ? 'size-[18px]' : 'size-3.5'}
+        />
+      </div>
+      <span class="min-w-0 truncate">{displayName()}</span>
+      <Show when={props.notifications().length > 0}>
+        <span class="ml-auto shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-ink/6 text-ink-muted rounded-md">
+          {props.notifications().length}
+        </span>
+      </Show>
+    </NavRow>
+  );
+
   return (
     <div
       ref={sortable}
@@ -300,31 +451,21 @@ const FavoriteRow = (props: {
         sortable.isActiveDraggable && 'opacity-40'
       )}
     >
-      <ContextMenu onOpenChange={props.onContextMenuOpenChange}>
+      <ContextMenu onOpenChange={setContextMenuOpen}>
         <ContextMenu.Trigger class="w-full h-7">
-          <NavRow
-            draggable={false}
-            disabled={props.disabled}
-            data-sidebar-favorite={favoriteEntityKey(
-              props.favorite.entityType,
-              props.favorite.entityId
-            )}
-            data-active={isActive() ? '' : undefined}
-            active={isActive()}
-            class="h-7"
-            fullWidth
-            onClick={open}
+          <Show
+            when={isUnreadChannelFavorite()}
+            fallback={row}
           >
-            <div class="size-5 shrink-0 flex items-center justify-center">
-              <FavoriteIcon favorite={props.favorite} class="size-3.5" />
-            </div>
-            <span class="min-w-0 truncate">{displayName()}</span>
-            <Show when={props.notifications().length > 0}>
-              <span class="ml-auto shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-ink/6 text-ink-muted rounded-md">
-                {props.notifications().length}
-              </span>
-            </Show>
-          </NavRow>
+            <FavoriteChannelHoverCard
+              channelId={props.favorite.entityId}
+              notifications={props.notifications()}
+              disabled={contextMenuOpen()}
+              onOpenChange={setHoverPreviewOpen}
+            >
+              {row}
+            </FavoriteChannelHoverCard>
+          </Show>
         </ContextMenu.Trigger>
 
         <ContextMenu.Portal>
