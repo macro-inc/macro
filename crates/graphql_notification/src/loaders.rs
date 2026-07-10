@@ -124,7 +124,7 @@ impl<R> EntityNotificationsLoader<R> {
     }
 }
 
-impl<R> Loader<model_entity::Entity<'static>> for EntityNotificationsLoader<R>
+impl<R> Loader<model_entity::OwnedEntity> for EntityNotificationsLoader<R>
 where
     R: SoupNotificationEdgeReader,
 {
@@ -133,13 +133,26 @@ where
 
     async fn load(
         &self,
-        keys: &[model_entity::Entity<'static>],
-    ) -> Result<HashMap<model_entity::Entity<'static>, Self::Value>, Self::Error> {
-        Ok(self
+        keys: &[model_entity::OwnedEntity],
+    ) -> Result<HashMap<model_entity::OwnedEntity, Self::Value>, Self::Error> {
+        let entities = keys
+            .iter()
+            .map(|key| key.as_entity().clone())
+            .collect::<Vec<_>>();
+        let loaded = self
             .reader
-            .get_notifications(self.user_id.clone(), keys.to_vec())
+            .get_notifications(self.user_id.clone(), entities)
             .await
-            .map_err(|e| e.into_cloneable())?)
+            .map_err(|error| error.into_cloneable())?;
+
+        Ok(keys
+            .iter()
+            .cloned()
+            .map(|key| {
+                let notifications = loaded.get(key.as_entity()).cloned().unwrap_or_default();
+                (key, notifications)
+            })
+            .collect())
     }
 }
 

@@ -135,3 +135,31 @@ impl<'a> CowLike<'a> for Entity<'a> {
         }
     }
 }
+
+/// An owned entity wrapper for APIs that require a non-lifetime-parameterized type.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct OwnedEntity(Entity<'static>);
+
+impl OwnedEntity {
+    /// Borrow the wrapped entity.
+    pub fn as_entity(&self) -> &Entity<'static> {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the wrapped entity.
+    pub fn into_entity(self) -> Entity<'static> {
+        self.0
+    }
+}
+
+impl From<Entity<'static>> for OwnedEntity {
+    fn from(entity: Entity<'static>) -> Self {
+        Self(entity)
+    }
+}
+
+impl From<OwnedEntity> for Entity<'static> {
+    fn from(entity: OwnedEntity) -> Self {
+        entity.into_entity()
+    }
+}

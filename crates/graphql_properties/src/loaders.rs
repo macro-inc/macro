@@ -149,7 +149,7 @@ impl<R> EntityPropertiesLoader<R> {
     }
 }
 
-impl<R> Loader<model_entity::Entity<'static>> for EntityPropertiesLoader<R>
+impl<R> Loader<model_entity::OwnedEntity> for EntityPropertiesLoader<R>
 where
     R: SoupPropertyEdgeReader,
 {
@@ -158,13 +158,26 @@ where
 
     async fn load(
         &self,
-        keys: &[model_entity::Entity<'static>],
-    ) -> Result<HashMap<model_entity::Entity<'static>, Self::Value>, Self::Error> {
-        Ok(self
+        keys: &[model_entity::OwnedEntity],
+    ) -> Result<HashMap<model_entity::OwnedEntity, Self::Value>, Self::Error> {
+        let entities = keys
+            .iter()
+            .map(|key| key.as_entity().clone())
+            .collect::<Vec<_>>();
+        let loaded = self
             .reader
-            .get_properties(&self.user_id, keys)
+            .get_properties(&self.user_id, &entities)
             .await
-            .map_err(|error| error.into_cloneable())?)
+            .map_err(|error| error.into_cloneable())?;
+
+        Ok(keys
+            .iter()
+            .cloned()
+            .map(|key| {
+                let properties = loaded.get(key.as_entity()).cloned().unwrap_or_default();
+                (key, properties)
+            })
+            .collect())
     }
 }
 
