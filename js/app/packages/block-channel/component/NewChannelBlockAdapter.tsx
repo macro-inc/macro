@@ -60,6 +60,7 @@ import {
   Switch,
 } from 'solid-js';
 import { ChannelTopLeft } from './Top';
+import { useChannelBotManagement } from './useChannelBotManagement';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
 
@@ -254,6 +255,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     setActiveTabInternal(tab);
   };
 
+  const botManagement = useChannelBotManagement({
+    channelId,
+    hotkeyScopeId: splitPanel.splitHotkeyScope,
+    isPreview,
+    openParticipants: () => setActiveTab('participants'),
+  });
+
   // CallContext: which channel has the Call tab selected (for isCallPage(), etc.).
   // `createComputed` (not `createEffect`) so this runs before paint and matches
   // `activeTab` on the first frame (e.g. deep-link opens on Call tab).
@@ -423,7 +431,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               <ChannelAttachmentsTab channelId={channelId} />
             </Match>
             <Match when={activeTab() === 'participants'}>
-              <ChannelParticipantsTab channelId={channelId} />
+              <ChannelParticipantsTab
+                channelId={channelId}
+                botManagementEnabled={botManagement.enabled()}
+                onCreateBot={botManagement.openCreateBot}
+                inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                onOpenBot={botManagement.openBot}
+              />
             </Match>
             <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
               <ChannelCallTab
