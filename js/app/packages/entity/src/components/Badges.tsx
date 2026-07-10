@@ -1,5 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
+import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
@@ -139,10 +140,19 @@ export function CallStatusBadge(props: { status: CallStatus }) {
 export function CallChannelNameBadge(props: { channelName: string }) {
   return (
     <Badge
-      class="ph-no-capture max-w-32 min-w-0 normal-case text-ink-extra-muted border-edge-muted px-2"
+      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
       title={props.channelName}
     >
+      <HashIcon class="size-3 shrink-0" />
       <span class="truncate">{props.channelName}</span>
+    </Badge>
+  );
+}
+
+export function CallDurationBadge(props: { duration: string }) {
+  return (
+    <Badge class="normal-case text-ink-extra-muted border-edge-muted px-2">
+      {props.duration}
     </Badge>
   );
 }
