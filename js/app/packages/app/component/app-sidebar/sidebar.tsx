@@ -29,12 +29,12 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@app/component/split-layout/layoutManager';
-import { InCallPanel, useCallContextOptional } from '@channel/Call';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { InCallPanel, useCallContextOptional } from '@channel/Call';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
