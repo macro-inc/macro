@@ -16,7 +16,7 @@ import type { MessageActions, MessageData } from './types';
  */
 function SwipeReplyBadge(props: { messageId: string }) {
   const ctx = useContext(SwipableRowContext);
-  const revealed = () => ctx?.stateFor(props.messageId).phase === 'threshold';
+  const revealed = () => ctx?.stateFor(props.messageId)?.phase === 'threshold';
 
   return (
     <div

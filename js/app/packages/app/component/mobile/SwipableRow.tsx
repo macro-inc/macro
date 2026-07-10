@@ -500,7 +500,7 @@ export function SwipableRow(
 ) {
   const ctx = useContext(SwipableRowContext);
   if (!ctx) {
-    throw new Error('EntityRow must be used within EntityRowProvider');
+    throw new Error('SwipableRow must be used within SwipableRowProvider');
   }
 
   const rowState = createMemo(() => ctx.stateFor(props.id));
