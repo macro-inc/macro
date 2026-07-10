@@ -34,6 +34,7 @@ import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { InCallPanel, useCallContextOptional } from '@channel/Call';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
@@ -810,6 +811,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const currentTeamQuery = useCurrentTeamQuery();
+  const callCtx = useCallContextOptional();
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -973,7 +975,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   );
 
   const workspaceItems = createMemo(() =>
-    ['mail', 'documents', 'channels', 'tasks', 'calls', 'agents']
+    ['mail', 'documents', 'channels', 'tasks', 'calls', 'agents', 'companies']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
       .map(toSectionItem)
@@ -1240,7 +1242,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
       </div>
 
-      <div class="shrink-0 w-full pt-2">
+      <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView() && callCtx?.isInCall()}>
+          <div data-ui="sidebar-in-call-panel">
+            <InCallPanel isSlim={() => false} />
+          </div>
+        </Show>
         <SidebarSettingsWidget
           isSlim={isSlim}
           onSelect={openSettingsTab}

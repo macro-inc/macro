@@ -28,6 +28,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -99,6 +100,128 @@ export function Layout(props: RouteSectionProps) {
         <LayoutInner {...props} />
       </SidebarCollapseContext.Provider>
     </SidebarVisibilityContext.Provider>
+  );
+}
+
+function CollapsedSidebarCallWidget(props: { visible: boolean }) {
+  const EDGE_GAP = 12;
+  const DEFAULT_BOTTOM_GAP = 12;
+  const [root, setRoot] = createSignal<HTMLDivElement>();
+  const [dragging, setDragging] = createSignal(false);
+  const [position, setPosition] = createSignal<{ left: number; top: number }>();
+
+  const clampPosition = (next: { left: number; top: number }) => {
+    const el = root();
+    if (!el) return next;
+
+    const maxLeft = Math.max(
+      EDGE_GAP,
+      window.innerWidth - el.offsetWidth - EDGE_GAP
+    );
+    const maxTop = Math.max(
+      EDGE_GAP,
+      window.innerHeight - el.offsetHeight - EDGE_GAP
+    );
+
+    return {
+      left: Math.min(Math.max(next.left, EDGE_GAP), maxLeft),
+      top: Math.min(Math.max(next.top, EDGE_GAP), maxTop),
+    };
+  };
+
+  const resetToDefaultPosition = () => {
+    const el = root();
+    if (!el) return;
+    setPosition(
+      clampPosition({
+        left: Math.round((window.innerWidth - el.offsetWidth) / 2),
+        top: window.innerHeight - el.offsetHeight - DEFAULT_BOTTOM_GAP,
+      })
+    );
+  };
+
+  createEffect(() => {
+    if (!props.visible) return;
+    requestAnimationFrame(() => resetToDefaultPosition());
+  });
+
+  createEffect(() => {
+    if (!props.visible || !position()) return;
+
+    const handleResize = () => {
+      const next = position();
+      if (!next) return;
+      setPosition(clampPosition(next));
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.visualViewport?.addEventListener('resize', handleResize);
+    onCleanup(() => {
+      window.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('resize', handleResize);
+    });
+  });
+
+  const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
+    if (e.button !== 0) return;
+
+    const el = root();
+    if (!el) return;
+
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const pointerStartX = e.clientX;
+    const pointerStartY = e.clientY;
+    const origin = { left: rect.left, top: rect.top };
+
+    setDragging(true);
+    setPosition(origin);
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      setPosition(
+        clampPosition({
+          left: origin.left + (moveEvent.clientX - pointerStartX),
+          top: origin.top + (moveEvent.clientY - pointerStartY),
+        })
+      );
+    };
+
+    const handleUp = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+  };
+
+  return (
+    <Show when={props.visible}>
+      <div
+        ref={setRoot}
+        class="fixed z-page-overlay w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
+        style={{
+          left: position() ? `${position()!.left}px` : '50%',
+          top: position() ? `${position()!.top}px` : undefined,
+          bottom: position() ? undefined : `${DEFAULT_BOTTOM_GAP}px`,
+          transform: position() ? undefined : 'translateX(-50%)',
+        }}
+      >
+        <div class="relative rounded-xl border border-edge-muted bg-surface shadow-menu p-1">
+          <button
+            type="button"
+            aria-label="Drag to move active call controls"
+            class={cn(
+              'absolute left-1 right-10 top-1 z-10 h-8 rounded-t-lg rounded-b-md bg-transparent select-none',
+              dragging() ? 'cursor-grabbing' : 'cursor-grab'
+            )}
+            onPointerDown={startDrag}
+          />
+          <InCallPanel isSlim={() => false} />
+        </div>
+      </div>
+    </Show>
   );
 }
 
@@ -266,17 +389,20 @@ function LayoutInner(props: RouteSectionProps) {
             left: sidebarState() === 'expanded' ? '15.75rem' : '0.75rem',
           }}
         >
-          <Show when={callCtx?.isInCall()}>
-            <div data-ui="in-call-panel">
-              <InCallPanel isSlim={() => false} />
-            </div>
-          </Show>
           <SidebarActiveCallWidget
             sidebarState="expanded"
             class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
           />
         </div>
       </Show>
+      <CollapsedSidebarCallWidget
+        visible={
+          isSidebarVisible() &&
+          sidebarState() === 'slim' &&
+          !!callCtx?.isInCall() &&
+          !callCtx?.isCallPage()
+        }
+      />
       <Show
         when={
           isMobile() &&

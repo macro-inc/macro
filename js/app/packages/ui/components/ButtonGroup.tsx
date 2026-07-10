@@ -50,6 +50,8 @@ const dividerVariantStyles: Record<ButtonVariant, string> = {
 /* explicit cross-axis size so the group's outer box matches a standalone
    Button of the same size (border-box absorbs the 1px outer border) */
 const groupHorizontalSize: Record<ButtonSize, string> = {
+  xs: '',
+  'icon-xs': 'h-5',
   lg: '',
   md: '',
   sm: 'h-6',
@@ -59,6 +61,8 @@ const groupHorizontalSize: Record<ButtonSize, string> = {
 };
 
 const groupVerticalSize: Record<ButtonSize, string> = {
+  xs: '',
+  'icon-xs': 'w-5',
   lg: '',
   md: '',
   sm: '',
