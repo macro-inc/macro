@@ -1,5 +1,5 @@
 import '@entity/composed/ListEntity.css';
-import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import { SwipableRow, SwipableRowContext } from '@app/component/mobile/SwipableRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
@@ -53,18 +53,18 @@ function MaybeEntityRow(props: {
   children: JSX.Element;
   config?: EntityRowConfig;
 }) {
-  const ctx = useContext(EntityRowContext);
+  const ctx = useContext(SwipableRowContext);
   return (
     <Show when={isMobile() && ctx} fallback={props.children}>
-      <EntityRow
-        entityId={props.entityId}
+      <SwipableRow
+        id={props.entityId}
         swipeLeftColor={props.config?.swipeLeftColor}
         swipeLeftRevealedComponent={props.config?.swipeLeftRevealedComponent}
         swipeRightColor={props.config?.swipeRightColor}
         swipeRightRevealedComponent={props.config?.swipeRightRevealedComponent}
       >
         {props.children}
-      </EntityRow>
+      </SwipableRow>
     </Show>
   );
 }

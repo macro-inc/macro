@@ -1,4 +1,4 @@
-import { EntityRowProvider } from '@app/component/mobile/EntityRow';
+import { SwipableRowProvider } from '@app/component/mobile/SwipableRow';
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { touchHandler } from '@core/directive/touchHandler';
 import {
@@ -130,7 +130,7 @@ export function OnboardingInbox() {
       </p>
 
       <ListLayoutProvider ref={listRef}>
-        <EntityRowProvider
+        <SwipableRowProvider
           container={listRef}
           canSwipeLeft={() => true}
           onSwipeLeft={(entityId) => markDone(entityId)}
@@ -168,7 +168,7 @@ export function OnboardingInbox() {
               )}
             </For>
           </div>
-        </EntityRowProvider>
+        </SwipableRowProvider>
       </ListLayoutProvider>
 
       {/* Long-press action drawer (markup modeled on SoupEntityActionDrawer). */}

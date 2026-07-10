@@ -1,5 +1,5 @@
 import { openChatWithInput } from '@app/component/ChatWithAgentButton';
-import { EntityRowProvider } from '@app/component/mobile/EntityRow';
+import { SwipableRowProvider } from 'app/component/mobile/SwipableRow';
 import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@app/component/mobile/float-regions/float-region-state';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -591,7 +591,7 @@ export function Channel(props: ChannelProps) {
                     class="relative flex-1 min-h-0"
                     ref={setThreadListContainerEl}
                   >
-                    <EntityRowProvider
+                    <SwipableRowProvider
                       container={threadListContainerEl}
                       triggerBehavior="spring-back"
                     >
@@ -670,7 +670,7 @@ export function Channel(props: ChannelProps) {
                           );
                         }}
                       </ThreadList>
-                    </EntityRowProvider>
+                    </SwipableRowProvider>
                     <Show when={!findBar.isOpen()}>
                       <ScrollToBottomOverlay
                         scrollState={threadListScrollState}

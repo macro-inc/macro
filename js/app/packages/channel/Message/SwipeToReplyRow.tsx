@@ -1,4 +1,4 @@
-import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
+import { SwipableRow, SwipableRowContext } from 'app/component/mobile/SwipableRow';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
@@ -12,7 +12,7 @@ import type { MessageActions, MessageData } from './types';
  * activation threshold, fading back out once the swipe triggers.
  */
 function SwipeReplyBadge(props: { messageId: string }) {
-  const ctx = useContext(EntityRowContext);
+  const ctx = useContext(SwipableRowContext);
   const revealed = () => ctx?.stateFor(props.messageId).phase === 'threshold';
 
   return (
@@ -34,7 +34,7 @@ function SwipeReplyBadge(props: { messageId: string }) {
 export function MaybeSwipeToReplyRow(
   props: ParentProps<{ message: MessageData; actions?: MessageActions }>
 ) {
-  const ctx = useContext(EntityRowContext);
+  const ctx = useContext(SwipableRowContext);
 
   const reply = () => {
     const onReply = props.actions?.onReply;
@@ -56,8 +56,8 @@ export function MaybeSwipeToReplyRow(
       when={isMobile() && ctx && props.actions?.onReply}
       fallback={props.children}
     >
-      <EntityRow
-        entityId={props.message.id}
+      <SwipableRow
+        id={props.message.id}
         onSwipeLeft={reply}
         // Transparent throughout: decorations behind the row (thread rails)
         // must stay visible, and the rubber-banded right direction must not
@@ -70,7 +70,7 @@ export function MaybeSwipeToReplyRow(
         }
       >
         {props.children}
-      </EntityRow>
+      </SwipableRow>
     </Show>
   );
 }

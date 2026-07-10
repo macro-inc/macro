@@ -3,7 +3,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { EntityRowProvider } from '@app/component/mobile/EntityRow';
+import { SwipableRowProvider } from '@app/component/mobile/SwipableRow';
 import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
 import {
   makeMarkDoneAction,
@@ -1310,7 +1310,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       <Show when={currentView() === 'companies' && !isMobile()}>
                         <ResponsiveCompanyListHeader class="shrink-0" />
                       </Show>
-                      <EntityRowProvider
+                      <SwipableRowProvider
                         container={localEntityListRef}
                         canSwipeLeft={(entityId) => {
                           const entity = entityById().get(entityId);
@@ -1571,7 +1571,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             );
                           }}
                         </SoupList>
-                      </EntityRowProvider>
+                      </SwipableRowProvider>
                     </ListLayoutProvider>
 
                     <Show when={!props.customScrollbarHidden}>
