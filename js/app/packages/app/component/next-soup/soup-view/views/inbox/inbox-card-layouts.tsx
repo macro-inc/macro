@@ -1117,12 +1117,15 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
   const senderName = createSenderDisplayName(senderId, senderFallbackName);
 
   const text = createMemo(() => {
-    const subject = props.item.entity.name;
+    const entity = props.item.entity;
 
     return {
       sender: senderName(),
-      subject,
-      content: '',
+      subject: entity.name,
+      content:
+        entity.type === 'email'
+          ? (itemContent(entity, props.item.notification) ?? entity.snippet)
+          : undefined,
     };
   });
 
