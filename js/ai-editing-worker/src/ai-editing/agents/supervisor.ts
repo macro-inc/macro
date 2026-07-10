@@ -15,7 +15,10 @@ import type { RunAgentOptions } from './types';
 
 export type { RunAgentOptions } from './types';
 
-const MASTER_SYSTEM = `${SHARED}\n${SUPERVISOR}\n${API_COMPACT}`;
+// TODO(wolf): figure out if we want this. Leaving it off for now.
+const USE_COMPACT = false;
+
+const MASTER_SYSTEM = `${SHARED}\n${SUPERVISOR}${USE_COMPACT ? `\n${API_COMPACT}` : ''}`;
 const INTERPRET_SYSTEM = `${SHARED}\n${INTERPRET}`;
 
 export async function supervisor(

@@ -13,6 +13,8 @@ import {
   SupportedNodeTypes,
 } from '../../../../lexical-core/node-list';
 import {
+  $getId,
+  $setId,
   $updateAllNodeIds,
   type NodeIdMappings,
   nodeIdPlugin,
@@ -94,13 +96,24 @@ export function toSnapshot(session: LexicalSession): SerializedEditorState {
   return session.editor.getEditorState().toJSON();
 }
 
+/** Derive the retype id for a node: `b3` -> `b3~v1` -> `b3~v2`. The stem stays
+ *  stable so the agent can see a retyped node is the same logical block, while
+ *  the id still changes (required — see `$retypeContainer`). `~` is outside
+ *  nanoid's alphabet, so a fresh random id can never be mistaken for a version. */
+function nextVersionId(id: string): string {
+  const m = /^(.*)~v(\d+)$/.exec(id);
+  return m ? `${m[1]}~v${Number(m[2]) + 1}` : `${id}~v1`;
+}
+
 /**
  * Retype a container node by swapping in a freshly-built replacement. The
  * replacement gets a FRESH durable id (Loro can't reshape a container in place —
  * reusing the id makes the change vanish on sync, a fresh id reads as a clean
- * delete + insert), and every id that pointed at the old node is forwarded to
- * the replacement. Children carry over via `replace(…, true)` with their own ids
- * intact. Backs `$setBlockType` and `$setListType`.
+ * delete + insert). The new id is the old id with a `~vN` suffix so it stays
+ * recognizable to the agent (`b3` -> `b3~v1`), and every id that pointed at the
+ * old node is forwarded to the replacement so prior handles keep resolving.
+ * Children carry over via `replace(…, true)` with their own ids intact. Backs
+ * `$setBlockType` and `$setListType`.
  *
  * This is specifically for retyping containers — NOT a generic node replace.
  * Inline wraps (`$wrapInBlock`) re-parent a node without minting a fresh id.
@@ -111,7 +124,11 @@ export function $retypeContainer<T extends ElementNode>(
   replacement: T
 ): T {
   const oldKey = node.getKey();
+  const oldId = $getId(node);
   node.replace(replacement, true);
+  // Stamp the versioned id BEFORE the walk so `$assertId` adopts it instead of
+  // minting a random one.
+  if (oldId) $setId(replacement, nextVersionId(oldId));
   $updateAllNodeIds(session.ids, replacement);
   const { idToNodeKeyMap } = session.ids;
   const newKey = replacement.getKey();

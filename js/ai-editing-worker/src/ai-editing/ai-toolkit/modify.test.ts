@@ -13,7 +13,7 @@ import { $modifyNode } from './modify';
 import { createEditingSession, loadMarkdown } from './session';
 
 describe('$modifyNode', () => {
-  it("op 'blockType' changes type + level, minting a fresh id the old id forwards to", () => {
+  it("op 'blockType' changes type + level, versioning the id the old id forwards to", () => {
     const { session, ids } = setup('Notes');
     const old = ids[0]!;
     edit(session, () =>
@@ -25,9 +25,38 @@ describe('$modifyNode', () => {
     const xml = serializeWithXml(session);
     expect(xml).toContain('<h2');
     expect(xml).toContain('Notes');
-    // fresh id replaces the old one, but the old id still resolves to the node
+    // the new id is the old id suffixed `~v1` -- recognizable but distinct
+    expect(xml).toContain(`id="${old}~v1"`);
     expect(xml).not.toContain(`id="${old}"`);
-    expect(read(session, () => $getId($byId(session, old)))).not.toBe(old);
+    // both the versioned id and the original still resolve to the node
+    expect(read(session, () => $getId($byId(session, `${old}~v1`)))).toBe(
+      `${old}~v1`
+    );
+    expect(read(session, () => $getId($byId(session, old)))).toBe(`${old}~v1`);
+  });
+
+  it("op 'blockType' bumps the version on each successive retype", () => {
+    const { session, ids } = setup('Notes');
+    const old = ids[0]!;
+    edit(session, () =>
+      $modifyNode(session, old, {
+        op: 'blockType',
+        block: { type: 'heading', level: 2 },
+      })
+    );
+    edit(session, () =>
+      $modifyNode(session, `${old}~v1`, {
+        op: 'blockType',
+        block: { type: 'quote' },
+      })
+    );
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('<blockquote');
+    expect(xml).toContain(`id="${old}~v2"`);
+    // every prior handle still points at the current node
+    for (const id of [old, `${old}~v1`, `${old}~v2`]) {
+      expect(read(session, () => $getId($byId(session, id)))).toBe(`${old}~v2`);
+    }
   });
 
   it("op 'text' rewrites a block's content, keeping type + id", () => {

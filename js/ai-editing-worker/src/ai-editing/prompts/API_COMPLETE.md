@@ -142,12 +142,14 @@ After:
 
 ```xml
 <doc>
-  <h2 id="b1"><t id="t1">Title</t></h2>
-  <blockquote id="b2"><t id="t2">A quote</t></blockquote>
-  <custom-code id="b3" direction="null" format="" indent="0" version="1" language="python"><t id="t3">code here</t></custom-code>
-  <p id="b4"><t id="t4">Back to paragraph</t></p>
+  <h2 id="b1~v1"><t id="t1">Title</t></h2>
+  <blockquote id="b2~v1"><t id="t2">A quote</t></blockquote>
+  <custom-code id="b3~v1" direction="null" format="" indent="0" version="1" language="python"><t id="t3">code here</t></custom-code>
+  <p id="b4~v1"><t id="t4">Back to paragraph</t></p>
 </doc>
 ```
+
+Converting a block's type gives it a fresh id: the old id with a `~vN` suffix (`b1` → `b1~v1`, again → `b1~v2`). It's the SAME block — the suffix just marks the retype, and the stem tells you which block it was. Both the suffixed id and the original resolve later in the same code, but going forward use the id shown in the latest XML.
 
 ## Lists
 
