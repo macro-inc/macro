@@ -1,12 +1,11 @@
 [package]
-name = "graphql_properties"
-version = "0.1.0"
 edition = "2024"
+name = "graphql_properties"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
-async-trait = { workspace = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 filter_ast = { path = "../filter_ast" }

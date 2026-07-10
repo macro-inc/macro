@@ -35,22 +35,22 @@ impl EntityNotificationsKey {
     }
 }
 
-/// Object-safe reader used by GraphQL notification edges.
-#[async_trait::async_trait]
+/// Reader used by GraphQL notification edges.
 pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
     /// Load notifications for the requested entity keys.
-    async fn get_notifications(
+    fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
         keys: Vec<EntityNotificationsKey>,
-    ) -> Result<
-        HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
-        rootcause::Report,
-    >;
+    ) -> impl Future<
+        Output = Result<
+            HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
+            rootcause::Report,
+        >,
+    > + Send;
 }
 
-#[async_trait::async_trait]
-impl<T> SoupNotificationEdgeReader for T
+impl<T> SoupNotificationEdgeReader for Arc<T>
 where
     T: notification::domain::service::NotificationReader,
 {
@@ -101,23 +101,40 @@ where
     }
 }
 
-/// DataLoader for entity notification edges.
-pub struct EntityNotificationsLoader {
-    user_id: MacroUserIdStr<'static>,
-    reader: Arc<dyn SoupNotificationEdgeReader>,
+/// Notification reader used by schema-only GraphQL construction.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpSoupNotificationEdgeReader;
+
+impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
+    async fn get_notifications(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        keys: Vec<EntityNotificationsKey>,
+    ) -> Result<
+        HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
+        rootcause::Report,
+    > {
+        Ok(keys.into_iter().map(|key| (key, Vec::new())).collect())
+    }
 }
 
-impl EntityNotificationsLoader {
+/// DataLoader for entity notification edges.
+pub struct EntityNotificationsLoader<R> {
+    user_id: MacroUserIdStr<'static>,
+    reader: R,
+}
+
+impl<R> EntityNotificationsLoader<R> {
     /// Create a new entity notifications DataLoader.
-    pub fn new(
-        user_id: MacroUserIdStr<'static>,
-        reader: Arc<dyn SoupNotificationEdgeReader>,
-    ) -> Self {
+    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
         Self { user_id, reader }
     }
 }
 
-impl Loader<EntityNotificationsKey> for EntityNotificationsLoader {
+impl<R> Loader<EntityNotificationsKey> for EntityNotificationsLoader<R>
+where
+    R: SoupNotificationEdgeReader,
+{
     type Value = Vec<UserNotificationRow<serde_json::Value>>;
     type Error = Arc<rootcause::Report>;
 
@@ -133,10 +150,13 @@ impl Loader<EntityNotificationsKey> for EntityNotificationsLoader {
 }
 
 /// Build a DataLoader for entity notification edges.
-pub fn entity_notifications_loader(
+pub fn entity_notifications_loader<R>(
     user_id: MacroUserIdStr<'static>,
-    reader: Arc<dyn SoupNotificationEdgeReader>,
-) -> DataLoader<EntityNotificationsLoader> {
+    reader: R,
+) -> DataLoader<EntityNotificationsLoader<R>>
+where
+    R: SoupNotificationEdgeReader,
+{
     DataLoader::new(
         EntityNotificationsLoader::new(user_id, reader),
         tokio::spawn,

@@ -6,7 +6,7 @@ mod loaders;
 mod objects;
 
 pub use loaders::{
-    EntityNotificationsKey, EntityNotificationsLoader, SoupNotificationEdgeReader,
-    entity_notifications_loader,
+    EntityNotificationsKey, EntityNotificationsLoader, NoOpSoupNotificationEdgeReader,
+    SoupNotificationEdgeReader, entity_notifications_loader,
 };
 pub use objects::{GraphqlSoupNotification, load_entity_notifications};

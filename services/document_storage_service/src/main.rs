@@ -291,7 +291,7 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue.clone(),
     });
     #[cfg(feature = "graphql")]
-    let graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader> =
+    let graphql_notification_reader: Arc<ai_tools::ToolNotificationService> =
         Arc::new(NotificationReaderService {
             repository: notification::outbound::repository::DbNotificationRepository::new(
                 db.clone(),

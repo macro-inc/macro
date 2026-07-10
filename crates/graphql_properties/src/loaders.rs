@@ -32,16 +32,17 @@ impl EntityPropertiesKey {
     }
 }
 
-/// Object-safe reader used by GraphQL property edges.
-#[async_trait::async_trait]
+/// Reader used by GraphQL property edges.
 pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
     /// Load properties for the requested entity keys on behalf of the given
     /// user. Entities the user cannot view yield an empty property list.
-    async fn get_properties(
+    fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
         keys: Vec<EntityPropertiesKey>,
-    ) -> Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report>;
+    ) -> impl Future<
+        Output = Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report>,
+    > + Send;
 }
 
 /// GraphQL property reader backed by the properties domain service and the
@@ -62,7 +63,6 @@ impl<P, A> PropertiesSoupPropertyEdgeReader<P, A> {
     }
 }
 
-#[async_trait::async_trait]
 impl<P, A> SoupPropertyEdgeReader for PropertiesSoupPropertyEdgeReader<P, A>
 where
     P: properties::PropertiesService,
@@ -147,19 +147,22 @@ where
 }
 
 /// DataLoader for entity property edges.
-pub struct EntityPropertiesLoader {
+pub struct EntityPropertiesLoader<R> {
     user_id: MacroUserIdStr<'static>,
-    reader: Arc<dyn SoupPropertyEdgeReader>,
+    reader: R,
 }
 
-impl EntityPropertiesLoader {
+impl<R> EntityPropertiesLoader<R> {
     /// Create a new entity properties DataLoader scoped to the requesting user.
-    pub fn new(user_id: MacroUserIdStr<'static>, reader: Arc<dyn SoupPropertyEdgeReader>) -> Self {
+    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
         Self { user_id, reader }
     }
 }
 
-impl Loader<EntityPropertiesKey> for EntityPropertiesLoader {
+impl<R> Loader<EntityPropertiesKey> for EntityPropertiesLoader<R>
+where
+    R: SoupPropertyEdgeReader,
+{
     type Value = Vec<SoupProperty>;
     type Error = Arc<rootcause::Report>;
 
@@ -175,9 +178,12 @@ impl Loader<EntityPropertiesKey> for EntityPropertiesLoader {
 }
 
 /// Build a DataLoader for entity property edges scoped to the requesting user.
-pub fn entity_properties_loader(
+pub fn entity_properties_loader<R>(
     user_id: MacroUserIdStr<'static>,
-    reader: Arc<dyn SoupPropertyEdgeReader>,
-) -> DataLoader<EntityPropertiesLoader> {
+    reader: R,
+) -> DataLoader<EntityPropertiesLoader<R>>
+where
+    R: SoupPropertyEdgeReader,
+{
     DataLoader::new(EntityPropertiesLoader::new(user_id, reader), tokio::spawn)
 }

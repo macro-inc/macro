@@ -5949,7 +5949,6 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "graphql_common",
  "macro_user_id",
  "notification",
@@ -5964,7 +5963,6 @@ name = "graphql_properties"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "chrono",
  "entity_access",
  "filter_ast",

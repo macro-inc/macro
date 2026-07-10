@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_graphql::{Context, ID, Object};
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
@@ -8,25 +6,48 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::shared::EntityReference;
 use properties::{PropertiesAccessReceipt, PropertiesService, access_entity_type};
+use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
 use crate::inputs::GraphqlPropertyEntityType;
 
 /// Mutation root for entity property writes.
 #[derive(Default)]
-pub struct PropertiesMutationRoot;
+pub struct PropertiesMutationRoot<T>(PhantomData<T>);
 
-/// Object-safe GraphQL boundary for setting an entity property.
-#[async_trait::async_trait]
+impl<T> PropertiesMutationRoot<T> {
+    /// Create a mutation root for the configured property writer.
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+/// GraphQL boundary for setting an entity property.
 pub trait EntityPropertyWriter: Send + Sync + 'static {
     /// Set or attach one property on an entity.
-    async fn set_entity_property(
+    fn set_entity_property(
         &self,
         entity_type: models_properties::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), rootcause::Report>;
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}
+
+/// Property writer used by schema-only GraphQL construction.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpEntityPropertyWriter;
+
+impl EntityPropertyWriter for NoOpEntityPropertyWriter {
+    async fn set_entity_property(
+        &self,
+        _entity_type: models_properties::EntityType,
+        _entity_id: String,
+        _property_definition_id: Uuid,
+        _value: Option<SetPropertyValue>,
+    ) -> Result<(), rootcause::Report> {
+        Err(rootcause::report!("property writer is not configured"))
+    }
 }
 
 /// Entity property writer backed by the properties and entity access services.
@@ -51,7 +72,6 @@ impl<P, A> PropertiesEntityPropertyWriter<P, A> {
     }
 }
 
-#[async_trait::async_trait]
 impl<P, A> EntityPropertyWriter for PropertiesEntityPropertyWriter<P, A>
 where
     P: PropertiesService,
@@ -172,14 +192,17 @@ impl GraphqlSetPropertyValue {
 }
 
 #[Object]
-impl PropertiesMutationRoot {
+impl<T> PropertiesMutationRoot<T>
+where
+    T: EntityPropertyWriter,
+{
     /// Set or attach one property on an entity.
     async fn set_entity_property(
         &self,
         ctx: &Context<'_>,
         input: SetEntityPropertyInput,
     ) -> async_graphql::Result<bool> {
-        let writer = ctx.data::<Arc<dyn EntityPropertyWriter>>()?;
+        let writer = ctx.data::<T>()?;
         let property_definition_id =
             parse_id(input.property_definition_id, "propertyDefinitionId")?;
         let value = input
@@ -226,12 +249,11 @@ mod tests {
         Option<SetPropertyValue>,
     );
 
-    #[derive(Default)]
+    #[derive(Default, Clone)]
     struct CapturingWriter {
-        write: Mutex<Option<CapturedWrite>>,
+        write: Arc<Mutex<Option<CapturedWrite>>>,
     }
 
-    #[async_trait::async_trait]
     impl EntityPropertyWriter for CapturingWriter {
         async fn set_entity_property(
             &self,
@@ -248,11 +270,15 @@ mod tests {
 
     #[tokio::test]
     async fn set_entity_property_forwards_to_writer() {
-        let writer = Arc::new(CapturingWriter::default());
-        let writer_data: Arc<dyn EntityPropertyWriter> = writer.clone();
-        let schema = Schema::build(QueryRoot, PropertiesMutationRoot, EmptySubscription)
-            .data(writer_data)
-            .finish();
+        let writer = CapturingWriter::default();
+        let writer_data = writer.clone();
+        let schema = Schema::build(
+            QueryRoot,
+            PropertiesMutationRoot::<CapturingWriter>::new(),
+            EmptySubscription,
+        )
+        .data(writer_data)
+        .finish();
         let property_definition_id = Uuid::from_u128(1);
         let option_id = Uuid::from_u128(2);
 

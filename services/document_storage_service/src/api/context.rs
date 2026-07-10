@@ -144,6 +144,8 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEmailService,
     EntityAccessService,
     ApiContext,
+    complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
+    Arc<ai_tools::ToolNotificationService>,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -368,7 +370,7 @@ pub(crate) struct ApiContext {
     #[cfg(feature = "graphql")]
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     #[cfg(feature = "graphql")]
-    pub graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader>,
+    pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,

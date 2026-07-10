@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
-async-trait = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 macro_user_id = { path = "../macro_user_id" }
 notification = { path = "../notification" }
