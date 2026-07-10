@@ -43,6 +43,7 @@ type SoupEntityActionItem = {
   label: string;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   hotkeyToken?: HotkeyToken;
+  shortcut?: string;
   onClick: () => void | Promise<void>;
   destructive?: boolean;
 };
@@ -138,6 +139,7 @@ export function createSoupEntityActions(): {
       topItems.push({
         id: 'mark-done',
         label: 'Mark Done',
+        hotkeyToken: TOKENS.entity.action.markDone,
         onClick: handle(markDone.executeWithSoup),
       });
     }
@@ -231,6 +233,7 @@ export function createSoupEntityActions(): {
       topItems.push({
         id: 'open-in-split',
         label: 'Open in new split',
+        shortcut: 'shift+enter',
         onClick: openInNewSplit,
       });
     }
@@ -242,6 +245,7 @@ export function createSoupEntityActions(): {
       middleItems.push({
         id: 'rename',
         label: 'Rename',
+        hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
       });
     }
@@ -271,6 +275,7 @@ export function createSoupEntityActions(): {
       middleItems.push({
         id: 'move-to-folder',
         label: 'Move to folder',
+        hotkeyToken: TOKENS.entity.action.moveToFolder,
         onClick: handle(moveToProjectAction.executeWithSoup),
       });
     }
@@ -287,6 +292,7 @@ export function createSoupEntityActions(): {
       middleItems.push({
         id: 'duplicate',
         label: 'Duplicate',
+        hotkeyToken: TOKENS.entity.action.copy,
         onClick: handle(copyAction.executeWithSoup),
       });
     }
@@ -295,6 +301,7 @@ export function createSoupEntityActions(): {
       middleItems.push({
         id: 'copy-link',
         label: 'Copy Link',
+        hotkeyToken: TOKENS.entity.action.copyLink,
         onClick: handle(copyLinkAction.executeWithSoup),
       });
 
@@ -302,6 +309,7 @@ export function createSoupEntityActions(): {
         middleItems.push({
           id: 'copy-branch-name',
           label: 'Copy Branch Name',
+          hotkeyToken: TOKENS.entity.action.copyBranchName,
           onClick: handle(copyBranchNameAction.executeWithSoup),
         });
       }
@@ -376,6 +384,7 @@ export function createSoupEntityActions(): {
       deleteItems.push({
         id: 'delete',
         label: 'Delete',
+        hotkeyToken: TOKENS.entity.action.delete,
         onClick: handle(deleteAction.executeWithSoup),
         destructive: true,
       });

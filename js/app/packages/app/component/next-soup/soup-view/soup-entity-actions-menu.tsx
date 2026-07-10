@@ -49,6 +49,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                 text={action.label}
                 icon={action.icon}
                 hotkeyToken={action.hotkeyToken}
+                shortcut={action.shortcut}
                 onClick={() => handleAction(action.onClick)}
                 class={action.destructive ? 'text-failure-ink' : undefined}
               />

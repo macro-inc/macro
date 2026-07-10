@@ -12,11 +12,15 @@ import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import PlusIcon from '@phosphor/plus.svg';
-import { cn, Dropdown, Hotkey, NavRow } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-export const SidebarCreateMenu = (props: { isSlim: () => boolean }) => {
+export const SidebarCreateMenu = (props: {
+  isSlim: () => boolean;
+  variant?: 'row' | 'icon';
+  onMenuOpenChange?: (open: boolean) => void;
+}) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
@@ -35,12 +39,15 @@ export const SidebarCreateMenu = (props: { isSlim: () => boolean }) => {
       analytics.track('create_menu_open', { from: 'sidebar' });
     }
     setOpen(nextOpen);
+    props.onMenuOpenChange?.(nextOpen);
     if (nextOpen) {
       setActiveScope(CREATE_MENU_COMMAND_SCOPE);
     } else {
       activateClosestDOMScope();
     }
   };
+
+  onCleanup(() => props.onMenuOpenChange?.(false));
 
   useHotkeyInterceptor((context) => {
     if (!open() || context.eventType !== 'keydown') return false;
@@ -77,31 +84,55 @@ export const SidebarCreateMenu = (props: { isSlim: () => boolean }) => {
       placement="right-start"
       gutter={8}
     >
-      <Dropdown.Trigger
-        as={NavRow}
-        class="center h-8 bg-ink/4"
-        fullWidth
-        tooltipPlacement="right"
-        tooltipDisabled={!props.isSlim()}
-        label="Create"
-        hotkey={TOKENS.global.createCommand}
-        onMouseDown={(e: MouseEvent) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-        }}
+      <Show
+        when={props.variant === 'icon'}
+        fallback={
+          <Dropdown.Trigger
+            as={NavRow}
+            class="center h-8 bg-ink/4 text-[13px]"
+            fullWidth
+            tooltipPlacement="right"
+            tooltipDisabled={!props.isSlim()}
+            label="Create"
+            hotkey={TOKENS.global.createCommand}
+            onMouseDown={(e: MouseEvent) => {
+              if (e.button !== 0) return;
+              e.preventDefault();
+            }}
+          >
+            <div class="size-4 shrink-0">
+              <PlusIcon class="size-4" />
+            </div>
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
+              Create
+            </span>
+            <Show when={open()}>
+              <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
+                <Hotkey
+                  token={TOKENS.global.createCommand}
+                  class="flex gap-1"
+                />
+              </div>
+            </Show>
+          </Dropdown.Trigger>
+        }
       >
-        <div class="size-4 shrink-0">
-          <PlusIcon class="size-4" />
-        </div>
-        <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-          Create
-        </span>
-        <Show when={open()}>
-          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
-            <Hotkey token={TOKENS.global.createCommand} class="flex gap-1" />
-          </div>
-        </Show>
-      </Dropdown.Trigger>
+        <Dropdown.Trigger
+          as={Button}
+          variant="base"
+          size="icon-sm"
+          depth={1}
+          class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
+          label="Create"
+          hotkey={TOKENS.global.createCommand}
+          onMouseDown={(e: MouseEvent) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+          }}
+        >
+          <PlusIcon />
+        </Dropdown.Trigger>
+      </Show>
       <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
           <For each={blocks()}>

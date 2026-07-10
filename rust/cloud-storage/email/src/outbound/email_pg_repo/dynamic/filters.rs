@@ -35,6 +35,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
+            | EmailLiteral::Importance(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::Property(_),
@@ -54,20 +55,12 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
+            | EmailLiteral::Importance(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::Property(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
-    })
-}
-
-pub(super) fn has_importance_literal(ast: &Expr<EmailLiteral>) -> bool {
-    ast.collapse_frames(|frame| match frame {
-        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
-        filter_ast::ExprFrame::Not(a) => a,
-        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(_)) => true,
-        filter_ast::ExprFrame::Literal(_) => false,
     })
 }
 
@@ -184,44 +177,6 @@ fn build_address_text_match(
     }
 }
 
-fn build_sender_importance_override_filter(is_important: bool) -> SqlFragment {
-    let importance_literal = if is_important { "TRUE" } else { "FALSE" };
-    let opposite_importance_literal = if is_important { "FALSE" } else { "TRUE" };
-
-    SqlFragment::raw(format!(
-        r#"(
-                    EXISTS (
-                        SELECT 1
-                        FROM email_contacts sender_c
-                        JOIN email_filters ef
-                          ON ef.link_id = m.link_id
-                         AND ef.email_address IS NOT NULL
-                         AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
-                        WHERE sender_c.id = m.from_contact_id
-                          AND ef.is_important = {importance_literal}
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                        FROM email_contacts sender_c
-                        JOIN email_filters ef
-                          ON ef.link_id = m.link_id
-                         AND ef.email_domain IS NOT NULL
-                         AND LOWER(ef.email_domain) = LOWER(split_part(sender_c.email_address, '@', 2))
-                        WHERE sender_c.id = m.from_contact_id
-                          AND ef.is_important = {importance_literal}
-                          AND NOT EXISTS (
-                              SELECT 1
-                              FROM email_filters ef_addr
-                              WHERE ef_addr.link_id = m.link_id
-                                AND ef_addr.email_address IS NOT NULL
-                                AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
-                                AND ef_addr.is_important = {opposite_importance_literal}
-                          )
-                    )
-                )"#,
-    ))
-}
-
 pub(super) fn build_message_email_filter(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
@@ -232,9 +187,7 @@ pub(super) fn build_message_email_filter(
         filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
 
         filter_ast::ExprFrame::Literal(
-            EmailLiteral::ThreadId(_)
-            | EmailLiteral::Owner(_)
-            | EmailLiteral::ProjectId(_),
+            EmailLiteral::ThreadId(_) | EmailLiteral::Owner(_) | EmailLiteral::ProjectId(_),
         ) => SqlFragment::raw("TRUE"),
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Sender(email)) => {
@@ -253,79 +206,7 @@ pub(super) fn build_message_email_filter(
             build_address_predicate_on_m(AddressKind::Bcc, &email, resolved)
         }
 
-        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
-            let mut f = SqlFragment::raw(
-                r#"(
-                NOT EXISTS (
-                    SELECT 1 FROM email_message_labels ml
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE ml.message_id = m.id
-                    AND l.name = 'TRASH'
-                )
-                AND (
-                    "#,
-            );
-            f.extend(build_sender_importance_override_filter(true));
-            f.push_raw(
-                r#"
-                    OR (
-                        NOT "#,
-            );
-            f.extend(build_sender_importance_override_filter(false));
-            f.push_raw(
-                r#"
-                        AND (
-                            m.is_draft = TRUE
-                            OR EXISTS (
-                                SELECT 1 FROM email_message_labels ml
-                                JOIN email_labels l ON ml.label_id = l.id
-                                WHERE ml.message_id = m.id
-                                AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
-                            )
-                            OR NOT EXISTS (
-                                SELECT 1 FROM email_message_labels ml
-                                JOIN email_labels l ON ml.label_id = l.id
-                                WHERE ml.message_id = m.id
-                                AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
-                            )
-                        )
-                    )
-                )
-            )"#,
-            );
-            f
-        }
-        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
-            let mut f = SqlFragment::raw(
-                r#"(
-                "#,
-            );
-            f.extend(build_sender_importance_override_filter(false));
-            f.push_raw(
-                r#"
-                OR (
-                    NOT "#,
-            );
-            f.extend(build_sender_importance_override_filter(true));
-            f.push_raw(
-                r#"
-                    AND NOT EXISTS (
-                        SELECT 1 FROM email_message_labels ml
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE ml.message_id = m.id
-                        AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
-                    )
-                    AND EXISTS (
-                        SELECT 1 FROM email_message_labels ml
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE ml.message_id = m.id
-                        AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
-                    )
-                )
-            )"#,
-            );
-            f
-        }
+        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::NotificationDone(_)) => {
             SqlFragment::raw("TRUE")
         }
@@ -360,7 +241,7 @@ pub(super) fn has_address_literals(ast: &Expr<EmailLiteral>) -> bool {
 /// True if the subtree contains only address literals (Sender/Cc/Bcc/Recipient)
 /// composed via And/Or/Not. Used to decide whether a top-level conjunct can be
 /// safely pushed into the candidate-thread pre-filter without risking false
-/// negatives (e.g., `Sender(X) OR Importance(true)` cannot be reduced to just
+/// negatives (e.g., `Sender(X) OR CalendarOnly(true)` cannot be reduced to just
 /// `Sender(X)` at the candidate stage).
 fn is_pure_address_subtree(expr: &Expr<EmailLiteral>) -> bool {
     expr.collapse_frames(|frame| match frame {
@@ -473,13 +354,12 @@ pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragme
 /// True when the candidate WHERE must mirror the CROSS JOIN LATERAL's
 /// message match via a correlated EXISTS rather than the address-only
 /// `matching_threads` CTE. That's the case when the lateral applies a
-/// per-message filter the address CTE doesn't model — an `Importance`
-/// literal, or a non-empty view-level message filter (Starred / Drafts /
-/// Important / …). Without this, the candidate `LIMIT` counts threads that
-/// the lateral later drops, so the page under-fills while still emitting a
-/// cursor.
-pub(super) fn wants_message_exists_pushdown(ast: &Expr<EmailLiteral>, view: &PreviewView) -> bool {
-    has_importance_literal(ast) || !build_view_message_filter(view).is_empty()
+/// per-message filter the address CTE doesn't model — a non-empty
+/// view-level message filter (Starred / Drafts / Important / …). Without
+/// this, the candidate `LIMIT` counts threads that the lateral later
+/// drops, so the page under-fills while still emitting a cursor.
+pub(super) fn wants_message_exists_pushdown(view: &PreviewView) -> bool {
+    !build_view_message_filter(view).is_empty()
 }
 
 /// Builds the candidate-stage mirror of the lateral message match:
@@ -775,6 +655,16 @@ pub(super) fn build_thread_email_filter(
             SqlFragment::raw("TRUE")
         }
 
+        // Denormalized importance flag maintained by update_thread_metadata
+        // (sync_thread_signal_flag) and the email_filters resync fan-out.
+        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
+            SqlFragment::raw("t.is_signal")
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
+            SqlFragment::raw("(NOT t.is_signal)")
+        }
+
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(ref lit)) => {
             date_predicate("t.created_at", lit)
         }
@@ -792,7 +682,6 @@ pub(super) fn build_thread_email_filter(
             | EmailLiteral::Cc(_)
             | EmailLiteral::Bcc(_)
             | EmailLiteral::Recipient(_)
-            | EmailLiteral::Importance(_)
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::NotificationSeen(_)
             | EmailLiteral::Shared(_),

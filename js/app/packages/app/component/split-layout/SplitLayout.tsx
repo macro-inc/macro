@@ -1,5 +1,8 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { isSidebarVisible } from '@app/component/sidebarVisibility';
+import {
+  isSidebarVisible,
+  useSidebarCollapse,
+} from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
 import { splitContainerSelector } from '@core/dom-selectors';
@@ -307,6 +310,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
   const [, setTabTitle] = tabTitleSignal;
+  const sidebar = useSidebarCollapse();
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =
@@ -345,7 +349,9 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <div
-        class={cn('size-full p-2 mobile:p-0', { 'pl-0': isSidebarVisible() })}
+        class={cn('size-full p-2 mobile:p-0', {
+          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
+        })}
       >
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}
