@@ -973,7 +973,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   );
 
   const workspaceItems = createMemo(() =>
-    ['mail', 'documents', 'channels', 'tasks', 'calls', 'agents']
+    ['mail', 'documents', 'channels', 'tasks', 'calls', 'agents', 'companies']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
       .map(toSectionItem)
