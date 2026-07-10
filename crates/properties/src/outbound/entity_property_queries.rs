@@ -1,6 +1,6 @@
 //! General entity property query helpers.
 
-use models_properties::service::property_value::PropertyValue;
+use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -14,7 +14,7 @@ pub async fn upsert_entity_property(
     entity_type: EntityType,
     property_definition_id: Uuid,
     value: Option<PropertyValue>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<EntityProperty> {
     let id = macro_uuid::generate_uuid_v7();
 
     // Serialize PropertyValue to JSONB (or NULL if None)
@@ -25,16 +25,24 @@ pub async fn upsert_entity_property(
 
     tracing::debug!(value_json = ?value_json, "upserting entity property");
 
-    // Single UPSERT operation - handles both INSERT and UPDATE cases
-    // When value is None, JSONB will be NULL, effectively clearing the value while keeping the property attached
-    sqlx::query!(
+    // Single UPSERT operation - handles both INSERT and UPDATE cases.
+    // RETURNING yields the canonical assignment for both branches without a second query.
+    let property = sqlx::query_as!(
+        EntityProperty,
         r#"
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (entity_id, entity_type, property_definition_id) 
-        DO UPDATE SET 
+        ON CONFLICT (entity_id, entity_type, property_definition_id)
+        DO UPDATE SET
             values = EXCLUDED.values,
             updated_at = NOW()
+        RETURNING
+            id,
+            entity_id,
+            entity_type as "entity_type: EntityType",
+            property_definition_id,
+            created_at,
+            updated_at
         "#,
         id,
         entity_id,
@@ -42,12 +50,12 @@ pub async fn upsert_entity_property(
         property_definition_id,
         value_json
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
     tracing::debug!("successfully upserted entity property");
 
-    Ok(())
+    Ok(property)
 }
 
 /// Atomically add one option to a multi-select entity property value, creating

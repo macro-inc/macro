@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use models_properties::EntityReference;
 use models_properties::EntityType;
-use models_properties::service::property_value::PropertyValue;
+use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use sqlx::{PgConnection, Pool, Postgres};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
@@ -18,7 +18,7 @@ pub async fn link_parent_task(
     pool: &Pool<Postgres>,
     task_id: Uuid,
     parent_task_id: Option<Uuid>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<EntityProperty>> {
     // Validate: can't set self as parent
     if parent_task_id == Some(task_id) {
         anyhow::bail!("a task cannot be its own parent");
@@ -46,11 +46,11 @@ pub async fn link_parent_task(
         tracing::debug!(old_parent = %old_parent_id, "removed task from old parent's Subtasks");
     }
 
-    // 3. Set new parent (returns true if task exists)
-    let task_exists = set_task_parent(&mut tx, task_id, parent_task_id).await?;
+    // 3. Set new parent and retain the canonical assignment returned by Postgres.
+    let property = set_task_parent(&mut tx, task_id, parent_task_id).await?;
 
     // 4. Add to new parent's subtasks (only if task exists)
-    if task_exists {
+    if property.is_some() {
         if let Some(parent_id) = parent_task_id {
             add_to_parent_subtasks(&mut tx, parent_id, task_id).await?;
             tracing::debug!("added task to parent's Subtasks");
@@ -61,7 +61,7 @@ pub async fn link_parent_task(
 
     tx.commit().await?;
     tracing::info!("successfully linked parent task");
-    Ok(())
+    Ok(property)
 }
 
 /// Set a task's subtasks (for Subtasks property).
@@ -69,7 +69,7 @@ pub async fn link_subtasks(
     pool: &Pool<Postgres>,
     task_id: Uuid,
     subtask_ids: Vec<Uuid>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<EntityProperty>> {
     // Validate: can't include self as subtask
     if subtask_ids.contains(&task_id) {
         anyhow::bail!("a task cannot be its own subtask");
@@ -112,8 +112,8 @@ pub async fn link_subtasks(
         "computed subtasks diff"
     );
 
-    // 2. Set task's subtasks to new list
-    set_task_subtasks(&mut tx, task_id, subtask_ids).await?;
+    // 2. Set task's subtasks to new list and retain the canonical assignment.
+    let property = set_task_subtasks(&mut tx, task_id, subtask_ids).await?;
 
     // 3. For added subtasks: remove from old parent, set new parent
     for subtask_id in &added {
@@ -141,7 +141,7 @@ pub async fn link_subtasks(
         removed_count = removed.len(),
         "successfully linked subtasks"
     );
-    Ok(())
+    Ok(property)
 }
 
 // ============================================================================
@@ -208,15 +208,17 @@ async fn remove_from_parent_subtasks(
 ) -> anyhow::Result<()> {
     let current = get_task_subtasks(&mut *tx, parent_id).await?;
     let updated: Vec<Uuid> = current.into_iter().filter(|id| *id != task_id).collect();
-    set_task_subtasks(&mut *tx, parent_id, updated).await
+    set_task_subtasks(&mut *tx, parent_id, updated)
+        .await
+        .map(|_| ())
 }
 
-/// Set a task's parent task property. Returns true if the task exists (row was updated).
+/// Set a task's parent task property, returning the updated assignment when present.
 async fn set_task_parent(
     tx: &mut PgConnection,
     task_id: Uuid,
     parent_task_id: Option<Uuid>,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<Option<EntityProperty>> {
     let parent_task_prop_id = SystemPropertyKey::PARENT_TASK_UUID;
     let task_id_str = task_id.to_string();
 
@@ -228,23 +230,29 @@ async fn set_task_parent(
         None => serde_json::Value::Null,
     };
 
-    let result = sqlx::query!(
+    Ok(sqlx::query_as!(
+        EntityProperty,
         r#"
         UPDATE entity_properties
         SET values = $4, updated_at = NOW()
         WHERE entity_id = $1
           AND entity_type = $2
           AND property_definition_id = $3
+        RETURNING
+            id,
+            entity_id,
+            entity_type as "entity_type: EntityType",
+            property_definition_id,
+            created_at,
+            updated_at
         "#,
         task_id_str,
         EntityType::Task as EntityType,
         parent_task_prop_id,
         parent_value
     )
-    .execute(&mut *tx)
-    .await?;
-
-    Ok(result.rows_affected() > 0)
+    .fetch_optional(&mut *tx)
+    .await?)
 }
 
 /// Add a task to a parent's subtasks array (if not already present).
@@ -269,7 +277,7 @@ async fn set_task_subtasks(
     tx: &mut PgConnection,
     task_id: Uuid,
     subtask_ids: Vec<Uuid>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<EntityProperty>> {
     let subtasks_prop_id = SystemPropertyKey::SUBTASKS_UUID;
     let task_id_str = task_id.to_string();
 
@@ -283,21 +291,27 @@ async fn set_task_subtasks(
         serde_json::to_value(PropertyValue::EntityRef(refs))?
     };
 
-    sqlx::query!(
+    Ok(sqlx::query_as!(
+        EntityProperty,
         r#"
         UPDATE entity_properties
         SET values = $4, updated_at = NOW()
         WHERE entity_id = $1
           AND entity_type = $2
           AND property_definition_id = $3
+        RETURNING
+            id,
+            entity_id,
+            entity_type as "entity_type: EntityType",
+            property_definition_id,
+            created_at,
+            updated_at
         "#,
         task_id_str,
         EntityType::Task as EntityType,
         subtasks_prop_id,
         subtasks_value
     )
-    .execute(&mut *tx)
-    .await?;
-
-    Ok(())
+    .fetch_optional(&mut *tx)
+    .await?)
 }

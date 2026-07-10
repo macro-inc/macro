@@ -294,7 +294,7 @@ where
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), PropertiesErr> {
+    ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
         let entity_id = access.entity_id();
         let entity_type = access.entity_type();
 
@@ -350,39 +350,50 @@ where
             ));
         }
 
-        // Handle special property types that require custom logic
-        match property_definition_id {
+        // Relationship writes update both sides transactionally and return the
+        // primary entity's canonical assignment from that transaction.
+        if matches!(
+            property_definition_id,
             SystemPropertyKey::PARENT_TASK_UUID | SystemPropertyKey::SUBTASKS_UUID
-                if entity_type == EntityType::Task =>
-            {
-                return self
-                    .handle_task_relationship_property(access, property_definition_id, value)
-                    .await;
-            }
-            SystemPropertyKey::ASSIGNEES_UUID if entity_type == EntityType::Task => {
-                self.handle_task_assignees_property(entity_id, value, access.authenticated_user())
-                    .await?;
-            }
-            _ => {
-                // No special handling needed
-            }
+        ) && entity_type == EntityType::Task
+        {
+            let property = self
+                .handle_task_relationship_property(access, property_definition_id, value)
+                .await?;
+            return Ok(EntityPropertyWithDefinition {
+                property,
+                definition: property_definition,
+                value: property_value,
+                options: None,
+            });
         }
 
-        // For all properties (including those with special handling that don't return early),
-        // upsert the already-converted PropertyValue
-        self.repository
+        if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
+            && entity_type == EntityType::Task
+        {
+            self.handle_task_assignees_property(entity_id, value, access.authenticated_user())
+                .await?;
+        }
+
+        let property = self
+            .repository
             .upsert_entity_property(
                 entity_id,
                 entity_type,
                 property_definition_id,
-                property_value,
+                property_value.clone(),
             )
             .await
             .map_err(anyhow::Error::from)?;
 
         self.enqueue_property_upsert(entity_id, entity_type).await;
 
-        Ok(())
+        Ok(EntityPropertyWithDefinition {
+            property,
+            definition: property_definition,
+            value: property_value,
+            options: None,
+        })
     }
 
     #[tracing::instrument(

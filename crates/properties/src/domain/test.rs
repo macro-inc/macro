@@ -10,10 +10,28 @@ use anyhow::anyhow;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{
     EntityType,
-    service::{property_definition::PropertyDefinition, property_value::PropertyValue},
+    service::{
+        entity_property::EntityProperty, property_definition::PropertyDefinition,
+        property_value::PropertyValue,
+    },
 };
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
+
+fn entity_property(
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+) -> EntityProperty {
+    EntityProperty {
+        id: Uuid::new_v4(),
+        entity_id: entity_id.to_owned(),
+        entity_type,
+        property_definition_id,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }
+}
 
 fn caller_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
@@ -89,7 +107,10 @@ async fn test_set_status_complete_through_general_property_mutation() {
                         StatusOption::COMPLETED_UUID,
                     ]))
         })
-        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+        .returning(|entity_id, entity_type, property_definition_id, _| {
+            let property = entity_property(entity_id, entity_type, property_definition_id);
+            Box::pin(async move { Ok(property) })
+        });
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -97,7 +118,7 @@ async fn test_set_status_complete_through_general_property_mutation() {
         None::<MockNotificationService>,
     );
 
-    service
+    let property = service
         .set_entity_property(
             &edit_receipt("e1", EntityType::Document),
             SystemPropertyKey::STATUS_UUID,
@@ -109,6 +130,18 @@ async fn test_set_status_complete_through_general_property_mutation() {
         )
         .await
         .unwrap();
+
+    assert_eq!(property.property.entity_id, "e1");
+    assert_eq!(
+        property.property.property_definition_id,
+        SystemPropertyKey::STATUS_UUID
+    );
+    assert_eq!(
+        property.value,
+        Some(PropertyValue::SelectOption(vec![
+            StatusOption::COMPLETED_UUID
+        ]))
+    );
 }
 
 // ============================================================================
@@ -147,7 +180,14 @@ async fn test_link_parent_task_delegates_to_repo() {
 
     repo.expect_link_parent_task()
         .withf(move |t, p| *t == task_id && *p == Some(parent_id))
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        .returning(|task_id, _| {
+            let property = entity_property(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::PARENT_TASK_UUID,
+            );
+            Box::pin(async move { Ok(Some(property)) })
+        });
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -173,7 +213,14 @@ async fn test_link_parent_task_clear_parent() {
 
     repo.expect_link_parent_task()
         .withf(move |t, p| *t == task_id && p.is_none())
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        .returning(|task_id, _| {
+            let property = entity_property(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::PARENT_TASK_UUID,
+            );
+            Box::pin(async move { Ok(Some(property)) })
+        });
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -260,7 +307,14 @@ async fn test_link_subtasks_delegates_to_repo() {
         .withf(move |t, s| {
             *t == task_id && s.len() == 2 && s.contains(&subtask_1) && s.contains(&subtask_2)
         })
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        .returning(|task_id, _| {
+            let property = entity_property(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::SUBTASKS_UUID,
+            );
+            Box::pin(async move { Ok(Some(property)) })
+        });
 
     let service = PropertiesServiceImpl::new(
         repo,
@@ -286,7 +340,14 @@ async fn test_link_subtasks_clear_all() {
 
     repo.expect_link_subtasks()
         .withf(move |t, s| *t == task_id && s.is_empty())
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        .returning(|task_id, _| {
+            let property = entity_property(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::SUBTASKS_UUID,
+            );
+            Box::pin(async move { Ok(Some(property)) })
+        });
 
     let service = PropertiesServiceImpl::new(
         repo,

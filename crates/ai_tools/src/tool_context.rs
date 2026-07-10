@@ -251,6 +251,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         self.properties
             .set_entity_property(&access, property_definition_id, value)
             .await
+            .map(|_| ())
             .map_err(Into::into)
     }
 

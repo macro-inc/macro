@@ -73,6 +73,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<PropertyValue>, PropertiesErr>> + Send;
 
     /// Set or update a property value for an entity, or attach a property without a value.
+    /// Returns the canonical property assignment, definition, and persisted value.
     /// Validates property options if the value contains select options.
     /// Linking Parent Task / Subtasks additionally requires edit access to the
     /// referenced tasks.
@@ -81,7 +82,7 @@ pub trait PropertiesService: Send + Sync + 'static {
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
 
     /// Add one option to a multi-select entity property value atomically.
     /// Attaches the property if needed and dedupes. Validates the option belongs

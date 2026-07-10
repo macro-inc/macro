@@ -6,7 +6,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
-use models_properties::service::property_value::PropertyValue;
+use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
@@ -54,11 +54,11 @@ where
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), PropertiesErr> {
+    ) -> Result<EntityProperty, PropertiesErr> {
         let task_id = Uuid::parse_str(access.entity_id())
             .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
 
-        match property_definition_id {
+        let property = match property_definition_id {
             SystemPropertyKey::PARENT_TASK_UUID => {
                 let parent_task_id = match &value {
                     None => None,
@@ -85,7 +85,8 @@ where
                 self.repository
                     .link_parent_task(task_id, parent_task_id)
                     .await
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(anyhow::Error::from)?
+                    .ok_or(PropertiesErr::EntityPropertyNotFound)?
             }
             SystemPropertyKey::SUBTASKS_UUID => {
                 let subtask_ids = match &value {
@@ -117,16 +118,17 @@ where
                 self.repository
                     .link_subtasks(task_id, subtask_ids)
                     .await
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(anyhow::Error::from)?
+                    .ok_or(PropertiesErr::EntityPropertyNotFound)?
             }
             _ => {
                 return Err(PropertiesErr::Validation(
                     "Invalid property for task relationship handling".to_string(),
                 ));
             }
-        }
+        };
 
-        Ok(())
+        Ok(property)
     }
 
     /// Handle task assignees property with permissions.

@@ -10,11 +10,7 @@ use properties::{PropertiesAccessReceipt, PropertiesService, access_entity_type}
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
-use crate::{
-    inputs::GraphqlPropertyEntityType,
-    loaders::{EntityPropertiesKey, PropertiesSoupPropertyEdgeReader, SoupPropertyEdgeReader},
-    objects::GraphqlSoupProperty,
-};
+use crate::{inputs::GraphqlPropertyEntityType, objects::GraphqlSoupProperty};
 
 /// Mutation root for entity property writes.
 #[derive(Default)]
@@ -105,33 +101,13 @@ where
         )
         .map_err(|err| rootcause::report!(err))?;
 
-        self.properties_service
+        let property = self
+            .properties_service
             .set_entity_property(&access, property_definition_id, value)
             .await
             .map_err(|err| rootcause::report!(err))?;
 
-        let key = EntityPropertiesKey {
-            entity_type: entity_type.to_string(),
-            entity_id,
-        };
-        let reader = PropertiesSoupPropertyEdgeReader::new(
-            self.properties_service.clone(),
-            self.entity_access_service.clone(),
-        );
-        let properties = reader
-            .get_properties(&self.user_id, vec![key.clone()])
-            .await?
-            .remove(&key)
-            .unwrap_or_default();
-
-        properties
-            .into_iter()
-            .find(|property| property.definition.id == property_definition_id)
-            .ok_or_else(|| {
-                rootcause::report!(
-                    "set property {property_definition_id} was absent from the updated entity"
-                )
-            })
+        Ok(property.into())
     }
 }
 
