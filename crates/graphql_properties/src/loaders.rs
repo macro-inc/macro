@@ -6,29 +6,17 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::SoupProperty;
 
-/// Key for loading properties attached to an entity.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct EntityPropertiesKey {
-    /// Entity type key used by the property service.
-    pub entity_type: String,
-    /// Entity ID used by the property service.
-    pub entity_id: String,
-}
+type OwnedEntity = model_entity::Entity<'static>;
 
-impl EntityPropertiesKey {
-    fn property_entity_type(
-        &self,
-    ) -> Result<Option<models_properties::EntityType>, rootcause::Report> {
-        match self.entity_type.as_str() {
-            "email" | "email_thread" => Ok(Some(models_properties::EntityType::Thread)),
-            "crm_company" => Ok(Some(models_properties::EntityType::Company)),
-            "call" | "channel_message" | "channel_thread" | "foreign_entity" | "github" => Ok(None),
-            other => models_properties::EntityType::from_str(other)
-                .map(Some)
-                .map_err(|err| {
-                    rootcause::report!("invalid entity type {other} for property edge: {err}")
-                }),
-        }
+fn property_entity_type(
+    entity_type: model_entity::EntityType,
+) -> Option<models_properties::EntityType> {
+    use model_entity::EntityType;
+    match entity_type {
+        EntityType::EmailThread => Some(models_properties::EntityType::Thread),
+        EntityType::CrmCompany => Some(models_properties::EntityType::Company),
+        EntityType::Call | EntityType::ChannelMessage | EntityType::ForeignEntity => None,
+        other => models_properties::EntityType::from_str(other.as_ref()).ok(),
     }
 }
 
@@ -39,10 +27,8 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
     fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: Vec<EntityPropertiesKey>,
-    ) -> impl Future<
-        Output = Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report>,
-    > + Send;
+        keys: Vec<OwnedEntity>,
+    ) -> impl Future<Output = Result<HashMap<OwnedEntity, Vec<SoupProperty>>, rootcause::Report>> + Send;
 }
 
 /// GraphQL property reader backed by the properties domain service and the
@@ -71,8 +57,8 @@ where
     async fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: Vec<EntityPropertiesKey>,
-    ) -> Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report> {
+        keys: Vec<OwnedEntity>,
+    ) -> Result<HashMap<OwnedEntity, Vec<SoupProperty>>, rootcause::Report> {
         let mut result = keys
             .iter()
             .cloned()
@@ -83,7 +69,7 @@ where
         // skipped and keep their empty property list.
         let mut receipts = Vec::with_capacity(keys.len());
         for key in &keys {
-            let Some(entity_type) = key.property_entity_type()? else {
+            let Some(entity_type) = property_entity_type(key.entity_type) else {
                 continue;
             };
             let access_receipt = self
@@ -127,11 +113,11 @@ where
         // by the normalized entity type, which for alias keys ("email",
         // "email_thread", "crm_company") differs from the requested key.
         for key in &keys {
-            let Ok(Some(entity_type)) = key.property_entity_type() else {
+            let Some(entity_type) = property_entity_type(key.entity_type) else {
                 continue;
             };
             let batch_key = properties::EntityPropertiesKey {
-                entity_id: key.entity_id.clone(),
+                entity_id: key.entity_id.to_string(),
                 entity_type,
             };
             if let Some(properties) = properties_by_entity.get(&batch_key) {
@@ -159,7 +145,7 @@ impl<R> EntityPropertiesLoader<R> {
     }
 }
 
-impl<R> Loader<EntityPropertiesKey> for EntityPropertiesLoader<R>
+impl<R> Loader<(model_entity::EntityType, String)> for EntityPropertiesLoader<R>
 where
     R: SoupPropertyEdgeReader,
 {
@@ -168,12 +154,27 @@ where
 
     async fn load(
         &self,
-        keys: &[EntityPropertiesKey],
-    ) -> Result<HashMap<EntityPropertiesKey, Self::Value>, Self::Error> {
-        self.reader
-            .get_properties(&self.user_id, keys.to_vec())
+        keys: &[(model_entity::EntityType, String)],
+    ) -> Result<HashMap<(model_entity::EntityType, String), Self::Value>, Self::Error> {
+        let owned_keys = keys
+            .iter()
+            .map(|(entity_type, entity_id)| entity_type.with_entity_string(entity_id.clone()))
+            .collect();
+        let mut loaded = self
+            .reader
+            .get_properties(&self.user_id, owned_keys)
             .await
-            .map_err(Arc::new)
+            .map_err(Arc::new)?;
+
+        Ok(keys
+            .iter()
+            .cloned()
+            .map(|key| {
+                let owned_key = key.0.with_entity_string(key.1.clone());
+                let value = loaded.remove(&owned_key).unwrap_or_default();
+                (key, value)
+            })
+            .collect())
     }
 }
 

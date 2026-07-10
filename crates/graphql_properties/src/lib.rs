@@ -9,8 +9,8 @@ mod objects;
 
 pub use inputs::{GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr};
 pub use loaders::{
-    EntityPropertiesKey, EntityPropertiesLoader, PropertiesSoupPropertyEdgeReader,
-    SoupPropertyEdgeReader, entity_properties_loader,
+    EntityPropertiesLoader, PropertiesSoupPropertyEdgeReader, SoupPropertyEdgeReader,
+    entity_properties_loader,
 };
 pub use mutations::{
     EntityPropertyWriter, NoOpEntityPropertyWriter, PropertiesEntityPropertyWriter,

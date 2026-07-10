@@ -11,13 +11,12 @@ mod resolvers;
 
 pub use graphql_common::{GraphqlSoupEntityType, GraphqlSoupRequestParts};
 pub use graphql_notification::{
-    EntityNotificationsKey, EntityNotificationsLoader, GraphqlSoupNotification,
-    SoupNotificationEdgeReader, entity_notifications_loader,
+    EntityNotificationsLoader, GraphqlSoupNotification, SoupNotificationEdgeReader,
+    entity_notifications_loader,
 };
 pub use graphql_properties::{
-    EntityPropertiesKey, EntityPropertiesLoader, GraphqlSoupProperty,
-    GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue, SoupPropertyEdgeReader,
-    entity_properties_loader,
+    EntityPropertiesLoader, GraphqlSoupProperty, GraphqlSoupPropertyEntityReference,
+    GraphqlSoupPropertyValue, SoupPropertyEdgeReader, entity_properties_loader,
 };
 pub use inputs::{GraphqlSimpleSortMethod, SoupInput};
 pub use objects::{

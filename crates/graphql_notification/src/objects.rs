@@ -2,10 +2,9 @@ use async_graphql::{Context, ID, Json, Object, dataloader::DataLoader};
 use graphql_common::GraphqlSoupEntityType;
 use notification::domain::models::UserNotificationRow;
 use serde_json::Value;
+use std::{future::Future, pin::Pin};
 
-use crate::loaders::{
-    EntityNotificationsKey, EntityNotificationsLoader, SoupNotificationEdgeReader,
-};
+use crate::loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader};
 
 /// GraphQL notification attached to a Soup entity.
 pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
@@ -63,21 +62,25 @@ impl GraphqlSoupNotification {
 
 /// Load the notifications attached to the given entity via the
 /// [`EntityNotificationsLoader`] stored in the GraphQL context.
-pub async fn load_entity_notifications<R>(
-    ctx: &Context<'_>,
-    key: EntityNotificationsKey,
-) -> async_graphql::Result<Vec<GraphqlSoupNotification>>
+pub fn load_entity_notifications<'a, R>(
+    ctx: &'a Context<'a>,
+    entity_type: model_entity::EntityType,
+    entity_id: String,
+) -> Pin<Box<dyn Future<Output = async_graphql::Result<Vec<GraphqlSoupNotification>>> + Send + 'a>>
 where
     R: SoupNotificationEdgeReader,
 {
-    let loader = ctx.data::<DataLoader<EntityNotificationsLoader<R>>>()?;
-    let notifications = loader
-        .load_one(key)
-        .await
-        .map_err(|err| async_graphql::Error::new(err.to_string()))?
-        .unwrap_or_default();
-    Ok(notifications
-        .into_iter()
-        .map(GraphqlSoupNotification)
-        .collect())
+    Box::pin(async move {
+        let loader = ctx.data::<DataLoader<EntityNotificationsLoader<R>>>()?;
+        let key = (entity_type, entity_id);
+        let notifications = loader
+            .load_one::<(model_entity::EntityType, String)>(key)
+            .await
+            .map_err(|err| async_graphql::Error::new(err.to_string()))?
+            .unwrap_or_default();
+        Ok(notifications
+            .into_iter()
+            .map(GraphqlSoupNotification)
+            .collect())
+    })
 }
