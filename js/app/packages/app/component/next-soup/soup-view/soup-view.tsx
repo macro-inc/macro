@@ -58,6 +58,7 @@ import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/T
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/component/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  navigateChannelEntityToTarget,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
 } from '@app/component/next-soup/utils';
@@ -1046,6 +1047,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       else soup.focus.set(entity.id);
 
       soup.setPreviewEntity(entity.id);
+      // Re-selecting the same row leaves the preview entity unchanged, so the
+      // preview's navigation effect won't re-run — fire the target navigation
+      // here so a channel row re-activates its message on every click.
+      navigateChannelEntityToTarget(entity, orchestrator);
       return;
     }
 

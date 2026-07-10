@@ -27,6 +27,7 @@ import {
   isGithubPrEntity,
   isHitSnippetEntity,
   isSearchEntity,
+  isWithNotification,
   type SearchLocation,
   toNotificationEntity,
   type WithSearch,
@@ -35,6 +36,7 @@ import { queryKeys } from '@macro-entity';
 import {
   compositeEntity,
   getAllNotificationsFromGroup,
+  getChannelNotificationParams,
   type NotificationSource,
   setDoneOverride,
   stackNotifications,
@@ -323,6 +325,82 @@ interface OpenEntityOptions {
 }
 
 /**
+ * Resolve which channel message to activate when a channel row is opened.
+ *
+ * Inbox rows are keyed by the channel or thread, not by the message that was
+ * actually sent — a `channel` row is the whole channel and a `channel_thread`
+ * row is keyed by its root, so neither carries the id of the new message/reply.
+ * That id lives only on the driving notification (the same data the card
+ * renders), so read the target from there, exactly like the old inbox did via
+ * getChannelNotificationParams. Notifications are scoped to the row first
+ * (top-level sends for a channel, this thread's replies for a thread) and the
+ * most recent one wins.
+ *
+ * Search hits are the other caller: a `channel_message` hit carries a real,
+ * distinct messageId and has no notification, so fall back to the entity's ids.
+ * A `channel` row with no notification has no message to target — open latest.
+ */
+export function getChannelEntityTarget(
+  entity: EntityData
+): { messageId: string; threadId?: string } | undefined {
+  if (
+    entity.type !== 'channel' &&
+    entity.type !== 'channel_message' &&
+    entity.type !== 'channel_thread'
+  ) {
+    return undefined;
+  }
+
+  const fallback =
+    entity.type === 'channel'
+      ? undefined
+      : { messageId: entity.messageId, threadId: entity.threadId };
+
+  if (!isWithNotification(entity)) return fallback;
+
+  const scoped = scopeChannelNotificationsForEntity(
+    entity,
+    entity.notifications?.() ?? []
+  );
+  for (const notification of scoped) {
+    const { messageId, threadId } = getChannelNotificationParams(notification);
+    if (messageId) return { messageId, threadId };
+  }
+
+  return fallback;
+}
+
+/**
+ * Activate a channel row's target message in its (already-open) channel block.
+ *
+ * Callable imperatively per click: re-selecting the same row leaves the preview
+ * entity unchanged, so a reactive derivation would never re-run — but a click
+ * should always re-activate the target (e.g. after the user cleared the
+ * highlight by clicking a message), matching the old inbox's per-click
+ * behaviour. No-ops for non-channel entities or when there is no target.
+ */
+export async function navigateChannelEntityToTarget(
+  entity: EntityData,
+  blockOrchestrator: BlockOrchestrator
+): Promise<void> {
+  const target = getChannelEntityTarget(entity);
+  if (!target) return;
+
+  const channelId =
+    entity.type === 'channel'
+      ? entity.id
+      : entity.type === 'channel_message' || entity.type === 'channel_thread'
+        ? entity.channelId
+        : undefined;
+  if (!channelId) return;
+
+  const handle = await blockOrchestrator.getBlockHandle(channelId);
+  await handle?.goToLocationFromParams(
+    getChannelParams(target.messageId, target.threadId)
+  );
+}
+
+/**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
  *
@@ -370,14 +448,13 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
+  const channelTarget = getChannelEntityTarget(entity);
+
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
-  } else if (
-    entity.type === 'channel_message' ||
-    entity.type === 'channel_thread'
-  ) {
-    params = getChannelParams(entity.messageId, entity.threadId);
+  } else if (channelTarget) {
+    params = getChannelParams(channelTarget.messageId, channelTarget.threadId);
   } else if (entity.type === 'call' && location?.type === 'call_record') {
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
@@ -400,24 +477,24 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
-      reopen: entity.type === 'channel' && !location ? 'latest' : undefined,
+      reopen:
+        entity.type === 'channel' && !location && !channelTarget
+          ? 'latest'
+          : undefined,
     }
   );
 
   // Navigate to specific location if provided
   if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (
-    entity.type === 'channel_message' ||
-    entity.type === 'channel_thread'
-  ) {
+  } else if (channelTarget) {
     // NOTE: This will force target message navigation in case the split is already open.
     await navigateToLocation(
-      entity.channelId,
+      content.id,
       {
         type: 'channel',
-        messageId: entity.messageId,
-        threadId: entity.threadId,
+        messageId: channelTarget.messageId,
+        threadId: channelTarget.threadId,
       },
       blockOrchestrator
     );
