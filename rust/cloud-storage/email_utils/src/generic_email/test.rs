@@ -150,6 +150,9 @@ fn test_is_generic_email_expanded_keywords() {
     assert!(is_generic_email("invitations@linkedin.com"));
     assert!(is_generic_email("donotrespond@bank.com"));
     assert!(is_generic_email("do-not-respond@service.net"));
+    assert!(is_generic_email("do.not.respond@service.net"));
+    assert!(is_generic_email("do_not_respond@service.net"));
+    assert!(is_generic_email("donation@charity.org"));
 
     // New automated prefixes
     assert!(is_generic_email("calendar@scheduling.io"));

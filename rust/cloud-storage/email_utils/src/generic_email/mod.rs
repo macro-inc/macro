@@ -257,6 +257,7 @@ fn starts_with_automated_prefix(local_part: &str) -> bool {
         "expenses",
         "rewards",
         "loyalty",
+        "donation",
         "donations",
         // Shipping/Delivery
         "shipping",
