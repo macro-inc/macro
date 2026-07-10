@@ -432,6 +432,25 @@ export function ThreadList(props: ThreadListProps) {
     });
   }
 
+  let disposed = false;
+
+  // A preview-pane mount can hand over the virtualizer before layout, with a
+  // zero-height viewport — the initial scroll then lands wherever and always
+  // needs the onScrollEnd retry. Wait (bounded) for a measured viewport.
+  function scrollOnMountWhenMeasured(
+    handle: VirtualizerHandle,
+    framesLeft = 30
+  ) {
+    if (disposed || initialScrollStarted) return;
+    if (handle.viewportSize > 0 || framesLeft <= 0) {
+      scrollOnMount(handle);
+      return;
+    }
+    requestAnimationFrame(() =>
+      scrollOnMountWhenMeasured(handle, framesLeft - 1)
+    );
+  }
+
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
@@ -580,7 +599,10 @@ export function ThreadList(props: ThreadListProps) {
     }
   };
 
-  onCleanup(() => cancelPinToBottom?.());
+  onCleanup(() => {
+    disposed = true;
+    cancelPinToBottom?.();
+  });
 
   return (
     <>
@@ -616,7 +638,7 @@ export function ThreadList(props: ThreadListProps) {
               props.onNavigationReady(createNavigation(ref));
             }
             resetInitialScroll();
-            scrollOnMount(ref);
+            scrollOnMountWhenMeasured(ref);
           }}
           scrollRef={scrollRef}
           startMargin={insets().start}
