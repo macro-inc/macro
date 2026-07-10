@@ -41,7 +41,7 @@ impl From<models_properties::DataType> for GraphqlSoupDataType {
     }
 }
 
-/// GraphQL property attached to a Soup entity.
+/// GraphQL property assignment attached to a Soup entity.
 pub struct GraphqlSoupProperty(SoupProperty);
 
 impl From<SoupProperty> for GraphqlSoupProperty {
@@ -52,10 +52,12 @@ impl From<SoupProperty> for GraphqlSoupProperty {
 
 #[Object]
 impl GraphqlSoupProperty {
-    /// Id of the shared property *definition* — deliberately not named `id`:
-    /// a property instance has no global identity (its `value` is
-    /// per-entity), so it must never be treated as a cacheable entity.
-    /// Normalized caches key objects by the presence of an `id` field.
+    /// Globally unique id of this property assignment.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Id of the shared property definition.
     async fn property_definition_id(&self) -> ID {
         ID(self.0.definition.id.to_string())
     }

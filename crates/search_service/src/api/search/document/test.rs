@@ -647,6 +647,7 @@ fn test_sort_stability() {
 
 fn make_test_soup_property(name: &str) -> SoupProperty {
     SoupProperty {
+        id: Uuid::new_v4(),
         definition: PropertyDefinition {
             id: Uuid::new_v4(),
             owner: PropertyOwner::System,

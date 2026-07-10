@@ -381,6 +381,7 @@ fn test_from_soup_item_resolves_tags_via_caller_map() {
 
     let now = Utc::now();
     let tag_property = SoupProperty {
+        id: Uuid::new_v4(),
         definition: PropertyDefinition {
             id: definition_id,
             owner: PropertyOwner::User {

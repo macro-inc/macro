@@ -191,6 +191,7 @@ query Soup($input: SoupInput!) {
 }
 
 fragment SoupPropertyFields on GraphqlSoupProperty {
+  id
   propertyDefinitionId
   displayName
   dataType

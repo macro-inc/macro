@@ -51,6 +51,7 @@ query Soup($input: SoupInput!) {
 }
 
 fragment SoupPropertyFields on GraphqlSoupProperty {
+  id
   propertyDefinitionId
   displayName
   dataType
@@ -105,6 +106,7 @@ fn response_data() -> Json {
                         "updatedAt": "2026-07-01T00:00:00Z",
                         "properties": [
                             {
+                                "id": "entity-prop-1",
                                 "propertyDefinitionId": "prop-1",
                                 "displayName": "Status",
                                 "dataType": "select",
@@ -176,6 +178,7 @@ fn normalizes_expected_records() {
             "GraphqlSoupDocument:doc-1",
             "GraphqlSoupItem:ch-1",
             "GraphqlSoupItem:doc-1",
+            "GraphqlSoupProperty:entity-prop-1",
             "GraphqlUser:user-1",
             "ROOT_QUERY",
         ]
@@ -189,10 +192,11 @@ fn normalizes_expected_records() {
     ));
     assert!(!doc_record.fields.contains_key("documentName"));
 
-    // Properties embedded (not their own records), message keyed by messageId.
+    // Property assignments and messages are normalized by their ids.
     assert!(matches!(
         doc_record.fields.get("properties"),
-        Some(CacheValue::List(items)) if matches!(&items[0], CacheValue::Object(_))
+        Some(CacheValue::List(items))
+            if matches!(&items[0], CacheValue::Ref(k) if k.0 == "GraphqlSoupProperty:entity-prop-1")
     ));
     let channel = &records[&EntityKey("GraphqlSoupChannel:ch-1".into())];
     assert!(matches!(
@@ -238,6 +242,7 @@ fn round_trip_reproduces_response() {
             "GraphqlSoupDocument:doc-1",
             "GraphqlSoupItem:ch-1",
             "GraphqlSoupItem:doc-1",
+            "GraphqlSoupProperty:entity-prop-1",
             "GraphqlUser:user-1",
             "ROOT_QUERY",
         ]

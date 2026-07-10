@@ -190,6 +190,7 @@ function mapGraphqlPropertyValue(
 
 function mapGraphqlProperties(properties: GraphqlSoupProperty[]) {
   return properties.map((property) => ({
+    id: property.id,
     definition: {
       id: property.propertyDefinitionId,
       display_name: property.displayName,

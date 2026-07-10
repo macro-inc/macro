@@ -123,9 +123,12 @@ mod tests {
             type_meta("GraphqlSoupChannelMessage").unwrap().key_fields,
             Some(&["id"][..])
         );
-        // Property values are per-entity; the schema exposes the definition
-        // id as `propertyDefinitionId` (not `id`) so properties embed.
-        assert_eq!(type_meta("GraphqlSoupProperty").unwrap().key_fields, None);
+        // Property assignments have globally unique database ids and are
+        // normalized independently from their shared definitions.
+        assert_eq!(
+            type_meta("GraphqlSoupProperty").unwrap().key_fields,
+            Some(&["id"][..])
+        );
         assert!(field_meta("GraphqlSoupProperty", "propertyDefinitionId").is_some());
         // No id field → embedded.
         assert_eq!(type_meta("SoupPage").unwrap().key_fields, None);
