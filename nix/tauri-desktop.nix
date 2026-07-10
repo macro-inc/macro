@@ -103,10 +103,8 @@
         outputHashes = {
           "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" =
             "sha256-v0Pn8kiRXaczNrFNjXct7yZUQ50qP68l8ivQDumu7Hw=";
-          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fwebsocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
-            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
-          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
-            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =
+            "sha256-ngH5sltERe8DlP/zjsin9jmlGOZFeABk8SxJ5AnZG18=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
             "sha256-5HamTWAZPtUSWOfP3TgtiqFJvunlPXy9/C0TLHQpXlU=";
           "git+https://github.com/voxelbee/tauri-plugin-virtual-keyboard?branch=main#70e8e8325b5ff7d681ef5f3b996ac083d4fc5a01" =
