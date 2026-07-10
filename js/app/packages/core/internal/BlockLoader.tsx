@@ -28,7 +28,6 @@ import {
 } from '../signal/load';
 import type { Source, SourcePreload } from '../source';
 import type { ObjectLike } from '../util/result';
-import { loadBlockDataAfterComponentPreload } from './loadBlockData';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -73,10 +72,7 @@ export function BlockLoader<
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
 
   const getResult = createAsync(async () => {
-    const result = await loadBlockDataAfterComponentPreload(
-      () => props.definition.load(props.source, 'initial'),
-      props.definition.component.preload
-    );
+    const result = await props.definition.load(props.source, 'initial');
     if (result.isErr()) {
       return err(result.error);
     }

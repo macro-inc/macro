@@ -1,12 +1,12 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { fetchAndCacheThread } from '@queries/email/thread';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+import EmailBlock from './component/Block';
 
 export const definition = defineBlock({
   name: 'email',
   description: 'View and manage email threads',
-  component: lazy(() => import('./component/Block')),
+  component: EmailBlock,
   liveTrackingEnabled: true,
   syncServiceEnabled: false,
   defaultFilename: '[No subject]',

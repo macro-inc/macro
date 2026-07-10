@@ -9,7 +9,7 @@ import type { GetDocumentResponseDataViewLocation } from '@service-storage/gener
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
-import { lazy } from 'solid-js';
+import BlockPdf from './component/Block';
 import PdfJsWorker from './PdfViewer/pdfjs-worker?worker';
 
 export const definition = defineBlock({
@@ -19,7 +19,7 @@ export const definition = defineBlock({
     pdf: 'application/pdf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   },
-  component: lazy(() => import('./component/Block')),
+  component: BlockPdf,
   liveTrackingEnabled: true,
   async load(source, intent) {
     if (source.type === 'dss') {

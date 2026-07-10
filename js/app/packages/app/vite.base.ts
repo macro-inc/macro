@@ -124,10 +124,6 @@ export const createAppViteConfig = (): UserConfigFn => {
           input: {
             app: resolve(__dirname, 'index.html'),
           },
-          // KaTeX and PDF.js are now reachable through lazy boundaries. Let
-          // Rollup place them naturally; forcing named chunks hoists shared
-          // CommonJS helpers into those chunks and makes the entry preload
-          // otherwise-lazy code.
           output: NO_MINIFY
             ? {
                 // remove hashes from output paths
@@ -135,11 +131,19 @@ export const createAppViteConfig = (): UserConfigFn => {
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
                 assetFileNames: `assets/[name].[ext]`,
+                manualChunks: {
+                  katex: ['katex'],
+                  pdfjs: ['pdfjs-dist'],
+                },
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
+                manualChunks: {
+                  katex: ['katex'],
+                  pdfjs: ['pdfjs-dist'],
+                },
               },
         },
         assetsInlineLimit: (filePath) => {

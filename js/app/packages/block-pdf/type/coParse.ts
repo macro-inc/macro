@@ -1,10 +1,10 @@
+import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
 import { v7 as uuid7 } from 'uuid';
 import { z } from 'zod';
 import {
   type IPlaceable,
   IPlaceableSchema,
   IPlaceableServerSchema,
-  isThreadPlaceable,
 } from '../type/placeables';
 import { type IBookmark, IBookmarkSchema } from './Bookmark';
 

@@ -11,7 +11,7 @@ import type { DocumentMetadataFileType } from '@service-storage/generated/schema
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { toast } from 'core/component/Toast/Toast';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+import BlockVideo from './component/Block';
 
 export const VIDEO_MIMES: Record<
   NonNullable<DocumentMetadataFileType>,
@@ -52,7 +52,7 @@ export const PLAYBACK_ENABLED_MIMES: Record<keyof typeof VIDEO_MIMES, boolean> =
 export const definition = defineBlock({
   name: 'video',
   description: 'block for video file types',
-  component: lazy(() => import('./component/Block')),
+  component: BlockVideo,
   liveTrackingEnabled: false,
   accepted: VIDEO_MIMES,
   async load(source, intent) {

@@ -9,13 +9,13 @@ import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+import CanvasBlock from './component/Block';
 import type { Canvas } from './model/CanvasModel';
 
 export const definition = defineBlock({
   name: 'canvas',
   description: 'edit canvas',
-  component: lazy(() => import('./component/Block')),
+  component: CanvasBlock,
   accepted: {
     canvas: 'application/x-macro-canvas',
   },

@@ -1,16 +1,13 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+
+import { Automation } from './component/Automation';
 
 export const definition = defineBlock({
   name: 'automation',
   description: 'view and edit a single automation',
   defaultFilename: 'Untitled automation',
-  component: lazy(() =>
-    import('./component/Automation').then((module) => ({
-      default: module.Automation,
-    }))
-  ),
+  component: Automation,
   accepted: {},
   async load(source, intent) {
     if (source.type === 'dss') {

@@ -21,7 +21,6 @@ import {
   ValidNestingCombinations,
 } from './block';
 import type { BlockMethodsFor } from './blockMethodRegistry';
-import { LoadingBlock } from './component/LoadingBlock';
 import { blocks as BLOCK_REGISTRY } from './constant/allBlocks';
 import { BlockEffectRunner } from './internal/BlockEffectRunner';
 import { BlockLoader } from './internal/BlockLoader';
@@ -210,7 +209,7 @@ function createBlockElement({
           id={id}
           handle={ownedHandle}
         />
-        <Suspense fallback={<LoadingBlock />}>
+        <Suspense>
           <Dynamic component={definition.component} {...opts?.params} />
         </Suspense>
         <BlockEffectRunner />

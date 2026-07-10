@@ -6,14 +6,14 @@ import {
 } from '@core/block';
 import { storageServiceClient } from '@service-storage/client';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+import BlockCode from './component/Block';
 import { supportedExtensions } from './util/languageSupport';
 
 export const definition = defineBlock({
   name: 'code',
   description: 'Edit code files with syntax highlighting and formatting',
   aliases: [{ name: 'csv', defaultFileName: 'New CSV' }],
-  component: lazy(() => import('./component/Block')),
+  component: BlockCode,
   async load(source, intent) {
     if (intent === 'preload') {
       return ok({

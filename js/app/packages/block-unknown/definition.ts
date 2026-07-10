@@ -6,12 +6,12 @@ import {
 } from '@core/block';
 import { storageServiceClient } from '@service-storage/client';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+import BlockUnknown from './component/Block';
 
 export const definition = defineBlock({
   name: 'unknown',
   description: 'fallback block for unknown files types',
-  component: lazy(() => import('./component/Block')),
+  component: BlockUnknown,
   async load(source, intent) {
     if (source.type === 'dss') {
       const maybeDocument = await loadResult(

@@ -1,15 +1,12 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
+
+import { NewChannelBlockAdapter } from './component/NewChannelBlockAdapter';
 
 export const definition = defineBlock({
   name: 'channel',
   description: '',
-  component: lazy(() =>
-    import('./component/NewChannelBlockAdapter').then((module) => ({
-      default: module.NewChannelBlockAdapter,
-    }))
-  ),
+  component: NewChannelBlockAdapter,
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
