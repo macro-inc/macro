@@ -56,12 +56,21 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
 
     let property_reader: std::sync::Arc<dyn complete_graph::SoupPropertyEdgeReader> =
         state.properties_service.clone();
+    let email_content_reader: std::sync::Arc<dyn complete_graph::SoupEmailContentEdgeReader> =
+        std::sync::Arc::new(complete_graph::EmailContentEdgeService::new(
+            state.soup_router_state.email_service(),
+            state.entity_access_service.clone(),
+        ));
     let request = request
         .data(GraphqlSoupRequestParts::new(parts))
         .data(state.clone())
         .data(complete_graph::entity_properties_loader(
             macro_user_id.clone(),
             property_reader,
+        ))
+        .data(complete_graph::email_content_loader(
+            macro_user_id.clone(),
+            email_content_reader,
         ))
         .data(complete_graph::entity_notifications_loader(
             macro_user_id,

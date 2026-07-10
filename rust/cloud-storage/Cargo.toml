@@ -39,6 +39,7 @@ members = [
   "favorites",
   "foreign_entity",
   "graphql_common",
+  "graphql_email",
   "graphql_notification",
   "graphql_properties",
   "graphql_soup",

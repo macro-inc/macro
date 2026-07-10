@@ -20,6 +20,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
+graphql_email = { path = "../graphql_email" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_properties = { path = "../graphql_properties" }
 item_filters = { path = "../item_filters" }

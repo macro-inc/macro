@@ -62,6 +62,7 @@ import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
+import { clearGraphqlEmailThreadPreloads } from '@service-storage/graphql-soup';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -446,8 +447,15 @@ function UserInfoSideEffects() {
   systemThemeEffect();
 
   let identified = false;
+  let emailPreloadViewerId: string | undefined;
   createEffect(
     on(userInfo, (user) => {
+      const currentViewerId = user?.authenticated ? user.id : undefined;
+      if (currentViewerId !== emailPreloadViewerId) {
+        clearGraphqlEmailThreadPreloads();
+        emailPreloadViewerId = currentViewerId;
+      }
+
       // Keep Datadog log user context in sync with auth state: set on every
       // authenticated load (the logs SDK doesn't persist across reloads), and
       // clear on logout so logs aren't attributed to a signed-out user. Logout

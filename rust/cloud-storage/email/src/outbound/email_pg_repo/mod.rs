@@ -135,6 +135,13 @@ impl EmailRepo for EmailPgRepo {
         thread::messages_by_thread_id_paginated(&self.pool, thread_id, offset, limit).await
     }
 
+    async fn latest_content_message_rows(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<MessageRow>, Self::Err> {
+        thread::latest_content_message_rows(&self.pool, thread_ids).await
+    }
+
     async fn cross_inbox_reply_drafts(
         &self,
         replying_to_ids: &[Uuid],

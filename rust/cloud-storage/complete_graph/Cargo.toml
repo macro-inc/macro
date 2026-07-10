@@ -18,6 +18,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "inbound",
 ] }
 graphql_common = { path = "../graphql_common" }
+graphql_email = { path = "../graphql_email" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_soup = { path = "../graphql_soup" }

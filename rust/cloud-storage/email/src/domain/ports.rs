@@ -2,9 +2,9 @@ use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
     CreatedDraft, EmailErr, EmailFilter, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-    ParsedAddresses, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+    ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType,
+    ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
+    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -111,6 +111,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_id: Uuid,
         offset: i64,
         limit: i64,
+    ) -> impl Future<Output = Result<Vec<MessageRow>, Self::Err>> + Send;
+
+    /// Fetch the newest non-draft content message for each requested thread.
+    fn latest_content_message_rows(
+        &self,
+        thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<MessageRow>, Self::Err>> + Send;
 
     /// Find macro reply drafts (across the given inboxes) that reply to any of
@@ -324,6 +330,15 @@ pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
             EmailErr,
         >,
     > + Send;
+}
+
+/// Read-only domain service used to hydrate lightweight email content edges.
+pub trait EmailContentService: Send + Sync + 'static {
+    /// Fetch the newest non-draft parsed content message for each authorized thread.
+    fn get_latest_messages_parsed(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, ParsedMessage>, EmailErr>> + Send;
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
@@ -653,6 +668,15 @@ impl EmailService for NoOpEmailService {
     }
 
     async fn list_email_filters(&self, _link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
+impl EmailContentService for NoOpEmailService {
+    async fn get_latest_messages_parsed(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
         Err(no_op_email_err())
     }
 }

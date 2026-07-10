@@ -1,7 +1,7 @@
 # complete_graph — schema conventions
 
 This crate composes the domain GraphQL adapter crates (`graphql_soup`,
-`graphql_properties`, `graphql_notification`, with shared plumbing in
+`graphql_properties`, `graphql_notification`, `graphql_email`, with shared plumbing in
 `graphql_common`) into the complete GraphQL schema consumed by the client's
 **normalized cache** (`rust/cloud-storage/client`, design doc:
 `js/app/docs/graphql-normalized-cache-plan.md`). Two field-naming

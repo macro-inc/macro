@@ -2822,6 +2822,7 @@ dependencies = [
  "email",
  "entity_access",
  "graphql_common",
+ "graphql_email",
  "graphql_notification",
  "graphql_properties",
  "graphql_soup",
@@ -5838,6 +5839,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_email"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "email",
+ "entity_access",
+ "futures",
+ "macro_user_id",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
@@ -5884,6 +5901,7 @@ dependencies = [
  "entity_access",
  "filter_ast",
  "graphql_common",
+ "graphql_email",
  "graphql_notification",
  "graphql_properties",
  "item_filters",

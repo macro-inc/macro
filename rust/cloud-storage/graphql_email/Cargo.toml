@@ -1,0 +1,19 @@
+[package]
+name = "graphql_email"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader"] }
+async-trait = { workspace = true }
+email = { path = "../email", default-features = false, features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+] }
+futures = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

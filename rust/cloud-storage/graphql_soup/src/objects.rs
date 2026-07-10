@@ -1,5 +1,6 @@
 use async_graphql::{Context, ID, Json, Object, SimpleObject, Union};
 use graphql_common::GraphqlSoupEntityType;
+use graphql_email::{EmailContentKey, GraphqlSoupEmailMessage, load_latest_email_message};
 use graphql_notification::{
     EntityNotificationsKey, GraphqlSoupNotification, load_entity_notifications,
 };
@@ -670,6 +671,19 @@ impl GraphqlSoupEmailThread {
             EntityNotificationsKey {
                 entity_id: self.0.thread.id.to_string(),
                 entity_type: "email".to_owned(),
+            },
+        )
+        .await
+    }
+
+    async fn latest_content_message(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
+        load_latest_email_message(
+            ctx,
+            EmailContentKey {
+                thread_id: self.0.thread.id.to_string(),
             },
         )
         .await

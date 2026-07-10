@@ -60,6 +60,35 @@ pub(super) async fn messages_by_thread_id_paginated(
     Ok(rows.into_iter().map(MessageRow::from).collect())
 }
 
+/// Fetch the newest non-draft content message in each thread using an
+/// effective timestamp and deterministic ID tiebreaker.
+pub(super) async fn latest_content_message_rows(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<MessageRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, DbMessageRow>(
+        r#"
+        SELECT DISTINCT ON (thread_id)
+            id, provider_id, thread_id, provider_thread_id, replying_to_id,
+            global_id, link_id, provider_history_id, internal_date_ts, snippet,
+            size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
+            is_sent, is_draft, body_text, body_html_sanitized, body_macro,
+            headers_jsonb, created_at, updated_at
+        FROM email_messages
+        WHERE thread_id = ANY($1)
+          AND is_draft = false
+        ORDER BY thread_id,
+                 COALESCE(internal_date_ts, sent_at, created_at) DESC,
+                 id DESC
+        "#,
+    )
+    .bind(thread_ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(MessageRow::from).collect())
+}
+
 /// Find macro drafts that reply to any of the given messages but live in a
 /// different thread within one of the accessible inboxes. These are reply drafts
 /// the user moved to another of their inboxes by switching the sender; surfacing

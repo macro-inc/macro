@@ -10,6 +10,10 @@ mod objects;
 mod resolvers;
 
 pub use graphql_common::{GraphqlSoupEntityType, GraphqlSoupRequestParts};
+pub use graphql_email::{
+    EmailContentKey, EmailContentLoader, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader,
+    email_content_loader,
+};
 pub use graphql_notification::{
     EntityNotificationsKey, EntityNotificationsLoader, GraphqlSoupNotification,
     SoupNotificationEdgeReader, entity_notifications_loader,

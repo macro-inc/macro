@@ -19,6 +19,7 @@ import {
   SoupDocument as SoupQueryDocument,
   type SoupQueryVariables,
 } from './graphql/generated/graphql';
+import { ViewerBoundPreloadCache } from './viewer-bound-preload-cache';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 
@@ -113,6 +114,13 @@ export type GraphqlSoupInput = SoupInput;
 
 type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem['entity'];
+type GraphqlSoupEmailThread = Extract<
+  GraphqlSoupEntity,
+  { __typename: 'GraphqlSoupEmailThread' }
+>;
+type GraphqlSoupEmailMessage = NonNullable<
+  GraphqlSoupEmailThread['latestEmailMessage']
+>;
 type GraphqlSoupProperty = Extract<
   GraphqlSoupEntity,
   { __typename: 'GraphqlSoupDocument' }
@@ -128,6 +136,56 @@ type GraphqlSoupChannelMessage = NonNullable<
     { __typename: 'GraphqlSoupChannel' }
   >['latestMessage']
 >;
+
+export type GraphqlEmailThreadPreload = {
+  thread: Pick<
+    GraphqlSoupEmailThread,
+    | 'id'
+    | 'inboxVisible'
+    | 'isRead'
+    | 'projectId'
+    | 'providerId'
+    | 'createdAt'
+    | 'updatedAt'
+  >;
+  attachments: GraphqlSoupEmailThread['attachments'];
+  message: GraphqlSoupEmailMessage;
+};
+
+const MAX_EMAIL_PRELOADS = 20;
+const emailThreadPreloads =
+  new ViewerBoundPreloadCache<GraphqlEmailThreadPreload>(MAX_EMAIL_PRELOADS);
+
+function registerEmailThreadPreloads(data: SoupQuery): void {
+  for (const item of data.user.soup.items) {
+    const thread = item.entity;
+    if (thread.__typename !== 'GraphqlSoupEmailThread') continue;
+    const message = thread.latestEmailMessage;
+    const preload = message
+      ? {
+          thread,
+          attachments: thread.attachments.filter(
+            (attachment) => attachment.messageId === message.id
+          ),
+          message,
+        }
+      : undefined;
+    emailThreadPreloads.set(data.user.id, thread.id, preload);
+  }
+}
+
+/** Clears all email body preloads at an authentication boundary. */
+export function clearGraphqlEmailThreadPreloads(): void {
+  emailThreadPreloads.clear();
+}
+
+/** Returns Soup-preloaded email content, if the current viewer fetched it. */
+export function getGraphqlEmailThreadPreload(
+  threadId: string,
+  viewerId: string
+): GraphqlEmailThreadPreload | undefined {
+  return emailThreadPreloads.get(viewerId, threadId);
+}
 
 const GRAPHQL_PROPERTY_VALUE_KINDS = [
   'Boolean',
@@ -511,6 +569,8 @@ export async function fetchGraphqlSoup(
 ): Promise<SoupPage> {
   const client = getGraphqlSoupClient();
   const useCache = graphqlCacheEnabled();
+  const includeEmailContent = useCache && (input.limit ?? 20) <= 20;
+  const variables = { input, includeEmailContent };
 
   // `cache-and-network` writes responses through the normalized cache;
   // `.toPromise()` skips the stale cache emission, so callers keep
@@ -519,7 +579,7 @@ export async function fetchGraphqlSoup(
   const result = await client
     .query<SoupQuery, SoupQueryVariables>(
       SoupQueryDocument,
-      { input },
+      variables,
       useCache ? { requestPolicy: 'cache-and-network' } : {}
     )
     .toPromise();
@@ -528,13 +588,12 @@ export async function fetchGraphqlSoup(
     // Offline replay: a network failure falls back to the last cached page.
     if (useCache && result.error.networkError) {
       const cached = await client
-        .query<SoupQuery, SoupQueryVariables>(
-          SoupQueryDocument,
-          { input },
-          { requestPolicy: 'cache-only' }
-        )
+        .query<SoupQuery, SoupQueryVariables>(SoupQueryDocument, variables, {
+          requestPolicy: 'cache-only',
+        })
         .toPromise();
       if (cached.data) {
+        registerEmailThreadPreloads(cached.data);
         return {
           items: cached.data.user.soup.items.map(mapGraphqlSoupItem),
           next_cursor: cached.data.user.soup.nextCursor ?? undefined,
@@ -548,6 +607,8 @@ export async function fetchGraphqlSoup(
   if (!data) {
     throw new Error('GraphQL Soup query returned no data');
   }
+
+  registerEmailThreadPreloads(data);
 
   return {
     items: data.user.soup.items.map(mapGraphqlSoupItem),
