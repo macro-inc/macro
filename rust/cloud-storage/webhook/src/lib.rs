@@ -24,10 +24,12 @@
 //! - a Kafka consumer (`inbound::kafka_consumer`, feature `consumer`) that
 //!   subscribes to the `macro.documents` and `macro.channels` topics and hands
 //!   every event to the `domain::ingestion::WebhookEventIngestionService`
-//!   (feature `ingestion`), whose per-event handlers are still stubs.
+//!   (feature `ingestion`);
+//! - a queue worker (`inbound::worker`, feature `worker`) that delegates valid
+//!   event messages to `domain::ports::WebhookEventDeliveryService` and applies
+//!   its acknowledge-or-retry disposition.
 //!
-//! The current implementation intentionally excludes delivery workers, SQS/SNS
-//! infrastructure, redelivery, and auto-pause behavior.
+//! The current implementation intentionally excludes auto-pause behavior.
 //!
 //! Temporary limitations: IDs use prefixed UUIDv7 strings (`wh_<uuid_v7>`)
 //! rather than true ULIDs. Custom headers are stored as JSON in `headers`.
@@ -36,8 +38,8 @@
 
 /// Domain models, ports, and services.
 pub mod domain;
-#[cfg(any(feature = "inbound", feature = "consumer"))]
-/// HTTP and Kafka consumer adapters.
+#[cfg(any(feature = "inbound", feature = "consumer", feature = "worker"))]
+/// HTTP, Kafka consumer, and queue worker adapters.
 pub mod inbound;
 #[cfg(feature = "outbound")]
 /// Postgres and HTTP adapters.

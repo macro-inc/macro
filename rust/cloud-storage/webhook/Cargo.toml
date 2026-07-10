@@ -46,6 +46,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:serde_json", "dep:url"]
+worker = ["dep:tokio", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }
