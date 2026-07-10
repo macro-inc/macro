@@ -147,6 +147,7 @@ sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",
   "search",
+  "webhook",
 ] }
 sqs_worker = { path = "../sqs_worker" }
 sync_service_client = { path = "../sync_service_client" }
@@ -163,7 +164,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
-webhook = { path = "../webhook", features = ["inbound", "outbound"] }
+webhook = { path = "../webhook", features = ["inbound", "outbound", "worker"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_config = { path = "../macro_config" }
 doppler-config = { workspace = true }

@@ -114,6 +114,21 @@ maybe_env_vars! {
     struct SnsApnsVoipPlatformArn;
 }
 
+const SQS_MAX_MESSAGES_PER_RECEIVE: i32 = 10;
+const SQS_MAX_WAIT_TIME_SECONDS: i32 = 20;
+
+fn validate_webhook_queue_configuration(config: &Config) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        (1..=SQS_MAX_MESSAGES_PER_RECEIVE).contains(&config.webhook_queue_max_messages),
+        "WEBHOOK_QUEUE_MAX_MESSAGES must be between 1 and {SQS_MAX_MESSAGES_PER_RECEIVE}"
+    );
+    anyhow::ensure!(
+        (0..=SQS_MAX_WAIT_TIME_SECONDS).contains(&config.webhook_queue_wait_time_seconds),
+        "WEBHOOK_QUEUE_WAIT_TIME_SECONDS must be between 0 and {SQS_MAX_WAIT_TIME_SECONDS}"
+    );
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
@@ -131,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
         .resolve_remote_secrets(env, &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
+    validate_webhook_queue_configuration(&config)?;
 
     tracing::trace!("initialized config");
 
@@ -185,9 +201,13 @@ async fn main() -> anyhow::Result<()> {
     let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
+    let webhook_event_queue = macro_queues::WebhookEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
-        .document_delete_queue(&document_delete_queue);
+        .document_delete_queue(&document_delete_queue)
+        .webhook_event_queue(&webhook_event_queue)
+        .webhook_event_queue_max_messages(config.webhook_queue_max_messages)
+        .webhook_event_queue_wait_time_seconds(config.webhook_queue_wait_time_seconds);
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
@@ -575,10 +595,13 @@ async fn main() -> anyhow::Result<()> {
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+
+    let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
+    let webhook_http_client = webhook::outbound::ReqwestWebhookDeliveryClient::new()
+        .context("failed to create webhook HTTP client")?;
     let webhook_service = webhook::domain::service::WebhookServiceImpl::new(
-        webhook::outbound::pg_repository::PgRepository::new(db.clone()),
-        webhook::outbound::http_validator::ReqwestWebhookValidationClient::new()
-            .context("failed to create webhook validation client")?,
+        webhook_repository.clone(),
+        webhook_http_client.clone(),
     );
     let webhook_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -590,23 +613,50 @@ async fn main() -> anyhow::Result<()> {
         webhook_rate_limiter,
     );
 
-    // Webhook event ingestion: consume document and channel broker events and
-    // fan them out to matching webhooks (per-event handlers are stubs for now).
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
+            webhook_repository,
+            sqs_client.clone(),
         );
+    let webhook_delivery_repository =
+        webhook::outbound::PgWebhookDeliveryRepository::new(db.clone());
+    let webhook_delivery_service = webhook::domain::delivery::WebhookEventDeliveryServiceImpl::new(
+        webhook_delivery_repository,
+        webhook_http_client,
+    );
+    let webhook_worker = webhook::inbound::worker::WebhookEventWorker::new(
+        sqs_client.clone(),
+        webhook_delivery_service,
+    );
+    let webhook_worker_task = tokio::spawn(async move {
+        tracing::info!("starting webhook event worker");
+        webhook_worker.run().await;
+    });
+    tokio::spawn(async move {
+        match webhook_worker_task.await {
+            Ok(()) => tracing::error!("webhook event worker exited unexpectedly"),
+            Err(error) => {
+                tracing::error!(error = ?error, "webhook event worker exited unexpectedly");
+            }
+        }
+    });
+
     let webhook_consumer_brokers = config.kafka_brokers.as_ref().to_string();
     tokio::spawn(async move {
         loop {
-            if let Err(e) = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
+            tracing::info!("starting webhook event consumer");
+            let result = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
                 &webhook_consumer_brokers,
                 webhook_ingestion_service.clone(),
                 std::future::pending::<()>(),
             )
-            .await
-            {
-                tracing::error!(error = ?e, "webhook event consumer exited");
+            .await;
+            match result {
+                Ok(()) => tracing::error!("webhook event consumer exited unexpectedly"),
+                Err(error) => {
+                    tracing::error!(error = ?error, "webhook event consumer exited unexpectedly");
+                }
             }
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
