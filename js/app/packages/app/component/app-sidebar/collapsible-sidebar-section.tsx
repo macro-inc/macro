@@ -1,6 +1,5 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import { cn, Dropdown, NavRow } from '@ui';
+import { cn } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 
 export type CollapsibleSidebarSectionItem = {
@@ -12,23 +11,12 @@ export type CollapsibleSidebarSectionItem = {
 export function CollapsibleSidebarSection(props: {
   label: string;
   items: readonly CollapsibleSidebarSectionItem[];
-  visibleCount: number;
-  dropdownMax?: number;
-  dropdownFooter?: () => JSX.Element;
+  headerMenu?: () => JSX.Element;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onDropdownOpenChange?: (open: boolean) => void;
-  dropdownInteractionDisabled?: boolean;
 }) {
   const [open, setOpen] = createSignal(props.defaultOpen ?? true);
   let openChangeTimer: ReturnType<typeof setTimeout> | undefined;
-  const visibleItems = () => props.items.slice(0, props.visibleCount);
-  const overflowItems = () => {
-    const items = props.items.slice(props.visibleCount);
-    return props.dropdownMax === undefined
-      ? items
-      : items.slice(0, props.dropdownMax);
-  };
 
   onCleanup(() => {
     if (openChangeTimer !== undefined) clearTimeout(openChangeTimer);
@@ -47,10 +35,10 @@ export function CollapsibleSidebarSection(props: {
 
   return (
     <section class="w-full flex flex-col">
-      <header>
+      <header class="group/section relative">
         <button
           type="button"
-          class="group/section flex h-7 w-full items-center justify-start gap-1 rounded-md px-2 text-left text-[13px] font-medium text-ink-extra-muted/60 transition-colors hover:bg-ink/3 hover:text-ink-muted"
+          class="flex h-7 w-full min-w-0 items-center justify-start gap-1 rounded-md px-2 pr-9 text-left text-[13px] font-medium text-ink-extra-muted/60 transition-colors group-hover/section:bg-ink/3 group-hover/section:text-ink-muted"
           aria-expanded={open()}
           onClick={toggleOpen}
         >
@@ -62,6 +50,13 @@ export function CollapsibleSidebarSection(props: {
             )}
           />
         </button>
+        <Show when={props.headerMenu}>
+          {(headerMenu) => (
+            <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+              {headerMenu()()}
+            </div>
+          )}
+        </Show>
       </header>
       <div
         class={cn('grid overflow-hidden', !open() && 'pointer-events-none')}
@@ -77,48 +72,9 @@ export function CollapsibleSidebarSection(props: {
         }}
       >
         <div class="min-h-0 overflow-hidden flex flex-col gap-0.5">
-          <For each={visibleItems()}>
+          <For each={props.items}>
             {(item) => <div class="w-full">{item.visible()}</div>}
           </For>
-          <Show when={overflowItems().length > 0}>
-            <Dropdown
-              placement="right-start"
-              gutter={8}
-              onOpenChange={props.onDropdownOpenChange}
-            >
-              <Dropdown.Trigger
-                as={NavRow}
-                class="h-7 border-0! text-[13px] focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                fullWidth
-                label={`${props.label} more`}
-                tooltipPlacement="right"
-                onMouseDown={(e: MouseEvent) => {
-                  if (e.button !== 0) return;
-                  e.preventDefault();
-                }}
-              >
-                <div class="size-5 shrink-0 flex items-center justify-center">
-                  <DotsIcon class="size-3.5" />
-                </div>
-                <span class="whitespace-nowrap">More</span>
-              </Dropdown.Trigger>
-              <Dropdown.Content
-                class={cn(
-                  'min-w-52 shadow-menu',
-                  props.dropdownInteractionDisabled &&
-                    'pointer-events-none [&_[data-highlighted]]:bg-transparent!'
-                )}
-                inert={props.dropdownInteractionDisabled || undefined}
-              >
-                <Dropdown.Group>
-                  <For each={overflowItems()}>{(item) => item.dropdown()}</For>
-                  <Show when={props.dropdownFooter}>
-                    {(footer) => footer()()}
-                  </Show>
-                </Dropdown.Group>
-              </Dropdown.Content>
-            </Dropdown>
-          </Show>
         </div>
       </div>
     </section>

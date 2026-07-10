@@ -8,7 +8,6 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
@@ -418,7 +417,6 @@ export const ChannelsUnreadWidget = (props: {
   onDropdownOpenChange?: (open: boolean) => void;
 }) => {
   const notificationSource = useGlobalNotificationSource();
-  const layout = useSplitLayout();
   const allNotifications = () => [...notificationSource.notifications()];
 
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
@@ -474,18 +472,6 @@ export const ChannelsUnreadWidget = (props: {
     }))
   );
 
-  const openChannels = () => {
-    layout.openWithSplit(
-      { type: 'component', id: 'channels' },
-      {
-        allowDuplicate: true,
-        mergeHistory: false,
-        referredFrom: 'sidebar',
-      }
-    );
-    globalSplitManager()?.returnFocus();
-  };
-
   return (
     <Show when={channelGroups().length > 0}>
       <Show
@@ -508,18 +494,7 @@ export const ChannelsUnreadWidget = (props: {
         <CollapsibleSidebarSection
           label="Unread"
           items={sectionItems()}
-          visibleCount={3}
-          dropdownMax={10}
           onOpenChange={() => props.onSectionOpenChange?.()}
-          onDropdownOpenChange={props.onDropdownOpenChange}
-          dropdownFooter={() => (
-            <Dropdown.Item
-              class="min-h-8 gap-2 px-2.5 text-[13px]"
-              onSelect={openChannels}
-            >
-              <span class="flex-1 text-ink">Go to channels</span>
-            </Dropdown.Item>
-          )}
         />
       </Show>
     </Show>
