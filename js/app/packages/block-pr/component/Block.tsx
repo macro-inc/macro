@@ -1,9 +1,11 @@
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { cn, Layer, Scroll } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
@@ -38,6 +40,7 @@ export default function PrBlock() {
 }
 
 function PrBlockContent(props: { foreignEntityId: string }) {
+  const notificationSource = useGlobalNotificationSource();
   const foreignEntityQuery = usePrForeignEntityQuery(
     () => props.foreignEntityId
   );
@@ -54,6 +57,10 @@ function PrBlockContent(props: { foreignEntityId: string }) {
 
   return (
     <div class="size-full overflow-hidden flex flex-col relative">
+      <DebouncedNotificationReadMarker
+        notificationSource={notificationSource}
+        entity={{ id: props.foreignEntityId }}
+      />
       <SidePanel.Layout>
         <PrSidePanelSections enrichment={pullRequest} />
         <div class="flex flex-col size-full min-w-0">
