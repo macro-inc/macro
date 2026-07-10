@@ -8,7 +8,8 @@
 //! conventions from `STYLE_GUIDE.md` at the repo root.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
+    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
+    Step, Use, Workflow,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -22,6 +23,11 @@ fn conventions_runner() -> String {
 /// Build the workflow.
 pub fn code_check_conventions() -> Workflow {
     Workflow::new("conventions code check")
+        // Read-only: the workflow only checks out code and runs a scan.
+        .permissions(Permissions {
+            contents: Some(Level::Read),
+            ..Default::default()
+        })
         .on(Event::default().pull_request(
             PullRequest::default()
                 .add_branch("main")
@@ -100,9 +106,11 @@ fn check_job_results() -> Step<Run> {
         echo "path-check: ${{ needs.path-check.result }}"
         echo "ast-grep: ${{ needs.ast-grep.result }}"
 
-        # Fail if any job failed (skipped and success are both OK)
+        # Fail if any job failed, or ast-grep was cancelled (skipped and
+        # success are both OK; cancelled means it started and didn't finish)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ast-grep.result }}" == "failure" ]]; then
+           [[ "${{ needs.ast-grep.result }}" == "failure" ]] || \
+           [[ "${{ needs.ast-grep.result }}" == "cancelled" ]]; then
           echo "❌ One or more jobs failed"
           exit 1
         fi

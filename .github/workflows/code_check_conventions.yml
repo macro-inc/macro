@@ -10,6 +10,8 @@ name: conventions code check
     - ready_for_review
     branches:
     - main
+permissions:
+  contents: read
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small
@@ -73,9 +75,11 @@ jobs:
         echo "path-check: ${{ needs.path-check.result }}"
         echo "ast-grep: ${{ needs.ast-grep.result }}"
 
-        # Fail if any job failed (skipped and success are both OK)
+        # Fail if any job failed, or ast-grep was cancelled (skipped and
+        # success are both OK; cancelled means it started and didn't finish)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ast-grep.result }}" == "failure" ]]; then
+           [[ "${{ needs.ast-grep.result }}" == "failure" ]] || \
+           [[ "${{ needs.ast-grep.result }}" == "cancelled" ]]; then
           echo "❌ One or more jobs failed"
           exit 1
         fi

@@ -99,8 +99,7 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-29** `[arch]` Group proliferating root files (e.g. Dockerfiles) into a dedicated
   folder. (#4380)
 - **CS-30** `[api]` Axum handlers take shared services via `State`, not `Extension`.
-  ⚠️ Supersedes the older case-study note in `rust/cloud-storage/CLAUDE.md` that said
-  the opposite. (#4556 · enforced: ast-grep `rust-no-axum-extension-param`, warning)
+  (#4556 · enforced: ast-grep `rust-no-axum-extension-param`, warning · also: CLAUDE.md)
 - **CS-31** `[api]` Attach cross-cutting services to the owning domain service, not ad
   hoc at the router/handler layer — e.g. `EntityAccessManagementService` hangs off the
   email/document service itself, the way the documents crate does. (#4572)
@@ -133,7 +132,7 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-45** `[rust]` CLI binaries use `clap`, not hand-rolled arg parsing. (#3678)
 - **CS-46** `[rust]` Use `rootcause` for error handling in new code — it's preferred
   over `anyhow` these days. In code that's still on anyhow, prefer `bail!` for early
-  error returns. ⚠️ Supersedes the anyhow-only note in `rust/cloud-storage/CLAUDE.md`.
+  error returns. (also: CLAUDE.md)
 - **CS-47** `[perf]` Keep latency-critical services thin: push bytes directly instead of
   round-tripping through presigned URLs or extra services; dispatch non-blocking
   background work with `wait_until`. (#3781)
