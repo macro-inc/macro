@@ -15,6 +15,7 @@ import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import {
+  DraftBadge,
   type EntityData,
   isGithubPrEntity,
   type Notification,
@@ -416,7 +417,7 @@ const channelLocation = (entity: EntityData): string | undefined => {
     return undefined;
   }
   if (entity.channelType === 'direct_message') return undefined;
-  return entity.name.startsWith('#') ? entity.name : `#${entity.name}`;
+  return entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
 };
 
 const entityLocation = (entity: EntityData): string | undefined => {
@@ -1126,6 +1127,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
         entity.type === 'email'
           ? (itemContent(entity, props.item.notification) ?? entity.snippet)
           : undefined,
+      isDraft: entity.type === 'email' && entity.isDraft,
     };
   });
 
@@ -1144,6 +1146,9 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <InboxCard.Title class="flex items-center gap-1">
+            <Show when={text().isDraft}>
+              <DraftBadge />
+            </Show>
             {text().sender}
           </InboxCard.Title>
         </InboxCard.Header>
@@ -1332,19 +1337,19 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 
     if (entity.type === 'call' && entity.status === 'MISSED') {
       return {
-        title: entity.name ? `Missed call in #${entity.name}` : 'Missed call',
+        title: entity.name ? `Missed call in ${entity.name}` : 'Missed call',
       };
     }
 
     if (entity.type === 'call' && entity.status === 'UNATTENDED') {
       return {
         title: entity.name
-          ? `Call unattended in #${entity.name}`
+          ? `Call unattended in ${entity.name}`
           : 'Call unattended',
       };
     }
 
-    return { title: entity.name ? `Call in #${entity.name}` : 'Call' };
+    return { title: entity.name ? `Call in ${entity.name}` : 'Call' };
   });
 
   const participantIds = () =>
