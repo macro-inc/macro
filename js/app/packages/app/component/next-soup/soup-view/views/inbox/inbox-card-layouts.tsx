@@ -1293,7 +1293,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
 
         <Show when={text().location}>
           {(location) => (
-            <InboxCard.Content class="col-start-2 row-start-3 truncate text-xs text-ink/40">
+            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm text-ink/40">
               {location()}
             </InboxCard.Content>
           )}
