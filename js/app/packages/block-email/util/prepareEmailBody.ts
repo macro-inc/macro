@@ -12,11 +12,13 @@ import {
 } from '@lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import {
+  $addUpdateTag,
   $createLineBreakNode,
   $createParagraphNode,
   $createTextNode,
   $getRoot,
   $isLineBreakNode,
+  $setSelection,
   COMMAND_PRIORITY_EDITOR,
   createCommand,
   type LexicalEditor,
@@ -109,11 +111,22 @@ function $generateHeaderNodes(
 ): LexicalNode[] {
   const descriptor = buildHeaderDescriptor(replyingTo, replyType);
   if (descriptor.kind === 'forward') {
-    return descriptor.lines.map((line) => {
-      const p = $createParagraphNode();
-      p.append($createTextNode(line));
-      return p;
+    // Match Gmail's forward markup: headers live in a gmail_attr div inside
+    // the gmail_quote — quote-trimming (ours and Gmail's) keys off it
+    const emailHeader = $createClassedBlockNode({
+      tag: 'div',
+      classes: ['gmail_attr'],
+      attributes: replyingTo.replying_to_id
+        ? {
+            [REPLYING_TO_ID_ATTRIBUTE]: replyingTo.replying_to_id,
+          }
+        : undefined,
     });
+    descriptor.lines.forEach((line, i) => {
+      if (i > 0) emailHeader.append($createLineBreakNode());
+      emailHeader.append($createTextNode(line));
+    });
+    return [emailHeader];
   }
   const emailHeader = $createClassedBlockNode({
     tag: 'div',
@@ -208,6 +221,7 @@ function removeAppendedThread(
 
   editor.update(
     () => {
+      $addUpdateTag('skip-dom-selection');
       for (const node of $findPreviousEmailNode(replyingToID)) {
         if (!node) continue;
 
@@ -222,6 +236,9 @@ export function registerToggleAppendedThread(editor: LexicalEditor) {
   return editor.registerCommand(
     TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
     ({ replyingTo, visible, replyType }) => {
+      // Programmatic content change: don't let selection reconciliation
+      // move DOM focus into the editor
+      $addUpdateTag('skip-dom-selection');
       const replyingToID = replyingTo?.replying_to_id ?? undefined;
 
       if (!visible) {
@@ -230,6 +247,9 @@ export function registerToggleAppendedThread(editor: LexicalEditor) {
       }
 
       $appendPreviousEmail(editor, replyingTo, replyType);
+      // Appending leaves a dirty selection inside the quote; any later
+      // update would flush it to the DOM and steal focus into the editor
+      $setSelection(null);
 
       return true;
     },
@@ -489,6 +509,15 @@ export function prepareEmailBody(
   // Convert Macro document mentions to HTML links in the parsed DOM
   const mentions = convertMentionsToLinks(parsed.body);
 
+  // HtmlRenderNode exports as declarative shadow DOM; email clients and the
+  // backend sanitizer drop template content, so inline it
+  for (const host of parsed.body.querySelectorAll('div[data-html-render]')) {
+    const template = host.querySelector('template[shadowrootmode]');
+    if (template instanceof HTMLTemplateElement) {
+      host.replaceChildren(template.content.cloneNode(true));
+    }
+  }
+
   if (appendReply && !parsed.body.querySelector('.macro_quote')) {
     const appendedReplyElement = getAppendedReplyElement(
       appendReply.replyingTo,
@@ -534,8 +563,10 @@ export function hasDraftContent(
 }
 
 export function prepareMacroBody(bodyMacro: string): string {
-  // Remove macro-quote blocks from the markdown string
+  // Remove appended-quote blocks from the markdown string
   // We want these in the HTML, but not in body_macro
   // TODO (seamus + peter) Add logic for binding a markdown signal that skips certain transforms
-  return bodyMacro.replace(/<macro-quote>.*?<\/macro-quote>/gs, '').trim();
+  return bodyMacro
+    .replace(/<m-email-thread-embed>.*?<\/m-email-thread-embed>/gs, '')
+    .trim();
 }

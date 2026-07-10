@@ -13,6 +13,11 @@
   display: contents;
 }
 
+/* Email composer collapses the appended quoted thread behind an expander pill */
+.quote-collapsed .macro_quote {
+  display: none;
+}
+
 .md * {
   caret-color: currentcolor;
 }
