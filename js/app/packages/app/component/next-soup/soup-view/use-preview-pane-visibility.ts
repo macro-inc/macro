@@ -6,6 +6,7 @@ import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMemo } from 'solid-js';
 
 export const WIDE_SPLIT_PANEL_BREAKPOINT = 640;
@@ -31,36 +32,30 @@ export function useIsNewInboxEnabled() {
 
 export function usePreviewPaneVisiblity() {
   const panel = useSplitPanelOrThrow();
+  const { soup, previewOpen } = useSoupView();
 
-  const { soup, rows } = useSoupView();
-
-  const isNewInboxEnabled = useIsNewInboxEnabled();
-
-  const isWideSplitPanel = createMemo(() => {
-    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
-  });
-
-  const previewVisible = createMemo(
-    () =>
-      isWideSplitPanel() &&
-      (!!soup.previewEntity() || panel.previewState[0]()) &&
-      !!soup.focus.item()
+  const isWideSplitPanel = createMemo(
+    () => (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT
   );
 
-  // Placeholder display only for new inbox where the preview panel is open by default
-  // Only open while no items are focused
-  const previewPlaceholderVisible = createMemo(() => {
-    return isWideSplitPanel() && isNewInboxEnabled() && !soup.focus.item();
+  // Group headers and load-more rows carry a representative entity, but they
+  // are navigation controls rather than user-selectable preview items.
+  const selectedEntity = createMemo(() => {
+    const row = soup.focus.row();
+    if (!row || row.getIsGrouped() || row.getIsLoadMore()) return;
+    return row.original;
   });
 
-  const previewPaneVisible = createMemo(
-    () => rows().length > 0 && (previewVisible() || previewPlaceholderVisible())
+  const paneVisible = createMemo(
+    () => !isMobile() && isWideSplitPanel() && previewOpen()
   );
+  const previewVisible = createMemo(() => paneVisible() && !!selectedEntity());
 
   return {
-    paneVisible: previewPaneVisible,
-    placeholderVisible: previewPlaceholderVisible,
+    paneVisible,
     previewVisible,
+    previewOpen,
+    selectedEntity,
     isWideSplitPanel,
   };
 }

@@ -34,6 +34,7 @@ import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { InCallPanel, useCallContextOptional } from '@channel/Call';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
@@ -941,6 +942,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     createSignal<TryItemVisibility>(DEFAULT_TRY_VISIBILITY),
     { name: 'sidebar-try-visibility' }
   );
+  const callCtx = useCallContextOptional();
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -1347,57 +1349,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
             />
           </Show>
 
-          <Show
-            when={
-              !hasPaidAccess() &&
-              isExpandedView() &&
-              !premiumCardDismissed() &&
-              newPricingFF().enabled
-            }
-          >
-            <div class="w-full px-2">
-              <SidebarPromoCard
-                label="Upgrade to Premium"
-                description="Unlock MCP integrations, better AI models, and team collaboration."
-                onDismiss={() => {
-                  setPremiumCardDismissed(true);
-                  setPremiumHintVisible(true);
-                }}
-                primaryAction={{
-                  label: 'Upgrade',
-                  onClick: () => openSettingsTab('Billing'),
-                }}
-                secondaryAction={{
-                  label: 'Later',
-                  onClick: () => {
-                    setPremiumCardDismissed(true);
-                    setPremiumHintVisible(true);
-                  },
-                }}
-              />
-            </div>
-          </Show>
-          <Show
-            when={
-              !hasPaidAccess() &&
-              isExpandedView() &&
-              premiumHintVisible() &&
-              premiumCardDismissed() &&
-              newPricingFF().enabled
-            }
-          >
-            <div class="w-full px-2">
-              <SidebarPromoHint
-                title="Maybe later"
-                message="You can upgrade anytime from Account settings."
-                onDone={() => setPremiumHintVisible(false)}
-                secondaryAction={{
-                  label: 'Take me there',
-                  onClick: () => openSettingsTab('Account'),
-                }}
-              />
-            </div>
-          </Show>
         </div>
         <div
           class={cn(
@@ -1413,7 +1364,59 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
       </div>
 
-      <div class="shrink-0 w-full pt-2">
+      <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView() && callCtx?.isInCall()}>
+          <div data-ui="sidebar-in-call-panel">
+            <InCallPanel isSlim={() => false} />
+          </div>
+        </Show>
+        <Show
+          when={
+            !hasPaidAccess() &&
+            isExpandedView() &&
+            !premiumCardDismissed() &&
+            newPricingFF().enabled
+          }
+        >
+          <SidebarPromoCard
+            label="Upgrade to Premium"
+            description="Unlock MCP integrations, better AI models, and team collaboration."
+            onDismiss={() => {
+              setPremiumCardDismissed(true);
+              setPremiumHintVisible(true);
+            }}
+            primaryAction={{
+              label: 'Upgrade',
+              onClick: () => openSettingsTab('Billing'),
+            }}
+            secondaryAction={{
+              label: 'Later',
+              onClick: () => {
+                setPremiumCardDismissed(true);
+                setPremiumHintVisible(true);
+              },
+            }}
+          />
+        </Show>
+        <Show
+          when={
+            !hasPaidAccess() &&
+            isExpandedView() &&
+            premiumHintVisible() &&
+            premiumCardDismissed() &&
+            newPricingFF().enabled
+          }
+        >
+          <SidebarPromoHint
+            title="Maybe later"
+            message="You can upgrade anytime from Account settings."
+            onDone={() => setPremiumHintVisible(false)}
+            secondaryAction={{
+              label: 'Take me there',
+              onClick: () => openSettingsTab('Account'),
+            }}
+          />
+        </Show>
         <SidebarSettingsWidget
           isSlim={isSlim}
           onSelect={openSettingsTab}

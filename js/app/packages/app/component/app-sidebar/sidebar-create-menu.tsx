@@ -11,6 +11,7 @@ import {
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
+import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
@@ -130,7 +131,7 @@ export const SidebarCreateMenu = (props: {
             e.preventDefault();
           }}
         >
-          <PlusIcon />
+          <CreateIcon />
         </Dropdown.Trigger>
       </Show>
       <Dropdown.Content class="min-w-52 shadow-menu">

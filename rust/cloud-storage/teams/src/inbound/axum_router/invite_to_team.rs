@@ -28,7 +28,7 @@ pub struct InviteToTeamRequest {
 #[derive(Debug, thiserror::Error)]
 pub enum InviteToTeamError {
     /// Unable to invite users to team
-    #[error("unable to invite users to team")]
+    #[error("unable to invite users to team: {0}")]
     InviteUsersToTeamError(#[from] InviteUsersToTeamError),
     /// Invalid emails detected
     #[error("unable to parse email")]
@@ -58,6 +58,12 @@ impl axum::response::IntoResponse for InviteToTeamError {
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
                         message: "too many emails".into(),
+                    }),
+                ),
+                InviteUsersToTeamError::CustomerError(_) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "internal server error".into(),
                     }),
                 ),
                 _ => (

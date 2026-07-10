@@ -1,11 +1,9 @@
 import type { LanguageModel, LanguageModelUsage } from 'ai';
 import { describe, expect, it } from 'vitest';
 import type { coder } from '../agents';
-import type { snippet } from '../agents/snippet';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
 import { mockAwarenessSource } from '../awareness/awareness-source';
 import { Doc } from '../doc/doc';
-import { type SnippetSource, settleSnippets } from '../runtime';
 import { TokenTracker } from '../token-tracker';
 import {
   computeContextRange,
@@ -115,173 +113,113 @@ describe('computeContextRange', () => {
   });
 });
 
-describe('dispatch — snippet_specs', () => {
-  const usage: LanguageModelUsage = {
-    inputTokens: 10,
-    outputTokens: 5,
-    totalTokens: 15,
-    inputTokenDetails: {
-      noCacheTokens: undefined,
-      cacheReadTokens: undefined,
-      cacheWriteTokens: undefined,
+const usage: LanguageModelUsage = {
+  inputTokens: 10,
+  outputTokens: 5,
+  totalTokens: 15,
+  inputTokenDetails: {
+    noCacheTokens: undefined,
+    cacheReadTokens: undefined,
+    cacheWriteTokens: undefined,
+  },
+  outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined },
+};
+const childModel = { modelId: 'child-model' } as unknown as LanguageModel;
+const coderResult = (async () =>
+  ({ totalUsage: usage, steps: [] }) as unknown as Awaited<
+    ReturnType<typeof coder>
+  >)();
+
+function setup() {
+  const session = createEditingSession();
+  loadMarkdown(session, 'hello world');
+  const tracker = new TokenTracker();
+  const editTraces: DispatchEditTrace[] = [];
+  const tasks: string[] = [];
+  // The request each coder received, to verify it reaches every writer.
+  const requests: Array<string | undefined> = [];
+  const dispatch = createDispatchTool({
+    session,
+    childModel,
+    tracker,
+    request: 'make it formal',
+    runner: () => [],
+    makeWriter: async () => ({
+      doc: new Doc(session),
+      awarenessSource: mockAwarenessSource(),
+      release: () => {},
+    }),
+    runTask: async (_session, task, _model, deps) => {
+      tasks.push(task);
+      requests.push(deps.request);
+      deps.onRunCode?.();
+      return coderResult;
     },
-    outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined },
-  };
-  const snippetModel = { modelId: 'snip-model' } as unknown as LanguageModel;
-  const snippetHighModel = {
-    modelId: 'snip-high-model',
-  } as unknown as LanguageModel;
-  const childModel = { modelId: 'child-model' } as unknown as LanguageModel;
-  const coderResult = (async () =>
-    ({ totalUsage: usage, steps: [] }) as unknown as Awaited<
-      ReturnType<typeof coder>
-    >)();
+    onEditTrace: (edit) => editTraces.push(edit),
+  });
+  return { ...dispatch, tracker, editTraces, tasks, requests };
+}
 
-  function setup(opts: {
-    runSnippet: typeof snippet;
-    onSnippets?: (s: SnippetSource | undefined) => void;
-  }) {
-    const session = createEditingSession();
-    loadMarkdown(session, 'hello world');
-    const tracker = new TokenTracker();
-    const editTraces: DispatchEditTrace[][] = [];
-    const dispatchTool = createDispatchTool({
-      session,
-      childModel,
-      snippetModel,
-      snippetHighModel,
-      tracker,
-      runSnippet: opts.runSnippet,
-      runner: () => [],
-      makeWriter: async () => ({
-        doc: new Doc(session),
-        awarenessSource: mockAwarenessSource(),
-        release: () => {},
-      }),
-      runTask: async (_session, _task, _model, deps) => {
-        opts.onSnippets?.(deps.snippets);
-        deps.onRunCode?.();
-        return coderResult;
-      },
-      onEditTrace: (edits) => editTraces.push(edits),
-    });
-    return { dispatchTool, tracker, editTraces };
-  }
+const callOptions = { toolCallId: 't1', messages: [] };
 
-  const callOptions = { toolCallId: 't1', messages: [] };
-
-  it('launches one agent per spec, merges pending values, and tracks usage', async () => {
-    const briefs: string[] = [];
-    let seen: SnippetSource | undefined;
-    const { dispatchTool, tracker, editTraces } = setup({
-      runSnippet: async (brief) => {
-        briefs.push(brief);
-        return { text: `composed: ${brief}`, totalUsage: usage };
-      },
-      onSnippets: (s) => {
-        seen = s;
-      },
-    });
-    await dispatchTool.execute?.(
-      {
-        edits: [
-          {
-            editing_instruction: 'insert snippets.intro after the paragraph',
-            snippets: { exact: 'as-is' },
-            snippet_specs: { intro: 'one paragraph about intros' },
-          },
-        ],
-      },
+describe('dispatch -- writer inputs', () => {
+  it('passes the user request to the writer', async () => {
+    const { tool, requests } = setup();
+    const out = await tool.execute?.(
+      { editing_instruction: 'first edit' },
       callOptions
     );
-    expect(briefs).toEqual(['one paragraph about intros']);
-    expect(await settleSnippets(seen)).toEqual({
-      exact: 'as-is',
-      intro: 'composed: one paragraph about intros',
-    });
-    expect(tracker.toEntries()).toContainEqual({
-      model: 'snip-model',
-      inputTokens: 10,
-      outputTokens: 5,
-    });
-
-    expect(editTraces).toHaveLength(1);
-    const [trace] = editTraces[0]!;
-    expect(trace!.snippets).toMatchObject([
-      {
-        key: 'intro',
-        brief: 'one paragraph about intros',
-        text: 'composed: one paragraph about intros',
-      },
-    ]);
-    expect(trace!.snippets[0]!.resolvedAt).toBeGreaterThanOrEqual(
-      trace!.snippets[0]!.startedAt
-    );
-    expect(trace!.runCodeAt).toHaveLength(1);
-    expect(trace!.runCodeAt[0]).toBeGreaterThanOrEqual(trace!.coderStartedAt);
-    expect(trace!.coderFinishedAt).toBeGreaterThanOrEqual(trace!.runCodeAt[0]!);
+    expect(out).toContain('✓ APPLIED');
+    expect(requests).toEqual(['make it formal']);
   });
 
-  it('routes effort:high specs to the high model and low/string specs to the default', async () => {
-    const modelsByBrief: Record<string, string> = {};
-    const { dispatchTool, tracker, editTraces } = setup({
-      runSnippet: async (brief, _context, model) => {
-        modelsByBrief[brief] = (model as { modelId: string }).modelId;
-        return { text: `composed: ${brief}`, totalUsage: usage };
-      },
-    });
-    await dispatchTool.execute?.(
-      {
-        edits: [
-          {
-            editing_instruction: 'insert snippets.plain and snippets.fancy',
-            snippet_specs: {
-              plain: 'a one-line caption',
-              fancy: { brief: 'a long poem', effort: 'high' },
-            },
-          },
-        ],
-      },
+  it('records runCode timing in the trace', async () => {
+    const { tool, editTraces } = setup();
+    await tool.execute?.(
+      { editing_instruction: 'one edit' },
       callOptions
     );
-    expect(modelsByBrief).toEqual({
-      'a one-line caption': 'snip-model',
-      'a long poem': 'snip-high-model',
-    });
-    expect(tracker.toEntries()).toContainEqual({
-      model: 'snip-high-model',
-      inputTokens: 10,
-      outputTokens: 5,
-    });
-    expect(editTraces[0]![0]!.snippets).toMatchObject([
-      { key: 'plain', effort: 'low' },
-      { key: 'fancy', effort: 'high' },
-    ]);
+    const trace = editTraces[0]!;
+    expect(trace.runCodeAt).toHaveLength(1);
+    expect(trace.runCodeAt[0]).toBeGreaterThanOrEqual(trace.coderStartedAt);
+    expect(trace.coderFinishedAt).toBeGreaterThanOrEqual(trace.runCodeAt[0]!);
+  });
+});
+
+describe('dispatch -- onInputAvailable early launch', () => {
+  it('runs the edit once; execute joins it and marks the trace', async () => {
+    const { tool, editTraces, tasks } = setup();
+    const edit = { editing_instruction: 'convert the paragraph to a heading' };
+    tool.onInputAvailable?.({ input: edit, toolCallId: 't1', messages: [] });
+    const out = await tool.execute?.(edit, { toolCallId: 't1', messages: [] });
+    expect(out).toContain('✓ APPLIED');
+    expect(tasks).toEqual(['convert the paragraph to a heading']);
+    const trace = editTraces[0]!;
+    expect(trace.streamedAt).toBeGreaterThan(0);
+    expect(trace.coderFinishedAt).toBeGreaterThanOrEqual(trace.streamedAt!);
   });
 
-  it('survives a rejecting spec the writer never awaits and traces the error', async () => {
-    const { dispatchTool, editTraces } = setup({
-      runSnippet: async () => {
-        throw new Error('model unavailable');
-      },
-    });
-    const out = await dispatchTool.execute?.(
-      {
-        edits: [
-          {
-            editing_instruction: 'do something else entirely',
-            snippet_specs: { unused: 'never referenced' },
-          },
-        ],
-      },
-      callOptions
+  it('execute starts the coder if onInputAvailable did not fire', async () => {
+    const { tool, editTraces, tasks } = setup();
+    await tool.execute?.(
+      { editing_instruction: 'late edit' },
+      { toolCallId: 't1', messages: [] }
     );
-    expect(out).toContain('APPLIED');
-    // the trace tap runs on a microtask after the batch resolves
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(editTraces[0]![0]!.snippets[0]).toMatchObject({
-      key: 'unused',
-      error: 'model unavailable',
+    expect(tasks).toEqual(['late edit']);
+    expect(editTraces[0]!.streamedAt).toBeUndefined();
+  });
+
+  it('keeps calls from different tool call ids separate', async () => {
+    const { tool, tasks } = setup();
+    tool.onInputAvailable?.({
+      input: { editing_instruction: 'other edit' },
+      toolCallId: 'other-call',
+      messages: [],
     });
+    await tool.execute?.(
+      { editing_instruction: 'this edit' },
+      { toolCallId: 't1', messages: [] }
+    );
+    expect(tasks.sort()).toEqual(['other edit', 'this edit']);
   });
 });

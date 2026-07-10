@@ -2,8 +2,8 @@ import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
 import type { DocumentOp } from '../editor';
 import type { DocumentOpQueueParams } from '../queue';
-import type { SnippetSource } from '../runtime';
 import type {
+  CoderRunCode,
   DispatchEditTrace,
   RunCodeToolOptions,
   Writer,
@@ -14,7 +14,9 @@ export type RunTaskDeps = {
   awarenessSource: AwarenessSource;
   runner: RunCodeToolOptions['runner'];
   context: string;
-  snippets?: SnippetSource;
+  /** The user's original edit request (plus resolved intent when available),
+   *  tone and content context for the writer. */
+  request?: string;
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
   sleep?: (ms: number) => Promise<void>;
@@ -33,6 +35,6 @@ export type RunAgentOptions = {
   sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   onOps?: (ops: DocumentOp[]) => void;
-  onCoderResult?: (codes: string[][]) => void;
-  onEditTrace?: (edits: DispatchEditTrace[]) => void;
+  onCoderResult?: (codes: CoderRunCode[]) => void;
+  onEditTrace?: (edit: DispatchEditTrace) => void;
 };

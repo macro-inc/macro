@@ -8,7 +8,7 @@ import {
   type CodeRunner,
   docIds,
   runEditorCode,
-  type SnippetSource,
+  snippetKeysIn,
 } from './runtime';
 
 // In-process executor for unit tests: the QuickJS sandbox's wasm import doesn't
@@ -46,7 +46,7 @@ function topIds(session: LexicalSession): string[] {
 async function runCode(
   session: LexicalSession,
   code: string,
-  snippets?: SnippetSource
+  snippets?: Record<string, string>
 ): Promise<string> {
   return runEditorCode({
     session,
@@ -110,54 +110,48 @@ describe('runtime — end to end against real Lexical', () => {
   });
 });
 
-describe('runtime — snippet settling', () => {
-  it('resolves pending snippets before the code runs', async () => {
+describe('runtime — writer-authored snippets', () => {
+  it('injects call snippets into the code scope', async () => {
     const { session, ids } = build('first');
     const summary = await runCode(
       session,
       `editor.insertParagraphAfter('${ids[0]}', snippets.intro);`,
-      {
-        intro: {
-          brief: 'one line',
-          promise: new Promise((resolve) =>
-            setTimeout(() => resolve('composed later'), 5)
-          ),
-        },
-      }
+      { intro: 'writer wrote this' }
     );
     expect(summary).toBe('ok');
-    expect(serializeWithXml(session)).toContain('composed later');
+    expect(serializeWithXml(session)).toContain('writer wrote this');
   });
 
-  it('mixes verbatim strings and pending snippets', async () => {
-    const { session, ids } = build('first');
-    const summary = await runCode(
-      session,
-      `editor.insertParagraphAfter('${ids[0]}', snippets.a + ' ' + snippets.b);`,
-      {
-        a: 'verbatim',
-        b: { brief: 'x', promise: Promise.resolve('pending') },
-      }
-    );
-    expect(summary).toBe('ok');
-    expect(serializeWithXml(session)).toContain('verbatim pending');
-  });
-
-  it('reports a failed snippet by key and applies nothing', async () => {
+  it('fails clearly when the code references an unprovided key', async () => {
     const { session, ids } = build('untouched');
     const before = serializeWithXml(session);
     const summary = await runCode(
       session,
-      `editor.insertParagraphAfter('${ids[0]}', snippets.bad);`,
-      {
-        bad: {
-          brief: 'x',
-          promise: Promise.reject(new Error('model unavailable')),
-        },
-      }
+      `editor.insertParagraphAfter('${ids[0]}', snippets.ghost);`,
+      { other: 'x' }
     );
-    expect(summary).toBe('error: snippet "bad" failed: model unavailable');
+    expect(summary).toMatch(/error: snippet "ghost" is not defined/);
     expect(serializeWithXml(session)).toBe(before);
+  });
+
+  it('fails clearly when code references snippets but none were passed', async () => {
+    const { session, ids } = build('untouched');
+    const summary = await runCode(
+      session,
+      `editor.insertParagraphAfter('${ids[0]}', snippets.x);`
+    );
+    expect(summary).toMatch(/error: snippet "x" is not defined/);
+  });
+});
+
+describe('snippetKeysIn', () => {
+  it('extracts dot and bracket key references from code', () => {
+    const code = `
+      editor.setText(id, snippets.alpha);
+      const x = snippets["with-dash"] + snippets.alpha;
+      editor.bold(id, snippets['beta']);
+    `;
+    expect(snippetKeysIn(code).sort()).toEqual(['alpha', 'beta', 'with-dash']);
   });
 });
 

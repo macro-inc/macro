@@ -44,7 +44,6 @@ import {
 import {
   useIsNewInboxEnabled,
   usePreviewPaneVisiblity,
-  WIDE_SPLIT_PANEL_BREAKPOINT,
 } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
@@ -305,6 +304,8 @@ const useSoupNotificationInvalidators = () => {
 };
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
+const SOUP_PREVIEW_ENTITY_ENTRY_KEY = 'soup.preview';
+const SOUP_PREVIEW_OPEN_ENTRY_KEY = 'soup.previewOpen';
 
 type SoupListEntryState = {
   focus: string | undefined;
@@ -383,9 +384,17 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
+  const isNewInboxEnabled = useIsNewInboxEnabled();
 
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
+
+  const persistedPreviewEntity = entryState?.[SOUP_PREVIEW_ENTITY_ENTRY_KEY] as
+    | string
+    | undefined;
+  const persistedPreviewOpen = entryState?.[SOUP_PREVIEW_OPEN_ENTRY_KEY] as
+    | boolean
+    | undefined;
 
   const searchTags = useSearchTagsFlag();
 
@@ -455,6 +464,14 @@ export const SoupView = (props: SoupViewProps) => {
     if (init) return;
     init = true;
     batch(() => {
+      soup.setPreviewEntity(persistedPreviewEntity);
+      // Existing entries only stored the symbolic entity id. Treat one as an
+      // open pane while allowing new entries to use their view default.
+      soupView.setPreviewOpen(
+        persistedPreviewOpen ??
+          (persistedPreviewEntity ? true : isNewInboxEnabled())
+      );
+
       soupView.initialize({
         initialQuery: stripGatedTagFilters(
           initialCrmView
@@ -516,6 +533,17 @@ export const SoupView = (props: SoupViewProps) => {
       }
     });
   });
+
+  const previewEntityCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    SOUP_PREVIEW_ENTITY_ENTRY_KEY,
+    () => soup.previewEntity()
+  );
+  const previewOpenCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    SOUP_PREVIEW_OPEN_ENTRY_KEY,
+    () => soupView.previewOpen()
+  );
+  onCleanup(previewEntityCaptorTeardown);
+  onCleanup(previewOpenCaptorTeardown);
 
   onMount(() => {
     if (contentId !== 'documents') return;
@@ -609,18 +637,21 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const { paneVisible } = usePreviewPaneVisiblity();
+  const { paneVisible, previewVisible } = usePreviewPaneVisiblity();
 
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  createEffect(() => {
+    const visible = paneVisible();
+    const [getPreview, setPreview] = panel.previewState;
+    if (visible !== getPreview()) setPreview(visible);
+  });
+  onCleanup(() => panel.previewState[1](false));
 
   return (
     <SplitPanelContext.Provider
       value={{
         ...panel,
         halfSplitState: () =>
-          soup.previewEntity() && soup.focus.item()
-            ? { side: 'left', percentage: 30 }
-            : undefined,
+          previewVisible() ? { side: 'left', percentage: 30 } : undefined,
       }}
     >
       <div class="size-full flex flex-col" data-list-view={activeListView()}>
@@ -828,7 +859,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
-  const { paneVisible, placeholderVisible, previewVisible } =
+  const { paneVisible, previewVisible, previewOpen, selectedEntity } =
     usePreviewPaneVisiblity();
 
   const focusFirstEntity = () => {
@@ -959,7 +990,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
-    previewState: () => !!soup.previewEntity(),
+    previewState: previewVisible,
     currentView,
     activeTab,
     applyTabPreset,
@@ -1010,10 +1041,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    if (
-      placeholderVisible() ||
-      (previewVisible() && soup.previewEntity() && type === 'entity')
-    ) {
+    if (paneVisible() && type === 'entity') {
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
@@ -1161,21 +1189,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       | SoupListEntryState
       | undefined;
 
-  // Preview-pane open state is transient per history entry: captured into
-  // per-entry state on nav-away and restored on back/forward. Read
-  // synchronously in the body so the first render sees the correct value
-  // and we avoid a transient flash where the pane is closed.
-  const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
-    | string
-    | undefined;
-  soup.setPreviewEntity(persistedPreview);
-  const previewCaptorTeardown = panel.handle.registerEntryStateCaptor(
-    'soup.preview',
-    () => soup.previewEntity()
-  );
-  onCleanup(previewCaptorTeardown);
-
-  // Which groups are collapsed is also per-entry state: captured on nav-away
+  // Which groups are collapsed is per-entry state: captured on nav-away
   // and restored on back/forward.
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.collapsedGroups',
@@ -1243,23 +1257,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
-
-  const isWideSplitPanel = createMemo(() => {
-    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
-  });
-
-  createEffect(() => {
-    const hasPreviewEntity = !!soup.previewEntity();
-    const [getPreview, setPreview] = panel.previewState;
-    if (hasPreviewEntity !== getPreview()) {
-      setPreview(hasPreviewEntity);
-    }
-  });
-
-  // The preview flag lives on the panel, so clear it when the soup view
-  // unmounts (e.g. pressing enter replaces the split with the full entity);
-  // otherwise it stays stale-true and the entity's toolbar keeps the border.
-  onCleanup(() => panel.previewState[1](false));
 
   return (
     <MaybeSoupEntityActionDrawerManager>
@@ -1535,7 +1532,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           onMouseMove={() => {
                                             if (isKeypressActive()) return;
                                             if (
-                                              soup.previewEntity() ||
+                                              previewOpen() ||
                                               isNewInboxEnabled()
                                             )
                                               return;
@@ -1657,18 +1654,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 percent: isNewInboxEnabled() ? 55 : 70,
               }}
             >
-              <div
-                class={cn(
-                  'size-full',
-                  !isWideSplitPanel() && 'border-t border-t-edge-muted'
-                )}
-              >
+              <div class="size-full">
                 <Show
-                  when={
-                    (soup.focus.row() && !isNewInboxEnabled()) ||
-                    (soup.focus.row()?.getIsGrouped() === false &&
-                      isNewInboxEnabled())
-                  }
+                  when={selectedEntity()}
                   fallback={
                     <EmptyStatePanel
                       graphic={EmptyStatePreviewIcon}
@@ -1682,14 +1670,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     />
                   }
                 >
-                  <PreviewPanel
-                    selectedEntity={soup.focus.item()}
-                    orchestrator={orchestrator}
-                    splitPanelContext={panel}
-                    onFocusOut={() => {
-                      soupViewRef()?.focus();
-                    }}
-                  />
+                  {(entity) => (
+                    <PreviewPanel
+                      selectedEntity={entity()}
+                      orchestrator={orchestrator}
+                      splitPanelContext={panel}
+                      onFocusOut={() => {
+                        soupViewRef()?.focus();
+                      }}
+                    />
+                  )}
                 </Show>
               </div>
             </Resize.Panel>

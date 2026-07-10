@@ -1,7 +1,8 @@
 use ai_toolset::{ToolCallError, ToolResult};
+use item_filters::TagFilterMode;
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter};
+use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use models_search::MatchType;
 use models_search::unified::UnifiedSearchResponseItem;
 use models_soup::SoupProperty;
@@ -51,19 +52,39 @@ pub struct SearchToolResponse {
     pub results: Vec<TaggedSearchResult>,
 }
 
+/// Map the model-facing tag match mode onto the search request's filter mode.
+pub(super) fn tag_filter_mode(mode: TagMatch) -> TagFilterMode {
+    match mode {
+        TagMatch::Any => TagFilterMode::Any,
+        TagMatch::All => TagFilterMode::All,
+    }
+}
+
 /// Resolve the model's tag filters against the caller's tag sets, returning
 /// the matched option ids for `EntityFilters::tag_option_ids` plus the sets
-/// for later result annotation. An unknown label fails with the available tags.
+/// for later result annotation. An unknown label fails with the available
+/// tags. In all mode every filter must name exactly one tag — the option ids
+/// AND together, so expanding an unscoped label across scopes would require
+/// items to carry both variants; the ambiguity fails and asks for a scope.
 pub(super) async fn resolve_tag_filters(
     context: &SearchToolContext,
     user_id: &str,
     filters: &[TagFilter],
+    mode: TagMatch,
 ) -> ToolResult<(CallerTagSets, Vec<String>)> {
     let sets = fetch_caller_tag_sets(context, user_id).await?;
-    let resolved = sets.resolve_filters(filters).map_err(|e| ToolCallError {
-        description: e.to_string(),
-        internal_error: anyhow::anyhow!(e),
-    })?;
+    let resolved = match mode {
+        TagMatch::Any => sets.resolve_filters(filters).map_err(|e| ToolCallError {
+            description: e.to_string(),
+            internal_error: anyhow::anyhow!(e),
+        })?,
+        TagMatch::All => sets
+            .resolve_filters_unique(filters)
+            .map_err(|e| ToolCallError {
+                description: e.to_string(),
+                internal_error: anyhow::anyhow!(e),
+            })?,
+    };
     let option_ids = resolved
         .into_iter()
         .map(|option| option.option_id.to_string())

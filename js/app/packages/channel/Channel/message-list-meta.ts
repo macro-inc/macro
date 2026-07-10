@@ -4,7 +4,8 @@ import { shouldGroupWithPreviousMessage } from './message-grouping-meta';
 
 export function buildChannelMessageListMeta(
   messages: ApiChannelMessage[],
-  isNewMessageFn: (message: ApiChannelMessage) => boolean
+  isNewMessageFn: (message: ApiChannelMessage) => boolean,
+  reachedStart: boolean
 ): Record<string, ChannelMessageListMeta> {
   const metaByMessageId: Record<string, ChannelMessageListMeta> = {};
   let previousTopLevelCreatedAt: string | undefined;
@@ -28,6 +29,7 @@ export function buildChannelMessageListMeta(
         message,
         previousMessage
       ),
+      reachedStart,
     };
 
     previousTopLevelCreatedAt = message.created_at;

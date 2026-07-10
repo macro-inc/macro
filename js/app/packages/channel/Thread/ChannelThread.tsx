@@ -266,6 +266,7 @@ export function ChannelThread(props: ThreadProps) {
   return (
     <DebugSuspense name="ChannelThread.root">
       <Thread.Row
+        channelId={props.channelId()}
         message={props.data()}
         listMeta={props.listMeta}
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
