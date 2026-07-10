@@ -474,6 +474,7 @@ export function ThreadList(props: ThreadListProps) {
         distanceFromBottom: getDistanceFromBottom(handle),
       });
       requestAnimationFrame(() => {
+        const offsetBeforeRetry = handle.scrollOffset;
         const retryScrolled = scrollToInitialTarget(
           handle,
           initialScrollTarget
@@ -482,7 +483,21 @@ export function ThreadList(props: ThreadListProps) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
           completeInitialScroll(handle);
+          return;
         }
+        // A retry that lands on the current position moves nothing, so no
+        // scroll events (and no onScrollEnd) follow. Finalize on the next
+        // frame or `didInitialScroll` stays false for the life of the mount,
+        // deadlocking everything gated on it (target navigation, scroll
+        // pagination, goToLatest).
+        requestAnimationFrame(() => {
+          if (didInitialScroll()) return;
+          if (handle.scrollOffset !== offsetBeforeRetry) return;
+          console.debug(
+            'ThreadList: retry did not move the scroll, completing'
+          );
+          completeInitialScroll(handle);
+        });
       });
       return;
     }
