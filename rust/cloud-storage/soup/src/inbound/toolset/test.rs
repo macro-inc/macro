@@ -279,6 +279,10 @@ fn test_tags_arg_deserializes_and_documents_match_modes() {
         "tags arg should point at tagsMatch for all-of combining"
     );
     assert!(
+        schema_json.contains("is ambiguous"),
+        "tagsMatch arg should document the all-mode scope requirement"
+    );
+    assert!(
         schema_json.contains("ListTags"),
         "tags arg should point at ListTags"
     );

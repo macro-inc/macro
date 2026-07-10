@@ -81,6 +81,45 @@ fn format_available(available: &[String]) -> String {
     }
 }
 
+/// A tag filter label that matched more than one of the caller's tags, in a
+/// context that needs each filter to name exactly one.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "tag \"{label}\" is ambiguous: it matches {}. Set scope (\"personal\" or \"team\") on that entry to pick one",
+    format_matches(matches)
+)]
+pub struct AmbiguousTagError {
+    /// The label that resolved to more than one tag.
+    pub label: String,
+    /// Every tag the label matched.
+    pub matches: Vec<AppliedTag>,
+}
+
+fn format_matches(matches: &[AppliedTag]) -> String {
+    matches
+        .iter()
+        .map(|tag| {
+            let scope = match tag.scope {
+                TagScope::Personal => "a personal",
+                TagScope::Team => "a team",
+            };
+            format!("{scope} tag \"{}\"", tag.label)
+        })
+        .collect::<Vec<_>>()
+        .join(" and ")
+}
+
+/// Errors from resolving tag filters that must each name exactly one tag.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum TagFilterError {
+    /// A label matched nothing in the caller's tag sets.
+    #[error(transparent)]
+    Unknown(#[from] UnknownTagError),
+    /// A label matched more than one tag.
+    #[error(transparent)]
+    Ambiguous(#[from] AmbiguousTagError),
+}
+
 /// One resolved tag option from the caller's sets.
 #[derive(Debug, Clone)]
 pub struct CallerTagOption {
@@ -176,26 +215,63 @@ impl CallerTagSets {
     ) -> Result<Vec<CallerTagOption>, UnknownTagError> {
         let mut resolved: Vec<CallerTagOption> = Vec::new();
         for filter in filters {
-            let matches: Vec<&CallerTagOption> = self
-                .options
-                .iter()
-                .filter(|o| {
-                    o.label.eq_ignore_ascii_case(filter.label.trim())
-                        && filter.scope.is_none_or(|scope| o.scope == scope)
-                })
-                .collect();
-            if matches.is_empty() {
-                return Err(UnknownTagError {
-                    label: filter.label.clone(),
-                    available: self.available_labels(),
-                });
-            }
-            for option in matches {
+            for option in self.filter_matches(filter)? {
                 if !resolved.iter().any(|r| r.option_id == option.option_id) {
                     resolved.push(option.clone());
                 }
             }
         }
         Ok(resolved)
+    }
+
+    /// Like [`Self::resolve_filters`], but every filter must match exactly one
+    /// tag. Used when the resolved options combine with AND: silently
+    /// expanding an unscoped label present in both the personal and team set
+    /// would require items to carry both variants, so the ambiguity fails
+    /// loudly and asks for a scope instead.
+    pub fn resolve_filters_unique(
+        &self,
+        filters: &[TagFilter],
+    ) -> Result<Vec<CallerTagOption>, TagFilterError> {
+        let mut resolved: Vec<CallerTagOption> = Vec::new();
+        for filter in filters {
+            let matches = self.filter_matches(filter)?;
+            if matches.len() > 1 {
+                return Err(AmbiguousTagError {
+                    label: filter.label.clone(),
+                    matches: matches
+                        .into_iter()
+                        .map(|o| AppliedTag {
+                            label: o.label.clone(),
+                            scope: o.scope,
+                        })
+                        .collect(),
+                }
+                .into());
+            }
+            let option = matches[0];
+            if !resolved.iter().any(|r| r.option_id == option.option_id) {
+                resolved.push(option.clone());
+            }
+        }
+        Ok(resolved)
+    }
+
+    fn filter_matches(&self, filter: &TagFilter) -> Result<Vec<&CallerTagOption>, UnknownTagError> {
+        let matches: Vec<&CallerTagOption> = self
+            .options
+            .iter()
+            .filter(|o| {
+                o.label.eq_ignore_ascii_case(filter.label.trim())
+                    && filter.scope.is_none_or(|scope| o.scope == scope)
+            })
+            .collect();
+        if matches.is_empty() {
+            return Err(UnknownTagError {
+                label: filter.label.clone(),
+                available: self.available_labels(),
+            });
+        }
+        Ok(matches)
     }
 }

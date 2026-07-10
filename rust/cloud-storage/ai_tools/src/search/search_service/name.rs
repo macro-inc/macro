@@ -58,7 +58,9 @@ while a tag filter is active.")]
 
     #[schemars(description = "\
 How multiple entries in tags combine: \"any\" (the default) matches items carrying at least \
-one of the tags, \"all\" only items carrying every one of them. Ignored unless tags is set.")]
+one of the tags, \"all\" only items carrying every one of them. With \"all\", a label that \
+exists in both the personal and team sets is ambiguous — set scope on that entry to pick one. \
+Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
 }
@@ -115,6 +117,7 @@ impl AsyncTool<SearchToolContext> for NameSearch {
                 &search_context,
                 (*request_context.user_id).as_ref(),
                 filters,
+                self.tags_match,
             )
             .await?;
             tag_sets = Some(sets);

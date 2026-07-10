@@ -446,8 +446,9 @@ hand-building a propf filter for tags.")]
     /// How multiple entries in `tags` combine.
     #[schemars(description = "\
 How multiple entries in tags combine: \"any\" (the default) returns items carrying at least \
-one of the tags, \"all\" returns only items carrying every one of them. Ignored unless tags \
-is set.")]
+one of the tags, \"all\" returns only items carrying every one of them. With \"all\", a label \
+that exists in both the personal and team sets is ambiguous — set scope on that entry to pick \
+one. Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
 
@@ -604,12 +605,23 @@ where
             None
         } else {
             let sets = fetch_caller_tag_sets(&service_context, &request_context).await?;
-            let resolved = sets
-                .resolve_filters(self.tag_filters())
-                .map_err(|e| ToolCallError {
-                    description: e.to_string(),
-                    internal_error: anyhow::anyhow!(e),
-                })?;
+            // In all mode every filter must name exactly one tag — expanding
+            // an unscoped label across scopes would AND both variants in.
+            let resolved = match self.tags_match {
+                TagMatch::Any => {
+                    sets.resolve_filters(self.tag_filters())
+                        .map_err(|e| ToolCallError {
+                            description: e.to_string(),
+                            internal_error: anyhow::anyhow!(e),
+                        })?
+                }
+                TagMatch::All => sets
+                    .resolve_filters_unique(self.tag_filters())
+                    .map_err(|e| ToolCallError {
+                        description: e.to_string(),
+                        internal_error: anyhow::anyhow!(e),
+                    })?,
+            };
             // Each resolved option becomes its own literal; the match mode
             // picks how they combine (any = OR, all = AND across the item's
             // tag properties, which may span definitions).
