@@ -425,7 +425,7 @@ pub enum RemoveUserFromTeamError {
     #[error("There is no subscription for the team")]
     NoSubscription,
     /// Underlying customer error
-    #[error("Underlying customer error")]
+    #[error("Underlying customer error {0}")]
     CustomerError(#[from] CustomerError),
     /// The user is the owner of the team
     #[error("Cannot remove owner")]
@@ -499,7 +499,7 @@ pub enum DeleteTeamError {
     #[error("Underlying team error")]
     TeamError(#[from] TeamError),
     /// Underlying customer error
-    #[error("Underlying customer error")]
+    #[error("Underlying customer error {0}")]
     CustomerError(#[from] CustomerError),
     /// Remove roles from user error
     #[error("Remove roles from user error")]
@@ -516,7 +516,7 @@ pub enum JoinTeamError {
     #[error("Underlying team error")]
     TeamError(#[from] TeamError),
     /// Underlying customer error
-    #[error("Underlying customer error")]
+    #[error("Underlying customer error {0}")]
     CustomerError(#[from] CustomerError),
     /// The user was not invited to the team
     #[error("User not invited")]
@@ -566,4 +566,59 @@ pub enum TeamCheckoutError {
     /// Customer already has a subscription
     #[error("User already has an active subscription")]
     AlreadySubscribed,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CUSTOMER_STORAGE_ERROR: &str = "sentinel customer storage error";
+
+    fn customer_storage_error() -> CustomerError {
+        CustomerError::StorageLayerError(anyhow::anyhow!(CUSTOMER_STORAGE_ERROR))
+    }
+
+    fn assert_preserves_customer_storage_error(error: impl std::fmt::Display) {
+        let message = error.to_string();
+        assert!(
+            message.contains(CUSTOMER_STORAGE_ERROR),
+            "customer storage error was missing from: {message}"
+        );
+    }
+
+    #[test]
+    fn invite_users_to_team_error_preserves_customer_storage_error() {
+        let error = InviteUsersToTeamError::from(customer_storage_error());
+        assert_preserves_customer_storage_error(error);
+    }
+
+    #[test]
+    fn remove_user_from_team_error_preserves_customer_storage_error() {
+        let error = RemoveUserFromTeamError::from(customer_storage_error());
+        assert_preserves_customer_storage_error(error);
+    }
+
+    #[test]
+    fn remove_team_invite_error_preserves_customer_storage_error() {
+        let error = RemoveTeamInviteError::from(customer_storage_error());
+        assert_preserves_customer_storage_error(error);
+    }
+
+    #[test]
+    fn delete_team_error_preserves_customer_storage_error() {
+        let error = DeleteTeamError::from(customer_storage_error());
+        assert_preserves_customer_storage_error(error);
+    }
+
+    #[test]
+    fn join_team_error_preserves_customer_storage_error() {
+        let error = JoinTeamError::from(customer_storage_error());
+        assert_preserves_customer_storage_error(error);
+    }
+
+    #[test]
+    fn team_checkout_error_preserves_customer_storage_error() {
+        let error = TeamCheckoutError::from(customer_storage_error());
+        assert_preserves_customer_storage_error(error);
+    }
 }
