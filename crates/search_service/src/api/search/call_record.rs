@@ -52,7 +52,7 @@ pub(in crate::api::search) async fn enrich_call_records(
             .collect()
     };
     let channel_names_by_id =
-        batch_resolve_channel_names(&ctx.db, &unique_channel_ids, viewer_user_id)
+        batch_resolve_channel_names(&ctx.db, &unique_channel_ids, viewer_user_id.clone())
             .await
             .map_err(|e| SearchError::InternalError(e.into()))?;
 
@@ -110,16 +110,19 @@ pub(in crate::api::search) async fn enrich_call_records(
             });
     }
 
-    // Fetch call properties (e.g. tags) so rows can render and re-check them,
-    // mirroring the documents/emails/chats enrichment.
+    // Fetch each call's tags so rows can render and re-check them. Scope to the
+    // viewer (like the soup path) so another user's personal tags never leak
+    // into the response.
     let call_entity_refs: Vec<EntityReference> = call_ids
         .iter()
         .map(|id| EntityReference::new(id.to_string(), EntityType::CallRecord))
         .collect();
     let properties_map: HashMap<String, Vec<SoupProperty>> =
-        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             &ctx.db,
             &call_entity_refs,
+            &[],
+            Some(&viewer_user_id),
         )
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to fetch call record properties"))
