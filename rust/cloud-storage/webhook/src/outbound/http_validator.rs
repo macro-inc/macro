@@ -5,7 +5,7 @@
 mod http_validator_test;
 
 use crate::domain::{
-    models::{Webhook, WebhookValidationResult},
+    models::{Webhook, WebhookEndpointSchemePolicy, WebhookValidationResult},
     ports::WebhookValidationClient,
 };
 use hmac::{Hmac, Mac};
@@ -24,17 +24,28 @@ type HmacSha256 = Hmac<Sha256>;
 #[derive(Clone)]
 pub struct ReqwestWebhookValidationClient {
     pub(super) client: Client,
+    pub(super) endpoint_scheme_policy: WebhookEndpointSchemePolicy,
 }
 
 impl ReqwestWebhookValidationClient {
-    /// Create a validation client with the required webhook delivery limits.
+    /// Create a validation client that requires public HTTPS endpoints.
     pub fn new() -> Result<Self, reqwest::Error> {
+        Self::new_with_endpoint_scheme_policy(WebhookEndpointSchemePolicy::HttpsOnly)
+    }
+
+    /// Create a validation client with an explicit endpoint policy.
+    pub fn new_with_endpoint_scheme_policy(
+        endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    ) -> Result<Self, reqwest::Error> {
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .redirect(Policy::none())
             .build()?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            endpoint_scheme_policy,
+        })
     }
 }
 
@@ -45,7 +56,12 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
         &self,
         webhook: Webhook,
     ) -> Result<WebhookValidationResult, Self::Err> {
-        let url = match validate_resolved_endpoint_url(&webhook.endpoint_url).await {
+        let url = match validate_resolved_endpoint_url(
+            &webhook.endpoint_url,
+            self.endpoint_scheme_policy,
+        )
+        .await
+        {
             Ok(url) => url,
             Err(error) => return Ok(failure(None, error.message())),
         };
@@ -139,8 +155,9 @@ impl EndpointValidationError {
 
 pub(super) async fn validate_resolved_endpoint_url(
     value: &str,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
 ) -> Result<Url, EndpointValidationError> {
-    let url = validate_endpoint_url(value)?;
+    let url = validate_endpoint_url(value, endpoint_scheme_policy)?;
     let Some(host) = url.host_str().map(str::to_owned) else {
         return Err(EndpointValidationError::InvalidConfiguration(
             "webhook endpoint URL host is invalid",
@@ -169,7 +186,7 @@ pub(super) async fn validate_resolved_endpoint_url(
     let mut saw_address = false;
     for address in resolved.by_ref() {
         saw_address = true;
-        if is_blocked_ip(address.ip()) {
+        if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_ip(address.ip()) {
             return Err(EndpointValidationError::InvalidConfiguration(
                 "webhook endpoint host resolves to a disallowed address",
             ));
@@ -185,11 +202,14 @@ pub(super) async fn validate_resolved_endpoint_url(
     Ok(url)
 }
 
-fn validate_endpoint_url(value: &str) -> Result<Url, EndpointValidationError> {
+fn validate_endpoint_url(
+    value: &str,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+) -> Result<Url, EndpointValidationError> {
     let url = Url::parse(value).map_err(|_| {
         EndpointValidationError::InvalidConfiguration("webhook endpoint URL is invalid")
     })?;
-    if url.scheme() != "https" {
+    if !endpoint_scheme_policy.allows(url.scheme()) {
         return Err(EndpointValidationError::InvalidConfiguration(
             "webhook endpoint URL must use HTTPS",
         ));
@@ -201,7 +221,7 @@ fn validate_endpoint_url(value: &str) -> Result<Url, EndpointValidationError> {
         ));
     };
 
-    if is_blocked_host(host) {
+    if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_host(host) {
         return Err(EndpointValidationError::InvalidConfiguration(
             "webhook endpoint host is not allowed",
         ));

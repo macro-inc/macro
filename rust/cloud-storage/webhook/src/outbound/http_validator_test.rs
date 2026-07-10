@@ -38,28 +38,66 @@ fn signs_timestamp_and_raw_body() {
 
 #[test]
 fn rejects_non_https_endpoint() {
-    let error = validate_endpoint_url("http://example.com/webhook").expect_err("http is invalid");
+    let error = validate_endpoint_url(
+        "http://example.com/webhook",
+        WebhookEndpointSchemePolicy::HttpsOnly,
+    )
+    .expect_err("http is invalid");
 
     assert_eq!(error.message(), "webhook endpoint URL must use HTTPS");
 }
 
 #[test]
+fn allows_local_http_endpoints_when_policy_permits_them() {
+    let policy = WebhookEndpointSchemePolicy::HttpAndHttps;
+
+    for value in [
+        "http://localhost/webhook",
+        "http://127.0.0.1/webhook",
+        "http://10.1.2.3/webhook",
+        "http://[::1]/webhook",
+        "http://[fe80::1]/webhook",
+    ] {
+        let url = validate_endpoint_url(value, policy).expect("local endpoint should be allowed");
+
+        assert_eq!(url.scheme(), "http");
+    }
+}
+
+#[test]
 fn rejects_localhost_and_private_ips() {
-    assert!(validate_endpoint_url("https://localhost/webhook").is_err());
-    assert!(validate_endpoint_url("https://127.0.0.1/webhook").is_err());
-    assert!(validate_endpoint_url("https://10.1.2.3/webhook").is_err());
-    assert!(validate_endpoint_url("https://169.254.169.254/latest/meta-data").is_err());
-    assert!(validate_endpoint_url("https://[::1]/webhook").is_err());
-    assert!(validate_endpoint_url("https://[fe80::1]/webhook").is_err());
+    let policy = WebhookEndpointSchemePolicy::HttpsOnly;
+
+    assert!(validate_endpoint_url("https://localhost/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://127.0.0.1/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://10.1.2.3/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://169.254.169.254/latest/meta-data", policy).is_err());
+    assert!(validate_endpoint_url("https://[::1]/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://[fe80::1]/webhook", policy).is_err());
 }
 
 #[tokio::test]
 async fn rejects_hosts_that_resolve_to_blocked_addresses() {
-    let error = validate_resolved_endpoint_url("https://localhost/webhook")
-        .await
-        .expect_err("localhost is invalid");
+    let error = validate_resolved_endpoint_url(
+        "https://localhost/webhook",
+        WebhookEndpointSchemePolicy::HttpsOnly,
+    )
+    .await
+    .expect_err("localhost is invalid");
 
     assert_eq!(error.message(), "webhook endpoint host is not allowed");
+}
+
+#[tokio::test]
+async fn allows_localhost_resolution_when_policy_permits_it() {
+    let url = validate_resolved_endpoint_url(
+        "http://localhost/webhook",
+        WebhookEndpointSchemePolicy::HttpAndHttps,
+    )
+    .await
+    .expect("localhost should resolve");
+
+    assert_eq!(url.host_str(), Some("localhost"));
 }
 
 #[test]
@@ -71,7 +109,11 @@ fn blocks_ipv6_link_local_addresses() {
 
 #[test]
 fn accepts_public_https_endpoint() {
-    let url = validate_endpoint_url("https://example.com/webhook").expect("public https is valid");
+    let url = validate_endpoint_url(
+        "https://example.com/webhook",
+        WebhookEndpointSchemePolicy::HttpsOnly,
+    )
+    .expect("public https is valid");
 
     assert_eq!(url.host_str(), Some("example.com"));
 }

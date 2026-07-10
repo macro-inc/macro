@@ -583,12 +583,22 @@ async fn main() -> anyhow::Result<()> {
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
-    let webhook_http_client = webhook::outbound::ReqwestWebhookDeliveryClient::new()
+    let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
+        webhook::domain::models::WebhookEndpointSchemePolicy::HttpAndHttps
+    } else {
+        webhook::domain::models::WebhookEndpointSchemePolicy::HttpsOnly
+    };
+    let webhook_http_client =
+        webhook::outbound::ReqwestWebhookDeliveryClient::new_with_endpoint_scheme_policy(
+            webhook_endpoint_scheme_policy,
+        )
         .context("failed to create webhook HTTP client")?;
-    let webhook_service = webhook::domain::service::WebhookServiceImpl::new(
-        webhook_repository.clone(),
-        webhook_http_client.clone(),
-    );
+    let webhook_service =
+        webhook::domain::service::WebhookServiceImpl::new_with_endpoint_scheme_policy(
+            webhook_repository.clone(),
+            webhook_http_client.clone(),
+            webhook_endpoint_scheme_policy,
+        );
     let webhook_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
             redis: redis_client.clone(),

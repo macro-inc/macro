@@ -58,7 +58,12 @@ impl WebhookDeliveryClient for ReqwestWebhookValidationClient {
                 ));
             }
         };
-        let url = match validate_resolved_endpoint_url(&webhook.endpoint_url).await {
+        let url = match validate_resolved_endpoint_url(
+            &webhook.endpoint_url,
+            self.endpoint_scheme_policy,
+        )
+        .await
+        {
             Ok(url) => url,
             Err(error) => return Ok(endpoint_failure(started_at.elapsed(), error)),
         };

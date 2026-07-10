@@ -328,6 +328,28 @@ pub enum WebhookScope {
     Team,
 }
 
+/// Endpoint restrictions applied to webhook URLs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WebhookEndpointSchemePolicy {
+    /// Require HTTPS endpoints with public addresses.
+    #[default]
+    HttpsOnly,
+    /// Allow HTTP and non-public addresses for local testing.
+    HttpAndHttps,
+}
+
+impl WebhookEndpointSchemePolicy {
+    /// Return whether the URL scheme is permitted by this policy.
+    pub fn allows(self, scheme: &str) -> bool {
+        scheme == "https" || (self == Self::HttpAndHttps && scheme == "http")
+    }
+
+    /// Return whether localhost, loopback, private, and link-local addresses are permitted.
+    pub fn allows_local_addresses(self) -> bool {
+        self == Self::HttpAndHttps
+    }
+}
+
 /// Request to create a webhook.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -336,7 +358,7 @@ pub struct CreateWebhookRequest {
     pub scope: WebhookScope,
     /// Display name.
     pub name: String,
-    /// HTTPS endpoint URL.
+    /// Endpoint URL. HTTPS is required outside local environments.
     pub endpoint_url: String,
     /// Optional custom delivery headers.
     pub headers: Option<WebhookHeaders>,
@@ -350,7 +372,7 @@ pub struct CreateWebhookRequest {
 pub struct PatchWebhookRequest {
     /// Display name.
     pub name: Option<String>,
-    /// HTTPS endpoint URL.
+    /// Endpoint URL. HTTPS is required outside local environments.
     pub endpoint_url: Option<String>,
     /// Optional custom delivery headers. When present, replaces existing headers.
     pub headers: Option<WebhookHeaders>,
@@ -370,7 +392,7 @@ pub struct Webhook {
     pub workspace_id: String,
     /// Display name.
     pub name: String,
-    /// HTTPS endpoint URL.
+    /// Endpoint URL. HTTPS is required outside local environments.
     pub endpoint_url: String,
     /// Signing secret used by outbound adapters. This is never serialized by APIs.
     #[serde(default, skip_serializing)]
