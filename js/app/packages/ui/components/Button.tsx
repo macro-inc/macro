@@ -36,7 +36,15 @@ export type ButtonProps = ButtonRootProps<'button'> &
     tooltipDisabled?: boolean;
   };
 
-export type ButtonSize = 'xs' | 'icon-xs' | 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
+export type ButtonSize =
+  | 'xs'
+  | 'icon-xs'
+  | 'sm'
+  | 'icon-sm'
+  | 'md'
+  | 'icon-md'
+  | 'lg'
+  | 'icon-lg';
 
 export type ButtonVariant =
   | 'ghost'
