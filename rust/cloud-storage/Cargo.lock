@@ -14863,7 +14863,6 @@ name = "webhook"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-sdk-sqs",
  "axum",
  "axum-extra",
  "channel_sender",
@@ -14890,6 +14889,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
+ "sqs_client",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",

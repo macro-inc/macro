@@ -199,8 +199,9 @@ Webhook receivers should use `X-Macro-Event-Id` as an idempotency key.
 | Production | `webhook-event-queue-prod.fifo` |
 
 `OVERRIDE_WEBHOOK_EVENT_QUEUE` takes precedence over the environment default.
-The webhook crate's `outbound::SqsWebhookQueue` owns FIFO sends, polling,
-acknowledgment, and visibility changes; the shared `sqs_client` is unchanged.
+The webhook crate's `outbound::SqsWebhookQueue` wraps the shared
+`sqs_client::SQS` and owns webhook-specific FIFO serialization, polling,
+acknowledgment, and visibility changes.
 Set the override to the full queue URL when connecting to LocalStack. From the
 repository root, the canonical local orchestrator provisions the FIFO queue and
 exports this value automatically:

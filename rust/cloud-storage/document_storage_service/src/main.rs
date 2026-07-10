@@ -185,15 +185,15 @@ async fn main() -> anyhow::Result<()> {
     let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .search_event_queue(&search_event_queue)
+        .document_delete_queue(&document_delete_queue);
     let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
+        Arc::new(sqs_client.clone()),
         macro_queues::WebhookEventQueue::new().to_string(),
         config.webhook_queue_max_messages,
         config.webhook_queue_wait_time_seconds,
     );
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&search_event_queue)
-        .document_delete_queue(&document_delete_queue);
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(

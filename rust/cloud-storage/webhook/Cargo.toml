@@ -35,13 +35,13 @@ ingestion = [
   "ports",
 ]
 outbound = [
-  "dep:aws-sdk-sqs",
   "dep:hex",
   "dep:hmac",
   "dep:reqwest",
   "dep:sha2",
   "dep:macro_uuid",
   "dep:sqlx",
+  "dep:sqs_client",
   "dep:tokio",
   "dep:url",
   "ports",
@@ -51,7 +51,6 @@ worker = ["dep:tokio", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }
-aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
@@ -77,6 +76,7 @@ serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"], optional = true }
 tracing = { workspace = true }

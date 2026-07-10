@@ -4,10 +4,10 @@
 #[path = "sqs_queue_test.rs"]
 mod sqs_queue_test;
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{Context, ensure};
-use aws_sdk_sqs::types::Message;
+use sqs_client::{ReceivedMessage, SQS};
 
 use crate::domain::{
     models::{RawWebhookEventQueueMessage, WebhookEventQueueMessage},
@@ -19,7 +19,7 @@ const MAX_VISIBILITY_TIMEOUT_SECONDS: u64 = 12 * 60 * 60;
 /// SQS-backed implementation of webhook enqueueing and worker queue operations.
 #[derive(Clone)]
 pub struct SqsWebhookQueue {
-    client: aws_sdk_sqs::Client,
+    sqs: Arc<SQS>,
     queue_url: String,
     max_messages: i32,
     wait_time_seconds: i32,
@@ -28,13 +28,13 @@ pub struct SqsWebhookQueue {
 impl SqsWebhookQueue {
     /// Create a webhook queue adapter pointing at `queue_url`.
     pub fn new(
-        client: aws_sdk_sqs::Client,
+        sqs: Arc<SQS>,
         queue_url: String,
         max_messages: i32,
         wait_time_seconds: i32,
     ) -> Self {
         Self {
-            client,
+            sqs,
             queue_url,
             max_messages,
             wait_time_seconds,
@@ -56,13 +56,13 @@ impl WebhookEventEnqueuer for SqsWebhookQueue {
     async fn enqueue(&self, message: WebhookEventQueueMessage) -> Result<(), Self::Err> {
         let prepared = prepare_webhook_message(&message)?;
 
-        self.client
-            .send_message()
-            .queue_url(&self.queue_url)
-            .message_body(prepared.body)
-            .message_group_id(prepared.group_id)
-            .message_deduplication_id(prepared.deduplication_id)
-            .send()
+        self.sqs
+            .send_fifo_message(
+                &self.queue_url,
+                prepared.body,
+                prepared.group_id,
+                prepared.deduplication_id,
+            )
             .await?;
 
         Ok(())
@@ -74,30 +74,18 @@ impl WebhookEventQueue for SqsWebhookQueue {
 
     #[tracing::instrument(err, skip(self))]
     async fn receive_messages(&self) -> Result<Vec<RawWebhookEventQueueMessage>, Self::Err> {
-        let output = self
-            .client
-            .receive_message()
-            .queue_url(&self.queue_url)
-            .max_number_of_messages(self.max_messages)
-            .wait_time_seconds(self.wait_time_seconds)
-            .send()
+        let messages = self
+            .sqs
+            .receive_messages(&self.queue_url, self.max_messages, self.wait_time_seconds)
             .await?;
 
-        Ok(output
-            .messages
-            .unwrap_or_default()
-            .into_iter()
-            .map(raw_webhook_message)
-            .collect())
+        Ok(messages.into_iter().map(raw_webhook_message).collect())
     }
 
     #[tracing::instrument(err, skip(self, receipt_handle))]
     async fn delete_message(&self, receipt_handle: &str) -> Result<(), Self::Err> {
-        self.client
-            .delete_message()
-            .queue_url(&self.queue_url)
-            .receipt_handle(receipt_handle)
-            .send()
+        self.sqs
+            .delete_message(&self.queue_url, receipt_handle)
             .await?;
 
         Ok(())
@@ -111,12 +99,8 @@ impl WebhookEventQueue for SqsWebhookQueue {
     async fn delay_message(&self, receipt_handle: &str, delay: Duration) -> Result<(), Self::Err> {
         let visibility_timeout = visibility_timeout_seconds(delay)?;
 
-        self.client
-            .change_message_visibility()
-            .queue_url(&self.queue_url)
-            .receipt_handle(receipt_handle)
-            .visibility_timeout(visibility_timeout)
-            .send()
+        self.sqs
+            .change_message_visibility(&self.queue_url, receipt_handle, visibility_timeout)
             .await?;
 
         Ok(())
@@ -145,7 +129,7 @@ fn prepare_webhook_message(
     })
 }
 
-fn raw_webhook_message(message: Message) -> RawWebhookEventQueueMessage {
+fn raw_webhook_message(message: ReceivedMessage) -> RawWebhookEventQueueMessage {
     RawWebhookEventQueueMessage {
         message_id: message.message_id,
         body: message.body,
