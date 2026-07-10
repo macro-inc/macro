@@ -216,7 +216,8 @@ export function Hotkey(props: HotkeyProps) {
       <div
         {...rest}
         class={cn(
-          'inline-flex items-center gap-1',
+          'inline-flex items-center',
+          local.showPlus ? 'gap-0.5' : 'gap-1',
           local.theme && 'rounded-sm px-1.5 py-px text-xxs',
           local.theme && hotkeyStyles[local.theme]?.hotkey,
           local.class
@@ -228,7 +229,7 @@ export function Hotkey(props: HotkeyProps) {
               <span>{modifierMap[mod as keyof typeof modifierMap] || mod}</span>
 
               <Show when={local.showPlus}>
-                <span> + </span>
+                <span>+</span>
               </Show>
             </>
           )}

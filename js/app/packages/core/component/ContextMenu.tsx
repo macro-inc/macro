@@ -98,6 +98,7 @@ type BaseMenuItemProps = {
   closeOnSelect?: boolean;
   class?: string;
   hotkeyToken?: HotkeyToken;
+  shortcut?: string;
 };
 
 type CheckboxMenuItemProps = BaseMenuItemProps & {
@@ -208,14 +209,16 @@ export function MenuItem(props: MenuItemProps) {
         </Show>
       </Show>
       <Show when={props.text}>
-        <div class="flex-1 truncate">{props.text}</div>
+        <div class="flex-1 truncate pr-[2em]">{props.text}</div>
       </Show>
-      <Show when={props.hotkeyToken} keyed>
-        {(hotkeyToken) => (
-          <div class="ml-auto text-surface text-xs">
-            <Hotkey token={hotkeyToken} class="text-ink-muted" showPlus />
-          </div>
-        )}
+      <Show when={props.hotkeyToken || props.shortcut}>
+        <Hotkey
+          token={props.hotkeyToken}
+          shortcut={props.shortcut}
+          class="ml-auto"
+          theme="subtle"
+          showPlus
+        />
       </Show>
     </MenuItemWrapper>
   );
