@@ -870,9 +870,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
             <InboxCard.Content
               class={cn(
                 'text-sm text-ink/60',
-                isLatestNotificationReply()
-                  ? 'truncate'
-                  : 'line-clamp-2'
+                isLatestNotificationReply() ? 'truncate' : 'line-clamp-2'
               )}
             >
               <Show when={!isDM()}>
