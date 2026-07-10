@@ -2,7 +2,7 @@ import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog, Panel } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   type SplitFileMenuActionGroups,
@@ -26,6 +26,14 @@ type PopoverSplitData = {
   isOpen: boolean;
   options: PopoverSplitOptions;
 };
+
+function PopoverLoading() {
+  return (
+    <div class="flex h-64 min-w-80 items-center justify-center p-4">
+      <div class="h-2 w-full animate-pulse rounded-full bg-edge-muted/50" />
+    </div>
+  );
+}
 
 export function PopoverSplitRenderer(props: {
   popovers: () => Map<string, PopoverSplitData>;
@@ -157,7 +165,9 @@ function PopoverSplitModal(props: {
           <SoupContextProvider>
             <Show when={props.popover.mount}>
               <Panel.Body>
-                <Dynamic component={props.popover.mount.element} />
+                <Suspense fallback={<PopoverLoading />}>
+                  <Dynamic component={props.popover.mount.element} />
+                </Suspense>
               </Panel.Body>
             </Show>
           </SoupContextProvider>

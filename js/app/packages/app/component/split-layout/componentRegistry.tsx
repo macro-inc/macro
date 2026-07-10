@@ -6,8 +6,6 @@ import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter
 import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
-import { ChannelCompose } from '@block-channel/component/Compose';
-import { ComposeTask } from '@block-md/component/ComposeTask';
 import {
   CRM_VIEW_URL_PARAM,
   type CrmViewConfig,
@@ -24,8 +22,6 @@ import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
-import { EmailCompose } from '../../../block-email/component/compose/Compose';
-import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 
@@ -350,6 +346,22 @@ registerComponent(
 );
 /** END - APP ROUTES */
 
+const ChannelCompose = lazy(() =>
+  import('@block-channel/component/Compose').then((module) => ({
+    default: module.ChannelCompose,
+  }))
+);
+const EmailCompose = lazy(() =>
+  import('../../../block-email/component/compose/Compose').then((module) => ({
+    default: module.EmailCompose,
+  }))
+);
+const ComposeTask = lazy(() =>
+  import('@block-md/component/ComposeTask').then((module) => ({
+    default: module.ComposeTask,
+  }))
+);
+
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
@@ -367,7 +379,14 @@ registerComponent(
   'import-linear',
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsPanelComponentWrapper />);
+registerComponent(
+  'settings',
+  lazy(() =>
+    import('../settings/Settings').then((module) => ({
+      default: module.SettingsPanelComponentWrapper,
+    }))
+  )
+);
 
 if (LOCAL_ONLY) {
   registerComponent(

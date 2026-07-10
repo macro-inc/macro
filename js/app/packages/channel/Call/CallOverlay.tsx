@@ -4,7 +4,7 @@ import { useAuthor, useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
-import { type RemoteParticipant, Track } from 'livekit-client';
+import type { RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
@@ -12,6 +12,7 @@ import {
   CALL_PANEL_MEDIUM_NARROW_PX,
   CALL_PANEL_VERY_NARROW_PX,
 } from './call-panel-breakpoints';
+import { LK_TRACK_SOURCE } from './livekit-loader';
 import { TrackView } from './TrackView';
 import { useToggleShareWithTeam } from './use-toggle-share-with-team';
 
@@ -146,7 +147,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
 
   const cameraTrack = () => {
     callCtx.trackVersion();
-    const pub = props.participant.getTrackPublication(Track.Source.Camera);
+    const pub = props.participant.getTrackPublication(LK_TRACK_SOURCE.Camera);
     return pub?.isSubscribed && !pub.isMuted ? pub.track : undefined;
   };
 
@@ -188,7 +189,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   const [displayName] = useDisplayName(macroId());
   const screenTrack = () => {
     callCtx.trackVersion();
-    return props.participant.getTrackPublication(Track.Source.ScreenShare)
+    return props.participant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
       ?.track;
   };
 
@@ -232,21 +233,22 @@ export function CallOverlay(props: { onLeave: () => void }) {
     callCtx.trackVersion();
     const r = callCtx.room();
     if (!r || callCtx.isVideoMuted()) return undefined;
-    return r.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+    return r.localParticipant.getTrackPublication(LK_TRACK_SOURCE.Camera)
+      ?.track;
   };
 
   const localScreenTrack = () => {
     callCtx.trackVersion();
     const r = callCtx.room();
     if (!r || !callCtx.isScreenSharing()) return undefined;
-    return r.localParticipant.getTrackPublication(Track.Source.ScreenShare)
+    return r.localParticipant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
       ?.track;
   };
 
   const remoteScreenShares = () => {
     callCtx.trackVersion();
     return participants().filter((p) => {
-      const pub = p.getTrackPublication(Track.Source.ScreenShare);
+      const pub = p.getTrackPublication(LK_TRACK_SOURCE.ScreenShare);
       return !!pub?.track && pub.isSubscribed && !pub.isMuted;
     });
   };

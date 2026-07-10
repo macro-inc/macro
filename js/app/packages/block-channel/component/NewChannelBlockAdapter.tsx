@@ -7,16 +7,14 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
-import {
-  CallEventSync,
-  ChannelCallAutoJoin,
-  ChannelCallButton,
-  ChannelCallTab,
-  getCallJoinTab,
-  isNativeIosCallKitEnabled,
-  useCall,
-  useCallContextOptional,
-} from '@channel/Call';
+import { useCallContextOptional } from '@channel/Call/CallContext';
+import { CallEventSync } from '@channel/Call/CallEventSync';
+import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
+import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
+import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
+import { getCallJoinTab } from '@channel/Call/call-tabs';
+import { useCall } from '@channel/Call/use-call';
+import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
 import {
   type ChannelHandle,
   type ChannelMessagesStateSnapshot,

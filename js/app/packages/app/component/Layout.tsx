@@ -11,14 +11,16 @@ import {
 } from '@app/component/sidebarVisibility';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { AutomationComposer } from '@block-automation/component';
-import { InCallPanel, useCallContextOptional } from '@channel/Call';
+import { automationComposerOpen } from '@block-automation/component/automationComposerState';
+import { useCallContextOptional } from '@channel/Call/CallContext';
+import { InCallPanel } from '@channel/Call/InCallPanel';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { getPlatform } from '@core/util/platform';
 import { makePersisted } from '@solid-primitives/storage';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui';
@@ -29,6 +31,7 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  lazy,
   onCleanup,
   onMount,
   Show,
@@ -46,7 +49,6 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { GmailReauthenticationPrompt } from './GmailReauthenticationPrompt';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
-import { IosShareSheet } from './ios-share-sheet/IosShareSheet';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -58,6 +60,18 @@ import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+
+const AutomationComposer = lazy(() =>
+  import('@block-automation/component/AutomationComposer').then((module) => ({
+    default: module.AutomationComposer,
+  }))
+);
+
+const IosShareSheet = lazy(() =>
+  import('./ios-share-sheet/IosShareSheet').then((module) => ({
+    default: module.IosShareSheet,
+  }))
+);
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -233,6 +247,13 @@ function LayoutInner(props: RouteSectionProps) {
   const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
     createSignal(false);
   const callCtx = useCallContextOptional();
+  // Preserve the composer's original mounted lifetime after its first open.
+  // This keeps debounced draft saves and in-flight mutations alive on close
+  // while still avoiding the editor chunk during initial startup.
+  const automationComposerMounted = createMemo(
+    (mounted) => mounted || automationComposerOpen(),
+    false
+  );
   const sidebarCollapsed = createMemo(
     () => isSidebarVisible() && sidebarState() === 'slim'
   );
@@ -322,7 +343,9 @@ function LayoutInner(props: RouteSectionProps) {
           </Suspense>
           <GlobalBulkEditEntityModal />
           <GlobalShareModal />
-          <IosShareSheet />
+          <Show when={getPlatform() === 'ios'}>
+            <IosShareSheet />
+          </Show>
           <MacroMcpSetupModal />
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
@@ -425,7 +448,9 @@ function LayoutInner(props: RouteSectionProps) {
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-          <AutomationComposer />
+          <Show when={automationComposerMounted()}>
+            <AutomationComposer />
+          </Show>
         </Show>
       </Suspense>
       <DevStatusBar />

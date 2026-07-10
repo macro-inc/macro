@@ -1,18 +1,14 @@
 import { analytics } from '@app/lib/analytics';
-import {
-  isKrispNoiseFilterSupported,
-  KrispNoiseFilter,
-} from '@livekit/krisp-noise-filter';
+import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import type { CallTokenResponse } from '@service-call/client';
 import { makePersisted } from '@solid-primitives/storage';
-import {
-  type AudioCaptureOptions,
+import type {
+  AudioCaptureOptions,
   ConnectionState,
-  type LocalTrack,
-  type RemoteParticipant,
+  LocalTrack,
+  RemoteParticipant,
   Room,
-  Track,
 } from 'livekit-client';
 import {
   createContext,
@@ -28,11 +24,26 @@ import {
   type CallSessionDisconnectOptions,
   createCallSessionController,
 } from './CallSessionController';
-import { createLivekitJsCallController } from './LivekitJsCallController';
+import {
+  getKrisp,
+  getLivekit,
+  isKrispSupported,
+  LK_CONNECTION_STATE,
+  LK_TRACK_SOURCE,
+  loadKrisp,
+  loadLivekit,
+} from './livekit-loader';
 import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+
+type LivekitJsCallController = ReturnType<
+  typeof import('./LivekitJsCallController')['createLivekitJsCallController']
+>;
+type LivekitJsCallControllerOptions = Parameters<
+  typeof import('./LivekitJsCallController')['createLivekitJsCallController']
+>[0];
 
 export type CallParticipantInfo = {
   identity: string;
@@ -110,7 +121,7 @@ function normalizeNoiseSuppressionMode(
 function effectiveCaptureModeForPreferredMode(
   mode: MicNoiseSuppressionMode
 ): MicNoiseSuppressionMode {
-  if (mode === 'krisp' && !isKrispNoiseFilterSupported()) return 'browser';
+  if (mode === 'krisp' && !isKrispSupported()) return 'browser';
   return mode;
 }
 
@@ -177,16 +188,16 @@ function nativeAudioProcessingConstraints(
 }
 
 function getLocalMicTrack(r: Room): LocalTrack | undefined {
-  return r.localParticipant.getTrackPublication(Track.Source.Microphone)
+  return r.localParticipant.getTrackPublication(LK_TRACK_SOURCE.Microphone)
     ?.track as LocalTrack | undefined;
 }
 
 function isActiveCallConnectionState(state: ConnectionState): boolean {
   return (
-    state === ConnectionState.Connecting ||
-    state === ConnectionState.Connected ||
-    state === ConnectionState.Reconnecting ||
-    state === ConnectionState.SignalReconnecting
+    state === LK_CONNECTION_STATE.Connecting ||
+    state === LK_CONNECTION_STATE.Connected ||
+    state === LK_CONNECTION_STATE.Reconnecting ||
+    state === LK_CONNECTION_STATE.SignalReconnecting
   );
 }
 
@@ -214,11 +225,11 @@ async function applyNativeAudioProcessingToMicTrack(
 
 // Swift exposes a transient `disconnecting` state that livekit-client lacks.
 const NATIVE_TO_LIVEKIT_STATE = {
-  disconnected: ConnectionState.Disconnected,
-  connecting: ConnectionState.Connecting,
-  connected: ConnectionState.Connected,
-  reconnecting: ConnectionState.Reconnecting,
-  disconnecting: ConnectionState.Disconnected,
+  disconnected: LK_CONNECTION_STATE.Disconnected,
+  connecting: LK_CONNECTION_STATE.Connecting,
+  connected: LK_CONNECTION_STATE.Connected,
+  reconnecting: LK_CONNECTION_STATE.Reconnecting,
+  disconnecting: LK_CONNECTION_STATE.Disconnected,
 } satisfies Record<NativeCallConnectionState, ConnectionState>;
 
 type CallStoreState = {
@@ -250,7 +261,7 @@ type CallStoreState = {
 };
 
 const initialState: CallStoreState = {
-  connectionState: ConnectionState.Disconnected,
+  connectionState: LK_CONNECTION_STATE.Disconnected,
   activeChannelId: null,
   activeCallId: null,
   remoteParticipants: new Map(),
@@ -503,7 +514,7 @@ function createCallState() {
       event,
       preferredMode: persistedNoiseSuppressionMode(),
       activeMode: store.noiseSuppressionMode,
-      krispSupported: isKrispNoiseFilterSupported(),
+      krispSupported: isKrispSupported(),
       hasMicTrack: !!micTrack,
       micReadyState: mediaStreamTrack?.readyState,
       hasProcessor: !!micTrack?.getProcessor(),
@@ -531,7 +542,7 @@ function createCallState() {
       callId: store.activeCallId ?? undefined,
       preferredMode: persistedNoiseSuppressionMode(),
       activeMode: store.noiseSuppressionMode,
-      krispSupported: isKrispNoiseFilterSupported(),
+      krispSupported: isKrispSupported(),
       hasProcessor: !!micTrack?.getProcessor(),
       constraintMismatch,
       autoGainControl: settings?.autoGainControl,
@@ -586,14 +597,33 @@ function createCallState() {
     const micTrack = getLocalMicTrack(r);
     if (!isLiveLocalTrack(micTrack)) return;
 
-    if (preferredMode === 'browser' || !isKrispNoiseFilterSupported()) {
+    if (preferredMode === 'browser') {
       setStore('noiseSuppressionMode', 'browser');
       await detachKrispFromMicTrack(r);
       if (room() !== r) return;
       await applyNativeAudioProcessingToMicTrack(r, 'browser');
       if (room() !== r) return;
       logMicAudioProcessing('browser-noise-suppression-enabled', r, {
-        reason: preferredMode === 'browser' ? 'preferred' : 'krisp-unsupported',
+        reason: 'preferred',
+      });
+      return;
+    }
+
+    // Resolve Krisp before deciding whether the persisted preference can be
+    // honored. Import/load failures intentionally fall back to browser-native
+    // processing instead of failing call setup.
+    await loadKrisp().catch(() => null);
+    if (room() !== r || !isLiveLocalTrack(micTrack)) return;
+
+    const krispModule = getKrisp();
+    if (!krispModule || !krispModule.isKrispNoiseFilterSupported()) {
+      setStore('noiseSuppressionMode', 'browser');
+      await detachKrispFromMicTrack(r);
+      if (room() !== r) return;
+      await applyNativeAudioProcessingToMicTrack(r, 'browser');
+      if (room() !== r) return;
+      logMicAudioProcessing('browser-noise-suppression-enabled', r, {
+        reason: 'krisp-unsupported',
       });
       return;
     }
@@ -620,7 +650,7 @@ function createCallState() {
       // `quality` is model size/CPU cost, not suppression strength. The default
       // medium model avoids the CPU pressure/dropouts that made voices sound
       // muddy on busy machines while still enabling Krisp when supported.
-      const krisp = KrispNoiseFilter({ quality: 'medium' });
+      const krisp = krispModule.KrispNoiseFilter({ quality: 'medium' });
       setKrispFilter(krisp);
       await micTrack.setProcessor(krisp);
       if (room() !== r || !isLiveLocalTrack(micTrack)) {
@@ -695,7 +725,9 @@ function createCallState() {
     const effect = store.backgroundEffect;
     if (effect.type === 'none') return true;
 
-    const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+    const camPub = r.localParticipant.getTrackPublication(
+      LK_TRACK_SOURCE.Camera
+    );
     const camTrack = camPub?.track as LocalTrack | undefined;
     if (!isLiveLocalTrack(camTrack)) return true;
 
@@ -754,7 +786,7 @@ function createCallState() {
     if (prev) {
       try {
         const camPub = r.localParticipant.getTrackPublication(
-          Track.Source.Camera
+          LK_TRACK_SOURCE.Camera
         );
         if (camPub?.track) {
           await (camPub.track as LocalTrack).stopProcessor();
@@ -804,6 +836,12 @@ function createCallState() {
   // --- device enumeration ---
 
   async function enumerateDevices() {
+    // Device lists are only consumed after a browser call has loaded LiveKit.
+    // Native calls own device selection outside this JS context.
+    const livekitModule = getLivekit();
+    if (!livekitModule) return;
+    const { Room } = livekitModule;
+
     try {
       const devices = await Room.getLocalDevices('audioinput');
       setStore(
@@ -849,7 +887,7 @@ function createCallState() {
 
   function trackActiveDevices(r: Room) {
     const micPub = r.localParticipant.getTrackPublication(
-      Track.Source.Microphone
+      LK_TRACK_SOURCE.Microphone
     );
     if (micPub?.track) {
       const settings = (
@@ -876,7 +914,9 @@ function createCallState() {
     // Only set the active video device when we can read it from a live track.
     // When video is off we leave it null — guessing would show the wrong
     // selection if the browser's default differs from the first enumerated device.
-    const camPub = r.localParticipant.getTrackPublication(Track.Source.Camera);
+    const camPub = r.localParticipant.getTrackPublication(
+      LK_TRACK_SOURCE.Camera
+    );
     if (camPub?.track) {
       const settings = (
         camPub.track as LocalTrack
@@ -993,9 +1033,9 @@ function createCallState() {
       (nativeCall?.bootstrapChannelId() ?? null) !== null) ||
     (currentNativeCallSnapshot() === null &&
       store.optimisticJoinChannelId !== null) ||
-    currentConnectionState() === ConnectionState.Connecting ||
-    currentConnectionState() === ConnectionState.Reconnecting ||
-    currentConnectionState() === ConnectionState.SignalReconnecting;
+    currentConnectionState() === LK_CONNECTION_STATE.Connecting ||
+    currentConnectionState() === LK_CONNECTION_STATE.Reconnecting ||
+    currentConnectionState() === LK_CONNECTION_STATE.SignalReconnecting;
 
   const currentJoinError = () =>
     currentNativeCallSnapshot() ? null : store.joinError;
@@ -1036,7 +1076,37 @@ function createCallState() {
     trackActiveDevices(targetRoom);
   }
 
-  const livekitJs = createLivekitJsCallController({
+  // Create the browser controller on first use. LiveKit gates signaling;
+  // Krisp deliberately does not, because its much larger chunk is optional
+  // media enhancement and finishLocalMediaSetup already runs in the background.
+  let livekitJs: LivekitJsCallController | null = null;
+  let livekitJsPromise: Promise<LivekitJsCallController> | null = null;
+  let browserConnectGeneration = 0;
+  let disposed = false;
+
+  function getLivekitJsController(): Promise<LivekitJsCallController> {
+    if (livekitJsPromise) return livekitJsPromise;
+
+    livekitJsPromise = Promise.all([
+      import('./LivekitJsCallController'),
+      loadLivekit(),
+    ])
+      .then(([module]) => {
+        if (disposed) {
+          throw new Error('Call provider disposed while LiveKit was loading');
+        }
+        livekitJs = module.createLivekitJsCallController(livekitJsOptions);
+        return livekitJs;
+      })
+      .catch((error: unknown) => {
+        livekitJsPromise = null;
+        throw error;
+      });
+
+    return livekitJsPromise;
+  }
+
+  const livekitJsOptions: LivekitJsCallControllerOptions = {
     room,
     setRoom,
     state: () => ({
@@ -1076,12 +1146,25 @@ function createCallState() {
     bumpTrackVersion,
     bumpSpeakerVersion: () => setStore('speakerVersion', (v) => v + 1),
     setScreenSharing: (value) => setStore('isScreenSharing', value),
-  });
+  };
 
   const callSession = createCallSessionController({
     nativeCall,
-    jsConnect: livekitJs.connect,
-    jsDisconnect: livekitJs.disconnect,
+    jsConnect: async (tokenResponse) => {
+      const generation = ++browserConnectGeneration;
+      const controller = await getLivekitJsController();
+      if (disposed || generation !== browserConnectGeneration) return;
+      return controller.connect(tokenResponse);
+    },
+    jsDisconnect: async () => {
+      // Cancel a connect that is still waiting on its dynamic import. This is
+      // also reached by timeout/error recovery in useCall.
+      browserConnectGeneration += 1;
+      if (!livekitJsPromise) return;
+      const controller = await getLivekitJsController();
+      if (disposed) return;
+      return controller.disconnect();
+    },
     clearOptimisticJoin: () => {
       setStore('optimisticJoinChannelId', null);
       setStore('joinError', null);
@@ -1138,7 +1221,7 @@ function createCallState() {
         );
         // Read the actual device the browser chose so the dropdown is accurate
         const camPub = r.localParticipant.getTrackPublication(
-          Track.Source.Camera
+          LK_TRACK_SOURCE.Camera
         );
         if (camPub?.track) {
           const settings = (
@@ -1251,17 +1334,19 @@ function createCallState() {
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
-    livekitJs.disconnectBeforeUnload();
+    livekitJs?.disconnectBeforeUnload();
   };
   window.addEventListener('beforeunload', handleBeforeUnload);
 
   onCleanup(() => {
+    disposed = true;
+    browserConnectGeneration += 1;
     window.removeEventListener('beforeunload', handleBeforeUnload);
     navigator.mediaDevices?.removeEventListener(
       'devicechange',
       handleDeviceChange
     );
-    livekitJs.dispose();
+    livekitJs?.dispose();
   });
 
   // --- public API ---

@@ -143,7 +143,6 @@ import type { TypedSuccessResponse } from './generated/schemas/typedSuccessRespo
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
-import { saveDocumentHandlerResponse } from './generated/zod';
 import type {
   GetDocumentPermissionsTokenResponse,
   StorageServiceClient,
@@ -154,6 +153,43 @@ import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
 } from './util/getDocxFile';
+
+// The generated module constructs every storage schema at import time. Only
+// one response schema is needed here; resolve it before each mutating save so
+// a stale chunk can fail safely without misreporting a committed write.
+type StorageZodModule = typeof import('./generated/zod');
+type SavedDocumentMetadataSchema =
+  StorageZodModule['saveDocumentHandlerResponse']['shape']['data']['shape']['documentMetadata'];
+
+let savedDocumentMetadataSchemaPromise: Promise<SavedDocumentMetadataSchema> | null =
+  null;
+
+function getSavedDocumentMetadataSchema(): Promise<SavedDocumentMetadataSchema> {
+  savedDocumentMetadataSchemaPromise ??= import('./generated/zod')
+    .then(
+      (module) =>
+        module.saveDocumentHandlerResponse.shape.data.shape.documentMetadata
+    )
+    .catch((error: unknown) => {
+      savedDocumentMetadataSchemaPromise = null;
+      throw error;
+    });
+  return savedDocumentMetadataSchemaPromise;
+}
+
+async function getSavedDocumentMetadataSchemaResult() {
+  try {
+    return ok(await getSavedDocumentMetadataSchema());
+  } catch (error) {
+    console.error('Failed to load document metadata validator', error);
+    return err([
+      {
+        code: 'INVALID_RESPONSE' as const,
+        message: 'Unable to load document metadata validator',
+      },
+    ]);
+  }
+}
 
 function normalizeLocationResponseV3(response: LocationResponseV3) {
   return response;
@@ -1647,6 +1683,11 @@ export const storageServiceClient = {
       ]);
     }
 
+    // Resolve the validator before the mutating request. A stale lazy chunk
+    // must never make an already-committed save look like it failed.
+    const metadataSchemaResult = await getSavedDocumentMetadataSchemaResult();
+    if (metadataSchemaResult.isErr()) return err(metadataSchemaResult.error);
+    const metadataSchema = metadataSchemaResult.value;
     const body = `{ "sha": "${sha}", "modificationData": ${modificationDataString} }`;
     const result = await dssFetch<{ data: SaveDocumentResponseData }>(
       `/documents/${documentId}`,
@@ -1659,10 +1700,7 @@ export const storageServiceClient = {
 
     const { data } = result.value;
 
-    const metadata =
-      saveDocumentHandlerResponse.shape.data.shape.documentMetadata.safeParse(
-        data.documentMetadata
-      );
+    const metadata = metadataSchema.safeParse(data.documentMetadata);
     if (!metadata.success) {
       return err([
         {
@@ -1675,6 +1713,9 @@ export const storageServiceClient = {
   },
 
   async simpleSave(params) {
+    const metadataSchemaResult = await getSavedDocumentMetadataSchemaResult();
+    if (metadataSchemaResult.isErr()) return err(metadataSchemaResult.error);
+    const metadataSchema = metadataSchemaResult.value;
     const formData = new FormData();
     formData.append('file', params.file);
 
@@ -1689,10 +1730,7 @@ export const storageServiceClient = {
 
     const { data } = result.value;
 
-    const metadata =
-      saveDocumentHandlerResponse.shape.data.shape.documentMetadata.safeParse(
-        data.documentMetadata
-      );
+    const metadata = metadataSchema.safeParse(data.documentMetadata);
     if (!metadata.success) {
       return err([
         {
@@ -1957,6 +1995,9 @@ export const storageServiceClient = {
   },
 
   async simpleSaveText(params) {
+    const metadataSchemaResult = await getSavedDocumentMetadataSchemaResult();
+    if (metadataSchemaResult.isErr()) return err(metadataSchemaResult.error);
+    const metadataSchema = metadataSchemaResult.value;
     const formData = new FormData();
     formData.append('file', new Blob([params.text], { type: params.mimeType }));
 
@@ -1971,10 +2012,7 @@ export const storageServiceClient = {
 
     const { data } = result.value;
 
-    const metadata =
-      saveDocumentHandlerResponse.shape.data.shape.documentMetadata.safeParse(
-        data.documentMetadata
-      );
+    const metadata = metadataSchema.safeParse(data.documentMetadata);
     if (!metadata.success) {
       return err([
         {

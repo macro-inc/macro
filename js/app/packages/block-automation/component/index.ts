@@ -1,6 +1,6 @@
 export { Automation } from './Automation';
+export { AutomationComposer } from './AutomationComposer';
 export {
-  AutomationComposer,
   automationComposerOpen,
   setAutomationComposerOpen,
-} from './AutomationComposer';
+} from './automationComposerState';

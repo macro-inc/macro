@@ -1,14 +1,17 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { ok } from 'neverthrow';
-
-import { CallBlockAdapter } from './component/CallBlockAdapter';
+import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'call',
   description: '',
   defaultFilename: 'Call',
-  component: CallBlockAdapter,
+  component: lazy(() =>
+    import('./component/CallBlockAdapter').then((module) => ({
+      default: module.CallBlockAdapter,
+    }))
+  ),
   async load(source, _intent) {
     if (!ENABLE_CALLS()) return LoadErrors.MISSING;
     if (source.type === 'dss') {

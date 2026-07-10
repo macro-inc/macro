@@ -1,4 +1,5 @@
-import { NativeCallProvider, useCallKitSetup } from '@channel/Call';
+import { NativeCallProvider } from '@channel/Call/native-call-state';
+import { useCallKitSetup } from '@channel/Call/use-callkit';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';

@@ -1,6 +1,6 @@
-import { Track } from 'livekit-client';
 import { For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { LK_TRACK_SOURCE } from './livekit-loader';
 import { TrackView } from './TrackView';
 
 /**
@@ -25,7 +25,7 @@ export function CallAudioSink() {
       .filter((p) => !p.isAgent)
       .map((p) => ({
         id: p.identity,
-        track: p.getTrackPublication(Track.Source.Microphone)?.track,
+        track: p.getTrackPublication(LK_TRACK_SOURCE.Microphone)?.track,
       }));
   };
 

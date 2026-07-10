@@ -1,4 +1,4 @@
-import { analytics } from '@app/lib/analytics';
+import { analytics } from '@app/lib/analytics/analytics';
 import {
   type AudioReceiverStats,
   type RemoteAudioTrack,

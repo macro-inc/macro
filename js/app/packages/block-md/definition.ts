@@ -13,9 +13,8 @@ import { storageServiceClient } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
-import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
-import MarkdownBlock from './component/Block';
+import { lazy } from 'solid-js';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
 
 export const definition = defineBlock({
@@ -26,7 +25,7 @@ export const definition = defineBlock({
     { name: 'task', defaultFileName: 'New Task' },
     { name: 'snippet', defaultFileName: 'New Snippet' },
   ],
-  component: MarkdownBlock,
+  component: lazy(() => import('./component/Block')),
   accepted: {
     md: 'text/markdown',
   },
@@ -100,6 +99,7 @@ export const definition = defineBlock({
         }
       }
 
+      const { createSyncServiceSource } = await import('@service-sync/source');
       const { source: syncSource, doInitialSync } = createSyncServiceSource(
         source.id,
         token

@@ -1,5 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { setAutomationComposerOpen } from '@block-automation/component';
+import { setAutomationComposerOpen } from '@block-automation/component/automationComposerState';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';

@@ -1,4 +1,5 @@
-import { joinChannelCall, useCallContextOptional } from '@channel/Call';
+import { useCallContextOptional } from '@channel/Call/CallContext';
+import { joinChannelCall } from '@channel/Call/join-channel-call';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button } from '@ui';

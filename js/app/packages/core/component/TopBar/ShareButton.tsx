@@ -89,6 +89,11 @@ import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
 import { openLoginModal } from './LoginButton';
+import {
+  addShareButtonRefetch,
+  removeShareButtonRefetch,
+} from './shareButtonRefetch';
+import { getShareDrawerRecipientInput } from './shareDrawer';
 
 false && clickOutside;
 
@@ -134,9 +139,9 @@ const permissionsBlockResource = createBlockResource(
 
 createBlockEffect(() => {
   const [, { refetch }] = permissionsBlockResource;
-  setRefetchArray((prev) => [...prev, refetch]);
+  addShareButtonRefetch(refetch);
   onCleanup(() => {
-    setRefetchArray((prev) => prev.filter((r) => r !== refetch));
+    removeShareButtonRefetch(refetch);
   });
 });
 
@@ -159,21 +164,8 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
   }
 };
 
-const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
-export const refetchDocumentShareButtonResource = () => {
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
-};
-
-export function getShareDrawerRecipientInput(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[data-share-drawer-recipient] input'
-  );
-}
+export { refetchDocumentShareButtonResource } from './shareButtonRefetch';
+export { getShareDrawerRecipientInput };
 
 interface ShareModalProps {
   setIsSharePermOpen: (value: boolean) => void;

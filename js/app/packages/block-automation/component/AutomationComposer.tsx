@@ -1,15 +1,18 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Dialog, Surface } from '@ui';
+import { Button } from '@ui/components/Button';
+import { Dialog } from '@ui/components/Dialog';
+import { Surface } from '@ui/components/Surface';
+import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
   on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import {
@@ -19,6 +22,10 @@ import {
 } from '../util/automationComposerStorage';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationTimePicker } from './AutomationTimePicker';
+import {
+  automationComposerOpen,
+  setAutomationComposerOpen,
+} from './automationComposerState';
 import {
   createEmptyDraft,
   describeSchedule,
@@ -36,12 +43,14 @@ import type { ScheduleDraft } from './types';
  * Open/close signal for the automation composer modal. Flip to `true` from
  * anywhere (e.g. launcher / unified-list create button) to pop the dialog.
  */
-export const [automationComposerOpen, setAutomationComposerOpen] =
-  createControlledOpenSignal(false, { id: 'automation-composer' });
+export {
+  automationComposerOpen,
+  setAutomationComposerOpen,
+} from './automationComposerState';
 
 /**
- * Create-only automation composer modal. Mount once (see Layout.tsx) — the
- * dialog is driven by the `automationComposerOpen` signal.
+ * Create-only automation composer modal. Layout mounts it on demand while the
+ * `automationComposerOpen` signal is true.
  */
 export function AutomationComposer() {
   const { openWithSplit } = useSplitLayout();
@@ -60,6 +69,8 @@ export function AutomationComposer() {
 
   let skipNextSave = false;
   const debouncedSave = debounce(saveAutomationComposerDraft, 300);
+
+  onCleanup(debouncedSave.clear);
 
   createEffect(
     on(automationComposerOpen, (open) => {
@@ -103,6 +114,7 @@ export function AutomationComposer() {
 
   const createMutation = useCreateScheduleMutation({
     onSuccess: async (schedule) => {
+      debouncedSave.clear();
       clearAutomationComposerDraft();
       setAutomationComposerOpen(false, false);
       if (schedule.id) {

@@ -7,9 +7,10 @@ import {
 } from '@queries/call/call';
 import { callServiceClient } from '@service-call/client';
 import { useMutation } from '@tanstack/solid-query';
-import { DisconnectReason, RoomEvent } from 'livekit-client';
+import type { DisconnectReason } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { LK_DISCONNECT_REASON, LK_ROOM_EVENT } from './livekit-loader';
 import { registerCallKitCallEndedHandler } from './use-callkit';
 
 type UseCallOptions = {
@@ -34,11 +35,11 @@ type ActiveJoinAttempt = {
 
 function shouldAutoRejoin(reason?: DisconnectReason) {
   switch (reason) {
-    case DisconnectReason.CLIENT_INITIATED:
-    case DisconnectReason.DUPLICATE_IDENTITY:
-    case DisconnectReason.PARTICIPANT_REMOVED:
-    case DisconnectReason.ROOM_DELETED:
-    case DisconnectReason.ROOM_CLOSED:
+    case LK_DISCONNECT_REASON.CLIENT_INITIATED:
+    case LK_DISCONNECT_REASON.DUPLICATE_IDENTITY:
+    case LK_DISCONNECT_REASON.PARTICIPANT_REMOVED:
+    case LK_DISCONNECT_REASON.ROOM_DELETED:
+    case LK_DISCONNECT_REASON.ROOM_CLOSED:
       return false;
     default:
       return true;
@@ -115,9 +116,9 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       cleanupDisconnectListener = null;
       scheduleAutoRejoin(reason);
     };
-    room.on(RoomEvent.Disconnected, handleDisconnect);
+    room.on(LK_ROOM_EVENT.Disconnected, handleDisconnect);
     cleanupDisconnectListener = () =>
-      room.off(RoomEvent.Disconnected, handleDisconnect);
+      room.off(LK_ROOM_EVENT.Disconnected, handleDisconnect);
   }
 
   // If the call is already active for this channel (e.g. the user navigated
