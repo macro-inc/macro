@@ -83,7 +83,7 @@ export function HistorySessionList(props: HistorySessionListProps) {
                     <For each={row.userIds.slice(0, MAX_NAMED)}>
                       {(userId) => (
                         <span
-                          class="size-2 rounded-full ring-1 ring-surface"
+                          class="size-2 rounded-full ring ring-surface"
                           style={{ 'background-color': userColor(userId) }}
                         />
                       )}

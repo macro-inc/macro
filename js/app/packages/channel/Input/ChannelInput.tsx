@@ -368,8 +368,6 @@ export function ChannelInput(props: ChannelInputProps) {
     },
   });
 
-  const [isFocused, setIsFocused] = createSignal(false);
-
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
       <Show when={isCollapsed()}>
@@ -408,11 +406,8 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          setIsFocused(false);
           collapsedInput.collapse();
         }}
-        onFocusIn={() => setIsFocused(true)}
-        active={isFocused()}
         class={cn(
           'rounded-xl mobile:rounded-3xl mobile:island',
           isCollapsed() && 'hidden'

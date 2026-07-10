@@ -277,6 +277,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   horizontalScroll?: boolean;
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  portalScope?: 'local';
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -290,6 +291,18 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const [disabled, setDisabled] = createSignal(false);
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+  const [portalSearchRef, setPortalSearchRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  const portalMount = () => {
+    if (props.portalScope !== 'local') return undefined;
+    return (
+      portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
+    );
+  };
+  const shouldRenderPortal = () =>
+    props.portalScope !== 'local' || portalMount() !== undefined;
 
   // The chips container caps its height and scrolls; keep the input's line
   // visible as chips push it down.
@@ -337,9 +350,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   }
 
   const placeholderText = () => {
-    return props.selectedOptions.length === 0
-      ? 'Select recipients'
-      : 'select more recipients';
+    return props.selectedOptions.length === 0 ? 'Select recipients' : undefined;
   };
 
   const userId = useUserId();
@@ -601,7 +612,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
         class={cn(
           'ph-no-capture w-full text-sm offset-2 bg-surface rounded-2xl',
-          !props.hideBorder && 'ring-1 ring-edge',
+          !props.hideBorder && 'ring ring-edge',
           !props.noPadding && 'p-2',
           props.class
         )}
@@ -747,6 +758,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                     class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                     classList={{ 'ml-1': selectedLen() === 0 }}
+                    onFocus={() => setIsOpen(true)}
                     onKeyDown={(e) => {
                       if (
                         (e.key === 'a' && e.ctrlKey) ||
@@ -789,58 +801,61 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           }}
         </Combobox.Control>
 
-        <Combobox.Portal>
-          <Layer depth={2}>
-            <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
-              <Combobox.Listbox
-                ref={setListboxRef}
-                class="flex flex-col gap-1"
-                scrollToItem={scrollToItem()}
-                autoFocus="first"
-              >
-                {(items) => {
-                  const arr = Array.from(items());
-                  const count = arr.length;
-                  const visibleCount = Math.min(
-                    count,
-                    RECIPIENT_OPTION_MAX_VISIBLE_COUNT
-                  );
-                  const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
+        <div class="hidden" ref={setPortalSearchRef} />
+        <Show when={shouldRenderPortal()}>
+          <Combobox.Portal mount={portalMount()}>
+            <Layer depth={2}>
+              <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
+                <Combobox.Listbox
+                  ref={setListboxRef}
+                  class="flex flex-col gap-1"
+                  scrollToItem={scrollToItem()}
+                  autoFocus="first"
+                >
+                  {(items) => {
+                    const arr = Array.from(items());
+                    const count = arr.length;
+                    const visibleCount = Math.min(
+                      count,
+                      RECIPIENT_OPTION_MAX_VISIBLE_COUNT
+                    );
+                    const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
 
-                  const [handle, setHandle] =
-                    createSignal<VirtualizerHandle | null>(null);
+                    const [handle, setHandle] =
+                      createSignal<VirtualizerHandle | null>(null);
 
-                  setScrollToItem(() => (key: string) => {
-                    const virtualizerHandle = handle();
-                    if (virtualizerHandle) {
-                      const ndx = arr.findIndex((item) => item.key === key);
-                      if (ndx > -1) {
-                        virtualizerHandle.scrollToIndex(ndx, {
-                          align: 'nearest',
-                        });
+                    setScrollToItem(() => (key: string) => {
+                      const virtualizerHandle = handle();
+                      if (virtualizerHandle) {
+                        const ndx = arr.findIndex((item) => item.key === key);
+                        if (ndx > -1) {
+                          virtualizerHandle.scrollToIndex(ndx, {
+                            align: 'nearest',
+                          });
+                        }
                       }
-                    }
-                  });
+                    });
 
-                  return (
-                    <VList
-                      data={arr}
-                      itemSize={RECIPIENT_OPTION_HEIGHT_PX}
-                      style={{
-                        height: `${height}px`,
-                      }}
-                      ref={setHandle}
-                    >
-                      {(item) => {
-                        return <RecipientComboboxItem {...item} />;
-                      }}
-                    </VList>
-                  );
-                }}
-              </Combobox.Listbox>
-            </Combobox.Content>
-          </Layer>
-        </Combobox.Portal>
+                    return (
+                      <VList
+                        data={arr}
+                        itemSize={RECIPIENT_OPTION_HEIGHT_PX}
+                        style={{
+                          height: `${height}px`,
+                        }}
+                        ref={setHandle}
+                      >
+                        {(item) => {
+                          return <RecipientComboboxItem {...item} />;
+                        }}
+                      </VList>
+                    );
+                  }}
+                </Combobox.Listbox>
+              </Combobox.Content>
+            </Layer>
+          </Combobox.Portal>
+        </Show>
         <Combobox.ErrorMessage class="text-xs text-failure mt-1">
           *At least one participant is required
         </Combobox.ErrorMessage>

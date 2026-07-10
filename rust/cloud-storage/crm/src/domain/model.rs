@@ -266,6 +266,10 @@ pub enum CrmError {
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),
+    /// The request asks for hidden CRM rows but the caller's team role is
+    /// below admin/owner.
+    #[error("Querying hidden CRM companies requires admin/owner team role")]
+    AdminRoleRequired,
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

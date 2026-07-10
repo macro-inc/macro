@@ -837,6 +837,55 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
 }
 
 #[tokio::test]
+async fn crm_filters_without_team_receipt_are_rejected() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    let hidden_companies_filter = EntityFilters {
+        crm_company_filters: item_filters::CrmCompanyFilters {
+            company_ids: vec![],
+            hidden: Some(true),
+        },
+        ..EntityFilters::default()
+    };
+    let crm_scope_filter = EntityFilters {
+        email_filters: item_filters::EmailFilters {
+            crm_domains: vec!["example.com".to_string()],
+            ..item_filters::EmailFilters::default()
+        },
+        ..EntityFilters::default()
+    };
+
+    for filters in [hidden_companies_filter, crm_scope_filter] {
+        let err = SoupImpl::new(
+            MockSoupRepo::new(),
+            FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+            NoopEmailPreviewService,
+            NoopCommsService,
+            NoopCallRecordQueryService,
+            NoOpCrmService,
+            RecordingForeignEntityService::new(Vec::new()),
+        )
+        .get_user_soup(
+            SoupRequest {
+                email_preview_view: PreviewView::StandardLabel(
+                    email::domain::models::PreviewViewStandardLabel::Inbox,
+                ),
+                link_ids: vec![],
+                soup_type: SoupType::UnExpanded,
+                limit: 20,
+                cursor: SoupQuery::new_sort_simple(SimpleSortMethod::UpdatedAt, filters),
+                user: user.clone(),
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, SoupErr::CrmTeamRequired), "{err:?}");
+    }
+}
+
+#[tokio::test]
 async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
     let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
     let foreign_entity_service =

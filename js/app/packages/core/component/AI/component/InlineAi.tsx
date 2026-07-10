@@ -49,7 +49,7 @@ export function InlineInputReady(props: InlineInputReadyProps) {
   });
 
   return (
-    <div class="relative flex items-end justify-between p-2 ring-1 ring-edge rounded-xs w-full bg-hover">
+    <div class="relative flex items-end justify-between p-2 ring ring-edge rounded-xs w-full bg-hover">
       <textarea
         class="flex resize-none w-full p-1 text-sm h-max-[800px] overflow-hidden"
         ref={inputRef}
@@ -107,7 +107,7 @@ type InlineInputLoadingProps = {
 
 export function InlineInputLoading(props: InlineInputLoadingProps) {
   return (
-    <div class="relative flex items-end justify-between p-2 ring-1 ring-edge rounded-xs w-full bg-hover">
+    <div class="relative flex items-end justify-between p-2 ring ring-edge rounded-xs w-full bg-hover">
       <textarea
         class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none"
         disabled
@@ -126,7 +126,7 @@ export function InlineInputLoading(props: InlineInputLoadingProps) {
 
 export function InlineInputDisabled(props: InlineInputLoadingProps) {
   return (
-    <div class="relative flex items-end justify-between p-2 ring-1 ring-edge rounded-xs w-full bg-hover">
+    <div class="relative flex items-end justify-between p-2 ring ring-edge rounded-xs w-full bg-hover">
       <textarea
         class="flex resize-none rounded-md w-full p-1 text-sm h-max-[800px] overflow-hidden select-none"
         disabled

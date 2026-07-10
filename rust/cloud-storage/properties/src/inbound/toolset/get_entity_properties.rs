@@ -123,13 +123,19 @@ where
 
         let entity_type = EntityType::from(self.entity_type);
 
+        // Prove the requesting user can view the entity before reading anything.
+        let access = service_context
+            .service
+            .mint_view_receipt(Some(&request_context.user_id), &self.entity_id, entity_type)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "You do not have access to this entity".to_string(),
+                internal_error: e.into(),
+            })?;
+
         let props = service_context
             .service
-            .get_entity_properties(
-                &self.entity_id,
-                entity_type,
-                request_context.user_id.as_ref(),
-            )
+            .get_entity_properties(&access)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to get entity properties: {e}"),

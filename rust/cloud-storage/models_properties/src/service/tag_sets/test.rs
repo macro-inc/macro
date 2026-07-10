@@ -120,6 +120,48 @@ fn unknown_label_errors_with_available_labels() {
 }
 
 #[test]
+fn unique_resolve_rejects_a_label_present_in_both_sets() {
+    let personal_option = Uuid::from_u128(1);
+    let team_option = Uuid::from_u128(2);
+    let sets = CallerTagSets::new(vec![
+        tag_set(
+            Uuid::from_u128(10),
+            user_owner(),
+            &[(personal_option, "urgent")],
+        ),
+        tag_set(
+            Uuid::from_u128(11),
+            team_owner(),
+            &[(team_option, "urgent")],
+        ),
+    ]);
+
+    let err = sets
+        .resolve_filters_unique(&[filter("urgent", None)])
+        .unwrap_err();
+    let TagFilterError::Ambiguous(err) = err else {
+        panic!("expected ambiguous error, got {err:?}");
+    };
+    assert_eq!(err.label, "urgent");
+    assert_eq!(err.matches.len(), 2);
+    let message = err.to_string();
+    assert!(message.contains("ambiguous"), "{message}");
+    assert!(message.contains("scope"), "{message}");
+
+    // A scope disambiguates, and unknown labels still fail as unknown.
+    let resolved = sets
+        .resolve_filters_unique(&[filter("urgent", Some(TagScope::Team))])
+        .unwrap();
+    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved[0].option_id, team_option);
+
+    let err = sets
+        .resolve_filters_unique(&[filter("nonexistent", None)])
+        .unwrap_err();
+    assert!(matches!(err, TagFilterError::Unknown(_)));
+}
+
+#[test]
 fn duplicate_filters_dedupe_options() {
     let option_id = Uuid::from_u128(1);
     let sets = CallerTagSets::new(vec![tag_set(

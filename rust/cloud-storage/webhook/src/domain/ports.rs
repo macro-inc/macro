@@ -28,6 +28,17 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         webhook_id: WebhookId,
     ) -> impl Future<Output = Result<Option<Webhook>, Self::Err>> + Send;
 
+    /// List delivery-eligible webhooks whose typed filters match an event and entity id.
+    ///
+    /// Delivery-eligible webhooks are active, valid, and not soft-deleted. A filter without
+    /// `ids` matches every entity id.
+    fn list_active_webhooks_matching_event(
+        &self,
+        workspace_ids: Vec<String>,
+        event: String,
+        entity_id: String,
+    ) -> impl Future<Output = Result<Vec<Webhook>, Self::Err>> + Send;
+
     /// Patch an active webhook.
     fn patch_webhook(
         &self,

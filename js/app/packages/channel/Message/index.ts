@@ -8,6 +8,7 @@ import {
 
 export { ActionMenu } from './ActionMenu';
 export { Attachments } from './Attachments';
+export { ChannelCreatedIndicator } from './ChannelCreatedIndicator';
 export { ChannelMessage } from './ChannelMessage';
 export type { SearchHighlightTermsLookup } from './context';
 export { DateDivider } from './DateDivider';

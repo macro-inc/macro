@@ -53,7 +53,9 @@ pub enum EmailLiteral {
     Owner(Uuid),
     /// This value filters by project ID
     ProjectId(String),
-    /// This node value filters by email importance. false short-circuits to match nothing.
+    /// Filters by email importance, evaluated against the denormalized
+    /// `email_threads.is_signal` flag: true matches signal threads, false
+    /// matches noise threads.
     Importance(bool),
     /// This node value filters by notification done state for emails.
     NotificationDone(bool),

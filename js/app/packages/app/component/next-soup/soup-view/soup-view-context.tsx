@@ -60,6 +60,7 @@ import {
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
+import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -67,7 +68,8 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import type { SoupPage } from '@service-storage/generated/schemas';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -99,6 +101,11 @@ type DataSource<T> = {
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: VoidFunction;
+  /**
+   * Full refresh (e.g. mobile pull-to-refresh): invalidate every soup query
+   * plus notification state. Resolves once the active refetches settle.
+   */
+  refresh: () => Promise<void>;
 };
 
 type SoupViewInitializeOptions = {
@@ -233,7 +240,7 @@ export const SoupViewContextProvider: FlowComponent<
   );
   onCleanup(predicatesCaptorTeardown);
 
-  const invalidateCache = () => {
+  const trimToFirstPage = () => {
     const groupBy = serverGroupByField();
 
     queryClient.setQueryData(
@@ -257,19 +264,19 @@ export const SoupViewContextProvider: FlowComponent<
   const queryFilters: QueryStore = {
     ...store,
     set: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.set(query);
     },
     replace: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.replace(query);
     },
     add: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.add(query);
     },
     remove: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.remove(query);
     },
   };
@@ -456,25 +463,10 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // The inbox only surfaces missed calls. The preset NILs `callId` to exclude
-  // calls entirely, so drop that exclusion and filter to missed status instead.
-  const applyInboxCallFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
-    const { callId: _callId, ...include } = state.include;
-    return {
-      ...state,
-      include: {
-        ...include,
-        callStatus: 'MISSED',
-      },
-    };
-  };
-
   const applyViewFilters = (state: QueryState): QueryState => {
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
-    next = applyInboxCallFilter(next);
     return next;
   };
 
@@ -536,11 +528,34 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // Active tag option ids, used to gate optimistic websocket inserts so an
-  // active tag filter is honored even on the grouped render path.
+  // Active tag option ids and combine mode, used to gate optimistic websocket
+  // inserts so an active tag filter is honored even on the grouped render path.
   const activeTagOptionIds = createMemo(() =>
     (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
   );
+  const activeTagFilterMode = () =>
+    queryFilters.state.include.tagFilterMode ?? 'any';
+
+  const soupItemMatchesActiveFilters = (
+    item: SoupApiItem,
+    view: ListView | undefined
+  ): boolean => {
+    if (!soupItemMatchesListView(item, view)) return false;
+    if (
+      !soupItemMatchesTagFilter(
+        item,
+        activeTagOptionIds(),
+        activeTagFilterMode()
+      )
+    ) {
+      return false;
+    }
+
+    return soup.predicates.test(
+      mapApiSoupItemToEntity(item) as SoupEntity,
+      getFilterContext()
+    );
+  };
 
   const itemsQuery = useSoupAstItemsQuery(
     () => {
@@ -558,9 +573,7 @@ export const SoupViewContextProvider: FlowComponent<
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) =>
-            soupItemMatchesListView(item, view) &&
-            soupItemMatchesTagFilter(item, activeTagOptionIds()),
+          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
       };
     }
@@ -621,13 +634,14 @@ export const SoupViewContextProvider: FlowComponent<
     let transformed = items();
     const ctx = getFilterContext();
     const tagOptionIds = activeTagOptionIds();
+    const tagFilterMode = activeTagFilterMode();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
         continue;
       }
-      if (!entityMatchesTagFilter(entity, tagOptionIds)) {
+      if (!entityMatchesTagFilter(entity, tagOptionIds, tagFilterMode)) {
         continue;
       }
       next.push(entity);
@@ -687,9 +701,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) =>
-            soupItemMatchesListView(item, view) &&
-            soupItemMatchesTagFilter(item, activeTagOptionIds()),
+          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
       };
     },
@@ -995,6 +1007,21 @@ export const SoupViewContextProvider: FlowComponent<
         if (searchQuery.isEnabled) {
           searchQuery.fetchNextPage();
         }
+      },
+      refresh: async () => {
+        if (!enabled()) return;
+
+        trimToFirstPage();
+
+        await Promise.all([
+          queryClient.invalidateQueries(
+            { queryKey: soupKeys._def },
+            // Reject on refetch failure so pull-to-refresh can surface it
+            // instead of retracting as if the refresh succeeded.
+            { throwOnError: true }
+          ),
+          invalidateUserNotifications(),
+        ]);
       },
     },
     items,

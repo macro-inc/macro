@@ -10,6 +10,7 @@
 
 pub mod definitions;
 pub mod entities;
+pub mod extract;
 pub mod options;
 pub mod tags;
 
@@ -27,7 +28,6 @@ use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractor;
 use tower::{Layer, Service};
-use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
@@ -69,14 +69,6 @@ impl<S, A> FromRef<PropertiesRouterState<S, A>> for Arc<A> {
 /// the model where anyone on a team can manage that team's properties.
 pub type PropertyTeamExtractor<A> = OptionalMacroUserTeamExtractor<MemberTeamRole, A>;
 
-/// The team the caller belongs to, if any. A `None` team scopes the caller to their own
-/// user properties.
-pub fn caller_team_id<A>(team: &PropertyTeamExtractor<A>) -> Option<Uuid> {
-    team.entity_access_receipt
-        .as_ref()
-        .and_then(|receipt| Uuid::parse_str(&receipt.entity().entity_id).ok())
-}
-
 /// Map a domain [`PropertiesErr`] to the HTTP status code it represents.
 pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
     match e {
@@ -87,7 +79,8 @@ pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
         PropertiesErr::DuplicateOptionValue => StatusCode::CONFLICT,
         PropertiesErr::PermissionDenied
         | PropertiesErr::SystemPropertyNotModifiable
-        | PropertiesErr::RequiredProperty => StatusCode::FORBIDDEN,
+        | PropertiesErr::RequiredProperty
+        | PropertiesErr::TeamMembershipRequired => StatusCode::FORBIDDEN,
         PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
             StatusCode::INTERNAL_SERVER_ERROR
         }

@@ -9,7 +9,7 @@ export const AnimatedChatIcon = (props: {
       viewBox="0 -4 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width="2"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
@@ -54,7 +54,7 @@ export const AnimatedChatIcon = (props: {
         class="dot-1"
         cx="8"
         cy="8"
-        r="1.6"
+        r="1.2"
         fill="currentColor"
         stroke="none"
       />
@@ -62,7 +62,7 @@ export const AnimatedChatIcon = (props: {
         class="dot-2"
         cx="12"
         cy="8"
-        r="1.6"
+        r="1.2"
         fill="currentColor"
         stroke="none"
       />
@@ -70,7 +70,7 @@ export const AnimatedChatIcon = (props: {
         class="dot-3"
         cx="16"
         cy="8"
-        r="1.6"
+        r="1.2"
         fill="currentColor"
         stroke="none"
       />

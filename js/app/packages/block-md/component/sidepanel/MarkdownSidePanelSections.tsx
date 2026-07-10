@@ -110,8 +110,8 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <Show when={ENABLE_HISTORY_COMPONENT}>
-        <SidePanel.Section id="history" title="History" defaultOpen order={35}>
+      <Show when={ENABLE_HISTORY_COMPONENT()}>
+        <SidePanel.Section id="history" title="History" order={35}>
           <HistorySectionContent />
         </SidePanel.Section>
       </Show>

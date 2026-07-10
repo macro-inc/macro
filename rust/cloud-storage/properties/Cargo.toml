@@ -16,7 +16,6 @@ ai_tools = [
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
-  "dep:entity_access",
   "dep:model",
   "dep:serde",
   "dep:serde_json",
@@ -27,7 +26,6 @@ inbound = [
   "ports",
 ]
 outbound = [
-  "dep:entity_access",
   "dep:entity_access_db_utils",
   "dep:futures",
   "dep:macro_uuid",
@@ -49,7 +47,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
-], optional = true }
+] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }

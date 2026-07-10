@@ -304,12 +304,12 @@ fn push_thread_candidate_select(
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
-    // CROSS JOIN LATERAL's message match. When a per-message filter is in
-    // play (importance, or a view-level message filter) mirror the full
-    // lateral predicate as a correlated EXISTS; otherwise push address-only
-    // constraints through the index-driven `matching_threads` CTE referenced
-    // via `t.id IN (SELECT thread_id FROM matching_threads)`.
-    if wants_message_exists_pushdown(email_filter, view) {
+    // CROSS JOIN LATERAL's message match. When a view-level message filter
+    // is in play mirror the full lateral predicate as a correlated EXISTS;
+    // otherwise push address-only constraints through the index-driven
+    // `matching_threads` CTE referenced via
+    // `t.id IN (SELECT thread_id FROM matching_threads)`.
+    if wants_message_exists_pushdown(view) {
         build_thread_message_exists_filter(email_filter, view, &params.resolved).push_into(builder);
     } else if has_address_literals(email_filter) {
         build_thread_address_filter(email_filter).push_into(builder);
@@ -406,11 +406,10 @@ fn build_query(
     let defer_uh = !sort_uses_view_history(&params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
-    // When the candidate stage pushes a full per-message EXISTS (importance,
-    // or a view-level message filter), it already enforces "thread has a
-    // message the lateral will surface", so the address-only
-    // `matching_threads` CTE is redundant.
-    let matching_threads_body = if wants_message_exists_pushdown(email_filter, view) {
+    // When the candidate stage pushes a full per-message EXISTS (view-level
+    // message filter), it already enforces "thread has a message the lateral
+    // will surface", so the address-only `matching_threads` CTE is redundant.
+    let matching_threads_body = if wants_message_exists_pushdown(view) {
         None
     } else {
         // Owned-only, non-team queries can scope the CTE's contact/message
@@ -464,6 +463,9 @@ fn build_query(
         builder.push("t.viewed_at,");
     }
 
+    // The is_important output column reflects Gmail's IMPORTANT label — a
+    // different notion from the Importance filter, which reads the
+    // denormalized email_threads.is_signal heuristic.
     builder.push(
         r#"
             t.project_id,

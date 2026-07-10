@@ -283,7 +283,13 @@ export function Channel(props: ChannelProps) {
   });
 
   const listMetaByMessageId = createMemo(() =>
-    buildChannelMessageListMeta(messages(), activityTracker.isNewMessage)
+    buildChannelMessageListMeta(
+      messages(),
+      activityTracker.isNewMessage,
+      // Once there are no older pages left to fetch, the oldest loaded message
+      // (index 0) is the true first message in the channel.
+      !messagesQuery.hasNextPage
+    )
   );
 
   const attachmentTracker = createInputAttachmentTracker({
@@ -663,6 +669,7 @@ export function Channel(props: ChannelProps) {
                                   selectedMessageId={selection.selectedId}
                                   onSelectMessage={selectMessage}
                                   onClearSelection={clearSelection}
+                                  onClearTarget={releaseSelectionAndTarget}
                                   messageListScopeId={messageListScopeId}
                                 />
                               )}

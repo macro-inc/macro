@@ -11,9 +11,8 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::TaskAssignedNotification;
+use crate::domain::model::{EditReceipt, TaskAssignedNotification};
 use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
-use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -23,14 +22,40 @@ where
     N: NotificationService,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
-    /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
-    pub async fn handle_task_relationship_property(
+    /// Require edit access to every referenced task before linking: linking
+    /// mutates the referenced task's Parent Task / Subtasks property, so edit
+    /// access to the primary task alone is not enough. Internal (machine)
+    /// callers are trusted and skip the check.
+    async fn check_referenced_task_edit_access(
         &self,
-        entity_id: &str,
+        access: &EditReceipt,
+        referenced_task_ids: &[Uuid],
+    ) -> Result<(), PropertiesErr> {
+        if referenced_task_ids.is_empty() {
+            return Ok(());
+        }
+        let Some(user_id) = access.authenticated_user() else {
+            // Internal callers operate outside a user session and are trusted.
+            return Ok(());
+        };
+        let permission_service = self.permission_service()?;
+        for task_id in referenced_task_ids {
+            permission_service
+                .mint_edit_receipt(user_id, &task_id.to_string(), EntityType::Task)
+                .await
+                .map_err(|_| PropertiesErr::PermissionDenied)?;
+        }
+        Ok(())
+    }
+
+    /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
+    pub(crate) async fn handle_task_relationship_property(
+        &self,
+        access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<(), PropertiesErr> {
-        let task_id = Uuid::parse_str(entity_id)
+        let task_id = Uuid::parse_str(access.entity_id())
             .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
 
         match property_definition_id {
@@ -54,7 +79,13 @@ where
                     }
                 };
 
-                PropertiesService::link_parent_task(self, task_id, parent_task_id).await?;
+                self.check_referenced_task_edit_access(access, parent_task_id.as_slice())
+                    .await?;
+
+                self.repository
+                    .link_parent_task(task_id, parent_task_id)
+                    .await
+                    .map_err(anyhow::Error::from)?;
             }
             SystemPropertyKey::SUBTASKS_UUID => {
                 let subtask_ids = match &value {
@@ -80,7 +111,13 @@ where
                     }
                 };
 
-                PropertiesService::link_subtasks(self, task_id, subtask_ids).await?;
+                self.check_referenced_task_edit_access(access, &subtask_ids)
+                    .await?;
+
+                self.repository
+                    .link_subtasks(task_id, subtask_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?;
             }
             _ => {
                 return Err(PropertiesErr::Validation(
@@ -93,11 +130,11 @@ where
     }
 
     /// Handle task assignees property with permissions.
-    pub async fn handle_task_assignees_property(
+    pub(crate) async fn handle_task_assignees_property(
         &self,
         entity_id: &str,
         value: Option<SetPropertyValue>,
-        assigned_by_user_id: &MacroUserIdStr<'_>,
+        assigned_by_user_id: Option<&MacroUserIdStr<'_>>,
     ) -> Result<(), PropertiesErr> {
         let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
             if value.is_some() {
@@ -127,16 +164,22 @@ where
         Ok(())
     }
 
-    /// Handle notifications when task assignees are updated.
+    /// Handle notifications when task assignees are updated. Internal
+    /// (machine) writes have no assigning user and send no notifications.
     pub async fn handle_task_assignee_notifications(
         &self,
         task_id: Uuid,
         assignee_ids: &[MacroUserIdStr<'_>],
-        assigned_by_user_id: &MacroUserIdStr<'_>,
+        assigned_by_user_id: Option<&MacroUserIdStr<'_>>,
     ) -> Result<(), PropertiesErr> {
         if assignee_ids.is_empty() {
             return Ok(());
         }
+
+        let Some(assigned_by_user_id) = assigned_by_user_id else {
+            tracing::debug!("no assigning user (internal write), skipping notifications");
+            return Ok(());
+        };
 
         let notification_service = match &self.notification_service {
             Some(service) => service,
@@ -203,10 +246,7 @@ where
             return Ok(());
         }
 
-        let permission_service = self
-            .permission_service
-            .as_ref()
-            .ok_or(PropertiesErr::PermissionDenied)?;
+        let permission_service = self.permission_service()?;
 
         tracing::debug!(
             task_id = %task_id,

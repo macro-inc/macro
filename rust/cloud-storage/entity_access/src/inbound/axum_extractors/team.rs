@@ -36,6 +36,18 @@ pub struct OptionalMacroUserTeamExtractor<T: RequiredPermission, Svc> {
     _marker: PhantomData<(T, Svc)>,
 }
 
+impl<T: RequiredPermission, Svc> Clone for OptionalMacroUserTeamExtractor<T, Svc>
+where
+    EntityAccessReceipt<T>: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            entity_access_receipt: self.entity_access_receipt.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<T, S, Svc> FromRequestParts<S> for OptionalMacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,

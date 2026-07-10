@@ -5,7 +5,9 @@ use item_filters::ast::{
     LiteralTree,
     channel::{ChannelLiteral, ChannelThreadLiteral},
 };
-use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+#[cfg(any(feature = "list", feature = "outbound"))]
+use macro_user_id::email::ReadEmailParts;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -1121,9 +1123,11 @@ impl UserName {
 }
 
 /// Lookup from Macro user id to display name.
+#[cfg(any(feature = "list", feature = "outbound"))]
 pub(crate) type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
 
 /// Produce the human-readable fallback for a Macro user id.
+#[cfg(any(feature = "list", feature = "outbound"))]
 pub(crate) fn fallback_user_name(user_id: &MacroUserIdStr<'_>) -> String {
     user_id.email_part().local_part().to_string()
 }

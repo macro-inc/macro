@@ -21,6 +21,7 @@ async fn ids_search(
     search_pattern: String,
     highlight_pattern: String,
     tag_option_ids: &[String],
+    match_all_tags: bool,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -59,11 +60,26 @@ async fn ids_search(
                 )
                 AND (
                     cardinality($7::text[]) = 0
-                    OR EXISTS (
-                        SELECT 1 FROM entity_properties ep
-                        WHERE ep.entity_id = c.id
-                            AND ep.entity_type = 'CHAT'
-                            AND ep.values->'value' ?| $7::text[]
+                    OR (
+                        NOT $8::bool
+                        AND EXISTS (
+                            SELECT 1 FROM entity_properties ep
+                            WHERE ep.entity_id = c.id
+                                AND ep.entity_type = 'CHAT'
+                                AND ep.values->'value' ?| $7::text[]
+                        )
+                    )
+                    OR (
+                        $8::bool
+                        AND NOT EXISTS (
+                            SELECT 1 FROM unnest($7::text[]) AS want(opt)
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM entity_properties ep
+                                WHERE ep.entity_id = c.id
+                                    AND ep.entity_type = 'CHAT'
+                                    AND ep.values->'value' ? want.opt
+                            )
+                        )
                     )
                 )
             ORDER BY c."updatedAt" DESC, c.id DESC
@@ -79,6 +95,7 @@ async fn ids_search(
         cursor_entity_id,
         highlight_pattern,
         tag_option_ids,
+        match_all_tags,
     )
     .fetch_all(db)
     .await
@@ -105,6 +122,7 @@ async fn owner_search<'a>(
     search_pattern: String,
     highlight_pattern: String,
     tag_option_ids: &[String],
+    match_all_tags: bool,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -139,11 +157,26 @@ async fn owner_search<'a>(
                 )
                 AND (
                     cardinality($8::text[]) = 0
-                    OR EXISTS (
-                        SELECT 1 FROM entity_properties ep
-                        WHERE ep.entity_id = c.id
-                            AND ep.entity_type = 'CHAT'
-                            AND ep.values->'value' ?| $8::text[]
+                    OR (
+                        NOT $9::bool
+                        AND EXISTS (
+                            SELECT 1 FROM entity_properties ep
+                            WHERE ep.entity_id = c.id
+                                AND ep.entity_type = 'CHAT'
+                                AND ep.values->'value' ?| $8::text[]
+                        )
+                    )
+                    OR (
+                        $9::bool
+                        AND NOT EXISTS (
+                            SELECT 1 FROM unnest($8::text[]) AS want(opt)
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM entity_properties ep
+                                WHERE ep.entity_id = c.id
+                                    AND ep.entity_type = 'CHAT'
+                                    AND ep.values->'value' ? want.opt
+                            )
+                        )
                     )
                 )
             ORDER BY c."updatedAt" DESC, c.id DESC
@@ -160,6 +193,7 @@ async fn owner_search<'a>(
         cursor_entity_id,
         highlight_pattern,
         tag_option_ids,
+        match_all_tags,
     )
     .fetch_all(db)
     .await
@@ -179,7 +213,8 @@ async fn owner_search<'a>(
 }
 
 /// Searches over the user's chats by name. A non-empty `tag_option_ids`
-/// restricts results to chats holding any of those property option ids.
+/// restricts results to chats holding any of those property option ids, or
+/// every one of them when `match_all_tags` is set.
 #[tracing::instrument(skip(db), err)]
 #[cfg_attr(
     not(test),
@@ -187,7 +222,7 @@ async fn owner_search<'a>(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{:?}-{}-{}-{:?}-{}-{}", macro_user_id.as_ref(), chat_ids, term, ids_only, tag_option_ids, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{:?}-{}-{}-{:?}-{}-{}-{}", macro_user_id.as_ref(), chat_ids, term, ids_only, tag_option_ids, match_all_tags, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
     )
 )]
 pub async fn search_chat_names<'a>(
@@ -197,6 +232,7 @@ pub async fn search_chat_names<'a>(
     term: String,
     ids_only: bool,
     tag_option_ids: &[String],
+    match_all_tags: bool,
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -217,6 +253,7 @@ pub async fn search_chat_names<'a>(
             search_pattern,
             highlight_pattern,
             tag_option_ids,
+            match_all_tags,
             limit,
             cursor,
         )
@@ -229,6 +266,7 @@ pub async fn search_chat_names<'a>(
             search_pattern,
             highlight_pattern,
             tag_option_ids,
+            match_all_tags,
             limit,
             cursor,
         )

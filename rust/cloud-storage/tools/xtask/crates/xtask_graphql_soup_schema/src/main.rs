@@ -1,6 +1,6 @@
 //! `cargo x graphql-soup-schema <output-path>`
 //!
-//! Exports the GraphQL Soup SDL to a file by running the `graphql_soup`
+//! Exports the GraphQL Soup SDL to a file by running the `complete_graph`
 //! crate's schema-export bin with `SQLX_OFFLINE` so it needs no database.
 
 use std::{path::Path, process::Command};
@@ -25,9 +25,9 @@ fn run(output_path: &Path) -> Result<()> {
         .arg("env.SQLX_OFFLINE=\"true\"")
         .arg("--quiet")
         .arg("-p")
-        .arg("graphql_soup")
+        .arg("complete_graph")
         .arg("--bin")
-        .arg("graphql_soup_schema")
+        .arg("graphql_schema")
         .arg("--")
         .arg(output_path)
         .status()

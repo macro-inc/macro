@@ -1,13 +1,23 @@
+import {
+  CollapsibleSidebarSection,
+  type CollapsibleSidebarSectionItem,
+} from '@app/component/app-sidebar/collapsible-sidebar-section';
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { useSenderName } from '@app/component/app-sidebar/utils';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
-import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import {
+  ContextMenuContent,
+  MenuGroup,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
@@ -17,15 +27,13 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import { createElementSize } from '@solid-primitives/resize-observer';
-import { Avatar, cn, NavRow, Surface, Tooltip } from '@ui';
+import { Avatar, cn, Dropdown, NavRow, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
   on,
-  onCleanup,
   onMount,
   type ParentProps,
   Show,
@@ -81,7 +89,7 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
 
 function ChannelLetterIcon(props: { letters: string; slim?: boolean }) {
   return (
-    <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
+    <Avatar size="sm" class="size-3.5 bg-ink-extra-muted/15 text-ink-muted">
       <Avatar.Fallback>{props.letters}</Avatar.Fallback>
     </Avatar>
   );
@@ -174,10 +182,16 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
 }
 
 function UnreadHoverCard(
-  props: ParentProps<{ group: ChannelGroup; disabled?: boolean }>
+  props: ParentProps<{
+    group: ChannelGroup;
+    disabled?: boolean;
+    onOpenChange?: (open: boolean) => void;
+  }>
 ) {
   const [hovered, setHovered] = createSignal(false);
   const open = () => hovered() && !props.disabled;
+
+  createEffect(() => props.onOpenChange?.(open()));
 
   return (
     <Show when={!isTouchDevice()} fallback={props.children}>
@@ -215,6 +229,7 @@ function ChannelGroupItem(props: {
   animate?: boolean;
   isSlim?: boolean;
   channelLetters?: string;
+  onFloatingOpenChange?: (open: boolean) => void;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const [isVisible, setIsVisible] = createSignal(!props.animate);
@@ -271,7 +286,7 @@ function ChannelGroupItem(props: {
     void notificationSource.bulkMarkAsRead(props.group.notifications);
   };
 
-  const _openFullscreen = () => {
+  const openFullscreen = () => {
     const { params } = getChannelNotificationParams(latestNotification());
     globalSplitManager()?.createPopoverSplit({
       content: {
@@ -286,9 +301,7 @@ function ChannelGroupItem(props: {
 
   const ButtonContent = () => (
     <NavRow
-      class={cn(
-        'transition-[opacity,transform] justify-start gap-2 w-full h-8 p-1.25'
-      )}
+      class="transition-[opacity,transform] justify-start w-full h-7"
       draggable={false}
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
@@ -314,9 +327,10 @@ function ChannelGroupItem(props: {
         >
           <UserIcon
             id={senderId()!}
-            size={'md'}
+            size="sm"
             suppressClick
             showTooltip={false}
+            class="size-3.5"
           />
         </Show>
         <Show when={isSlim()}>
@@ -337,6 +351,11 @@ function ChannelGroupItem(props: {
   );
 
   const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
+  const [hoverCardOpen, setHoverCardOpen] = createSignal(false);
+
+  createEffect(() => {
+    props.onFloatingOpenChange?.(contextMenuOpen() || hoverCardOpen());
+  });
 
   return (
     <ContextMenu onOpenChange={setContextMenuOpen}>
@@ -351,7 +370,11 @@ function ChannelGroupItem(props: {
             </Tooltip>
           }
         >
-          <UnreadHoverCard group={props.group} disabled={contextMenuOpen()}>
+          <UnreadHoverCard
+            group={props.group}
+            disabled={contextMenuOpen()}
+            onOpenChange={setHoverCardOpen}
+          >
             <ButtonContent />
           </UnreadHoverCard>
         </Show>
@@ -359,16 +382,23 @@ function ChannelGroupItem(props: {
 
       <ContextMenu.Portal>
         <ContextMenuContent class="text-xs text-ink-muted">
-          <MenuItem
-            text="Open in new split"
-            onClick={openInNewSplit}
-            disabled={!canOpenInNewSplit()}
-          />
-          {/* FIXME: this doesn't work yet */}
-          {/* <MenuItem text="Open fullscreen" onClick={openFullscreen} /> */}
-          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
-          <MenuItem text="Mark all as read" onClick={markAllAsRead} />
-          <MenuItem text="Mark all as done" onClick={markAllAsDone} />
+          <MenuGroup>
+            <MenuItem
+              text="Open in new split"
+              onClick={openInNewSplit}
+              disabled={!canOpenInNewSplit()}
+            />
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+            <MenuItem
+              text="Open in current split"
+              onClick={openInCurrentSplit}
+            />
+          </MenuGroup>
+          <MenuSeparator />
+          <MenuGroup>
+            <MenuItem text="Mark all as read" onClick={markAllAsRead} />
+            <MenuItem text="Mark all as done" onClick={markAllAsDone} />
+          </MenuGroup>
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
@@ -379,8 +409,54 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
   return notifications.filter((n) => !n.viewed_at && !n.done);
 }
 
-export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
+function ChannelGroupDropdownItem(props: {
+  group: ChannelGroup;
+  channelLetters?: string;
+}) {
+  const senderName = useSenderName(props.group.latestSenderId);
+  const count = () => props.group.notifications.length;
+  const displayName = () => {
+    if (props.group.isDM) return senderName() ?? 'Direct Message';
+    return props.group.channelName
+      ? `#${props.group.channelName}`
+      : 'Unknown Channel';
+  };
+  const latestNotification = () => props.group.notifications[0];
+
+  return (
+    <Dropdown.Item
+      class="min-h-8 gap-2 px-2.5 text-[13px]"
+      onSelect={() => {
+        const manager = globalSplitManager();
+        if (manager) openNotification(latestNotification(), manager, false);
+      }}
+    >
+      <Show
+        when={props.group.isDM && props.group.latestSenderId}
+        fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
+      >
+        <UserIcon
+          id={props.group.latestSenderId!}
+          size="md"
+          suppressClick
+          showTooltip={false}
+        />
+      </Show>
+      <span class="min-w-0 flex-1 truncate text-ink">{displayName()}</span>
+      <span class="shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-ink/6 text-ink-muted rounded-md">
+        {count()}
+      </span>
+    </Dropdown.Item>
+  );
+}
+
+export const ChannelsUnreadWidget = (props: {
+  sidebarState: SidebarState;
+  onSectionOpenChange?: () => void;
+  onDropdownOpenChange?: (open: boolean) => void;
+}) => {
   const notificationSource = useGlobalNotificationSource();
+  const layout = useSplitLayout();
   const allNotifications = () => [...notificationSource.notifications()];
 
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
@@ -426,78 +502,37 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
   const SLIM_MAX = 4;
   const slimVisible = () => channelGroups().slice(0, SLIM_MAX);
   const slimOverflow = () => Math.max(0, channelGroups().length - SLIM_MAX);
-  const [hasOverflowTop, setHasOverflowTop] = createSignal(false);
-  const [hasOverflowBottom, setHasOverflowBottom] = createSignal(false);
-  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
-  const [scrollFrameRef, setScrollFrameRef] = createSignal<HTMLDivElement>();
-  const scrollSize = createElementSize(scrollRef);
-  const scrollFrameSize = createElementSize(scrollFrameRef);
-  let scrollShadowFrame: number | undefined;
-  let detachScrollShadowObservers: VoidFunction | undefined;
-
-  const updateScrollShadows = () => {
-    const el = scrollRef();
-    if (!el) return;
-    const maxScrollTop = el.scrollHeight - el.clientHeight;
-    setHasOverflowTop(el.scrollTop > 1);
-    setHasOverflowBottom(maxScrollTop - el.scrollTop > 1);
-  };
-
-  const scheduleScrollShadowUpdate = () => {
-    if (scrollShadowFrame !== undefined) {
-      cancelAnimationFrame(scrollShadowFrame);
-    }
-    scrollShadowFrame = requestAnimationFrame(() => {
-      scrollShadowFrame = undefined;
-      updateScrollShadows();
-    });
-  };
-
-  const detachScrollObservers = () => {
-    detachScrollShadowObservers?.();
-    detachScrollShadowObservers = undefined;
-  };
-
-  const attachScrollEl = (el: HTMLDivElement) => {
-    detachScrollObservers();
-    setScrollRef(el);
-
-    const mutationObserver = new MutationObserver(scheduleScrollShadowUpdate);
-    const sidebarRoot = el.closest('[data-expanded]');
-
-    mutationObserver.observe(sidebarRoot ?? el, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
-    scheduleScrollShadowUpdate();
-
-    detachScrollShadowObservers = () => {
-      mutationObserver.disconnect();
-    };
-  };
-
-  onCleanup(() => {
-    detachScrollObservers();
-    if (scrollShadowFrame !== undefined) {
-      cancelAnimationFrame(scrollShadowFrame);
-    }
-  });
-
-  createEffect(
-    on(channelGroups, () => {
-      scheduleScrollShadowUpdate();
-    })
+  const sectionItems = createMemo<CollapsibleSidebarSectionItem[]>(() =>
+    channelGroups().map((group) => ({
+      id: group.entityId,
+      visible: () => (
+        <ChannelGroupItem
+          group={group}
+          animate={false}
+          channelLetters={channelLettersMap().get(group.entityId)}
+          onFloatingOpenChange={props.onDropdownOpenChange}
+        />
+      ),
+      dropdown: () => (
+        <ChannelGroupDropdownItem
+          group={group}
+          channelLetters={channelLettersMap().get(group.entityId)}
+        />
+      ),
+    }))
   );
 
-  createEffect(() => {
-    scrollSize.width;
-    scrollSize.height;
-    scrollFrameSize.width;
-    scrollFrameSize.height;
-    scheduleScrollShadowUpdate();
-  });
+  const openChannels = () => {
+    layout.openWithSplit(
+      { type: 'component', id: 'channels' },
+      {
+        allowDuplicate: true,
+        mergeHistory: false,
+        referredFrom: 'sidebar',
+      }
+    );
+    globalSplitManager()?.returnFocus();
+  };
 
   return (
     <Show when={channelGroups().length > 0}>
@@ -523,41 +558,22 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
           </section>
         }
       >
-        <section class="size-full min-h-0 flex flex-col px-0 py-1.5">
-          <header class="shrink-0 text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
-            <h1>Unread</h1>
-          </header>
-
-          <div ref={setScrollFrameRef} class="relative min-h-0 flex-1">
-            <div
-              ref={attachScrollEl}
-              onScroll={updateScrollShadows}
-              class="size-full overflow-y-auto overscroll-contain flex flex-col gap-0.5 pr-1 -mr-1"
+        <CollapsibleSidebarSection
+          label="Unread"
+          items={sectionItems()}
+          visibleCount={3}
+          dropdownMax={10}
+          onOpenChange={() => props.onSectionOpenChange?.()}
+          onDropdownOpenChange={props.onDropdownOpenChange}
+          dropdownFooter={() => (
+            <Dropdown.Item
+              class="min-h-8 gap-2 px-2.5 text-[13px]"
+              onSelect={openChannels}
             >
-              <For each={channelGroups()}>
-                {(group) => (
-                  <ChannelGroupItem
-                    group={group}
-                    animate={false}
-                    channelLetters={channelLettersMap().get(group.entityId)}
-                  />
-                )}
-              </For>
-            </div>
-            <div
-              class={cn(
-                'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
-                hasOverflowTop() ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-            <div
-              class={cn(
-                'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
-                hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-          </div>
-        </section>
+              <span class="flex-1 text-ink">Go to channels</span>
+            </Dropdown.Item>
+          )}
+        />
       </Show>
     </Show>
   );

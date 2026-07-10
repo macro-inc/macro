@@ -22,6 +22,7 @@ fn importance_exclude_filter() -> Arc<Expr<EmailLiteral>> {
 async fn test_importance_inbox_pagination_fills_page_and_advances_cursor(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("a1111111-1111-1111-1111-111111111111")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let limit = 3;
@@ -111,6 +112,7 @@ async fn test_importance_inbox_pagination_fills_page_and_advances_cursor(
 async fn test_importance_inbox_underfilled_page_has_no_more(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("a1111111-1111-1111-1111-111111111111")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let limit = 50;
@@ -170,6 +172,7 @@ async fn test_importance_inbox_underfilled_page_has_no_more(
 async fn test_importance_pagination_multi_inbox_counts_agree(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link1 = Uuid::parse_str("a1111111-1111-1111-1111-111111111111")?;
     let link2 = Uuid::parse_str("b2222222-2222-2222-2222-222222222222")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);

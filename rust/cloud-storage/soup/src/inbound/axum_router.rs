@@ -23,7 +23,7 @@ use email::{
 };
 use entity_access::{
     domain::{
-        models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole},
+        models::{EntityAccessReceipt, MemberTeamRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
@@ -465,7 +465,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + RequestsCrmScope + RequestsCrmAdmin,
+        R: Clone + Serialize + Send,
     {
         let user_for_favorites = macro_user_id.copied().into_owned();
         let create_fallback = move || -> SoupQuery<R> {
@@ -490,15 +490,10 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
-        // Derive CRM-scope authorization from the *effective* filter (the
-        // one embedded in the resolved SoupQuery), not the raw request body.
-        // For cursor-paginated requests the body's filters may be empty and
-        // the real filter lives inside the cursor — checking the body would
-        // miss CRM scope on follow-up pages.
-        let team_receipt =
-            resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
-        require_crm_admin_role(cursor.filter().requests_crm_admin(), &team_receipt)?;
-
+        // CRM authorization (team membership for CRM scope, admin/owner
+        // role for hidden companies) is enforced by the soup domain and
+        // CRM service from the receipt itself; the router just forwards
+        // whatever membership the extractor resolved.
         let res = self
             .service
             .get_user_soup(
@@ -513,7 +508,7 @@ where
                     email_preview_view: email_view,
                     link_ids,
                 },
-                team_receipt,
+                team_receipt_option,
             )
             .await?;
 
@@ -582,69 +577,6 @@ where
                 .map(ApiGroupMeta::from)
                 .collect(),
         })
-    }
-}
-
-/// Probe applied to whichever filter type a soup endpoint accepts
-/// (`EntityFilters` for the typed POST, `ApiEntityFilterAst` for the AST
-/// endpoint). Lets `handle` inspect the *materialized* SoupQuery's filter
-/// — which may have come from the request body or from the cursor — and
-/// decide whether CRM scope is in play.
-pub trait RequestsCrmScope {
-    /// True when this filter asks the query to expand visibility across
-    /// the requesting user's team via a CRM-scoped attribute
-    /// (`crm_domains` or `crm_addresses`).
-    fn requests_crm_scope(&self) -> bool;
-}
-
-impl RequestsCrmScope for EntityFilters {
-    fn requests_crm_scope(&self) -> bool {
-        !self.email_filters.crm_domains.is_empty() || !self.email_filters.crm_addresses.is_empty()
-    }
-}
-
-impl RequestsCrmScope for ApiEntityFilterAst {
-    fn requests_crm_scope(&self) -> bool {
-        !self.email_crm_domains.is_empty() || !self.email_crm_addresses.is_empty()
-    }
-}
-
-/// Filter bodies that may opt into admin-only CRM data (currently:
-/// hidden CRM companies) implement this so the soup handler can gate
-/// the request on an admin/owner team role.
-pub trait RequestsCrmAdmin {
-    /// True when this filter asks for data only admin/owner team
-    /// members may see — e.g. `crm_company_filters.hidden = Some(true)`.
-    fn requests_crm_admin(&self) -> bool;
-}
-
-impl RequestsCrmAdmin for EntityFilters {
-    fn requests_crm_admin(&self) -> bool {
-        matches!(self.crm_company_filters.hidden, Some(true))
-    }
-}
-
-impl RequestsCrmAdmin for ApiEntityFilterAst {
-    fn requests_crm_admin(&self) -> bool {
-        self.crm_company_filter
-            .as_deref()
-            .is_some_and(ast_requests_crm_admin)
-    }
-}
-
-/// Walks a `CrmCompanyLiteral` AST checking for any `Hidden(true)`
-/// literal. Mirrors the conservative shape the request-time extractor
-/// in `models::extract_crm_company_filter` allows: `And`/`Or` recurse;
-/// `Not` would invert and fail closed downstream, but for the *role
-/// gate* we still must inspect under `Not` to avoid a `Not(Hidden(false))`
-/// sneaking past — treat any path reaching a `Hidden(true)` literal as
-/// admin-required.
-fn ast_requests_crm_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
-    match expr {
-        Expr::Literal(CrmCompanyLiteral::Hidden(true)) => true,
-        Expr::Literal(_) => false,
-        Expr::And(a, b) | Expr::Or(a, b) => ast_requests_crm_admin(a) || ast_requests_crm_admin(b),
-        Expr::Not(a) => ast_requests_crm_admin(a),
     }
 }
 
@@ -745,6 +677,8 @@ impl From<SoupErr> for SoupHandlerErr {
     fn from(value: SoupErr) -> Self {
         match value {
             SoupErr::AstErr(expand_err) => SoupHandlerErr::ExpandErr(expand_err),
+            SoupErr::CrmTeamRequired => SoupHandlerErr::CrmScopeForbidden,
+            SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
             err => SoupHandlerErr::Internal(err),
         }
     }
@@ -1079,43 +1013,6 @@ where
             })
         }
     }))
-}
-
-/// Returns the team receipt to use when CRM-scoped visibility is required.
-/// `crm_scope_requested` is true when the request body carries a
-/// `crm_domains` / `crm_addresses` attribute. Returns
-/// `Err(CrmScopeForbidden)` when CRM scope was requested but the user has
-/// no qualifying team membership.
-fn resolve_crm_team_receipt(
-    crm_scope_requested: bool,
-    receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-) -> Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupHandlerErr> {
-    if crm_scope_requested && receipt.is_none() {
-        return Err(SoupHandlerErr::CrmScopeForbidden);
-    }
-    Ok(receipt)
-}
-
-/// Companion to [`resolve_crm_team_receipt`] for the admin-only CRM
-/// data path (currently: hidden CRM companies). `admin_requested` is
-/// the result of [`RequestsCrmAdmin::requests_crm_admin`] on the
-/// effective filter. Returns `Err(CrmAdminRequired)` when the request
-/// asks for admin-only data but the receipt is missing or the user's
-/// actual team role doesn't satisfy [`AdminTeamRole`].
-fn require_crm_admin_role(
-    admin_requested: bool,
-    receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
-) -> Result<(), SoupHandlerErr> {
-    if !admin_requested {
-        return Ok(());
-    }
-    let Some(receipt) = receipt else {
-        return Err(SoupHandlerErr::CrmAdminRequired);
-    };
-    if !receipt.entity_permission().satisfies::<AdminTeamRole>() {
-        return Err(SoupHandlerErr::CrmAdminRequired);
-    }
-    Ok(())
 }
 
 /// Wire-format entity filter AST accepted by soup AST endpoints.

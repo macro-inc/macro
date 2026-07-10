@@ -399,7 +399,7 @@ fn create_body() -> serde_json::Value {
         "name": "Events",
         "endpoint_url": "https://example.com/webhook",
         "headers": {"x-custom": "value"},
-        "rule": {"events": ["document.created"]}
+        "filters": [{"events": ["document.created"]}]
     })
 }
 
@@ -425,7 +425,7 @@ fn webhook() -> Webhook {
         "created_at": "2026-06-29T00:00:00Z",
         "updated_at": "2026-06-29T00:00:00Z",
         "deleted_at": null,
-        "rule": {"events": ["document.created"]}
+        "filters": [{"events": ["document.created"]}]
     }))
     .unwrap()
 }

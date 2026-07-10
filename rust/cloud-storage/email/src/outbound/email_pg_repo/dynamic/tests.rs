@@ -254,49 +254,56 @@ fn test_partial_and_domain_emit_different_predicates_for_same_string() {
 }
 
 #[test]
-fn test_build_message_email_filter_importance_true_includes_drafts() {
-    let expr = Expr::Literal(EmailLiteral::Importance(true));
-    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
-    let debug = result.to_debug_sql();
+fn test_importance_compiles_to_thread_signal_flag() {
+    let thread = build_thread_email_filter(
+        &Expr::Literal(EmailLiteral::Importance(true)),
+        "t.updated_at",
+    )
+    .to_debug_sql();
+    assert!(thread.contains("t.is_signal"));
+    assert!(!thread.contains("NOT t.is_signal"));
 
-    assert!(debug.contains("m.is_draft = TRUE"));
+    let thread = build_thread_email_filter(
+        &Expr::Literal(EmailLiteral::Importance(false)),
+        "t.updated_at",
+    )
+    .to_debug_sql();
+    assert!(thread.contains("NOT t.is_signal"));
 }
 
 #[test]
-fn test_build_message_email_filter_importance_true_excludes_trash() {
-    let expr = Expr::Literal(EmailLiteral::Importance(true));
-    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
-    let debug = result.to_debug_sql();
-
-    assert!(debug.contains("l.name = 'TRASH'"));
-    assert!(debug.contains("NOT EXISTS"));
+fn test_importance_is_noop_in_message_filter() {
+    // The heuristic lives in the denormalized flag now; the lateral must not
+    // re-evaluate it per message.
+    for imp in [true, false] {
+        let result = build_message_email_filter(
+            &Expr::Literal(EmailLiteral::Importance(imp)),
+            &ResolvedFilters::empty(),
+        );
+        let debug = result.to_debug_sql();
+        assert!(!debug.contains("email_filters"));
+        assert!(!debug.contains("CATEGORY"));
+        assert!(!debug.contains("is_important"));
+    }
 }
 
 #[test]
-fn test_build_message_email_filter_importance_true_includes_email_filters() {
-    let expr = Expr::Literal(EmailLiteral::Importance(true));
-    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
-    let debug = result.to_debug_sql();
+fn test_importance_query_has_no_message_exists_pushdown() {
+    use item_filters::SharedEmailFilter;
 
-    assert!(debug.contains("FROM email_filters ef"));
-    assert!(
-        debug
-            .contains("LOWER(ef.email_domain) = LOWER(split_part(sender_c.email_address, '@', 2))")
+    // The Signal-tab shape: inbox view + Importance(true) + Shared(exclude).
+    // The candidate stage must filter on t.is_signal directly, with no
+    // per-message EXISTS mirror (the inbox view has no message filter).
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::Importance(true)),
+        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
     );
-    assert!(debug.contains("ef.is_important = TRUE"));
-    assert!(debug.contains("ef_addr.is_important = FALSE"));
-}
+    let sql = super::query::debug_build_query_sql(&view, &expr);
 
-#[test]
-fn test_build_message_email_filter_importance_false_includes_email_filters() {
-    let expr = Expr::Literal(EmailLiteral::Importance(false));
-    let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
-    let debug = result.to_debug_sql();
-
-    assert!(debug.contains("FROM email_filters ef"));
-    assert!(debug.contains("LOWER(ef.email_address) = LOWER(sender_c.email_address)"));
-    assert!(debug.contains("ef.is_important = FALSE"));
-    assert!(debug.contains("ef_addr.is_important = TRUE"));
+    assert!(sql.contains("t.is_signal"));
+    assert!(!sql.contains("AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id"));
+    assert!(!sql.contains("is_important = "));
 }
 
 #[test]

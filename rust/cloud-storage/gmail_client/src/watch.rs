@@ -51,6 +51,13 @@ pub(crate) async fn register_watch(
             return Err(GmailError::Conflict(error_body));
         }
 
+        // An access token minted from a grant without the Gmail scope is rejected
+        // with a 403. Typed so callers can treat it as a missing grant, matching
+        // the 403 mapping elsewhere in this client.
+        if status == reqwest::StatusCode::FORBIDDEN {
+            return Err(GmailError::Forbidden);
+        }
+
         return Err(GmailError::ApiError(format!(
             "({}): {}",
             status, error_body

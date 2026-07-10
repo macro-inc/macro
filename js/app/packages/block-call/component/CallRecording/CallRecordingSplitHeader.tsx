@@ -140,7 +140,7 @@ export function CallRecordingSplitHeader(props: {
               <Button
                 depth={2}
                 variant="base"
-                size="icon-sm"
+                size="icon-xs"
                 class="bg-surface"
                 tooltip="Call Again"
                 onClick={() => call.joinCall()}

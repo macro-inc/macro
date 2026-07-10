@@ -1,4 +1,6 @@
+use crate::api::context::ApiContext;
 use cookie::{Cookie, SameSite};
+use email::domain::ports::{FirstInboxProvisionOutcome, FirstInboxProvisioner};
 use macro_auth::constant::{MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE};
 use macro_env::Environment;
 use macro_env_var::maybe_env_vars;
@@ -143,4 +145,29 @@ pub async fn append_signed_up_param_if_new_user(
             tracing::error!(error=?e, "unable to check just-signed-up marker");
         }
     }
+}
+
+/// Provisions the user's primary inbox as a side effect of authentication,
+/// the moment a fresh access token exists. Fire-and-forget so the login
+/// response is never delayed. The email service arbitrates: a login without a
+/// usable Gmail grant is an expected no-op, and init is idempotent and recurs
+/// on every login, so a lost attempt only delays provisioning until the next one.
+pub fn spawn_first_inbox_provision(ctx: &ApiContext, access_token: &str) {
+    let email_service_client = ctx.email_service_client.clone();
+    let access_token = access_token.to_string();
+
+    tokio::spawn(async move {
+        match email_service_client
+            .provision_first_inbox(&access_token)
+            .await
+        {
+            Ok(FirstInboxProvisionOutcome::Provisioned) => {
+                tracing::info!("first-inbox provision: inbox initialized on login");
+            }
+            Ok(FirstInboxProvisionOutcome::Skipped) => {}
+            Err(e) => {
+                tracing::warn!(error=?e, "first-inbox provision: init failed");
+            }
+        }
+    });
 }

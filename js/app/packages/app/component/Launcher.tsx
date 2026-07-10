@@ -737,7 +737,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
+    <div class="bg-surface ring ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
       <div class="flex items-center justify-between p-2 px-4 sm:px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">

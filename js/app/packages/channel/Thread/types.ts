@@ -56,6 +56,8 @@ export type ThreadProps = {
   selectedMessageId?: Accessor<string | undefined>;
   onSelectMessage?: (messageId: string) => void;
   onClearSelection?: () => void;
+  /** Release the navigation target (clicking the targeted message). */
+  onClearTarget?: (threadId: string) => void;
   messageListScopeId?: string;
   isNewestThread?: boolean;
 } & ThreadState;
