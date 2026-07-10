@@ -1,5 +1,4 @@
 import { openChatWithInput } from '@app/component/ChatWithAgentButton';
-import { SwipableRowProvider } from 'app/component/mobile/SwipableRow';
 import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@app/component/mobile/float-regions/float-region-state';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -53,6 +52,7 @@ import {
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { queryClient } from '@queries/client';
 import { useBeforeLeave } from '@solidjs/router';
+import { SwipableRowProvider } from 'app/component/mobile/SwipableRow';
 import {
   type Accessor,
   createEffect,

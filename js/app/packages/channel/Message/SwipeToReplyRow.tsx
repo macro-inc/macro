@@ -1,7 +1,10 @@
-import { SwipableRow, SwipableRowContext } from 'app/component/mobile/SwipableRow';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
+import {
+  SwipableRow,
+  SwipableRowContext,
+} from 'app/component/mobile/SwipableRow';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
 
@@ -58,13 +61,14 @@ export function MaybeSwipeToReplyRow(
     >
       <SwipableRow
         id={props.message.id}
+        class="channel-message-swipe-to-reply-row"
         onSwipeLeft={reply}
         // Transparent throughout: decorations behind the row (thread rails)
         // must stay visible, and the rubber-banded right direction must not
         // tint the row. The badge alone signals the pending action.
         swipeLeftColor="bg-transparent"
         swipeRightColor="bg-transparent"
-        contentColor="bg-transparent"
+        rowBgClass="bg-transparent"
         swipeLeftRevealedComponent={
           <SwipeReplyBadge messageId={props.message.id} />
         }

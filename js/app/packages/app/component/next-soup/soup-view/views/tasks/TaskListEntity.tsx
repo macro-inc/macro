@@ -1,5 +1,8 @@
 import '@entity/composed/ListEntity.css';
-import { SwipableRow, SwipableRowContext } from '@app/component/mobile/SwipableRow';
+import {
+  SwipableRow,
+  SwipableRowContext,
+} from '@app/component/mobile/SwipableRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';

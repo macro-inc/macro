@@ -1,5 +1,4 @@
 import './ListEntity.css';
-import { SwipableRow, SwipableRowContext } from 'app/component/mobile/SwipableRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
@@ -16,6 +15,10 @@ import {
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui';
+import {
+  SwipableRow,
+  SwipableRowContext,
+} from 'app/component/mobile/SwipableRow';
 import {
   createEffect,
   createMemo,

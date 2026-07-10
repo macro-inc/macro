@@ -3,9 +3,9 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { SwipableRowProvider } from '@app/component/mobile/SwipableRow';
 import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
 import { PullToRefresh } from '@app/component/mobile/PullToRefresh';
+import { SwipableRowProvider } from '@app/component/mobile/SwipableRow';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,

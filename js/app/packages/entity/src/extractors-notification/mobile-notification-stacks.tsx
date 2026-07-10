@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { SwipableRow, SwipableRowContext } from 'app/component/mobile/SwipableRow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   getMostRecentNotification,
@@ -7,6 +6,10 @@ import {
   openNotification,
 } from '@notifications';
 import { cn } from '@ui';
+import {
+  SwipableRow,
+  SwipableRowContext,
+} from 'app/component/mobile/SwipableRow';
 import { createEffect, type JSX, useContext } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';

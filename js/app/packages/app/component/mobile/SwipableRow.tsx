@@ -1,4 +1,5 @@
 import { hapticImpact } from '@core/mobile/haptics';
+import { cn } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -96,9 +97,7 @@ export function SwipableRowProvider(
      * actions that keep it in place (e.g. reply to a message).
      */
     triggerBehavior?: 'fly-out' | 'spring-back';
-    setCollapseEntity?: Setter<
-      ((id: string) => Promise<void>) | undefined
-    >;
+    setCollapseEntity?: Setter<((id: string) => Promise<void>) | undefined>;
   }>
 ) {
   const [stateById, setStateById] = createSignal<
@@ -245,14 +244,12 @@ export function SwipableRowProvider(
   };
 
   const canSwipeRight = (id: string) => {
-    if (customRowSwipeHandlers.get(id)?.onSwipeRight !== undefined)
-      return true;
+    if (customRowSwipeHandlers.get(id)?.onSwipeRight !== undefined) return true;
     if (!props.onSwipeRight) return false;
     return props.canSwipeRight ? props.canSwipeRight(id) : true;
   };
   const canSwipeLeft = (id: string) => {
-    if (customRowSwipeHandlers.get(id)?.onSwipeLeft !== undefined)
-      return true;
+    if (customRowSwipeHandlers.get(id)?.onSwipeLeft !== undefined) return true;
     if (!props.onSwipeLeft) return false;
     return props.canSwipeLeft ? props.canSwipeLeft(id) : true;
   };
@@ -407,11 +404,7 @@ export function SwipableRowProvider(
   };
 
   const onTouchEnd = (_e: TouchEvent) => {
-    if (
-      !touchState.elements ||
-      !touchState.id ||
-      !touchState.isSwipeGesture
-    ) {
+    if (!touchState.elements || !touchState.id || !touchState.isSwipeGesture) {
       resetTouchState();
       return;
     }
@@ -463,8 +456,7 @@ export function SwipableRowProvider(
   });
 
   const ctx: SwipableRowContextValue = {
-    stateFor: (id) =>
-      stateById()[id] ?? { phase: 'idle', direction: null },
+    stateFor: (id) => stateById()[id] ?? { phase: 'idle', direction: null },
     clearState: (id) => clearState(id),
     collapseRow: collapseRow,
     registerRowHandler: (id, handlers) => {
@@ -488,6 +480,8 @@ export function SwipableRowProvider(
 export function SwipableRow(
   props: ParentProps<{
     id: string;
+    /** Applied to the root row so callers can scope styles to data-swipe-* attributes. */
+    class?: string;
     swipeRightRevealedComponent?: JSX.Element;
     swipeLeftRevealedComponent?: JSX.Element;
     swipeLeftColor?: string;
@@ -499,7 +493,7 @@ export function SwipableRow(
      * it (e.g. thread rails); the reveal components then have to manage
      * their own visibility, since nothing covers them at rest.
      */
-    contentColor?: string;
+    rowBgClass?: string;
     onSwipeLeft?: () => void;
     onSwipeRight?: () => void;
   }>
@@ -522,19 +516,29 @@ export function SwipableRow(
     ctx.clearState(props.id);
   });
 
+  const swipePhase = () => rowState().phase;
+  const swipeDirection = () => rowState().direction;
+  const isSwipeInteracting = () => isAtLeastPhase(swipePhase(), 'dragging');
+
   return (
     <div
       data-swipe-row
       data-swipe-id={props.id}
-      class="grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-250 ease-in-out"
-      classList={{
-        'bg-transparent': rowState()?.phase === 'idle',
-        [props.swipeLeftColor ?? 'bg-edge-muted']:
-          rowState()?.direction === 'left',
-        [props.swipeRightColor ?? 'bg-edge']: rowState()?.direction === 'right',
-        'grid-rows-[0fr]': isAtLeastPhase(rowState()?.phase, 'collapsing'),
-        'grid-rows-[1fr]': !isAtLeastPhase(rowState()?.phase, 'collapsing'),
-      }}
+      data-swipe-phase={swipePhase()}
+      data-swipe-direction={swipeDirection() ?? undefined}
+      data-swipe-interacting={isSwipeInteracting() ? '' : undefined}
+      class={cn(
+        'grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-250 ease-in-out',
+        props.class,
+        {
+          'bg-transparent': swipePhase() === 'idle',
+          [props.swipeLeftColor ?? 'bg-edge-muted']:
+            swipeDirection() === 'left',
+          [props.swipeRightColor ?? 'bg-edge']: swipeDirection() === 'right',
+          'grid-rows-[0fr]': isAtLeastPhase(swipePhase(), 'collapsing'),
+          'grid-rows-[1fr]': !isAtLeastPhase(swipePhase(), 'collapsing'),
+        }
+      )}
     >
       {/* Swipe Right Revealed Component */}
       <div
@@ -546,11 +550,10 @@ export function SwipableRow(
       >
         <div
           data-left-reveal
-          class="transition-transform duration-300 ease-in-out"
-          classList={{
-            'scale-50': !isAtLeastPhase(rowState()?.phase, 'threshold'),
-            'scale-100': isAtLeastPhase(rowState()?.phase, 'threshold'),
-          }}
+          class={cn('transition-transform duration-300 ease-in-out', {
+            'scale-50': !isAtLeastPhase(swipePhase(), 'threshold'),
+            'scale-100': isAtLeastPhase(swipePhase(), 'threshold'),
+          })}
         >
           {props.swipeRightRevealedComponent}
         </div>
@@ -566,11 +569,10 @@ export function SwipableRow(
       >
         <div
           data-right-reveal
-          class="transition-transform duration-300 ease-in-out"
-          classList={{
-            'scale-50': !isAtLeastPhase(rowState()?.phase, 'threshold'),
-            'scale-100': isAtLeastPhase(rowState()?.phase, 'threshold'),
-          }}
+          class={cn('transition-transform duration-300 ease-in-out', {
+            'scale-50': !isAtLeastPhase(swipePhase(), 'threshold'),
+            'scale-100': isAtLeastPhase(swipePhase(), 'threshold'),
+          })}
         >
           {props.swipeLeftRevealedComponent}
         </div>
@@ -584,7 +586,10 @@ export function SwipableRow(
         {/* Swipe Content */}
         <div
           data-swipe-content
-          class={`size-full min-h-0 overflow-hidden flex items-center p-0 ${props.contentColor ?? 'bg-panel'}`}
+          class={cn(
+            'size-full min-h-0 overflow-hidden flex items-center p-0',
+            props.rowBgClass ?? 'bg-panel'
+          )}
         >
           {props.children}
         </div>
