@@ -125,6 +125,13 @@ pub struct Config {
     #[macro_config_default(4)]
     pub queue_wait_time_seconds: i32,
 
+    /// Maximum number of SQS messages to receive per webhook worker poll
+    #[macro_config_default(10)]
+    pub webhook_queue_max_messages: i32,
+    /// SQS long-poll wait time in seconds for the webhook worker
+    #[macro_config_default(20)]
+    pub webhook_queue_wait_time_seconds: i32,
+
     /// The document limit for free users
     #[macro_config_default(20)]
     pub document_limit: u64,

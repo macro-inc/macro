@@ -482,7 +482,7 @@ export function MarkdownPopup(props: {
             </p>
             <div class="flex flex-row items-center space-x-2 w-full px-2">
               <textarea
-                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring-1 ring-edge bg-hover"
+                class="resize-none rounded-xs w-full p-2 my-3 text-sm h-max-[800px] overflow-hidden ring ring-edge bg-hover"
                 ref={setRewriteInputRef}
                 rows={1}
                 onSubmit={(e) => e.preventDefault()}

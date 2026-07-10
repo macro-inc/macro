@@ -169,4 +169,45 @@ describe('compileToAst', () => {
       '!': { l: { RootSender: 'macro|me@example.com' } },
     });
   });
+
+  it('compiles tag filters as one OR group across definitions by default', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: {
+          tagFilters: [
+            { propertyId: 'def-1', type: 'select', value: 'opt-1' },
+            { propertyId: 'def-2', type: 'select', value: 'opt-2' },
+          ],
+        },
+      })
+    );
+
+    expect(ast.propf).toEqual({
+      '|': [
+        { l: { pd: 'def-1', v: { so: 'opt-1' } } },
+        { l: { pd: 'def-2', v: { so: 'opt-2' } } },
+      ],
+    });
+  });
+
+  it('compiles tag filters as an AND group when tagFilterMode is all', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: {
+          tagFilterMode: 'all',
+          tagFilters: [
+            { propertyId: 'def-1', type: 'select', value: 'opt-1' },
+            { propertyId: 'def-2', type: 'select', value: 'opt-2' },
+          ],
+        },
+      })
+    );
+
+    expect(ast.propf).toEqual({
+      '&': [
+        { l: { pd: 'def-1', v: { so: 'opt-1' } } },
+        { l: { pd: 'def-2', v: { so: 'opt-2' } } },
+      ],
+    });
+  });
 });

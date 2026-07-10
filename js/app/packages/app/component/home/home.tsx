@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
@@ -12,7 +13,11 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { ENABLE_HOME_OVERRIDE } from '@core/constant/featureFlags';
+import {
+  ENABLE_HOME_OVERRIDE,
+  ENABLE_HOME_RECOMMENDATIONS_FLAG,
+  ENABLE_HOME_RECOMMENDATIONS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -22,7 +27,13 @@ import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Navigate } from '@solidjs/router';
-import { createMemo } from 'solid-js';
+import { $getRoot } from 'lexical';
+import { createEffect } from 'solid-js';
+import { HomeBackfillProgress } from './home-backfill-progress';
+import { replaceHomeComposerDraft } from './home-composer-selection';
+import { HomeExamples } from './home-examples';
+import { GettingStartedSection, RecommendedSection } from './home-hub';
+import { createHomePreferences } from './home-prefs';
 import { HomeSectionBoundary } from './home-section-boundary';
 
 const MACRO_LOGO_PATH =
@@ -57,6 +68,13 @@ function AnimatedHeroLogo(props: { class?: string }) {
   );
 }
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function Home() {
   return (
     <ShowFeatureFlag
@@ -75,69 +93,76 @@ export function Home() {
 
 function HomeContent() {
   const user = useUserContext();
+  const preferences = createHomePreferences();
 
-  const firstName = createMemo(() => {
+  const firstName = () => {
     const name = user.author();
     return name.includes('@') ? name.split('@')[0] : name.split(' ')[0];
-  });
+  };
 
-  const greeting = createMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  });
+  const greeting = getGreeting();
 
   return (
-    <main class="relative h-full overflow-y-auto bg-surface">
+    <main class="relative flex h-full flex-col bg-surface">
       <style>{
         /*css*/ `
-          @keyframes home-hero-fade-up {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-          }
           @keyframes home-hero-logo-fill {
             from { transform: scaleX(0); }
             to   { transform: scaleX(1); }
           }
-          .home-hero-stagger > * {
-            animation: home-hero-fade-up 250ms ease-out both;
+          @keyframes home-fade-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
           }
-          .home-hero-stagger > *:nth-child(1) { animation-delay: 50ms; }
-          .home-hero-stagger > *:nth-child(2) { animation-delay: 120ms; }
-          .home-hero-stagger > *:nth-child(3) { animation-delay: 190ms; }
           .home-logo-fill-clip {
             transform-box: fill-box;
             transform-origin: left center;
             animation: home-hero-logo-fill 550ms cubic-bezier(0.2, 0.8, 0.2, 1) 50ms both;
           }
+          .home-content { animation: home-fade-in 280ms ease-out both; }
           @media (prefers-reduced-motion: reduce) {
-            .home-hero-stagger > *,
-            .home-logo-fill-clip {
-              animation: none;
-            }
+            .home-logo-fill-clip, .home-content { animation: none; }
           }
         `
       }</style>
 
-      <div class="@container/home size-full p-2 mobile:pb-[calc(var(--mobile-content-inset-bottom)+1rem)] sm:pb-10 md:p-4">
-        <HomeSectionBoundary title="hero">
-          <section class="relative flex flex-col size-full">
-            <div class="home-hero-stagger mx-auto flex flex-col items-center gap-8 justify-end sm:justify-center sm:-mt-15 max-w-2xl size-full">
-              <div class="flex flex-col sm:flex-row w-full items-center gap-3 justify-center my-auto sm:m-0">
-                <AnimatedHeroLogo class="size-6 text-accent" />
-                <div class="flex flex-col gap-1 items-center">
-                  <h1 class="relative min-w-0 text-balance text-2xl font-normal tracking-tight text-ink">
-                    {greeting()}, <span class="capitalize">{firstName()}</span>
-                  </h1>
-                </div>
-              </div>
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 mobile:pb-(--mobile-content-inset-bottom) md:pt-16">
+          <header class="flex items-center gap-2.5">
+            <AnimatedHeroLogo class="size-6 shrink-0 text-accent" />
+            <h1 class="text-xl font-normal tracking-tight text-ink">
+              {greeting}, <span class="capitalize">{firstName()}</span>
+            </h1>
+          </header>
 
-              <HomeChatInput />
-            </div>
-          </section>
-        </HomeSectionBoundary>
+          <HomeSectionBoundary title="import">
+            <HomeBackfillProgress />
+          </HomeSectionBoundary>
+
+          <ShowFeatureFlag
+            key={ENABLE_HOME_RECOMMENDATIONS_FLAG}
+            enabledOverride={ENABLE_HOME_RECOMMENDATIONS_OVERRIDE}
+          >
+            <HomeSectionBoundary title="recommendations" fallback={null}>
+              <RecommendedSection />
+            </HomeSectionBoundary>
+          </ShowFeatureFlag>
+
+          <HomeSectionBoundary title="getting started" fallback={null}>
+            <GettingStartedSection preferences={preferences} />
+          </HomeSectionBoundary>
+
+          <HomeSectionBoundary title="examples">
+            <HomeExamples preferences={preferences} />
+          </HomeSectionBoundary>
+        </div>
       </div>
+
+      <FloatRegionOrInline region="accessory">
+        <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto mobile:px-(--mobile-chrome-gutter) mobile:pb-0">
+          <HomeChatInput />
+        </div>
+      </FloatRegionOrInline>
     </main>
   );
 }
@@ -157,6 +182,27 @@ const HomeChatInput = () => {
     },
     block: 'chat',
     showOpenTabs: true,
+  });
+
+  const applyDraft = (text: string) => {
+    replaceHomeComposerDraft(editor.controls, text);
+    requestAnimationFrame(() => {
+      editor.controls.focus();
+      // Focus lands at the start of the document; drafts are prompt prefixes,
+      // so the caret belongs at the end, ready to complete the sentence.
+      editor.controls.getLexical().update(() => {
+        $getRoot().selectEnd();
+      });
+    });
+  };
+
+  // Drafts requested from elsewhere on the home (e.g. a suggested action row).
+  createEffect(() => {
+    const draft = input.pendingDraft();
+    if (draft != null) {
+      applyDraft(draft);
+      input.setPendingDraft(null);
+    }
   });
 
   registerHotkey({
@@ -223,20 +269,16 @@ const HomeChatInput = () => {
   };
 
   return (
-    <div class="w-full max-w-3xl">
-      <div class="pointer-events-auto">
-        <ChatInput
-          variant="tall"
-          editor={editor}
-          onSend={handleSend}
-          onEscape={() => {
-            splitPanelContext.panelRef()?.focus();
-            return true;
-          }}
-          isPersistent={true}
-          autoFocusOnMount={true}
-        />
-      </div>
-    </div>
+    <ChatInput
+      variant="default"
+      editor={editor}
+      onSend={handleSend}
+      onEscape={() => {
+        splitPanelContext.panelRef()?.focus();
+        return true;
+      }}
+      isPersistent={true}
+      autoFocusOnMount={true}
+    />
   );
 };

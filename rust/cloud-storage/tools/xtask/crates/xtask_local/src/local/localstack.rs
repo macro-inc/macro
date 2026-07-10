@@ -49,10 +49,11 @@ async fn provision_async(url: &str) -> Result<()> {
 async fn create_queues(sqs: &aws_sdk_sqs::Client) -> Result<()> {
     for queue in resources::QUEUES {
         let name = queue.name;
-        ignore_exists(
-            sqs.create_queue().queue_name(name).send().await.map(|_| ()),
-            &format!("queue {name}"),
-        )?;
+        let mut request = sqs.create_queue().queue_name(name);
+        if name.ends_with(".fifo") {
+            request = request.attributes(aws_sdk_sqs::types::QueueAttributeName::FifoQueue, "true");
+        }
+        ignore_exists(request.send().await.map(|_| ()), &format!("queue {name}"))?;
     }
     Ok(())
 }

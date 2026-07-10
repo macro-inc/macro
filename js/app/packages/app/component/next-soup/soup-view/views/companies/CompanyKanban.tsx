@@ -28,14 +28,7 @@ import CircleDashed from '@phosphor/circle-dashed.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn, EmptyStatePanel, Layer } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Column key for companies without a Stage value. */
 const NO_STAGE_KEY = '';
@@ -75,31 +68,7 @@ export function CompanyKanban() {
     { key: NO_STAGE_KEY, label: 'No stage' },
   ]);
 
-  // Preview-pane open state is per history entry, mirroring SoupViewList:
-  // restored synchronously so the first render sees the pane, captured on
-  // nav-away so back/forward returns to the same state.
-  const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
-    | string
-    | undefined;
-  soup.setPreviewEntity(persistedPreview);
-  const previewCaptorTeardown = panel.handle.registerEntryStateCaptor(
-    'soup.preview',
-    () => soup.previewEntity()
-  );
-  onCleanup(previewCaptorTeardown);
-
-  const { paneVisible, previewVisible } = usePreviewPaneVisiblity();
-
-  // Keep the panel-level preview flag in sync (entity toolbars read it),
-  // and clear it when the board unmounts so it doesn't go stale.
-  createEffect(() => {
-    const hasPreviewEntity = !!soup.previewEntity();
-    const [getPreview, setPreview] = panel.previewState;
-    if (hasPreviewEntity !== getPreview()) {
-      setPreview(hasPreviewEntity);
-    }
-  });
-  onCleanup(() => panel.previewState[1](false));
+  const { paneVisible, selectedEntity } = usePreviewPaneVisiblity();
 
   const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
 
@@ -154,7 +123,7 @@ export function CompanyKanban() {
 
     // While the preview pane is open, card clicks retarget it instead of
     // replacing the split (mirrors the list view's behavior).
-    if (previewVisible() && soup.previewEntity()) {
+    if (paneVisible()) {
       soup.setPreviewEntity(entity.id);
       return;
     }
@@ -263,7 +232,7 @@ export function CompanyKanban() {
           target={{ kind: 'percent', percent: 70 }}
         >
           <Show
-            when={soup.focus.item()}
+            when={selectedEntity()}
             fallback={
               <EmptyStatePanel
                 graphic={EmptyStatePreviewIcon}
@@ -273,11 +242,13 @@ export function CompanyKanban() {
               />
             }
           >
-            <PreviewPanel
-              selectedEntity={soup.focus.item()}
-              orchestrator={orchestrator}
-              splitPanelContext={panel}
-            />
+            {(entity) => (
+              <PreviewPanel
+                selectedEntity={entity()}
+                orchestrator={orchestrator}
+                splitPanelContext={panel}
+              />
+            )}
           </Show>
         </Resize.Panel>
       </Show>

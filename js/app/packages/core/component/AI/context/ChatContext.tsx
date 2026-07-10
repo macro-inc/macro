@@ -25,6 +25,13 @@ type ChatInputState = {
   setIsGenerating: (generating: boolean) => void;
   attachments: Attachments;
   uploadQueue: UploadQueue;
+  /**
+   * Draft text requested by something outside the input (e.g. an example card
+   * or a suggested action). The input watches this, loads it into the editor,
+   * focuses, then clears it back to null.
+   */
+  pendingDraft: Accessor<string | null>;
+  setPendingDraft: (text: string | null) => void;
 };
 
 const ChatInputCtx = createContext<ChatInputState>();
@@ -46,6 +53,8 @@ export function ChatInputProvider(
   const attachments = useAttachments(props.initialAttachments);
   const uploadQueue = useUploadAttachment();
 
+  const [pendingDraft, setPendingDraft] = createSignal<string | null>(null);
+
   return (
     <ChatInputCtx.Provider
       value={{
@@ -55,6 +64,8 @@ export function ChatInputProvider(
         setIsGenerating,
         attachments,
         uploadQueue,
+        pendingDraft,
+        setPendingDraft,
       }}
     >
       {props.children}

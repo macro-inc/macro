@@ -311,7 +311,7 @@ export function ChatMessages(props: ChatMessagesProps) {
             </>
           }
         >
-          <EmptyChatState minHeight={Math.max(parentHeight(), 420)} />
+          <EmptyChatState />
         </Show>
       </div>
     </StaticMarkdownContext>

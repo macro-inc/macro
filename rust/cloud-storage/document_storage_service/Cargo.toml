@@ -22,7 +22,7 @@ path = "src/doppler_config.rs"
 connection_gateway = []
 default = ["connection_gateway", "delete_document_worker", "graphql", "location_check"]
 delete_document_worker = []
-graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:graphql_soup"]
+graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:complete_graph"]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
 location_check = []
@@ -74,7 +74,7 @@ favorites = { path = "../favorites", features = ["inbound", "postgres"] }
 foreign_entity = { path = "../foreign_entity", features = ["inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
-graphql_soup = { path = "../graphql_soup", optional = true }
+complete_graph = { path = "../complete_graph", optional = true }
 github = { path = "../github", default-features = false, features = [
   "axum",
   "inbound",
@@ -163,7 +163,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
-webhook = { path = "../webhook", features = ["inbound", "outbound"] }
+webhook = { path = "../webhook", features = ["inbound", "outbound", "worker"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_config = { path = "../macro_config" }
 doppler-config = { workspace = true }

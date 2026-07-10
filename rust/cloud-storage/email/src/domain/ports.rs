@@ -532,6 +532,131 @@ impl EmailMessageEnqueuer for NoOpEnqueuer {
     }
 }
 
+/// No-op [`EmailService`] for binaries that need to satisfy the bound but
+/// never call email — e.g. schema-only GraphQL SDL export. Every method
+/// errors; swap for a real implementation if you actually need email.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpEmailService;
+
+fn no_op_email_err() -> EmailErr {
+    EmailErr::RepoErr(anyhow::anyhow!("no-op email service"))
+}
+
+impl EmailService for NoOpEmailService {
+    async fn get_email_thread_previews(
+        &self,
+        _req: GetEmailsRequest,
+    ) -> Result<PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>, EmailErr>
+    {
+        Err(no_op_email_err())
+    }
+
+    async fn get_link_by_auth_id_and_macro_id(
+        &self,
+        _auth_id: &str,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_link_by_macro_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_owned_link_for_thread(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _thread_id: Uuid,
+    ) -> Result<Option<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Thread>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<ParsedThread>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn create_draft(
+        &self,
+        _link: &Link,
+        _accessible_inboxes: &[Link],
+        _input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn send_message(
+        &self,
+        _link: &Link,
+        _accessible_inboxes: &[Link],
+        _input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn list_labels(&self, _link: &Link) -> Result<Vec<LinkLabel>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn update_thread_labels(
+        &self,
+        _access_token: &str,
+        _link: &Link,
+        _thread_id: Uuid,
+        _label_id: Uuid,
+        _add: bool,
+    ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn update_thread_project(
+        &self,
+        _thread_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
+    ) -> Result<Option<String>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn upsert_email_filter(
+        &self,
+        _link: &Link,
+        _input: UpsertEmailFilterInput,
+    ) -> Result<EmailFilter, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn delete_email_filter(&self, _link: &Link, _filter_id: Uuid) -> Result<bool, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn list_email_filters(&self, _link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
 /// Outcome of a first-inbox provisioning attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FirstInboxProvisionOutcome {

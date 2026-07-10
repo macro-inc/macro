@@ -365,7 +365,7 @@ function GithubPullRequestChecksPopover(props: {
                     <Layer depth={5}>
                       <span
                         class={cn(
-                          'absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md bg-active text-ink-extra-muted opacity-0 shadow-sm ring-1 ring-edge-muted',
+                          'absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md bg-active text-ink-extra-muted opacity-0 shadow-sm ring ring-edge-muted',
                           hasUrl() && 'group-hover/check-card:opacity-100'
                         )}
                       >

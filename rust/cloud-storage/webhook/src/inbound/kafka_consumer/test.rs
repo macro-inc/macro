@@ -72,11 +72,9 @@ struct FlakyIngestionService {
 impl FlakyIngestionService {
     fn failure(&self) -> WebhookEventIngestionError {
         if self.transient {
-            WebhookEventIngestionError::EntityAccess(AccessError::DatabaseError(
-                sqlx::Error::PoolTimedOut,
-            ))
+            WebhookEventIngestionError::Enqueue(anyhow::anyhow!("queue unavailable"))
         } else {
-            WebhookEventIngestionError::Internal(anyhow::anyhow!("permanent failure"))
+            WebhookEventIngestionError::EntityAccess(AccessError::Unauthorized)
         }
     }
 }

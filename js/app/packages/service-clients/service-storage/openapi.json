@@ -12627,7 +12627,7 @@
         "properties": {
           "endpoint_url": {
             "type": "string",
-            "description": "HTTPS endpoint URL."
+            "description": "Endpoint URL. HTTPS is required outside local environments."
           },
           "filters": {
             "$ref": "#/components/schemas/Vec",
@@ -12749,7 +12749,7 @@
           },
           "hidden": {
             "type": ["boolean", "null"],
-            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced by the CRM service from the\ncaller's team receipt."
           }
         }
       },
@@ -14165,6 +14165,10 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
+          },
+          "tag_filter_mode": {
+            "$ref": "#/components/schemas/TagFilterMode",
+            "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
           },
           "tag_option_ids": {
             "type": "array",
@@ -16337,7 +16341,7 @@
         "properties": {
           "endpoint_url": {
             "type": ["string", "null"],
-            "description": "HTTPS endpoint URL."
+            "description": "Endpoint URL. HTTPS is required outside local environments."
           },
           "filters": {
             "oneOf": [
@@ -19300,6 +19304,11 @@
           }
         }
       },
+      "TagFilterMode": {
+        "type": "string",
+        "description": "How multiple `tag_option_ids` combine when filtering.",
+        "enum": ["any", "all"]
+      },
       "TaskFilters": {
         "type": "object",
         "description": "Task-only filters nested under document filters.",
@@ -19821,7 +19830,7 @@
           },
           "endpoint_url": {
             "type": "string",
-            "description": "HTTPS endpoint URL."
+            "description": "Endpoint URL. HTTPS is required outside local environments."
           },
           "filters": {
             "$ref": "#/components/schemas/Vec",

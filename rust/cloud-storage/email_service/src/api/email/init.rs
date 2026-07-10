@@ -79,9 +79,9 @@ pub struct InitErrorCodeResponse {
     pub message: String,
 }
 
-impl IntoResponse for InitError {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
+impl InitError {
+    fn status_code(&self) -> StatusCode {
+        match self {
             InitError::AlreadyInitialized
             | InitError::NoGmailGrant
             | InitError::BadRequest(_)
@@ -91,7 +91,13 @@ impl IntoResponse for InitError {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             InitError::SharedInboxConflict { .. } => StatusCode::CONFLICT,
-        };
+        }
+    }
+}
+
+impl IntoResponse for InitError {
+    fn into_response(self) -> Response {
+        let status_code = self.status_code();
 
         match self {
             InitError::SharedInboxConflict {
@@ -183,9 +189,31 @@ pub struct InitParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_extractor), fields(user_id=user_extractor.user_context.user_id, fusionauth_user_id=user_extractor.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, user_extractor), fields(user_id=user_extractor.user_context.user_id, fusionauth_user_id=user_extractor.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    query: Query<InitParams>,
+    user_extractor: MacroUserExtractor,
+) -> Result<Response, InitError> {
+    // Init runs on every authentication, so its expected no-op outcomes (400s)
+    // must not error-log. The span skips the auto err event and the result is
+    // classified here, inside the span, where user fields still attach.
+    let result = init_user(ctx, query, user_extractor).await;
+    if let Err(e) = &result {
+        let status = e.status_code();
+        if status.is_server_error() {
+            tracing::error!(error = ?e, "init failed");
+        } else if status == StatusCode::TOO_MANY_REQUESTS {
+            tracing::warn!(error = %e, "init rate limited");
+        } else {
+            tracing::debug!(error = %e, "init declined");
+        }
+    }
+    result
+}
+
+async fn init_user(
+    ctx: ApiContext,
     Query(InitParams {
         link_id,
         force_share,

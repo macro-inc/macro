@@ -164,6 +164,12 @@ impl IntoResponse for CrmError {
                     message: message.into(),
                 }),
             ),
+            CrmError::AdminRoleRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "querying hidden crm entities requires admin/owner team role".into(),
+                }),
+            ),
             CrmError::CompanyHidden => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {

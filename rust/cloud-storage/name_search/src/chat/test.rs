@@ -16,8 +16,18 @@ async fn test_search_chat_names_empty_term(pool: Pool<Postgres>) -> anyhow::Resu
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result =
-        search_chat_names(&pool, &user_id, &[], "".to_string(), false, &[], 10, None).await;
+    let result = search_chat_names(
+        &pool,
+        &user_id,
+        &[],
+        "".to_string(),
+        false,
+        &[],
+        false,
+        10,
+        None,
+    )
+    .await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -46,6 +56,7 @@ async fn test_search_chat_names_ids_only_with_empty_ids(
         "project".to_string(),
         true,
         &[],
+        false,
         10,
         None,
     )
@@ -83,6 +94,7 @@ async fn test_search_chat_names_ids_only_mode(pool: Pool<Postgres>) -> anyhow::R
         "project".to_string(),
         true,
         &[],
+        false,
         10,
         None,
     )
@@ -133,6 +145,7 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         "project".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -180,6 +193,7 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         "PROJECT".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -195,6 +209,7 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         "project".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -210,6 +225,7 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         "PrOjEcT".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -239,6 +255,7 @@ async fn test_search_chat_names_with_shared_chats(pool: Pool<Postgres>) -> anyho
         "project".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -279,6 +296,7 @@ async fn test_search_chat_names_pagination_limit(pool: Pool<Postgres>) -> anyhow
         "project".to_string(),
         false,
         &[],
+        false,
         2,
         None,
     )
@@ -319,6 +337,7 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         "project".to_string(),
         false,
         &[],
+        false,
         2,
         None,
     )
@@ -341,6 +360,7 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         "project".to_string(),
         false,
         &[],
+        false,
         2,
         cursor,
     )
@@ -397,6 +417,7 @@ async fn test_search_chat_names_no_results(pool: Pool<Postgres>) -> anyhow::Resu
         "nonexistent".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -425,6 +446,7 @@ async fn test_search_chat_names_partial_match(pool: Pool<Postgres>) -> anyhow::R
         "meet".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -469,6 +491,7 @@ async fn test_search_chat_names_user_isolation(pool: Pool<Postgres>) -> anyhow::
         "User2".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -497,6 +520,7 @@ async fn test_search_chat_names_excludes_soft_deleted(pool: Pool<Postgres>) -> a
         "project".to_string(),
         false,
         &[],
+        false,
         10,
         None,
     )
@@ -540,6 +564,7 @@ async fn test_search_chat_names_rejects_thread_cursor(pool: Pool<Postgres>) -> a
         "test".to_string(),
         false,
         &[],
+        false,
         10,
         Some(cursor),
     )
@@ -571,6 +596,7 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
         "project".to_string(),
         false,
         &tagged,
+        false,
         10,
         None,
     )
@@ -591,6 +617,7 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
         "project".to_string(),
         false,
         &unheld,
+        false,
         10,
         None,
     )
@@ -627,6 +654,7 @@ async fn test_search_chat_names_tag_filter_ids_only(pool: Pool<Postgres>) -> any
         "project".to_string(),
         true,
         &tagged,
+        false,
         10,
         None,
     )
@@ -637,6 +665,64 @@ async fn test_search_chat_names_tag_filter_ids_only(pool: Pool<Postgres>) -> any
         response.items[0].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("chat", "chat_tags"))
+)]
+async fn test_search_chat_names_tag_filter_match_all(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserId::parse_from_str("macro|user1@test.com")
+        .map(|l| l.lowercase())
+        .unwrap();
+
+    // Every option id must be held. The two ids live on different property
+    // rows (definitions), so the check must span rows.
+    let across_rows = vec![
+        "cccccccc-0000-0000-0000-000000000001".to_string(),
+        "cccccccc-0000-0000-0000-000000000003".to_string(),
+    ];
+    let response = search_chat_names(
+        &pool,
+        &user_id,
+        &[],
+        "project".to_string(),
+        false,
+        &across_rows,
+        true,
+        10,
+        None,
+    )
+    .await?;
+
+    assert_eq!(response.items.len(), 1);
+    assert_eq!(
+        response.items[0].entity_id.to_string(),
+        "22222222-2222-2222-2222-222222222222"
+    );
+
+    // One held plus one unheld id matches nothing under match-all, while the
+    // same pair would match under any.
+    let with_unheld = vec![
+        "cccccccc-0000-0000-0000-000000000001".to_string(),
+        "cccccccc-0000-0000-0000-000000000099".to_string(),
+    ];
+    let response = search_chat_names(
+        &pool,
+        &user_id,
+        &[],
+        "project".to_string(),
+        false,
+        &with_unheld,
+        true,
+        10,
+        None,
+    )
+    .await?;
+
+    assert!(response.items.is_empty());
 
     Ok(())
 }

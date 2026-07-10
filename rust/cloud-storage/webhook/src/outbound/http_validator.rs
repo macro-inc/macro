@@ -5,7 +5,7 @@
 mod http_validator_test;
 
 use crate::domain::{
-    models::{Webhook, WebhookValidationResult},
+    models::{Webhook, WebhookEndpointSchemePolicy, WebhookValidationResult},
     ports::WebhookValidationClient,
 };
 use hmac::{Hmac, Mac};
@@ -16,25 +16,36 @@ use std::{net::IpAddr, time::Duration};
 use tokio::net::lookup_host;
 
 const EVENT_NAME: &str = "webhook.validation.test";
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 type HmacSha256 = Hmac<Sha256>;
 
 /// Reqwest-backed implementation of [`WebhookValidationClient`].
 #[derive(Clone)]
 pub struct ReqwestWebhookValidationClient {
-    client: Client,
+    pub(super) client: Client,
+    pub(super) endpoint_scheme_policy: WebhookEndpointSchemePolicy,
 }
 
 impl ReqwestWebhookValidationClient {
-    /// Create a validation client with the required webhook delivery limits.
+    /// Create a validation client that requires public HTTPS endpoints.
     pub fn new() -> Result<Self, reqwest::Error> {
+        Self::new_with_endpoint_scheme_policy(WebhookEndpointSchemePolicy::HttpsOnly)
+    }
+
+    /// Create a validation client with an explicit endpoint policy.
+    pub fn new_with_endpoint_scheme_policy(
+        endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    ) -> Result<Self, reqwest::Error> {
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .redirect(Policy::none())
             .build()?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            endpoint_scheme_policy,
+        })
     }
 }
 
@@ -45,9 +56,14 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
         &self,
         webhook: Webhook,
     ) -> Result<WebhookValidationResult, Self::Err> {
-        let url = match validate_resolved_endpoint_url(&webhook.endpoint_url).await {
+        let url = match validate_resolved_endpoint_url(
+            &webhook.endpoint_url,
+            self.endpoint_scheme_policy,
+        )
+        .await
+        {
             Ok(url) => url,
-            Err(message) => return Ok(failure(None, message)),
+            Err(error) => return Ok(failure(None, error.message())),
         };
 
         let event_id = new_validation_event_id();
@@ -107,7 +123,7 @@ fn validation_body(webhook_id: &str, event_id: &str) -> Result<Vec<u8>, serde_js
     }))
 }
 
-fn signature_header(
+pub(super) fn signature_header(
     secret: &str,
     timestamp: &str,
     raw_body: &[u8],
@@ -119,45 +135,96 @@ fn signature_header(
     Ok(format!("v1={}", hex::encode(mac.finalize().into_bytes())))
 }
 
-async fn validate_resolved_endpoint_url(value: &str) -> Result<Url, &'static str> {
-    let url = validate_endpoint_url(value)?;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum EndpointValidationError {
+    InvalidConfiguration(&'static str),
+    ResolutionFailure(&'static str),
+}
+
+impl EndpointValidationError {
+    pub(super) const fn message(self) -> &'static str {
+        match self {
+            Self::InvalidConfiguration(message) | Self::ResolutionFailure(message) => message,
+        }
+    }
+
+    pub(super) const fn is_retryable(self) -> bool {
+        matches!(self, Self::ResolutionFailure(_))
+    }
+}
+
+pub(super) async fn validate_resolved_endpoint_url(
+    value: &str,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+) -> Result<Url, EndpointValidationError> {
+    let url = validate_endpoint_url(value, endpoint_scheme_policy)?;
     let Some(host) = url.host_str().map(str::to_owned) else {
-        return Err("webhook endpoint URL host is invalid");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL host is invalid",
+        ));
     };
     let Some(port) = url.port_or_known_default() else {
-        return Err("webhook endpoint URL port is invalid");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL port is invalid",
+        ));
     };
 
-    let mut resolved = lookup_host((host.as_str(), port))
-        .await
-        .map_err(|_| "webhook endpoint host could not be resolved")?;
+    let mut resolved =
+        match tokio::time::timeout(REQUEST_TIMEOUT, lookup_host((host.as_str(), port))).await {
+            Ok(Ok(resolved)) => resolved,
+            Ok(Err(_)) => {
+                return Err(EndpointValidationError::ResolutionFailure(
+                    "webhook endpoint host could not be resolved",
+                ));
+            }
+            Err(_) => {
+                return Err(EndpointValidationError::ResolutionFailure(
+                    "webhook endpoint host resolution timed out",
+                ));
+            }
+        };
     let mut saw_address = false;
     for address in resolved.by_ref() {
         saw_address = true;
-        if is_blocked_ip(address.ip()) {
-            return Err("webhook endpoint host resolves to a disallowed address");
+        if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_ip(address.ip()) {
+            return Err(EndpointValidationError::InvalidConfiguration(
+                "webhook endpoint host resolves to a disallowed address",
+            ));
         }
     }
 
     if !saw_address {
-        return Err("webhook endpoint host could not be resolved");
+        return Err(EndpointValidationError::ResolutionFailure(
+            "webhook endpoint host could not be resolved",
+        ));
     }
 
     Ok(url)
 }
 
-fn validate_endpoint_url(value: &str) -> Result<Url, &'static str> {
-    let url = Url::parse(value).map_err(|_| "webhook endpoint URL is invalid")?;
-    if url.scheme() != "https" {
-        return Err("webhook endpoint URL must use HTTPS");
+fn validate_endpoint_url(
+    value: &str,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+) -> Result<Url, EndpointValidationError> {
+    let url = Url::parse(value).map_err(|_| {
+        EndpointValidationError::InvalidConfiguration("webhook endpoint URL is invalid")
+    })?;
+    if !endpoint_scheme_policy.allows(url.scheme()) {
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL must use HTTPS",
+        ));
     }
 
     let Some(host) = url.host_str() else {
-        return Err("webhook endpoint URL host is invalid");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL host is invalid",
+        ));
     };
 
-    if is_blocked_host(host) {
-        return Err("webhook endpoint host is not allowed");
+    if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_host(host) {
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint host is not allowed",
+        ));
     }
 
     Ok(url)
@@ -191,7 +258,7 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn is_reserved_macro_header(name: &str) -> bool {
+pub(super) fn is_reserved_macro_header(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
         "x-macro-event" | "x-macro-event-id" | "x-macro-timestamp" | "x-macro-signature"

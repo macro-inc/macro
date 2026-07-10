@@ -54,6 +54,16 @@ fn values_are_local_only() {
 }
 
 #[test]
+fn emits_webhook_fifo_queue_override_url() {
+    let env = local_env();
+    assert_eq!(
+        env.get(macro_queues::WebhookEventQueue::OVERRIDE_ENV_VAR_NAME)
+            .map(String::as_str),
+        Some("http://localstack:4566/000000000000/webhook-event-queue.fifo")
+    );
+}
+
+#[test]
 fn aws_creds_are_dummy() {
     let env = local_env();
     assert_eq!(

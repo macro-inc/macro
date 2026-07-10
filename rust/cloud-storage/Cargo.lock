@@ -2812,6 +2812,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "complete_graph"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "axum",
+ "axum-extra",
+ "email",
+ "entity_access",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_properties",
+ "graphql_soup",
+ "macro_user_id",
+ "model_user",
+ "models_pagination",
+ "soup",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4137,6 +4160,7 @@ dependencies = [
  "clap",
  "cloudfront_sign",
  "comms_db_client",
+ "complete_graph",
  "connection",
  "connection_gateway_client",
  "contacts",
@@ -4156,7 +4180,6 @@ dependencies = [
  "frecency",
  "futures",
  "github",
- "graphql_soup",
  "hex",
  "http-body-util",
  "jsonwebtoken 10.3.0",
@@ -5801,32 +5824,79 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_common"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "axum",
+ "filter_ast",
+ "macro_user_id",
+ "model-entity",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_notification"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "graphql_common",
+ "macro_user_id",
+ "notification",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_properties"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "filter_ast",
+ "graphql_common",
+ "item_filters",
+ "macro_user_id",
+ "models_properties",
+ "models_soup",
+ "properties",
+ "rootcause",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_soup"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-graphql",
- "async-trait",
+ "axum",
+ "axum-extra",
  "chrono",
  "document_sub_type",
- "either",
+ "email",
  "entity_access",
  "filter_ast",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_properties",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_file_type",
+ "model_user",
  "models_pagination",
  "models_properties",
  "models_soup",
- "notification",
- "properties",
- "rootcause",
  "serde",
  "serde_json",
  "soup",
- "tokio",
- "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -14800,6 +14870,7 @@ dependencies = [
  "chrono",
  "documents",
  "entity_access",
+ "futures",
  "hex",
  "hmac 0.12.1",
  "macro_db_migrator",
@@ -14818,6 +14889,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
+ "sqs_client",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -15363,6 +15435,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "aho-corasick",
+ "async-graphql",
  "aws-config",
  "aws-credential-types",
  "aws-runtime",

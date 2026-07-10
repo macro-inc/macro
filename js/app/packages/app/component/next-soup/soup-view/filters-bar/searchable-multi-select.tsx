@@ -272,7 +272,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
         <Layer depth={2}>
           <Combobox.Content
             class={cn(
-              'z-action-menu bg-surface ring-1 ring-edge-muted rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
+              'z-action-menu bg-surface ring ring-edge-muted rounded-xl shadow-md w-65 max-w-[90vw] overflow-hidden',
               props.contentClass
             )}
           >

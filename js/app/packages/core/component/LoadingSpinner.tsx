@@ -1,9 +1,10 @@
 import MacroBrandLoader from '@icon/macro-brand-loader-2.svg';
+import { cn } from '@ui';
 import { createSignal, onMount } from 'solid-js';
 
-export function LoadingSpinner() {
+export function LoadingSpinner(props: { class?: string }) {
   return (
-    <div class="text-accent size-48 p-14">
+    <div class={cn('text-accent size-48 p-14', props.class)}>
       <MacroBrandLoader class="size-full" />
     </div>
   );

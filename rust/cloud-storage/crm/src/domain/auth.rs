@@ -189,6 +189,15 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
         &self.receipt
     }
 
+    /// Whether the caller's team role reveals hidden rows (admin/owner).
+    /// Derived from the receipt's actual team role, so the service — not
+    /// the caller — enforces the hidden gate.
+    pub(crate) fn include_hidden(&self) -> bool {
+        self.receipt
+            .entity_permission()
+            .allows_team_role(entity_access::domain::models::TeamRole::Admin)
+    }
+
     /// Test-only: mints an `Owner` receipt with no access check.
     #[cfg(test)]
     #[allow(dead_code)]

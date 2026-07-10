@@ -237,6 +237,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     // the parent chat doc).
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
     let tag_option_ids = req.filters.tag_option_ids.clone();
+    let match_all_tags = req.filters.tag_filter_mode == item_filters::TagFilterMode::All;
     // Tags are only indexed for the documents, emails, and chats indexes.
     // With a tag filter active every other source is dropped, so response
     // pages contain only rows the filter was actually applied to.
@@ -326,14 +327,18 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
+    filter_document_response.match_all_tags = match_all_tags;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
     filter_chat_response.tag_option_ids = tag_option_ids.clone();
+    filter_chat_response.match_all_tags = match_all_tags;
     filter_email_response.terms = email_terms.clone();
     filter_email_response.tag_option_ids = tag_option_ids.clone();
+    filter_email_response.match_all_tags = match_all_tags;
     filter_call_record_response.terms = search_terms.clone();
     filter_project_response.terms = search_terms.clone();
     filter_project_response.tag_option_ids = tag_option_ids;
+    filter_project_response.match_all_tags = match_all_tags;
 
     // Widen the email access filter to every inbox the caller can reach (their
     // own plus delegated). Connected secondary inboxes share the owner's
@@ -437,6 +442,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                             },
                             name_search_term.clone(),
                             &filter_chat_response.tag_option_ids,
+                            filter_chat_response.match_all_tags,
                             page_size,
                             chat_cursor_for_search,
                         )

@@ -18,13 +18,13 @@ export function MessageFlag(props: MessageFlagProps) {
       <div class="flex flex-col items-center justify-center">
         <div
           class={cn(
-            'border-l border-rail min-h-1/2',
+            'border-l-1 border-rail min-h-1/2',
             props.highlightAbove && 'border-accent'
           )}
         />
         <div
           class={cn(
-            'border-l border-rail min-h-1/2',
+            'border-l-1 border-rail min-h-1/2',
             props.highlightBelow && 'border-accent'
           )}
         />
@@ -32,13 +32,13 @@ export function MessageFlag(props: MessageFlagProps) {
       <div class="flex items-center flex-1 py-2">
         <div
           class={cn(
-            'border-b border-rail w-5',
+            'border-b-1 border-rail w-5',
             props.highlightBelow && 'border-accent'
           )}
         />
         <span
           class={cn(
-            'text-xs px-3 ring py-1 rounded-sm',
+            'text-xs px-3 ring-1 py-1 rounded-sm',
             props.highlightBelow
               ? 'text-accent ring-accent'
               : 'text-ink-extra-muted ring-rail'

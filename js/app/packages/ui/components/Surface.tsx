@@ -1,4 +1,3 @@
-import { isMobile } from '@core/mobile/isMobile';
 import type { SemanticToken } from '@theme/types/themeTypes';
 import { type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -7,6 +6,7 @@ import { Layer } from './Layer';
 export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   style?: JSX.CSSProperties;
+  edgeColor?: string;
   highlightColor?: string;
   active?: boolean;
   solid?: boolean;
@@ -18,6 +18,7 @@ export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
 export function Surface(props: SurfaceProps) {
   const [local, rest] = splitProps(props, [
     'highlightColor',
+    'edgeColor',
     'children',
     'active',
     'solid',
@@ -28,37 +29,31 @@ export function Surface(props: SurfaceProps) {
     'hideBorder',
   ]);
 
-  const defaultHighlightColor = isMobile() ? 'var(--color-edge)' : 'var(--a0)';
-
-  const border = () => {
-    const edge = 'var(--b4)';
-    const top = local.active
-      ? (local.highlightColor ?? defaultHighlightColor)
-      : edge;
-    const bottom = local.active && !local.solid ? `${edge} 80%` : top;
-    return `linear-gradient(${top}, ${bottom})`;
-  };
-
   const bgVariable = () =>
     local.bgToken ? `--color-${local.bgToken}` : '--b0';
+
+  const style = (): JSX.CSSProperties => {
+    const base: JSX.CSSProperties = {
+      'background-color': `var(${bgVariable()})`,
+    };
+
+    if (!local.hideBorder) {
+      base.border = `0.5px solid ${local.edgeColor ?? 'var(--b4)'}`;
+    }
+
+    if (local.active) {
+      const ring = local.highlightColor ?? 'var(--b4)';
+      base['box-shadow'] =
+        `0 0 0 2px color-mix(in srgb, ${ring} 60%, transparent)`;
+    }
+
+    return { ...base, ...local.style };
+  };
 
   return (
     <Layer depth={local.depth ?? 0}>
       <div
-        style={
-          local.hideBorder
-            ? {
-                'background-color': `var(${bgVariable()})`,
-                ...local.style,
-              }
-            : {
-                'background-image': `linear-gradient(var(${bgVariable()}), var(${bgVariable()})), ${border()}`,
-                'background-origin': 'padding-box, border-box',
-                'background-clip': 'padding-box, border-box',
-                border: '1px solid #0000',
-                ...local.style,
-              }
-        }
+        style={style()}
         class={cn(
           'relative rounded-md overflow-clip min-h-0 size-full',
           local.class

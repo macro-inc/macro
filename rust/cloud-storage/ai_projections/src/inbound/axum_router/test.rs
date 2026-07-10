@@ -80,20 +80,25 @@ fn build_router_with(service: Arc<MockService>) -> axum::Router {
 }
 
 fn post_request() -> axum::http::Request<axum::body::Body> {
+    post_request_with_model(None)
+}
+
+fn post_request_with_model(model: Option<&str>) -> axum::http::Request<axum::body::Body> {
+    let mut body = serde_json::json!({
+        "id": "inbox/important",
+        "prompt": "What is important?",
+        "target_type": "user",
+        "refresh_cadence": "high",
+        "expiry": "day"
+    });
+    if let Some(model) = model {
+        body["model"] = serde_json::json!(model);
+    }
     axum::http::Request::builder()
         .uri("/ai-projections")
         .method("POST")
         .header("content-type", "application/json")
-        .body(axum::body::Body::from(
-            serde_json::json!({
-                "id": "inbox/important",
-                "prompt": "What is important?",
-                "target_type": "user",
-                "refresh_cadence": "high",
-                "expiry": "day"
-            })
-            .to_string(),
-        ))
+        .body(axum::body::Body::from(body.to_string()))
         .unwrap()
 }
 
@@ -115,8 +120,31 @@ async fn upsert_projection_returns_cold_state_for_professional_user() {
 async fn upsert_projection_is_forbidden_without_professional_features() {
     let app = build_router(false);
 
+    // No model requested -> server default (smart tier) -> premium only.
     let response = app.oneshot(post_request()).await.unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn upsert_projection_forbids_premium_models_without_professional_features() {
+    let app = build_router(false);
+
+    let response = app
+        .oneshot(post_request_with_model(Some("cerebras/llama-3.3-70b")))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn upsert_projection_allows_free_tier_models_without_professional_features() {
+    let app = build_router(false);
+
+    let response = app
+        .oneshot(post_request_with_model(Some("anthropic/claude-haiku-4-5")))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]

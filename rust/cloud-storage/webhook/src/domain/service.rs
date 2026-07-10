@@ -3,7 +3,8 @@
 use super::{
     models::{
         CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
-        WebhookFilters, WebhookId, WebhookScope, WebhookValidationResult,
+        WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
+        WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
@@ -24,14 +25,29 @@ const VALIDATION_EVENT_NAME: &str = "webhook.validation.test";
 pub struct WebhookServiceImpl<R, V> {
     repo: R,
     validation_client: V,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
 }
 
 impl<R, V> WebhookServiceImpl<R, V> {
-    /// Create a webhook service.
+    /// Create a webhook service that requires public HTTPS endpoints.
     pub fn new(repo: R, validation_client: V) -> Self {
+        Self::new_with_endpoint_scheme_policy(
+            repo,
+            validation_client,
+            WebhookEndpointSchemePolicy::HttpsOnly,
+        )
+    }
+
+    /// Create a webhook service with an explicit endpoint policy.
+    pub fn new_with_endpoint_scheme_policy(
+        repo: R,
+        validation_client: V,
+        endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    ) -> Self {
         Self {
             repo,
             validation_client,
+            endpoint_scheme_policy,
         }
     }
 }
@@ -46,11 +62,14 @@ fn validate_name(name: &str) -> Result<(), WebhookError> {
     Ok(())
 }
 
-fn validate_endpoint_url(endpoint_url: &str) -> Result<(), WebhookError> {
+fn validate_endpoint_url(
+    endpoint_url: &str,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+) -> Result<(), WebhookError> {
     let url = Url::parse(endpoint_url)
         .map_err(|_| WebhookError::BadRequest("endpoint_url must be a valid URL".to_string()))?;
 
-    if url.scheme() != "https" {
+    if !endpoint_scheme_policy.allows(url.scheme()) {
         return Err(WebhookError::BadRequest(
             "endpoint_url must use https".to_string(),
         ));
@@ -62,7 +81,7 @@ fn validate_endpoint_url(endpoint_url: &str) -> Result<(), WebhookError> {
         ));
     };
 
-    if is_blocked_endpoint_host(host) {
+    if !endpoint_scheme_policy.allows_local_addresses() && is_blocked_endpoint_host(host) {
         return Err(WebhookError::BadRequest(
             "endpoint_url host is not allowed".to_string(),
         ));
@@ -171,18 +190,24 @@ fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
     Ok(())
 }
 
-fn validate_create_request(request: &CreateWebhookRequest) -> Result<(), WebhookError> {
+fn validate_create_request(
+    request: &CreateWebhookRequest,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+) -> Result<(), WebhookError> {
     validate_name(&request.name)?;
-    validate_endpoint_url(&request.endpoint_url)?;
+    validate_endpoint_url(&request.endpoint_url, endpoint_scheme_policy)?;
     validate_filters(&request.filters)
 }
 
-fn validate_patch_request(request: &PatchWebhookRequest) -> Result<(), WebhookError> {
+fn validate_patch_request(
+    request: &PatchWebhookRequest,
+    endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+) -> Result<(), WebhookError> {
     if let Some(name) = &request.name {
         validate_name(name)?;
     }
     if let Some(endpoint_url) = &request.endpoint_url {
-        validate_endpoint_url(endpoint_url)?;
+        validate_endpoint_url(endpoint_url, endpoint_scheme_policy)?;
     }
     if let Some(filters) = &request.filters {
         validate_filters(filters)?;
@@ -291,7 +316,7 @@ where
         caller: MacroUserIdStr<'static>,
         request: CreateWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
-        validate_create_request(&request)?;
+        validate_create_request(&request, self.endpoint_scheme_policy)?;
 
         let workspace_id = self
             .workspace_id_for_scope(caller.clone(), request.scope)
@@ -318,7 +343,7 @@ where
         let webhook = self
             .load_authorized_webhook(caller, webhook_id.clone())
             .await?;
-        validate_patch_request(&request)?;
+        validate_patch_request(&request, self.endpoint_scheme_policy)?;
         let reset_validity = request.endpoint_url.is_some() || request.headers.is_some();
 
         let patched = self

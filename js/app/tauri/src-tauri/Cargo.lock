@@ -4491,7 +4491,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-fs"
 version = "2.4.2"
-source = "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#41a10c2912be75a4a17307295f42e08aeae17989"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca"
 dependencies = [
  "anyhow",
  "dunce",
@@ -4512,7 +4512,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-http"
 version = "2.5.2"
-source = "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#41a10c2912be75a4a17307295f42e08aeae17989"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca"
 dependencies = [
  "bytes",
  "cookie_store",
@@ -4656,7 +4656,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-websocket"
 version = "2.4.0"
-source = "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#41a10c2912be75a4a17307295f42e08aeae17989"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca"
 dependencies = [
  "futures-util",
  "http",

@@ -1,17 +1,19 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
+import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
 import type { CallStatus } from '../types/entity';
 
-function Badge(props: ParentProps<{ class?: string }>) {
+function Badge(props: ParentProps<{ class?: string; title?: string }>) {
   return (
     <div
       class={cn(
         'font-mono font-medium user-select-none uppercase flex items-center p-0.5 gap-1 text-xxs rounded-full border',
         props.class
       )}
+      title={props.title}
     >
       {props.children}
     </div>
@@ -133,6 +135,26 @@ export function CallStatusBadge(props: { status: CallStatus }) {
   const config = () => getCallStatusBadgeConfig(props.status);
 
   return <Badge class={config().class}>{config().label}</Badge>;
+}
+
+export function CallChannelNameBadge(props: { channelName: string }) {
+  return (
+    <Badge
+      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
+      title={props.channelName}
+    >
+      <HashIcon class="size-3 shrink-0" />
+      <span class="truncate">{props.channelName}</span>
+    </Badge>
+  );
+}
+
+export function CallDurationBadge(props: { duration: string }) {
+  return (
+    <Badge class="normal-case text-ink-extra-muted border-edge-muted px-2">
+      {props.duration}
+    </Badge>
+  );
 }
 
 export function AttendanceBadge(props: { attended: boolean }) {

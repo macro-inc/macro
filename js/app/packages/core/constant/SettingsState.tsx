@@ -35,6 +35,7 @@ export type SettingsTab =
   | 'Shortcuts'
   | 'Mobile App'
   | 'Agent'
+  | 'Bots'
   | 'Team'
   | 'CRM'
   | 'Connected'

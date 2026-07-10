@@ -21,7 +21,7 @@ export interface Webhook {
   created_by_user_id: string;
   /** Soft-delete timestamp. */
   deleted_at?: WebhookDeletedAt;
-  /** HTTPS endpoint URL. */
+  /** Endpoint URL. HTTPS is required outside local environments. */
   endpoint_url: string;
   /** Typed filters used to match events and optional entity ids. */
   filters: Vec;

@@ -179,7 +179,10 @@ const IncomingCallContextMenu: FlowComponent<IncomingCallContextMenuProps> = (
   );
 };
 
-export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
+export function SidebarActiveCallWidget(props: {
+  sidebarState: SidebarState;
+  class?: string;
+}) {
   const channelsCtx = useChannelsContext();
   const callCtx = useCallContextOptional();
   const userId = useUserId();
@@ -313,7 +316,9 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
       <Show
         when={!isSlim()}
         fallback={
-          <section class="w-full p-2 flex flex-col items-center">
+          <section
+            class={cn('w-full p-2 flex flex-col items-center', props.class)}
+          >
             <For each={slimVisible()}>
               {(call) => {
                 const channel = () =>
@@ -366,7 +371,12 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
           </section>
         }
       >
-        <section class="size-full flex flex-col justify-center px-2 py-1.5">
+        <section
+          class={cn(
+            'size-full flex flex-col justify-center px-2 py-1.5',
+            props.class
+          )}
+        >
           <header class="text-xs font-medium text-ink-muted ml-2 mb-1 whitespace-nowrap">
             <h1>Incoming calls</h1>
           </header>

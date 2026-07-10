@@ -77,6 +77,8 @@
         cargo-tauri
         cargo-info
         cargo-udeps
+        cmake
+        nasm
         pulumi
         pulumiPackages.pulumi-nodejs
         pulumiPackages.pulumi-aws-native
@@ -123,6 +125,14 @@
       ];
 
       jsLibraries = if isDarwin then jsDarwinLibraries else jsLinuxLibraries;
+      jsPkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
+        jsPkgs.openssl.dev
+      ];
+      jsCmakeFixEnv = {
+        # Match the default dev shell's aws-lc-sys path. Its default cc builder
+        # can reject wrapped cross compilers; the CMake builder needs cmake+nasm.
+        AWS_LC_SYS_CMAKE_BUILDER = "1";
+      };
       jsLinuxShellHook = ''
         export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath jsLibraries}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         export XDG_DATA_DIRS="${jsPkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${jsPkgs.gsettings-desktop-schemas.name}:${jsPkgs.gtk3}/share/gsettings-schemas/${jsPkgs.gtk3.name}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
@@ -133,8 +143,9 @@
         js-app = jsPkgs.mkShell (
           {
             buildInputs = jsPackages ++ jsLibraries;
-            PKG_CONFIG_PATH = "${jsPkgs.openssl.dev}/lib/pkgconfig";
+            PKG_CONFIG_PATH = jsPkgConfigPath;
           }
+          // jsCmakeFixEnv
           // pkgs.lib.optionalAttrs isLinux {
             shellHook = jsLinuxShellHook;
             GIO_MODULE_DIR = "${jsPkgs.glib-networking}/lib/gio/modules/";
@@ -142,15 +153,15 @@
         );
       }
       // pkgs.lib.optionalAttrs isLinux {
-        js-app-android = jsPkgs.mkShell {
+        js-app-android = jsPkgs.mkShell ({
           buildInputs = jsAndroidPackages ++ jsLibraries;
-          PKG_CONFIG_PATH = "${jsPkgs.openssl.dev}/lib/pkgconfig";
+          PKG_CONFIG_PATH = jsPkgConfigPath;
           shellHook = jsLinuxShellHook;
           ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
           NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
           GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
           GIO_MODULE_DIR = "${jsPkgs.glib-networking}/lib/gio/modules/";
-        };
+        } // jsCmakeFixEnv);
       };
     };
 }

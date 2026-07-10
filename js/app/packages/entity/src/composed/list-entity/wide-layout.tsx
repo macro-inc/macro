@@ -1,12 +1,17 @@
 import { useRowTagsVisible } from '@app/component/next-soup/soup-view/filters-bar/search/search-tags-flag';
 import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { CallStatusBadge, SharedBadge } from '../../components/Badges';
+import {
+  CallDurationBadge,
+  CallStatusBadge,
+  SharedBadge,
+} from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -100,7 +105,7 @@ export function WideLayout(props: LayoutProps) {
       </Show>
       <Entity.Slot
         placement="content"
-        class="ph-no-capture font-semibold truncate items-center gap-2 flex"
+        class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
@@ -170,31 +175,6 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show
           when={
-            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
-          }
-        >
-          <SharedBadge ownerId={props.entity.ownerId} />
-        </Show>
-        <Show when={isGithubPrEntity(props.entity) && props.entity}>
-          {(entity) => <GithubPullRequestPills entity={entity()} />}
-        </Show>
-        <Show when={isCallEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <>
-              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-                <CallStatusBadge status={entity().status} />
-              </Show>
-              <span class="flex w-10 shrink-0 justify-end">
-                <CallParticipants participantIds={entity().participantIds} />
-              </span>
-            </>
-          )}
-        </Show>
-        <Show when={isTaskEntity(props.entity) && props.entity}>
-          {(entity) => <Entity.Properties entity={entity()} />}
-        </Show>
-        <Show
-          when={
             rowTagsVisible() && isDocumentEntity(props.entity) && props.entity
           }
         >
@@ -237,6 +217,45 @@ export function WideLayout(props: LayoutProps) {
               properties={entity().properties}
             />
           )}
+        </Show>
+        <Show
+          when={
+            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
+          }
+        >
+          <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isGithubPrEntity(props.entity) && props.entity}>
+          {(entity) => <GithubPullRequestPills entity={entity()} />}
+        </Show>
+        <Show when={isCallEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <>
+              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
+                <CallStatusBadge status={entity().status} />
+              </Show>
+              <Show
+                when={entity().durationMs}
+                fallback={
+                  <Show when={entity().isActive}>
+                    <CallDurationBadge duration="In progress" />
+                  </Show>
+                }
+              >
+                {(durationMs) => (
+                  <CallDurationBadge
+                    duration={formatCallDuration(durationMs())}
+                  />
+                )}
+              </Show>
+              <span class="flex w-10 shrink-0 justify-end">
+                <CallParticipants participantIds={entity().participantIds} />
+              </span>
+            </>
+          )}
+        </Show>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
         <Show when={isProjectContainedEntity(props.entity) && props.entity}>
           {(entity) => (

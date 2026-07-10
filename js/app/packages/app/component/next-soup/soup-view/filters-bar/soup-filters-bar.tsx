@@ -5,6 +5,7 @@ import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { usePreviewPaneVisiblity } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import {
   SplitToolbarLeft,
@@ -34,36 +35,21 @@ export function SoupFiltersBar() {
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
   const soup = useSoup();
+  const { setPreviewOpen } = useSoupView();
 
-  const { isWideSplitPanel } = usePreviewPaneVisiblity();
+  const { isWideSplitPanel, previewOpen, selectedEntity } =
+    usePreviewPaneVisiblity();
 
   const togglePreview = () => {
-    const currentPreview = soup.previewEntity();
-    if (currentPreview) {
+    if (previewOpen()) {
+      setPreviewOpen(false);
       soup.setPreviewEntity(undefined);
       return;
     }
 
-    let focused = soup.focus.id();
-
-    if (!focused) {
-      const allRows = soup.rows();
-
-      const firstEntityIndex = allRows.findIndex(
-        (row) => !row.getIsGrouped() && !row.getIsLoadMore()
-      );
-
-      if (firstEntityIndex === -1) return;
-
-      const result = soup.navigate.toIndex(firstEntityIndex);
-
-      if (!result) return;
-
-      focused = result.row.id;
-    }
-
     analytics.track('preview_panel_use');
-    soup.setPreviewEntity(focused);
+    soup.setPreviewEntity(selectedEntity()?.id);
+    setPreviewOpen(true);
   };
 
   registerHotkey({
@@ -126,7 +112,7 @@ export function SoupFiltersBar() {
             class="bg-surface"
             disabled={!isWideSplitPanel()}
           >
-            {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
+            {previewOpen() ? <EyeSlashIcon /> : <EyeIcon />}
             <span>Preview</span>
           </Button>
         </Tooltip>

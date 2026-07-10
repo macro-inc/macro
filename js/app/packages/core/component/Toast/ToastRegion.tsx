@@ -23,9 +23,9 @@ export function ToastRegion() {
         as a new one is shown, so no stacking is needed here.
       */}
       <div
-        class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-4 pointer-events-none z-toast-region"
+        class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region"
         style={{
-          bottom: 'calc(var(--safe-bottom, 0px) + 104px)',
+          bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
       >
         <Toast.Region

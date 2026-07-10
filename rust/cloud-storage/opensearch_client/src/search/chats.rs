@@ -57,6 +57,7 @@ pub(crate) struct ChatQueryBuilder {
     /// The role of the chat message
     role: Vec<String>,
     tag_option_ids: Vec<String>,
+    match_all_tags: bool,
 }
 
 impl ChatQueryBuilder {
@@ -65,6 +66,7 @@ impl ChatQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             role: Vec::new(),
             tag_option_ids: Vec::new(),
+            match_all_tags: false,
         }
     }
 
@@ -86,6 +88,11 @@ impl ChatQueryBuilder {
 
     pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
         self.tag_option_ids = tag_option_ids;
+        self
+    }
+
+    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
+        self.match_all_tags = match_all_tags;
         self
     }
 
@@ -118,9 +125,9 @@ impl ChatQueryBuilder {
         // Access control on parent fields (user_id and/or entity_id).
         bool_query.filter(self.build_parent_filter()?);
 
-        // Tag filter: a single nested clause matching any of the option ids in
-        // the parent's `properties.values`, with no definition_id constraint.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids) {
+        // Tag filter: nested clause(s) matching the parent's
+        // `properties.values`, with no definition_id constraint.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
             bool_query.filter(nested);
         }
 
@@ -241,6 +248,7 @@ pub struct ChatSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
 }
 
 impl From<ChatSearchArgs> for ChatQueryBuilder {
@@ -255,6 +263,7 @@ impl From<ChatSearchArgs> for ChatQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .tag_option_ids(args.tag_option_ids)
+            .match_all_tags(args.match_all_tags)
     }
 }
 

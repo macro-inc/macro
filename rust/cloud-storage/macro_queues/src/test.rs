@@ -130,6 +130,26 @@ fn grouped_defaults_do_not_check_overrides() {
 }
 
 #[test]
+fn webhook_event_queue_defaults_are_fifo() {
+    assert_eq!(
+        WebhookEventQueue::local().as_ref(),
+        "webhook-event-queue.fifo"
+    );
+    assert_eq!(
+        WebhookEventQueue::dev().as_ref(),
+        "webhook-event-queue-dev.fifo",
+    );
+    assert_eq!(
+        WebhookEventQueue::prod().as_ref(),
+        "webhook-event-queue-prod.fifo",
+    );
+    assert_eq!(
+        WebhookEventQueue::local().override_env_var_name(),
+        "OVERRIDE_WEBHOOK_EVENT_QUEUE",
+    );
+}
+
+#[test]
 fn exported_queues_match_local_values() {
     let queues = Queues::default_for_environment(Environment::Local);
 
@@ -174,6 +194,10 @@ fn exported_queues_match_local_values() {
     assert_eq!(
         queues.push_notification_event_handler_queue.as_ref(),
         "push-delivery-queue",
+    );
+    assert_eq!(
+        queues.webhook_event_queue.as_ref(),
+        "webhook-event-queue.fifo",
     );
     assert_eq!(
         queues.static_file_service_s3_event_queue_url.as_ref(),
@@ -253,6 +277,10 @@ fn exported_queues_match_dev_values() {
     assert_eq!(
         queues.push_notification_event_handler_queue.as_ref(),
         "push-delivery-queue-dev",
+    );
+    assert_eq!(
+        queues.webhook_event_queue.as_ref(),
+        "webhook-event-queue-dev.fifo",
     );
     assert_eq!(
         queues.static_file_service_s3_event_queue_url.as_ref(),
@@ -341,6 +369,10 @@ fn exported_queues_match_prod_values() {
     assert_eq!(
         queues.push_notification_event_handler_queue.as_ref(),
         "push-delivery-queue-prod",
+    );
+    assert_eq!(
+        queues.webhook_event_queue.as_ref(),
+        "webhook-event-queue-prod.fifo",
     );
     assert_eq!(
         queues.static_file_service_s3_event_queue_url.as_ref(),
@@ -433,6 +465,10 @@ fn exported_queue_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         PushNotificationEventHandlerQueue::local().override_env_var_name(),
         "OVERRIDE_PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE",
+    );
+    assert_eq!(
+        WebhookEventQueue::local().override_env_var_name(),
+        "OVERRIDE_WEBHOOK_EVENT_QUEUE",
     );
     // Pins the digit-boundary case: `S3` stays fused with a separator after it.
     assert_eq!(

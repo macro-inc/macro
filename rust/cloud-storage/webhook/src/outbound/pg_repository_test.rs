@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::{
     models::{WebhookFilter, WebhookStatus},
-    ports::WebhookRepo,
+    ports::{WebhookRepo, WebhookWorkspaceResolver},
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -9,11 +9,21 @@ use serde_json::json;
 use sqlx::{PgPool, types::Uuid};
 
 const USER_ID: &str = "macro|webhook-owner@example.com";
+const SECOND_USER_ID: &str = "macro|webhook-reader@example.com";
 const TEAM_ID: &str = "11111111-1111-1111-1111-111111111111";
+const UNRELATED_TEAM_ID: &str = "22222222-2222-2222-2222-222222222222";
 const OTHER_WORKSPACE_ID: &str = "workspace_other";
 
+fn macro_user_id(user_id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(user_id.to_string()).expect("valid macro user id")
+}
+
 fn user_id() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from(USER_ID.to_string()).expect("valid macro user id")
+    macro_user_id(USER_ID)
+}
+
+fn second_user_id() -> MacroUserIdStr<'static> {
+    macro_user_id(SECOND_USER_ID)
 }
 
 fn create_request() -> CreateWebhookRequest {
@@ -29,7 +39,7 @@ fn create_request() -> CreateWebhookRequest {
     }
 }
 
-async fn insert_user(pool: &PgPool) -> anyhow::Result<()> {
+async fn insert_user_with_id(pool: &PgPool, user_id: &str, email: &str) -> anyhow::Result<()> {
     let macro_user_id = macro_uuid::generate_uuid_v7();
     let stripe_customer_id = format!("stripe_{macro_user_id}");
     sqlx::query!(
@@ -39,8 +49,8 @@ async fn insert_user(pool: &PgPool) -> anyhow::Result<()> {
         ON CONFLICT (id) DO NOTHING
         "#,
         macro_user_id,
-        "webhook-owner@example.com",
-        "webhook-owner@example.com",
+        email,
+        email,
         stripe_customer_id
     )
     .execute(pool)
@@ -52,13 +62,40 @@ async fn insert_user(pool: &PgPool) -> anyhow::Result<()> {
         VALUES ($1, $2, $3)
         ON CONFLICT (id) DO NOTHING
         "#,
-        USER_ID,
-        "webhook-owner@example.com",
+        user_id,
+        email,
         macro_user_id
     )
     .execute(pool)
     .await?;
 
+    Ok(())
+}
+
+async fn insert_user(pool: &PgPool) -> anyhow::Result<()> {
+    insert_user_with_id(pool, USER_ID, "webhook-owner@example.com").await
+}
+
+async fn insert_team(pool: &PgPool, team_id: Uuid, owner_id: &str) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO team (id, owner_id, name) VALUES ($1, $2, $3)"#,
+        team_id,
+        owner_id,
+        team_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn insert_team_member(pool: &PgPool, user_id: &str, team_id: Uuid) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+        user_id,
+        team_id
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -364,6 +401,92 @@ async fn list_matching_event_excludes_ineligible_webhooks(pool: PgPool) -> anyho
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn resolved_workspaces_match_personal_and_related_team_webhooks(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    insert_user_with_id(&pool, SECOND_USER_ID, "webhook-reader@example.com").await?;
+
+    let team_id = Uuid::parse_str(TEAM_ID)?;
+    let unrelated_team_id = Uuid::parse_str(UNRELATED_TEAM_ID)?;
+    insert_team(&pool, team_id, USER_ID).await?;
+    insert_team(&pool, unrelated_team_id, SECOND_USER_ID).await?;
+    insert_team_member(&pool, USER_ID, team_id).await?;
+    insert_team_member(&pool, SECOND_USER_ID, team_id).await?;
+
+    let matching_filter = vec![webhook_filter(&["document.created"], None)];
+    insert_webhook_for_matching(
+        &pool,
+        "wh_personal",
+        USER_ID,
+        matching_filter.clone(),
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_team",
+        TEAM_ID,
+        matching_filter.clone(),
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_unrelated_team",
+        UNRELATED_TEAM_ID,
+        matching_filter,
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+
+    let repo = PgRepository::new(pool);
+    let workspace_ids = repo
+        .resolve_workspace_ids(vec![
+            second_user_id(),
+            user_id(),
+            second_user_id(),
+            user_id(),
+        ])
+        .await?;
+
+    assert_eq!(
+        workspace_ids,
+        vec![
+            TEAM_ID.to_string(),
+            USER_ID.to_string(),
+            SECOND_USER_ID.to_string(),
+        ]
+    );
+
+    let webhooks = repo
+        .list_active_webhooks_matching_event(
+            workspace_ids,
+            "document.created".to_string(),
+            "doc_1".to_string(),
+        )
+        .await?;
+
+    assert_eq!(webhook_ids(&webhooks), vec!["wh_personal", "wh_team"]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn resolve_workspace_ids_returns_empty_for_no_people(pool: PgPool) -> anyhow::Result<()> {
+    let repo = PgRepository::new(pool.clone());
+    pool.close().await;
+
+    assert!(repo.resolve_workspace_ids(Vec::new()).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn patch_updates_endpoint_and_resets_validity(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool).await?;
     let repo = PgRepository::new(pool.clone());
@@ -431,21 +554,8 @@ async fn get_webhook_excludes_deleted_rows(pool: PgPool) -> anyhow::Result<()> {
 async fn get_user_team_workspace_id_returns_team_membership(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool).await?;
     let team_id = Uuid::parse_str(TEAM_ID)?;
-    sqlx::query!(
-        r#"INSERT INTO team (id, owner_id, name) VALUES ($1, $2, $3)"#,
-        team_id,
-        USER_ID,
-        team_id.to_string(),
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
-        USER_ID,
-        team_id
-    )
-    .execute(&pool)
-    .await?;
+    insert_team(&pool, team_id, USER_ID).await?;
+    insert_team_member(&pool, USER_ID, team_id).await?;
     let repo = PgRepository::new(pool);
 
     assert_eq!(

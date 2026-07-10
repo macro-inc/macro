@@ -8876,7 +8876,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced upstream in soup's axum router."
+            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced by the CRM service from the\ncaller's team receipt."
           ),
       })
       .optional()
@@ -9194,6 +9194,10 @@ export const postItemsSoupBody = zod
       )
       .optional()
       .describe('property-based filters applied across entity types'),
+    tag_filter_mode: zod
+      .enum(['any', 'all'])
+      .optional()
+      .describe('How multiple `tag_option_ids` combine when filtering.'),
     tag_option_ids: zod
       .array(zod.string())
       .optional()
@@ -20025,7 +20029,9 @@ export const editProjectV2Response = zod.object({
  */
 export const createWebhookBody = zod
   .object({
-    endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    endpoint_url: zod
+      .string()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
     filters: zod.array(
       zod
         .object({
@@ -20069,7 +20075,10 @@ export const patchWebhookParams = zod.object({
 
 export const patchWebhookBody = zod
   .object({
-    endpoint_url: zod.string().nullish().describe('HTTPS endpoint URL.'),
+    endpoint_url: zod
+      .string()
+      .nullish()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
     filters: zod
       .union([
         zod.null(),
@@ -20115,7 +20124,9 @@ export const patchWebhookResponse = zod
       .datetime({})
       .nullish()
       .describe('Soft-delete timestamp.'),
-    endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    endpoint_url: zod
+      .string()
+      .describe('Endpoint URL. HTTPS is required outside local environments.'),
     filters: zod.array(
       zod
         .object({

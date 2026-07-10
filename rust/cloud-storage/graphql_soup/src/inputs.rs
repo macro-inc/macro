@@ -1,9 +1,13 @@
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 use async_graphql::{Enum, ID};
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
+use graphql_common::{
+    IntoFilterExpr, filter_expr_input, optional_tree, parse_id, parse_macro_user_id,
+};
+use graphql_properties::GraphqlPropertiesExpr;
 use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
@@ -17,7 +21,6 @@ use item_filters::{
         email::{Email, EmailLiteral},
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
-        properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
     },
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
@@ -25,8 +28,6 @@ use model_file_type::FileType;
 use models_pagination::{Base64Str, CursorWithValAndFilter, SimpleSortMethod};
 use soup::domain::models::{SoupQuery, SoupRequest, SoupType};
 use uuid::Uuid;
-
-use crate::request_context::GraphqlSoupRequestContext;
 
 /// Input for `Query.soup`.
 #[derive(async_graphql::InputObject)]
@@ -49,7 +50,8 @@ pub struct SoupInput {
 impl SoupInput {
     pub(crate) fn into_request(
         self,
-        request_context: &GraphqlSoupRequestContext,
+        macro_user_id: MacroUserIdStr<'static>,
+        link_ids: Vec<Uuid>,
     ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
         let filter = self
             .filters
@@ -80,14 +82,14 @@ impl SoupInput {
             },
             limit: self.limit.unwrap_or(20).min(500),
             cursor,
-            user: request_context.macro_user_id.clone(),
+            user: macro_user_id,
             email_preview_view: self
                 .email_view
                 .map(GraphqlEmailView::as_preview_view_str)
                 .unwrap_or("inbox")
                 .parse()
                 .map_err(async_graphql::Error::new)?,
-            link_ids: request_context.link_ids.clone(),
+            link_ids,
         })
     }
 }
@@ -153,68 +155,6 @@ impl GraphqlEntityFilterAst {
     }
 }
 
-trait IntoFilterExpr<T>: Sized {
-    fn into_expr(self) -> async_graphql::Result<Expr<T>>;
-}
-
-fn optional_tree<I, T>(input: Option<I>) -> async_graphql::Result<Option<Arc<Expr<T>>>>
-where
-    I: IntoFilterExpr<T>,
-{
-    input.map(|expr| expr.into_expr().map(Arc::new)).transpose()
-}
-
-fn parse_uuid(value: String, field: &str) -> async_graphql::Result<Uuid> {
-    Uuid::parse_str(&value)
-        .map_err(|err| async_graphql::Error::new(format!("invalid {field} UUID `{value}`: {err}")))
-}
-
-fn parse_id(id: ID, field: &str) -> async_graphql::Result<Uuid> {
-    parse_uuid(id.to_string(), field)
-}
-
-fn parse_macro_user_id(
-    value: String,
-    field: &str,
-) -> async_graphql::Result<MacroUserIdStr<'static>> {
-    MacroUserIdStr::parse_from_str(&value)
-        .map(CowLike::into_owned)
-        .map_err(|err| async_graphql::Error::new(format!("invalid {field} `{value}`: {err}")))
-}
-
-macro_rules! filter_expr_input {
-    ($name:ident, $binary_name:ident, $literal:ty, $target:ty, $type_name:literal) => {
-        #[derive(async_graphql::InputObject)]
-        struct $binary_name {
-            left: Box<$name>,
-            right: Box<$name>,
-        }
-
-        #[derive(async_graphql::OneofObject)]
-        enum $name {
-            And($binary_name),
-            Or($binary_name),
-            Not(Box<$name>),
-            Literal($literal),
-        }
-
-        impl IntoFilterExpr<$target> for $name {
-            fn into_expr(self) -> async_graphql::Result<Expr<$target>> {
-                match self {
-                    Self::And(exprs) => {
-                        Ok(Expr::and(exprs.left.into_expr()?, exprs.right.into_expr()?))
-                    }
-                    Self::Or(exprs) => {
-                        Ok(Expr::or(exprs.left.into_expr()?, exprs.right.into_expr()?))
-                    }
-                    Self::Not(expr) => expr.into_expr().map(Expr::is_not),
-                    Self::Literal(literal) => literal.into_expr(),
-                }
-            }
-        }
-    };
-}
-
 filter_expr_input!(
     GraphqlDocumentExpr,
     GraphqlDocumentBinaryExpr,
@@ -278,14 +218,6 @@ filter_expr_input!(
     ForeignEntityLiteral,
     "ForeignEntityFilterExpr"
 );
-filter_expr_input!(
-    GraphqlPropertiesExpr,
-    GraphqlPropertiesBinaryExpr,
-    GraphqlPropertiesLiteral,
-    PropertiesLiteral,
-    "PropertiesFilterExpr"
-);
-
 #[derive(async_graphql::InputObject)]
 struct GraphqlEmailFilterAst {
     tree: Option<GraphqlEmailExpr>,
@@ -738,71 +670,6 @@ impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
             Self::NotificationSeen(seen) => ForeignEntityLiteral::NotificationSeen(seen),
         };
         Ok(Expr::val(literal))
-    }
-}
-
-#[derive(async_graphql::InputObject)]
-struct GraphqlPropertiesLiteral {
-    property_definition_id: ID,
-    entity_type: Option<GraphqlPropertyEntityType>,
-    value: GraphqlPropertyMatchValue,
-}
-
-impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
-    fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
-        Ok(Expr::val(PropertiesLiteral {
-            property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
-            entity_type: self.entity_type.map(Into::into),
-            value: self.value.into_ast()?,
-        }))
-    }
-}
-
-#[derive(async_graphql::OneofObject)]
-enum GraphqlPropertyMatchValue {
-    SelectOption(ID),
-    EntityRef(String),
-}
-
-impl GraphqlPropertyMatchValue {
-    fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
-        Ok(match self {
-            Self::SelectOption(id) => {
-                PropertyMatchValue::SelectOption(parse_id(id, "selectOption")?)
-            }
-            Self::EntityRef(value) => {
-                PropertyMatchValue::EntityRef(EntityRefId::new(value).map_err(|err| {
-                    async_graphql::Error::new(format!("invalid entityRef: {err}"))
-                })?)
-            }
-        })
-    }
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-enum GraphqlPropertyEntityType {
-    Channel,
-    Chat,
-    Company,
-    Document,
-    Project,
-    Task,
-    Thread,
-    User,
-}
-
-impl From<GraphqlPropertyEntityType> for PropertyEntityType {
-    fn from(value: GraphqlPropertyEntityType) -> Self {
-        match value {
-            GraphqlPropertyEntityType::Channel => Self::Channel,
-            GraphqlPropertyEntityType::Chat => Self::Chat,
-            GraphqlPropertyEntityType::Company => Self::Company,
-            GraphqlPropertyEntityType::Document => Self::Document,
-            GraphqlPropertyEntityType::Project => Self::Project,
-            GraphqlPropertyEntityType::Task => Self::Task,
-            GraphqlPropertyEntityType::Thread => Self::Thread,
-            GraphqlPropertyEntityType::User => Self::User,
-        }
     }
 }
 

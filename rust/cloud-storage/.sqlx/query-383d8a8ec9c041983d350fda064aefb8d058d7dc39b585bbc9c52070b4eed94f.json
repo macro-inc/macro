@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE webhook_delivery\n            SET\n                status = $2,\n                attempt_count = attempt_count + 1,\n                first_attempt_at = COALESCE(first_attempt_at, now()),\n                last_attempt_at = now(),\n                next_attempt_at = NULL,\n                updated_at = now()\n            WHERE id = $1\n            RETURNING\n                attempt_count,\n                last_attempt_at AS \"started_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attempt_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "383d8a8ec9c041983d350fda064aefb8d058d7dc39b585bbc9c52070b4eed94f"
+}

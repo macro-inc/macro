@@ -6,6 +6,6 @@
  */
 
 /**
- * HTTPS endpoint URL.
+ * Endpoint URL. HTTPS is required outside local environments.
  */
 export type PatchWebhookRequestEndpointUrl = string | null;

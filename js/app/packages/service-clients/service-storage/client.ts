@@ -60,7 +60,9 @@ import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessa
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
 import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
+import type { BotToken } from './generated/schemas/botToken';
 import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
 import { ChannelType } from './generated/schemas/channelType';
 import {
@@ -69,6 +71,8 @@ import {
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
+import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
+import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
@@ -257,6 +261,32 @@ export type TaskSimilaritySearchResponse = {
 
 type WithBotId = { bot_id: string };
 type WithChannelId = { channel_id: string };
+
+type CreateBotRequest = {
+  team_id?: string;
+  name: string;
+  handle: string;
+  description?: string;
+  avatar_url?: string;
+};
+
+type PatchBotRequest = {
+  name?: string;
+  handle?: string;
+  description?: string;
+  avatar_url?: string;
+};
+
+type CreateBotTokenRequest = {
+  label?: string;
+  expires_at?: string;
+};
+
+type CreateBotTokenResponse = {
+  token: BotToken;
+  bearer_token: string;
+};
+
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
@@ -483,6 +513,71 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getBots() {
+    return (
+      await dssFetch<Bot[]>(`/bots`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async createBot(args: CreateBotRequest) {
+    return (
+      await dssFetch<Bot>(`/bots`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async getBot(args: WithBotId) {
+    return (
+      await dssFetch<Bot>(`/bots/${args.bot_id}`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async patchBot(args: WithBotId & PatchBotRequest) {
+    const { bot_id, ...request } = args;
+    return (
+      await dssFetch<Bot>(`/bots/${bot_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async deleteBot(args: WithBotId) {
+    return await dssFetch(`/bots/${args.bot_id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async createBotToken(args: WithBotId & CreateBotTokenRequest) {
+    const { bot_id, ...request } = args;
+    return (
+      await dssFetch<CreateBotTokenResponse>(`/bots/${bot_id}/tokens`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async getBotTokens(args: WithBotId) {
+    return (
+      await dssFetch<BotToken[]>(`/bots/${args.bot_id}/tokens`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async revokeBotToken(args: WithBotId & { token_id: string }) {
+    return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getBotChannels(args: WithBotId) {
     const { bot_id } = args;
     return (
@@ -492,11 +587,41 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getChannelBots(args: WithChannelId) {
+    return (
+      await dssFetch<Bot[]>(`/channels/${args.channel_id}/bots`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async addBotToChannel(args: WithChannelId & WithBotId) {
+    return await dssFetch(`/channels/${args.channel_id}/bots`, {
+      method: 'POST',
+      body: JSON.stringify({ bot_id: args.bot_id }),
+    });
+  },
+
   async removeBotFromChannel(args: WithBotId & WithChannelId) {
     const { bot_id, channel_id } = args;
     return await dssFetch(`/bots/${bot_id}/channels/${channel_id}`, {
       method: 'DELETE',
     });
+  },
+
+  async createChannelScopedBot(
+    args: WithChannelId & CreateChannelScopedBotRequest
+  ) {
+    const { channel_id, ...request } = args;
+    return (
+      await dssFetch<CreateChannelScopedBotResponse>(
+        `/channels/${channel_id}/bots/scoped`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      )
+    ).map((result) => result);
   },
 
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                webhook_id,\n                status,\n                attempt_count,\n                COALESCE(next_attempt_at <= now(), true) AS \"is_due!\"\n            FROM webhook_delivery\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "webhook_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_due!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5dd893b03be604e8ac4d82f90e8f205ea8a52b85cedfb30a314c1b8f891d25ad"
+}

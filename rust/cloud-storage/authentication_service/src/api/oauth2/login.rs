@@ -1,62 +1,19 @@
 use crate::api::{
     context::ApiContext,
-    link::gmail::GMAIL_IDENTITY_PROVIDER_NAME,
     oauth2::{OAuthState, format_redirect_uri},
     utils::{
         create_access_token_cookie, create_refresh_token_cookie, default_redirect_url,
-        generate_session_code,
+        generate_session_code, spawn_first_inbox_provision,
     },
 };
 use axum::{
     Json,
     response::{IntoResponse, Redirect, Response},
 };
-use email::domain::ports::{FirstInboxProvisionOutcome, FirstInboxProvisioner};
 use macro_env::Environment;
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use tower_cookies::Cookies;
-
-/// Provisions the user's primary inbox after a Gmail-scoped login, the moment
-/// the Google grant is minted or refreshed. Fire-and-forget so the login
-/// redirect is never delayed. Init is idempotent and recurs on every login, so
-/// a lost attempt only delays provisioning until the next one.
-fn spawn_first_inbox_provision(ctx: &ApiContext, identity_provider_id: &str, access_token: &str) {
-    let auth_client = ctx.auth_client.clone();
-    let email_service_client = ctx.email_service_client.clone();
-    let identity_provider_id = identity_provider_id.to_string();
-    let access_token = access_token.to_string();
-
-    tokio::spawn(async move {
-        let gmail_idp_id = match auth_client
-            .get_identity_provider_id_by_name(GMAIL_IDENTITY_PROVIDER_NAME)
-            .await
-        {
-            Ok(id) => id,
-            Err(e) => {
-                tracing::warn!(error=?e, "first-inbox provision: unable to resolve gmail idp id");
-                return;
-            }
-        };
-
-        if identity_provider_id != gmail_idp_id {
-            return;
-        }
-
-        match email_service_client
-            .provision_first_inbox(&access_token)
-            .await
-        {
-            Ok(FirstInboxProvisionOutcome::Provisioned) => {
-                tracing::info!("first-inbox provision: inbox initialized on login");
-            }
-            Ok(FirstInboxProvisionOutcome::Skipped) => {}
-            Err(e) => {
-                tracing::warn!(error=?e, "first-inbox provision: init failed");
-            }
-        }
-    });
-}
 
 /// Handles logging in through an identity provider
 pub(in crate::api::oauth2) async fn handler(
@@ -153,7 +110,7 @@ pub(in crate::api::oauth2) async fn handler(
     cookies.add(create_access_token_cookie(&access_token));
     cookies.add(create_refresh_token_cookie(&refresh_token));
 
-    spawn_first_inbox_provision(ctx, &state.identity_provider_id, &access_token);
+    spawn_first_inbox_provision(ctx, &access_token);
 
     match environment {
         Environment::Local => Ok(StatusCode::OK.into_response()), // We don't really care about redirect in local

@@ -5,6 +5,7 @@ import {
 } from '@app/component/GlobalAppState';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
 import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
+import { PullToRefresh } from '@app/component/mobile/PullToRefresh';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
@@ -43,7 +44,6 @@ import {
 import {
   useIsNewInboxEnabled,
   usePreviewPaneVisiblity,
-  WIDE_SPLIT_PANEL_BREAKPOINT,
 } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
@@ -304,6 +304,8 @@ const useSoupNotificationInvalidators = () => {
 };
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
+const SOUP_PREVIEW_ENTITY_ENTRY_KEY = 'soup.preview';
+const SOUP_PREVIEW_OPEN_ENTRY_KEY = 'soup.previewOpen';
 
 type SoupListEntryState = {
   focus: string | undefined;
@@ -382,9 +384,17 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
+  const isNewInboxEnabled = useIsNewInboxEnabled();
 
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
+
+  const persistedPreviewEntity = entryState?.[SOUP_PREVIEW_ENTITY_ENTRY_KEY] as
+    | string
+    | undefined;
+  const persistedPreviewOpen = entryState?.[SOUP_PREVIEW_OPEN_ENTRY_KEY] as
+    | boolean
+    | undefined;
 
   const searchTags = useSearchTagsFlag();
 
@@ -399,6 +409,7 @@ export const SoupView = (props: SoupViewProps) => {
     if (!query?.include?.tagFilters?.length) return query;
     const include = { ...query.include };
     delete include.tagFilters;
+    delete include.tagFilterMode;
     return { ...query, include };
   };
 
@@ -453,6 +464,14 @@ export const SoupView = (props: SoupViewProps) => {
     if (init) return;
     init = true;
     batch(() => {
+      soup.setPreviewEntity(persistedPreviewEntity);
+      // Existing entries only stored the symbolic entity id. Treat one as an
+      // open pane while allowing new entries to use their view default.
+      soupView.setPreviewOpen(
+        persistedPreviewOpen ??
+          (persistedPreviewEntity ? true : isNewInboxEnabled())
+      );
+
       soupView.initialize({
         initialQuery: stripGatedTagFilters(
           initialCrmView
@@ -514,6 +533,17 @@ export const SoupView = (props: SoupViewProps) => {
       }
     });
   });
+
+  const previewEntityCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    SOUP_PREVIEW_ENTITY_ENTRY_KEY,
+    () => soup.previewEntity()
+  );
+  const previewOpenCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    SOUP_PREVIEW_OPEN_ENTRY_KEY,
+    () => soupView.previewOpen()
+  );
+  onCleanup(previewEntityCaptorTeardown);
+  onCleanup(previewOpenCaptorTeardown);
 
   onMount(() => {
     if (contentId !== 'documents') return;
@@ -607,18 +637,21 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const { paneVisible } = usePreviewPaneVisiblity();
+  const { paneVisible, previewVisible } = usePreviewPaneVisiblity();
 
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  createEffect(() => {
+    const visible = paneVisible();
+    const [getPreview, setPreview] = panel.previewState;
+    if (visible !== getPreview()) setPreview(visible);
+  });
+  onCleanup(() => panel.previewState[1](false));
 
   return (
     <SplitPanelContext.Provider
       value={{
         ...panel,
         halfSplitState: () =>
-          soup.previewEntity() && soup.focus.item()
-            ? { side: 'left', percentage: 30 }
-            : undefined,
+          previewVisible() ? { side: 'left', percentage: 30 } : undefined,
       }}
     >
       <div class="size-full flex flex-col" data-list-view={activeListView()}>
@@ -826,7 +859,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
-  const { paneVisible, placeholderVisible, previewVisible } =
+  const { paneVisible, previewVisible, previewOpen, selectedEntity } =
     usePreviewPaneVisiblity();
 
   const focusFirstEntity = () => {
@@ -947,7 +980,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
-    if (isNewInboxEnabled()) return DateGroupHeader;
+    if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
     return DefaultGroupHeader;
   };
 
@@ -957,7 +990,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
-    previewState: () => !!soup.previewEntity(),
+    previewState: previewVisible,
     currentView,
     activeTab,
     applyTabPreset,
@@ -1008,10 +1041,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    if (
-      placeholderVisible() ||
-      (previewVisible() && soup.previewEntity() && type === 'entity')
-    ) {
+    if (paneVisible() && type === 'entity') {
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
@@ -1107,6 +1137,33 @@ export const SoupViewList = (props: SoupViewListProps) => {
     HTMLDivElement | undefined
   >();
 
+  // The virtualizer's scroll container, for mobile pull-to-refresh.
+  const [listScrollerRef, setListScrollerRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  // The empty-state wrapper, so pull-to-refresh still works with no rows.
+  const [emptyStateRef, setEmptyStateRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  // While a pull-driven refetch is in flight, the pull spinner is already
+  // the loading indicator — the loading/searching blocks stay unmounted so
+  // the empty state doesn't flash away (which would also unmount the
+  // gesture's target element mid-refresh).
+  const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
+
+  const pullRefresh = () => {
+    setIsPullRefreshing(true);
+    return source.refresh().finally(() => setIsPullRefreshing(false));
+  };
+
+  // Shared by the empty-state <Match> and the pull-to-refresh target so the
+  // gesture always attaches to whichever element is actually mounted.
+  const showEmptyState = () =>
+    ((!source.isFetching() || isPullRefreshing()) && !rows().length) ||
+    forceEmptyState();
+
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1132,21 +1189,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       | SoupListEntryState
       | undefined;
 
-  // Preview-pane open state is transient per history entry: captured into
-  // per-entry state on nav-away and restored on back/forward. Read
-  // synchronously in the body so the first render sees the correct value
-  // and we avoid a transient flash where the pane is closed.
-  const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
-    | string
-    | undefined;
-  soup.setPreviewEntity(persistedPreview);
-  const previewCaptorTeardown = panel.handle.registerEntryStateCaptor(
-    'soup.preview',
-    () => soup.previewEntity()
-  );
-  onCleanup(previewCaptorTeardown);
-
-  // Which groups are collapsed is also per-entry state: captured on nav-away
+  // Which groups are collapsed is per-entry state: captured on nav-away
   // and restored on back/forward.
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.collapsedGroups',
@@ -1215,23 +1258,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const featuredCount = createMemo(() => featuredIds().length);
 
-  const isWideSplitPanel = createMemo(() => {
-    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
-  });
-
-  createEffect(() => {
-    const hasPreviewEntity = !!soup.previewEntity();
-    const [getPreview, setPreview] = panel.previewState;
-    if (hasPreviewEntity !== getPreview()) {
-      setPreview(hasPreviewEntity);
-    }
-  });
-
-  // The preview flag lives on the panel, so clear it when the soup view
-  // unmounts (e.g. pressing enter replaces the split with the full entity);
-  // otherwise it stays stale-true and the entity's toolbar keeps the border.
-  onCleanup(() => panel.previewState[1](false));
-
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -1264,9 +1290,23 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 <Show when={isMobile() && source.isPlaceholderData()}>
                   <MobileTabLoadingBar />
                 </Show>
+                <Show when={isMobile()}>
+                  <PullToRefresh
+                    scrollContainer={() =>
+                      showEmptyState() ? emptyStateRef() : listScrollerRef()
+                    }
+                    onRefresh={pullRefresh}
+                  />
+                </Show>
                 <StaticMarkdownContext>
                   <Switch>
-                    <Match when={source.isFetching() && !rows().length}>
+                    <Match
+                      when={
+                        source.isFetching() &&
+                        !rows().length &&
+                        !isPullRefreshing()
+                      }
+                    >
                       {/* Non-list states pad the chrome top themselves — the
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
@@ -1277,7 +1317,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     <Match
                       when={
                         (isSearchServiceLoading() || isLocalSearchSettling()) &&
-                        !rows().length
+                        !rows().length &&
+                        !isPullRefreshing()
                       }
                     >
                       <div class="flex items-center gap-2 p-3 text-xs text-text-muted mobile:mt-(--mobile-content-inset-top) mobile:mb-(--mobile-content-inset-bottom)">
@@ -1285,13 +1326,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         Searching...
                       </div>
                     </Match>
-                    <Match
-                      when={
-                        (!source.isFetching() && !rows().length) ||
-                        forceEmptyState()
-                      }
-                    >
-                      <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                    <Match when={showEmptyState()}>
+                      <div
+                        ref={setEmptyStateRef}
+                        class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)"
+                      >
                         <EmptyState
                           listView={currentView()}
                           search={!!searchText()}
@@ -1343,6 +1382,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               setLocalEntityListRef(el);
                               soupNavigationTouchHighlight(el);
                             }}
+                            scrollerRef={setListScrollerRef}
                             virtualizerClass={'scrollbar-hidden space-y-2'}
                             class="overflow-hidden flex min-w-0"
                             virtualizerRef={registerVirtualizerHandler}
@@ -1492,7 +1532,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           onMouseMove={() => {
                                             if (isKeypressActive()) return;
                                             if (
-                                              soup.previewEntity() ||
+                                              previewOpen() ||
                                               isNewInboxEnabled()
                                             )
                                               return;
@@ -1614,18 +1654,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 percent: isNewInboxEnabled() ? 55 : 70,
               }}
             >
-              <div
-                class={cn(
-                  'size-full',
-                  !isWideSplitPanel() && 'border-t border-t-edge-muted'
-                )}
-              >
+              <div class="size-full">
                 <Show
-                  when={
-                    (soup.focus.row() && !isNewInboxEnabled()) ||
-                    (soup.focus.row()?.getIsGrouped() === false &&
-                      isNewInboxEnabled())
-                  }
+                  when={selectedEntity()}
                   fallback={
                     <EmptyStatePanel
                       graphic={EmptyStatePreviewIcon}
@@ -1639,14 +1670,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     />
                   }
                 >
-                  <PreviewPanel
-                    selectedEntity={soup.focus.item()}
-                    orchestrator={orchestrator}
-                    splitPanelContext={panel}
-                    onFocusOut={() => {
-                      soupViewRef()?.focus();
-                    }}
-                  />
+                  {(entity) => (
+                    <PreviewPanel
+                      selectedEntity={entity()}
+                      orchestrator={orchestrator}
+                      splitPanelContext={panel}
+                      onFocusOut={() => {
+                        soupViewRef()?.focus();
+                      }}
+                    />
+                  )}
                 </Show>
               </div>
             </Resize.Panel>
@@ -1669,6 +1702,8 @@ const DEFAULT_OVERSCAN = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
+  /** Receives the inner scroll container (the element that owns scrollTop). */
+  scrollerRef?: (el: HTMLDivElement) => void;
   virtualizerRef?: (handle: VirtualizerHandle) => void;
   class?: string;
   virtualizerClass?: string;
@@ -1736,6 +1771,7 @@ const SoupList = (props: SoupListProps) => {
           but still slide beneath it. `startMargin` keeps virtua's scroll
           math correct for the leading spacer. */}
       <div
+        ref={props.scrollerRef}
         class={cn('overscroll-none', props.virtualizerClass)}
         style={{
           display: 'block',

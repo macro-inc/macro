@@ -303,16 +303,6 @@ function GithubStatusIcon(props: { status?: string }) {
   );
 }
 
-function Badge(props: { unread: boolean }) {
-  return (
-    <Show when={props.unread}>
-      <span class="flex shrink-0 items-center">
-        <span class="size-2 rounded-full bg-accent" />
-      </span>
-    </Show>
-  );
-}
-
 function PropertyPills(props: { entityId: string; properties?: PropertyT[] }) {
   const properties = createMemo(() => props.properties ?? []);
 
@@ -504,7 +494,6 @@ function BaseCard(props: {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <InboxCard.Title class="flex items-center gap-1 truncate">
-            <Badge unread={props.unread} />
             {props.title}
           </InboxCard.Title>
         </InboxCard.Header>
@@ -637,7 +626,6 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <InboxCard.Title class="flex items-center gap-1">
-            <Badge unread={props.item.unread} />
             {text().title}
           </InboxCard.Title>
         </InboxCard.Header>
@@ -854,7 +842,6 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
           <div class={cn('col-start-2 row-start-2')}>
             <InboxCard.Header class="self-center">
               <InboxCard.Title class="flex items-center gap-1">
-                <Badge unread={props.item.unread} />
                 {text().title}
               </InboxCard.Title>
             </InboxCard.Header>
@@ -1165,7 +1152,6 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <InboxCard.Title class="flex items-center gap-1">
-            <Badge unread={props.item.unread} />
             {text().sender}
           </InboxCard.Title>
         </InboxCard.Header>
@@ -1292,7 +1278,6 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <InboxCard.Title class="flex items-center gap-1">
-            <Badge unread={props.item.unread} />
             {text().title}
           </InboxCard.Title>
         </InboxCard.Header>

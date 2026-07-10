@@ -6,6 +6,7 @@ import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
+import RobotIcon from '@phosphor/robot.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -14,6 +15,8 @@ import { useHasPermission } from '../context/user';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
+  BOT_MANAGEMENT_FLAG,
+  BOT_MANAGEMENT_OVERRIDE,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CRM,
@@ -63,6 +66,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
+      { tab: 'Bots', label: 'Bots', icon: RobotIcon },
     ],
   },
   {
@@ -92,6 +96,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Shortcuts: 'shortcuts',
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
+  Bots: 'bots',
   Team: 'team',
   CRM: 'crm',
   Connected: 'connections',
@@ -136,6 +141,9 @@ export const useSettingsTabAvailable = () => {
   const teamsFlag = useFeatureFlag('enable-teams-settings', {
     enabledOverride: ENABLE_TEAMS_OVERRIDE,
   });
+  const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
+    enabledOverride: BOT_MANAGEMENT_OVERRIDE,
+  });
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
@@ -159,6 +167,8 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
+      case 'Bots':
+        return botManagementFlag().enabled;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
       case 'Admin':

@@ -188,6 +188,12 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue);
+    let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
+        Arc::new(sqs_client.clone()),
+        macro_queues::WebhookEventQueue::new().to_string(),
+        config.webhook_queue_max_messages,
+        config.webhook_queue_wait_time_seconds,
+    );
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
@@ -285,7 +291,7 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue.clone(),
     });
     #[cfg(feature = "graphql")]
-    let graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader> =
+    let graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader> =
         Arc::new(NotificationReaderService {
             repository: notification::outbound::repository::DbNotificationRepository::new(
                 db.clone(),
@@ -575,11 +581,24 @@ async fn main() -> anyhow::Result<()> {
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
-    let webhook_service = webhook::domain::service::WebhookServiceImpl::new(
-        webhook::outbound::pg_repository::PgRepository::new(db.clone()),
-        webhook::outbound::http_validator::ReqwestWebhookValidationClient::new()
-            .context("failed to create webhook validation client")?,
-    );
+
+    let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
+    let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
+        webhook::domain::models::WebhookEndpointSchemePolicy::HttpAndHttps
+    } else {
+        webhook::domain::models::WebhookEndpointSchemePolicy::HttpsOnly
+    };
+    let webhook_http_client =
+        webhook::outbound::ReqwestWebhookDeliveryClient::new_with_endpoint_scheme_policy(
+            webhook_endpoint_scheme_policy,
+        )
+        .context("failed to create webhook HTTP client")?;
+    let webhook_service =
+        webhook::domain::service::WebhookServiceImpl::new_with_endpoint_scheme_policy(
+            webhook_repository.clone(),
+            webhook_http_client.clone(),
+            webhook_endpoint_scheme_policy,
+        );
     let webhook_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
             redis: redis_client.clone(),
@@ -590,23 +609,50 @@ async fn main() -> anyhow::Result<()> {
         webhook_rate_limiter,
     );
 
-    // Webhook event ingestion: consume document and channel broker events and
-    // fan them out to matching webhooks (per-event handlers are stubs for now).
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
+            webhook_repository,
+            webhook_event_queue.clone(),
         );
+    let webhook_delivery_repository =
+        webhook::outbound::PgWebhookDeliveryRepository::new(db.clone());
+    let webhook_delivery_service = webhook::domain::delivery::WebhookEventDeliveryServiceImpl::new(
+        webhook_delivery_repository,
+        webhook_http_client,
+    );
+    let webhook_worker = webhook::inbound::worker::WebhookEventWorker::new(
+        webhook_event_queue,
+        webhook_delivery_service,
+    );
+    let webhook_worker_task = tokio::spawn(async move {
+        tracing::info!("starting webhook event worker");
+        webhook_worker.run().await;
+    });
+    tokio::spawn(async move {
+        match webhook_worker_task.await {
+            Ok(()) => tracing::error!("webhook event worker exited unexpectedly"),
+            Err(error) => {
+                tracing::error!(error = ?error, "webhook event worker exited unexpectedly");
+            }
+        }
+    });
+
     let webhook_consumer_brokers = config.kafka_brokers.as_ref().to_string();
     tokio::spawn(async move {
         loop {
-            if let Err(e) = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
+            tracing::info!("starting webhook event consumer");
+            let result = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
                 &webhook_consumer_brokers,
                 webhook_ingestion_service.clone(),
                 std::future::pending::<()>(),
             )
-            .await
-            {
-                tracing::error!(error = ?e, "webhook event consumer exited");
+            .await;
+            match result {
+                Ok(()) => tracing::error!("webhook event consumer exited unexpectedly"),
+                Err(error) => {
+                    tracing::error!(error = ?error, "webhook event consumer exited unexpectedly");
+                }
             }
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
@@ -735,7 +781,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         favorites_service,
         #[cfg(feature = "graphql")]
-        graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
+        graphql_soup_schema: complete_graph::build_schema_from_arc(soup_service),
         #[cfg(feature = "graphql")]
         graphql_notification_reader,
         github_sync_service: Arc::new(github_sync_service_impl),

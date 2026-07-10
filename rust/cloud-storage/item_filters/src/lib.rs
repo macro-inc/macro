@@ -551,7 +551,8 @@ pub struct CrmCompanyFilters {
     /// Optional `crm_companies.hidden` filter. `None` = visible only
     /// (default for back-compat with non-admin callers). `Some(false)` =
     /// visible only (explicit). `Some(true)` = hidden only — requires
-    /// admin/owner team role; enforced upstream in soup's axum router.
+    /// admin/owner team role; enforced by the CRM service from the
+    /// caller's team receipt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hidden: Option<bool>,
 }
@@ -608,6 +609,18 @@ impl IsEmpty for ProjectFilters {
     }
 }
 
+/// How multiple `tag_option_ids` combine when filtering.
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum TagFilterMode {
+    /// Match entities holding at least one of the selected tags (default).
+    #[default]
+    Any,
+    /// Match entities holding every selected tag.
+    All,
+}
+
 /// a bundle of all of the filters for each entity type
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -647,6 +660,10 @@ pub struct EntityFilters {
     /// the owning definition id (personal and team tags combine into one OR).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tag_option_ids: Vec<String>,
+    /// How the `tag_option_ids` combine: `any` (default) matches entities
+    /// holding at least one selected tag, `all` requires every selected tag.
+    #[serde(default)]
+    pub tag_filter_mode: TagFilterMode,
 }
 
 impl IsEmpty for EntityFilters {
@@ -663,6 +680,8 @@ impl IsEmpty for EntityFilters {
             foreign_entity_filters,
             property_filters,
             tag_option_ids,
+            // Mode is a modifier on tag_option_ids, not a filter by itself.
+            tag_filter_mode: _,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()

@@ -177,11 +177,10 @@ export const AnimatedEmailIcon = (props: {
       viewBox="0 -3 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.5"
+      stroke-width="1.125"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
-      overflow="visible"
       class={props.class}
     >
       {/*<title>Animated email icon</title>*/}

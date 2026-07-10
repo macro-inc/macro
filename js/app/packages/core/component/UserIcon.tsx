@@ -173,10 +173,7 @@ export function UserIcon(props: UserIconProps) {
       <Match when={isMacroAgentId(props.id)}>
         <Avatar
           size={size()}
-          class={cn(
-            'bg-surface text-accent ring-1 ring-edge-muted',
-            props.class
-          )}
+          class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
         >
           <Avatar.Fallback>
             <MacroLogo class="size-[62%]" />

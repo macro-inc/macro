@@ -236,7 +236,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                   classList={{
                     'bg-accent text-surface': isSelected(day!),
                     'hover:bg-active': !isSelected(day!),
-                    'ring-1 ring-accent': isToday(day!),
+                    'ring ring-accent': isToday(day!),
                   }}
                   disabled={
                     (props.disablePriorToDate &&
