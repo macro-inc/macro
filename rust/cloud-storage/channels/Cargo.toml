@@ -56,7 +56,6 @@ outbound = [
   "dep:serde_json",
   "dep:share_permission_db_utils",
   "dep:sqlx",
-  "dep:sqs_client",
   "entity_access/ports",
   "list",
   "macro_user_id/sqlx",
@@ -99,9 +98,6 @@ serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
-sqs_client = { path = "../sqs_client", default-features = false, features = [
-  "search",
-], optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"], optional = true }
 tracing = { workspace = true }

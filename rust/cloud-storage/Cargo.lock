@@ -2578,7 +2578,6 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
- "sqs_client",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -13022,6 +13021,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sqs",
+ "channels",
  "chrono",
  "email",
  "futures",
@@ -13034,6 +13034,7 @@ dependencies = [
  "strum",
  "tracing",
  "uuid",
+ "webhook",
  "workspace-hack",
 ]
 

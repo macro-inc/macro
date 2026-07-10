@@ -540,6 +540,12 @@ queue! {
             dev: "push-delivery-queue-dev",
             prod: "push-delivery-queue-prod",
         },
+        /// FIFO queue for webhook event delivery.
+        pub WebhookEventQueue {
+            local: "webhook-event-queue.fifo",
+            dev: "webhook-event-queue-dev.fifo",
+            prod: "webhook-event-queue-prod.fifo",
+        },
         /// Queue for static-file-service S3 upload event notifications.
         ///
         /// Note: this value is consumed as a full SQS URL in deployed

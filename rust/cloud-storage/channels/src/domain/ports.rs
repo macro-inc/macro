@@ -985,6 +985,23 @@ pub trait ChannelContactsDispatcher: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// Queue transport used by the channel search-index adapter.
+pub trait ChannelSearchQueue: Send + Sync + 'static {
+    /// Enqueue a message upsert.
+    fn enqueue_message(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>>;
+
+    /// Enqueue a message or channel removal.
+    fn enqueue_removal(
+        &self,
+        channel_id: Uuid,
+        message_id: Option<Uuid>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>>;
+}
+
 /// Indexer for channel search updates.
 pub trait ChannelSearchIndexer: Send + Sync + 'static {
     /// Enqueue a message upsert.

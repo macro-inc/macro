@@ -23,6 +23,44 @@ pub mod project;
 
 use crate::{MAX_BATCH_SIZE, PrimaryId};
 
+impl channels::domain::ports::ChannelSearchQueue for SQS {
+    fn enqueue_message(
+        &self,
+        channel_id: uuid::Uuid,
+        message_id: uuid::Uuid,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            self.send_message_to_search_event_queue(SearchQueueMessage::ChannelMessageUpdate(
+                ChannelMessageUpdate {
+                    channel_id: channel_id.to_string(),
+                    message_id: message_id.to_string(),
+                    index_override: None,
+                },
+            ))
+            .await
+            .map(|_| ())
+        })
+    }
+
+    fn enqueue_removal(
+        &self,
+        channel_id: uuid::Uuid,
+        message_id: Option<uuid::Uuid>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            self.send_message_to_search_event_queue(SearchQueueMessage::RemoveChannelMessage(
+                RemoveChannelMessage {
+                    channel_id: channel_id.to_string(),
+                    message_id: message_id.map(|id| id.to_string()),
+                    index_override: None,
+                },
+            ))
+            .await
+            .map(|_| ())
+        })
+    }
+}
+
 impl SQS {
     pub fn search_event_queue(mut self, search_event_queue: &str) -> Self {
         self.search_event_queue = Some(search_event_queue.to_string());
