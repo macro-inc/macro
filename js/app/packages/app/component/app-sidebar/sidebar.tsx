@@ -182,10 +182,10 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'channels',
-    label: 'Messages',
+    label: 'Channels',
     href: LIST_VIEW_PATHS.channels,
     icon: AnimatedChannelIcon,
-    hotkey: 'm',
+    hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
   ...(ENABLE_CRM
