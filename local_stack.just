@@ -29,6 +29,7 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name notification-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name notification-ingress-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name push-delivery-queue || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name webhook-event-queue.fifo --attributes FifoQueue=true || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-backfill-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name delete-chat-handler-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name contacts-queue || true

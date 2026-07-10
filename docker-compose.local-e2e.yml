@@ -43,6 +43,7 @@ x-local-e2e-env: &local-e2e-env
   OVERRIDE_NOTIFICATION_QUEUE: http://localstack:4566/000000000000/notification-queue
   OVERRIDE_NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
   OVERRIDE_PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
+  OVERRIDE_WEBHOOK_EVENT_QUEUE: http://localstack:4566/000000000000/webhook-event-queue.fifo
   OVERRIDE_SEARCH_EVENT_QUEUE: search-event-queue
   OVERRIDE_AI_PROJECTION_QUEUE: http://localstack:4566/000000000000/ai-projection-queue
   OVERRIDE_SFS_DELETE_QUEUE: email-sfs-delete-queue

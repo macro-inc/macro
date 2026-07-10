@@ -107,6 +107,10 @@ pub const QUEUES: &[Queue] = &[
         bindings: &[("PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE", Name)],
     },
     Queue {
+        name: macro_queues::WebhookEventQueue::LOCAL,
+        bindings: &[(macro_queues::WebhookEventQueue::OVERRIDE_ENV_VAR_NAME, Url)],
+    },
+    Queue {
         name: macro_queues::EmailBackfillQueue::LOCAL,
         bindings: &[("BACKFILL_QUEUE", Name), ("EMAIL_BACKFILL_QUEUE", Url)],
     },
