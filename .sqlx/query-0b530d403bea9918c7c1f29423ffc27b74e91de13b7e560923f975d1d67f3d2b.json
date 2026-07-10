@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            cr.id AS \"call_id!\",\n            cr.channel_id AS \"channel_id!\",\n            cr.created_by AS \"created_by!\",\n            cc.name AS \"channel_name?\"\n        FROM call_records cr\n        LEFT JOIN comms_channels cc ON cc.id = cr.channel_id\n        WHERE cr.id = $1\n        ",
+  "query": "\n        SELECT\n            cr.id AS \"call_id!\",\n            cr.channel_id AS \"channel_id!\",\n            cr.created_by AS \"created_by!\",\n            cr.custom_name AS \"custom_name?\",\n            cc.name AS \"channel_name?\"\n        FROM call_records cr\n        LEFT JOIN comms_channels cc ON cc.id = cr.channel_id\n        WHERE cr.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -20,6 +20,11 @@
       },
       {
         "ordinal": 3,
+        "name": "custom_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "channel_name?",
         "type_info": "Varchar"
       }
@@ -33,8 +38,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "3907578083a1a10d49eab63c85fd92d078cbce9ef2e968480ea475623ec76f63"
+  "hash": "0b530d403bea9918c7c1f29423ffc27b74e91de13b7e560923f975d1d67f3d2b"
 }

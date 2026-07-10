@@ -14354,6 +14354,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALL_RECORD",
           "CHANNEL",
           "CHAT",
           "COMPANY",
@@ -18184,7 +18185,8 @@
           "isActive",
           "status",
           "attended",
-          "participants"
+          "participants",
+          "properties"
         ],
         "properties": {
           "attended": {
@@ -18233,6 +18235,13 @@
               "$ref": "#/components/schemas/SoupCallRecordParticipant"
             },
             "description": "Participants in the call."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Entity properties (e.g. tags). Populated after fetch by the soup repo."
           },
           "startedAt": {
             "type": "string",

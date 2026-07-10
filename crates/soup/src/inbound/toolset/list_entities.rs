@@ -193,6 +193,9 @@ pub enum EntityItem {
         id: Uuid,
         /// User or actor that created the call.
         created_by: String,
+        /// Tags on the call visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
     },
     /// Foreign entity item.
     #[serde(rename_all = "camelCase")]
@@ -256,6 +259,7 @@ impl EntityItem {
             SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,
                 created_by: record.created_by,
+                tags: resolve_applied_tags(&record.properties, tag_map),
             },
             // `entity_filter_ast` force-filters CrmCompany out — kept
             // loud here so a contract break is obvious, not silent.
@@ -332,7 +336,7 @@ pub struct ListEntitiesResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListEntities",
-    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, and emails include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
+    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
     /// Filter returned items to specific item types.

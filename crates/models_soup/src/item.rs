@@ -219,7 +219,10 @@ impl SoupItem {
             )),
             SoupItem::Channel(_) => None,
             SoupItem::ChannelThread(_) => None,
-            SoupItem::Call(_) => None,
+            SoupItem::Call(c) => Some(EntityReference::new(
+                c.call_id.to_string(),
+                PropertiesEntityType::CallRecord,
+            )),
             SoupItem::CrmCompany(c) => Some(EntityReference::new(
                 c.id.to_string(),
                 PropertiesEntityType::Company,

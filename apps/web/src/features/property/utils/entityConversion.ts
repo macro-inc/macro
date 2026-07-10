@@ -55,6 +55,7 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('PROJECT', () => 'project' as ItemType)
     .with('CHANNEL', () => 'channel' as ItemType)
     .with('CHAT', () => 'chat' as ItemType)
+    .with('CALL_RECORD', () => 'call' as ItemType)
     .with('COMPANY', () => undefined) // huh
     .with('USER', () => undefined) // huh
     .with('THREAD', () => 'email' as ItemType)
@@ -73,7 +74,7 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
     .with({ type: 'channel_message' }, () => EntityType.CHANNEL)
     .with({ type: 'channel_thread' }, () => EntityType.CHANNEL)
-    .with({ type: 'call' }, () => EntityType.CHANNEL)
+    .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
     .with({ type: 'crm_contact' }, () => {
       // No CONTACT in the properties-service EntityType yet.

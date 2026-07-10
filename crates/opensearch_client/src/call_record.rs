@@ -3,6 +3,7 @@ use crate::{
     upsert::{
         self, BulkUpsertResult,
         call_record::{UpsertCallRecordSegmentArgs, bulk_upsert_call_record_segments},
+        properties::IndexedProperty,
     },
 };
 
@@ -23,6 +24,16 @@ impl OpensearchClient {
         index_override: Option<&str>,
     ) -> Result<BulkUpsertResult> {
         bulk_upsert_call_record_segments(&self.inner, segments, index_override).await
+    }
+
+    /// Refresh only the denormalized `properties` on an existing parent call doc.
+    #[tracing::instrument(skip(self, properties))]
+    pub async fn update_call_record_properties(
+        &self,
+        call_id: &str,
+        properties: &[IndexedProperty],
+    ) -> Result<()> {
+        upsert::call_record::update_call_record_properties(&self.inner, call_id, properties).await
     }
 
     #[tracing::instrument(skip(self))]

@@ -16,8 +16,15 @@ pub async fn get_owner_and_deleted(
     entity_type: EntityType,
 ) -> anyhow::Result<(String, bool)> {
     let result = match entity_type {
-        // The following entity types are either deleted immediately or simply unsupported
-        EntityType::Channel | EntityType::Company | EntityType::User | EntityType::Thread => {
+        // The following entity types are either deleted immediately or simply
+        // unsupported by this owner lookup. Calls resolve access through their
+        // owning channel (see `access_entity_type`), so the caller skips this
+        // path for them entirely.
+        EntityType::CallRecord
+        | EntityType::Channel
+        | EntityType::Company
+        | EntityType::User
+        | EntityType::Thread => {
             anyhow::bail!("unsupported entity type")
         }
         EntityType::Document | EntityType::Task => {

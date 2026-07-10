@@ -24,7 +24,8 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD"
               ]
             }
           }

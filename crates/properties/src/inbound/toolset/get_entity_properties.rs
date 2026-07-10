@@ -28,6 +28,7 @@ pub enum ToolEntityType {
     Chat,
     Thread,
     Channel,
+    Call,
     User,
     Company,
 }
@@ -41,6 +42,7 @@ impl From<ToolEntityType> for EntityType {
             ToolEntityType::Chat => EntityType::Chat,
             ToolEntityType::Thread => EntityType::Thread,
             ToolEntityType::Channel => EntityType::Channel,
+            ToolEntityType::Call => EntityType::CallRecord,
             ToolEntityType::User => EntityType::User,
             ToolEntityType::Company => EntityType::Company,
         }

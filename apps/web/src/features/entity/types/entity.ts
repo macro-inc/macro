@@ -223,6 +223,7 @@ export type CallEntity = EntityBase & {
   durationMs?: number;
   participantIds: string[];
   summary?: string;
+  properties?: SoupProperty[];
 };
 
 export type AutomationEntity = EntityBase & {

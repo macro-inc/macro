@@ -507,6 +507,7 @@ export const useSearchResponseItemMapper = () => {
             attended: status === 'ATTENDED',
             durationMs: result.metadata.duration_ms,
             participantIds: result.participant_ids,
+            properties: result.properties ?? undefined,
             search,
           },
         ];
@@ -642,6 +643,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
         summary: item.data.summary ?? undefined,
+        properties: item.data.properties,
       } satisfies CallEntity;
     })
     .with({ tag: 'channelThread' }, (item) => {

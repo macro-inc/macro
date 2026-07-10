@@ -17,6 +17,8 @@ use uuid::Uuid;
 pub fn access_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {
         EntityType::Document => AccessEntityType::Document,
+        // Call access is resolved through the call's owning channel.
+        EntityType::CallRecord => AccessEntityType::Call,
         EntityType::Chat => AccessEntityType::Chat,
         EntityType::Project => AccessEntityType::Project,
         EntityType::Thread => AccessEntityType::EmailThread,

@@ -106,7 +106,11 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         // Check if entity is deleted: the owner always has access, and deleted
         // entities are only visible to their owner.
         match entity_type {
-            EntityType::Channel | EntityType::Company | EntityType::User | EntityType::Thread => {}
+            EntityType::CallRecord
+            | EntityType::Channel
+            | EntityType::Company
+            | EntityType::User
+            | EntityType::Thread => {}
             _ => {
                 let (owner, deleted) =
                     permission_queries::get_owner_and_deleted(&self.db, entity_id, entity_type)

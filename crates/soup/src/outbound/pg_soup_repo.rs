@@ -219,11 +219,9 @@ pub(crate) async fn populate_properties(
             SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
             SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
             SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
-            // Channels, calls, and foreign entities are not in entity_properties.
-            SoupItem::Channel(_)
-            | SoupItem::ChannelThread(_)
-            | SoupItem::Call(_)
-            | SoupItem::ForeignEntity(_) => None,
+            SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
+            // Channels and foreign entities are not in entity_properties.
+            SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => None,
         };
         if let Some(props) = props {
             let soup_props: Vec<SoupProperty> =
@@ -234,10 +232,8 @@ pub(crate) async fn populate_properties(
                 SoupItem::EmailThread(x) => x.properties = soup_props,
                 SoupItem::Chat(x) => x.properties = soup_props,
                 SoupItem::CrmCompany(x) => x.properties = soup_props,
-                SoupItem::Channel(_)
-                | SoupItem::ChannelThread(_)
-                | SoupItem::Call(_)
-                | SoupItem::ForeignEntity(_) => {}
+                SoupItem::Call(x) => x.properties = soup_props,
+                SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => {}
             }
         }
     }

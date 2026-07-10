@@ -1,11 +1,16 @@
 require('dotenv').config();
 
 import { client } from '../client';
-import { CHATS_ALIAS, EMAILS_ALIAS, IS_DRY_RUN } from '../constants';
+import {
+  CALL_RECORDS_ALIAS,
+  CHATS_ALIAS,
+  EMAILS_ALIAS,
+  IS_DRY_RUN,
+} from '../constants';
 
 // Indexes that receive the nested entity-properties field additively
 // (documents shipped with it; projects_v1 was created with it).
-const SUPPORTED_INDEXES = [EMAILS_ALIAS, CHATS_ALIAS];
+const SUPPORTED_INDEXES = [EMAILS_ALIAS, CHATS_ALIAS, CALL_RECORDS_ALIAS];
 
 async function addPropertiesField(dryRun: boolean) {
   const index = process.env.INDEX;
@@ -36,23 +41,31 @@ async function addPropertiesField(dryRun: boolean) {
   }
 
   console.log('\nAdding nested properties field mapping...');
-  const mappingUpdate = {
+  const fields: Record<string, unknown> = {
+    // Entity properties (e.g. tags), same nested shape as the documents
+    // index so the shared property/tag filters apply unchanged. Emails:
+    // thread-level values denormalized onto every message doc. Chats and
+    // calls: values live on the parent doc only.
     properties: {
-      // Entity properties (e.g. tags), same nested shape as the documents
-      // index so the shared property/tag filters apply unchanged. Emails:
-      // thread-level values denormalized onto every message doc. Chats:
-      // values live on the parent chat doc only.
+      type: 'nested' as const,
       properties: {
-        type: 'nested' as const,
-        properties: {
-          definition_id: { type: 'keyword' as const },
-          values: { type: 'keyword' as const },
-          number_value: { type: 'double' as const },
-          date_value: { type: 'date' as const },
-        },
+        definition_id: { type: 'keyword' as const },
+        values: { type: 'keyword' as const },
+        number_value: { type: 'double' as const },
+        date_value: { type: 'date' as const },
       },
     },
   };
+  // Calls also gain a searchable `name` field (custom name, falling back to
+  // the channel name). Existing indexes only got channel_name; the calls
+  // backfill re-populates `name` on every parent doc.
+  if (index === CALL_RECORDS_ALIAS) {
+    fields.name = {
+      type: 'text' as const,
+      fields: { keyword: { type: 'keyword' as const, ignore_above: 128 } },
+    };
+  }
+  const mappingUpdate = { properties: fields };
 
   if (dryRun) {
     console.log('[DRY-RUN] Would add nested properties field mapping');

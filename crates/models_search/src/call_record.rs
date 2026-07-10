@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use item_filters::{CallFilters, CallStatus};
+use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -45,6 +46,10 @@ pub struct CallRecordMetadata {
 pub struct CallRecordSearchResponseItemWithMetadata {
     /// `None` if the call has been deleted.
     pub metadata: Option<CallRecordMetadata>,
+    /// Entity properties (e.g. tags) on the call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: CallRecordSearchResponseItem,
 }

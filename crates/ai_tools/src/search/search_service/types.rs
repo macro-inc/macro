@@ -168,9 +168,8 @@ fn item_properties(item: &UnifiedSearchResponseItem) -> Option<&Vec<SoupProperty
         UnifiedSearchResponseItem::Chat(i) => i.properties.as_ref(),
         UnifiedSearchResponseItem::Email(i) => i.properties.as_ref(),
         UnifiedSearchResponseItem::Project(i) => i.properties.as_ref(),
-        UnifiedSearchResponseItem::Channel(_)
-        | UnifiedSearchResponseItem::Call(_)
-        | UnifiedSearchResponseItem::Company(_) => None,
+        UnifiedSearchResponseItem::Call(i) => i.properties.as_ref(),
+        UnifiedSearchResponseItem::Channel(_) | UnifiedSearchResponseItem::Company(_) => None,
     }
 }
 

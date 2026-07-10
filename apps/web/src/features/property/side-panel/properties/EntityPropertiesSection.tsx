@@ -77,6 +77,7 @@ const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'THREAD',
   'PROJECT',
   'CHAT',
+  'CALL_RECORD',
 ]);
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {

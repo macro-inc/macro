@@ -28,7 +28,8 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD"
               ]
             }
           }
@@ -111,7 +112,8 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD"
               ]
             }
           }
@@ -148,7 +150,8 @@
                 "THREAD",
                 "USER",
                 "COMPANY",
-                "TASK"
+                "TASK",
+                "CALL_RECORD"
               ]
             }
           }
