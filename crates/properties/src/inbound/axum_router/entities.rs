@@ -20,7 +20,6 @@ use models_properties::api::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::{EntityReference, EntityType};
 use serde::{Deserialize, Serialize};
-use system_properties::{StatusOption, SystemPropertyKey};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -552,68 +551,5 @@ pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService
         .delete_entity_property(&access, entity_property_uuid)
         .await?;
 
-    Ok(StatusCode::NO_CONTENT)
-}
-
-#[derive(Debug, Error)]
-pub enum SetPropertyStatusCompleteErr {
-    #[error(transparent)]
-    Properties(#[from] PropertiesErr),
-}
-
-impl IntoResponse for SetPropertyStatusCompleteErr {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
-            SetPropertyStatusCompleteErr::Properties(e) => properties_err_status(e),
-        };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                error = ?self,
-                error_type = "SetPropertyStatusCompleteErr",
-                "Internal server error"
-            );
-        }
-
-        (status_code, self.to_string()).into_response()
-    }
-}
-
-/// Set an entity's status property to "Completed".
-///
-/// Uses the general property mutation path, attaching the status property if needed.
-#[utoipa::path(
-    patch,
-    path = "/properties/entities/{entity_type}/{entity_id}/status/complete",
-    params(
-        ("entity_type" = EntityType, Path, description = "Entity type (document, channel, project, thread, chat)"),
-        ("entity_id" = String, Path, description = "Entity ID")
-    ),
-    responses(
-        (status = 204, description = "Status set to complete"),
-        (status = 403, description = "Access denied"),
-        (status = 500, description = "Internal server error")
-    ),
-    tags = ["Properties"]
-)]
-#[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type()), err)]
-pub async fn set_property_status_complete<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    access: EditReceiptExtractor,
-) -> Result<StatusCode, SetPropertyStatusCompleteErr> {
-    tracing::info!("setting entity status to complete");
-
-    state
-        .properties_service
-        .set_entity_property(
-            &access.0,
-            SystemPropertyKey::STATUS_UUID,
-            Some(SetPropertyValue::SelectOption {
-                option_id: StatusOption::COMPLETED_UUID,
-            }),
-        )
-        .await?;
-
-    tracing::debug!("status complete handled");
     Ok(StatusCode::NO_CONTENT)
 }
