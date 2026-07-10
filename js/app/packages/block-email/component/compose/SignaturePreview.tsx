@@ -1,3 +1,5 @@
+import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import InfoIcon from '@phosphor/info.svg';
 import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -73,7 +75,18 @@ export function SignaturePreview(props: {
             label="Edit your signature in Settings -> Connections."
             as="span"
           >
-            <InfoIcon class="size-3.5 text-ink-muted" />
+            {/* Tooltips never show on touch, so on mobile a tap surfaces the
+                guidance as a toast instead (editing is desktop-only). */}
+            <button
+              type="button"
+              class="flex items-center"
+              aria-label="Edit your signature in Settings -> Connections."
+              onClick={() => {
+                if (isMobile()) toast.alert('Update your signature on desktop');
+              }}
+            >
+              <InfoIcon class="size-3.5 text-ink-muted" />
+            </button>
           </Tooltip>
         </div>
         <Tooltip label="Don't include signature" as="span">
