@@ -6,6 +6,7 @@ import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMemo } from 'solid-js';
 
 export const WIDE_SPLIT_PANEL_BREAKPOINT = 640;
@@ -45,7 +46,9 @@ export function usePreviewPaneVisiblity() {
     return row.original;
   });
 
-  const paneVisible = createMemo(() => isWideSplitPanel() && previewOpen());
+  const paneVisible = createMemo(
+    () => !isMobile() && isWideSplitPanel() && previewOpen()
+  );
   const previewVisible = createMemo(() => paneVisible() && !!selectedEntity());
 
   return {
