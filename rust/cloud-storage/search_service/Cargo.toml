@@ -37,6 +37,7 @@ models_soup = { path = "../models_soup" }
 properties = { path = "../properties", default-features = false, features = [
   "outbound",
 ] }
+system_properties = { path = "../system_properties" }
 readonly_pool = { path = "../readonly_pool" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
