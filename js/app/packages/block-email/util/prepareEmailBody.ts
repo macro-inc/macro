@@ -173,9 +173,11 @@ const $appendPreviousEmail = (
   } else {
     const parser = new DOMParser();
     const dom = parser.parseFromString(replyingToBodyHTML, 'text/html');
-    // We are checking if the appended reply contains a table. This is not exact, but is a good indicator that an email will contain content that we can not render correctly, in which case the appended reply will be a non-editable HTML Render Node.
+    // Forwards always embed the original as a non-editable HTML Render Node so
+    // the recipient gets the exact original markup. For replies, a table is a
+    // good indicator of content we can't convert into editable nodes correctly.
     const hasTable = Boolean(dom.querySelector('table'));
-    if (hasTable) {
+    if (replyType === 'forward' || hasTable) {
       const htmlNode = $createHtmlRenderNode({ html: replyingToBodyHTML });
       quoteNode.append(htmlNode);
     } else {
