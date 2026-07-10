@@ -841,6 +841,17 @@
               # Doppler's dev DATABASE_URL, run-local its container-side URL.
               DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
             }
+            // pkgs.lib.optionalAttrs isDarwin {
+              # The bundled librdkafka C++ build is a native macOS build.
+              # cmake-rs supplies an `arm64-apple-macosx` target flag, while
+              # the Nix clang wrapper is configured for `arm64-apple-darwin`.
+              # Passing both through the wrapper makes Apple SDK headers
+              # incompatible with Nix's libc++ headers. Use Apple's compiler
+              # for native host C/C++ builds; Nix still supplies the SDK,
+              # dependency flags, and cross-compilation toolchain.
+              CC = "/usr/bin/clang";
+              CXX = "/usr/bin/clang++";
+            }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
               BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
