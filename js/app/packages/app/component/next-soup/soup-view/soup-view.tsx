@@ -1043,14 +1043,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     if (paneVisible() && type === 'entity') {
+      const alreadyFocused = soup.focus.id() === entity.id;
+
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
       soup.setPreviewEntity(entity.id);
-      // Re-selecting the same row leaves the preview entity unchanged, so the
-      // preview's navigation effect won't re-run — fire the target navigation
-      // here so a channel row re-activates its message on every click.
-      navigateChannelEntityToTarget(entity, orchestrator);
+
+      if (alreadyFocused) {
+        navigateChannelEntityToTarget(entity, orchestrator);
+      }
       return;
     }
 
