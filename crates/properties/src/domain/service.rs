@@ -41,13 +41,6 @@ pub fn team_id_from_receipt(team: Option<&TeamReceipt>) -> Option<Uuid> {
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
-    /// Set an entity's status system property to "Completed".
-    /// No-op if the entity doesn't have a status property.
-    fn set_system_property_status_complete(
-        &self,
-        access: &EditReceipt,
-    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
-
     /// Get all properties attached to an entity, with definitions, values, and
     /// options. Tag properties are restricted to the viewer's own and their
     /// teams' definitions (the viewer being the receipt's authenticated user).

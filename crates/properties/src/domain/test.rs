@@ -54,26 +54,40 @@ fn create_mock_permission_service() -> MockPermissionService {
 }
 
 #[tokio::test]
-async fn test_set_system_property_status_complete_happy_path() {
+async fn test_set_status_complete_through_general_property_mutation() {
     let mut repo = MockPropertiesRepo::new();
 
-    repo.expect_update_entity_property_value_if_exists()
-        .withf(|entity_id, entity_type, prop_id, value| {
-            if entity_id != "e1" {
-                return false;
-            }
-            if *entity_type != EntityType::Document {
-                return false;
-            }
-            if *prop_id != SystemPropertyKey::STATUS_UUID {
-                return false;
-            }
-            match value {
-                Some(PropertyValue::SelectOption(ids)) => {
-                    ids.len() == 1 && ids[0] == StatusOption::COMPLETED_UUID
-                }
-                _ => false,
-            }
+    repo.expect_get_property_definition().returning(|_| {
+        Box::pin(async {
+            Ok(Some(PropertyDefinition {
+                id: SystemPropertyKey::STATUS_UUID,
+                owner: models_properties::PropertyOwner::System,
+                display_name: "Status".to_string(),
+                data_type: models_properties::DataType::SelectString,
+                is_multi_select: false,
+                specific_entity_type: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                is_system: true,
+                is_metadata: false,
+            }))
+        })
+    });
+    repo.expect_count_valid_property_options()
+        .withf(|property_id, option_ids| {
+            *property_id == SystemPropertyKey::STATUS_UUID
+                && option_ids == [StatusOption::COMPLETED_UUID]
+        })
+        .returning(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_upsert_entity_property()
+        .withf(|entity_id, entity_type, property_id, value| {
+            entity_id == "e1"
+                && *entity_type == EntityType::Document
+                && *property_id == SystemPropertyKey::STATUS_UUID
+                && *value
+                    == Some(PropertyValue::SelectOption(vec![
+                        StatusOption::COMPLETED_UUID,
+                    ]))
         })
         .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
 
@@ -84,31 +98,17 @@ async fn test_set_system_property_status_complete_happy_path() {
     );
 
     service
-        .set_system_property_status_complete(&edit_receipt("e1", EntityType::Document))
+        .set_entity_property(
+            &edit_receipt("e1", EntityType::Document),
+            SystemPropertyKey::STATUS_UUID,
+            Some(
+                models_properties::api::requests::SetPropertyValue::SelectOption {
+                    option_id: StatusOption::COMPLETED_UUID,
+                },
+            ),
+        )
         .await
         .unwrap();
-
-    // expectations on the mock validate the call shape
-}
-
-#[tokio::test]
-async fn test_set_system_property_status_complete_error_path() {
-    let mut repo = MockPropertiesRepo::new();
-    repo.expect_update_entity_property_value_if_exists()
-        .returning(|_, _, _, _| Box::pin(async { Err(anyhow!("boom")) }));
-
-    let service = PropertiesServiceImpl::new(
-        repo,
-        Some(create_mock_permission_service()),
-        None::<MockNotificationService>,
-    );
-
-    let err = service
-        .set_system_property_status_complete(&edit_receipt("e1", EntityType::Document))
-        .await
-        .unwrap_err();
-
-    assert_eq!(err.to_string(), "boom");
 }
 
 // ============================================================================

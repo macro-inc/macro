@@ -246,24 +246,6 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self, value))]
-    async fn update_entity_property_value_if_exists(
-        &self,
-        entity_id: &str,
-        entity_type: EntityType,
-        property_definition_id: Uuid,
-        value: Option<PropertyValue>,
-    ) -> Result<(), Self::Err> {
-        entity_property_queries::update_entity_property_value_if_exists(
-            &self.pool,
-            entity_id,
-            entity_type,
-            property_definition_id,
-            value,
-        )
-        .await
-    }
-
-    #[tracing::instrument(skip(self, value))]
     async fn upsert_entity_property(
         &self,
         entity_id: &str,

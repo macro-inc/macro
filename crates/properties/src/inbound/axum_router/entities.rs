@@ -20,6 +20,7 @@ use models_properties::api::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::{EntityReference, EntityType};
 use serde::{Deserialize, Serialize};
+use system_properties::{StatusOption, SystemPropertyKey};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -580,8 +581,7 @@ impl IntoResponse for SetPropertyStatusCompleteErr {
 
 /// Set an entity's status property to "Completed".
 ///
-/// If the entity has a status property attached, it will be set to "Completed".
-/// If the entity does not have a status property, this is a no-op and returns success.
+/// Uses the general property mutation path, attaching the status property if needed.
 #[utoipa::path(
     patch,
     path = "/properties/entities/{entity_type}/{entity_id}/status/complete",
@@ -605,7 +605,13 @@ pub async fn set_property_status_complete<S: PropertiesService, A: EntityAccessS
 
     state
         .properties_service
-        .set_system_property_status_complete(&access.0)
+        .set_entity_property(
+            &access.0,
+            SystemPropertyKey::STATUS_UUID,
+            Some(SetPropertyValue::SelectOption {
+                option_id: StatusOption::COMPLETED_UUID,
+            }),
+        )
         .await?;
 
     tracing::debug!("status complete handled");
