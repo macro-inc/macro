@@ -16,14 +16,14 @@ use std::{net::IpAddr, time::Duration};
 use tokio::net::lookup_host;
 
 const EVENT_NAME: &str = "webhook.validation.test";
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 type HmacSha256 = Hmac<Sha256>;
 
 /// Reqwest-backed implementation of [`WebhookValidationClient`].
 #[derive(Clone)]
 pub struct ReqwestWebhookValidationClient {
-    client: Client,
+    pub(super) client: Client,
 }
 
 impl ReqwestWebhookValidationClient {
@@ -47,7 +47,7 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
     ) -> Result<WebhookValidationResult, Self::Err> {
         let url = match validate_resolved_endpoint_url(&webhook.endpoint_url).await {
             Ok(url) => url,
-            Err(message) => return Ok(failure(None, message)),
+            Err(error) => return Ok(failure(None, error.message())),
         };
 
         let event_id = new_validation_event_id();
@@ -107,7 +107,7 @@ fn validation_body(webhook_id: &str, event_id: &str) -> Result<Vec<u8>, serde_js
     }))
 }
 
-fn signature_header(
+pub(super) fn signature_header(
     secret: &str,
     timestamp: &str,
     raw_body: &[u8],
@@ -119,45 +119,81 @@ fn signature_header(
     Ok(format!("v1={}", hex::encode(mac.finalize().into_bytes())))
 }
 
-async fn validate_resolved_endpoint_url(value: &str) -> Result<Url, &'static str> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum EndpointValidationError {
+    InvalidConfiguration(&'static str),
+    ResolutionFailure(&'static str),
+}
+
+impl EndpointValidationError {
+    pub(super) const fn message(self) -> &'static str {
+        match self {
+            Self::InvalidConfiguration(message) | Self::ResolutionFailure(message) => message,
+        }
+    }
+
+    pub(super) const fn is_retryable(self) -> bool {
+        matches!(self, Self::ResolutionFailure(_))
+    }
+}
+
+pub(super) async fn validate_resolved_endpoint_url(
+    value: &str,
+) -> Result<Url, EndpointValidationError> {
     let url = validate_endpoint_url(value)?;
     let Some(host) = url.host_str().map(str::to_owned) else {
-        return Err("webhook endpoint URL host is invalid");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL host is invalid",
+        ));
     };
     let Some(port) = url.port_or_known_default() else {
-        return Err("webhook endpoint URL port is invalid");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL port is invalid",
+        ));
     };
 
-    let mut resolved = lookup_host((host.as_str(), port))
-        .await
-        .map_err(|_| "webhook endpoint host could not be resolved")?;
+    let mut resolved = lookup_host((host.as_str(), port)).await.map_err(|_| {
+        EndpointValidationError::ResolutionFailure("webhook endpoint host could not be resolved")
+    })?;
     let mut saw_address = false;
     for address in resolved.by_ref() {
         saw_address = true;
         if is_blocked_ip(address.ip()) {
-            return Err("webhook endpoint host resolves to a disallowed address");
+            return Err(EndpointValidationError::InvalidConfiguration(
+                "webhook endpoint host resolves to a disallowed address",
+            ));
         }
     }
 
     if !saw_address {
-        return Err("webhook endpoint host could not be resolved");
+        return Err(EndpointValidationError::ResolutionFailure(
+            "webhook endpoint host could not be resolved",
+        ));
     }
 
     Ok(url)
 }
 
-fn validate_endpoint_url(value: &str) -> Result<Url, &'static str> {
-    let url = Url::parse(value).map_err(|_| "webhook endpoint URL is invalid")?;
+fn validate_endpoint_url(value: &str) -> Result<Url, EndpointValidationError> {
+    let url = Url::parse(value).map_err(|_| {
+        EndpointValidationError::InvalidConfiguration("webhook endpoint URL is invalid")
+    })?;
     if url.scheme() != "https" {
-        return Err("webhook endpoint URL must use HTTPS");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL must use HTTPS",
+        ));
     }
 
     let Some(host) = url.host_str() else {
-        return Err("webhook endpoint URL host is invalid");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint URL host is invalid",
+        ));
     };
 
     if is_blocked_host(host) {
-        return Err("webhook endpoint host is not allowed");
+        return Err(EndpointValidationError::InvalidConfiguration(
+            "webhook endpoint host is not allowed",
+        ));
     }
 
     Ok(url)
@@ -191,7 +227,7 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn is_reserved_macro_header(name: &str) -> bool {
+pub(super) fn is_reserved_macro_header(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
         "x-macro-event" | "x-macro-event-id" | "x-macro-timestamp" | "x-macro-signature"

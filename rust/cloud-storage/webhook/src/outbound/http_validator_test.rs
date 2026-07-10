@@ -1,6 +1,11 @@
 use super::*;
 
 #[test]
+fn uses_five_second_request_timeout() {
+    assert_eq!(REQUEST_TIMEOUT, Duration::from_secs(5));
+}
+
+#[test]
 fn builds_deterministic_validation_body() {
     let body = validation_body("wh_test", "evt_test").expect("body should serialize");
     let value: serde_json::Value = serde_json::from_slice(&body).expect("body should be json");
@@ -35,7 +40,7 @@ fn signs_timestamp_and_raw_body() {
 fn rejects_non_https_endpoint() {
     let error = validate_endpoint_url("http://example.com/webhook").expect_err("http is invalid");
 
-    assert_eq!(error, "webhook endpoint URL must use HTTPS");
+    assert_eq!(error.message(), "webhook endpoint URL must use HTTPS");
 }
 
 #[test]
@@ -54,7 +59,7 @@ async fn rejects_hosts_that_resolve_to_blocked_addresses() {
         .await
         .expect_err("localhost is invalid");
 
-    assert_eq!(error, "webhook endpoint host is not allowed");
+    assert_eq!(error.message(), "webhook endpoint host is not allowed");
 }
 
 #[test]
