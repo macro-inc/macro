@@ -2,12 +2,8 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, Show } from 'solid-js';
-import {
-  getRecipientDisplayName,
-  getSenderDisplayName,
-  getSenderMacroId,
-} from '../util/emailUser';
+import { createMemo, Show } from 'solid-js';
+import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
@@ -25,7 +21,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     getSenderDisplayName(props.message, currentUserEmail())
   );
   const senderMacroId = createMemo(() => getSenderMacroId(props.message));
-  const allRecipients = createMemo(() => [
+  const _allRecipients = createMemo(() => [
     ...props.message.to,
     ...props.message.cc,
   ]);
@@ -98,9 +94,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               </span>
             </Show>
           </div>
-          <div class="min-w-0 text-sm text-ink-muted truncate">
-            {snippet()}
-          </div>
+          <div class="min-w-0 text-sm text-ink-muted truncate">{snippet()}</div>
         </div>
       </div>
     </div>

@@ -101,8 +101,6 @@ export function MessageContainer(props: MessageContainerProps) {
     return props.isExpanded;
   });
 
-
-
   // Hide attachments that are referenced in inline images
   const inlineContentIds = createMemo(() => {
     const set = new Set<string>();
@@ -373,9 +371,7 @@ export function MessageContainer(props: MessageContainerProps) {
                         setShowReply={setShowReply}
                         draft={draftChild()}
                         markdownDomRef={
-                          props.isLastMessage
-                            ? props.markdownDomRef
-                            : undefined
+                          props.isLastMessage ? props.markdownDomRef : undefined
                         }
                         unframed
                       />

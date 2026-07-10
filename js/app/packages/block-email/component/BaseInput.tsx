@@ -80,14 +80,7 @@ import type {
   ApiMessage,
 } from '@service-email/generated/schemas';
 import { isIOS } from '@solid-primitives/platform';
-import {
-  Button,
-  cn,
-  Layer,
-  SendButton,
-  Surface,
-  Tooltip,
-} from '@ui';
+import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
 import { iosCursorScrollPlugin } from 'core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { $getRoot } from 'lexical';

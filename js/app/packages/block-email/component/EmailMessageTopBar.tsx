@@ -218,7 +218,12 @@ function HeaderTopRow(props: {
                 props.onToggle();
               }}
             >
-              <CaretRight class={cn("size-3! text-ink-muted/30 transition-transform", props.isExpanded && 'rotate-90')} />
+              <CaretRight
+                class={cn(
+                  'size-3! text-ink-muted/30 transition-transform',
+                  props.isExpanded && 'rotate-90'
+                )}
+              />
             </Button>
           </Tooltip>
         </div>
@@ -287,9 +292,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
       onClick={handleClick}
     >
       <Show when={props.isBodyExpanded()}>
-        <div
-          class="flex items-center gap-2"
-        >
+        <div class="flex items-center gap-2">
           {props.avatar}
           <HeaderTopRow
             senderName={senderName()}

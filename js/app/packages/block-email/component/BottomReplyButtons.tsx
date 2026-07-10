@@ -1,6 +1,6 @@
 import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
-import { UserIcon } from '@core/component/UserIcon';
 import { inboxIconProps } from '@core/component/inboxIcon';
+import { UserIcon } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
