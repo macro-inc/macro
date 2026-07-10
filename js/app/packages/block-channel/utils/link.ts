@@ -30,6 +30,22 @@ export function getUrlToMessage(
   return url;
 }
 
+/**
+ * Drive an (already-mounted) channel block to a target message through its
+ * block handle. The shared last mile for every "go to a channel message"
+ * caller — always keyed on the `'channel'` block type so a stale id can't
+ * resolve the wrong block.
+ */
+export async function goToChannelMessage(
+  orchestrator: BlockOrchestrator,
+  channelId: string,
+  messageId: string,
+  threadId?: string
+) {
+  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
+  await handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
+}
+
 export async function navigateToChannelMessage(
   orchestrator: BlockOrchestrator,
   channelId: string,
@@ -40,7 +56,6 @@ export async function navigateToChannelMessage(
     preferNewSplit?: boolean;
   }
 ) {
-  const params = getChannelParams(messageId, threadId);
   const splitManager = options?.splitManager ?? globalSplitManager();
   if (!splitManager) return;
 
@@ -49,7 +64,11 @@ export async function navigateToChannelMessage(
     existing.activate();
   } else {
     splitManager.openWithSplit(
-      { type: 'channel', id: channelId, params },
+      {
+        type: 'channel',
+        id: channelId,
+        params: getChannelParams(messageId, threadId),
+      },
       {
         activate: true,
         referredFrom: null,
@@ -58,6 +77,5 @@ export async function navigateToChannelMessage(
     );
   }
 
-  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
-  await handle?.goToLocationFromParams(params);
+  await goToChannelMessage(orchestrator, channelId, messageId, threadId);
 }

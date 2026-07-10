@@ -6,7 +6,10 @@ import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { getChannelParams } from '@block-channel/utils/link';
+import {
+  getChannelParams,
+  goToChannelMessage,
+} from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -394,9 +397,11 @@ export async function navigateChannelEntityToTarget(
         : undefined;
   if (!channelId) return;
 
-  const handle = await blockOrchestrator.getBlockHandle(channelId);
-  await handle?.goToLocationFromParams(
-    getChannelParams(target.messageId, target.threadId)
+  await goToChannelMessage(
+    blockOrchestrator,
+    channelId,
+    target.messageId,
+    target.threadId
   );
 }
 
