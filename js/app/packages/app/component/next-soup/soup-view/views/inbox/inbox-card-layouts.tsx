@@ -1302,6 +1302,11 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
+function CallParticipantName(props: { id: string }) {
+  const displayName = createSenderDisplayName(() => props.id);
+  return <>{displayName()}</>;
+}
+
 export function CallCardLayout(props: InboxCardLayoutProps) {
   const senderId = () => props.item.notification?.sender_id ?? undefined;
 
@@ -1313,7 +1318,6 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 
   const text = createMemo(() => {
     const entity = props.item.entity;
-    const content = itemContent(entity, props.item.notification);
     const location = entityLocation(entity);
 
     if (getNotificationTag(props.item.notification) === 'call_started') {
@@ -1323,14 +1327,12 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
           action: location ? 'started a call in' : 'started a call',
           location,
         }),
-        content,
       };
     }
 
     if (entity.type === 'call' && entity.status === 'MISSED') {
       return {
         title: entity.name ? `Missed call in #${entity.name}` : 'Missed call',
-        content,
       };
     }
 
@@ -1339,22 +1341,34 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
         title: entity.name
           ? `Call unattended in #${entity.name}`
           : 'Call unattended',
-        content,
       };
     }
 
-    return { title: entity.name ? `Call in #${entity.name}` : 'Call', content };
+    return { title: entity.name ? `Call in #${entity.name}` : 'Call' };
   });
 
+  const participantIds = () =>
+    props.item.entity.type === 'call' ? props.item.entity.participantIds : [];
+
+  const duration = () => {
+    const entity = props.item.entity;
+    if (entity.type !== 'call') {
+      return getNotificationTag(props.item.notification) === 'call_started'
+        ? 'In progress'
+        : undefined;
+    }
+    if (entity.durationMs != null) return formatCallDuration(entity.durationMs);
+    return entity.isActive ? 'In progress' : 'No duration';
+  };
+
   return (
-    <BaseCard
-      entityId={props.item.entity.id}
+    <InboxCard.Root
+      dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
+    >
+      <div class="col-start-1 row-start-1 row-span-3">
         <InboxCard.Icon
           fallback={
             <EntityIcon
@@ -1365,10 +1379,40 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
             />
           }
         ></InboxCard.Icon>
-      }
-      title={text().title}
-      preview={text().content}
-    />
+      </div>
+      <InboxCard.Body class="contents">
+        <InboxCard.Header class="col-start-2 row-start-1 self-center">
+          <InboxCard.Title class="flex items-center gap-1">
+            {text().title}
+          </InboxCard.Title>
+        </InboxCard.Header>
+
+        <Show when={participantIds().length}>
+          <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm">
+            <For each={participantIds()}>
+              {(participantId, index) => (
+                <>
+                  {index() > 0 ? ', ' : ''}
+                  <CallParticipantName id={participantId} />
+                </>
+              )}
+            </For>
+          </InboxCard.Content>
+        </Show>
+
+        <Show when={duration()}>
+          {(value) => (
+            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm">
+              {value()}
+            </InboxCard.Content>
+          )}
+        </Show>
+      </InboxCard.Body>
+      <InboxTimestamp
+        timestamp={props.item.timestamp}
+        class="col-start-3 row-start-1 self-start justify-self-end"
+      />
+    </InboxCard.Root>
   );
 }
 
