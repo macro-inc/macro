@@ -116,10 +116,10 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
-    label: 'Triage',
+    label: 'Inbox',
     href: LIST_VIEW_PATHS.inbox,
     icon: AnimatedInboxIcon,
-    hotkey: 'r',
+    hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
@@ -142,10 +142,10 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'mail',
-    label: 'Inbox',
+    label: 'Email',
     href: LIST_VIEW_PATHS.mail,
     icon: AnimatedEmailIcon,
-    hotkey: 'i',
+    hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
   },
   {

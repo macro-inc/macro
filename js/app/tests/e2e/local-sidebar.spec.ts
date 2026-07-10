@@ -9,7 +9,7 @@ import {
 } from './helpers/local-app';
 
 const SIDEBAR_LIST_VIEWS = [
-  { id: 'inbox', label: 'Triage', tabs: ['Signal', 'Noise', 'All'] },
+  { id: 'inbox', label: 'Inbox', tabs: ['Signal', 'Noise', 'All'] },
   { id: 'search', label: 'Search', tabs: [] },
   {
     id: 'agents',
@@ -18,7 +18,7 @@ const SIDEBAR_LIST_VIEWS = [
   },
   {
     id: 'mail',
-    label: 'Inbox',
+    label: 'Email',
     tabs: ['Signal', 'Noise', 'Calendar', 'Sent', 'Drafts', 'Shared', 'All'],
   },
   {
