@@ -1,5 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import { ThrownResultError } from '@core/util/result';
+import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import { useEmailSignature } from '@queries/email/link';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';
@@ -158,23 +160,39 @@ export function SignatureSection(props: { link: EmailLink }) {
 
   return (
     <div class="flex flex-col gap-3 rounded-xl border border-edge-muted p-3">
-      <Suspense
+      {/* Editing (Quill) is desktop-only; on mobile the section still offers
+          the replies/forwards toggle and Remove, with a pointer to desktop. */}
+      <Show
+        when={!isMobile()}
         fallback={
-          <div class="h-44 animate-pulse rounded-lg border border-edge-muted" />
+          <div class="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-edge-muted px-3 py-6 text-center">
+            <SignatureIcon class="size-5 text-ink-muted" />
+            <p class="text-sm text-ink-muted">
+              Update your signature on desktop.
+            </p>
+          </div>
         }
       >
-        <SignatureEditor
-          value={draft() ?? persisted()}
-          onInput={(html) => {
-            setDraft(html);
-            setSaveError(null);
-          }}
-          onReady={(api) => {
-            editorApi = api;
-          }}
-        />
-      </Suspense>
-      <div class="flex items-center justify-between gap-3">
+        <Suspense
+          fallback={
+            <div class="h-44 animate-pulse rounded-lg border border-edge-muted" />
+          }
+        >
+          <SignatureEditor
+            value={draft() ?? persisted()}
+            onInput={(html) => {
+              setDraft(html);
+              setSaveError(null);
+            }}
+            onReady={(api) => {
+              editorApi = api;
+            }}
+          />
+        </Suspense>
+      </Show>
+      {/* Stacks on narrow screens so the toggle label and buttons never
+          crowd each other onto wrapped lines. */}
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleSwitch
           checked={props.link.settings.signature_on_replies_forwards ?? false}
           onChange={setOnRepliesForwards}
@@ -184,7 +202,7 @@ export function SignatureSection(props: { link: EmailLink }) {
             </span>
           }
         />
-        <div class="flex items-center gap-2">
+        <div class="flex items-center justify-end gap-2">
           <Button
             variant="base"
             size="sm"
@@ -194,15 +212,17 @@ export function SignatureSection(props: { link: EmailLink }) {
           >
             Remove
           </Button>
-          <Button
-            variant="active"
-            size="sm"
-            depth={3}
-            disabled={!isDirty() || updateSettings.isPending}
-            onClick={saveSignature}
-          >
-            Save
-          </Button>
+          <Show when={!isMobile()}>
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              disabled={!isDirty() || updateSettings.isPending}
+              onClick={saveSignature}
+            >
+              Save
+            </Button>
+          </Show>
         </div>
       </div>
       <Show when={saveError()}>

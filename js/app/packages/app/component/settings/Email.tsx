@@ -12,7 +12,6 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import { isMobile } from '@core/mobile/isMobile';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
@@ -450,15 +449,7 @@ function InboxRow(props: {
                 variant="base"
                 size="icon-sm"
                 depth={3}
-                onClick={() => {
-                  // Quill signature editing isn't supported on mobile; point
-                  // the user at desktop instead of expanding the editor.
-                  if (isMobile()) {
-                    toast.alert('Update your signature on desktop');
-                    return;
-                  }
-                  toggleSignatureExpanded(props.link.id);
-                }}
+                onClick={() => toggleSignatureExpanded(props.link.id)}
                 aria-label={`Edit signature for ${props.link.email_address}`}
                 aria-expanded={showSignature()}
                 aria-controls={signatureSectionId}
@@ -514,14 +505,7 @@ function InboxRow(props: {
           </Tooltip>
         </div>
       </div>
-      <Show
-        when={
-          ENABLE_EMAIL_SIGNATURES &&
-          props.isOwn &&
-          showSignature() &&
-          !isMobile()
-        }
-      >
+      <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn && showSignature()}>
         <div id={signatureSectionId} class="px-6 pb-4">
           <SignatureSection link={props.link} />
         </div>
