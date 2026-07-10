@@ -842,7 +842,7 @@ type PropertiesMutationRoot {
 	"""
 	Set or attach one property on an entity.
 	"""
-	setEntityProperty(input: SetEntityPropertyInput!): Boolean!
+	setEntityProperty(input: SetEntityPropertyInput!): GraphqlSoupProperty!
 }
 
 input SetEntityPropertyInput {

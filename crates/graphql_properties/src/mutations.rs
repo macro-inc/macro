@@ -5,11 +5,16 @@ use graphql_common::parse_id;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::shared::EntityReference;
+use models_soup::SoupProperty;
 use properties::{PropertiesAccessReceipt, PropertiesService, access_entity_type};
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
-use crate::inputs::GraphqlPropertyEntityType;
+use crate::{
+    inputs::GraphqlPropertyEntityType,
+    loaders::{EntityPropertiesKey, PropertiesSoupPropertyEdgeReader, SoupPropertyEdgeReader},
+    objects::GraphqlSoupProperty,
+};
 
 /// Mutation root for entity property writes.
 #[derive(Default)]
@@ -31,7 +36,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<SoupProperty, rootcause::Report>> + Send;
 }
 
 /// Property writer used by schema-only GraphQL construction.
@@ -45,7 +50,7 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
         _entity_id: String,
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<SoupProperty, rootcause::Report> {
         Err(rootcause::report!("property writer is not configured"))
     }
 }
@@ -83,7 +88,7 @@ where
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<SoupProperty, rootcause::Report> {
         let entity_access_receipt = self
             .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
@@ -105,7 +110,28 @@ where
             .await
             .map_err(|err| rootcause::report!(err))?;
 
-        Ok(())
+        let key = EntityPropertiesKey {
+            entity_type: entity_type.to_string(),
+            entity_id,
+        };
+        let reader = PropertiesSoupPropertyEdgeReader::new(
+            self.properties_service.clone(),
+            self.entity_access_service.clone(),
+        );
+        let properties = reader
+            .get_properties(&self.user_id, vec![key.clone()])
+            .await?
+            .remove(&key)
+            .unwrap_or_default();
+
+        properties
+            .into_iter()
+            .find(|property| property.definition.id == property_definition_id)
+            .ok_or_else(|| {
+                rootcause::report!(
+                    "set property {property_definition_id} was absent from the updated entity"
+                )
+            })
     }
 }
 
@@ -201,7 +227,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: SetEntityPropertyInput,
-    ) -> async_graphql::Result<bool> {
+    ) -> async_graphql::Result<GraphqlSoupProperty> {
         let writer = ctx.data::<T>()?;
         let property_definition_id =
             parse_id(input.property_definition_id, "propertyDefinitionId")?;
@@ -210,7 +236,7 @@ where
             .map(GraphqlSetPropertyValue::try_into_model)
             .transpose()?;
 
-        writer
+        let property = writer
             .set_entity_property(
                 input.entity_type.into(),
                 input.entity_id,
@@ -220,7 +246,7 @@ where
             .await
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
-        Ok(true)
+        Ok(property.into())
     }
 }
 
@@ -249,9 +275,10 @@ mod tests {
         Option<SetPropertyValue>,
     );
 
-    #[derive(Default, Clone)]
+    #[derive(Clone)]
     struct CapturingWriter {
         write: Arc<Mutex<Option<CapturedWrite>>>,
+        property: SoupProperty,
     }
 
     impl EntityPropertyWriter for CapturingWriter {
@@ -261,16 +288,41 @@ mod tests {
             entity_id: String,
             property_definition_id: Uuid,
             value: Option<SetPropertyValue>,
-        ) -> Result<(), rootcause::Report> {
+        ) -> Result<SoupProperty, rootcause::Report> {
             *self.write.lock().expect("capture mutex poisoned") =
                 Some((entity_type, entity_id, property_definition_id, value));
-            Ok(())
+            Ok(self.property.clone())
         }
     }
 
     #[tokio::test]
     async fn set_entity_property_forwards_to_writer() {
-        let writer = CapturingWriter::default();
+        let property_assignment_id = Uuid::from_u128(3);
+        let property_definition_id = Uuid::from_u128(1);
+        let option_id = Uuid::from_u128(2);
+        let writer = CapturingWriter {
+            write: Arc::default(),
+            property: SoupProperty {
+                id: property_assignment_id,
+                definition: models_properties::service::property_definition::PropertyDefinition {
+                    id: property_definition_id,
+                    owner: models_properties::PropertyOwner::System,
+                    display_name: "Status".to_owned(),
+                    data_type: models_properties::DataType::SelectString,
+                    is_multi_select: false,
+                    specific_entity_type: Some(models_properties::EntityType::Task),
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    is_system: true,
+                    is_metadata: false,
+                },
+                value: Some(
+                    models_properties::service::property_value::PropertyValue::SelectOption(vec![
+                        option_id,
+                    ]),
+                ),
+            },
+        };
         let writer_data = writer.clone();
         let schema = Schema::build(
             QueryRoot,
@@ -279,9 +331,6 @@ mod tests {
         )
         .data(writer_data)
         .finish();
-        let property_definition_id = Uuid::from_u128(1);
-        let option_id = Uuid::from_u128(2);
-
         let response = schema
             .execute(format!(
                 r#"
@@ -291,7 +340,20 @@ mod tests {
                         entityId: "task-1",
                         propertyDefinitionId: "{property_definition_id}",
                         value: {{ selectOption: "{option_id}" }}
-                    }})
+                    }}) {{
+                        id
+                        propertyDefinitionId
+                        displayName
+                        dataType
+                        isMultiSelect
+                        specificEntityType
+                        isSystem
+                        isMetadata
+                        value {{
+                            kind
+                            selectOptionIds
+                        }}
+                    }}
                 }}
                 "#
             ))
@@ -300,7 +362,22 @@ mod tests {
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(
             response.data,
-            async_graphql::value!({ "setEntityProperty": true })
+            async_graphql::value!({
+                "setEntityProperty": {
+                    "id": property_assignment_id.to_string(),
+                    "propertyDefinitionId": property_definition_id.to_string(),
+                    "displayName": "Status",
+                    "dataType": "SELECT_STRING",
+                    "isMultiSelect": false,
+                    "specificEntityType": "TASK",
+                    "isSystem": true,
+                    "isMetadata": false,
+                    "value": {
+                        "kind": "SelectOption",
+                        "selectOptionIds": [option_id.to_string()],
+                    },
+                }
+            })
         );
         assert_eq!(
             writer.write.lock().expect("capture mutex poisoned").clone(),
