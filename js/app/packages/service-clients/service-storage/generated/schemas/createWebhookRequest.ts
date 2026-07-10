@@ -13,7 +13,7 @@ import type { WebhookScope } from './webhookScope';
  * Request to create a webhook.
  */
 export interface CreateWebhookRequest {
-  /** HTTPS endpoint URL. */
+  /** Endpoint URL. HTTPS is required outside local environments. */
   endpoint_url: string;
   /** Typed filters used to match events and optional entity ids. */
   filters: Vec;

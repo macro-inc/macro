@@ -12627,7 +12627,7 @@
         "properties": {
           "endpoint_url": {
             "type": "string",
-            "description": "HTTPS endpoint URL."
+            "description": "Endpoint URL. HTTPS is required outside local environments."
           },
           "filters": {
             "$ref": "#/components/schemas/Vec",
@@ -16341,7 +16341,7 @@
         "properties": {
           "endpoint_url": {
             "type": ["string", "null"],
-            "description": "HTTPS endpoint URL."
+            "description": "Endpoint URL. HTTPS is required outside local environments."
           },
           "filters": {
             "oneOf": [
@@ -19830,7 +19830,7 @@
           },
           "endpoint_url": {
             "type": "string",
-            "description": "HTTPS endpoint URL."
+            "description": "Endpoint URL. HTTPS is required outside local environments."
           },
           "filters": {
             "$ref": "#/components/schemas/Vec",
