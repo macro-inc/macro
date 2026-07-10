@@ -8,8 +8,6 @@ use notification::domain::models::{
 };
 use rootcause::markers::{Cloneable, Dynamic};
 
-type OwnedEntity = model_entity::Entity<'static>;
-
 fn notification_item_type(
     entity_type: model_entity::EntityType,
 ) -> Result<NotificationItemType, rootcause::Report> {
@@ -32,16 +30,17 @@ fn notification_item_type(
 /// Reader used by GraphQL notification edges.
 pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
     /// Load notifications for the requested entity keys.
-    fn get_notifications(
-        &self,
+    fn get_notifications<'a>(
+        &'a self,
         user_id: MacroUserIdStr<'static>,
-        keys: &[OwnedEntity],
+        keys: Vec<model_entity::Entity<'static>>,
     ) -> impl Future<
         Output = Result<
-            HashMap<OwnedEntity, Vec<UserNotificationRow<serde_json::Value>>>,
+            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
             rootcause::Report,
         >,
-    > + Send;
+    > + Send
+    + 'a;
 }
 
 impl<T> SoupNotificationEdgeReader for Arc<T>
@@ -51,9 +50,11 @@ where
     async fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
-        keys: &[OwnedEntity],
-    ) -> Result<HashMap<OwnedEntity, Vec<UserNotificationRow<serde_json::Value>>>, rootcause::Report>
-    {
+        keys: Vec<model_entity::Entity<'static>>,
+    ) -> Result<
+        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+        rootcause::Report,
+    > {
         let mut result = keys
             .iter()
             .cloned()
@@ -101,13 +102,12 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
     async fn get_notifications(
         &self,
         _user_id: MacroUserIdStr<'static>,
-        keys: &[OwnedEntity],
-    ) -> Result<HashMap<OwnedEntity, Vec<UserNotificationRow<serde_json::Value>>>, rootcause::Report>
-    {
-        Ok(keys
-            .into_iter()
-            .map(|key| (key.clone(), Vec::new()))
-            .collect())
+        keys: Vec<model_entity::Entity<'static>>,
+    ) -> Result<
+        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+        rootcause::Report,
+    > {
+        Ok(keys.iter().map(|key| (key.clone(), Vec::new())).collect())
     }
 }
 
@@ -137,7 +137,7 @@ where
     ) -> Result<HashMap<model_entity::Entity<'static>, Self::Value>, Self::Error> {
         Ok(self
             .reader
-            .get_notifications(self.user_id.clone(), keys)
+            .get_notifications(self.user_id.clone(), keys.to_vec())
             .await
             .map_err(|e| e.into_cloneable())?)
     }

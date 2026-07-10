@@ -5,8 +5,7 @@ use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::SoupProperty;
-
-type OwnedEntity = model_entity::Entity<'static>;
+use rootcause::markers::{Cloneable, Dynamic};
 
 fn property_entity_type(
     entity_type: model_entity::EntityType,
@@ -27,8 +26,13 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
     fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: Vec<OwnedEntity>,
-    ) -> impl Future<Output = Result<HashMap<OwnedEntity, Vec<SoupProperty>>, rootcause::Report>> + Send;
+        keys: &[model_entity::Entity<'static>],
+    ) -> impl Future<
+        Output = Result<
+            HashMap<model_entity::Entity<'static>, Vec<SoupProperty>>,
+            rootcause::Report,
+        >,
+    > + Send;
 }
 
 /// GraphQL property reader backed by the properties domain service and the
@@ -57,8 +61,8 @@ where
     async fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: Vec<OwnedEntity>,
-    ) -> Result<HashMap<OwnedEntity, Vec<SoupProperty>>, rootcause::Report> {
+        keys: &[model_entity::Entity<'static>],
+    ) -> Result<HashMap<model_entity::Entity<'static>, Vec<SoupProperty>>, rootcause::Report> {
         let mut result = keys
             .iter()
             .cloned()
@@ -68,7 +72,7 @@ where
         // Mint a view receipt per entity; entities the caller cannot view are
         // skipped and keep their empty property list.
         let mut receipts = Vec::with_capacity(keys.len());
-        for key in &keys {
+        for key in keys {
             let Some(entity_type) = property_entity_type(key.entity_type) else {
                 continue;
             };
@@ -112,7 +116,7 @@ where
         // Merge back under the original loader keys: the batch result is keyed
         // by the normalized entity type, which for alias keys ("email",
         // "email_thread", "crm_company") differs from the requested key.
-        for key in &keys {
+        for key in keys {
             let Some(entity_type) = property_entity_type(key.entity_type) else {
                 continue;
             };
@@ -145,36 +149,22 @@ impl<R> EntityPropertiesLoader<R> {
     }
 }
 
-impl<R> Loader<(model_entity::EntityType, String)> for EntityPropertiesLoader<R>
+impl<R> Loader<model_entity::Entity<'static>> for EntityPropertiesLoader<R>
 where
     R: SoupPropertyEdgeReader,
 {
     type Value = Vec<SoupProperty>;
-    type Error = Arc<rootcause::Report>;
+    type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(
         &self,
-        keys: &[(model_entity::EntityType, String)],
-    ) -> Result<HashMap<(model_entity::EntityType, String), Self::Value>, Self::Error> {
-        let owned_keys = keys
-            .iter()
-            .map(|(entity_type, entity_id)| entity_type.with_entity_string(entity_id.clone()))
-            .collect();
-        let mut loaded = self
+        keys: &[model_entity::Entity<'static>],
+    ) -> Result<HashMap<model_entity::Entity<'static>, Self::Value>, Self::Error> {
+        Ok(self
             .reader
-            .get_properties(&self.user_id, owned_keys)
+            .get_properties(&self.user_id, keys)
             .await
-            .map_err(Arc::new)?;
-
-        Ok(keys
-            .iter()
-            .cloned()
-            .map(|key| {
-                let owned_key = key.0.with_entity_string(key.1.clone());
-                let value = loaded.remove(&owned_key).unwrap_or_default();
-                (key, value)
-            })
-            .collect())
+            .map_err(|error| error.into_cloneable())?)
     }
 }
 

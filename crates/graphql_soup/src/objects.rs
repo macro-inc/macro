@@ -325,8 +325,11 @@ where
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(ctx, model_entity::EntityType::Chat, self.0.id.to_string())
-            .await
+        load_entity_notifications::<R>(
+            ctx,
+            model_entity::EntityType::Chat.with_entity_string(self.0.id.to_string()),
+        )
+        .await
     }
 }
 
@@ -379,14 +382,13 @@ where
             .collect()
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
+    async fn notifications<'a>(
+        &'a self,
+        ctx: &'a Context<'a>,
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::Project,
-            self.0.id.to_string(),
+            model_entity::EntityType::Project.with_entity_string(self.0.id.to_string()),
         )
         .await
     }
@@ -705,8 +707,7 @@ where
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::EmailThread,
-            self.0.thread.id.to_string(),
+            model_entity::EntityType::EmailThread.with_entity_string(self.0.thread.id.to_string()),
         )
         .await
     }
@@ -892,8 +893,8 @@ where
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::Channel,
-            self.0.channel.channel.id.0.to_string(),
+            model_entity::EntityType::Channel
+                .with_entity_string(self.0.channel.channel.id.0.to_string()),
         )
         .await
     }
@@ -948,8 +949,7 @@ where
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::ChannelMessage,
-            self.0.id.to_string(),
+            model_entity::EntityType::ChannelMessage.with_entity_string(self.0.id.to_string()),
         )
         .await
     }
@@ -1080,8 +1080,7 @@ where
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::Call,
-            self.0.call_id.to_string(),
+            model_entity::EntityType::Call.with_entity_string(self.0.call_id.to_string()),
         )
         .await
     }
@@ -1202,8 +1201,8 @@ where
     ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
         load_entity_notifications::<R>(
             ctx,
-            model_entity::EntityType::ForeignEntity,
-            self.0.foreign_entity_id.clone(),
+            model_entity::EntityType::ForeignEntity
+                .with_entity_string(self.0.foreign_entity_id.clone()),
         )
         .await
     }
