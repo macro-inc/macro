@@ -648,7 +648,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
         </InboxCard.Header>
 
         <div class="col-start-2 row-start-2 min-w-0 text-sm">
-          <InboxCard.Content class="line-clamp-2 min-h-[2lh] whitespace-normal">
+          <InboxCard.Content class="line-clamp-2 min-h-[2lh]">
             <Show when={senderLabel()}>
               <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
             </Show>
@@ -872,7 +872,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                 'text-sm text-ink/60',
                 isLatestNotificationReply()
                   ? 'truncate'
-                  : 'line-clamp-2 whitespace-normal'
+                  : 'line-clamp-2'
               )}
             >
               <Show when={!isDM()}>
