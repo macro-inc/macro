@@ -21,6 +21,17 @@ use crate::domain::{
 /// The permission required to read professional (premium) features.
 pub const READ_PROFESSIONAL_FEATURES: &str = "read:professional_features";
 
+/// `provider/model` ids that any user may request, without professional
+/// features. Everything else — including an absent model, which resolves to
+/// the server default (the smart tier) — requires the permission.
+pub const FREE_TIER_MODELS: &[&str] = &["anthropic/claude-haiku-4-5"];
+
+/// Whether a requested projection model requires the
+/// [`READ_PROFESSIONAL_FEATURES`] permission.
+pub fn requires_professional_features(model: Option<&str>) -> bool {
+    model.is_none_or(|model| !FREE_TIER_MODELS.contains(&model))
+}
+
 /// The AiProjectionService defines the high-level operations for ai projections.
 pub trait AiProjectionService: Clone + Send + Sync + 'static {
     /// Gets or creates a projection definition and the target's instance of it,

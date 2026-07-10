@@ -469,6 +469,13 @@ export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
 
 export const ENABLE_HOME_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
+// AI-generated recommendations on Home. Keep the whole data-owning component
+// behind this gate so disabled users do not fetch notifications or start AI
+// projections. Override locally with VITE_ENABLE_HOME_RECOMMENDATIONS.
+export const ENABLE_HOME_RECOMMENDATIONS_FLAG = 'enable-home-recommendations';
+export const ENABLE_HOME_RECOMMENDATIONS_OVERRIDE =
+  resolveFeatureFlag('ENABLE_HOME_RECOMMENDATIONS', DEV_MODE_ENV) || undefined;
+
 export const ENABLE_NEW_PRICING_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;
 

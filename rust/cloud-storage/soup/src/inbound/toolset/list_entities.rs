@@ -154,6 +154,18 @@ pub enum EntityItem {
         id: Uuid,
         /// Email subject, when present.
         subject: Option<String>,
+        /// Preview text from the thread's latest relevant message.
+        snippet: Option<String>,
+        /// Sender display name, when present.
+        sender_name: Option<String>,
+        /// Sender email address, when present.
+        sender_email: Option<String>,
+        /// Whether the thread currently belongs in the inbox.
+        inbox_visible: bool,
+        /// Whether the thread has been read.
+        is_read: bool,
+        /// Whether the thread contains a draft.
+        is_draft: bool,
         /// Tags on the thread visible to the user.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tags: Vec<AppliedTag>,
@@ -225,6 +237,12 @@ impl EntityItem {
             SoupItem::EmailThread(thread) => EntityItem::Email {
                 id: thread.thread.id,
                 subject: thread.thread.name,
+                snippet: thread.thread.snippet,
+                sender_name: thread.thread.sender_name,
+                sender_email: thread.thread.sender_email,
+                inbox_visible: thread.thread.inbox_visible,
+                is_read: thread.thread.is_read,
+                is_draft: thread.thread.is_draft,
                 tags: resolve_applied_tags(&thread.properties, tag_map),
             },
             SoupItem::Channel(channel) => EntityItem::Channel {

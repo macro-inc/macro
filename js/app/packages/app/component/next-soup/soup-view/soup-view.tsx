@@ -5,6 +5,7 @@ import {
 } from '@app/component/GlobalAppState';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
 import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
+import { PullToRefresh } from '@app/component/mobile/PullToRefresh';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
@@ -948,7 +949,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
-    if (isNewInboxEnabled()) return DateGroupHeader;
+    if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
     return DefaultGroupHeader;
   };
 
@@ -1108,6 +1109,33 @@ export const SoupViewList = (props: SoupViewListProps) => {
     HTMLDivElement | undefined
   >();
 
+  // The virtualizer's scroll container, for mobile pull-to-refresh.
+  const [listScrollerRef, setListScrollerRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  // The empty-state wrapper, so pull-to-refresh still works with no rows.
+  const [emptyStateRef, setEmptyStateRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  // While a pull-driven refetch is in flight, the pull spinner is already
+  // the loading indicator — the loading/searching blocks stay unmounted so
+  // the empty state doesn't flash away (which would also unmount the
+  // gesture's target element mid-refresh).
+  const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
+
+  const pullRefresh = () => {
+    setIsPullRefreshing(true);
+    return source.refresh().finally(() => setIsPullRefreshing(false));
+  };
+
+  // Shared by the empty-state <Match> and the pull-to-refresh target so the
+  // gesture always attaches to whichever element is actually mounted.
+  const showEmptyState = () =>
+    ((!source.isFetching() || isPullRefreshing()) && !rows().length) ||
+    forceEmptyState();
+
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1265,9 +1293,23 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 <Show when={isMobile() && source.isPlaceholderData()}>
                   <MobileTabLoadingBar />
                 </Show>
+                <Show when={isMobile()}>
+                  <PullToRefresh
+                    scrollContainer={() =>
+                      showEmptyState() ? emptyStateRef() : listScrollerRef()
+                    }
+                    onRefresh={pullRefresh}
+                  />
+                </Show>
                 <StaticMarkdownContext>
                   <Switch>
-                    <Match when={source.isFetching() && !rows().length}>
+                    <Match
+                      when={
+                        source.isFetching() &&
+                        !rows().length &&
+                        !isPullRefreshing()
+                      }
+                    >
                       {/* Non-list states pad the chrome top themselves — the
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
@@ -1278,7 +1320,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     <Match
                       when={
                         (isSearchServiceLoading() || isLocalSearchSettling()) &&
-                        !rows().length
+                        !rows().length &&
+                        !isPullRefreshing()
                       }
                     >
                       <div class="flex items-center gap-2 p-3 text-xs text-text-muted mobile:mt-(--mobile-content-inset-top) mobile:mb-(--mobile-content-inset-bottom)">
@@ -1286,13 +1329,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         Searching...
                       </div>
                     </Match>
-                    <Match
-                      when={
-                        (!source.isFetching() && !rows().length) ||
-                        forceEmptyState()
-                      }
-                    >
-                      <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                    <Match when={showEmptyState()}>
+                      <div
+                        ref={setEmptyStateRef}
+                        class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)"
+                      >
                         <EmptyState
                           listView={currentView()}
                           search={!!searchText()}
@@ -1344,6 +1385,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               setLocalEntityListRef(el);
                               soupNavigationTouchHighlight(el);
                             }}
+                            scrollerRef={setListScrollerRef}
                             virtualizerClass={'scrollbar-hidden space-y-2'}
                             class="overflow-hidden flex min-w-0"
                             virtualizerRef={registerVirtualizerHandler}
@@ -1670,6 +1712,8 @@ const DEFAULT_OVERSCAN = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
+  /** Receives the inner scroll container (the element that owns scrollTop). */
+  scrollerRef?: (el: HTMLDivElement) => void;
   virtualizerRef?: (handle: VirtualizerHandle) => void;
   class?: string;
   virtualizerClass?: string;
@@ -1737,6 +1781,7 @@ const SoupList = (props: SoupListProps) => {
           but still slide beneath it. `startMargin` keeps virtua's scroll
           math correct for the leading spacer. */}
       <div
+        ref={props.scrollerRef}
         class={cn('overscroll-none', props.virtualizerClass)}
         style={{
           display: 'block',

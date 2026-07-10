@@ -213,6 +213,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       noise: () => ({
         filters: defineQueryFilters({
@@ -224,6 +225,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       calendar: () => ({
         filters: defineQueryFilters({
@@ -235,6 +237,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
 
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       drafts: () => ({
         filters: defineQueryFilters({
@@ -242,6 +245,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'drafts',
         }),
         clientFilters: { and: ['email-drafts'] },
+        groupBy: 'date',
       }),
       // No sender filter: the 'sent' view already scopes to messages with
       // is_sent = TRUE per linked inbox, which covers multi-inbox correctly
@@ -251,6 +255,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'sent',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       shared: () => ({
         filters: defineQueryFilters({
@@ -258,6 +263,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         }),
         clientFilters: { and: ['email', 'shared-entity'] },
+        groupBy: 'date',
       }),
       all: () => ({
         filters: defineQueryFilters({
@@ -265,6 +271,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         }),
         clientFilters: { and: ['email'] },
+        groupBy: 'date',
       }),
     },
   },

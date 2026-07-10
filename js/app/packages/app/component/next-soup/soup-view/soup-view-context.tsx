@@ -60,6 +60,7 @@ import {
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
+import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -100,6 +101,11 @@ type DataSource<T> = {
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: VoidFunction;
+  /**
+   * Full refresh (e.g. mobile pull-to-refresh): invalidate every soup query
+   * plus notification state. Resolves once the active refetches settle.
+   */
+  refresh: () => Promise<void>;
 };
 
 type SoupViewInitializeOptions = {
@@ -234,7 +240,7 @@ export const SoupViewContextProvider: FlowComponent<
   );
   onCleanup(predicatesCaptorTeardown);
 
-  const invalidateCache = () => {
+  const trimToFirstPage = () => {
     const groupBy = serverGroupByField();
 
     queryClient.setQueryData(
@@ -258,19 +264,19 @@ export const SoupViewContextProvider: FlowComponent<
   const queryFilters: QueryStore = {
     ...store,
     set: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.set(query);
     },
     replace: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.replace(query);
     },
     add: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.add(query);
     },
     remove: (query) => {
-      invalidateCache();
+      trimToFirstPage();
       store.remove(query);
     },
   };
@@ -1001,6 +1007,21 @@ export const SoupViewContextProvider: FlowComponent<
         if (searchQuery.isEnabled) {
           searchQuery.fetchNextPage();
         }
+      },
+      refresh: async () => {
+        if (!enabled()) return;
+
+        trimToFirstPage();
+
+        await Promise.all([
+          queryClient.invalidateQueries(
+            { queryKey: soupKeys._def },
+            // Reject on refetch failure so pull-to-refresh can surface it
+            // instead of retracting as if the refresh succeeded.
+            { throwOnError: true }
+          ),
+          invalidateUserNotifications(),
+        ]);
       },
     },
     items,

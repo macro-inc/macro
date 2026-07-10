@@ -56,7 +56,7 @@ export function OnboardingConnectAccounts() {
     if (githubLinked()) return;
     if (DEBUG_FAKE_GITHUB) {
       setDebugGithubConnected(true);
-      toast.success('GitHub connected (debug)', { mobile: true });
+      toast.success('GitHub connected (debug)');
       return;
     }
     const isIos = getNativeMobilePlatform() === 'ios';
@@ -88,16 +88,16 @@ export function OnboardingConnectAccounts() {
 
       if (!auth.success) {
         if (auth.error !== 'User canceled login') {
-          toast.failure('Failed to connect GitHub', { mobile: true });
+          toast.failure('Failed to connect GitHub');
         }
         return;
       }
 
       await invalidateGithubLinkStatus();
-      toast.success('GitHub connected', { mobile: true });
+      toast.success('GitHub connected');
     } catch (error) {
       console.error('connect github failed', error);
-      toast.failure('Failed to connect GitHub', { mobile: true });
+      toast.failure('Failed to connect GitHub');
     }
   };
 

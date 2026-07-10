@@ -1017,6 +1017,12 @@ export const ListEntitiesResponse = z.object({
         }),
         z.object({
           id: z.string().uuid(),
+          inboxVisible: z.boolean(),
+          isDraft: z.boolean(),
+          isRead: z.boolean(),
+          senderEmail: z.union([z.string(), z.null()]).optional(),
+          senderName: z.union([z.string(), z.null()]).optional(),
+          snippet: z.union([z.string(), z.null()]).optional(),
           subject: z.union([z.string(), z.null()]).optional(),
           tags: z
             .array(

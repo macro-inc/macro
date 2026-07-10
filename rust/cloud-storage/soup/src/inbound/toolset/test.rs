@@ -213,6 +213,12 @@ fn test_build_summary_with_items() {
         EntityItem::Email {
             id: Uuid::new_v4(),
             subject: Some("Hello".to_string()),
+            snippet: Some("Can you review this?".to_string()),
+            sender_name: Some("Ada".to_string()),
+            sender_email: Some("ada@example.com".to_string()),
+            inbox_visible: true,
+            is_read: false,
+            is_draft: false,
             tags: vec![],
         },
         EntityItem::ForeignEntity {

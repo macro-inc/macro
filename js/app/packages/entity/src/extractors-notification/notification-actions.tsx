@@ -59,6 +59,7 @@ export function useNotificationStackActions(props: NotificationActionsProps) {
             ],
             duration: 10_000,
             stack: true,
+            hideOnMobile: true,
           });
         };
 

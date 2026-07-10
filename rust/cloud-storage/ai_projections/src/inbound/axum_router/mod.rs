@@ -1,7 +1,5 @@
 //! Axum router for ai projection endpoints.
 
-/// Extractor ensuring the authenticated user has professional features.
-pub mod premium_user;
 /// Get-or-create a projection and the requesting user's instance.
 pub mod upsert_projection;
 
@@ -86,6 +84,13 @@ impl IntoResponse for UpsertProjectionError {
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: msg.into(),
+                }),
+            )
+                .into_response(),
+            UpsertProjectionError::ProfessionalFeaturesRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "professional features required".into(),
                 }),
             )
                 .into_response(),

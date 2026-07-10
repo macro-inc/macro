@@ -130,7 +130,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         // callback so the inbox panel shows it immediately on return rather
         // than flashing a stale list until its own refetch lands.
         await query.refetch();
-        toast.success('Inbox connected', { mobile: true });
+        toast.success('Inbox connected');
         navigateToEmailSettings();
       },
       async (err) => {
@@ -149,7 +149,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           });
           return;
         }
-        toast.failure('Failed to add inbox', { mobile: true });
+        toast.failure('Failed to add inbox');
         navigateToSuccess();
       }
     );

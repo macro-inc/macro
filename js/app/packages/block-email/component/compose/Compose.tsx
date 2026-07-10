@@ -425,7 +425,6 @@ export function EmailCompose(props: EmailComposeProps) {
             ]
           : undefined,
         duration: 8_000,
-        mobile: true,
       });
       if (data.message.thread_db_id) {
         replaceSplit({
