@@ -149,24 +149,20 @@ function formatEditEntry(
 }
 
 function formatDispatchInput(
-  args: { edits: TraceDispatchEdit[] },
-  codesPerEdit: CoderRunCode[][] | undefined,
-  editTraces: DispatchEditTrace[] | undefined,
+  edit: TraceDispatchEdit,
+  codes: CoderRunCode[] | undefined,
+  trace: DispatchEditTrace | undefined,
   t0: number | undefined
 ): string {
-  // A malformed supervisor tool call can land `edits` as a raw string (the model
-  // emitting `<parameter …>` markup instead of a JSON array). Render it verbatim
-  // rather than crashing the whole trace.
-  if (!Array.isArray(args.edits)) {
+  // A malformed supervisor tool call can land `editing_instruction` as something
+  // other than a string (the model emitting `<parameter …>` markup instead of a
+  // JSON string). Render it verbatim rather than crashing the whole trace.
+  if (typeof edit?.editing_instruction !== 'string') {
     return indented(
-      `⚠ malformed dispatch args (edits is ${typeof args.edits}, not an array):\n${String(args.edits)}`
+      `⚠ malformed dispatch args (editing_instruction is ${typeof edit?.editing_instruction}, not a string):\n${JSON.stringify(edit)}`
     );
   }
-  return args.edits
-    .map((e, i) =>
-      formatEditEntry(e, i, codesPerEdit?.[i], editTraces?.[i], t0)
-    )
-    .join('\n');
+  return formatEditEntry(edit, 0, codes, trace, t0);
 }
 
 function formatDispatchOutput(output: unknown): string[] {
@@ -201,13 +197,12 @@ function formatToolCall(
   const lines: string[] = [];
 
   if (call.toolName === 'dispatch') {
-    const { edits } = call.input as { edits: TraceDispatchEdit[] };
-    lines.push(
-      `**dispatch** — ${Array.isArray(edits) ? `${edits.length} edit(s)` : '⚠ malformed'}`
-    );
+    const edit = call.input as TraceDispatchEdit;
+    const valid = typeof edit?.editing_instruction === 'string';
+    lines.push(`**dispatch** — ${valid ? '1 edit' : '⚠ malformed'}`);
     lines.push(
       '',
-      formatDispatchInput({ edits }, codesPerEdit, editTraces, t0)
+      formatDispatchInput(edit, codesPerEdit?.[0], editTraces?.[0], t0)
     );
     if (output != null) lines.push(...formatDispatchOutput(output));
   } else if (call.toolName === 'readDocument') {
