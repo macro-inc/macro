@@ -1,6 +1,7 @@
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import {
   type ApiChannelMessage,
+  type ApiResolvedChannelMessage,
   type ApiThreadReply,
   type ChannelMessagesPage,
   storageServiceClient,
@@ -59,6 +60,29 @@ export function isMissingChannelMessageError(error: unknown): boolean {
     error instanceof ThrownResultError &&
     error.errors.some(({ code }) => code === 'NOT_FOUND' || code === 'GONE')
   );
+}
+
+/**
+ * Resolve any channel message id to its position in the channel/thread model.
+ * A bare message id is ambiguous — it may be a top-level message or a thread
+ * reply — and the resolution (kind + parent thread id) never changes for a
+ * given message, so cache it indefinitely.
+ */
+export function fetchResolvedChannelMessage(
+  channelId: string,
+  messageId: string
+): Promise<ApiResolvedChannelMessage> {
+  return queryClient.fetchQuery({
+    queryKey: channelKeys.resolveMessage(channelId, messageId).queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        storageServiceClient.resolveChannelMessage({
+          channel_id: channelId,
+          message_id: messageId,
+        })
+      ),
+    staleTime: Infinity,
+  });
 }
 
 export function channelMessagesQueryOptions(
@@ -568,7 +592,7 @@ export function restoreThreadPreviewReplyInChannelMessages(
 }
 
 /** Finds a top-level message across all cached variants for a channel. */
-function _findTopLevelMessageInChannelMessages(
+export function findTopLevelMessageInChannelMessages(
   channelId: string,
   messageId: string
 ): ApiChannelMessage | undefined {

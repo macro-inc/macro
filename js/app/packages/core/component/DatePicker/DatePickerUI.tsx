@@ -193,7 +193,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
         <div class="flex items-center justify-between mb-3">
           <button
             type="button"
-            class="p-1 hover:bg-active transition-colors"
+            class="p-1 rounded-md hover:bg-active transition-colors"
             onClick={handlePrevMonth}
           >
             <CaretLeft class="size-4" />
@@ -201,7 +201,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
 
           <button
             type="button"
-            class="font-semibold hover:bg-active px-2 py-1 transition-colors"
+            class="font-semibold rounded-md hover:bg-active px-2 py-1 transition-colors"
             onClick={() => setPickerMode('month')}
           >
             {MONTHS[displayMonth()]} {displayYear()}
@@ -209,7 +209,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
 
           <button
             type="button"
-            class="p-1 hover:bg-active transition-colors"
+            class="p-1 rounded-md hover:bg-active transition-colors"
             onClick={handleNextMonth}
           >
             <CaretRight class="size-4" />
@@ -232,11 +232,11 @@ export function DatePickerUI(props: DatePickerUIProps) {
               <Show when={day !== null} fallback={<div class="h-8" />}>
                 <button
                   type="button"
-                  class="size-8 transition-colors disabled:opacity-40"
+                  class="size-8 rounded-md transition-colors disabled:opacity-40"
                   classList={{
                     'bg-accent text-surface': isSelected(day!),
                     'hover:bg-active': !isSelected(day!),
-                    'ring-1 ring-accent': isToday(day!),
+                    'ring ring-accent': isToday(day!),
                   }}
                   disabled={
                     (props.disablePriorToDate &&
@@ -265,7 +265,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
         <div class="mb-3">
           <button
             type="button"
-            class="w-full font-semibold hover:bg-active px-2 py-1 transition-colors text-center"
+            class="w-full font-semibold rounded-md hover:bg-active px-2 py-1 transition-colors text-center"
             onClick={() => setPickerMode('year')}
           >
             {displayYear()}
@@ -277,7 +277,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
             {(month, index) => (
               <button
                 type="button"
-                class="px-3 py-2 hover:bg-active transition-colors"
+                class="px-3 py-2 rounded-md hover:bg-active transition-colors"
                 classList={{
                   'bg-accent text-surface hover:bg-accent':
                     displayMonth() === index(),
@@ -303,7 +303,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               {(year) => (
                 <button
                   type="button"
-                  class="px-3 py-2 hover:bg-active transition-colors"
+                  class="px-3 py-2 rounded-md hover:bg-active transition-colors"
                   classList={{
                     'bg-accent text-surface hover:bg-accent':
                       displayYear() === year,
@@ -326,7 +326,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               inputmode="numeric"
               maxLength={2}
               aria-label="Hour"
-              class="w-10 text-center bg-active border border-edge-muted p-1 text-sm focus:outline-none focus:border-accent"
+              class="w-10 text-center bg-active border border-edge-muted rounded-md p-1 text-sm focus:outline-none focus:border-accent"
               value={hourDisplay()}
               onKeyDown={(e) => {
                 if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -351,7 +351,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               inputmode="numeric"
               maxLength={2}
               aria-label="Minute"
-              class="w-10 text-center bg-active border border-edge-muted p-1 text-sm focus:outline-none focus:border-accent"
+              class="w-10 text-center bg-active border border-edge-muted rounded-md p-1 text-sm focus:outline-none focus:border-accent"
               value={minuteDisplay()}
               onKeyDown={(e) => {
                 if (e.key.length === 1 && !/\d/.test(e.key)) {
@@ -371,7 +371,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
               }}
             />
           </div>
-          <div class="flex border border-edge-muted text-sm">
+          <div class="flex border border-edge-muted rounded-md overflow-hidden text-sm">
             <button
               type="button"
               class="px-2 py-1 transition-colors"
@@ -398,7 +398,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
           <button
             type="button"
             aria-label="Confirm scheduled time"
-            class="p-1 bg-surface text-accent hover:bg-active transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="p-1 rounded-md bg-surface text-accent hover:bg-active transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={isTimeInPast()}
             onClick={() => props.onChange(buildDateWithTime(selectedDate()))}
           >

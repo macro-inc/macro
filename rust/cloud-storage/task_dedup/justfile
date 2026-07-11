@@ -1,0 +1,16 @@
+import '../database.just'
+
+# Run the real task-dedup semantic eval (the opt-in #[ignore] tests): real
+# OpenAI embeddings + Anthropic judge over the labeled corpus, reporting
+# precision/recall, retrieval recall@k, the vector-score threshold sweep, and
+# judge variance. Needs the local macrodb up and OPENAI_API_KEY /
+# ANTHROPIC_API_KEY / CEREBRAS_API_KEY in the environment. Every file in
+# tests/eval/cases/ is discovered automatically (see tests/eval/main.rs). Each
+# measurement runs its model calls concurrently, and the measurements run on
+# parallel test threads, for the fastest wall-clock; pass a name to run just
+# one (e.g. `just eval judge_accuracy`).
+eval filter="":
+    DATABASE_URL={{ DATABASE_URL }} cargo test -p task_dedup --test eval {{ filter }} -- --ignored --nocapture
+
+test:
+  DATABASE_URL={{ DATABASE_URL }} cargo test

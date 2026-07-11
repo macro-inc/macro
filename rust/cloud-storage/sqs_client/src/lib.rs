@@ -1,4 +1,7 @@
 mod message_attribute;
+mod queue;
+
+pub use queue::ReceivedMessage;
 
 #[cfg(feature = "ai_projection")]
 pub mod ai_projection;

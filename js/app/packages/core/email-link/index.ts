@@ -1,11 +1,17 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
-import { emailClient, SHARED_INBOX_CONFLICT_CODE } from '@service-email/client';
+import {
+  ALREADY_INITIALIZED_CODE,
+  emailClient,
+  NO_GMAIL_GRANT_CODE,
+  SHARED_INBOX_CONFLICT_CODE,
+} from '@service-email/client';
 import type {
   ListLinksResponse,
   ResyncResponse,
@@ -37,6 +43,8 @@ export function useEmailLinksStatus() {
 type EmailInitError =
   /** The email link has already been initialized*/
   | { tag: 'AlreadyInitialized' }
+  /** No Gmail grant to provision from — scope declined at consent or grant removed. */
+  | { tag: 'NoGmailGrant' }
   /** The mailbox is already connected by another user; confirm to share it. */
   | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
   | { tag: 'FailedToInitialize'; message: string };
@@ -89,11 +97,12 @@ function initEmailLink(args?: {
         };
         return err<void, EmailInitError>(conflictError);
       }
-      const badRequestError = initResult.error.find(
-        // TODO: this is cope but seems like error.code not being set correctly
-        (e) => e.message.includes('400')
-      );
-      const error: EmailInitError = badRequestError
+      if (initResult.error.some((e) => e.code === NO_GMAIL_GRANT_CODE)) {
+        return err<void, EmailInitError>({ tag: 'NoGmailGrant' });
+      }
+      const error: EmailInitError = initResult.error.some(
+        (e) => e.code === ALREADY_INITIALIZED_CODE
+      )
         ? { tag: 'AlreadyInitialized' }
         : { tag: 'FailedToInitialize', message: 'Failed to initialize' };
       return err<void, EmailInitError>(error);
@@ -176,6 +185,17 @@ export function initAndStartEmailSync() {
 }
 
 /**
+ * The backend gates additional inboxes behind a paid subscription and answers
+ * `POST /link/gmail` with 402 when the user isn't entitled. The auth client maps
+ * that to a `PAYMENT_REQUIRED` error code; the add-inbox flow surfaces the
+ * paywall instead of a generic failure so the backend stays the source of truth
+ * on entitlement.
+ */
+function isPaymentRequired(errors: ReadonlyArray<{ code: string }>): boolean {
+  return errors.some((error) => error.code === 'PAYMENT_REQUIRED');
+}
+
+/**
  * Starts the add-inbox flow: fetches the Gmail link authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
@@ -189,12 +209,13 @@ export function initAndStartEmailSync() {
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
   const { query, initEmailLink } = useEmailLinks();
+  const { showPaywall } = usePaywallState();
 
   const completeNativeLink = async (linkId: string, forceShare: boolean) => {
     await initEmailLink({ linkId, forceShare }).match(
       async () => {
         await query.refetch();
-        toast.success('Inbox connected', { mobile: true });
+        toast.success('Inbox connected');
       },
       async (error) => {
         if (error.tag === 'AlreadyInitialized') {
@@ -209,7 +230,7 @@ export function useAddInboxFlow() {
           });
           return;
         }
-        toast.failure('Failed to add inbox', { mobile: true });
+        toast.failure('Failed to add inbox');
       }
     );
   };
@@ -219,7 +240,11 @@ export function useAddInboxFlow() {
       'macro://inbox-link-callback'
     );
     if (result.isErr()) {
-      toast.failure('Failed to start Gmail link flow', { mobile: true });
+      if (isPaymentRequired(result.error)) {
+        showPaywall(PaywallKey.MULTI_INBOX);
+        return;
+      }
+      toast.failure('Failed to start Gmail link flow');
       return;
     }
 
@@ -234,13 +259,13 @@ export function useAddInboxFlow() {
       });
     } catch (error) {
       console.error('add-inbox authenticate failed', error);
-      toast.failure('Failed to add inbox', { mobile: true });
+      toast.failure('Failed to add inbox');
       return;
     }
 
     if (!auth.success || !auth.token) {
       if (auth.error !== 'User canceled login') {
-        toast.failure('Failed to add inbox', { mobile: true });
+        toast.failure('Failed to add inbox');
       }
       return;
     }
@@ -258,6 +283,8 @@ export function useAddInboxFlow() {
     const result = await initGmailLink.mutateAsync(callbackUrl);
     if (result.isOk()) {
       window.location.href = result.value.authorization_url;
+    } else if (isPaymentRequired(result.error)) {
+      showPaywall(PaywallKey.MULTI_INBOX);
     } else {
       toast.failure('Failed to start Gmail link flow');
     }

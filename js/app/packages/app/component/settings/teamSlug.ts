@@ -1,7 +1,6 @@
 export const TEAM_SLUG_MAX_LENGTH = 20;
 
-export const TEAM_SLUG_ALLOWED_INPUT_REGEX: RegExp =
-  /^[A-Za-z_\- \t\n\f\r]*$/;
+export const TEAM_SLUG_ALLOWED_INPUT_REGEX: RegExp = /^[A-Za-z_\- \t\n\f\r]*$/;
 
 export const TEAM_SLUG_NORMALIZED_REGEX: RegExp = /^[A-Z]+(_[A-Z]+)*$/;
 

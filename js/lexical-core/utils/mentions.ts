@@ -1,4 +1,5 @@
 import { $dfsIterator } from '@lexical/utils';
+import { $getRoot, type LexicalNode } from 'lexical';
 import {
   $isContactMentionNode,
   type ContactMentionInfo,
@@ -29,7 +30,6 @@ import {
   type UserMentionNode,
 } from '../nodes/UserMentionNode';
 import { wrapXml } from '../transformers/transformers';
-import { $getRoot, type LexicalNode } from 'lexical';
 
 function dropKey<T extends object, K extends keyof T>(
   obj: T,

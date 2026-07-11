@@ -487,6 +487,13 @@ pub struct ChannelThreadFilters {
     /// Sender IDs for the root thread message. Empty to include all root senders.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub root_sender_ids: Vec<String>,
+
+    /// Thread participant user IDs. A participant is the root message sender, anyone
+    /// who replied in the thread, or anyone @-mentioned in the thread (group mentions
+    /// like @here count through their per-user expansion at send time). Empty to
+    /// include threads regardless of participants.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub participant_ids: Vec<String>,
 }
 
 impl IsEmpty for ChannelThreadFilters {
@@ -495,8 +502,12 @@ impl IsEmpty for ChannelThreadFilters {
             thread_ids,
             channel_ids,
             root_sender_ids,
+            participant_ids,
         } = self;
-        thread_ids.is_empty() && channel_ids.is_empty() && root_sender_ids.is_empty()
+        thread_ids.is_empty()
+            && channel_ids.is_empty()
+            && root_sender_ids.is_empty()
+            && participant_ids.is_empty()
     }
 }
 
@@ -540,7 +551,8 @@ pub struct CrmCompanyFilters {
     /// Optional `crm_companies.hidden` filter. `None` = visible only
     /// (default for back-compat with non-admin callers). `Some(false)` =
     /// visible only (explicit). `Some(true)` = hidden only — requires
-    /// admin/owner team role; enforced upstream in soup's axum router.
+    /// admin/owner team role; enforced by the CRM service from the
+    /// caller's team receipt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hidden: Option<bool>,
 }
@@ -597,6 +609,18 @@ impl IsEmpty for ProjectFilters {
     }
 }
 
+/// How multiple `tag_option_ids` combine when filtering.
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum TagFilterMode {
+    /// Match entities holding at least one of the selected tags (default).
+    #[default]
+    Any,
+    /// Match entities holding every selected tag.
+    All,
+}
+
 /// a bundle of all of the filters for each entity type
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -631,6 +655,15 @@ pub struct EntityFilters {
     /// property-based filters applied across entity types
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_filters: Vec<PropertyFilter>,
+    /// tag option ids matched against `properties.values`, OR'd together across
+    /// all tag definitions. Option ids are globally unique, so the match ignores
+    /// the owning definition id (personal and team tags combine into one OR).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_option_ids: Vec<String>,
+    /// How the `tag_option_ids` combine: `any` (default) matches entities
+    /// holding at least one selected tag, `all` requires every selected tag.
+    #[serde(default)]
+    pub tag_filter_mode: TagFilterMode,
 }
 
 impl IsEmpty for EntityFilters {
@@ -646,6 +679,9 @@ impl IsEmpty for EntityFilters {
             crm_company_filters,
             foreign_entity_filters,
             property_filters,
+            tag_option_ids,
+            // Mode is a modifier on tag_option_ids, not a filter by itself.
+            tag_filter_mode: _,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()
@@ -657,5 +693,6 @@ impl IsEmpty for EntityFilters {
             && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
+            && tag_option_ids.is_empty()
     }
 }

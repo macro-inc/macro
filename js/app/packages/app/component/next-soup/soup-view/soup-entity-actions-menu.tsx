@@ -1,15 +1,19 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { MenuItem } from '@core/component/ContextMenu';
+import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
-import { createSoupEntityActions } from './create-soup-entity-actions';
+import {
+  createSoupEntityActions,
+  viewedProjectIdFromContent,
+} from './create-soup-entity-actions';
 import { useSoupView } from './soup-view-context';
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
   soup: SoupState;
   onActionComplete?: () => void;
+  onEditTags?: () => void;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
@@ -17,11 +21,15 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
-  const groups = () =>
-    buildActionGroups(props.soup, props.entities, {
+  const groups = () => {
+    const content = panel.handle.content();
+    return buildActionGroups(props.soup, props.entities, {
       activeTab: activeTab(),
-      activeListView: panel.handle.content().id,
+      activeListView: content.id,
+      viewedProjectId: viewedProjectIdFromContent(content),
+      openTagPicker: props.onEditTags,
     });
+  };
 
   const handleAction = async (onClick: () => void | Promise<void>) => {
     await onClick();
@@ -33,12 +41,15 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       {(group, groupIndex) => (
         <>
           <Show when={groupIndex() > 0}>
-            <Divider />
+            <MenuSeparator />
           </Show>
           <For each={group.items}>
             {(action) => (
               <MenuItem
                 text={action.label}
+                icon={action.icon}
+                hotkeyToken={action.hotkeyToken}
+                shortcut={action.shortcut}
                 onClick={() => handleAction(action.onClick)}
                 class={action.destructive ? 'text-failure-ink' : undefined}
               />
@@ -49,5 +60,3 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     </For>
   );
 };
-
-const Divider = () => <div class="border-b border-edge-muted w-full my-1" />;

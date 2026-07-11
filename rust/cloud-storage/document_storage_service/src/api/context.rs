@@ -49,6 +49,12 @@ use email::{
     outbound::EmailPgRepo,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use favorites::{
+    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    outbound::pg_favorites_repo::PgFavoritesRepo,
+};
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -80,6 +86,14 @@ use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
     SystemPropertiesServiceImpl,
 };
+use webhook::{
+    domain::service::WebhookServiceImpl,
+    inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
+    outbound::{
+        http_validator::ReqwestWebhookValidationClient,
+        pg_repository::PgRepository as PgWebhookRepo,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct InternalFlag {
@@ -92,11 +106,12 @@ pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
 >;
 
-type DssEmailService = EmailServiceImpl<
+pub(crate) type DssEmailService = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
     DssCrmService,
+    EntityAccessManagementService,
 >;
 
 /// CRM router state.
@@ -114,6 +129,17 @@ pub(crate) type DssSoupService = SoupImpl<
 >;
 
 type DssSoupState = SoupRouterState<DssSoupService, DssEmailService, EntityAccessService>;
+
+/// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
+/// parameter lets GraphQL resolvers run the same axum extractors as the REST
+/// routes, lazily, against the stored request parts.
+#[cfg(feature = "graphql")]
+pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
+    DssSoupService,
+    DssEmailService,
+    EntityAccessService,
+    ApiContext,
+>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -159,14 +185,15 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
+        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
+
+        let access = self
+            .properties
+            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+            .await?;
+
         self.properties
-            .set_entity_property(
-                user_id,
-                entity_id,
-                models_properties::EntityType::Task,
-                property_definition_id,
-                value,
-            )
+            .set_entity_property(&access, property_definition_id, value)
             .await
             .map_err(Into::into)
     }
@@ -197,6 +224,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
 /// Type alias for the documents router state.
@@ -219,6 +247,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<NotificationIngressType>,
             SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            MacroEventBrokerService<KafkaEventPublisher>,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
@@ -272,6 +301,12 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
+/// Type alias for the favorites service.
+pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
+
+/// Type alias for the favorites router state.
+pub(crate) type DssFavoritesState = FavoritesRouterState<FavoritesServiceType, EntityAccessService>;
+
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
@@ -294,6 +329,17 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 /// Type alias for the cal.com webhook router state.
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
+/// Type alias for the product webhook service.
+pub(crate) type DssWebhookService =
+    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient>;
+
+/// Type alias for the product webhook rate limiter.
+pub(crate) type DssWebhookRateLimiter =
+    rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
+
+/// Type alias for the product webhook router state.
+pub(crate) type DssWebhookState = MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -305,9 +351,11 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     #[cfg(feature = "graphql")]
-    pub graphql_soup_schema: graphql_soup::SharedSoupSchema<DssSoupService>,
+    pub graphql_soup_schema: DssGraphqlSoupSchema,
     #[cfg(feature = "graphql")]
-    pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
+    pub graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader>,
+    pub favorites_state: DssFavoritesState,
+    pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
@@ -331,6 +379,7 @@ pub(crate) struct ApiContext {
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
+    pub webhook_state: DssWebhookState,
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
@@ -344,11 +393,10 @@ env_var! {
 
 impl From<&ApiContext> for PropertiesHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        PropertiesHandlerState {
-            db: ctx.db.clone(),
-            properties_service: ctx.properties_service.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
-        }
+        PropertiesHandlerState::new(
+            ctx.properties_service.clone(),
+            ctx.entity_access_service.clone(),
+        )
     }
 }
 
@@ -371,5 +419,16 @@ impl From<&ApiContext> for SearchHandlerState {
 impl FromRef<ApiContext> for SearchHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
         SearchHandlerState::from(ctx)
+    }
+}
+
+/// `#[derive(FromRef)]` only exposes direct field types, so hand the email
+/// router state out of the nested soup router state for extractors like
+/// `MultiEmailLinkExtractor` that key off `EmailRouterState`.
+impl FromRef<ApiContext>
+    for email::inbound::axum::previews_router::EmailRouterState<DssEmailService>
+{
+    fn from_ref(ctx: &ApiContext) -> Self {
+        FromRef::from_ref(&ctx.soup_router_state)
     }
 }

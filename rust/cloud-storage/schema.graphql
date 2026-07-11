@@ -1,0 +1,892 @@
+input GraphqlCallBinaryExpr {
+	left: GraphqlCallExpr!
+	right: GraphqlCallExpr!
+}
+
+input GraphqlCallExpr @oneOf {
+	and: GraphqlCallBinaryExpr
+	or: GraphqlCallBinaryExpr
+	not: GraphqlCallExpr
+	literal: GraphqlCallLiteral
+}
+
+input GraphqlCallLiteral @oneOf {
+	callId: ID
+	channelId: ID
+	speaker: String
+	status: GraphqlCallStatus
+	attended: Boolean
+}
+
+enum GraphqlCallStatus {
+	ATTENDED
+	MISSED
+	UNATTENDED
+}
+
+input GraphqlChannelBinaryExpr {
+	left: GraphqlChannelExpr!
+	right: GraphqlChannelExpr!
+}
+
+input GraphqlChannelExpr @oneOf {
+	and: GraphqlChannelBinaryExpr
+	or: GraphqlChannelBinaryExpr
+	not: GraphqlChannelExpr
+	literal: GraphqlChannelLiteral
+}
+
+input GraphqlChannelLiteral @oneOf {
+	threadId: ID
+	mention: String
+	organizationId: Int
+	teamId: ID
+	channelId: ID
+	sender: String
+	channelType: GraphqlChannelTypeFilter
+	importance: Boolean
+	notificationDone: Boolean
+	notificationSeen: Boolean
+}
+
+input GraphqlChannelThreadBinaryExpr {
+	left: GraphqlChannelThreadExpr!
+	right: GraphqlChannelThreadExpr!
+}
+
+input GraphqlChannelThreadExpr @oneOf {
+	and: GraphqlChannelThreadBinaryExpr
+	or: GraphqlChannelThreadBinaryExpr
+	not: GraphqlChannelThreadExpr
+	literal: GraphqlChannelThreadLiteral
+}
+
+input GraphqlChannelThreadLiteral @oneOf {
+	threadId: ID
+	channelId: ID
+	rootSender: String
+	participant: String
+	notificationDone: Boolean
+	notificationSeen: Boolean
+}
+
+enum GraphqlChannelTypeFilter {
+	PUBLIC
+	PRIVATE
+	DIRECT_MESSAGE
+	TEAM
+}
+
+input GraphqlChatBinaryExpr {
+	left: GraphqlChatExpr!
+	right: GraphqlChatExpr!
+}
+
+input GraphqlChatExpr @oneOf {
+	and: GraphqlChatBinaryExpr
+	or: GraphqlChatBinaryExpr
+	not: GraphqlChatExpr
+	literal: GraphqlChatLiteral
+}
+
+input GraphqlChatLiteral @oneOf {
+	projectId: ID
+	role: GraphqlChatRole
+	chatId: ID
+	owner: String
+	importance: Boolean
+	notificationDone: Boolean
+	notificationSeen: Boolean
+	createdAt: GraphqlDateLiteral
+	updatedAt: GraphqlDateLiteral
+}
+
+enum GraphqlChatRole {
+	USER
+	SYSTEM
+	ASSISTANT
+}
+
+input GraphqlCrmCompanyBinaryExpr {
+	left: GraphqlCrmCompanyExpr!
+	right: GraphqlCrmCompanyExpr!
+}
+
+input GraphqlCrmCompanyExpr @oneOf {
+	and: GraphqlCrmCompanyBinaryExpr
+	or: GraphqlCrmCompanyBinaryExpr
+	not: GraphqlCrmCompanyExpr
+	literal: GraphqlCrmCompanyLiteral
+}
+
+input GraphqlCrmCompanyLiteral @oneOf {
+	id: ID
+	hidden: Boolean
+}
+
+input GraphqlCrmScope @oneOf {
+	domains: [String!]
+	addresses: [String!]
+}
+
+input GraphqlDateLiteral @oneOf {
+	gt: String
+	lt: String
+	gte: String
+	lte: String
+}
+
+input GraphqlDocumentBinaryExpr {
+	left: GraphqlDocumentExpr!
+	right: GraphqlDocumentExpr!
+}
+
+input GraphqlDocumentExpr @oneOf {
+	and: GraphqlDocumentBinaryExpr
+	or: GraphqlDocumentBinaryExpr
+	not: GraphqlDocumentExpr
+	literal: GraphqlDocumentLiteral
+}
+
+input GraphqlDocumentLiteral @oneOf {
+	fileType: String
+	id: ID
+	projectId: ID
+	owner: String
+	importance: Boolean
+	notificationDone: Boolean
+	notificationSeen: Boolean
+	includeCbmAtmNc: Boolean
+	subType: GraphqlDocumentSubType
+	fileAssoc: String
+	isEmailAttachment: Boolean
+	createdAt: GraphqlDateLiteral
+	updatedAt: GraphqlDateLiteral
+}
+
+enum GraphqlDocumentSubType {
+	TASK
+	SNIPPET
+}
+
+input GraphqlEmailBinaryExpr {
+	left: GraphqlEmailExpr!
+	right: GraphqlEmailExpr!
+}
+
+input GraphqlEmailExpr @oneOf {
+	and: GraphqlEmailBinaryExpr
+	or: GraphqlEmailBinaryExpr
+	not: GraphqlEmailExpr
+	literal: GraphqlEmailLiteral
+}
+
+input GraphqlEmailFilterAst {
+	tree: GraphqlEmailExpr
+	crmScope: GraphqlCrmScope
+}
+
+input GraphqlEmailLiteral @oneOf {
+	sender: GraphqlEmailValue
+	cc: GraphqlEmailValue
+	bcc: GraphqlEmailValue
+	recipient: GraphqlEmailValue
+	threadId: ID
+	owner: ID
+	projectId: String
+	importance: Boolean
+	notificationDone: Boolean
+	notificationSeen: Boolean
+	shared: GraphqlSharedEmailFilter
+	calendarOnly: Boolean
+	createdAt: GraphqlDateLiteral
+	updatedAt: GraphqlDateLiteral
+}
+
+input GraphqlEmailValue @oneOf {
+	partial: String
+	complete: String
+	domain: String
+}
+
+enum GraphqlEmailView {
+	INBOX
+	DRAFTS
+	SENT
+	ALL
+	STARRED
+	IMPORTANT
+	OTHER
+}
+
+"""
+GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
+"""
+input GraphqlEntityFilterAst {
+	documentFilter: GraphqlDocumentExpr
+	projectFilter: GraphqlProjectExpr
+	chatFilter: GraphqlChatExpr
+	emailFilter: GraphqlEmailFilterAst
+	channelFilter: GraphqlChannelExpr
+	channelThreadFilter: GraphqlChannelThreadExpr
+	callFilter: GraphqlCallExpr
+	crmCompanyFilter: GraphqlCrmCompanyExpr
+	foreignEntityFilter: GraphqlForeignEntityExpr
+	propertiesFilter: GraphqlPropertiesExpr
+}
+
+input GraphqlForeignEntityBinaryExpr {
+	left: GraphqlForeignEntityExpr!
+	right: GraphqlForeignEntityExpr!
+}
+
+input GraphqlForeignEntityExpr @oneOf {
+	and: GraphqlForeignEntityBinaryExpr
+	or: GraphqlForeignEntityBinaryExpr
+	not: GraphqlForeignEntityExpr
+	literal: GraphqlForeignEntityLiteral
+}
+
+input GraphqlForeignEntityLiteral @oneOf {
+	id: ID
+	foreignEntityId: String
+	foreignEntitySource: String
+	includesMe: Boolean
+	notificationDone: Boolean
+	notificationSeen: Boolean
+}
+
+input GraphqlProjectBinaryExpr {
+	left: GraphqlProjectExpr!
+	right: GraphqlProjectExpr!
+}
+
+input GraphqlProjectExpr @oneOf {
+	and: GraphqlProjectBinaryExpr
+	or: GraphqlProjectBinaryExpr
+	not: GraphqlProjectExpr
+	literal: GraphqlProjectLiteral
+}
+
+input GraphqlProjectLiteral @oneOf {
+	projectId: ID
+	projectIdSelf: ID
+	owner: String
+	importance: Boolean
+	notificationDone: Boolean
+	notificationSeen: Boolean
+	createdAt: GraphqlDateLiteral
+	updatedAt: GraphqlDateLiteral
+}
+
+input GraphqlPropertiesBinaryExpr {
+	left: GraphqlPropertiesExpr!
+	right: GraphqlPropertiesExpr!
+}
+
+input GraphqlPropertiesExpr @oneOf {
+	and: GraphqlPropertiesBinaryExpr
+	or: GraphqlPropertiesBinaryExpr
+	not: GraphqlPropertiesExpr
+	literal: GraphqlPropertiesLiteral
+}
+
+"""
+GraphQL input for matching a property value on an entity.
+"""
+input GraphqlPropertiesLiteral {
+	"""
+	Property definition id to match.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Optional entity type scope for the property match.
+	"""
+	entityType: GraphqlPropertyEntityType
+	"""
+	Value to compare against the property.
+	"""
+	value: GraphqlPropertyMatchValue!
+}
+
+"""
+GraphQL entity type supported by property filters.
+"""
+enum GraphqlPropertyEntityType {
+	"""
+	Channel entity.
+	"""
+	CHANNEL
+	"""
+	Chat entity.
+	"""
+	CHAT
+	"""
+	Company entity.
+	"""
+	COMPANY
+	"""
+	Document entity.
+	"""
+	DOCUMENT
+	"""
+	Project entity.
+	"""
+	PROJECT
+	"""
+	Task entity.
+	"""
+	TASK
+	"""
+	Thread entity.
+	"""
+	THREAD
+	"""
+	User entity.
+	"""
+	USER
+}
+
+"""
+GraphQL input value used when matching a property.
+"""
+input GraphqlPropertyMatchValue @oneOf {
+	"""
+	Select option id to match.
+	"""
+	selectOption: ID
+	"""
+	Entity reference id to match.
+	"""
+	entityRef: String
+}
+
+enum GraphqlSharedEmailFilter {
+	EXCLUDE
+	INCLUDE
+	ONLY
+}
+
+"""
+GraphQL representation of supported simple Soup sorts.
+"""
+enum GraphqlSimpleSortMethod {
+	"""
+	Sort by most recently viewed.
+	"""
+	VIEWED_AT
+	"""
+	Sort by creation timestamp.
+	"""
+	CREATED_AT
+	"""
+	Sort by update timestamp.
+	"""
+	UPDATED_AT
+	"""
+	Sort by viewed timestamp, falling back to updated timestamp.
+	"""
+	VIEWED_UPDATED
+}
+
+type GraphqlSoupCall {
+	id: ID!
+	channelId: ID!
+	channelName: String
+	createdBy: String!
+	customName: String
+	name: String
+	summary: String
+	startedAt: String!
+	endedAt: String
+	durationMs: Int
+	isActive: Boolean!
+	status: String!
+	attended: Boolean!
+	participantCount: Int!
+	participantIds: [String!]!
+	participants: [GraphqlSoupCallParticipant!]!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupCallParticipant {
+	userId: String!
+	joinedAt: String!
+	leftAt: String
+}
+
+type GraphqlSoupChannel {
+	id: ID!
+	name: String
+	channelType: String!
+	ownerId: String!
+	organizationId: ID
+	teamId: ID
+	createdAt: String!
+	updatedAt: String!
+	viewedAt: String
+	interactedAt: String
+	participantCount: Int!
+	participantIds: [String!]!
+	participants: [GraphqlSoupChannelParticipant!]!
+	latestMessage: GraphqlSoupChannelMessage
+	latestNonThreadMessage: GraphqlSoupChannelMessage
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupChannelMessage {
+	id: ID!
+	threadId: ID
+	senderId: String!
+	content: String!
+	createdAt: String!
+	updatedAt: String!
+	deletedAt: String
+	mentions: [String!]!
+}
+
+type GraphqlSoupChannelParticipant {
+	channelId: ID!
+	userId: String!
+	role: String!
+	joinedAt: String!
+	leftAt: String
+}
+
+type GraphqlSoupChannelThread {
+	id: ID!
+	channelId: ID!
+	senderId: String!
+	content: String!
+	createdAt: String!
+	updatedAt: String!
+	effectiveUpdatedAt: String!
+	replyCount: Int!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupChat {
+	id: ID!
+	name: String!
+	ownerId: String!
+	projectId: ID
+	isPersistent: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	viewedAt: String
+	deletedAt: String
+	properties: [GraphqlSoupProperty!]!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupCrmCompany {
+	id: ID!
+	teamId: ID!
+	name: String
+	description: String
+	emailSync: Boolean!
+	hidden: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	viewedAt: String
+	domains: [String!]!
+	properties: [GraphqlSoupProperty!]!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+"""
+GraphQL representation of supported Soup property data types.
+"""
+enum GraphqlSoupDataType {
+	"""
+	Boolean true/false values.
+	"""
+	BOOLEAN
+	"""
+	Date and time values.
+	"""
+	DATE
+	"""
+	Numeric values.
+	"""
+	NUMBER
+	"""
+	String/text values.
+	"""
+	STRING
+	"""
+	Select property with numeric options.
+	"""
+	SELECT_NUMBER
+	"""
+	Select property with string options.
+	"""
+	SELECT_STRING
+	"""
+	Tag property - user- or team-scoped colored labels (always multi-select).
+	"""
+	TAG
+	"""
+	Entity reference property.
+	"""
+	ENTITY
+	"""
+	Link value Property.
+	"""
+	LINK
+}
+
+type GraphqlSoupDocument {
+	id: ID!
+	name: String!
+	ownerId: String!
+	fileType: String
+	projectId: ID
+	createdAt: String!
+	updatedAt: String!
+	viewedAt: String
+	deletedAt: String
+	subType: GraphqlSoupDocumentSubType
+	properties: [GraphqlSoupProperty!]!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupDocumentSubType {
+	kind: String!
+	isCompleted: Boolean
+}
+
+type GraphqlSoupEmailAttachment {
+	id: ID!
+	messageId: ID!
+	providerAttachmentId: String
+	filename: String
+	mimeType: String
+	sizeBytes: Int
+	contentId: String
+	createdAt: String!
+}
+
+type GraphqlSoupEmailLabel {
+	id: ID!
+	linkId: ID!
+	providerLabelId: String!
+	name: String!
+	createdAt: String!
+	messageListVisibility: String!
+	labelListVisibility: String!
+	type: String!
+}
+
+type GraphqlSoupEmailParticipant {
+	id: ID!
+	linkId: ID!
+	name: String
+	email: String
+	sfsPhotoUrl: String
+}
+
+type GraphqlSoupEmailThread {
+	id: ID!
+	providerId: String
+	ownerId: String!
+	inboxVisible: Boolean!
+	linkId: ID
+	name: String
+	snippet: String
+	senderEmail: String
+	senderName: String
+	senderPhotoUrl: String
+	isRead: Boolean!
+	isDraft: Boolean!
+	isImportant: Boolean!
+	projectId: ID
+	sortTs: String!
+	createdAt: String!
+	updatedAt: String!
+	viewedAt: String
+	attachmentCount: Int!
+	participantCount: Int!
+	participants: [GraphqlSoupEmailParticipant!]!
+	attachments: [GraphqlSoupEmailAttachment!]!
+	labels: [GraphqlSoupEmailLabel!]!
+	properties: [GraphqlSoupProperty!]!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+"""
+GraphQL union over expanded Soup entity variants.
+"""
+union GraphqlSoupEntity = GraphqlSoupDocument | GraphqlSoupChat | GraphqlSoupProject | GraphqlSoupEmailThread | GraphqlSoupChannel | GraphqlSoupChannelThread | GraphqlSoupCall | GraphqlSoupCrmCompany | GraphqlSoupForeignEntity
+
+"""
+GraphQL representation of Soup entity types.
+"""
+enum GraphqlSoupEntityType {
+	"""
+	Document entity.
+	"""
+	DOCUMENT
+	"""
+	Chat entity.
+	"""
+	CHAT
+	"""
+	Project entity.
+	"""
+	PROJECT
+	"""
+	Email thread entity.
+	"""
+	EMAIL_THREAD
+	"""
+	Channel entity.
+	"""
+	CHANNEL
+	"""
+	Channel thread entity.
+	"""
+	CHANNEL_THREAD
+	"""
+	Call entity.
+	"""
+	CALL
+	"""
+	CRM company entity.
+	"""
+	CRM_COMPANY
+	"""
+	Foreign entity.
+	"""
+	FOREIGN_ENTITY
+	"""
+	User entity.
+	"""
+	USER
+	"""
+	Team entity.
+	"""
+	TEAM
+	"""
+	Static file entity.
+	"""
+	STATIC_FILE
+	"""
+	CRM contact entity.
+	"""
+	CRM_CONTACT
+}
+
+type GraphqlSoupForeignEntity {
+	id: ID!
+	foreignEntityId: String!
+	foreignEntitySource: String!
+	storedForId: String!
+	storedForAuthEntity: String!
+	metadata: JSON!
+	createdAt: String!
+	updatedAt: String!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupItem {
+	id: ID!
+	entityType: GraphqlSoupEntityType!
+	frecencyScore: Float!
+	entity: GraphqlSoupEntity!
+}
+
+type GraphqlSoupNotification {
+	id: ID!
+	eventType: String!
+	entityType: GraphqlSoupEntityType!
+	entityId: String!
+	sent: Boolean!
+	done: Boolean!
+	seen: Boolean!
+	createdAt: String!
+	viewedAt: String
+	updatedAt: String!
+	senderId: String
+	metadata: JSON!
+}
+
+type GraphqlSoupProject {
+	id: ID!
+	name: String!
+	ownerId: String!
+	parentId: ID
+	createdAt: String!
+	updatedAt: String!
+	viewedAt: String
+	deletedAt: String
+	properties: [GraphqlSoupProperty!]!
+	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupProperty {
+	"""
+	Id of the shared property *definition* — deliberately not named `id`:
+	a property instance has no global identity (its `value` is
+	per-entity), so it must never be treated as a cacheable entity.
+	Normalized caches key objects by the presence of an `id` field.
+	"""
+	propertyDefinitionId: ID!
+	displayName: String!
+	dataType: GraphqlSoupDataType!
+	isMultiSelect: Boolean!
+	specificEntityType: GraphqlSoupPropertyEntityType
+	isSystem: Boolean!
+	isMetadata: Boolean!
+	value: GraphqlSoupPropertyValue
+}
+
+"""
+GraphQL entity reference stored in a property value.
+"""
+type GraphqlSoupPropertyEntityReference {
+	entityId: String!
+	entityType: GraphqlSoupPropertyEntityType!
+	specificMessageId: ID
+}
+
+"""
+GraphQL entity type supported by Soup properties.
+"""
+enum GraphqlSoupPropertyEntityType {
+	"""
+	Channel entity.
+	"""
+	CHANNEL
+	"""
+	Chat entity.
+	"""
+	CHAT
+	"""
+	Company entity.
+	"""
+	COMPANY
+	"""
+	Document entity.
+	"""
+	DOCUMENT
+	"""
+	Project entity.
+	"""
+	PROJECT
+	"""
+	Task entity.
+	"""
+	TASK
+	"""
+	Thread entity.
+	"""
+	THREAD
+	"""
+	User entity.
+	"""
+	USER
+}
+
+"""
+GraphQL representation of a property value.
+"""
+type GraphqlSoupPropertyValue {
+	kind: String!
+	boolValue: Boolean
+	numberValue: Float
+	stringValue: String
+	dateValue: String
+	selectOptionIds: [ID!]!
+	entityReferences: [GraphqlSoupPropertyEntityReference!]!
+	links: [String!]!
+}
+
+type GraphqlUser {
+	"""
+	Stable id of the authenticated user.
+	"""
+	id: ID!
+	"""
+	Fetch a page of Soup items using the existing Soup filter AST format.
+	"""
+	soup(input: SoupInput!): SoupPage!
+}
+
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+"""
+Input for `Query.soup`.
+"""
+input SoupInput {
+	"""
+	Maximum number of items to return. Defaults to 20, max 500.
+	"""
+	limit: Int
+	"""
+	Whether to return expanded Soup items. Defaults to true.
+	"""
+	expand: Boolean
+	"""
+	Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
+	not supported by this initial GraphQL adapter.
+	"""
+	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Opaque cursor returned by a previous GraphQL Soup response.
+	"""
+	cursor: String
+	"""
+	Email preview view used when hydrating email Soup items.
+	"""
+	emailView: GraphqlEmailView
+	"""
+	AST-shaped filters applied to each Soup entity type.
+	"""
+	filters: GraphqlEntityFilterAst
+}
+
+"""
+Page returned by `Query.soup`.
+"""
+type SoupPage {
+	"""
+	Items in the current page.
+	"""
+	items: [GraphqlSoupItem!]!
+	"""
+	Opaque cursor for the next page, if one exists.
+	"""
+	nextCursor: String
+	"""
+	Whether more items are available after this page.
+	"""
+	hasMore: Boolean!
+}
+
+type SoupQueryRoot {
+	"""
+	The authenticated user.
+	"""
+	user: GraphqlUser!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)
+"""
+directive @oneOf on INPUT_OBJECT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: SoupQueryRoot
+}
+

@@ -72,6 +72,11 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
 import {
+  BlameTooltip,
+  blameTooltipPlugin,
+  createBlameTooltipStore,
+} from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
+import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
@@ -121,6 +126,7 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
+  ENABLE_GIT_BLAME,
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
@@ -173,6 +179,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import {
@@ -407,10 +414,13 @@ export function MarkdownEditor(props: {
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {
+    // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragEnd(event);
   });
 
   onDragMove((event: EntityDragEvent) => {
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragMove(event);
   });
 
@@ -503,7 +513,7 @@ export function MarkdownEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager.getPeerIdStr();
+    const peerId = () => props.loroManager.peerIdStr;
     return createPeerIdValidator(peerId, true);
   };
 
@@ -622,7 +632,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager.getPeerIdStr();
+    const peerId = () => props.loroManager.peerIdStr;
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -920,6 +930,13 @@ export function MarkdownEditor(props: {
     },
   });
 
+  const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
+  if (ENABLE_GIT_BLAME()) {
+    plugins.use(
+      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
+    );
+  }
+
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
     wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
@@ -1002,6 +1019,11 @@ export function MarkdownEditor(props: {
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
+        </Show>
+        <Show when={ENABLE_GIT_BLAME()}>
+          <Suspense>
+            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+          </Suspense>
         </Show>
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
@@ -1110,7 +1132,10 @@ export function MarkdownEditor(props: {
                 title="Lexical state debugger"
                 onClose={props.onLexicalStateDebuggerClose}
               >
-                <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+                <LexicalStateDebugger
+                  state={state()}
+                  editor={editor}
+                ></LexicalStateDebugger>
               </SplitBottomPanel>
             )}
           </Show>

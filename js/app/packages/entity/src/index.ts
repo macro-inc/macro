@@ -1,10 +1,15 @@
 // Export types
 
+export { DraftBadge } from './components/Badges';
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { InlineEntity } from './composed/InlineEntity';
-export { ListEntity, ListLayoutProvider } from './composed/ListEntity';
+export {
+  ListEntity,
+  ListLayoutProvider,
+  MaybeEntityRow,
+} from './composed/ListEntity';
 
 export { Entity } from './entity';
 export { EntityIcon as EntityRowIcon } from './extractors/entity-icon';
@@ -26,8 +31,12 @@ export {
   type BuildEntityDataArgs,
   buildEntityData,
 } from './utils/buildEntityData';
+export {
+  type CrmCompanyEntityWithProperties,
+  getCompanyOwnerId,
+  getCompanyStageOptionId,
+} from './utils/company-properties';
 export { createEntityDraggable } from './utils/draggable';
-
 export { unreadFilterFn } from './utils/filter';
 export {
   filterNotDoneNotifications,
@@ -36,6 +45,7 @@ export {
 } from './utils/notification';
 export { useIsShared } from './utils/shared';
 export {
+  COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
@@ -43,4 +53,5 @@ export {
 export {
   formatDateAndTime,
   formatRelativeTimestamp,
+  formatTimestamp,
 } from './utils/timestamp';

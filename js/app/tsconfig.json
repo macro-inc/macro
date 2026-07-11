@@ -1,6 +1,7 @@
 {
   "include": [
     "./packages/**/*",
+    "./packages/core/component/Emoji/cldr-tags.json",
     "../loro-mirror/**/*",
     "../lexical-core/**/*"
   ],
@@ -59,6 +60,9 @@
       ],
       "loro-crdt/*": [
         "../node_modules/loro-crdt/*"
+      ],
+      "@graphql-cache/*": [
+        "./packages/graphql-cache/*"
       ],
       "@filesystem": [
         "./packages/filesystem/src"

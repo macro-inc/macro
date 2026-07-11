@@ -44,7 +44,7 @@ export function TaskDuplicateMatchPill() {
               title="Possible duplicate tasks"
             >
               <WarningIcon class="size-3 shrink-0" />
-              <span class="truncate">Duplicate Detected</span>
+              <span class="truncate">Possible duplicate</span>
               <CaretDownIcon class="size-3 shrink-0 text-current/70" />
             </Dropdown.Trigger>
             <Dropdown.Content class="max-w-[calc(100vw-24px)]">

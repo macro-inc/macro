@@ -11,21 +11,38 @@ use crate::domain::{
     ai_projection_queue::AiProjectionQueue,
     ai_projection_repo::AiProjectionRepository,
     model::{
-        AiProjectionError, ProjectionStatus, TargetType, UpsertProjectionError,
+        AiProjection, AiProjectionError, ProjectionStatus, TargetType, UpsertProjectionError,
         UpsertProjectionParams, UserAiProjection,
     },
-    projection_generator::ProjectionGenerator,
+    projection_generator::{GenerationRequest, ProjectionGenerator},
+    projection_notifier::ProjectionNotifier,
 };
 
 /// The permission required to read professional (premium) features.
 pub const READ_PROFESSIONAL_FEATURES: &str = "read:professional_features";
 
+/// `provider/model` ids that any user may request, without professional
+/// features. Everything else — including an absent model, which resolves to
+/// the server default (the smart tier) — requires the permission.
+pub const FREE_TIER_MODELS: &[&str] = &["anthropic/claude-haiku-4-5"];
+
+/// Whether a requested projection model requires the
+/// [`READ_PROFESSIONAL_FEATURES`] permission.
+pub fn requires_professional_features(model: Option<&str>) -> bool {
+    model.is_none_or(|model| !FREE_TIER_MODELS.contains(&model))
+}
+
 /// The AiProjectionService defines the high-level operations for ai projections.
 pub trait AiProjectionService: Clone + Send + Sync + 'static {
-    /// Gets or creates a projection definition and the target's cold instance
-    /// of it, returning that instance. The concrete target id is resolved from
-    /// the authenticated user: a `user` target resolves to the user's own id,
-    /// a `team` target resolves to the user's (single) team.
+    /// Gets or creates a projection definition and the target's instance of it,
+    /// returning that instance. The concrete target id is resolved from the
+    /// authenticated user: a `user` target resolves to the user's own id, a
+    /// `team` target resolves to the user's (single) team.
+    ///
+    /// A cold instance (or a `regenerate` request) triggers materialization:
+    /// asynchronously via the queue by default, or inline when
+    /// `await_generation` is set — in which case the returned instance reflects
+    /// the finished generation.
     fn upsert_projection(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -49,51 +66,55 @@ pub trait AiProjectionService: Clone + Send + Sync + 'static {
 }
 
 /// Implementation of [`AiProjectionService`] backed by an
-/// [`AiProjectionRepository`], an [`AiProjectionQueue`], and a
-/// [`ProjectionGenerator`].
+/// [`AiProjectionRepository`], an [`AiProjectionQueue`], a
+/// [`ProjectionGenerator`], and a [`ProjectionNotifier`].
 #[derive(Debug, Clone)]
-pub struct AiProjectionServiceImpl<R, Q, G>
+pub struct AiProjectionServiceImpl<R, Q, G, N>
 where
     R: AiProjectionRepository,
     Q: AiProjectionQueue,
     G: ProjectionGenerator,
+    N: ProjectionNotifier,
 {
     repository: R,
     queue: Q,
     generator: G,
+    notifier: N,
 }
 
-impl<R, Q, G> AiProjectionServiceImpl<R, Q, G>
+impl<R, Q, G, N> AiProjectionServiceImpl<R, Q, G, N>
 where
     R: AiProjectionRepository,
     Q: AiProjectionQueue,
     G: ProjectionGenerator,
+    N: ProjectionNotifier,
 {
     /// Creates a new AiProjectionServiceImpl.
-    pub fn new(repository: R, queue: Q, generator: G) -> Self {
+    pub fn new(repository: R, queue: Q, generator: G, notifier: N) -> Self {
         Self {
             repository,
             queue,
             generator,
+            notifier,
         }
     }
 
-    /// Loads the projection definition, marks the target instance as loading,
-    /// runs the prompt through the generator, and stores the result as ready.
+    /// Marks the target instance as loading, runs the prompt through the
+    /// generator, and stores the result as ready.
     ///
     /// The caller ([`AiProjectionService::materialize`]) owns the processing
     /// claim and is responsible for releasing it and recording errors.
     async fn generate_and_store(
         &self,
+        projection: &AiProjection,
         message: &AiProjectionQueueMessage,
     ) -> Result<(), AiProjectionError> {
-        let projection = self
-            .repository
-            .get_projection(&message.ai_projection_id)
-            .await?;
-
         self.repository
-            .set_projection_loading(&message.ai_projection_id, &message.target_id)
+            .set_projection_loading(
+                &message.ai_projection_id,
+                &message.target_id,
+                &message.prompt_hash,
+            )
             .await?;
 
         // For `user` targets the target id is the user id. `team` targets store
@@ -103,7 +124,15 @@ where
 
         let result = self
             .generator
-            .generate(&user_id, &projection.prompt)
+            .generate(
+                &user_id,
+                GenerationRequest {
+                    projection_id: &projection.id,
+                    prompt: &projection.prompt,
+                    model: projection.model.as_deref(),
+                    output_schema: projection.output_schema.as_ref(),
+                },
+            )
             .await?;
 
         let generated_at = chrono::Utc::now();
@@ -113,6 +142,7 @@ where
             .set_projection_result(
                 &message.ai_projection_id,
                 &message.target_id,
+                &message.prompt_hash,
                 &result,
                 generated_at,
                 stale_at,
@@ -120,6 +150,30 @@ where
             .await?;
 
         Ok(())
+    }
+
+    /// Pushes the instance's current state to the target's connected clients.
+    /// Best-effort: a failed lookup or send is logged and swallowed so
+    /// notification issues never fail materialization.
+    async fn notify_updated(&self, target_type: TargetType, message: &AiProjectionQueueMessage) {
+        let instance = match self
+            .repository
+            .get_target_projection(&message.ai_projection_id, &message.target_id)
+            .await
+        {
+            Ok(instance) => instance,
+            Err(e) => {
+                tracing::error!(error=?e, "failed to load ai projection instance for notification");
+                return;
+            }
+        };
+        self.notifier
+            .notify_updated(target_type, &instance)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to push ai projection update notification");
+            })
+            .ok();
     }
 
     /// Resolves the concrete target id from the authenticated user and the
@@ -149,9 +203,24 @@ where
     }
 }
 
-/// Computes the prompt version hash used as part of a projection's cache key.
-pub fn hash_prompt(prompt: &str) -> String {
-    let digest = Sha256::digest(prompt.as_bytes());
+/// Computes the version hash used as part of a projection's cache key: any
+/// change to the prompt, model, or output schema regenerates cached instances.
+pub fn hash_projection_version(
+    prompt: &str,
+    model: Option<&str>,
+    output_schema: Option<&serde_json::Value>,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(prompt.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(model.unwrap_or_default().as_bytes());
+    hasher.update([0u8]);
+    if let Some(schema) = output_schema {
+        // serde_json::Value maps are BTreeMap-backed, so serialization is
+        // canonical regardless of the key order the client sent.
+        hasher.update(schema.to_string().as_bytes());
+    }
+    let digest = hasher.finalize();
     let mut hex = String::with_capacity(digest.len() * 2);
     for byte in digest {
         use std::fmt::Write;
@@ -160,11 +229,12 @@ pub fn hash_prompt(prompt: &str) -> String {
     hex
 }
 
-impl<R, Q, G> AiProjectionService for AiProjectionServiceImpl<R, Q, G>
+impl<R, Q, G, N> AiProjectionService for AiProjectionServiceImpl<R, Q, G, N>
 where
     R: AiProjectionRepository,
     Q: AiProjectionQueue,
     G: ProjectionGenerator,
+    N: ProjectionNotifier,
 {
     #[tracing::instrument(skip(self), err)]
     async fn upsert_projection(
@@ -185,41 +255,81 @@ where
 
         let target_id = self.resolve_target_id(user_id, params.target_type).await?;
 
-        let prompt_hash = hash_prompt(&params.prompt);
+        let prompt_hash = hash_projection_version(
+            &params.prompt,
+            params.model.as_deref(),
+            params.output_schema.as_ref(),
+        );
 
         let projection = self
             .repository
-            .get_or_create_projection(
+            .upsert_projection_definition(
                 &params.id,
                 &params.prompt,
                 &prompt_hash,
                 params.target_type,
                 params.refresh_cadence,
                 params.expiry,
+                params.model.as_deref(),
+                params.output_schema.as_ref(),
             )
             .await?;
 
-        let target_projection = self
+        // An instance whose prompt_hash no longer matches the definition comes
+        // back reset to cold, so a changed prompt/model/schema regenerates.
+        let mut target_projection = self
             .repository
             .get_or_create_target_projection(&projection.id, &target_id, &projection.prompt_hash)
             .await?;
 
-        // A cold instance has no materialized result yet, so request async
-        // materialization. The instance already exists, so a failed enqueue is
-        // logged and swallowed rather than failing the request.
-        if target_projection.status == ProjectionStatus::Cold {
-            self.queue
-                .enqueue_materialization(AiProjectionQueueMessage {
-                    ai_projection_id: target_projection.ai_projection_id.clone(),
-                    target_id: target_projection.target_id.clone(),
-                    prompt_hash: target_projection.prompt_hash.clone(),
-                })
+        let needs_generation =
+            target_projection.status == ProjectionStatus::Cold || params.regenerate;
+        if !needs_generation {
+            return Ok(target_projection);
+        }
+
+        let message = AiProjectionQueueMessage {
+            ai_projection_id: target_projection.ai_projection_id.clone(),
+            target_id: target_projection.target_id.clone(),
+            prompt_hash: target_projection.prompt_hash.clone(),
+        };
+
+        if params.await_generation {
+            // Materialize inline and return the finished state. Generation
+            // failures are recorded on the instance (status `error`) rather
+            // than failing the request, and a concurrent claim elsewhere means
+            // the state below reflects that in-flight work.
+            self.materialize(message)
                 .await
                 .inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to enqueue ai projection materialization");
+                    tracing::error!(error=?e, "inline ai projection materialization failed");
                 })
                 .ok();
+            target_projection = self
+                .repository
+                .get_target_projection(&projection.id, &target_id)
+                .await?;
+            return Ok(target_projection);
         }
+
+        // Re-triggering over an existing result: surface as refreshing so the
+        // stale result stays visible while the regeneration is in flight.
+        if target_projection.status != ProjectionStatus::Cold {
+            self.repository
+                .set_projection_refreshing(&projection.id, &target_id)
+                .await?;
+            target_projection.status = ProjectionStatus::Refreshing;
+        }
+
+        // The instance already exists, so a failed enqueue is logged and
+        // swallowed rather than failing the request.
+        self.queue
+            .enqueue_materialization(message)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to enqueue ai projection materialization");
+            })
+            .ok();
 
         Ok(target_projection)
     }
@@ -246,6 +356,22 @@ where
             "materializing ai projection"
         );
 
+        let projection = self
+            .repository
+            .get_projection(&message.ai_projection_id)
+            .await?;
+
+        // The definition was revised after this message was enqueued; a newer
+        // message for the current version exists, so skip and acknowledge.
+        if projection.prompt_hash != message.prompt_hash {
+            tracing::info!(
+                ai_projection_id = %message.ai_projection_id,
+                target_id = %message.target_id,
+                "ai projection version changed since enqueue; skipping stale message"
+            );
+            return Ok(());
+        }
+
         // Claim the (ai_projection_id, target_id) pair. If another worker is
         // already processing it, skip and acknowledge the message rather than
         // duplicating work.
@@ -264,7 +390,7 @@ where
 
         // Run the generation, then release the claim regardless of the outcome
         // so a retried message can re-acquire it.
-        let result = self.generate_and_store(&message).await;
+        let result = self.generate_and_store(&projection, &message).await;
 
         match result {
             Ok(()) => {
@@ -277,6 +403,7 @@ where
                         tracing::error!(error=?e, "failed to release ai projection processing claim");
                     })
                     .ok();
+                self.notify_updated(projection.target_type, &message).await;
                 Ok(())
             }
             Err(e) => {
@@ -286,6 +413,7 @@ where
                     .set_projection_error(
                         &message.ai_projection_id,
                         &message.target_id,
+                        &message.prompt_hash,
                         &e.to_string(),
                     )
                     .await
@@ -296,6 +424,7 @@ where
                 self.repository
                     .finish_processing(&message.ai_projection_id, &message.target_id)
                     .await?;
+                self.notify_updated(projection.target_type, &message).await;
                 Err(e)
             }
         }

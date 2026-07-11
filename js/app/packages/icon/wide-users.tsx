@@ -42,11 +42,11 @@ export const AnimatedUsersIcon = (props: {
 
       {/* Right person (behind) — head crescent + shoulders */}
       <path class="head-right" d="M10.62 1.34A3.25 3.25 0 1 1 10.62 6.66" />
-      <path d="M10.6 9.12A4.98 4.98 0 0 1 17.15 12" />
+      <path d="M10.6 9.12A4.98 4.98 0 0 1 17.15 11.25" />
 
       {/* Left person (front) — full head + shoulders */}
       <circle class="head-left" cx="5.48" cy="4" r="3.25" />
-      <path d="M0.8 12A4.98 4.98 0 0 1 10.14 12" />
+      <path d="M0.8 11.25A4.98 4.98 0 0 1 10.14 11.25" />
     </svg>
   );
 };

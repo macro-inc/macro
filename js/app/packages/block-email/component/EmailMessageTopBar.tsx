@@ -1,9 +1,8 @@
 import { useEmail } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { Button, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -32,6 +31,7 @@ interface EmailMessageTopBarProps {
   setShowReply: Setter<boolean>;
   isLastMessage?: boolean;
   hiddenActions?: EmailMessageAction[];
+  avatar?: JSX.Element;
 }
 
 interface Recipient {
@@ -71,7 +71,7 @@ export function formatShortDate(date: DateValue): string {
 function RecipientChip(props: { recipient: Recipient }): JSX.Element {
   return (
     <EmailUserTooltip recipient={props.recipient}>
-      <span class="cursor-default whitespace-nowrap">
+      <span class="cursor-default whitespace-nowrap flex">
         <span class="text-ink">
           {props.recipient.name ?? props.recipient.email}
         </span>
@@ -91,10 +91,10 @@ function DetailRow(props: {
 }): JSX.Element {
   return (
     <Show when={props.recipients.length > 0}>
-      <div class="flex flex-row gap-3 text-sm">
-        <span class="text-ink-extra-muted shrink-0 w-10 text-sm pt-0.5">
+      <div class="flex flex-row gap-3 text-xs items-center">
+        <div class="text-ink-extra-muted flex items-center shrink-0 w-10 pt-0.5">
           {props.label}
-        </span>
+        </div>
         <div class="flex flex-row flex-wrap gap-y-1 select-text cursor-text min-w-0">
           <For each={props.recipients}>
             {(r, index) => (
@@ -118,7 +118,7 @@ function ExpandedDetails(props: { message: ApiMessage }): JSX.Element {
   );
 
   return (
-    <div class="mt-2.5 py-3 border-y border-ink-muted/8 flex flex-col gap-1.5 text-sm">
+    <div class="mt-2.5 py-3 border-y border-ink-muted/8 flex flex-col gap-1.5 text-xs">
       <DetailRow label="From" recipients={fromRecipients()} />
       <DetailRow label="To" recipients={props.message.to} />
       <DetailRow label="Cc" recipients={props.message.cc} />
@@ -176,20 +176,27 @@ function HeaderTopRow(props: {
   ]);
 
   return (
-    <div class="flex flex-row w-full items-center justify-between">
-      <div class="flex flex-row items-center gap-1.5 text-sm min-w-0">
+    <div class="flex flex-row w-full items-center justify-between gap-2 text-xs min-w-0">
+      <div class="flex flex-row items-center gap-1.5 min-w-0">
         <EmailUserTooltip recipient={props.message.from}>
           <span class="text-ink font-medium cursor-default">
             {props.senderName}
           </span>
         </EmailUserTooltip>
-        <span class="text-ink-extra-muted text-sm truncate">
+        <span class="text-ink-extra-muted/60 truncate">
           to{' '}
           <CollapsedRecipientList
             recipients={allRecipients()}
             currentUserEmail={props.currentUserEmail}
           />
         </span>
+        <Show when={props.message.internal_date_ts}>
+          <Tooltip label={formatFullDate(props.message.internal_date_ts!)}>
+            <span class="text-xs text-ink-extra-muted/60 tabular-nums cursor-default shrink-0">
+              {formatShortDate(props.message.internal_date_ts!)}
+            </span>
+          </Tooltip>
+        </Show>
         <div
           classList={{
             'opacity-0': !props.isHovering && !props.isExpanded,
@@ -211,28 +218,24 @@ function HeaderTopRow(props: {
                 props.onToggle();
               }}
             >
-              <Show when={props.isExpanded} fallback={<CaretDown />}>
-                <CaretUp />
-              </Show>
+              <CaretRight
+                class={cn(
+                  'size-3! text-ink-muted/30 transition-transform',
+                  props.isExpanded && 'rotate-90'
+                )}
+              />
             </Button>
           </Tooltip>
         </div>
       </div>
-      <div class="flex flex-row gap-3 items-center shrink-0">
+      <div class="flex flex-row items-center shrink-0">
         <MessageActions
           message={props.message}
-          showActions={props.focused}
+          showActions={true}
           setShowReply={props.setShowReply}
           isLastMessage={props.isLastMessage}
           hiddenActions={props.hiddenActions}
         />
-        <Show when={props.message.internal_date_ts}>
-          <Tooltip label={formatFullDate(props.message.internal_date_ts!)}>
-            <div class="text-xs text-ink-extra-muted tabular-nums cursor-default">
-              {formatShortDate(props.message.internal_date_ts!)}
-            </div>
-          </Tooltip>
-        </Show>
       </div>
     </div>
   );
@@ -282,17 +285,15 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   return (
     <div
-      class="ph-no-capture pr-1.5 flex flex-col w-full"
+      class="ph-no-capture flex flex-col w-full"
       style={{ 'min-height': 'var(--user-icon-width)' }}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={handleClick}
     >
       <Show when={props.isBodyExpanded()}>
-        <div
-          class="flex items-center"
-          style={{ 'min-height': 'var(--user-icon-width)' }}
-        >
+        <div class="flex items-center gap-2">
+          {props.avatar}
           <HeaderTopRow
             senderName={senderName()}
             isHovering={isHovering()}

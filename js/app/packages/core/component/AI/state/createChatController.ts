@@ -1,9 +1,14 @@
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
-import { bufferedStream } from '@core/component/AI/util/stream';
+import {
+  bufferedStream,
+  createMentionBufferPlugin,
+} from '@core/component/AI/util/stream';
+import { tailContext } from '@core/component/LexicalMarkdown/tailContext';
 import { toast } from '@core/component/Toast/Toast';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
+import type { EditorState } from 'lexical';
 import type { Accessor, Owner, Setter } from 'solid-js';
 import {
   createEffect,
@@ -43,10 +48,31 @@ export type ChatController = {
   dispatch: (event: ControllerEvent) => void;
   /** Escape hatch for debug components that set stream directly */
   setStream: Setter<ChatMessageStream | undefined>;
+  /**
+   * Ref to the renderer's parsed editor state for the streaming message's
+   * tail text part. The renderer sets it; the stream's Macro XML buffering
+   * reads it to skip buffering tags that land in code blocks.
+   */
+  setStreamTailState: (
+    state: Accessor<EditorState | null> | undefined,
+    key?: string
+  ) => void;
 };
 
 export type ChatControllerOptions = {
   onShowPaywall?: () => void;
+  /**
+   * Switch the chat to a model from a different provider. When provided, a
+   * provider-outage error toast offers a "Switch model" button that calls this.
+   */
+  onSwitchModel?: () => void;
+  /**
+   * Whether an accessible model on another (non-failed) provider exists to
+   * switch to. When this returns `false`, a provider-outage toast shows a plain
+   * "try again later" message instead of a dead "Switch model" button. Defaults
+   * to assuming an alternate exists when not provided.
+   */
+  hasAlternateModel?: () => boolean;
 };
 
 export function createChatController(
@@ -59,10 +85,44 @@ export function createChatController(
     createSignal<ChatMessageWithAttachments[]>(initialMessages);
   const [stream, setStream] = createSignal<ChatMessageStream>();
 
+  /*
+   The renderer's parsed editor state for the streaming message's tail text
+   part (set from AssistantMessageParts as it renders). Macro XML buffering
+   reads the node tree the renderer already built — never parses — to skip
+   buffering tags that land in code blocks, where they render literally.
+  */
+  let streamTailState: Accessor<EditorState | null> | undefined;
+  let streamTailStateKey: string | undefined;
+  function streamTailInCode(): boolean {
+    const state = streamTailState?.();
+    return state ? tailContext(state).inCode : false;
+  }
+
   function executeEffects(effects: SideEffect[]) {
     for (const effect of effects) {
       match(effect)
-        .with({ type: 'toast' }, (e) => toast.failure(e.message))
+        .with({ type: 'toast' }, (e) => {
+          const onSwitchModel = options?.onSwitchModel;
+          const canSwitch =
+            !!e.offerModelSwitch &&
+            !!onSwitchModel &&
+            (options?.hasAlternateModel?.() ?? true);
+          if (canSwitch) {
+            toast.failure(e.message, {
+              duration: 10000,
+              actions: [{ label: 'Switch model', onClick: onSwitchModel! }],
+            });
+          } else if (e.offerModelSwitch) {
+            // Provider outage but nowhere to fall back to (no accessible model
+            // on another provider, or every other provider has already failed
+            // this session). Don't offer a dead button — tell the user to wait.
+            toast.failure(
+              'The AI provider is currently unavailable. Please try again later.'
+            );
+          } else {
+            toast.failure(e.message);
+          }
+        })
         .with({ type: 'show_paywall' }, () => options?.onShowPaywall?.())
         .exhaustive();
     }
@@ -110,16 +170,21 @@ export function createChatController(
   function dispatch(event: ControllerEvent) {
     // Handle stream attachment through the state transition
     if (event.type === 'stream_connected' && 'stream' in event) {
+      /* the previous message's tail state must not answer for this stream */
+      streamTailState = undefined;
+      streamTailStateKey = undefined;
+      const makeStream = () =>
+        bufferedStream(event.stream, [
+          createMentionBufferPlugin(streamTailInCode),
+        ]);
       const { owner = getOwner() } = event;
-      let newStream: ChatMessageStream;
+      let newStream: ReturnType<typeof bufferedStream>;
       if (owner) {
-        const ownedStream = runWithOwner(owner, () =>
-          bufferedStream(event.stream)
-        );
+        const ownedStream = runWithOwner(owner, makeStream);
         if (!ownedStream) return;
         newStream = ownedStream;
       } else {
-        newStream = bufferedStream(event.stream);
+        newStream = makeStream();
       }
       setStream(newStream);
 
@@ -185,5 +250,16 @@ export function createChatController(
 
     dispatch,
     setStream,
+    setStreamTailState: (state, key) => {
+      if (!state) {
+        if (key === undefined || key === streamTailStateKey) {
+          streamTailState = undefined;
+          streamTailStateKey = undefined;
+        }
+        return;
+      }
+      streamTailState = state;
+      streamTailStateKey = key;
+    },
   };
 }

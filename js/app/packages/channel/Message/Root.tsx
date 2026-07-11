@@ -6,8 +6,13 @@ import type { MessageActions, MessageData } from './types';
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
   message: MessageData;
   actions?: MessageActions;
-  highlighted?: boolean;
+  /** This message is the selection cursor. Renders the background highlight. */
   selected?: boolean;
+  /**
+   * The unified-input mode's floating reply/edit input, or message
+   * navigation, points at this message. Renders the accent bar.
+   */
+  targeted?: boolean;
 };
 
 export function Root(props: RootProps) {
@@ -16,8 +21,8 @@ export function Root(props: RootProps) {
     'class',
     'message',
     'actions',
-    'highlighted',
     'selected',
+    'targeted',
   ]);
 
   return (
@@ -25,8 +30,8 @@ export function Root(props: RootProps) {
       class={cn('group/message relative touch:no-select-children', local.class)}
       data-message
       data-message-id={local.message.id}
-      data-highlighted={local.highlighted ? '' : undefined}
       data-selected={local.selected ? '' : undefined}
+      data-targeted={local.targeted ? '' : undefined}
       {...rest}
     >
       <div class="absolute h-full w-1 left-0 top-0 bg-accent opacity-0 message-accent-bar" />

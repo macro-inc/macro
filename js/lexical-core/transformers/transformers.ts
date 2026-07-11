@@ -32,6 +32,10 @@ import {
   $createSearchMatchNode,
   SearchMatchNode,
 } from '../nodes/SearchMatchNode';
+import {
+  replaceTextWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 export function wrapXml(tag: string, attrs: Record<string, any>) {
   return `<${tag}>${JSON.stringify(attrs)}</${tag}>`;
@@ -178,7 +182,7 @@ function escapeUrl(url: string): string {
 }
 
 export const LINK_XML: TextMatchTransformer = {
-  dependencies: [LinkNode],
+  dependencies: [LinkNode, UnknownMentionNode],
   export: (node: LexicalNode) => {
     if (!($isLinkNode(node) || $isAutoLinkNode(node))) return null;
     const text = node.getTextContent();
@@ -202,7 +206,8 @@ export const LINK_XML: TextMatchTransformer = {
       linkNode.append(linkTextNode);
       textNode.replace(linkNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in LINK_XML replace:', e);
+      replaceTextWithUnknownMention(textNode, 'Unknown Link');
     }
   },
   type: 'text-match',

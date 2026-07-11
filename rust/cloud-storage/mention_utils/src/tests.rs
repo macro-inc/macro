@@ -1,8 +1,9 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    ParsedContactMention, ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
-    ParsedUserMention, ParsedXmlText, TextSegment, XmlTag,
+    NullXmlFormatter, ParsedContactMention, ParsedDateMention, ParsedDocumentMention,
+    ParsedGroupMention, ParsedLink, ParsedUserMention, ParsedXmlText, PlainTextFormatter,
+    TextSegment, XmlFormatter, XmlTag,
 };
 
 // =============================================================================
@@ -77,10 +78,9 @@ fn parse_single_user_mention() {
     let input = r#"<m-user-mention>{"userId":"macro|rithy@macro.com","email":"rithy@macro.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, email }))
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id }))
     ] => {
-        assert_eq!(user_id.0.as_ref(), "macro|rithy@macro.com");
-        assert_eq!(email.as_ref(), "rithy@macro.com");
+        assert_eq!(user_id.as_ref(), "macro|rithy@macro.com");
     });
 }
 
@@ -90,23 +90,13 @@ fn parse_multiple_user_mentions() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("Hello "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid1, email: email1 })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid1 })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid2, email: email2 })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid2 })),
     ] => {
-        assert_eq!(uid1.0.as_ref(), "macro|a@b.com");
-        assert_eq!(email1.as_ref(), "a@b.com");
-        assert_eq!(uid2.0.as_ref(), "macro|c@d.com");
-        assert_eq!(email2.as_ref(), "c@d.com");
+        assert_eq!(uid1.as_ref(), "macro|a@b.com");
+        assert_eq!(uid2.as_ref(), "macro|c@d.com");
     });
-}
-
-#[test]
-fn parse_user_mention_missing_email() {
-    // Missing "email" field - should fail to parse
-    let input = r#"<m-user-mention>{"userId":"macro|chase@macro.com"}</m-user-mention>"#;
-    let result = ParsedXmlText::parse(input);
-    assert!(result.is_err());
 }
 
 #[test]
@@ -114,6 +104,57 @@ fn parse_user_mention_invalid_json() {
     let input = r#"<m-user-mention>invalid</m-user-mention>"#;
     let result = ParsedXmlText::parse(input);
     assert!(result.is_err());
+}
+
+// =============================================================================
+// Bot mention tests
+// =============================================================================
+
+#[test]
+fn parse_bare_uuid_bot_mention() {
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> there will come a day when I shall liberate you"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
+        TextSegment::Plain(" there will come a day when I shall liberate you"),
+    ] => {
+        assert_eq!(user_id.into_bot().unwrap().as_uuid().to_string(), "00000000-0000-0000-0000-00000000a1a1");
+    });
+}
+
+#[test]
+fn parse_prefixed_bot_mention() {
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
+    ] => {
+        assert_eq!(user_id.as_ref(), "bot|00000000-0000-0000-0000-00000000a1a1");
+    });
+}
+
+#[test]
+fn bot_mention_renders_display_name() {
+    let input = r#"hi <m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> ok"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "hi Macro ok");
+}
+
+#[test]
+fn bot_mention_null_formatter_strips_mention() {
+    let input = r#"hi <m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> ok"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = NullXmlFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "hi  ok");
+}
+
+#[test]
+fn user_mention_renders_email() {
+    let input = r#"<m-user-mention>{"userId":"macro|rithy@macro.com","email":"rithy@macro.com"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "rithy@macro.com");
 }
 
 // =============================================================================
@@ -309,7 +350,7 @@ fn parse_mixed_mentions() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("Hi "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
         TextSegment::Plain(", let's discuss "),
         TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
         TextSegment::Plain(" with "),
@@ -317,7 +358,6 @@ fn parse_mixed_mentions() {
         TextSegment::Plain(" on "),
         TextSegment::Xml(XmlTag::Date(ParsedDateMention { display_format })),
     ] => {
-        assert_eq!(email.as_ref(), "chase@macro.com");
         assert_eq!(document_name.as_ref(), "Test Doc 34");
         assert_eq!(name.as_ref(), "Ness Chu");
         assert_eq!(display_format.as_ref(), "Mon, Dec 1, 2025");
@@ -330,13 +370,12 @@ fn parse_mixed_mentions_with_links() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("Hi "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention {  .. })),
         TextSegment::Plain(", check out "),
         TextSegment::Xml(XmlTag::Link(ParsedLink { text, url })),
         TextSegment::Plain(" and "),
         TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
     ] => {
-        assert_eq!(email.as_ref(), "chase@macro.com");
         assert_eq!(text.as_ref(), "Our Docs");
         assert_eq!(url.as_ref(), "https://docs.example.com");
         assert_eq!(document_name.as_ref(), "Test Doc 34");
@@ -348,13 +387,12 @@ fn parse_content_with_multiple_document_and_user_mentions() {
     let input = r#"<m-user-mention>{"userId":"macro|rithy@macro.com","email":"rithy@macro.com"}</m-user-mention> I'm testing sending a message with a document  <m-document-mention>{"documentId":"doc-1","blockName":"md","documentName":"Document 1","blockParams":{}}</m-document-mention> mention  <m-document-mention>{"documentId":"doc-2","blockName":"md","documentName":"Document 2","blockParams":{}}</m-document-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention {  .. })),
         TextSegment::Plain(" I'm testing sending a message with a document  "),
         TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name1 })),
         TextSegment::Plain(" mention  "),
         TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name: name2 })),
     ] => {
-        assert_eq!(email.as_ref(), "rithy@macro.com");
         assert_eq!(name1.as_ref(), "Document 1");
         assert_eq!(name2.as_ref(), "Document 2");
     });
@@ -377,13 +415,13 @@ fn parse_text_with_angle_brackets_but_no_mentions() {
 fn parse_consecutive_mentions_no_space() {
     let input = r#"<m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention><m-user-mention>{"userId":"macro|c@d.com","email":"c@d.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
-    assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email: e1, .. })),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email: e2, .. })),
-    ] => {
-        assert_eq!(e1.as_ref(), "a@b.com");
-        assert_eq!(e2.as_ref(), "c@d.com");
-    });
+    assert_matches!(
+        out.0,
+        [
+            TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
+            TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
+        ]
+    );
 }
 
 #[test]
@@ -391,12 +429,13 @@ fn parse_mention_at_start() {
     let input =
         r#"<m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention> hello"#;
     let out = ParsedXmlText::parse(input).unwrap();
-    assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
-        TextSegment::Plain(" hello"),
-    ] => {
-        assert_eq!(email.as_ref(), "a@b.com");
-    });
+    assert_matches!(
+        out.0,
+        [
+            TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
+            TextSegment::Plain(" hello"),
+        ]
+    );
 }
 
 #[test]
@@ -404,12 +443,13 @@ fn parse_mention_at_end() {
     let input =
         r#"hello <m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
-    assert_matches!(out.0, [
-        TextSegment::Plain("hello "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
-    ] => {
-        assert_eq!(email.as_ref(), "a@b.com");
-    });
+    assert_matches!(
+        out.0,
+        [
+            TextSegment::Plain("hello "),
+            TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
+        ]
+    );
 }
 
 // =============================================================================
@@ -420,13 +460,14 @@ fn parse_mention_at_end() {
 fn parse_user_mention_with_surrounding_text() {
     let input = r#"asdf <m-user-mention>{"userId":"macro|chase@macro.com","email":"chase@macro.com"}</m-user-mention> asdf"#;
     let out = ParsedXmlText::parse(input).unwrap();
-    assert_matches!(out.0, [
-        TextSegment::Plain("asdf "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
-        TextSegment::Plain(" asdf"),
-    ] => {
-        assert_eq!(email.as_ref(), "chase@macro.com");
-    });
+    assert_matches!(
+        out.0,
+        [
+            TextSegment::Plain("asdf "),
+            TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
+            TextSegment::Plain(" asdf"),
+        ]
+    );
 }
 
 #[test]
@@ -529,7 +570,7 @@ fn parse_mixed_mentions_with_multiple_links() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("Hi "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
         TextSegment::Plain(", check out "),
         TextSegment::Xml(XmlTag::Link(ParsedLink { text: t1, .. })),
         TextSegment::Plain(" and "),
@@ -539,7 +580,6 @@ fn parse_mixed_mentions_with_multiple_links() {
         TextSegment::Plain(" or visit "),
         TextSegment::Xml(XmlTag::Link(ParsedLink { text: t2, url: u2 })),
     ] => {
-        assert_eq!(email.as_ref(), "chase@macro.com");
         assert_eq!(t1.as_ref(), "Our Docs");
         assert_eq!(document_name.as_ref(), "Test Doc 34");
         assert_eq!(display_format.as_ref(), "Mon, Dec 1, 2025");
@@ -556,13 +596,12 @@ fn parse_link_user_document_mixed() {
         TextSegment::Plain("Check out "),
         TextSegment::Xml(XmlTag::Link(ParsedLink { text, url })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
         TextSegment::Plain(" this doc "),
         TextSegment::Xml(XmlTag::Document(ParsedDocumentMention { document_name })),
     ] => {
         assert_eq!(text.as_ref(), "Example");
         assert_eq!(url.as_ref(), "https://example.com");
-        assert_eq!(email.as_ref(), "rithy@macro.com");
         assert_eq!(document_name.as_ref(), "Document 1");
     });
 }
@@ -597,13 +636,6 @@ fn parse_link_unicode_with_prefix() {
 #[test]
 fn parse_contact_mention_missing_name_with_suffix() {
     let input = r#"<m-contact-mention>{"contactId":"ness@macro.com","emailOrDomain":"ness@macro.com","isCompany":false}</m-contact-mention> asdf"#;
-    let result = ParsedXmlText::parse(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn parse_user_mention_missing_email_with_suffix() {
-    let input = r#"<m-user-mention>{"userId":"macro|chase@macro.com"}</m-user-mention> asdf"#;
     let result = ParsedXmlText::parse(input);
     assert!(result.is_err());
 }
@@ -664,10 +696,9 @@ fn parse_group_mention_with_user_mention() {
     assert_matches!(out.0, [
         TextSegment::Xml(XmlTag::Group(ParsedGroupMention { group_alias })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
     ] => {
         assert_eq!(group_alias.as_ref(), "here");
-        assert_eq!(email.as_ref(), "a@b.com");
     });
 }
 
@@ -730,10 +761,11 @@ fn parse_self_closing_unknown_tag_alone_is_skipped() {
 fn parse_unknown_tag_mixed_with_recognized() {
     let input = r#"<m-await>{"text":"thinking"}</m-await> Hi <m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
-    assert_matches!(out.0, [
-        TextSegment::Plain(" Hi "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
-    ] => {
-        assert_eq!(email.as_ref(), "a@b.com");
-    });
+    assert_matches!(
+        out.0,
+        [
+            TextSegment::Plain(" Hi "),
+            TextSegment::Xml(XmlTag::User(ParsedUserMention { .. })),
+        ]
+    );
 }

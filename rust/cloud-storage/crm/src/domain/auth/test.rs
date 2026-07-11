@@ -115,3 +115,32 @@ fn comment_receipt_derives_entity_and_rejects_non_crm() {
         .is_err()
     );
 }
+
+#[test]
+fn team_receipt_hidden_gate_derives_from_team_role() {
+    use entity_access::domain::models::{Entity, EntityPermission, MemberTeamRole, TeamRole};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+
+    let team = team_uuid();
+    let user = MacroUserIdStr::parse_from_str("macro|user@example.com")
+        .unwrap()
+        .into_owned();
+    let receipt_with_role = |role: TeamRole| {
+        CrmTeamReceipt::from_team_receipt(
+            EntityAccessReceipt::<MemberTeamRole>::try_new_authenticated_user(
+                user.clone(),
+                Entity {
+                    entity_id: team.to_string(),
+                    entity_type: EntityType::Team,
+                },
+                EntityPermission::TeamRole { role },
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+
+    assert!(!receipt_with_role(TeamRole::Member).include_hidden());
+    assert!(receipt_with_role(TeamRole::Admin).include_hidden());
+    assert!(receipt_with_role(TeamRole::Owner).include_hidden());
+}

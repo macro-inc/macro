@@ -402,7 +402,7 @@ async fn read_bot_channels(response: axum::response::Response) -> Vec<BotChannel
 async fn bot_owner_can_list_bot_channels_via_http() {
     let channel_id = Uuid::new_v4();
     let service = TestBotService::with_bot_channels(TestBotMode::Ok, vec![bot_channel(channel_id)]);
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("GET")
         .uri(format!("/bots/{bot_id}/channels"))
@@ -426,7 +426,7 @@ async fn bot_owner_can_list_bot_channels_via_http() {
 #[tokio::test]
 async fn bot_listing_requires_bot_usability() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("GET")
         .uri(format!("/bots/{bot_id}/channels"))
@@ -446,7 +446,7 @@ async fn bot_listing_requires_bot_usability() {
 async fn bot_owner_can_remove_bot_from_channel_via_bot_route_without_channel_admin() {
     let service = TestBotService::new(TestBotMode::Ok);
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("DELETE")
         .uri(format!("/bots/{bot_id}/channels/{channel_id}"))
@@ -466,7 +466,7 @@ async fn bot_owner_can_remove_bot_from_channel_via_bot_route_without_channel_adm
 async fn bot_remove_channel_requires_bot_usability() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("DELETE")
         .uri(format!("/bots/{bot_id}/channels/{channel_id}"))
@@ -486,7 +486,7 @@ async fn bot_remove_channel_requires_bot_usability() {
 async fn channel_member_cannot_add_bot_to_channel() {
     let service = TestBotService::new(TestBotMode::Ok);
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots"))
@@ -509,7 +509,7 @@ async fn channel_member_cannot_add_bot_to_channel() {
 async fn channel_admin_still_needs_bot_usability_to_add_bot() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots"))
@@ -532,7 +532,7 @@ async fn channel_admin_still_needs_bot_usability_to_add_bot() {
 async fn channel_member_cannot_remove_bot_from_channel() {
     let service = TestBotService::new(TestBotMode::Ok);
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("DELETE")
         .uri(format!("/channels/{channel_id}/bots/{bot_id}"))
@@ -552,7 +552,7 @@ async fn channel_member_cannot_remove_bot_from_channel() {
 async fn channel_admin_still_needs_bot_usability_to_remove_bot() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let request = Request::builder()
         .method("DELETE")
         .uri(format!("/channels/{channel_id}/bots/{bot_id}"))
@@ -598,7 +598,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
         .add_bot_to_channel(macro_user_id(BOT_OWNER_ID), channel_id, bot.id)
         .await?;
 
-    let bot_principal_id = bot.id.to_storage_string();
+    let bot_principal_id = bot.id.into_storage_id().to_string();
     let router = real_router(pool.clone(), BOT_OWNER_ID);
     let list_request = Request::builder()
         .method("GET")
@@ -680,7 +680,7 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
         )
         .await?;
 
-    let bot_principal_id = bot.id.to_storage_string();
+    let bot_principal_id = bot.id.into_storage_id().to_string();
     let router = real_router(pool.clone(), ADMIN_USER_ID);
     let add_request = Request::builder()
         .method("POST")

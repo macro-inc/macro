@@ -1,5 +1,6 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_opensearch::SearchEntityType;
 use models_properties::{EntityReference, EntityType};
 use models_search::SearchHighlight;
@@ -11,6 +12,7 @@ use name_search::highlight_name;
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
+use system_properties::SystemPropertyKey;
 
 use crate::api::context::SearchHandlerState;
 
@@ -43,10 +45,8 @@ pub(in crate::api::search) async fn enrich_documents(
         .await
         .map_err(SearchError::InternalError)?;
 
-    // Fetch properties for markdown documents (tasks, etc.)
-    let md_entity_refs: Vec<EntityReference> = document_histories
+    let entity_refs: Vec<EntityReference> = document_histories
         .iter()
-        .filter(|(_, info)| info.file_type.as_deref() == Some("md"))
         .map(|(id, info)| {
             let entity_type = info
                 .sub_type
@@ -56,10 +56,16 @@ pub(in crate::api::search) async fn enrich_documents(
         })
         .collect();
 
-    let properties_map = if !md_entity_refs.is_empty() {
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+    // Scope tags to the viewer so another user's personal tags never leak into
+    // the response. System properties still ride along via the key list.
+    let viewer_user_id = MacroUserIdStr::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?;
+    let properties_map = if !entity_refs.is_empty() {
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             &ctx.db,
-            &md_entity_refs,
+            &entity_refs,
+            SystemPropertyKey::all_system_property_keys(),
+            Some(&viewer_user_id),
         )
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to fetch entity properties"))

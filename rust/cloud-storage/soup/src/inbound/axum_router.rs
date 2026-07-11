@@ -13,6 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{either::Either, extract::Cached};
+use cowlike::CowLike;
 use email::{
     domain::{
         models::{EmailErr, PreviewView},
@@ -22,7 +23,7 @@ use email::{
 };
 use entity_access::{
     domain::{
-        models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole},
+        models::{EntityAccessReceipt, MemberTeamRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
@@ -44,6 +45,7 @@ use item_filters::{
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_grouping::{GroupByField, GroupingConfig};
@@ -56,7 +58,8 @@ use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::pin::Pin;
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
@@ -353,11 +356,38 @@ struct ApiGroupedSoupParts {
     groups: Vec<ApiGroupMeta>,
 }
 
+/// Reader used to flag soup items that the requesting user (or their team)
+/// has favorited. Object-safe so the router state can hold it without an
+/// extra generic; the concrete impl is provided by the mounting service.
+pub trait SoupFavoritesReader: Send + Sync + 'static {
+    /// Of the given entities, return the subset favorited by the user or
+    /// the user's team.
+    fn favorited_entities<'a>(
+        &'a self,
+        user_id: &'a str,
+        entities: Vec<Entity<'static>>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<HashSet<Entity<'static>>>> + Send + 'a>>;
+}
+
+/// Default [SoupFavoritesReader] that marks nothing as favorited.
+pub struct NoFavoritesReader;
+
+impl SoupFavoritesReader for NoFavoritesReader {
+    fn favorited_entities<'a>(
+        &'a self,
+        _user_id: &'a str,
+        _entities: Vec<Entity<'static>>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<HashSet<Entity<'static>>>> + Send + 'a>> {
+        Box::pin(async { Ok(HashSet::new()) })
+    }
+}
+
 /// Shared state for soup API routes.
 pub struct SoupRouterState<T, U, EAS> {
     service: Arc<T>,
     email: EmailRouterState<U>,
     entity_access_service: Arc<EAS>,
+    favorites: Arc<dyn SoupFavoritesReader>,
 }
 
 impl<T, U, EAS> Clone for SoupRouterState<T, U, EAS> {
@@ -366,6 +396,7 @@ impl<T, U, EAS> Clone for SoupRouterState<T, U, EAS> {
             service: self.service.clone(),
             email: self.email.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            favorites: self.favorites.clone(),
         }
     }
 }
@@ -399,7 +430,15 @@ where
             service,
             email: EmailRouterState::new(email),
             entity_access_service,
+            favorites: Arc::new(NoFavoritesReader),
         }
+    }
+
+    /// Attach a [SoupFavoritesReader] used to populate `is_favorited` on
+    /// returned soup items.
+    pub fn with_favorites_reader(mut self, favorites: Arc<dyn SoupFavoritesReader>) -> Self {
+        self.favorites = favorites;
+        self
     }
 
     /// Returns an `Arc` to the inner soup service.
@@ -426,8 +465,9 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + RequestsCrmScope + RequestsCrmAdmin,
+        R: Clone + Serialize + Send,
     {
+        let user_for_favorites = macro_user_id.copied().into_owned();
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
                 .sort_method
@@ -450,15 +490,10 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
-        // Derive CRM-scope authorization from the *effective* filter (the
-        // one embedded in the resolved SoupQuery), not the raw request body.
-        // For cursor-paginated requests the body's filters may be empty and
-        // the real filter lives inside the cursor — checking the body would
-        // miss CRM scope on follow-up pages.
-        let team_receipt =
-            resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
-        require_crm_admin_role(cursor.filter().requests_crm_admin(), &team_receipt)?;
-
+        // CRM authorization (team membership for CRM scope, admin/owner
+        // role for hidden companies) is enforced by the soup domain and
+        // CRM service from the receipt itself; the router just forwards
+        // whatever membership the extractor resolved.
         let res = self
             .service
             .get_user_soup(
@@ -473,13 +508,14 @@ where
                     email_preview_view: email_view,
                     link_ids,
                 },
-                team_receipt,
+                team_receipt_option,
             )
             .await?;
 
-        Ok(Json(
-            res.type_erase().map(SoupApiItem::from_frecency_soup_item),
-        ))
+        let mut page = res.type_erase().map(SoupApiItem::from_frecency_soup_item);
+        mark_favorited(&*self.favorites, &user_for_favorites, page.items.iter_mut()).await;
+
+        Ok(Json(page))
     }
 
     async fn handle_grouped(
@@ -489,6 +525,7 @@ where
         params: GroupedParams,
         cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>>,
     ) -> Result<ApiGroupedSoupParts, SoupHandlerErr> {
+        let user_for_favorites = macro_user_id.copied().into_owned();
         let limit = params.limit.unwrap_or(20).clamp(20, 500);
         let sort_method = params
             .sort_method
@@ -525,81 +562,21 @@ where
             filters,
         );
 
+        let mut items: HashMap<Uuid, SoupApiItem> = response
+            .items
+            .into_iter()
+            .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
+            .collect();
+        mark_favorited(&*self.favorites, &user_for_favorites, items.values_mut()).await;
+
         Ok(ApiGroupedSoupParts {
-            items: response
-                .items
-                .into_iter()
-                .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
-                .collect(),
+            items,
             groups: response
                 .groups
                 .into_iter()
                 .map(ApiGroupMeta::from)
                 .collect(),
         })
-    }
-}
-
-/// Probe applied to whichever filter type a soup endpoint accepts
-/// (`EntityFilters` for the typed POST, `ApiEntityFilterAst` for the AST
-/// endpoint). Lets `handle` inspect the *materialized* SoupQuery's filter
-/// — which may have come from the request body or from the cursor — and
-/// decide whether CRM scope is in play.
-pub trait RequestsCrmScope {
-    /// True when this filter asks the query to expand visibility across
-    /// the requesting user's team via a CRM-scoped attribute
-    /// (`crm_domains` or `crm_addresses`).
-    fn requests_crm_scope(&self) -> bool;
-}
-
-impl RequestsCrmScope for EntityFilters {
-    fn requests_crm_scope(&self) -> bool {
-        !self.email_filters.crm_domains.is_empty() || !self.email_filters.crm_addresses.is_empty()
-    }
-}
-
-impl RequestsCrmScope for ApiEntityFilterAst {
-    fn requests_crm_scope(&self) -> bool {
-        !self.email_crm_domains.is_empty() || !self.email_crm_addresses.is_empty()
-    }
-}
-
-/// Filter bodies that may opt into admin-only CRM data (currently:
-/// hidden CRM companies) implement this so the soup handler can gate
-/// the request on an admin/owner team role.
-pub trait RequestsCrmAdmin {
-    /// True when this filter asks for data only admin/owner team
-    /// members may see — e.g. `crm_company_filters.hidden = Some(true)`.
-    fn requests_crm_admin(&self) -> bool;
-}
-
-impl RequestsCrmAdmin for EntityFilters {
-    fn requests_crm_admin(&self) -> bool {
-        matches!(self.crm_company_filters.hidden, Some(true))
-    }
-}
-
-impl RequestsCrmAdmin for ApiEntityFilterAst {
-    fn requests_crm_admin(&self) -> bool {
-        self.crm_company_filter
-            .as_deref()
-            .is_some_and(ast_requests_crm_admin)
-    }
-}
-
-/// Walks a `CrmCompanyLiteral` AST checking for any `Hidden(true)`
-/// literal. Mirrors the conservative shape the request-time extractor
-/// in `models::extract_crm_company_filter` allows: `And`/`Or` recurse;
-/// `Not` would invert and fail closed downstream, but for the *role
-/// gate* we still must inspect under `Not` to avoid a `Not(Hidden(false))`
-/// sneaking past — treat any path reaching a `Hidden(true)` literal as
-/// admin-required.
-fn ast_requests_crm_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
-    match expr {
-        Expr::Literal(CrmCompanyLiteral::Hidden(true)) => true,
-        Expr::Literal(_) => false,
-        Expr::And(a, b) | Expr::Or(a, b) => ast_requests_crm_admin(a) || ast_requests_crm_admin(b),
-        Expr::Not(a) => ast_requests_crm_admin(a),
     }
 }
 
@@ -625,6 +602,8 @@ pub struct SoupApiItem {
     #[serde(flatten)]
     item: SoupItem,
     frecency_score: f64,
+    /// Whether the requesting user has favorited this entity.
+    is_favorited: bool,
 }
 
 impl SoupApiItem {
@@ -638,6 +617,35 @@ impl SoupApiItem {
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
+            is_favorited: false,
+        }
+    }
+}
+
+/// Populate `is_favorited` on the given items from one batched favorites
+/// lookup. A lookup failure leaves every flag `false` rather than failing
+/// the soup query.
+async fn mark_favorited<'a>(
+    favorites: &dyn SoupFavoritesReader,
+    user_id: &MacroUserIdStr<'_>,
+    items: impl Iterator<Item = &'a mut SoupApiItem>,
+) {
+    let items: Vec<&mut SoupApiItem> = items.collect();
+    if items.is_empty() {
+        return;
+    }
+    let entities = items.iter().map(|i| i.item.entity()).collect();
+    match favorites
+        .favorited_entities(user_id.as_ref(), entities)
+        .await
+    {
+        Ok(favorited) => {
+            for item in items {
+                item.is_favorited = favorited.contains(&item.item.entity());
+            }
+        }
+        Err(error) => {
+            tracing::error!(error=?error, "failed to resolve favorited soup items");
         }
     }
 }
@@ -669,6 +677,8 @@ impl From<SoupErr> for SoupHandlerErr {
     fn from(value: SoupErr) -> Self {
         match value {
             SoupErr::AstErr(expand_err) => SoupHandlerErr::ExpandErr(expand_err),
+            SoupErr::CrmTeamRequired => SoupHandlerErr::CrmScopeForbidden,
+            SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
             err => SoupHandlerErr::Internal(err),
         }
     }
@@ -1003,43 +1013,6 @@ where
             })
         }
     }))
-}
-
-/// Returns the team receipt to use when CRM-scoped visibility is required.
-/// `crm_scope_requested` is true when the request body carries a
-/// `crm_domains` / `crm_addresses` attribute. Returns
-/// `Err(CrmScopeForbidden)` when CRM scope was requested but the user has
-/// no qualifying team membership.
-fn resolve_crm_team_receipt(
-    crm_scope_requested: bool,
-    receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-) -> Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupHandlerErr> {
-    if crm_scope_requested && receipt.is_none() {
-        return Err(SoupHandlerErr::CrmScopeForbidden);
-    }
-    Ok(receipt)
-}
-
-/// Companion to [`resolve_crm_team_receipt`] for the admin-only CRM
-/// data path (currently: hidden CRM companies). `admin_requested` is
-/// the result of [`RequestsCrmAdmin::requests_crm_admin`] on the
-/// effective filter. Returns `Err(CrmAdminRequired)` when the request
-/// asks for admin-only data but the receipt is missing or the user's
-/// actual team role doesn't satisfy [`AdminTeamRole`].
-fn require_crm_admin_role(
-    admin_requested: bool,
-    receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
-) -> Result<(), SoupHandlerErr> {
-    if !admin_requested {
-        return Ok(());
-    }
-    let Some(receipt) = receipt else {
-        return Err(SoupHandlerErr::CrmAdminRequired);
-    };
-    if !receipt.entity_permission().satisfies::<AdminTeamRole>() {
-        return Err(SoupHandlerErr::CrmAdminRequired);
-    }
-    Ok(())
 }
 
 /// Wire-format entity filter AST accepted by soup AST endpoints.

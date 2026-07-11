@@ -64,7 +64,7 @@ export function Input(props: {
 export function ErrorMsg(props: { msg?: string }) {
   return (
     <Show when={props.msg}>
-      <div class="grid items-center justify-center p-4 border-b border-edge-muted text-sm text-red-500">
+      <div class="grid items-center justify-center p-4 border-b border-edge-muted text-sm text-failure">
         {props.msg}
       </div>
     </Show>

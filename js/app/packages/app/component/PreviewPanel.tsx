@@ -1,4 +1,4 @@
-import { getChannelParams } from '@block-channel/utils/link';
+import { navigateChannelEntityToTarget } from '@app/component/next-soup/utils';
 import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
@@ -7,7 +7,6 @@ import { throttledDependent } from '@core/util/debounce';
 import type { NonNullableFields } from '@core/util/withRequired';
 import {
   type EntityData,
-  isChannelMessageEntity,
   isGithubPrEntity,
   isSnippetEntity,
   isTaskEntity,
@@ -15,8 +14,10 @@ import {
 import { createContextProvider } from '@solid-primitives/context';
 import {
   type Component,
+  createMemo,
   createRenderEffect,
   createSignal,
+  on,
   Show,
   Suspense,
 } from 'solid-js';
@@ -51,10 +52,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
     ...props.splitPanelContext.layoutRefs,
   };
-  // In preview we intentionally do NOT render the split header/title row.
-  // We only provide toolbar slots (Share, etc).
-  scopedLayoutRefs.headerLeft = undefined;
-  scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
     // Isolate the previewed project's preview state from the outer panel so
@@ -87,7 +84,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     if (props.selectedEntity.type === 'document') {
       blockType = fileTypeToResolvedBlockName(props.selectedEntity.fileType);
       blockId = props.selectedEntity.id;
-    } else if (props.selectedEntity.type === 'channel_message') {
+    } else if (
+      props.selectedEntity.type === 'channel_message' ||
+      props.selectedEntity.type === 'channel_thread'
+    ) {
       blockType = 'channel';
       blockId = props.selectedEntity.channelId;
     } else if (props.selectedEntity.type === 'foreign') {
@@ -117,24 +117,16 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   };
   const [interactedWith, setInteractedWith] = createSignal(false);
 
-  createRenderEffect((prevId: string) => {
-    const id = props.selectedEntity.id;
-    if (id !== prevId) {
+  // Key on the id: the entity object is live, and unrelated notification
+  // churn must not re-target the previewed channel.
+  const selectedEntityId = createMemo(() => props.selectedEntity.id);
+
+  createRenderEffect(
+    on(selectedEntityId, () => {
       setInteractedWith(false);
-    }
-
-    const entity = props.selectedEntity;
-    if (isChannelMessageEntity(entity)) {
-      const channelId = entity.channelId;
-      const messageId = entity.messageId;
-      const threadId = entity.threadId;
-      props.orchestrator.getBlockHandle(channelId).then((handle) => {
-        handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
-      });
-    }
-
-    return id;
-  }, props.selectedEntity.id);
+      navigateChannelEntityToTarget(props.selectedEntity, props.orchestrator);
+    })
+  );
 
   createRenderEffect(() => {
     // noop: previously we constrained toolbarLeft width based on the main split's
@@ -176,14 +168,32 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       }}
       tabIndex={-1}
     >
-      {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
+      {/* Display the split header content here */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-surface px-2"
+        class="relative w-full flex items-center justify-between shrink-0 bg-surface px-2 py-2"
+        data-preview-split-header
+      >
+        <div
+          class="flex h-full items-center gap-1"
+          ref={(ref) => {
+            scopedLayoutRefs.headerLeft = ref;
+          }}
+        />
+        <div
+          class="flex h-full items-center gap-1"
+          ref={(ref) => {
+            scopedLayoutRefs.headerRight = ref;
+          }}
+        />
+      </div>
+
+      {/* Legacy: We've moved to a single top bar in most places but some blocks/places still try to display a toolbar as well.
+          This is for those blocks so we can see their toolbars int eh preview panel */}
+      <div
+        class="relative w-full flex items-center justify-between shrink-0 bg-surface px-2 py-2"
         data-preview-split-toolbar
       >
         <div
-          // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
-          // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
           class="flex h-full items-center gap-1"
           ref={(ref) => {
             scopedLayoutRefs.toolbarLeft = ref;

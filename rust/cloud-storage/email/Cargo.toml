@@ -8,6 +8,7 @@ version = "0.1.0"
 all = [
   "ai_tools",
   "gmail_token",
+  "http_client",
   "inbound",
   "outbound",
   "ports",
@@ -34,8 +35,9 @@ axum = [
   "models_pagination/axum",
 ]
 gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
+http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
-outbound = ["dep:sqlx", "ports"]
+outbound = ["dep:sqlx", "dep:email_db_client", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
@@ -45,6 +47,9 @@ anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true }
 entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+  "ports",
+] }
 futures = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
@@ -56,6 +61,9 @@ email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
+lol_html = { workspace = true }
+scraper = { workspace = true }
+email_db_client = { path = "../email_db_client", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
@@ -64,6 +72,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
+reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

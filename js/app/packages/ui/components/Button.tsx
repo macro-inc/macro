@@ -15,6 +15,12 @@ export type ButtonProps = ButtonRootProps<'button'> &
   ComponentProps<'button'> & {
     depth?: 0 | 1 | 2 | 3 | 4 | 5;
     tooltipPlacement?: Placement;
+    /**
+     * Stretch the button (and, when a tooltip wraps it, the tooltip's trigger
+     * wrapper) to fill the available width. Without this the tooltip wrapper is
+     * `inline-flex` and collapses a `w-full` button to its content width.
+     */
+    fullWidth?: boolean;
     noTouchResize?: boolean;
     variant?: ButtonVariant;
     children?: JSX.Element;
@@ -27,9 +33,18 @@ export type ButtonProps = ButtonRootProps<'button'> &
     shortcut?: string | string[];
     size?: ButtonSize;
     class?: string;
+    tooltipDisabled?: boolean;
   };
 
-export type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
+export type ButtonSize =
+  | 'xs'
+  | 'icon-xs'
+  | 'sm'
+  | 'icon-sm'
+  | 'md'
+  | 'icon-md'
+  | 'lg'
+  | 'icon-lg';
 
 export type ButtonVariant =
   | 'ghost'
@@ -37,6 +52,7 @@ export type ButtonVariant =
   | 'active'
   | 'success'
   | 'danger'
+  | 'contrast'
   | 'cta';
 
 const variantStyles: Record<ButtonVariant, string> = {
@@ -49,10 +65,14 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-success-bg not-disabled:hover:bg-success/30 text-success disabled:opacity-30 ',
   ghost:
     'bg-transparent text-ink-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink active:bg-active disabled:opacity-30 ',
+  contrast:
+    'bg-ink text-surface border border-transparent not-disabled:hover:bg-ink/90 active:bg-ink/80 disabled:opacity-30 focus-visible:bg-ink/90',
   cta: 'bg-accent text-surface border border-transparent not-disabled:hover:bg-accent/90 active:bg-accent/80 disabled:opacity-30 focus-visible:bg-accent/90',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
+  xs: '          p-1  [&_:where(svg)]:size-3 gap-1   text-xs',
+  'icon-xs': 'size-5   p-2.75  [&_:where(svg)]:size-4                  ',
   lg: '          p-2.5  [&_:where(svg)]:size-5 gap-2   text-base',
   md: '          p-2                           gap-1.5 text-sm  ' /* scuffed */,
   sm: 'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',
@@ -74,6 +94,8 @@ export const Button = (props: ButtonProps) => {
     'depth',
     'label',
     'size',
+    'fullWidth',
+    'tooltipDisabled',
   ]);
 
   const group = useButtonGroupContext();
@@ -81,6 +103,7 @@ export const Button = (props: ButtonProps) => {
   const cls = () =>
     cn(
       'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-sm whitespace-nowrap',
+      local.fullWidth && 'w-full',
       {
         'touch:min-h-9 touch:min-w-9 touch:[&_svg]:size-6':
           !props.noTouchResize,
@@ -127,10 +150,12 @@ export const Button = (props: ButtonProps) => {
     >
       {(label) => (
         <Tooltip
+          class={local.fullWidth ? 'w-full' : undefined}
           hotkey={local.hotkey}
           shortcut={local.shortcut}
           placement={placement()}
           label={label()}
+          disabled={local.tooltipDisabled}
         >
           {button()}
         </Tooltip>

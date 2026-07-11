@@ -1,3 +1,4 @@
+import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import {
@@ -20,6 +21,7 @@ import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
+import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -63,6 +65,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 export function TaskGridLayout(props: LayoutProps) {
   const currentId = useUserId();
+  const filterByTag = useRowTagFilter();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
   const isShared = () => props.entity.ownerId !== currentId();
 
@@ -75,8 +78,12 @@ export function TaskGridLayout(props: LayoutProps) {
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
     for (const sp of entity().properties ?? []) {
-      const property = soupPropertyToProperty(sp);
-      map.set(property.propertyDefinitionId, property);
+      try {
+        const property = soupPropertyToProperty(sp);
+        map.set(property.propertyDefinitionId, property);
+      } catch (error) {
+        console.warn('Skipping property with unsupported type', error);
+      }
     }
     return map;
   });
@@ -150,7 +157,7 @@ export function TaskGridLayout(props: LayoutProps) {
 
         <Entity.Slot
           placement="content"
-          class="ph-no-capture font-semibold truncate items-center gap-2 flex min-w-0"
+          class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
         >
           <div class="size-4 shrink-0">
             <Entity.Icon
@@ -182,6 +189,13 @@ export function TaskGridLayout(props: LayoutProps) {
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
           </Show>
+          <EntityRowTags
+            entityId={props.entity.id}
+            entityType={EntityType.TASK}
+            properties={entity().properties}
+            onFilterByTag={filterByTag}
+            class="ml-auto"
+          />
         </Entity.Slot>
 
         <For each={TASK_GRID_COLUMNS}>

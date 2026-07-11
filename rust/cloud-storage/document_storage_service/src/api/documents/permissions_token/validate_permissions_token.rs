@@ -6,8 +6,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use documents_hex::domain::permission_token::ISSUER;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use macro_sync_service_jwt::ISSUER;
 use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
 use utoipa::ToSchema;
 
@@ -54,12 +54,7 @@ pub async fn handler(
     // Attempt to decode the token.
     let decoded_jwt: DocumentPermissionsToken = match jsonwebtoken::decode::<DocumentPermissionsToken>(
         &token,
-        &DecodingKey::from_secret(
-            config_context
-                .document_permission_jwt_secret_key
-                .as_ref()
-                .as_bytes(),
-        ),
+        &DecodingKey::from_secret(config_context.document_permission_jwt.as_ref().as_bytes()),
         &validation,
     ) {
         Ok(decoded) => decoded.claims,
@@ -85,7 +80,7 @@ pub async fn handler(
         },
     };
 
-    if decoded_jwt.user_id != user_id {
+    if decoded_jwt.user_id.as_ref().map(|id| id.to_string()) != user_id {
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {

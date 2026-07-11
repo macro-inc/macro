@@ -862,7 +862,9 @@ export function CanvasController(props: ParentProps) {
 
     const entityType = event.draggable.data.type;
     // TODO: add channel message support
-    if (entityType === 'channel_message') return;
+    if (entityType === 'channel_message' || entityType === 'channel_thread') {
+      return;
+    }
     // Automation and foreign entities aren't yet renderable as canvas mentions.
     if (entityType === 'automation' || entityType === 'foreign') return;
     // CRM companies/contacts aren't renderable as canvas mentions.
@@ -928,11 +930,14 @@ export function CanvasController(props: ParentProps) {
   };
 
   onDragEnd((event) => {
+    // Only soup entity drags create nodes (not e.g. sidebar favorite drags).
+    if (event.draggable?.data.dragType !== 'entity') return;
     if (event.droppable?.id !== 'canvas-input-' + _id) return;
     dndDragEnd(event as EntityDragEvent);
   });
 
   onDragMove((event) => {
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragMove(event as EntityDragEvent);
   });
 

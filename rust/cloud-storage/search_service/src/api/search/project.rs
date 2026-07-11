@@ -1,10 +1,14 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::{EntityReference, EntityType};
 use models_search::project::{
     ProjectSearchResponseItem, ProjectSearchResponseItemWithMetadata, ProjectSearchResult,
 };
+use models_soup::SoupProperty;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
+use system_properties::SystemPropertyKey;
 
 use crate::api::context::SearchHandlerState;
 
@@ -36,9 +40,41 @@ pub(in crate::api::search) async fn enrich_projects(
         .await
         .map_err(SearchError::InternalError)?;
 
+    // Fetch project properties (e.g. tags) so rows can render and re-check
+    // them, mirroring the documents enrichment.
+    let project_entity_refs: Vec<EntityReference> = project_ids
+        .iter()
+        .map(|id| EntityReference::new(id.to_string(), EntityType::Project))
+        .collect();
+    // Scope tags to the viewer so another user's personal tags never leak into
+    // the response. System properties still ride along via the key list.
+    let viewer_user_id = MacroUserIdStr::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?;
+    let properties_map: HashMap<String, Vec<SoupProperty>> =
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
+            &ctx.db,
+            &project_entity_refs,
+            SystemPropertyKey::all_system_property_keys(),
+            Some(&viewer_user_id),
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "failed to fetch project properties"))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, props)| {
+            (
+                id,
+                props
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(results, project_histories).map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, project_histories, properties_map)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -49,6 +85,7 @@ pub fn construct_search_result(
         String,
         macro_db_client::projects::get_project_history::ProjectHistoryInfo,
     >,
+    mut properties_map: HashMap<String, Vec<SoupProperty>>,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<Uuid, Vec<ProjectSearchResult>> = search_results
@@ -81,6 +118,9 @@ pub fn construct_search_result(
                 };
                 Some(ProjectSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
+                    properties: properties_map
+                        .remove(&entity_id.to_string())
+                        .filter(|p| !p.is_empty()),
                     extra: ProjectSearchResponseItem {
                         id: entity_id,
                         owner_id: info.user_id.clone(),

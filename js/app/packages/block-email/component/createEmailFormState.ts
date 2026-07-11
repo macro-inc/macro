@@ -68,7 +68,7 @@ const EMPTY_FORM_STATE: EmailFormState = {
     cc: [],
     bcc: [],
   },
-  replyType: 'reply',
+  replyType: 'reply-all',
   withQuotedText: false,
   subject: '',
   markdownBody: '',
@@ -260,7 +260,10 @@ export function createEmailFormState(
       if (rt === 'forward') {
         setState('withQuotedText', true);
         const editor = capturedEditor();
-        if (editor) {
+        // The captured editor can be a stale one from an unmounted composer
+        // (this state outlives the component); dispatching into it is a no-op,
+        // so defer the append to the next editor capture instead.
+        if (editor?.getRootElement()?.isConnected) {
           editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
             replyingTo: replyingTo,
             replyType: rt,

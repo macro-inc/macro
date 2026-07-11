@@ -6,6 +6,7 @@ import {
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
 import {
+  ENABLE_NEW_INBOX,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -28,7 +29,6 @@ type SoupFiltersPreset = {
 // Tab preset configuration types
 export type PresetContext = {
   userId: string | undefined;
-  email: string | undefined;
   /** True iff the current user has admin/owner team role. Drives
    * visibility of admin-only tabs (e.g. companies → hidden). */
   isTeamAdmin: boolean;
@@ -85,6 +85,7 @@ const getInboxSignalFilters = () => {
       emailImportance: true,
       emailUpdatedAt: { gte: twoWeeksAgo },
       channelDone: false,
+      channelThreadDone: false,
       chatDone: false,
       chatUpdatedAt: { gte: twoWeeksAgo },
       folderDone: false,
@@ -111,6 +112,7 @@ const getInboxNoiseFilters = () =>
       emailDone: false,
       emailImportance: false,
       channelDone: false,
+      channelThreadDone: false,
       chatDone: false,
       folderDone: false,
       emailShared: 'exclude',
@@ -126,10 +128,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
+        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
+        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
       all: () => ({
         filters: {
@@ -154,6 +158,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
+        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
     },
   },
@@ -208,6 +213,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       noise: () => ({
         filters: defineQueryFilters({
@@ -219,6 +225,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'inbox',
         }),
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       calendar: () => ({
         filters: defineQueryFilters({
@@ -230,6 +237,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
 
         clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
       }),
       drafts: () => ({
         filters: defineQueryFilters({
@@ -237,23 +245,25 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'drafts',
         }),
         clientFilters: { and: ['email-drafts'] },
+        groupBy: 'date',
       }),
-      sent: (ctx) => {
-        if (!ctx.email) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: { emailSender: [ctx.email] },
-            emailView: 'sent',
-          }),
-          clientFilters: { and: ['email', 'no-drafts'] },
-        };
-      },
+      // No sender filter: the 'sent' view already scopes to messages with
+      // is_sent = TRUE per linked inbox, which covers multi-inbox correctly
+      // (a single sender address would drop secondary inboxes' sent mail).
+      sent: () => ({
+        filters: defineQueryFilters({
+          emailView: 'sent',
+        }),
+        clientFilters: { and: ['email', 'no-drafts'] },
+        groupBy: 'date',
+      }),
       shared: () => ({
         filters: defineQueryFilters({
           include: { emailShared: 'only' },
           emailView: 'all',
         }),
         clientFilters: { and: ['email', 'shared-entity'] },
+        groupBy: 'date',
       }),
       all: () => ({
         filters: defineQueryFilters({
@@ -261,6 +271,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         }),
         clientFilters: { and: ['email'] },
+        groupBy: 'date',
       }),
     },
   },
@@ -426,6 +437,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           { skipTargets: ['ccf'] }
         ),
         clientFilters: { and: ['crm-company-active'] },
+        groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
       }),
       // Admin/owner only — the BE rejects `hidden: true` requests from
       // non-admins with 403. Returning `undefined` hides the tab for
@@ -438,6 +450,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             { skipTargets: ['ccf'] }
           ),
           clientFilters: { and: ['crm-company-hidden'] },
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
         };
       },
     },
@@ -527,7 +540,6 @@ export function getViewPreset(
 
   const presetCtx: PresetContext = ctx ?? {
     userId: undefined,
-    email: undefined,
     isTeamAdmin: false,
   };
   const resolved = resolver(presetCtx);

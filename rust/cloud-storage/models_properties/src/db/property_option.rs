@@ -17,24 +17,9 @@ pub struct PropertyOption {
     pub display_order: i32,
     pub number_value: Option<f64>,
     pub string_value: Option<String>,
+    pub color: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-}
-
-impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for PropertyOption {
-    fn from_row(row: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        Ok(PropertyOption {
-            id: row.try_get("id")?,
-            property_definition_id: row.try_get("property_definition_id")?,
-            display_order: row.try_get("display_order")?,
-            number_value: row.try_get("number_value")?,
-            string_value: row.try_get("string_value")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-        })
-    }
 }
 
 // ===== Conversions =====
@@ -61,6 +46,7 @@ impl std::convert::TryFrom<PropertyOption> for crate::service::property_option::
             property_definition_id: db.property_definition_id,
             display_order: db.display_order,
             value,
+            color: db.color,
             created_at: db.created_at,
             updated_at: db.updated_at,
         })

@@ -30,7 +30,7 @@ const CONTROL_CLASS = cn(
   'data-checked:bg-accent data-checked:border-accent',
   'data-indeterminate:bg-accent data-indeterminate:border-accent',
   'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
-  'data-invalid:border-red-500'
+  'data-invalid:border-failure'
 );
 
 function CheckboxIndicator(props: IndicatorProps) {

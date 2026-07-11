@@ -119,7 +119,7 @@ function VideoViewerContent(props: {
 
         <div class="flex size-full items-center justify-center">
           <video
-            class="max-h-[80vh] max-w-[90vw] rounded-2xl bg-black"
+            class="max-h-[80vh] max-w-[90vw] rounded-2xl bg-[black]"
             controls
             autoplay
             playsinline

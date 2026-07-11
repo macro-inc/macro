@@ -7,6 +7,7 @@ import {
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { createSignal, Show } from 'solid-js';
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
+import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
 import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
@@ -31,11 +32,14 @@ function EditableThreadInner() {
   const deleteMessageMutation = useDeleteMessageMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
+  const deleteConfirmation = createDeleteMessageConfirmation(
+    deleteMessageMutation.mutate
+  );
 
   const getMessageActions = createChannelMessageActions({
     channelId: ctx.channelId,
     userId,
-    deleteMessage: deleteMessageMutation.mutate,
+    deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: ({ message }) => {
@@ -51,7 +55,10 @@ function EditableThreadInner() {
         };
         setReplyInputState(nextSnapshot);
         requestAnimationFrame(() => {
-          replyInputHandle()?.restoreSnapshot(nextSnapshot, { focus: false });
+          replyInputHandle()?.restoreSnapshot(nextSnapshot, {
+            focus: false,
+            cursor: 'trailing-paragraph',
+          });
           ctx.replyInputFocusRequest.request();
         });
       } else {
@@ -69,6 +76,7 @@ function EditableThreadInner() {
 
   return (
     <>
+      <deleteConfirmation.ConfirmationDialog />
       <StandaloneThread.ParentMessage actions={parentActions()} />
       <StandaloneThread.Replies
         getMessageActions={getMessageActions}

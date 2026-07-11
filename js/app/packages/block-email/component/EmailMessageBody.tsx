@@ -30,6 +30,8 @@ import {
 
 interface EmailMessageBodyProps {
   message: ApiMessage;
+  /** Sender emails (lowercased) with a CATEGORY_PERSONAL message in the thread */
+  personalSenders: Accessor<Set<string>>;
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: (messageID: string | undefined) => void;
@@ -96,22 +98,37 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       : parsedBodyReplyless();
   };
 
+  // Sent-from-Macro messages strip the quoted thread from body_macro at send
+  // time, and the backend skips replyless trimming for "Fwd:" subjects — so a
+  // quote in the full html means there is hidden content regardless of
+  // body_replyless.
+  const bodyHtmlHasQuote = createMemo(() => {
+    const html = props.message.body_html_sanitized;
+    if (!html || !props.message.body_macro) return false;
+    const doc = new DOMParser().parseFromString(html.toString(), 'text/html');
+    return doc.body.querySelector('.macro_quote') !== null;
+  });
+
   const hasHiddenReplyStructure = () => {
     return (
       !isPlaintext() &&
-      ((bodyReplyless() &&
-        bodyReplyless().toString().replace(/\s+/g, '').length !==
-          props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
-            .length) ||
+      (bodyHtmlHasQuote() ||
+        (bodyReplyless() &&
+          bodyReplyless().toString().replace(/\s+/g, '').length !==
+            props.message.body_html_sanitized?.toString().replace(/\s+/g, '')
+              .length) ||
         source()?.signature)
     );
   };
 
   // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
   const isPersonal = createMemo(() => {
+    const senderEmail = props.message.from?.email?.toLowerCase();
     return (
-      props.message.from?.email === userEmail() ||
-      props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')
+      (senderEmail !== undefined &&
+        senderEmail === userEmail()?.toLowerCase()) ||
+      props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL') ||
+      (senderEmail !== undefined && props.personalSenders().has(senderEmail))
     );
   });
 
@@ -131,7 +148,16 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       isPersonal() && !isMacroSender()
         ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
         : '';
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${fontOverride}`;
+    // Let long &nbsp;-joined signature lines wrap (overflow-wrap is inherited)
+    // and fixed-width tables scroll, so a wide signature doesn't trip the
+    // fit-to-width zoom below and shrink the whole message.
+    const signatureContain = `.macro-email-signature{max-width:100%;overflow-x:auto;overflow-wrap:anywhere;}`;
+    // Browser default blockquote margins apply on both sides. In long email
+    // reply chains that compounds into a narrow column, so keep quote nesting
+    // as a left indent only.
+    const quoteContain =
+      'blockquote{margin-block:0.75em!important;margin-inline-start:1.5em!important;margin-inline-end:0!important;max-width:100%!important;box-sizing:border-box;}';
+    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${quoteContain}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
@@ -295,7 +321,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   return (
     <div
-      class="ph-no-capture flex flex-col pt-1 max-sm:-ml-[calc(var(--user-icon-width)+var(--message-padding-x))]"
+      class="ph-no-capture flex flex-col pt-1"
       onPointerDown={() => {
         if (!props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBody(props.message.db_id);
@@ -335,7 +361,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
           <Match when={true}>{host()}</Match>
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
-          <div class="flex items-center mt-1.5">
+          <div class="flex items-center mt-1.5 mb-2">
             <Button
               variant="ghost"
               size="icon-sm"

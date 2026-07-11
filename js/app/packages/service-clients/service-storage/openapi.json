@@ -4640,6 +4640,16 @@
               }
             }
           },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6676,6 +6686,256 @@
           },
           "404": {
             "description": "Entity not found"
+          }
+        }
+      }
+    },
+    "/favorites": {
+      "get": {
+        "tags": ["favorites"],
+        "summary": "List the caller's favorites.",
+        "operationId": "list_favorites",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoritesList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["favorites"],
+        "summary": "Favorite an entity in the caller's collection.",
+        "operationId": "add_favorite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFavoriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Favorite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/favorites/reorder": {
+      "patch": {
+        "tags": ["favorites"],
+        "summary": "Persist a manual order for the caller's favorites.",
+        "operationId": "reorder_favorites",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderFavoritesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "default": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/favorites/{entity_type}/{entity_id}": {
+      "delete": {
+        "tags": ["favorites"],
+        "summary": "Remove a favorite by entity.",
+        "operationId": "remove_favorite_by_entity",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "The type of the favorited entity.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The type of an entity in Macro",
+              "enum": [
+                "user",
+                "chat",
+                "channel",
+                "channel_message",
+                "document",
+                "project",
+                "email_thread",
+                "team",
+                "call",
+                "foreign_entity",
+                "static_file",
+                "crm_company",
+                "crm_contact"
+              ]
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "The id of the favorited entity.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "default": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -8982,6 +9242,266 @@
           }
         }
       }
+    },
+    "/webhook/webhooks": {
+      "post": {
+        "tags": ["webhook"],
+        "summary": "Create a webhook.",
+        "operationId": "create_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/webhooks/{webhook_id}": {
+      "delete": {
+        "tags": ["webhook"],
+        "summary": "Delete a webhook.",
+        "operationId": "delete_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Webhook deleted"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["webhook"],
+        "summary": "Patch a webhook.",
+        "operationId": "patch_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/webhooks/{webhook_id}/validate": {
+      "post": {
+        "tags": ["webhook"],
+        "summary": "Validate a webhook endpoint.",
+        "operationId": "validate_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateWebhookResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9018,6 +9538,41 @@
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
       },
+      "AddFavoriteRequest": {
+        "type": "object",
+        "description": "Request body for favoriting an entity.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The id of the entity to favorite."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact"
+                ]
+              }
+            ],
+            "description": "The type of the entity to favorite."
+          }
+        }
+      },
       "AddParticipantsRequest": {
         "type": "object",
         "description": "Request to add participants.",
@@ -9028,7 +9583,8 @@
             "items": {
               "type": "string"
             },
-            "description": "User ids to add."
+            "description": "User ids to add.",
+            "uniqueItems": true
           }
         }
       },
@@ -9950,6 +10506,10 @@
             "type": ["string", "null"],
             "description": "Display name for bot senders."
           },
+          "triggered_by": {
+            "type": ["string", "null"],
+            "description": "For an agent (bot) message, the id of the user who triggered it."
+          },
           "type": {
             "$ref": "#/components/schemas/ApiMessageSenderType",
             "description": "Sender type."
@@ -10101,6 +10661,15 @@
             "format": "date-time",
             "description": "When the reply was last updated."
           }
+        }
+      },
+      "BTreeMap": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "propertyNames": {
+          "type": "string"
         }
       },
       "BasicDocument": {
@@ -11150,6 +11719,13 @@
             },
             "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
           },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread (group mentions\nlike @here count through their per-user expansion at send time). Empty to\ninclude threads regardless of participants."
+          },
           "root_sender_ids": {
             "type": "array",
             "items": {
@@ -11475,7 +12051,8 @@
             "items": {
               "type": "string"
             },
-            "description": "Participants to add, excluding the owner."
+            "description": "Participants to add, excluding the owner.",
+            "uniqueItems": true
           },
           "team_id": {
             "type": ["string", "null"],
@@ -12043,6 +12620,40 @@
           }
         }
       },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "description": "Request to create a webhook.",
+        "required": ["scope", "name", "endpoint_url", "filters"],
+        "properties": {
+          "endpoint_url": {
+            "type": "string",
+            "description": "Endpoint URL. HTTPS is required outside local environments."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/Vec",
+            "description": "Typed filters used to match events and optional entity ids."
+          },
+          "headers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BTreeMap",
+                "description": "Optional custom delivery headers."
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/WebhookScope",
+            "description": "Scope that owns the webhook."
+          }
+        }
+      },
       "CrmComment": {
         "type": "object",
         "description": "A single comment within a [`CrmThread`].",
@@ -12138,7 +12749,7 @@
           },
           "hidden": {
             "type": ["boolean", "null"],
-            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced by the CRM service from the\ncaller's team receipt."
           }
         }
       },
@@ -12372,6 +12983,7 @@
           "STRING",
           "SELECT_NUMBER",
           "SELECT_STRING",
+          "TAG",
           "ENTITY",
           "LINK"
         ]
@@ -12828,8 +13440,15 @@
             "description": "The issuer of the token"
           },
           "user_id": {
-            "type": ["string", "null"],
-            "description": "The users id if present"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The users id if present"
+              }
+            ]
           }
         }
       },
@@ -13546,6 +14165,17 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
+          },
+          "tag_filter_mode": {
+            "$ref": "#/components/schemas/TagFilterMode",
+            "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
+          },
+          "tag_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "tag option ids matched against `properties.values`, OR'd together across\nall tag definitions. Option ids are globally unique, so the match ignores\nthe owning definition id (personal and team tags combine into one OR)."
           }
         }
       },
@@ -13703,6 +14333,116 @@
           "presigned_url": {
             "type": "string",
             "description": "The presigned url to download the raw content of the document"
+          }
+        }
+      },
+      "Favorite": {
+        "type": "object",
+        "description": "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available. Display names are deliberately not\nincluded: clients resolve them from the entity previews pipeline, which\nis viewer-relative for DM channels and updated by renames.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id.",
+        "required": ["entityType", "entityId", "sortOrder", "createdAt"],
+        "properties": {
+          "channelId": {
+            "type": ["string", "null"],
+            "description": "Owning channel id of the favorited channel message, when applicable."
+          },
+          "channelType": {
+            "type": ["string", "null"],
+            "description": "Channel type (e.g. `public`, `direct_message`) of the favorited channel, when applicable."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the favorite was created."
+          },
+          "documentSubType": {
+            "type": ["string", "null"],
+            "description": "Document sub type (e.g. `task`) of the favorited document, when applicable."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The id of the favorited entity."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact"
+                ]
+              }
+            ],
+            "description": "The type of the favorited entity."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "File type of the favorited document, when applicable."
+          },
+          "sortOrder": {
+            "type": "number",
+            "format": "double",
+            "description": "Manual ordering value; lower sorts first."
+          }
+        }
+      },
+      "FavoriteEntityRef": {
+        "type": "object",
+        "description": "A reference to a favorited entity.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The id of the favorited entity."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact"
+                ]
+              }
+            ],
+            "description": "The type of the favorited entity."
+          }
+        }
+      },
+      "FavoritesList": {
+        "type": "object",
+        "description": "The user's favorites, in manual order.",
+        "required": ["favorites"],
+        "properties": {
+          "favorites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Favorite"
+            },
+            "description": "The requesting user's favorites, in manual order."
           }
         }
       },
@@ -14760,7 +15500,8 @@
             "items": {
               "type": "string"
             },
-            "description": "Recipient user ids."
+            "description": "Recipient user ids.",
+            "uniqueItems": true
           }
         }
       },
@@ -15416,6 +16157,9 @@
         ],
         "description": "Location response with content lifecycle metadata."
       },
+      "MacroUserIdStr": {
+        "type": "string"
+      },
       "Mentions": {
         "type": "object",
         "required": ["users", "mentionId"],
@@ -15586,6 +16330,53 @@
               {
                 "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
                 "description": "The share permissions for the thread."
+              }
+            ]
+          }
+        }
+      },
+      "PatchWebhookRequest": {
+        "type": "object",
+        "description": "Request to patch a webhook.",
+        "properties": {
+          "endpoint_url": {
+            "type": ["string", "null"],
+            "description": "Endpoint URL. HTTPS is required outside local environments."
+          },
+          "filters": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Vec",
+                "description": "Typed filters used to match events and optional entity ids."
+              }
+            ]
+          },
+          "headers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BTreeMap",
+                "description": "Optional custom delivery headers. When present, replaces existing headers."
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebhookStatus",
+                "description": "Webhook lifecycle status."
               }
             ]
           }
@@ -16645,7 +17436,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-scoped property only",
+            "description": "User-scoped property.",
             "required": ["user_id", "scope"],
             "properties": {
               "scope": {
@@ -16659,40 +17450,22 @@
           },
           {
             "type": "object",
-            "description": "Organization-scoped property only",
-            "required": ["organization_id", "scope"],
+            "description": "Team-scoped property.",
+            "required": ["team_id", "scope"],
             "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
               "scope": {
                 "type": "string",
-                "enum": ["organization"]
+                "enum": ["team"]
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
           {
             "type": "object",
-            "description": "Both user and organization-scoped",
-            "required": ["user_id", "organization_id", "scope"],
-            "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["user_and_organization"]
-              },
-              "user_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "System-owned property (no user or org owner)",
+            "description": "System-owned property (no user or team owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -16702,7 +17475,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
+        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -16855,6 +17628,20 @@
               "type": "string"
             },
             "description": "User ids to remove."
+          }
+        }
+      },
+      "ReorderFavoritesRequest": {
+        "type": "object",
+        "description": "Request body for reordering favorites.",
+        "required": ["favorites"],
+        "properties": {
+          "favorites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FavoriteEntityRef"
+            },
+            "description": "The user's favorited entities in the desired order."
           }
         }
       },
@@ -17242,11 +18029,15 @@
           },
           {
             "type": "object",
-            "required": ["frecency_score"],
+            "required": ["frecency_score", "is_favorited"],
             "properties": {
               "frecency_score": {
                 "type": "number",
                 "format": "double"
+              },
+              "is_favorited": {
+                "type": "boolean",
+                "description": "Whether the requesting user has favorited this entity."
               }
             }
           }
@@ -17666,6 +18457,13 @@
           "name": {
             "type": ["string", "null"],
             "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Properties attached to this company (system CRM properties like\nStage / Owner / Revenue plus any custom ones)."
           },
           "teamId": {
             "type": "string",
@@ -18476,6 +19274,9 @@
           }
         }
       },
+      "String": {
+        "type": "string"
+      },
       "SuccessResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -18502,6 +19303,11 @@
             "type": "string"
           }
         }
+      },
+      "TagFilterMode": {
+        "type": "string",
+        "description": "How multiple `tag_option_ids` combine when filtering.",
+        "enum": ["any", "all"]
       },
       "TaskFilters": {
         "type": "object",
@@ -18880,6 +19686,56 @@
           }
         }
       },
+      "ValidateWebhookResponse": {
+        "type": "object",
+        "description": "Sanitized result of validating a webhook endpoint.",
+        "required": ["webhook_id", "is_valid"],
+        "properties": {
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the endpoint accepted the signed validation delivery."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "Sanitized message explaining validation failure."
+          },
+          "response_status": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "HTTP response status returned by the webhook endpoint, when available.",
+            "minimum": 0
+          },
+          "webhook_id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id that was validated."
+          }
+        }
+      },
+      "Vec": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "Event and optional entity-id constraints used to match webhook deliveries.",
+          "required": ["events"],
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Event names matched by this filter."
+            },
+            "ids": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string"
+              },
+              "description": "Entity ids matched by this filter. When absent, the filter matches all entity ids."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
       "View": {
         "type": "object",
         "required": [
@@ -18940,6 +19796,108 @@
             }
           }
         }
+      },
+      "Webhook": {
+        "type": "object",
+        "description": "Webhook row returned by application APIs.",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "endpoint_url",
+          "headers",
+          "status",
+          "is_valid",
+          "created_by_user_id",
+          "created_at",
+          "updated_at",
+          "filters"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "description": "User that created the webhook."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "endpoint_url": {
+            "type": "string",
+            "description": "Endpoint URL. HTTPS is required outside local environments."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/Vec",
+            "description": "Typed filters used to match events and optional entity ids."
+          },
+          "headers": {
+            "$ref": "#/components/schemas/BTreeMap",
+            "description": "Custom delivery headers, after decryption by the repository."
+          },
+          "id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id."
+          },
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the current endpoint configuration has passed validation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/WebhookStatus",
+            "description": "Webhook lifecycle status."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Owning workspace id."
+          }
+        }
+      },
+      "WebhookFilter": {
+        "type": "object",
+        "description": "Event and optional entity-id constraints used to match webhook deliveries.",
+        "required": ["events"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event names matched by this filter."
+          },
+          "ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity ids matched by this filter. When absent, the filter matches all entity ids."
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebhookScope": {
+        "type": "string",
+        "description": "Scope that owns a newly-created webhook.",
+        "enum": ["user", "team"]
+      },
+      "WebhookStatus": {
+        "type": "string",
+        "description": "Webhook lifecycle status.",
+        "enum": ["active", "paused", "disabled"]
       },
       "WithCallId": {
         "type": "object",

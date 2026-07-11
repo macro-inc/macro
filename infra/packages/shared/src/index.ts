@@ -50,5 +50,6 @@ export {
   getAiToolsServiceRoleArns,
   type AiToolsInfra,
 } from './ai_tools';
+export { getKafkaClusterPolicy } from './kafka_cluster_policy';
 
 export * from './service_urls';

@@ -31,13 +31,14 @@ use crate::domain::{
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
         TeamMember, TeamMembers, TeamRole, TeamWithMembers,
     },
+    team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamChannelsRepository, TeamMembersService, TeamRepository, TeamService},
 };
 
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
-pub struct TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+pub struct TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA = NoOpTeamAnalytics>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -46,6 +47,7 @@ where
     NI: NotificationIngress,
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
+    TA: TeamAnalytics,
 {
     /// The underlying team repository
     team_repository: TR,
@@ -64,9 +66,12 @@ where
     /// Repository for the `team_crm_settings` row and the bulk CRM
     /// teardown invoked from `set_team_crm_enabled`.
     team_crm_settings_repository: TCRMS,
+    /// Outbound port for best-effort team lifecycle analytics events.
+    team_analytics: TA,
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS> Clone for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> Clone
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -75,6 +80,7 @@ where
     NI: NotificationIngress,
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
+    TA: TeamAnalytics,
 {
     fn clone(&self) -> Self {
         Self {
@@ -85,11 +91,13 @@ where
             notification_ingress: self.notification_ingress.clone(),
             crm_enqueuer: self.crm_enqueuer.clone(),
             team_crm_settings_repository: self.team_crm_settings_repository.clone(),
+            team_analytics: self.team_analytics.clone(),
         }
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, NoOpTeamAnalytics>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -99,7 +107,7 @@ where
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
 {
-    /// Creates a new TeamService
+    /// Creates a new TeamService with no-op analytics.
     pub fn new(
         team_repository: TR,
         customer_repository: CR,
@@ -109,7 +117,7 @@ where
         crm_enqueuer: CE,
         team_crm_settings_repository: TCRMS,
     ) -> Self {
-        Self {
+        Self::new_with_analytics(
             team_repository,
             customer_repository,
             team_channels_repository,
@@ -117,11 +125,12 @@ where
             notification_ingress,
             crm_enqueuer,
             team_crm_settings_repository,
-        }
+            NoOpTeamAnalytics,
+        )
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -130,7 +139,48 @@ where
     NI: NotificationIngress,
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
+    TA: TeamAnalytics,
 {
+    /// Creates a new TeamService with an analytics implementation.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "constructor mirrors TeamServiceImpl::new plus analytics port"
+    )]
+    pub fn new_with_analytics(
+        team_repository: TR,
+        customer_repository: CR,
+        team_channels_repository: TCR,
+        user_roles_and_permissions_service: URPS,
+        notification_ingress: Arc<NI>,
+        crm_enqueuer: CE,
+        team_crm_settings_repository: TCRMS,
+        team_analytics: TA,
+    ) -> Self {
+        Self {
+            team_repository,
+            customer_repository,
+            team_channels_repository,
+            user_roles_and_permissions_service,
+            notification_ingress,
+            crm_enqueuer,
+            team_crm_settings_repository,
+            team_analytics,
+        }
+    }
+
+    async fn track_team_analytics_event(&self, event: TeamAnalyticsEvent) {
+        self.team_analytics
+            .track_team_event(event)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    "failed to track team analytics event"
+                );
+            })
+            .ok();
+    }
+
     /// Gets the teams subscription id
     /// If the team doesn't have a subscription yet, it will convert the owners personal subscription into a team subscription
     #[tracing::instrument(skip(self), err)]
@@ -187,6 +237,52 @@ where
         Ok(customer_subscription_id)
     }
 
+    /// Backfills legacy teams that were created without a team subscription id.
+    #[tracing::instrument(skip(self), err)]
+    async fn backfill_legacy_team_subscription(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<(), GetTeamSubscriptionError> {
+        let team_owner = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .team
+            .owner_id;
+
+        let customer_id = self
+            .team_repository
+            .get_stripe_customer_id(&team_owner)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .ok_or(CustomerError::NoStripeCustomerId)
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        let subscription_id = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.customer_repository
+            .convert_subscription_to_team(&subscription_id, team_id, &team_owner)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.team_repository
+            .update_team_subscription(team_id, &subscription_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        self.team_repository
+            .update_team_payment_status(team_id, true)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        Ok(())
+    }
+
     /// Sends an invite notification for a team invite
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
@@ -226,6 +322,14 @@ enum GetTeamSubscriptionError {
 }
 
 impl GetTeamSubscriptionError {
+    fn into_invite_users_to_team_error(self) -> InviteUsersToTeamError {
+        match self {
+            Self::Team(e) => InviteUsersToTeamError::TeamError(e),
+            Self::Customer(e) => InviteUsersToTeamError::CustomerError(e),
+            Self::Storage(e) => InviteUsersToTeamError::StorageLayerError(e),
+        }
+    }
+
     fn into_join_team_error(self) -> JoinTeamError {
         match self {
             Self::Team(e) => JoinTeamError::TeamError(e),
@@ -243,8 +347,8 @@ impl GetTeamSubscriptionError {
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS> TeamMembersService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> TeamMembersService
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -253,6 +357,7 @@ where
     NI: NotificationIngress,
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
+    TA: TeamAnalytics,
 {
     #[tracing::instrument(skip(self), err)]
     async fn list_team_members(
@@ -269,8 +374,8 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS> TeamService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> TeamService
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -279,29 +384,49 @@ where
     NI: NotificationIngress,
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
+    TA: TeamAnalytics,
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> Result<Team, CreateTeamError> {
         // New teams start with `team_crm_settings.crm_enabled = false`
         // (seeded by `team_repository.create_team`), so there's nothing
         // for the email-backfill fan-out to populate yet. The fan-out
         // happens later, on the disabled → enabled transition in
         // `set_team_crm_enabled`.
-        let team = self.team_repository.create_team(user_id, team_name).await?;
+        let team = self
+            .team_repository
+            .create_team(user_id, team_name, subscription_id)
+            .await?;
+        self.customer_repository
+            .convert_subscription_to_team(subscription_id, team.id(), user_id)
+            .await
+            .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?;
         self.team_repository
             .move_github_app_installation_to_team_if_exists(user_id, team.id())
             .await?;
+
+        self.track_team_analytics_event(TeamAnalyticsEvent::TeamCreated {
+            team_id: *team.id(),
+            owner_id: user_id.clone().into_owned(),
+            team_name: team.name().to_owned(),
+        })
+        .await;
+
         Ok(team)
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn is_user_premium(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+    async fn is_user_premium(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<stripe::SubscriptionId>, TeamError> {
         let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
-            return Ok(false);
+            return Ok(None);
         };
 
         match self
@@ -309,9 +434,9 @@ where
             .get_subscription_id_for_customer(&customer_id)
             .await
         {
-            Ok(_) => Ok(true),
+            Ok(subscription_id) => Ok(Some(subscription_id)),
             Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => {
-                Ok(false)
+                Ok(None)
             }
             Err(e) => Err(TeamError::StorageLayerError(e.into())),
         }
@@ -320,7 +445,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         let team_id =
@@ -331,7 +456,19 @@ where
             .get_team_payment_status(&team_id)
             .await?
         {
-            return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+                .is_some()
+            {
+                return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+            }
+
+            self.backfill_legacy_team_subscription(&team_id)
+                .await
+                .map_err(GetTeamSubscriptionError::into_invite_users_to_team_error)?;
         }
 
         let invited_by = entity_access_receipt
@@ -352,52 +489,73 @@ where
             return Err(InviteUsersToTeamError::NotEnoughOpenSeats);
         }
 
+        let new_invite_emails: HashSet<String> = new_invites
+            .iter()
+            .map(|email| email.as_ref().to_owned())
+            .collect();
+
         let invited = self
             .team_repository
             .invite_users_to_team(&team_id, invited_by, invites)
             .await?;
 
-        // Send notifications for new invites
-        if !invited.is_empty() {
-            let team_name = self.team_repository.get_team_name(&team_id).await.ok();
+        let team_name = if invited.is_empty() {
+            None
+        } else {
+            self.team_repository.get_team_name(&team_id).await.ok()
+        };
 
-            if let Some(team_name) = team_name {
-                let invited_by_owned = invited_by.clone().into_owned();
-                let mut sent_invite_ids = Vec::new();
-                for invite in &invited {
-                    if self
-                        .send_invite_notification(
-                            MacroUserIdStr::try_from_email(invite.email.as_ref())
-                                .expect("this cannot fail"),
-                            invite.team_invite_id,
-                            InviteToTeamMetadata {
-                                team_id,
-                                team_invite_id: invite.team_invite_id,
-                                invited_by: invited_by_owned.clone(),
-                                team_name: team_name.clone(),
-                                role: None,
-                                sender_profile_picture_url: None,
-                            },
-                        )
-                        .await
-                        .inspect_err(
-                            |e| tracing::error!(error=?e, "unable to send invite notification"),
-                        )
-                        .is_ok()
-                    {
-                        sent_invite_ids.push(invite.team_invite_id);
-                    }
-                }
-                if !sent_invite_ids.is_empty() {
-                    self.team_repository
-                        .mark_invites_sent(&sent_invite_ids)
-                        .await
-                        .inspect_err(
-                            |e| tracing::error!(error=?e, "unable to mark invites as sent"),
-                        )
-                        .ok();
+        // Send notifications for new invites
+        if !invited.is_empty()
+            && let Some(team_name) = team_name.clone()
+        {
+            let invited_by_owned = invited_by.clone().into_owned();
+            let mut sent_invite_ids = Vec::new();
+            for invite in &invited {
+                if self
+                    .send_invite_notification(
+                        MacroUserIdStr::try_from_email(invite.email.as_ref())
+                            .expect("this cannot fail"),
+                        invite.team_invite_id,
+                        InviteToTeamMetadata {
+                            team_id,
+                            team_invite_id: invite.team_invite_id,
+                            invited_by: invited_by_owned.clone(),
+                            team_name: team_name.clone(),
+                            role: None,
+                            sender_profile_picture_url: None,
+                        },
+                    )
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to send invite notification"),
+                    )
+                    .is_ok()
+                {
+                    sent_invite_ids.push(invite.team_invite_id);
                 }
             }
+            if !sent_invite_ids.is_empty() {
+                self.team_repository
+                    .mark_invites_sent(&sent_invite_ids)
+                    .await
+                    .inspect_err(|e| tracing::error!(error=?e, "unable to mark invites as sent"))
+                    .ok();
+            }
+        }
+
+        for invite in &invited {
+            if !new_invite_emails.contains(invite.email.as_ref()) {
+                continue;
+            }
+
+            self.track_team_analytics_event(TeamAnalyticsEvent::TeamInvited {
+                team_id,
+                team_invite_id: invite.team_invite_id,
+                inviter_id: invited_by.clone().into_owned(),
+                team_name: team_name.clone(),
+            })
+            .await;
         }
 
         Ok(invited)
@@ -406,11 +564,16 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn remove_user_from_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        let removed_by_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|e| RemoveUserFromTeamError::TeamError(TeamError::AccessError(e)))?
+            .clone()
+            .into_owned();
 
         let removed_member = self
             .team_repository
@@ -542,6 +705,14 @@ where
             );
         }
 
+        self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
+            team_id,
+            member_id: removed_member.user_id.clone().into_owned(),
+            removed_by_id,
+            role: removed_member.role,
+        })
+        .await;
+
         Ok(())
     }
 
@@ -570,7 +741,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete_team_invite(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         team_invite_id: &uuid::Uuid,
     ) -> Result<(), RemoveTeamInviteError> {
         let team_id =
@@ -651,7 +822,14 @@ where
             .get_team_payment_status(&team_member.team_id)
             .await?
         {
-            self.team_repository
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&accepted_invite.member.team_id)
+                .await?
+                .is_some()
+            {
+                self.team_repository
                     .rollback_accept_team_invite(&accepted_invite)
                     .await
                     .inspect_err(|rollback_err| {
@@ -661,7 +839,25 @@ where
                         );
                     })
                     .ok();
-            return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+                return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+            }
+
+            if let Err(e) = self
+                .backfill_legacy_team_subscription(&accepted_invite.member.team_id)
+                .await
+            {
+                self.team_repository
+                    .rollback_accept_team_invite(&accepted_invite)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback accepted team invite after backfilling team subscription failed"
+                        );
+                    })
+                    .ok();
+                return Err(e.into_join_team_error());
+            }
         }
 
         let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
@@ -787,6 +983,14 @@ where
                 "Failed to enqueue PopulateCrmForUser after join_team; CRM tables will not be seeded from sent-mail history (per-message fan-out will still cover future sends)"
             );
         }
+
+        self.track_team_analytics_event(TeamAnalyticsEvent::TeamJoined {
+            team_id: team_member.team_id,
+            team_invite_id: accepted_invite.invite.id,
+            member_id: team_member.user_id.clone().into_owned(),
+            role: team_member.role,
+        })
+        .await;
 
         Ok(team_member)
     }

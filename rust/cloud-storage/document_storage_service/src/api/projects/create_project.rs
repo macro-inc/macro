@@ -15,6 +15,7 @@ use model::{
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::EditAccessLevel;
+use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Creates a new project.
@@ -89,6 +90,24 @@ async fn create_project_v2(
         }
     };
 
+    tokio::spawn({
+        let sqs_client = ctx.sqs_client.clone();
+        let project_id = project.id.clone();
+        async move {
+            let _ = sqs_client
+                .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(
+                    UpsertProject {
+                        project_id: project_id.clone(),
+                        index_override: None,
+                    },
+                ))
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, project_id=?project_id, "unable to enqueue project search upsert"),
+                );
+        }
+    });
+
     // update project modified if necessary
     if let Some(project_id) = req.project_parent_id {
         tracing::trace!("updating project modified date");
@@ -105,6 +124,7 @@ async fn create_project_v2(
 
         macro_project_utils::update_project_modified(
             &ctx.db,
+            Some(ctx.sqs_client.as_ref()),
             macro_project_utils::ProjectModifiedArgs {
                 project_id: Some(project_id.to_string()),
                 old_project_id: None,

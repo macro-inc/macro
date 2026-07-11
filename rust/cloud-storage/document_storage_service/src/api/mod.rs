@@ -225,6 +225,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/favorites",
+            favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
+        )
+        .nest(
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(
                 state.foreign_entity_state.clone(),
@@ -233,6 +237,10 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/call",
             call::inbound::axum_router::call_router(state.call_state.clone()),
+        )
+        .nest(
+            "/webhook",
+            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()),
         )
         .nest(
             "/crm",

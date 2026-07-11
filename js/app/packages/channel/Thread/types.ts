@@ -31,6 +31,8 @@ export type ThreadState = {
 
 export type MessageEditState = {
   messageId: string;
+  /** The message as it was when the edit started. */
+  message: MessageData;
   snapshot: InputSnapshot;
 };
 
@@ -46,12 +48,16 @@ export type ThreadProps = {
   /** One-shot scroll target. Caller must clear via `onTargetReplyScrolled`. */
   targetReplyId?: string;
   onTargetReplyScrolled?: (replyId: string) => void;
-  /** Persistent highlight target. */
-  selectedReplyId?: string;
+  /** Navigation target reply */
+  activeTargetReplyId?: string;
+  /** The unified input's reply binding */
+  unifiedReplyTarget?: { threadId: string; replyId?: string };
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   selectedMessageId?: Accessor<string | undefined>;
   onSelectMessage?: (messageId: string) => void;
   onClearSelection?: () => void;
+  /** Release the navigation target (clicking the targeted message). */
+  onClearTarget?: (threadId: string) => void;
   messageListScopeId?: string;
   isNewestThread?: boolean;
 } & ThreadState;

@@ -1,3 +1,4 @@
+import { $isListNode } from '@lexical/list';
 import {
   CHECK_LIST,
   type ElementTransformer,
@@ -26,6 +27,18 @@ const customTransformer = (
         $isHeadingNode(parentNode)
       ) {
         return false;
+      }
+      if (original === ORDERED_LIST) {
+        const nextNode = parentNode.getNextSibling();
+        const start = Number(match[2]);
+
+        if (
+          Number.isFinite(start) &&
+          $isListNode(nextNode) &&
+          nextNode.getListType() === 'number'
+        ) {
+          nextNode.setStart(start);
+        }
       }
       original.replace(parentNode, children, match, isImport);
     },

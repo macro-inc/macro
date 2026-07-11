@@ -30,6 +30,7 @@ use crate::domain::response::CreateDocumentResponse;
         (status = 400, body = model_error_response::ErrorResponse),
         (status = 401, body = model_error_response::ErrorResponse),
         (status = 409, body = model_error_response::ErrorResponse),
+        (status = 422, description = "Document name exceeds the maximum length", body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]

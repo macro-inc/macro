@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE webhook_delivery_attempt\n        SET\n            status = $4,\n            completed_at = now(),\n            duration_ms = $5,\n            response_status = $6,\n            response_headers_redacted = $7,\n            response_body_preview = $8,\n            error_kind = $9,\n            error_message = $10\n        WHERE id = $1\n          AND webhook_delivery_id = $2\n          AND attempt_number = $3\n          AND status = $11\n        RETURNING completed_at AS \"completed_at!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "completed_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Int4",
+        "Int4",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "366018afc77416e3ef92d6e46f9f1f6f44c74c8461c3110f074a09abc2983a72"
+}

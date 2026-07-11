@@ -7,13 +7,19 @@ import {
   restoreSoupFocus,
 } from '@app/component/next-soup/utils';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_NEW_INBOX_FLAG,
+  ENABLE_NEW_INBOX_OVERRIDE,
+} from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { useUndoableMutation } from '@queries/undo';
+import { type UndoHandle, useUndoableMutation } from '@queries/undo';
 import type { SoupState } from '../create-soup-state';
 
 // Valid list views where the mark done should be allowed to run
@@ -43,10 +49,36 @@ type MarkDoneVariables = {
   emailIds: string[];
   notificationIds: string[];
   restoreFocus?: () => void;
+  /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
+   *  where it would replace the "Email sent" toast. */
+  silent?: boolean;
+  /** Receives the undo handle once the mark-done is pushed onto the undo
+   *  stack, so callers (e.g. undo-send) can reverse it programmatically. */
+  onUndoHandle?: (handle: UndoHandle) => void;
 };
+
+type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
 
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
+  const splitPanel = useSplitPanel();
+
+  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
+    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
+  });
+
+  // Channel and channel_thread entities share the same notification bucket.
+  // The new inbox renders them as separate rows, so marking a channel as done
+  // should not clear thread notifications.
+  //
+  // TODO: This should probably be the default case after the new inbox is released
+  // or we should rework how notifications are sent to not be under just the 'channel'
+  // entity
+  const scopeChannelNotificationsToEntity = () =>
+    newInboxFlag().enabled &&
+    (splitPanel?.handle.content().id === 'inbox' ||
+      splitPanel?.handle.referredFrom() === 'inbox');
+
   const { notificationSource, hotkeyGroup } = options;
   const previewPanel = useMaybePreviewPanel();
   const inPreview = previewPanel !== undefined;
@@ -99,6 +131,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     },
     undoLabel: 'Mark Done',
     onPushed: (handle, variables) => {
+      variables.onUndoHandle?.(handle);
       const firstEntityId = variables.entities[0]?.id;
       const count = variables.entities.length;
       const message =
@@ -106,6 +139,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       let toastId: number | undefined;
 
       const showToast = () => {
+        if (variables.silent) return;
         toastId = toast.success(message, {
           actions: [
             {
@@ -120,6 +154,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           ],
           duration: 3_000,
           stack: true,
+          hideOnMobile: true,
         });
       };
 
@@ -137,7 +172,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   }));
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'channel_message') return false;
+    if (entity.type === 'channel_message') {
+      return false;
+    }
+    if (entity.type === 'channel_thread') {
+      return scopeChannelNotificationsToEntity();
+    }
     if (
       entity.type === 'email' ||
       entity.type === 'channel' ||
@@ -152,23 +192,31 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     return false;
   };
 
-  const execute = async (entities: EntityData[], restoreFocus?: () => void) => {
+  const execute = async (
+    entities: EntityData[],
+    restoreFocus?: () => void,
+    opts?: MarkDoneExecuteOpts
+  ) => {
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
       entities,
       notificationSource: notificationSource(),
+      scopeChannelNotificationsToEntity: scopeChannelNotificationsToEntity(),
     });
     await mutation.mutateAsync({
       entities,
       emailIds,
       notificationIds,
       restoreFocus,
+      silent: opts?.silent,
+      onUndoHandle: opts?.onUndoHandle,
     });
   };
 
   const executeWithSoup = async (
     entities: EntityData[],
     soup: SoupState,
-    onNavigate?: (entity: EntityData) => void
+    onNavigate?: (entity: EntityData) => void,
+    opts?: MarkDoneExecuteOpts
   ) => {
     const currentIndex = soup.focus.index();
     const focusedIdBeforeMarkDone = soup.focus.id();
@@ -193,7 +241,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       onNavigate?.(nextRow.original);
     }
 
-    await execute(entities, restoreFocus);
+    await execute(entities, restoreFocus, opts);
   };
 
   return { canExecute, execute, executeWithSoup };

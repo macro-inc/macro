@@ -14,6 +14,10 @@ interface EmailInputProps {
   draft?: ApiMessage;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  unframed?: boolean;
+  mobileDrawer?: {
+    onClose: () => void;
+  };
 }
 
 export function EmailInput(props: EmailInputProps) {
@@ -43,7 +47,7 @@ export function EmailInput(props: EmailInputProps) {
 
   return (
     <Show when={ctx.drafts.initialDraftsSettled()}>
-      <Layer depth={2}>
+      <Layer depth={props.mobileDrawer ? 0 : 2}>
         <BaseInput
           replyingTo={props.replyingTo}
           draft={props.draft}
@@ -52,6 +56,8 @@ export function EmailInput(props: EmailInputProps) {
           onMarkDone={ctx.archiveThread}
           setShowReply={props.setShowReply}
           markdownDomRef={props.markdownDomRef}
+          unframed={props.unframed}
+          mobileDrawer={props.mobileDrawer}
           isEditingExisting={props.replyingTo() == null && props.draft != null}
         />
       </Layer>

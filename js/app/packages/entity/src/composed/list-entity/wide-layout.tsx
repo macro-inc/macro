@@ -1,7 +1,17 @@
+import { useRowTagsVisible } from '@app/component/next-soup/soup-view/filters-bar/search/search-tags-flag';
+import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { formatCallDuration } from '@block-call/utils';
+import { EntityRowTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { CallStatusBadge, SharedBadge } from '../../components/Badges';
+import {
+  CallDurationBadge,
+  CallStatusBadge,
+  SharedBadge,
+} from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -11,9 +21,12 @@ import {
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
+  isChatEntity,
+  isDocumentEntity,
   isEmailEntity,
   isGithubPrEntity,
   isProjectContainedEntity,
+  isProjectEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
@@ -27,8 +40,25 @@ import {
 } from './foreign';
 import type { LayoutProps } from './shared';
 
+function RowTags(props: {
+  entityId: string;
+  entityType: EntityType;
+  properties: SoupProperty[] | undefined;
+}) {
+  const filterByTag = useRowTagFilter();
+  return (
+    <EntityRowTags
+      entityId={props.entityId}
+      entityType={props.entityType}
+      properties={props.properties}
+      onFilterByTag={filterByTag}
+    />
+  );
+}
+
 export function WideLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
+  const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = useOwningInbox(() =>
@@ -75,7 +105,7 @@ export function WideLayout(props: LayoutProps) {
       </Show>
       <Entity.Slot
         placement="content"
-        class="ph-no-capture font-semibold truncate items-center gap-2 flex"
+        class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
@@ -130,14 +160,62 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
-        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+        <Show
+          when={
+            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
+          }
+        >
           {(entity) => (
-            <span class="ph-no-capture text-ink-extra-muted text-xs">
-              <ProjectBreadCrumb
-                entity={entity()}
-                onClick={props.onProjectClick}
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.PROJECT}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
+        <Show
+          when={
+            rowTagsVisible() && isDocumentEntity(props.entity) && props.entity
+          }
+        >
+          {(entity) => {
+            const properties = () => {
+              const doc = entity();
+              return 'properties' in doc ? doc.properties : undefined;
+            };
+            return (
+              <RowTags
+                entityId={entity().id}
+                entityType={
+                  isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
+                }
+                properties={properties()}
               />
-            </span>
+            );
+          }}
+        </Show>
+        <Show
+          when={rowTagsVisible() && isEmailEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            // No filter-by-tag affordance. The soup email path does not apply
+            // tag filters, so filtering would leave email rows unfiltered.
+            <EntityRowTags
+              entityId={entity().id}
+              entityType={EntityType.THREAD}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
+        <Show
+          when={rowTagsVisible() && isChatEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.CHAT}
+              properties={entity().properties}
+            />
           )}
         </Show>
         <Show
@@ -156,6 +234,20 @@ export function WideLayout(props: LayoutProps) {
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
                 <CallStatusBadge status={entity().status} />
               </Show>
+              <Show
+                when={entity().durationMs}
+                fallback={
+                  <Show when={entity().isActive}>
+                    <CallDurationBadge duration="In progress" />
+                  </Show>
+                }
+              >
+                {(durationMs) => (
+                  <CallDurationBadge
+                    duration={formatCallDuration(durationMs())}
+                  />
+                )}
+              </Show>
               <span class="flex w-10 shrink-0 justify-end">
                 <CallParticipants participantIds={entity().participantIds} />
               </span>
@@ -164,6 +256,16 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isTaskEntity(props.entity) && props.entity}>
           {(entity) => <Entity.Properties entity={entity()} />}
+        </Show>
+        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <span class="ph-no-capture text-ink-extra-muted text-xs">
+              <ProjectBreadCrumb
+                entity={entity()}
+                onClick={props.onProjectClick}
+              />
+            </span>
+          )}
         </Show>
       </Entity.Slot>
       <Entity.Slot

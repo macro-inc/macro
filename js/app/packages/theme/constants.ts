@@ -1,7 +1,110 @@
+import { isMobile } from '@core/mobile/isMobile';
 import type { ThemeV2 } from './types/themeTypes';
 
 export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
 export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
+
+const MACRO_DARK: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isMobile()  ? {
+      depth: 0.35,
+      tokens: {
+        a0: { l: 0.75, c: 0.20, h:  59 },
+        a1: { l: 0.75, c: 0.20, h:  99 },
+        a2: { l: 0.75, c: 0.20, h: 139 },
+        a3: { l: 0.75, c: 0.20, h: 179 },
+        a4: { l: 0.75, c: 0.20, h: 219 },
+        b0: { l: 0.00, c: 0.00, h:  21 },
+        b1: { l: 0.18, c: 0.00, h:  21 },
+        b2: { l: 0.23, c: 0.00, h:  21 },
+        b3: { l: 0.25, c: 0.00, h:  21 },
+        b4: { l: 0.28, c: 0.00, h:  21 },
+        c0: { l: 0.95, c: 0.00, h:  21 },
+        c1: { l: 0.83, c: 0.00, h:  21 },
+        c2: { l: 0.75, c: 0.00, h:  21 },
+        c3: { l: 0.63, c: 0.00, h:  21 },
+        c4: { l: 0.55, c: 0.00, h:  21 },
+      },
+    }
+  : {
+      depth: 0.20,
+      tokens: {
+        a0: { l: 0.75, c: 0.20, h:  59 },
+        a1: { l: 0.75, c: 0.20, h:  99 },
+        a2: { l: 0.75, c: 0.20, h: 139 },
+        a3: { l: 0.75, c: 0.20, h: 179 },
+        a4: { l: 0.75, c: 0.20, h: 219 },
+        b0: { l: 0.13, c: 0.00, h:  59 },
+        b1: { l: 0.20, c: 0.00, h:  59 },
+        b2: { l: 0.23, c: 0.00, h:  59 },
+        b3: { l: 0.22, c: 0.00, h:  59 },
+        b4: { l: 0.22, c: 0.00, h:  59 },
+        c0: { l: 0.95, c: 0.00, h:  59 },
+        c1: { l: 0.83, c: 0.00, h:  59 },
+        c2: { l: 0.75, c: 0.00, h:  59 },
+        c3: { l: 0.63, c: 0.00, h:  59 },
+        c4: { l: 0.55, c: 0.00, h:  59 },
+      },
+    };
+
+const MACRO_LIGHT: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isMobile()
+  ? {
+      depth: 0.06,
+      tokens: {
+        a0: { l: 0.65, c: 0.20, h:  59 },
+        a1: { l: 0.65, c: 0.20, h:  99 },
+        a2: { l: 0.65, c: 0.20, h: 139 },
+        a3: { l: 0.65, c: 0.20, h: 179 },
+        a4: { l: 0.65, c: 0.20, h: 219 },
+        b0: { l: 1.00, c: 0.00, h:  59 },
+        b1: { l: 0.96, c: 0.00, h:  59 },
+        b2: { l: 0.96, c: 0.00, h:  59 },
+        b3: { l: 0.92, c: 0.00, h:  59 },
+        b4: { l: 0.91, c: 0.00, h:  59 },
+        c0: { l: 0.14, c: 0.00, h:  59 },
+        c1: { l: 0.40, c: 0.00, h:  59 },
+        c2: { l: 0.55, c: 0.00, h:  59 },
+        c3: { l: 0.65, c: 0.00, h:  59 },
+        c4: { l: 0.75, c: 0.00, h:  59 },
+      },
+      overrides: [
+        {
+          token: 'menu',
+          value: { l: 1.00, c: 0.00, h:  59 },
+        },
+        {
+          token: 'panel',
+          value: { l: 1.00, c: 0.00, h:  59 },
+        },
+        {
+          token: 'dialog',
+          value: { l: 1.00, c: 0.00, h:  59 },
+        },
+        {
+          token: 'input',
+          value: { l: 1.00, c: 0.00, h:  59 },
+        },
+      ]
+    }
+  : {
+      depth: 0.16,
+      tokens: {
+        a0: { l: 0.65, c: 0.20, h:  59 },
+        a1: { l: 0.65, c: 0.20, h:  99 },
+        a2: { l: 0.65, c: 0.20, h: 139 },
+        a3: { l: 0.65, c: 0.20, h: 179 },
+        a4: { l: 0.65, c: 0.20, h: 219 },
+        b0: { l: 0.964, c: 0.00, h:  59 },
+        b1: { l: 0.92, c: 0.00, h:  59 },
+        b2: { l: 0.91, c: 0.00, h:  59 },
+        b3: { l: 0.92, c: 0.00, h:  59 },
+        b4: { l: 0.91, c: 0.00, h:  59 },
+        c0: { l: 0.16, c: 0.00, h:  59 },
+        c1: { l: 0.40, c: 0.00, h:  59 },
+        c2: { l: 0.45, c: 0.00, h:  59 },
+        c3: { l: 0.55, c: 0.00, h:  59 },
+        c4: { l: 0.70, c: 0.00, h:  59 },
+      },
+    };
+
 
 // Ordered for the theme picker: dark themes first (led by the Macro brand theme),
 // then light themes (led by the Macro brand theme). ThemeList renders in array order.
@@ -10,24 +113,9 @@ export const DEFAULT_THEMES = [
     id: 'Macro Dark',
     name: 'Macro Dark',
     version: 2,
-    depth: 0.15,
-    tokens: {
-      a0: { l: 0.75, c: 0.20, h:  59 },
-      a1: { l: 0.75, c: 0.20, h:  99 },
-      a2: { l: 0.75, c: 0.20, h: 139 },
-      a3: { l: 0.75, c: 0.20, h: 179 },
-      a4: { l: 0.75, c: 0.20, h: 219 },
-      b0: { l: 0.14, c: 0.00, h:  59 },
-      b1: { l: 0.20, c: 0.00, h:  59 },
-      b2: { l: 0.23, c: 0.00, h:  59 },
-      b3: { l: 0.25, c: 0.00, h:  59 },
-      b4: { l: 0.28, c: 0.00, h:  59 },
-      c0: { l: 0.95, c: 0.00, h:  59 },
-      c1: { l: 0.83, c: 0.00, h:  59 },
-      c2: { l: 0.75, c: 0.00, h:  59 },
-      c3: { l: 0.63, c: 0.00, h:  59 },
-      c4: { l: 0.55, c: 0.00, h:  59 },
-    },
+    depth: MACRO_DARK.depth,
+    tokens: MACRO_DARK.tokens,
+    overrides: MACRO_DARK.overrides
   },
   {
     // Neutral anchor: a true graphite monochrome, accents carry only a whisper of
@@ -55,29 +143,29 @@ export const DEFAULT_THEMES = [
     },
   },
   {
-    // Warm: a deep ember charcoal with a soft amber accent — the 3am-screen glow.
-    id: 'Sleepless',
-    name: 'Sleepless',
-    version: 2,
-    depth: 0.12,
-    tokens: {
-      a0: { l: 0.75, c: 0.15, h:  55 },
-      a1: { l: 0.75, c: 0.15, h:  95 },
-      a2: { l: 0.75, c: 0.15, h: 135 },
-      a3: { l: 0.75, c: 0.15, h: 175 },
-      a4: { l: 0.75, c: 0.15, h: 215 },
-      b0: { l: 0.16, c: 0.010, h:  55 },
-      b1: { l: 0.20, c: 0.010, h:  55 },
-      b2: { l: 0.24, c: 0.012, h:  55 },
-      b3: { l: 0.27, c: 0.012, h:  55 },
-      b4: { l: 0.31, c: 0.014, h:  55 },
-      c0: { l: 0.95, c: 0.008, h:  55 },
-      c1: { l: 0.83, c: 0.008, h:  55 },
-      c2: { l: 0.73, c: 0.008, h:  55 },
-      c3: { l: 0.63, c: 0.008, h:  55 },
-      c4: { l: 0.55, c: 0.008, h:  55 },
+      // Warm: a deep ember charcoal with a soft amber accent.
+      id: 'Ember',
+      name: 'Ember',
+      version: 2,
+      depth: 0.12,
+      tokens: {
+        a0: { l: 0.75, c: 0.15, h:  55 },
+        a1: { l: 0.75, c: 0.15, h:  95 },
+        a2: { l: 0.75, c: 0.15, h: 135 },
+        a3: { l: 0.75, c: 0.15, h: 175 },
+        a4: { l: 0.75, c: 0.15, h: 215 },
+        b0: { l: 0.16, c: 0.010, h:  55 },
+        b1: { l: 0.20, c: 0.010, h:  55 },
+        b2: { l: 0.24, c: 0.012, h:  55 },
+        b3: { l: 0.27, c: 0.012, h:  55 },
+        b4: { l: 0.31, c: 0.014, h:  55 },
+        c0: { l: 0.95, c: 0.008, h:  55 },
+        c1: { l: 0.83, c: 0.008, h:  55 },
+        c2: { l: 0.73, c: 0.008, h:  55 },
+        c3: { l: 0.63, c: 0.008, h:  55 },
+        c4: { l: 0.55, c: 0.008, h:  55 },
+      },
     },
-  },
   {
     // Cool: an ethereal violet-indigo night, calm and a touch mysterious.
     id: 'Spirit',
@@ -154,24 +242,9 @@ export const DEFAULT_THEMES = [
     id: 'Macro Light',
     name: 'Macro Light',
     version: 2,
-    depth: 0.09,
-    tokens: {
-      a0: { l: 0.65, c: 0.20, h:  59 },
-      a1: { l: 0.65, c: 0.20, h:  99 },
-      a2: { l: 0.65, c: 0.20, h: 139 },
-      a3: { l: 0.65, c: 0.20, h: 179 },
-      a4: { l: 0.65, c: 0.20, h: 219 },
-      b0: { l: 0.96, c: 0.00, h:  59 },
-      b1: { l: 0.92, c: 0.00, h:  59 },
-      b2: { l: 0.91, c: 0.00, h:  59 },
-      b3: { l: 0.92, c: 0.00, h:  59 },
-      b4: { l: 0.91, c: 0.00, h:  59 },
-      c0: { l: 0.14, c: 0.00, h:  59 },
-      c1: { l: 0.40, c: 0.00, h:  59 },
-      c2: { l: 0.55, c: 0.00, h:  59 },
-      c3: { l: 0.65, c: 0.00, h:  59 },
-      c4: { l: 0.75, c: 0.00, h:  59 },
-    },
+    depth: MACRO_LIGHT.depth,
+    tokens: MACRO_LIGHT.tokens,
+    overrides: MACRO_LIGHT.overrides
   },
   {
     // Warm: a cream page with a sun-ripe orange accent — citrus, but restrained.
@@ -295,6 +368,6 @@ export const DEFAULT_THEMES = [
       c4: { l: 0.72, c: 0.006, h: 295 },
     },
   },
-] as const satisfies ReadonlyArray<ThemeV2>;
+] as const satisfies readonly ThemeV2[];
 
 type DefaultTheme = (typeof DEFAULT_THEMES)[number]['id'];

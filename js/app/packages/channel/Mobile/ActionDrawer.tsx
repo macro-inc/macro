@@ -1,5 +1,6 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
+import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { focusInput } from '@core/directive/focusInput';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import CheckSquareIcon from '@phosphor/check-square.svg';
@@ -45,18 +46,21 @@ type ActionItem = {
 
 function buildActionItems(
   actions: MessageActions | undefined,
-  messageId: string | undefined
+  message: { id: string; thread_id?: string | null } | undefined
 ): ActionItem[] {
+  const messageId = message?.id;
+  // Reply inputs are keyed by the thread root, not the long-pressed message.
+  const replyThreadId = message ? (message.thread_id ?? message.id) : undefined;
   return [
     {
       id: 'reply',
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
-      getFocusTarget: messageId
+      getFocusTarget: replyThreadId
         ? () =>
             document.querySelector<HTMLElement>(
-              `[data-input-id="thread-reply-input-${messageId}"] [contenteditable]`
+              `[data-input-id="thread-reply-input-${replyThreadId}"] [contenteditable]`
             )
         : undefined,
     },
@@ -175,7 +179,7 @@ export function ActionDrawer() {
     drawerState.close();
   };
 
-  const actionItems = () => buildActionItems(actions(), message()?.id);
+  const actionItems = () => buildActionItems(actions(), message());
   const nonDestructiveActions = () =>
     actionItems().filter((item) => item.onClick && !item.destructive);
   const destructiveActions = () =>
@@ -227,7 +231,10 @@ export function ActionDrawer() {
                       title={`React ${emoji}`}
                       aria-label={`React ${emoji}`}
                       class="size-12 flex items-center justify-center bg-edge rounded-full text-[28px]"
-                      onClick={(event) => handleReaction(emoji, event)}
+                      onClick={(event) => {
+                        recordEmojiUsage(emoji);
+                        handleReaction(emoji, event);
+                      }}
                     >
                       {emoji}
                     </button>

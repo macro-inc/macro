@@ -1,0 +1,13874 @@
+{
+  "2049": [
+    "!",
+    "!?",
+    "?",
+    "exclamation",
+    "interrobang",
+    "mark",
+    "punctuation",
+    "question"
+  ],
+  "2122": [
+    "mark",
+    "tm",
+    "trade",
+    "trademark"
+  ],
+  "2139": [
+    "i"
+  ],
+  "2194": [
+    "arrow",
+    "left-right"
+  ],
+  "2195": [
+    "arrow",
+    "up-down"
+  ],
+  "2196": [
+    "arrow",
+    "direction",
+    "intercardinal",
+    "northwest",
+    "up-left"
+  ],
+  "2197": [
+    "arrow",
+    "direction",
+    "intercardinal",
+    "northeast",
+    "up-right"
+  ],
+  "2198": [
+    "arrow",
+    "direction",
+    "down-right",
+    "intercardinal",
+    "southeast"
+  ],
+  "2199": [
+    "arrow",
+    "direction",
+    "down-left",
+    "intercardinal",
+    "southwest"
+  ],
+  "2328": [
+    "computer"
+  ],
+  "2600": [
+    "bright",
+    "rays",
+    "space",
+    "sunny",
+    "weather"
+  ],
+  "2601": [
+    "weather"
+  ],
+  "2602": [
+    "clothing",
+    "rain"
+  ],
+  "2603": [
+    "cold",
+    "man",
+    "snow"
+  ],
+  "2604": [
+    "space"
+  ],
+  "2611": [
+    "ballot",
+    "box",
+    "check",
+    "checked",
+    "done",
+    "off",
+    "tick",
+    "✓"
+  ],
+  "2614": [
+    "clothing",
+    "drop",
+    "drops",
+    "rain",
+    "umbrella",
+    "weather"
+  ],
+  "2615": [
+    "beverage",
+    "cafe",
+    "caffeine",
+    "chai",
+    "coffee",
+    "drink",
+    "hot",
+    "morning",
+    "steaming",
+    "tea"
+  ],
+  "2618": [
+    "irish",
+    "plant"
+  ],
+  "2620": [
+    "bone",
+    "crossbones",
+    "dead",
+    "death",
+    "face",
+    "monster",
+    "skull"
+  ],
+  "2622": [
+    "sign"
+  ],
+  "2623": [
+    "sign"
+  ],
+  "2626": [
+    "christian",
+    "cross",
+    "orthodox",
+    "religion"
+  ],
+  "2638": [
+    "buddhist",
+    "dharma",
+    "religion",
+    "wheel"
+  ],
+  "2639": [
+    "face",
+    "frown",
+    "frowning",
+    "sad"
+  ],
+  "2640": [
+    "female",
+    "sign",
+    "woman"
+  ],
+  "2642": [
+    "male",
+    "man",
+    "sign"
+  ],
+  "2648": [
+    "aries",
+    "horoscope",
+    "ram",
+    "zodiac"
+  ],
+  "2649": [
+    "bull",
+    "horoscope",
+    "ox",
+    "taurus",
+    "zodiac"
+  ],
+  "2650": [
+    "archer",
+    "horoscope",
+    "sagittarius",
+    "zodiac"
+  ],
+  "2651": [
+    "capricorn",
+    "goat",
+    "horoscope",
+    "zodiac"
+  ],
+  "2652": [
+    "aquarius",
+    "bearer",
+    "horoscope",
+    "water",
+    "zodiac"
+  ],
+  "2653": [
+    "fish",
+    "horoscope",
+    "pisces",
+    "zodiac"
+  ],
+  "2660": [
+    "card",
+    "game",
+    "spade",
+    "suit"
+  ],
+  "2663": [
+    "card",
+    "club",
+    "clubs",
+    "game",
+    "suit"
+  ],
+  "2665": [
+    "card",
+    "emotion",
+    "game",
+    "heart",
+    "hearts",
+    "suit"
+  ],
+  "2666": [
+    "card",
+    "diamond",
+    "game",
+    "suit"
+  ],
+  "2668": [
+    "hot",
+    "hotsprings",
+    "springs",
+    "steaming"
+  ],
+  "2692": [
+    "hammer",
+    "pick",
+    "tool"
+  ],
+  "2693": [
+    "ship",
+    "tool"
+  ],
+  "2694": [
+    "crossed",
+    "swords",
+    "weapon"
+  ],
+  "2695": [
+    "aesculapius",
+    "medical",
+    "medicine",
+    "staff",
+    "symbol"
+  ],
+  "2696": [
+    "balance",
+    "justice",
+    "libra",
+    "scale",
+    "scales",
+    "tool",
+    "weight",
+    "zodiac"
+  ],
+  "2697": [
+    "chemistry",
+    "tool"
+  ],
+  "2699": [
+    "cog",
+    "cogwheel",
+    "tool"
+  ],
+  "2702": [
+    "cut",
+    "cutting",
+    "paper",
+    "tool"
+  ],
+  "2705": [
+    "button",
+    "check",
+    "checked",
+    "checkmark",
+    "complete",
+    "completed",
+    "done",
+    "fixed",
+    "mark",
+    "tick",
+    "✓"
+  ],
+  "2708": [
+    "aeroplane",
+    "fly",
+    "flying",
+    "jet",
+    "plane",
+    "travel"
+  ],
+  "2709": [
+    "e-mail",
+    "email",
+    "letter"
+  ],
+  "2712": [
+    "black",
+    "nib",
+    "pen"
+  ],
+  "2714": [
+    "check",
+    "checked",
+    "checkmark",
+    "done",
+    "heavy",
+    "mark",
+    "tick",
+    "✓"
+  ],
+  "2716": [
+    "cancel",
+    "multiplication",
+    "sign",
+    "x",
+    "×"
+  ],
+  "2721": [
+    "david",
+    "jew",
+    "jewish",
+    "judaism",
+    "religion",
+    "star"
+  ],
+  "2728": [
+    "*",
+    "magic",
+    "sparkle",
+    "star"
+  ],
+  "2733": [
+    "*",
+    "asterisk",
+    "eight-spoked"
+  ],
+  "2734": [
+    "*",
+    "eight-pointed",
+    "star"
+  ],
+  "2744": [
+    "cold",
+    "snow",
+    "weather"
+  ],
+  "2747": [
+    "*"
+  ],
+  "2753": [
+    "?",
+    "mark",
+    "punctuation",
+    "question",
+    "red"
+  ],
+  "2754": [
+    "?",
+    "mark",
+    "outlined",
+    "punctuation",
+    "question",
+    "white"
+  ],
+  "2755": [
+    "!",
+    "exclamation",
+    "mark",
+    "outlined",
+    "punctuation",
+    "white"
+  ],
+  "2757": [
+    "!",
+    "exclamation",
+    "mark",
+    "punctuation",
+    "red"
+  ],
+  "2763": [
+    "exclamation",
+    "heart",
+    "heavy",
+    "mark",
+    "punctuation"
+  ],
+  "2764": [
+    "emotion",
+    "heart",
+    "love",
+    "red"
+  ],
+  "2795": [
+    "+"
+  ],
+  "2796": [
+    "-",
+    "heavy",
+    "math",
+    "sign",
+    "−"
+  ],
+  "2797": [
+    "division",
+    "heavy",
+    "math",
+    "sign",
+    "÷"
+  ],
+  "2934": [
+    "arrow",
+    "curving",
+    "right",
+    "up"
+  ],
+  "2935": [
+    "arrow",
+    "curving",
+    "down",
+    "right"
+  ],
+  "3030": [
+    "dash",
+    "punctuation",
+    "wavy"
+  ],
+  "3297": [
+    "button",
+    "congratulations",
+    "ideograph",
+    "japanese"
+  ],
+  "3299": [
+    "button",
+    "ideograph",
+    "japanese",
+    "secret"
+  ],
+  "1F600": [
+    "cheerful",
+    "cheery",
+    "face",
+    "grin",
+    "grinning",
+    "happy",
+    "laugh",
+    "nice",
+    "smile",
+    "smiling",
+    "teeth"
+  ],
+  "1F603": [
+    "awesome",
+    "big",
+    "eyes",
+    "face",
+    "grin",
+    "grinning",
+    "happy",
+    "mouth",
+    "open",
+    "smile",
+    "smiling",
+    "teeth",
+    "yay"
+  ],
+  "1F604": [
+    "eye",
+    "eyes",
+    "face",
+    "grin",
+    "grinning",
+    "happy",
+    "laugh",
+    "lol",
+    "mouth",
+    "open",
+    "smile",
+    "smiling"
+  ],
+  "1F601": [
+    "beaming",
+    "eye",
+    "eyes",
+    "face",
+    "grin",
+    "grinning",
+    "happy",
+    "nice",
+    "smile",
+    "smiling",
+    "teeth"
+  ],
+  "1F606": [
+    "closed",
+    "eyes",
+    "face",
+    "grinning",
+    "haha",
+    "hahaha",
+    "happy",
+    "laugh",
+    "lol",
+    "mouth",
+    "open",
+    "rofl",
+    "smile",
+    "smiling",
+    "squinting"
+  ],
+  "1F605": [
+    "cold",
+    "dejected",
+    "excited",
+    "face",
+    "grinning",
+    "mouth",
+    "nervous",
+    "open",
+    "smile",
+    "smiling",
+    "stress",
+    "stressed",
+    "sweat"
+  ],
+  "1F923": [
+    "crying",
+    "face",
+    "floor",
+    "funny",
+    "haha",
+    "happy",
+    "hehe",
+    "hilarious",
+    "joy",
+    "laugh",
+    "lmao",
+    "lol",
+    "rofl",
+    "roflmao",
+    "rolling",
+    "tear"
+  ],
+  "1F602": [
+    "crying",
+    "face",
+    "feels",
+    "funny",
+    "haha",
+    "happy",
+    "hehe",
+    "hilarious",
+    "joy",
+    "laugh",
+    "lmao",
+    "lol",
+    "rofl",
+    "roflmao",
+    "tear"
+  ],
+  "1F642": [
+    "face",
+    "happy",
+    "slightly",
+    "smile",
+    "smiling"
+  ],
+  "1F643": [
+    "face",
+    "hehe",
+    "smile",
+    "upside-down"
+  ],
+  "1FAE0": [
+    "disappear",
+    "dissolve",
+    "embarrassed",
+    "face",
+    "haha",
+    "heat",
+    "hot",
+    "liquid",
+    "lol",
+    "melt",
+    "melting",
+    "sarcasm",
+    "sarcastic"
+  ],
+  "1F609": [
+    "face",
+    "flirt",
+    "heartbreaker",
+    "sexy",
+    "slide",
+    "tease",
+    "wink",
+    "winking",
+    "winks"
+  ],
+  "1F60A": [
+    "blush",
+    "eye",
+    "eyes",
+    "face",
+    "glad",
+    "satisfied",
+    "smile",
+    "smiling"
+  ],
+  "1F607": [
+    "angel",
+    "angelic",
+    "angels",
+    "blessed",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "halo",
+    "happy",
+    "innocent",
+    "peaceful",
+    "smile",
+    "smiling",
+    "spirit",
+    "tale"
+  ],
+  "1F970": [
+    "3",
+    "adore",
+    "crush",
+    "face",
+    "heart",
+    "hearts",
+    "ily",
+    "love",
+    "romance",
+    "smile",
+    "smiling",
+    "you"
+  ],
+  "1F60D": [
+    "143",
+    "bae",
+    "eye",
+    "face",
+    "feels",
+    "heart-eyes",
+    "hearts",
+    "ily",
+    "kisses",
+    "love",
+    "romance",
+    "romantic",
+    "smile",
+    "xoxo"
+  ],
+  "1F929": [
+    "excited",
+    "eyes",
+    "face",
+    "grinning",
+    "smile",
+    "star",
+    "starry-eyed",
+    "wow"
+  ],
+  "1F618": [
+    "adorbs",
+    "bae",
+    "blowing",
+    "face",
+    "flirt",
+    "heart",
+    "ily",
+    "kiss",
+    "love",
+    "lover",
+    "miss",
+    "muah",
+    "romantic",
+    "smooch",
+    "xoxo",
+    "you"
+  ],
+  "1F617": [
+    "143",
+    "date",
+    "dating",
+    "face",
+    "flirt",
+    "ily",
+    "kiss",
+    "love",
+    "smooch",
+    "smooches",
+    "xoxo",
+    "you"
+  ],
+  "263A": [
+    "face",
+    "happy",
+    "outlined",
+    "relaxed",
+    "smile",
+    "smiling"
+  ],
+  "1F61A": [
+    "143",
+    "bae",
+    "blush",
+    "closed",
+    "date",
+    "dating",
+    "eye",
+    "eyes",
+    "face",
+    "flirt",
+    "ily",
+    "kisses",
+    "kissing",
+    "smooches",
+    "xoxo"
+  ],
+  "1F619": [
+    "143",
+    "closed",
+    "date",
+    "dating",
+    "eye",
+    "eyes",
+    "face",
+    "flirt",
+    "ily",
+    "kiss",
+    "kisses",
+    "kissing",
+    "love",
+    "night",
+    "smile",
+    "smiling"
+  ],
+  "1F972": [
+    "face",
+    "glad",
+    "grateful",
+    "happy",
+    "joy",
+    "pain",
+    "proud",
+    "relieved",
+    "smile",
+    "smiley",
+    "smiling",
+    "tear",
+    "touched"
+  ],
+  "1F60B": [
+    "delicious",
+    "eat",
+    "face",
+    "food",
+    "full",
+    "hungry",
+    "savor",
+    "smile",
+    "smiling",
+    "tasty",
+    "um",
+    "yum",
+    "yummy"
+  ],
+  "1F61B": [
+    "awesome",
+    "cool",
+    "face",
+    "nice",
+    "party",
+    "stuck-out",
+    "sweet",
+    "tongue"
+  ],
+  "1F61C": [
+    "crazy",
+    "epic",
+    "eye",
+    "face",
+    "funny",
+    "joke",
+    "loopy",
+    "nutty",
+    "party",
+    "stuck-out",
+    "tongue",
+    "wacky",
+    "weirdo",
+    "wink",
+    "winking",
+    "yolo"
+  ],
+  "1F92A": [
+    "crazy",
+    "eye",
+    "eyes",
+    "face",
+    "goofy",
+    "large",
+    "small",
+    "zany"
+  ],
+  "1F61D": [
+    "closed",
+    "eye",
+    "eyes",
+    "face",
+    "gross",
+    "horrible",
+    "omg",
+    "squinting",
+    "stuck-out",
+    "taste",
+    "tongue",
+    "whatever",
+    "yolo"
+  ],
+  "1F911": [
+    "face",
+    "money",
+    "money-mouth",
+    "mouth",
+    "paid"
+  ],
+  "1F917": [
+    "face",
+    "hands",
+    "hug",
+    "hugging",
+    "open",
+    "smiling"
+  ],
+  "1F92D": [
+    "face",
+    "giggle",
+    "giggling",
+    "hand",
+    "mouth",
+    "oops",
+    "realization",
+    "secret",
+    "shock",
+    "sudden",
+    "surprise",
+    "whoops"
+  ],
+  "1FAE2": [
+    "amazement",
+    "awe",
+    "disbelief",
+    "embarrass",
+    "eyes",
+    "face",
+    "gasp",
+    "hand",
+    "mouth",
+    "omg",
+    "open",
+    "over",
+    "quiet",
+    "scared",
+    "shock",
+    "surprise"
+  ],
+  "1FAE3": [
+    "captivated",
+    "embarrass",
+    "eye",
+    "face",
+    "hide",
+    "hiding",
+    "peek",
+    "peeking",
+    "peep",
+    "scared",
+    "shy",
+    "stare"
+  ],
+  "1F92B": [
+    "face",
+    "quiet",
+    "shh",
+    "shush",
+    "shushing"
+  ],
+  "1F914": [
+    "chin",
+    "consider",
+    "face",
+    "hmm",
+    "ponder",
+    "pondering",
+    "thinking",
+    "wondering"
+  ],
+  "1FAE1": [
+    "face",
+    "good",
+    "luck",
+    "ma’am",
+    "ok",
+    "respect",
+    "salute",
+    "saluting",
+    "sir",
+    "troops",
+    "yes"
+  ],
+  "1F910": [
+    "face",
+    "keep",
+    "mouth",
+    "quiet",
+    "secret",
+    "shut",
+    "zip",
+    "zipper",
+    "zipper-mouth"
+  ],
+  "1F928": [
+    "disapproval",
+    "disbelief",
+    "distrust",
+    "emoji",
+    "eyebrow",
+    "face",
+    "hmm",
+    "mild",
+    "raised",
+    "skeptic",
+    "skeptical",
+    "skepticism",
+    "surprise",
+    "what"
+  ],
+  "1F610": [
+    "awkward",
+    "blank",
+    "deadpan",
+    "expressionless",
+    "face",
+    "fine",
+    "jealous",
+    "meh",
+    "neutral",
+    "oh",
+    "shade",
+    "straight",
+    "unamused",
+    "unhappy",
+    "unimpressed",
+    "whatever"
+  ],
+  "1F611": [
+    "awkward",
+    "dead",
+    "expressionless",
+    "face",
+    "fine",
+    "inexpressive",
+    "jealous",
+    "meh",
+    "not",
+    "oh",
+    "omg",
+    "straight",
+    "uh",
+    "unhappy",
+    "unimpressed",
+    "whatever"
+  ],
+  "1F636": [
+    "awkward",
+    "blank",
+    "expressionless",
+    "face",
+    "mouth",
+    "mouthless",
+    "mute",
+    "quiet",
+    "secret",
+    "silence",
+    "silent",
+    "speechless"
+  ],
+  "1FAE5": [
+    "depressed",
+    "disappear",
+    "dotted",
+    "face",
+    "hidden",
+    "hide",
+    "introvert",
+    "invisible",
+    "line",
+    "meh",
+    "whatever",
+    "wtv"
+  ],
+  "1F636-200D-1F32B": [
+    "absentminded",
+    "clouds",
+    "face",
+    "fog",
+    "head"
+  ],
+  "1F60F": [
+    "boss",
+    "dapper",
+    "face",
+    "flirt",
+    "homie",
+    "kidding",
+    "leer",
+    "shade",
+    "slick",
+    "sly",
+    "smirk",
+    "smug",
+    "snicker",
+    "suave",
+    "suspicious",
+    "swag"
+  ],
+  "1F612": [
+    "...",
+    "bored",
+    "face",
+    "fine",
+    "jealous",
+    "jel",
+    "jelly",
+    "pissed",
+    "smh",
+    "ugh",
+    "uhh",
+    "unamused",
+    "unhappy",
+    "weird",
+    "whatever"
+  ],
+  "1F644": [
+    "eyeroll",
+    "eyes",
+    "face",
+    "rolling",
+    "shade",
+    "ugh",
+    "whatever"
+  ],
+  "1F62C": [
+    "awk",
+    "awkward",
+    "dentist",
+    "face",
+    "grimace",
+    "grimacing",
+    "grinning",
+    "smile",
+    "smiling"
+  ],
+  "1F62E-200D-1F4A8": [
+    "blow",
+    "blowing",
+    "exhale",
+    "exhaling",
+    "exhausted",
+    "face",
+    "gasp",
+    "groan",
+    "relief",
+    "sigh",
+    "smiley",
+    "smoke",
+    "whisper",
+    "whistle"
+  ],
+  "1F925": [
+    "face",
+    "liar",
+    "lie",
+    "lying",
+    "pinocchio"
+  ],
+  "1FAE8": [
+    "crazy",
+    "daze",
+    "earthquake",
+    "face",
+    "omg",
+    "panic",
+    "shaking",
+    "shock",
+    "surprise",
+    "vibrate",
+    "whoa",
+    "wow"
+  ],
+  "1F642-200D-2194": [
+    "head",
+    "horizontally",
+    "no",
+    "shake",
+    "shaking"
+  ],
+  "1F642-200D-2195": [
+    "head",
+    "nod",
+    "shaking",
+    "vertically",
+    "yes"
+  ],
+  "1F60C": [
+    "calm",
+    "face",
+    "peace",
+    "relief",
+    "relieved",
+    "zen"
+  ],
+  "1F614": [
+    "awful",
+    "bored",
+    "dejected",
+    "died",
+    "disappointed",
+    "face",
+    "losing",
+    "lost",
+    "pensive",
+    "sad",
+    "sucks"
+  ],
+  "1F62A": [
+    "crying",
+    "face",
+    "good",
+    "night",
+    "sad",
+    "sleep",
+    "sleeping",
+    "sleepy",
+    "tired"
+  ],
+  "1F924": [
+    "drooling",
+    "face"
+  ],
+  "1F634": [
+    "bed",
+    "bedtime",
+    "face",
+    "good",
+    "goodnight",
+    "nap",
+    "night",
+    "sleep",
+    "sleeping",
+    "tired",
+    "whatever",
+    "yawn",
+    "zzz"
+  ],
+  "1FAE9": [
+    "bags",
+    "bored",
+    "exhausted",
+    "eyes",
+    "face",
+    "fatigued",
+    "late",
+    "sleepy",
+    "tired",
+    "weary"
+  ],
+  "1F637": [
+    "cold",
+    "dentist",
+    "dermatologist",
+    "doctor",
+    "dr",
+    "face",
+    "germs",
+    "mask",
+    "medical",
+    "medicine",
+    "sick"
+  ],
+  "1F912": [
+    "face",
+    "ill",
+    "sick",
+    "thermometer"
+  ],
+  "1F915": [
+    "bandage",
+    "face",
+    "head-bandage",
+    "hurt",
+    "injury",
+    "ouch"
+  ],
+  "1F922": [
+    "face",
+    "gross",
+    "nasty",
+    "nauseated",
+    "sick",
+    "vomit"
+  ],
+  "1F92E": [
+    "barf",
+    "ew",
+    "face",
+    "gross",
+    "puke",
+    "sick",
+    "spew",
+    "throw",
+    "up",
+    "vomit",
+    "vomiting"
+  ],
+  "1F927": [
+    "face",
+    "fever",
+    "flu",
+    "gesundheit",
+    "sick",
+    "sneeze",
+    "sneezing"
+  ],
+  "1F975": [
+    "dying",
+    "face",
+    "feverish",
+    "heat",
+    "hot",
+    "panting",
+    "red-faced",
+    "stroke",
+    "sweating",
+    "tongue"
+  ],
+  "1F976": [
+    "blue",
+    "blue-faced",
+    "cold",
+    "face",
+    "freezing",
+    "frostbite",
+    "icicles",
+    "subzero",
+    "teeth"
+  ],
+  "1F974": [
+    "dizzy",
+    "drunk",
+    "eyes",
+    "face",
+    "intoxicated",
+    "mouth",
+    "tipsy",
+    "uneven",
+    "wavy",
+    "woozy"
+  ],
+  "1F635": [
+    "crossed-out",
+    "dead",
+    "dizzy",
+    "eyes",
+    "face",
+    "feels",
+    "knocked",
+    "out",
+    "sick",
+    "tired"
+  ],
+  "1F635-200D-1F4AB": [
+    "confused",
+    "dizzy",
+    "eyes",
+    "face",
+    "hypnotized",
+    "omg",
+    "smiley",
+    "spiral",
+    "trouble",
+    "whoa",
+    "woah",
+    "woozy"
+  ],
+  "1F92F": [
+    "blown",
+    "explode",
+    "exploding",
+    "head",
+    "mind",
+    "mindblown",
+    "no",
+    "shocked",
+    "way"
+  ],
+  "1F920": [
+    "cowboy",
+    "cowgirl",
+    "face",
+    "hat"
+  ],
+  "1F973": [
+    "bday",
+    "birthday",
+    "celebrate",
+    "celebration",
+    "excited",
+    "face",
+    "happy",
+    "hat",
+    "hooray",
+    "horn",
+    "party",
+    "partying"
+  ],
+  "1F978": [
+    "disguise",
+    "eyebrow",
+    "face",
+    "glasses",
+    "incognito",
+    "moustache",
+    "mustache",
+    "nose",
+    "person",
+    "spy",
+    "tache",
+    "tash"
+  ],
+  "1F60E": [
+    "awesome",
+    "beach",
+    "bright",
+    "bro",
+    "chilling",
+    "cool",
+    "face",
+    "rad",
+    "relaxed",
+    "shades",
+    "slay",
+    "smile",
+    "style",
+    "sunglasses",
+    "swag",
+    "win"
+  ],
+  "1F913": [
+    "brainy",
+    "clever",
+    "expert",
+    "face",
+    "geek",
+    "gifted",
+    "glasses",
+    "intelligent",
+    "nerd",
+    "smart"
+  ],
+  "1F9D0": [
+    "classy",
+    "face",
+    "fancy",
+    "monocle",
+    "rich",
+    "stuffy",
+    "wealthy"
+  ],
+  "1F615": [
+    "befuddled",
+    "confused",
+    "confusing",
+    "dunno",
+    "face",
+    "frown",
+    "hm",
+    "meh",
+    "not",
+    "sad",
+    "sorry",
+    "sure"
+  ],
+  "1FAE4": [
+    "confused",
+    "confusion",
+    "diagonal",
+    "disappointed",
+    "doubt",
+    "doubtful",
+    "face",
+    "frustrated",
+    "frustration",
+    "meh",
+    "mouth",
+    "skeptical",
+    "unsure",
+    "whatever",
+    "wtv"
+  ],
+  "1F61F": [
+    "anxious",
+    "butterflies",
+    "face",
+    "nerves",
+    "nervous",
+    "sad",
+    "stress",
+    "stressed",
+    "surprised",
+    "worried",
+    "worry"
+  ],
+  "1F641": [
+    "face",
+    "frown",
+    "frowning",
+    "sad",
+    "slightly"
+  ],
+  "1F62E": [
+    "believe",
+    "face",
+    "forgot",
+    "mouth",
+    "omg",
+    "open",
+    "shocked",
+    "surprised",
+    "sympathy",
+    "unbelievable",
+    "unreal",
+    "whoa",
+    "wow",
+    "you"
+  ],
+  "1F62F": [
+    "epic",
+    "face",
+    "hushed",
+    "omg",
+    "stunned",
+    "surprised",
+    "whoa",
+    "woah"
+  ],
+  "1F632": [
+    "astonished",
+    "cost",
+    "face",
+    "no",
+    "omg",
+    "shocked",
+    "totally",
+    "way"
+  ],
+  "1F633": [
+    "amazed",
+    "awkward",
+    "crazy",
+    "dazed",
+    "dead",
+    "disbelief",
+    "embarrassed",
+    "face",
+    "flushed",
+    "geez",
+    "heat",
+    "hot",
+    "impressed",
+    "jeez",
+    "what",
+    "wow"
+  ],
+  "1F97A": [
+    "begging",
+    "big",
+    "eyes",
+    "face",
+    "mercy",
+    "not",
+    "pleading",
+    "please",
+    "pretty",
+    "puppy",
+    "sad",
+    "why"
+  ],
+  "1F979": [
+    "admiration",
+    "aww",
+    "back",
+    "cry",
+    "embarrassed",
+    "face",
+    "feelings",
+    "grateful",
+    "gratitude",
+    "holding",
+    "joy",
+    "please",
+    "proud",
+    "resist",
+    "sad",
+    "tears"
+  ],
+  "1F626": [
+    "caught",
+    "face",
+    "frown",
+    "frowning",
+    "guard",
+    "mouth",
+    "open",
+    "scared",
+    "scary",
+    "surprise",
+    "what",
+    "wow"
+  ],
+  "1F627": [
+    "anguished",
+    "face",
+    "forgot",
+    "scared",
+    "scary",
+    "stressed",
+    "surprise",
+    "unhappy",
+    "what",
+    "wow"
+  ],
+  "1F628": [
+    "afraid",
+    "anxious",
+    "blame",
+    "face",
+    "fear",
+    "fearful",
+    "scared",
+    "worried"
+  ],
+  "1F630": [
+    "anxious",
+    "blue",
+    "cold",
+    "eek",
+    "face",
+    "mouth",
+    "nervous",
+    "open",
+    "rushed",
+    "scared",
+    "sweat",
+    "yikes"
+  ],
+  "1F625": [
+    "anxious",
+    "call",
+    "close",
+    "complicated",
+    "disappointed",
+    "face",
+    "not",
+    "relieved",
+    "sad",
+    "sweat",
+    "time",
+    "whew"
+  ],
+  "1F622": [
+    "awful",
+    "cry",
+    "crying",
+    "face",
+    "feels",
+    "miss",
+    "sad",
+    "tear",
+    "triste",
+    "unhappy"
+  ],
+  "1F62D": [
+    "bawling",
+    "cry",
+    "crying",
+    "face",
+    "loudly",
+    "sad",
+    "sob",
+    "tear",
+    "tears",
+    "unhappy"
+  ],
+  "1F631": [
+    "epic",
+    "face",
+    "fear",
+    "fearful",
+    "munch",
+    "scared",
+    "scream",
+    "screamer",
+    "screaming",
+    "shocked",
+    "surprised",
+    "woah"
+  ],
+  "1F616": [
+    "annoyed",
+    "confounded",
+    "confused",
+    "cringe",
+    "distraught",
+    "face",
+    "feels",
+    "frustrated",
+    "mad",
+    "sad"
+  ],
+  "1F623": [
+    "concentrate",
+    "concentration",
+    "face",
+    "focus",
+    "headache",
+    "persevere",
+    "persevering"
+  ],
+  "1F61E": [
+    "awful",
+    "blame",
+    "dejected",
+    "disappointed",
+    "face",
+    "fail",
+    "losing",
+    "sad",
+    "unhappy"
+  ],
+  "1F613": [
+    "close",
+    "cold",
+    "downcast",
+    "face",
+    "feels",
+    "headache",
+    "nervous",
+    "sad",
+    "scared",
+    "sweat",
+    "yikes"
+  ],
+  "1F629": [
+    "crying",
+    "face",
+    "fail",
+    "feels",
+    "hungry",
+    "mad",
+    "nooo",
+    "sad",
+    "sleepy",
+    "tired",
+    "unhappy",
+    "weary"
+  ],
+  "1F62B": [
+    "cost",
+    "face",
+    "feels",
+    "nap",
+    "sad",
+    "sneeze",
+    "tired"
+  ],
+  "1F971": [
+    "bedtime",
+    "bored",
+    "face",
+    "goodnight",
+    "nap",
+    "night",
+    "sleep",
+    "sleepy",
+    "tired",
+    "whatever",
+    "yawn",
+    "yawning",
+    "zzz"
+  ],
+  "1F624": [
+    "anger",
+    "angry",
+    "face",
+    "feels",
+    "fume",
+    "fuming",
+    "furious",
+    "fury",
+    "mad",
+    "nose",
+    "steam",
+    "triumph",
+    "unhappy",
+    "won"
+  ],
+  "1F621": [
+    "anger",
+    "angry",
+    "enraged",
+    "face",
+    "feels",
+    "mad",
+    "maddening",
+    "pouting",
+    "rage",
+    "red",
+    "shade",
+    "unhappy",
+    "upset"
+  ],
+  "1F620": [
+    "anger",
+    "angry",
+    "blame",
+    "face",
+    "feels",
+    "frustrated",
+    "mad",
+    "maddening",
+    "rage",
+    "shade",
+    "unhappy",
+    "upset"
+  ],
+  "1F92C": [
+    "censor",
+    "cursing",
+    "cussing",
+    "face",
+    "mad",
+    "mouth",
+    "pissed",
+    "swearing",
+    "symbols"
+  ],
+  "1F608": [
+    "demon",
+    "devil",
+    "evil",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "horns",
+    "purple",
+    "shade",
+    "smile",
+    "smiling",
+    "tale"
+  ],
+  "1F47F": [
+    "angry",
+    "demon",
+    "devil",
+    "evil",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "horns",
+    "imp",
+    "mischievous",
+    "purple",
+    "shade",
+    "tale"
+  ],
+  "1F480": [
+    "body",
+    "dead",
+    "death",
+    "face",
+    "fairy",
+    "fairytale",
+    "i’m",
+    "lmao",
+    "monster",
+    "tale",
+    "yolo"
+  ],
+  "1F4A9": [
+    "bs",
+    "comic",
+    "doo",
+    "dung",
+    "face",
+    "fml",
+    "monster",
+    "pile",
+    "poo",
+    "poop",
+    "smelly",
+    "smh",
+    "stink",
+    "stinks",
+    "stinky",
+    "turd"
+  ],
+  "1F921": [
+    "clown",
+    "face"
+  ],
+  "1F479": [
+    "creature",
+    "devil",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "mask",
+    "monster",
+    "scary",
+    "tale"
+  ],
+  "1F47A": [
+    "angry",
+    "creature",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "mask",
+    "mean",
+    "monster",
+    "tale"
+  ],
+  "1F47B": [
+    "boo",
+    "creature",
+    "excited",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "halloween",
+    "haunting",
+    "monster",
+    "scary",
+    "silly",
+    "tale"
+  ],
+  "1F47D": [
+    "creature",
+    "extraterrestrial",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "monster",
+    "space",
+    "tale",
+    "ufo"
+  ],
+  "1F47E": [
+    "alien",
+    "creature",
+    "extraterrestrial",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "game",
+    "gamer",
+    "games",
+    "monster",
+    "pixelated",
+    "space",
+    "tale",
+    "ufo"
+  ],
+  "1F916": [
+    "face",
+    "monster"
+  ],
+  "1F63A": [
+    "animal",
+    "cat",
+    "face",
+    "grinning",
+    "mouth",
+    "open",
+    "smile",
+    "smiling"
+  ],
+  "1F638": [
+    "animal",
+    "cat",
+    "eye",
+    "eyes",
+    "face",
+    "grin",
+    "grinning",
+    "smile",
+    "smiling"
+  ],
+  "1F639": [
+    "animal",
+    "cat",
+    "face",
+    "joy",
+    "laugh",
+    "laughing",
+    "lol",
+    "tear",
+    "tears"
+  ],
+  "1F63B": [
+    "animal",
+    "cat",
+    "eye",
+    "face",
+    "heart",
+    "heart-eyes",
+    "love",
+    "smile",
+    "smiling"
+  ],
+  "1F63C": [
+    "animal",
+    "cat",
+    "face",
+    "ironic",
+    "smile",
+    "wry"
+  ],
+  "1F63D": [
+    "animal",
+    "cat",
+    "closed",
+    "eye",
+    "eyes",
+    "face",
+    "kiss",
+    "kissing"
+  ],
+  "1F640": [
+    "animal",
+    "cat",
+    "face",
+    "oh",
+    "surprised",
+    "weary"
+  ],
+  "1F63F": [
+    "animal",
+    "cat",
+    "cry",
+    "crying",
+    "face",
+    "sad",
+    "tear"
+  ],
+  "1F63E": [
+    "animal",
+    "cat",
+    "face",
+    "pouting"
+  ],
+  "1F648": [
+    "embarrassed",
+    "evil",
+    "face",
+    "forbidden",
+    "forgot",
+    "gesture",
+    "hide",
+    "monkey",
+    "no",
+    "omg",
+    "prohibited",
+    "scared",
+    "secret",
+    "smh",
+    "watch"
+  ],
+  "1F649": [
+    "animal",
+    "ears",
+    "evil",
+    "face",
+    "forbidden",
+    "gesture",
+    "hear",
+    "listen",
+    "monkey",
+    "no",
+    "not",
+    "prohibited",
+    "secret",
+    "shh",
+    "tmi"
+  ],
+  "1F64A": [
+    "animal",
+    "evil",
+    "face",
+    "forbidden",
+    "gesture",
+    "monkey",
+    "no",
+    "not",
+    "oops",
+    "prohibited",
+    "quiet",
+    "secret",
+    "speak",
+    "stealth"
+  ],
+  "1F48C": [
+    "heart",
+    "letter",
+    "love",
+    "mail",
+    "romance",
+    "valentine"
+  ],
+  "1F498": [
+    "143",
+    "adorbs",
+    "arrow",
+    "cupid",
+    "date",
+    "emotion",
+    "heart",
+    "ily",
+    "love",
+    "romance",
+    "valentine"
+  ],
+  "1F49D": [
+    "143",
+    "anniversary",
+    "emotion",
+    "heart",
+    "ily",
+    "kisses",
+    "ribbon",
+    "valentine",
+    "xoxo"
+  ],
+  "1F496": [
+    "143",
+    "emotion",
+    "excited",
+    "good",
+    "heart",
+    "ily",
+    "kisses",
+    "morning",
+    "night",
+    "sparkle",
+    "sparkling",
+    "xoxo"
+  ],
+  "1F497": [
+    "143",
+    "emotion",
+    "excited",
+    "growing",
+    "heart",
+    "heartpulse",
+    "ily",
+    "kisses",
+    "muah",
+    "nervous",
+    "pulse",
+    "xoxo"
+  ],
+  "1F493": [
+    "143",
+    "beating",
+    "cardio",
+    "emotion",
+    "heart",
+    "heartbeat",
+    "ily",
+    "love",
+    "pulsating",
+    "pulse"
+  ],
+  "1F49E": [
+    "143",
+    "adorbs",
+    "anniversary",
+    "emotion",
+    "heart",
+    "hearts",
+    "revolving"
+  ],
+  "1F495": [
+    "143",
+    "anniversary",
+    "date",
+    "dating",
+    "emotion",
+    "heart",
+    "hearts",
+    "ily",
+    "kisses",
+    "love",
+    "loving",
+    "two",
+    "xoxo"
+  ],
+  "1F49F": [
+    "143",
+    "decoration",
+    "emotion",
+    "heart",
+    "hearth",
+    "purple",
+    "white"
+  ],
+  "1F494": [
+    "break",
+    "broken",
+    "crushed",
+    "emotion",
+    "heart",
+    "heartbroken",
+    "lonely",
+    "sad"
+  ],
+  "2764-200D-1F525": [
+    "burn",
+    "fire",
+    "heart",
+    "love",
+    "lust",
+    "sacred"
+  ],
+  "2764-200D-1FA79": [
+    "healthier",
+    "heart",
+    "improving",
+    "mending",
+    "recovering",
+    "recuperating",
+    "well"
+  ],
+  "1FA77": [
+    "143",
+    "adorable",
+    "cute",
+    "emotion",
+    "heart",
+    "ily",
+    "like",
+    "love",
+    "pink",
+    "special",
+    "sweet"
+  ],
+  "1F9E1": [
+    "143",
+    "heart",
+    "orange"
+  ],
+  "1F49B": [
+    "143",
+    "cardiac",
+    "emotion",
+    "heart",
+    "ily",
+    "love",
+    "yellow"
+  ],
+  "1F49A": [
+    "143",
+    "emotion",
+    "green",
+    "heart",
+    "ily",
+    "love",
+    "romantic"
+  ],
+  "1F499": [
+    "143",
+    "blue",
+    "emotion",
+    "heart",
+    "ily",
+    "love",
+    "romance"
+  ],
+  "1FA75": [
+    "143",
+    "blue",
+    "cute",
+    "cyan",
+    "emotion",
+    "heart",
+    "ily",
+    "light",
+    "like",
+    "love",
+    "sky",
+    "special",
+    "teal"
+  ],
+  "1F49C": [
+    "143",
+    "bestest",
+    "emotion",
+    "heart",
+    "ily",
+    "love",
+    "purple"
+  ],
+  "1F90E": [
+    "143",
+    "brown",
+    "heart"
+  ],
+  "1F5A4": [
+    "black",
+    "evil",
+    "heart",
+    "wicked"
+  ],
+  "1FA76": [
+    "143",
+    "emotion",
+    "gray",
+    "grey",
+    "heart",
+    "ily",
+    "love",
+    "silver",
+    "slate",
+    "special"
+  ],
+  "1F90D": [
+    "143",
+    "heart",
+    "white"
+  ],
+  "1F48B": [
+    "dating",
+    "emotion",
+    "heart",
+    "kiss",
+    "kissing",
+    "lips",
+    "mark",
+    "romance",
+    "sexy"
+  ],
+  "1F4AF": [
+    "100",
+    "a+",
+    "agree",
+    "clearly",
+    "definitely",
+    "faithful",
+    "fleek",
+    "full",
+    "hundred",
+    "keep",
+    "perfect",
+    "point",
+    "score",
+    "true",
+    "truth",
+    "yup"
+  ],
+  "1F4A2": [
+    "anger",
+    "angry",
+    "comic",
+    "mad",
+    "symbol",
+    "upset"
+  ],
+  "1F4A5": [
+    "bomb",
+    "boom",
+    "collide",
+    "comic",
+    "explode"
+  ],
+  "1F4AB": [
+    "comic",
+    "shining",
+    "shooting",
+    "star",
+    "stars"
+  ],
+  "1F4A6": [
+    "comic",
+    "drip",
+    "droplet",
+    "droplets",
+    "drops",
+    "splashing",
+    "squirt",
+    "sweat",
+    "water",
+    "wet",
+    "work",
+    "workout"
+  ],
+  "1F4A8": [
+    "away",
+    "cloud",
+    "comic",
+    "dash",
+    "dashing",
+    "fart",
+    "fast",
+    "go",
+    "gone",
+    "gotta",
+    "running",
+    "smoke"
+  ],
+  "1F573": [
+    "hole"
+  ],
+  "1F4AC": [
+    "balloon",
+    "bubble",
+    "comic",
+    "dialog",
+    "message",
+    "sms",
+    "speech",
+    "talk",
+    "text",
+    "typing"
+  ],
+  "1F441-200D-1F5E8": [
+    "balloon",
+    "bubble",
+    "eye",
+    "speech",
+    "witness"
+  ],
+  "1F5E8": [
+    "balloon",
+    "bubble",
+    "dialog",
+    "left",
+    "speech"
+  ],
+  "1F5EF": [
+    "anger",
+    "angry",
+    "balloon",
+    "bubble",
+    "mad",
+    "right"
+  ],
+  "1F4AD": [
+    "balloon",
+    "bubble",
+    "cartoon",
+    "cloud",
+    "comic",
+    "daydream",
+    "decisions",
+    "dream",
+    "idea",
+    "invent",
+    "invention",
+    "realize",
+    "think",
+    "thoughts",
+    "wonder"
+  ],
+  "1F4A4": [
+    "comic",
+    "good",
+    "goodnight",
+    "night",
+    "sleep",
+    "sleeping",
+    "sleepy",
+    "tired",
+    "zzz"
+  ],
+  "1F44B": [
+    "bye",
+    "cya",
+    "g2g",
+    "greetings",
+    "gtg",
+    "hand",
+    "hello",
+    "hey",
+    "hi",
+    "later",
+    "outtie",
+    "ttfn",
+    "ttyl",
+    "wave",
+    "yo",
+    "you"
+  ],
+  "1F91A": [
+    "back",
+    "backhand",
+    "hand",
+    "raised"
+  ],
+  "1F590": [
+    "finger",
+    "fingers",
+    "hand",
+    "raised",
+    "splayed",
+    "stop"
+  ],
+  "270B": [
+    "5",
+    "five",
+    "hand",
+    "high",
+    "raised",
+    "stop"
+  ],
+  "1F596": [
+    "finger",
+    "hand",
+    "hands",
+    "salute",
+    "vulcan"
+  ],
+  "1FAF1": [
+    "hand",
+    "handshake",
+    "hold",
+    "reach",
+    "right",
+    "rightward",
+    "rightwards",
+    "shake"
+  ],
+  "1FAF2": [
+    "hand",
+    "handshake",
+    "hold",
+    "left",
+    "leftward",
+    "leftwards",
+    "reach",
+    "shake"
+  ],
+  "1FAF3": [
+    "dismiss",
+    "down",
+    "drop",
+    "dropped",
+    "hand",
+    "palm",
+    "pick",
+    "shoo",
+    "up"
+  ],
+  "1FAF4": [
+    "beckon",
+    "catch",
+    "come",
+    "hand",
+    "hold",
+    "know",
+    "lift",
+    "me",
+    "offer",
+    "palm",
+    "tell"
+  ],
+  "1FAF7": [
+    "block",
+    "five",
+    "halt",
+    "hand",
+    "high",
+    "hold",
+    "leftward",
+    "leftwards",
+    "pause",
+    "push",
+    "pushing",
+    "refuse",
+    "slap",
+    "stop",
+    "wait"
+  ],
+  "1FAF8": [
+    "block",
+    "five",
+    "halt",
+    "hand",
+    "high",
+    "hold",
+    "pause",
+    "push",
+    "pushing",
+    "refuse",
+    "rightward",
+    "rightwards",
+    "slap",
+    "stop",
+    "wait"
+  ],
+  "1F44C": [
+    "awesome",
+    "bet",
+    "dope",
+    "fleek",
+    "fosho",
+    "got",
+    "gotcha",
+    "hand",
+    "legit",
+    "ok",
+    "okay",
+    "pinch",
+    "rad",
+    "sure",
+    "sweet",
+    "three"
+  ],
+  "1F90C": [
+    "fingers",
+    "gesture",
+    "hand",
+    "hold",
+    "huh",
+    "interrogation",
+    "patience",
+    "pinched",
+    "relax",
+    "sarcastic",
+    "ugh",
+    "what",
+    "zip"
+  ],
+  "1F90F": [
+    "amount",
+    "bit",
+    "fingers",
+    "hand",
+    "little",
+    "pinching",
+    "small",
+    "sort"
+  ],
+  "270C": [
+    "hand",
+    "peace",
+    "v",
+    "victory"
+  ],
+  "1F91E": [
+    "cross",
+    "crossed",
+    "finger",
+    "fingers",
+    "hand",
+    "luck"
+  ],
+  "1FAF0": [
+    "<3",
+    "crossed",
+    "expensive",
+    "finger",
+    "hand",
+    "heart",
+    "index",
+    "love",
+    "money",
+    "snap",
+    "thumb"
+  ],
+  "1F91F": [
+    "fingers",
+    "gesture",
+    "hand",
+    "ily",
+    "love",
+    "love-you",
+    "three",
+    "you"
+  ],
+  "1F918": [
+    "finger",
+    "hand",
+    "horns",
+    "rock-on",
+    "sign"
+  ],
+  "1F919": [
+    "call",
+    "hand",
+    "hang",
+    "loose",
+    "me",
+    "shaka"
+  ],
+  "1F448": [
+    "backhand",
+    "finger",
+    "hand",
+    "index",
+    "left",
+    "point",
+    "pointing"
+  ],
+  "1F449": [
+    "backhand",
+    "finger",
+    "hand",
+    "index",
+    "point",
+    "pointing",
+    "right"
+  ],
+  "1F446": [
+    "backhand",
+    "finger",
+    "hand",
+    "index",
+    "point",
+    "pointing",
+    "up"
+  ],
+  "1F595": [
+    "finger",
+    "hand",
+    "middle"
+  ],
+  "1F447": [
+    "backhand",
+    "down",
+    "finger",
+    "hand",
+    "index",
+    "point",
+    "pointing"
+  ],
+  "261D": [
+    "finger",
+    "hand",
+    "index",
+    "point",
+    "pointing",
+    "this",
+    "up"
+  ],
+  "1FAF5": [
+    "at",
+    "finger",
+    "hand",
+    "index",
+    "pointing",
+    "poke",
+    "viewer",
+    "you"
+  ],
+  "1F44D": [
+    "+1",
+    "good",
+    "hand",
+    "like",
+    "thumb",
+    "up",
+    "yes"
+  ],
+  "1F44E": [
+    "-1",
+    "bad",
+    "dislike",
+    "down",
+    "good",
+    "hand",
+    "no",
+    "nope",
+    "thumb",
+    "thumbs"
+  ],
+  "270A": [
+    "clenched",
+    "fist",
+    "hand",
+    "punch",
+    "raised",
+    "solidarity"
+  ],
+  "1F44A": [
+    "absolutely",
+    "agree",
+    "boom",
+    "bro",
+    "bruh",
+    "bump",
+    "clenched",
+    "correct",
+    "fist",
+    "hand",
+    "knuckle",
+    "oncoming",
+    "pound",
+    "punch",
+    "rock",
+    "ttyl"
+  ],
+  "1F91B": [
+    "fist",
+    "left-facing",
+    "leftwards"
+  ],
+  "1F91C": [
+    "fist",
+    "right-facing",
+    "rightwards"
+  ],
+  "1F44F": [
+    "applause",
+    "approval",
+    "awesome",
+    "clap",
+    "congrats",
+    "congratulations",
+    "excited",
+    "good",
+    "great",
+    "hand",
+    "homie",
+    "job",
+    "nice",
+    "prayed",
+    "well",
+    "yay"
+  ],
+  "1F64C": [
+    "celebration",
+    "gesture",
+    "hand",
+    "hands",
+    "hooray",
+    "praise",
+    "raised",
+    "raising"
+  ],
+  "1FAF6": [
+    "<3",
+    "hands",
+    "heart",
+    "love",
+    "you"
+  ],
+  "1F450": [
+    "hand",
+    "hands",
+    "hug",
+    "jazz",
+    "open",
+    "swerve"
+  ],
+  "1F932": [
+    "cupped",
+    "dua",
+    "hands",
+    "palms",
+    "pray",
+    "prayer",
+    "together",
+    "up",
+    "wish"
+  ],
+  "1F91D": [
+    "agreement",
+    "deal",
+    "hand",
+    "meeting",
+    "shake"
+  ],
+  "1F64F": [
+    "appreciate",
+    "ask",
+    "beg",
+    "blessed",
+    "bow",
+    "cmon",
+    "five",
+    "folded",
+    "gesture",
+    "hand",
+    "high",
+    "please",
+    "pray",
+    "thanks",
+    "thx"
+  ],
+  "270D": [
+    "hand",
+    "write",
+    "writing"
+  ],
+  "1F485": [
+    "bored",
+    "care",
+    "cosmetics",
+    "done",
+    "makeup",
+    "manicure",
+    "nail",
+    "polish",
+    "whatever"
+  ],
+  "1F933": [
+    "camera",
+    "phone"
+  ],
+  "1F4AA": [
+    "arm",
+    "beast",
+    "bench",
+    "biceps",
+    "bodybuilder",
+    "bro",
+    "curls",
+    "flex",
+    "gains",
+    "gym",
+    "jacked",
+    "muscle",
+    "press",
+    "ripped",
+    "strong",
+    "weightlift"
+  ],
+  "1F9BE": [
+    "accessibility",
+    "arm",
+    "mechanical",
+    "prosthetic"
+  ],
+  "1F9BF": [
+    "accessibility",
+    "leg",
+    "mechanical",
+    "prosthetic"
+  ],
+  "1F9B5": [
+    "bent",
+    "foot",
+    "kick",
+    "knee",
+    "limb"
+  ],
+  "1F9B6": [
+    "ankle",
+    "feet",
+    "kick",
+    "stomp"
+  ],
+  "1F442": [
+    "body",
+    "ears",
+    "hear",
+    "hearing",
+    "listen",
+    "listening",
+    "sound"
+  ],
+  "1F9BB": [
+    "accessibility",
+    "aid",
+    "ear",
+    "hard",
+    "hearing"
+  ],
+  "1F443": [
+    "body",
+    "noses",
+    "nosey",
+    "odor",
+    "smell",
+    "smells"
+  ],
+  "1F9E0": [
+    "intelligent",
+    "smart"
+  ],
+  "1FAC0": [
+    "anatomical",
+    "beat",
+    "cardiology",
+    "heart",
+    "heartbeat",
+    "organ",
+    "pulse",
+    "real",
+    "red"
+  ],
+  "1FAC1": [
+    "breath",
+    "breathe",
+    "exhalation",
+    "inhalation",
+    "lung",
+    "organ",
+    "respiration"
+  ],
+  "1F9B7": [
+    "dentist",
+    "pearly",
+    "teeth",
+    "white"
+  ],
+  "1F9B4": [
+    "bones",
+    "dog",
+    "skeleton",
+    "wishbone"
+  ],
+  "1F440": [
+    "body",
+    "eye",
+    "face",
+    "googly",
+    "look",
+    "looking",
+    "omg",
+    "peep",
+    "see",
+    "seeing"
+  ],
+  "1F441": [
+    "1",
+    "body",
+    "one"
+  ],
+  "1F445": [
+    "body",
+    "lick",
+    "slurp"
+  ],
+  "1F444": [
+    "beauty",
+    "body",
+    "kiss",
+    "kissing",
+    "lips",
+    "lipstick"
+  ],
+  "1FAE6": [
+    "anxious",
+    "bite",
+    "biting",
+    "fear",
+    "flirt",
+    "flirting",
+    "kiss",
+    "lip",
+    "lipstick",
+    "nervous",
+    "sexy",
+    "uncomfortable",
+    "worried",
+    "worry"
+  ],
+  "1F476": [
+    "babies",
+    "children",
+    "goo",
+    "infant",
+    "newborn",
+    "pregnant",
+    "young"
+  ],
+  "1F9D2": [
+    "bright-eyed",
+    "grandchild",
+    "kid",
+    "young",
+    "younger"
+  ],
+  "1F466": [
+    "bright-eyed",
+    "child",
+    "grandson",
+    "kid",
+    "son",
+    "young",
+    "younger"
+  ],
+  "1F467": [
+    "bright-eyed",
+    "child",
+    "daughter",
+    "granddaughter",
+    "kid",
+    "virgo",
+    "young",
+    "younger",
+    "zodiac"
+  ],
+  "1F9D1": [
+    "adult"
+  ],
+  "1F471": [
+    "blond",
+    "blond-haired",
+    "human",
+    "person"
+  ],
+  "1F468": [
+    "adult",
+    "bro"
+  ],
+  "1F9D4": [
+    "beard",
+    "bearded",
+    "person",
+    "whiskers"
+  ],
+  "1F9D4-200D-2642": [
+    "beard",
+    "bearded",
+    "man",
+    "whiskers"
+  ],
+  "1F9D4-200D-2640": [
+    "beard",
+    "bearded",
+    "whiskers",
+    "woman"
+  ],
+  "1F468-200D-1F9B0": [
+    "adult",
+    "bro",
+    "man",
+    "red hair"
+  ],
+  "1F468-200D-1F9B1": [
+    "adult",
+    "bro",
+    "curly hair",
+    "man"
+  ],
+  "1F468-200D-1F9B3": [
+    "adult",
+    "bro",
+    "man",
+    "white hair"
+  ],
+  "1F468-200D-1F9B2": [
+    "adult",
+    "bald",
+    "bro",
+    "man"
+  ],
+  "1F469": [
+    "adult",
+    "lady"
+  ],
+  "1F469-200D-1F9B0": [
+    "adult",
+    "lady",
+    "red hair",
+    "woman"
+  ],
+  "1F9D1-200D-1F9B0": [
+    "adult",
+    "person",
+    "red hair"
+  ],
+  "1F469-200D-1F9B1": [
+    "adult",
+    "curly hair",
+    "lady",
+    "woman"
+  ],
+  "1F9D1-200D-1F9B1": [
+    "adult",
+    "curly hair",
+    "person"
+  ],
+  "1F469-200D-1F9B3": [
+    "adult",
+    "lady",
+    "white hair",
+    "woman"
+  ],
+  "1F9D1-200D-1F9B3": [
+    "adult",
+    "person",
+    "white hair"
+  ],
+  "1F469-200D-1F9B2": [
+    "adult",
+    "bald",
+    "lady",
+    "woman"
+  ],
+  "1F9D1-200D-1F9B2": [
+    "adult",
+    "bald",
+    "person"
+  ],
+  "1F471-200D-2640": [
+    "blond",
+    "blond-haired",
+    "blonde",
+    "hair",
+    "woman"
+  ],
+  "1F471-200D-2642": [
+    "blond",
+    "blond-haired",
+    "hair",
+    "man"
+  ],
+  "1F9D3": [
+    "adult",
+    "elderly",
+    "grandparent",
+    "old",
+    "person",
+    "wise"
+  ],
+  "1F474": [
+    "adult",
+    "bald",
+    "elderly",
+    "gramps",
+    "grandfather",
+    "grandpa",
+    "man",
+    "old",
+    "wise"
+  ],
+  "1F475": [
+    "adult",
+    "elderly",
+    "grandma",
+    "grandmother",
+    "granny",
+    "lady",
+    "old",
+    "wise",
+    "woman"
+  ],
+  "1F64D": [
+    "annoyed",
+    "disappointed",
+    "disgruntled",
+    "disturbed",
+    "frown",
+    "frowning",
+    "frustrated",
+    "gesture",
+    "irritated",
+    "person",
+    "upset"
+  ],
+  "1F64D-200D-2642": [
+    "annoyed",
+    "disappointed",
+    "disgruntled",
+    "disturbed",
+    "frown",
+    "frowning",
+    "frustrated",
+    "gesture",
+    "irritated",
+    "man",
+    "upset"
+  ],
+  "1F64D-200D-2640": [
+    "annoyed",
+    "disappointed",
+    "disgruntled",
+    "disturbed",
+    "frown",
+    "frowning",
+    "frustrated",
+    "gesture",
+    "irritated",
+    "upset",
+    "woman"
+  ],
+  "1F64E": [
+    "disappointed",
+    "downtrodden",
+    "frown",
+    "grimace",
+    "person",
+    "pouting",
+    "scowl",
+    "sulk",
+    "upset",
+    "whine"
+  ],
+  "1F64E-200D-2642": [
+    "disappointed",
+    "downtrodden",
+    "frown",
+    "grimace",
+    "man",
+    "pouting",
+    "scowl",
+    "sulk",
+    "upset",
+    "whine"
+  ],
+  "1F64E-200D-2640": [
+    "disappointed",
+    "downtrodden",
+    "frown",
+    "grimace",
+    "pouting",
+    "scowl",
+    "sulk",
+    "upset",
+    "whine",
+    "woman"
+  ],
+  "1F645": [
+    "forbidden",
+    "gesture",
+    "hand",
+    "no",
+    "not",
+    "person",
+    "prohibit"
+  ],
+  "1F645-200D-2642": [
+    "forbidden",
+    "gesture",
+    "hand",
+    "man",
+    "no",
+    "not",
+    "prohibit"
+  ],
+  "1F645-200D-2640": [
+    "forbidden",
+    "gesture",
+    "hand",
+    "no",
+    "not",
+    "prohibit",
+    "woman"
+  ],
+  "1F646": [
+    "exercise",
+    "gesture",
+    "gesturing",
+    "hand",
+    "ok",
+    "omg",
+    "person"
+  ],
+  "1F646-200D-2642": [
+    "exercise",
+    "gesture",
+    "gesturing",
+    "hand",
+    "man",
+    "ok",
+    "omg"
+  ],
+  "1F646-200D-2640": [
+    "exercise",
+    "gesture",
+    "gesturing",
+    "hand",
+    "ok",
+    "omg",
+    "woman"
+  ],
+  "1F481": [
+    "fetch",
+    "flick",
+    "flip",
+    "gossip",
+    "hand",
+    "person",
+    "sarcasm",
+    "sarcastic",
+    "sassy",
+    "seriously",
+    "tipping",
+    "whatever"
+  ],
+  "1F481-200D-2642": [
+    "fetch",
+    "flick",
+    "flip",
+    "gossip",
+    "hand",
+    "man",
+    "sarcasm",
+    "sarcastic",
+    "sassy",
+    "seriously",
+    "tipping",
+    "whatever"
+  ],
+  "1F481-200D-2640": [
+    "fetch",
+    "flick",
+    "flip",
+    "gossip",
+    "hand",
+    "sarcasm",
+    "sarcastic",
+    "sassy",
+    "seriously",
+    "tipping",
+    "whatever",
+    "woman"
+  ],
+  "1F64B": [
+    "gesture",
+    "hand",
+    "here",
+    "know",
+    "me",
+    "person",
+    "pick",
+    "question",
+    "raise",
+    "raising"
+  ],
+  "1F64B-200D-2642": [
+    "gesture",
+    "hand",
+    "here",
+    "know",
+    "man",
+    "me",
+    "pick",
+    "question",
+    "raise",
+    "raising"
+  ],
+  "1F64B-200D-2640": [
+    "gesture",
+    "hand",
+    "here",
+    "know",
+    "me",
+    "pick",
+    "question",
+    "raise",
+    "raising",
+    "woman"
+  ],
+  "1F9CF": [
+    "accessibility",
+    "deaf",
+    "ear",
+    "gesture",
+    "hear",
+    "person"
+  ],
+  "1F9CF-200D-2642": [
+    "accessibility",
+    "deaf",
+    "ear",
+    "gesture",
+    "hear",
+    "man"
+  ],
+  "1F9CF-200D-2640": [
+    "accessibility",
+    "deaf",
+    "ear",
+    "gesture",
+    "hear",
+    "woman"
+  ],
+  "1F647": [
+    "apology",
+    "ask",
+    "beg",
+    "bow",
+    "bowing",
+    "favor",
+    "forgive",
+    "gesture",
+    "meditate",
+    "meditation",
+    "person",
+    "pity",
+    "regret",
+    "sorry"
+  ],
+  "1F647-200D-2642": [
+    "apology",
+    "ask",
+    "beg",
+    "bow",
+    "bowing",
+    "favor",
+    "forgive",
+    "gesture",
+    "man",
+    "meditate",
+    "meditation",
+    "pity",
+    "regret",
+    "sorry"
+  ],
+  "1F647-200D-2640": [
+    "apology",
+    "ask",
+    "beg",
+    "bow",
+    "bowing",
+    "favor",
+    "forgive",
+    "gesture",
+    "meditate",
+    "meditation",
+    "pity",
+    "regret",
+    "sorry",
+    "woman"
+  ],
+  "1F926": [
+    "again",
+    "bewilder",
+    "disbelief",
+    "exasperation",
+    "facepalm",
+    "no",
+    "not",
+    "oh",
+    "omg",
+    "person",
+    "shock",
+    "smh"
+  ],
+  "1F926-200D-2642": [
+    "again",
+    "bewilder",
+    "disbelief",
+    "exasperation",
+    "facepalm",
+    "man",
+    "no",
+    "not",
+    "oh",
+    "omg",
+    "shock",
+    "smh"
+  ],
+  "1F926-200D-2640": [
+    "again",
+    "bewilder",
+    "disbelief",
+    "exasperation",
+    "facepalm",
+    "no",
+    "not",
+    "oh",
+    "omg",
+    "shock",
+    "smh",
+    "woman"
+  ],
+  "1F937": [
+    "doubt",
+    "dunno",
+    "guess",
+    "idk",
+    "ignorance",
+    "indifference",
+    "knows",
+    "maybe",
+    "person",
+    "shrug",
+    "shrugging",
+    "whatever",
+    "who"
+  ],
+  "1F937-200D-2642": [
+    "doubt",
+    "dunno",
+    "guess",
+    "idk",
+    "ignorance",
+    "indifference",
+    "knows",
+    "man",
+    "maybe",
+    "shrug",
+    "shrugging",
+    "whatever",
+    "who"
+  ],
+  "1F937-200D-2640": [
+    "doubt",
+    "dunno",
+    "guess",
+    "idk",
+    "ignorance",
+    "indifference",
+    "knows",
+    "maybe",
+    "shrug",
+    "shrugging",
+    "whatever",
+    "who",
+    "woman"
+  ],
+  "1F9D1-200D-2695": [
+    "doctor",
+    "health",
+    "healthcare",
+    "nurse",
+    "therapist",
+    "worker"
+  ],
+  "1F468-200D-2695": [
+    "doctor",
+    "health",
+    "healthcare",
+    "man",
+    "nurse",
+    "therapist",
+    "worker"
+  ],
+  "1F469-200D-2695": [
+    "doctor",
+    "health",
+    "healthcare",
+    "nurse",
+    "therapist",
+    "woman",
+    "worker"
+  ],
+  "1F9D1-200D-1F393": [
+    "graduate"
+  ],
+  "1F468-200D-1F393": [
+    "graduate",
+    "man",
+    "student"
+  ],
+  "1F469-200D-1F393": [
+    "graduate",
+    "student",
+    "woman"
+  ],
+  "1F9D1-200D-1F3EB": [
+    "instructor",
+    "lecturer",
+    "professor"
+  ],
+  "1F468-200D-1F3EB": [
+    "instructor",
+    "lecturer",
+    "man",
+    "professor",
+    "teacher"
+  ],
+  "1F469-200D-1F3EB": [
+    "instructor",
+    "lecturer",
+    "professor",
+    "teacher",
+    "woman"
+  ],
+  "1F9D1-200D-2696": [
+    "justice",
+    "law",
+    "scales"
+  ],
+  "1F468-200D-2696": [
+    "judge",
+    "justice",
+    "law",
+    "man",
+    "scales"
+  ],
+  "1F469-200D-2696": [
+    "judge",
+    "justice",
+    "law",
+    "scales",
+    "woman"
+  ],
+  "1F9D1-200D-1F33E": [
+    "gardener",
+    "rancher"
+  ],
+  "1F468-200D-1F33E": [
+    "farmer",
+    "gardener",
+    "man",
+    "rancher"
+  ],
+  "1F469-200D-1F33E": [
+    "farmer",
+    "gardener",
+    "rancher",
+    "woman"
+  ],
+  "1F9D1-200D-1F373": [
+    "chef"
+  ],
+  "1F468-200D-1F373": [
+    "chef",
+    "cook",
+    "man"
+  ],
+  "1F469-200D-1F373": [
+    "chef",
+    "cook",
+    "woman"
+  ],
+  "1F9D1-200D-1F527": [
+    "electrician",
+    "plumber",
+    "tradesperson"
+  ],
+  "1F468-200D-1F527": [
+    "electrician",
+    "man",
+    "mechanic",
+    "plumber",
+    "tradesperson"
+  ],
+  "1F469-200D-1F527": [
+    "electrician",
+    "mechanic",
+    "plumber",
+    "tradesperson",
+    "woman"
+  ],
+  "1F9D1-200D-1F3ED": [
+    "assembly",
+    "factory",
+    "industrial",
+    "worker"
+  ],
+  "1F468-200D-1F3ED": [
+    "assembly",
+    "factory",
+    "industrial",
+    "man",
+    "worker"
+  ],
+  "1F469-200D-1F3ED": [
+    "assembly",
+    "factory",
+    "industrial",
+    "woman",
+    "worker"
+  ],
+  "1F9D1-200D-1F4BC": [
+    "architect",
+    "business",
+    "manager",
+    "office",
+    "white-collar",
+    "worker"
+  ],
+  "1F468-200D-1F4BC": [
+    "architect",
+    "business",
+    "man",
+    "manager",
+    "office",
+    "white-collar",
+    "worker"
+  ],
+  "1F469-200D-1F4BC": [
+    "architect",
+    "business",
+    "manager",
+    "office",
+    "white-collar",
+    "woman",
+    "worker"
+  ],
+  "1F9D1-200D-1F52C": [
+    "biologist",
+    "chemist",
+    "engineer",
+    "mathematician",
+    "physicist"
+  ],
+  "1F468-200D-1F52C": [
+    "biologist",
+    "chemist",
+    "engineer",
+    "man",
+    "mathematician",
+    "physicist",
+    "scientist"
+  ],
+  "1F469-200D-1F52C": [
+    "biologist",
+    "chemist",
+    "engineer",
+    "mathematician",
+    "physicist",
+    "scientist",
+    "woman"
+  ],
+  "1F9D1-200D-1F4BB": [
+    "coder",
+    "computer",
+    "developer",
+    "inventor",
+    "software"
+  ],
+  "1F468-200D-1F4BB": [
+    "coder",
+    "computer",
+    "developer",
+    "inventor",
+    "man",
+    "software",
+    "technologist"
+  ],
+  "1F469-200D-1F4BB": [
+    "coder",
+    "computer",
+    "developer",
+    "inventor",
+    "software",
+    "technologist",
+    "woman"
+  ],
+  "1F9D1-200D-1F3A4": [
+    "actor",
+    "entertainer",
+    "rock",
+    "rockstar",
+    "star"
+  ],
+  "1F468-200D-1F3A4": [
+    "actor",
+    "entertainer",
+    "man",
+    "rock",
+    "rockstar",
+    "singer",
+    "star"
+  ],
+  "1F469-200D-1F3A4": [
+    "actor",
+    "entertainer",
+    "rock",
+    "rockstar",
+    "singer",
+    "star",
+    "woman"
+  ],
+  "1F9D1-200D-1F3A8": [
+    "palette"
+  ],
+  "1F468-200D-1F3A8": [
+    "artist",
+    "man",
+    "palette"
+  ],
+  "1F469-200D-1F3A8": [
+    "artist",
+    "palette",
+    "woman"
+  ],
+  "1F9D1-200D-2708": [
+    "plane"
+  ],
+  "1F468-200D-2708": [
+    "man",
+    "pilot",
+    "plane"
+  ],
+  "1F469-200D-2708": [
+    "pilot",
+    "plane",
+    "woman"
+  ],
+  "1F9D1-200D-1F680": [
+    "rocket",
+    "space"
+  ],
+  "1F468-200D-1F680": [
+    "astronaut",
+    "man",
+    "rocket",
+    "space"
+  ],
+  "1F469-200D-1F680": [
+    "astronaut",
+    "rocket",
+    "space",
+    "woman"
+  ],
+  "1F9D1-200D-1F692": [
+    "fire",
+    "firetruck"
+  ],
+  "1F468-200D-1F692": [
+    "fire",
+    "firefighter",
+    "firetruck",
+    "man"
+  ],
+  "1F469-200D-1F692": [
+    "fire",
+    "firefighter",
+    "firetruck",
+    "woman"
+  ],
+  "1F46E": [
+    "apprehend",
+    "arrest",
+    "citation",
+    "cop",
+    "law",
+    "officer",
+    "over",
+    "police",
+    "pulled",
+    "undercover"
+  ],
+  "1F46E-200D-2642": [
+    "apprehend",
+    "arrest",
+    "citation",
+    "cop",
+    "law",
+    "man",
+    "officer",
+    "over",
+    "police",
+    "pulled",
+    "undercover"
+  ],
+  "1F46E-200D-2640": [
+    "apprehend",
+    "arrest",
+    "citation",
+    "cop",
+    "law",
+    "officer",
+    "over",
+    "police",
+    "pulled",
+    "undercover",
+    "woman"
+  ],
+  "1F575": [
+    "sleuth",
+    "spy"
+  ],
+  "1F575-200D-2642": [
+    "detective",
+    "man",
+    "sleuth",
+    "spy"
+  ],
+  "1F575-200D-2640": [
+    "detective",
+    "sleuth",
+    "spy",
+    "woman"
+  ],
+  "1F482": [
+    "buckingham",
+    "helmet",
+    "london",
+    "palace"
+  ],
+  "1F482-200D-2642": [
+    "buckingham",
+    "guard",
+    "helmet",
+    "london",
+    "man",
+    "palace"
+  ],
+  "1F482-200D-2640": [
+    "buckingham",
+    "guard",
+    "helmet",
+    "london",
+    "palace",
+    "woman"
+  ],
+  "1F977": [
+    "assassin",
+    "fight",
+    "fighter",
+    "hidden",
+    "person",
+    "secret",
+    "skills",
+    "sly",
+    "soldier",
+    "stealth",
+    "war"
+  ],
+  "1F477": [
+    "build",
+    "construction",
+    "fix",
+    "hardhat",
+    "hat",
+    "man",
+    "person",
+    "rebuild",
+    "remodel",
+    "repair",
+    "work",
+    "worker"
+  ],
+  "1F477-200D-2642": [
+    "build",
+    "construction",
+    "fix",
+    "hardhat",
+    "hat",
+    "man",
+    "rebuild",
+    "remodel",
+    "repair",
+    "work",
+    "worker"
+  ],
+  "1F477-200D-2640": [
+    "build",
+    "construction",
+    "fix",
+    "hardhat",
+    "hat",
+    "man",
+    "rebuild",
+    "remodel",
+    "repair",
+    "woman",
+    "work",
+    "worker"
+  ],
+  "1FAC5": [
+    "crown",
+    "monarch",
+    "noble",
+    "person",
+    "regal",
+    "royal",
+    "royalty"
+  ],
+  "1F934": [
+    "crown",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "king",
+    "royal",
+    "royalty",
+    "tale"
+  ],
+  "1F478": [
+    "crown",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "queen",
+    "royal",
+    "royalty",
+    "tale"
+  ],
+  "1F473": [
+    "person",
+    "turban",
+    "wearing"
+  ],
+  "1F473-200D-2642": [
+    "man",
+    "turban",
+    "wearing"
+  ],
+  "1F473-200D-2640": [
+    "turban",
+    "wearing",
+    "woman"
+  ],
+  "1F472": [
+    "cap",
+    "chinese",
+    "gua",
+    "guapi",
+    "hat",
+    "mao",
+    "person",
+    "pi",
+    "skullcap"
+  ],
+  "1F9D5": [
+    "bandana",
+    "head",
+    "headscarf",
+    "hijab",
+    "kerchief",
+    "mantilla",
+    "tichel",
+    "woman"
+  ],
+  "1F935": [
+    "formal",
+    "person",
+    "tuxedo",
+    "wedding"
+  ],
+  "1F935-200D-2642": [
+    "formal",
+    "groom",
+    "man",
+    "tuxedo",
+    "wedding"
+  ],
+  "1F935-200D-2640": [
+    "formal",
+    "tuxedo",
+    "wedding",
+    "woman"
+  ],
+  "1F470": [
+    "person",
+    "veil",
+    "wedding"
+  ],
+  "1F470-200D-2642": [
+    "man",
+    "veil",
+    "wedding"
+  ],
+  "1F470-200D-2640": [
+    "bride",
+    "veil",
+    "wedding",
+    "woman"
+  ],
+  "1F930": [
+    "pregnant",
+    "woman"
+  ],
+  "1FAC3": [
+    "belly",
+    "bloated",
+    "full",
+    "man",
+    "overeat",
+    "pregnant"
+  ],
+  "1FAC4": [
+    "belly",
+    "bloated",
+    "full",
+    "overeat",
+    "person",
+    "pregnant",
+    "stuffed"
+  ],
+  "1F931": [
+    "baby",
+    "breast",
+    "feeding",
+    "mom",
+    "mother",
+    "nursing",
+    "woman"
+  ],
+  "1F469-200D-1F37C": [
+    "baby",
+    "feed",
+    "feeding",
+    "mom",
+    "mother",
+    "nanny",
+    "newborn",
+    "nursing",
+    "woman"
+  ],
+  "1F468-200D-1F37C": [
+    "baby",
+    "dad",
+    "father",
+    "feed",
+    "feeding",
+    "man",
+    "nanny",
+    "newborn",
+    "nursing"
+  ],
+  "1F9D1-200D-1F37C": [
+    "baby",
+    "feed",
+    "feeding",
+    "nanny",
+    "newborn",
+    "nursing",
+    "parent"
+  ],
+  "1F47C": [
+    "angel",
+    "baby",
+    "church",
+    "face",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "tale"
+  ],
+  "1F385": [
+    "celebration",
+    "christmas",
+    "claus",
+    "fairy",
+    "fantasy",
+    "father",
+    "holiday",
+    "merry",
+    "santa",
+    "tale",
+    "xmas"
+  ],
+  "1F936": [
+    "celebration",
+    "christmas",
+    "claus",
+    "fairy",
+    "fantasy",
+    "holiday",
+    "merry",
+    "mother",
+    "mrs",
+    "santa",
+    "tale",
+    "xmas"
+  ],
+  "1F9D1-200D-1F384": [
+    "celebration",
+    "christmas",
+    "claus",
+    "fairy",
+    "fantasy",
+    "holiday",
+    "merry",
+    "mx",
+    "santa",
+    "tale",
+    "xmas"
+  ],
+  "1F9B8": [
+    "good",
+    "hero",
+    "superpower"
+  ],
+  "1F9B8-200D-2642": [
+    "good",
+    "hero",
+    "man",
+    "superhero",
+    "superpower"
+  ],
+  "1F9B8-200D-2640": [
+    "good",
+    "hero",
+    "heroine",
+    "superhero",
+    "superpower",
+    "woman"
+  ],
+  "1F9B9": [
+    "bad",
+    "criminal",
+    "evil",
+    "superpower",
+    "villain"
+  ],
+  "1F9B9-200D-2642": [
+    "bad",
+    "criminal",
+    "evil",
+    "man",
+    "superpower",
+    "supervillain",
+    "villain"
+  ],
+  "1F9B9-200D-2640": [
+    "bad",
+    "criminal",
+    "evil",
+    "superpower",
+    "supervillain",
+    "villain",
+    "woman"
+  ],
+  "1F9D9": [
+    "fantasy",
+    "magic",
+    "play",
+    "sorcerer",
+    "sorceress",
+    "sorcery",
+    "spell",
+    "summon",
+    "witch",
+    "wizard"
+  ],
+  "1F9D9-200D-2642": [
+    "fantasy",
+    "mage",
+    "magic",
+    "man",
+    "play",
+    "sorcerer",
+    "sorceress",
+    "sorcery",
+    "spell",
+    "summon",
+    "witch",
+    "wizard"
+  ],
+  "1F9D9-200D-2640": [
+    "fantasy",
+    "mage",
+    "magic",
+    "play",
+    "sorcerer",
+    "sorceress",
+    "sorcery",
+    "spell",
+    "summon",
+    "witch",
+    "wizard",
+    "woman"
+  ],
+  "1F9DA": [
+    "fairytale",
+    "fantasy",
+    "myth",
+    "person",
+    "pixie",
+    "tale",
+    "wings"
+  ],
+  "1F9DA-200D-2642": [
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "man",
+    "myth",
+    "oberon",
+    "person",
+    "pixie",
+    "puck",
+    "tale",
+    "wings"
+  ],
+  "1F9DA-200D-2640": [
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "myth",
+    "person",
+    "pixie",
+    "tale",
+    "titania",
+    "wings",
+    "woman"
+  ],
+  "1F9DB": [
+    "blood",
+    "dracula",
+    "fangs",
+    "halloween",
+    "scary",
+    "supernatural",
+    "teeth",
+    "undead"
+  ],
+  "1F9DB-200D-2642": [
+    "blood",
+    "fangs",
+    "halloween",
+    "man",
+    "scary",
+    "supernatural",
+    "teeth",
+    "undead",
+    "vampire"
+  ],
+  "1F9DB-200D-2640": [
+    "blood",
+    "fangs",
+    "halloween",
+    "scary",
+    "supernatural",
+    "teeth",
+    "undead",
+    "vampire",
+    "woman"
+  ],
+  "1F9DC": [
+    "creature",
+    "fairytale",
+    "folklore",
+    "ocean",
+    "sea",
+    "siren",
+    "trident"
+  ],
+  "1F9DC-200D-2642": [
+    "creature",
+    "fairytale",
+    "folklore",
+    "neptune",
+    "ocean",
+    "poseidon",
+    "sea",
+    "siren",
+    "trident",
+    "triton"
+  ],
+  "1F9DC-200D-2640": [
+    "creature",
+    "fairytale",
+    "folklore",
+    "merwoman",
+    "ocean",
+    "sea",
+    "siren",
+    "trident"
+  ],
+  "1F9DD": [
+    "elves",
+    "enchantment",
+    "fantasy",
+    "folklore",
+    "magic",
+    "magical",
+    "myth"
+  ],
+  "1F9DD-200D-2642": [
+    "elf",
+    "elves",
+    "enchantment",
+    "fantasy",
+    "folklore",
+    "magic",
+    "magical",
+    "man",
+    "myth"
+  ],
+  "1F9DD-200D-2640": [
+    "elf",
+    "elves",
+    "enchantment",
+    "fantasy",
+    "folklore",
+    "magic",
+    "magical",
+    "myth",
+    "woman"
+  ],
+  "1F9DE": [
+    "djinn",
+    "fantasy",
+    "jinn",
+    "lamp",
+    "myth",
+    "rub",
+    "wishes"
+  ],
+  "1F9DE-200D-2642": [
+    "djinn",
+    "fantasy",
+    "genie",
+    "jinn",
+    "lamp",
+    "man",
+    "myth",
+    "rub",
+    "wishes"
+  ],
+  "1F9DE-200D-2640": [
+    "djinn",
+    "fantasy",
+    "genie",
+    "jinn",
+    "lamp",
+    "myth",
+    "rub",
+    "wishes",
+    "woman"
+  ],
+  "1F9DF": [
+    "apocalypse",
+    "dead",
+    "halloween",
+    "horror",
+    "scary",
+    "undead",
+    "walking"
+  ],
+  "1F9DF-200D-2642": [
+    "apocalypse",
+    "dead",
+    "halloween",
+    "horror",
+    "man",
+    "scary",
+    "undead",
+    "walking",
+    "zombie"
+  ],
+  "1F9DF-200D-2640": [
+    "apocalypse",
+    "dead",
+    "halloween",
+    "horror",
+    "scary",
+    "undead",
+    "walking",
+    "woman",
+    "zombie"
+  ],
+  "1F9CC": [
+    "fairy",
+    "fantasy",
+    "monster",
+    "tale",
+    "trolling"
+  ],
+  "1F486": [
+    "face",
+    "getting",
+    "headache",
+    "massage",
+    "person",
+    "relax",
+    "relaxing",
+    "salon",
+    "soothe",
+    "spa",
+    "tension",
+    "therapy",
+    "treatment"
+  ],
+  "1F486-200D-2642": [
+    "face",
+    "getting",
+    "headache",
+    "man",
+    "massage",
+    "relax",
+    "relaxing",
+    "salon",
+    "soothe",
+    "spa",
+    "tension",
+    "therapy",
+    "treatment"
+  ],
+  "1F486-200D-2640": [
+    "face",
+    "getting",
+    "headache",
+    "massage",
+    "relax",
+    "relaxing",
+    "salon",
+    "soothe",
+    "spa",
+    "tension",
+    "therapy",
+    "treatment",
+    "woman"
+  ],
+  "1F487": [
+    "barber",
+    "beauty",
+    "chop",
+    "cosmetology",
+    "cut",
+    "groom",
+    "hair",
+    "haircut",
+    "parlor",
+    "person",
+    "shears",
+    "style"
+  ],
+  "1F487-200D-2642": [
+    "barber",
+    "beauty",
+    "chop",
+    "cosmetology",
+    "cut",
+    "groom",
+    "hair",
+    "haircut",
+    "man",
+    "parlor",
+    "person",
+    "shears",
+    "style"
+  ],
+  "1F487-200D-2640": [
+    "barber",
+    "beauty",
+    "chop",
+    "cosmetology",
+    "cut",
+    "groom",
+    "hair",
+    "haircut",
+    "parlor",
+    "person",
+    "shears",
+    "style",
+    "woman"
+  ],
+  "1F6B6": [
+    "amble",
+    "gait",
+    "hike",
+    "man",
+    "pace",
+    "pedestrian",
+    "person",
+    "stride",
+    "stroll",
+    "walk",
+    "walking"
+  ],
+  "1F6B6-200D-2642": [
+    "amble",
+    "gait",
+    "hike",
+    "man",
+    "pace",
+    "pedestrian",
+    "stride",
+    "stroll",
+    "walk",
+    "walking"
+  ],
+  "1F6B6-200D-2640": [
+    "amble",
+    "gait",
+    "hike",
+    "man",
+    "pace",
+    "pedestrian",
+    "stride",
+    "stroll",
+    "walk",
+    "walking",
+    "woman"
+  ],
+  "1F6B6-200D-27A1": [
+    "amble",
+    "facing",
+    "gait",
+    "hike",
+    "man",
+    "pace",
+    "pedestrian",
+    "person",
+    "right",
+    "stride",
+    "stroll",
+    "walk",
+    "walking"
+  ],
+  "1F6B6-200D-2640-200D-27A1": [
+    "amble",
+    "facing",
+    "gait",
+    "hike",
+    "man",
+    "pace",
+    "pedestrian",
+    "right",
+    "stride",
+    "stroll",
+    "walk",
+    "walking",
+    "woman"
+  ],
+  "1F6B6-200D-2642-200D-27A1": [
+    "amble",
+    "facing",
+    "gait",
+    "hike",
+    "man",
+    "pace",
+    "pedestrian",
+    "right",
+    "stride",
+    "stroll",
+    "walk",
+    "walking"
+  ],
+  "1F9CD": [
+    "person",
+    "stand",
+    "standing"
+  ],
+  "1F9CD-200D-2642": [
+    "man",
+    "stand",
+    "standing"
+  ],
+  "1F9CD-200D-2640": [
+    "stand",
+    "standing",
+    "woman"
+  ],
+  "1F9CE": [
+    "kneel",
+    "kneeling",
+    "knees",
+    "person"
+  ],
+  "1F9CE-200D-2642": [
+    "kneel",
+    "kneeling",
+    "knees",
+    "man"
+  ],
+  "1F9CE-200D-2640": [
+    "kneel",
+    "kneeling",
+    "knees",
+    "woman"
+  ],
+  "1F9CE-200D-27A1": [
+    "facing",
+    "kneel",
+    "kneeling",
+    "knees",
+    "person",
+    "right"
+  ],
+  "1F9CE-200D-2640-200D-27A1": [
+    "facing",
+    "kneel",
+    "kneeling",
+    "knees",
+    "right",
+    "woman"
+  ],
+  "1F9CE-200D-2642-200D-27A1": [
+    "facing",
+    "kneel",
+    "kneeling",
+    "knees",
+    "man",
+    "right"
+  ],
+  "1F9D1-200D-1F9AF": [
+    "accessibility",
+    "blind",
+    "cane",
+    "person",
+    "probing",
+    "white"
+  ],
+  "1F9D1-200D-1F9AF-200D-27A1": [
+    "accessibility",
+    "blind",
+    "cane",
+    "facing",
+    "person",
+    "probing",
+    "right",
+    "white"
+  ],
+  "1F468-200D-1F9AF": [
+    "accessibility",
+    "blind",
+    "cane",
+    "man",
+    "probing",
+    "white"
+  ],
+  "1F468-200D-1F9AF-200D-27A1": [
+    "accessibility",
+    "blind",
+    "cane",
+    "facing",
+    "man",
+    "probing",
+    "right",
+    "white"
+  ],
+  "1F469-200D-1F9AF": [
+    "accessibility",
+    "blind",
+    "cane",
+    "probing",
+    "white",
+    "woman"
+  ],
+  "1F469-200D-1F9AF-200D-27A1": [
+    "accessibility",
+    "blind",
+    "cane",
+    "facing",
+    "probing",
+    "right",
+    "white",
+    "woman"
+  ],
+  "1F9D1-200D-1F9BC": [
+    "accessibility",
+    "motorized",
+    "person",
+    "wheelchair"
+  ],
+  "1F9D1-200D-1F9BC-200D-27A1": [
+    "accessibility",
+    "facing",
+    "motorized",
+    "person",
+    "right",
+    "wheelchair"
+  ],
+  "1F468-200D-1F9BC": [
+    "accessibility",
+    "man",
+    "motorized",
+    "wheelchair"
+  ],
+  "1F468-200D-1F9BC-200D-27A1": [
+    "accessibility",
+    "facing",
+    "man",
+    "motorized",
+    "right",
+    "wheelchair"
+  ],
+  "1F469-200D-1F9BC": [
+    "accessibility",
+    "motorized",
+    "wheelchair",
+    "woman"
+  ],
+  "1F469-200D-1F9BC-200D-27A1": [
+    "accessibility",
+    "facing",
+    "motorized",
+    "right",
+    "wheelchair",
+    "woman"
+  ],
+  "1F9D1-200D-1F9BD": [
+    "accessibility",
+    "manual",
+    "person",
+    "wheelchair"
+  ],
+  "1F9D1-200D-1F9BD-200D-27A1": [
+    "accessibility",
+    "facing",
+    "manual",
+    "person",
+    "right",
+    "wheelchair"
+  ],
+  "1F468-200D-1F9BD": [
+    "accessibility",
+    "man",
+    "manual",
+    "wheelchair"
+  ],
+  "1F468-200D-1F9BD-200D-27A1": [
+    "accessibility",
+    "facing",
+    "man",
+    "manual",
+    "right",
+    "wheelchair"
+  ],
+  "1F469-200D-1F9BD": [
+    "accessibility",
+    "manual",
+    "wheelchair",
+    "woman"
+  ],
+  "1F469-200D-1F9BD-200D-27A1": [
+    "accessibility",
+    "facing",
+    "manual",
+    "right",
+    "wheelchair",
+    "woman"
+  ],
+  "1F3C3": [
+    "fast",
+    "hurry",
+    "marathon",
+    "move",
+    "person",
+    "quick",
+    "race",
+    "racing",
+    "run",
+    "rush",
+    "speed"
+  ],
+  "1F3C3-200D-2642": [
+    "fast",
+    "hurry",
+    "man",
+    "marathon",
+    "move",
+    "quick",
+    "race",
+    "racing",
+    "run",
+    "rush",
+    "speed"
+  ],
+  "1F3C3-200D-2640": [
+    "fast",
+    "hurry",
+    "marathon",
+    "move",
+    "quick",
+    "race",
+    "racing",
+    "run",
+    "rush",
+    "speed",
+    "woman"
+  ],
+  "1F3C3-200D-27A1": [
+    "facing",
+    "fast",
+    "hurry",
+    "marathon",
+    "move",
+    "person",
+    "quick",
+    "race",
+    "racing",
+    "right",
+    "run",
+    "rush",
+    "speed"
+  ],
+  "1F3C3-200D-2640-200D-27A1": [
+    "facing",
+    "fast",
+    "hurry",
+    "marathon",
+    "move",
+    "quick",
+    "race",
+    "racing",
+    "right",
+    "run",
+    "rush",
+    "speed",
+    "woman"
+  ],
+  "1F3C3-200D-2642-200D-27A1": [
+    "facing",
+    "fast",
+    "hurry",
+    "man",
+    "marathon",
+    "move",
+    "quick",
+    "race",
+    "racing",
+    "right",
+    "run",
+    "rush",
+    "speed"
+  ],
+  "1F483": [
+    "dance",
+    "dancer",
+    "dancing",
+    "elegant",
+    "festive",
+    "flair",
+    "flamenco",
+    "groove",
+    "let’s",
+    "salsa",
+    "tango",
+    "woman"
+  ],
+  "1F57A": [
+    "dance",
+    "dancer",
+    "dancing",
+    "elegant",
+    "festive",
+    "flair",
+    "flamenco",
+    "groove",
+    "let’s",
+    "man",
+    "salsa",
+    "tango"
+  ],
+  "1F574": [
+    "business",
+    "levitating",
+    "person",
+    "suit"
+  ],
+  "1F46F": [
+    "bestie",
+    "bff",
+    "bunny",
+    "counterpart",
+    "dancer",
+    "double",
+    "ear",
+    "identical",
+    "pair",
+    "party",
+    "partying",
+    "people",
+    "soulmate",
+    "twin",
+    "twinsies"
+  ],
+  "1F46F-200D-2642": [
+    "bestie",
+    "bff",
+    "bunny",
+    "counterpart",
+    "dancer",
+    "double",
+    "ear",
+    "identical",
+    "men",
+    "pair",
+    "party",
+    "partying",
+    "people",
+    "soulmate",
+    "twin",
+    "twinsies"
+  ],
+  "1F46F-200D-2640": [
+    "bestie",
+    "bff",
+    "bunny",
+    "counterpart",
+    "dancer",
+    "double",
+    "ear",
+    "identical",
+    "pair",
+    "party",
+    "partying",
+    "people",
+    "soulmate",
+    "twin",
+    "twinsies",
+    "women"
+  ],
+  "1F9D6": [
+    "day",
+    "luxurious",
+    "pamper",
+    "person",
+    "relax",
+    "room",
+    "sauna",
+    "spa",
+    "steam",
+    "steambath",
+    "unwind"
+  ],
+  "1F9D6-200D-2642": [
+    "day",
+    "luxurious",
+    "man",
+    "pamper",
+    "relax",
+    "room",
+    "sauna",
+    "spa",
+    "steam",
+    "steambath",
+    "unwind"
+  ],
+  "1F9D6-200D-2640": [
+    "day",
+    "luxurious",
+    "pamper",
+    "relax",
+    "room",
+    "sauna",
+    "spa",
+    "steam",
+    "steambath",
+    "unwind",
+    "woman"
+  ],
+  "1F9D7": [
+    "climb",
+    "climber",
+    "climbing",
+    "mountain",
+    "person",
+    "rock",
+    "scale",
+    "up"
+  ],
+  "1F9D7-200D-2642": [
+    "climb",
+    "climber",
+    "climbing",
+    "man",
+    "mountain",
+    "rock",
+    "scale",
+    "up"
+  ],
+  "1F9D7-200D-2640": [
+    "climb",
+    "climber",
+    "climbing",
+    "mountain",
+    "rock",
+    "scale",
+    "up",
+    "woman"
+  ],
+  "1F93A": [
+    "fencer",
+    "fencing",
+    "person",
+    "sword"
+  ],
+  "1F3C7": [
+    "horse",
+    "jockey",
+    "racehorse",
+    "racing",
+    "riding",
+    "sport"
+  ],
+  "26F7": [
+    "ski",
+    "snow"
+  ],
+  "1F3C2": [
+    "ski",
+    "snow",
+    "snowboard",
+    "sport"
+  ],
+  "1F3CC": [
+    "ball",
+    "birdie",
+    "caddy",
+    "driving",
+    "golf",
+    "golfing",
+    "green",
+    "person",
+    "pga",
+    "putt",
+    "range",
+    "tee"
+  ],
+  "1F3CC-200D-2642": [
+    "ball",
+    "birdie",
+    "caddy",
+    "driving",
+    "golf",
+    "golfing",
+    "green",
+    "man",
+    "pga",
+    "putt",
+    "range",
+    "tee"
+  ],
+  "1F3CC-200D-2640": [
+    "ball",
+    "birdie",
+    "caddy",
+    "driving",
+    "golf",
+    "golfing",
+    "green",
+    "pga",
+    "putt",
+    "range",
+    "tee",
+    "woman"
+  ],
+  "1F3C4": [
+    "beach",
+    "ocean",
+    "person",
+    "sport",
+    "surf",
+    "surfer",
+    "surfing",
+    "swell",
+    "waves"
+  ],
+  "1F3C4-200D-2642": [
+    "beach",
+    "man",
+    "ocean",
+    "sport",
+    "surf",
+    "surfer",
+    "surfing",
+    "swell",
+    "waves"
+  ],
+  "1F3C4-200D-2640": [
+    "beach",
+    "ocean",
+    "person",
+    "sport",
+    "surf",
+    "surfer",
+    "surfing",
+    "swell",
+    "waves"
+  ],
+  "1F6A3": [
+    "boat",
+    "canoe",
+    "cruise",
+    "fishing",
+    "lake",
+    "oar",
+    "paddle",
+    "person",
+    "raft",
+    "river",
+    "row",
+    "rowboat",
+    "rowing"
+  ],
+  "1F6A3-200D-2642": [
+    "boat",
+    "canoe",
+    "cruise",
+    "fishing",
+    "lake",
+    "man",
+    "oar",
+    "paddle",
+    "raft",
+    "river",
+    "row",
+    "rowboat",
+    "rowing"
+  ],
+  "1F6A3-200D-2640": [
+    "boat",
+    "canoe",
+    "cruise",
+    "fishing",
+    "lake",
+    "oar",
+    "paddle",
+    "raft",
+    "river",
+    "row",
+    "rowboat",
+    "rowing",
+    "woman"
+  ],
+  "1F3CA": [
+    "freestyle",
+    "person",
+    "sport",
+    "swim",
+    "swimmer",
+    "swimming",
+    "triathlon"
+  ],
+  "1F3CA-200D-2642": [
+    "freestyle",
+    "man",
+    "sport",
+    "swim",
+    "swimmer",
+    "swimming",
+    "triathlon"
+  ],
+  "1F3CA-200D-2640": [
+    "freestyle",
+    "man",
+    "sport",
+    "swim",
+    "swimmer",
+    "swimming",
+    "triathlon"
+  ],
+  "26F9": [
+    "athletic",
+    "ball",
+    "basketball",
+    "bouncing",
+    "championship",
+    "dribble",
+    "net",
+    "person",
+    "player",
+    "throw"
+  ],
+  "26F9-200D-2642": [
+    "athletic",
+    "ball",
+    "basketball",
+    "bouncing",
+    "championship",
+    "dribble",
+    "man",
+    "net",
+    "player",
+    "throw"
+  ],
+  "26F9-200D-2640": [
+    "athletic",
+    "ball",
+    "basketball",
+    "bouncing",
+    "championship",
+    "dribble",
+    "net",
+    "player",
+    "throw",
+    "woman"
+  ],
+  "1F3CB": [
+    "barbell",
+    "bodybuilder",
+    "deadlift",
+    "lifter",
+    "lifting",
+    "person",
+    "powerlifting",
+    "weight",
+    "weightlifter",
+    "weights",
+    "workout"
+  ],
+  "1F3CB-200D-2642": [
+    "barbell",
+    "bodybuilder",
+    "deadlift",
+    "lifter",
+    "lifting",
+    "man",
+    "powerlifting",
+    "weight",
+    "weightlifter",
+    "weights",
+    "workout"
+  ],
+  "1F3CB-200D-2640": [
+    "barbell",
+    "bodybuilder",
+    "deadlift",
+    "lifter",
+    "lifting",
+    "powerlifting",
+    "weight",
+    "weightlifter",
+    "weights",
+    "woman",
+    "workout"
+  ],
+  "1F6B4": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "biking",
+    "cycle",
+    "cyclist",
+    "person",
+    "riding",
+    "sport"
+  ],
+  "1F6B4-200D-2642": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "biking",
+    "cycle",
+    "cyclist",
+    "man",
+    "riding",
+    "sport"
+  ],
+  "1F6B4-200D-2640": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "biking",
+    "cycle",
+    "cyclist",
+    "riding",
+    "sport",
+    "woman"
+  ],
+  "1F6B5": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "biking",
+    "cycle",
+    "cyclist",
+    "mountain",
+    "person",
+    "riding",
+    "sport"
+  ],
+  "1F6B5-200D-2642": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "biking",
+    "cycle",
+    "cyclist",
+    "man",
+    "mountain",
+    "riding",
+    "sport"
+  ],
+  "1F6B5-200D-2640": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "biking",
+    "cycle",
+    "cyclist",
+    "mountain",
+    "riding",
+    "sport",
+    "woman"
+  ],
+  "1F938": [
+    "active",
+    "cartwheel",
+    "cartwheeling",
+    "excited",
+    "flip",
+    "gymnastics",
+    "happy",
+    "person",
+    "somersault"
+  ],
+  "1F938-200D-2642": [
+    "active",
+    "cartwheel",
+    "cartwheeling",
+    "excited",
+    "flip",
+    "gymnastics",
+    "happy",
+    "man",
+    "somersault"
+  ],
+  "1F938-200D-2640": [
+    "active",
+    "cartwheel",
+    "cartwheeling",
+    "excited",
+    "flip",
+    "gymnastics",
+    "happy",
+    "somersault",
+    "woman"
+  ],
+  "1F93C": [
+    "combat",
+    "duel",
+    "grapple",
+    "people",
+    "ring",
+    "tournament",
+    "wrestle",
+    "wrestling"
+  ],
+  "1F93C-200D-2642": [
+    "combat",
+    "duel",
+    "grapple",
+    "men",
+    "ring",
+    "tournament",
+    "wrestle",
+    "wrestling"
+  ],
+  "1F93C-200D-2640": [
+    "combat",
+    "duel",
+    "grapple",
+    "ring",
+    "tournament",
+    "women",
+    "wrestle",
+    "wrestling"
+  ],
+  "1F93D": [
+    "person",
+    "playing",
+    "polo",
+    "sport",
+    "swimming",
+    "water",
+    "waterpolo"
+  ],
+  "1F93D-200D-2642": [
+    "man",
+    "playing",
+    "polo",
+    "sport",
+    "swimming",
+    "water",
+    "waterpolo"
+  ],
+  "1F93D-200D-2640": [
+    "playing",
+    "polo",
+    "sport",
+    "swimming",
+    "water",
+    "waterpolo",
+    "woman"
+  ],
+  "1F93E": [
+    "athletics",
+    "ball",
+    "catch",
+    "chuck",
+    "handball",
+    "hurl",
+    "lob",
+    "person",
+    "pitch",
+    "playing",
+    "sport",
+    "throw",
+    "toss"
+  ],
+  "1F93E-200D-2642": [
+    "athletics",
+    "ball",
+    "catch",
+    "chuck",
+    "handball",
+    "hurl",
+    "lob",
+    "man",
+    "pitch",
+    "playing",
+    "sport",
+    "throw",
+    "toss"
+  ],
+  "1F93E-200D-2640": [
+    "athletics",
+    "ball",
+    "catch",
+    "chuck",
+    "handball",
+    "hurl",
+    "lob",
+    "pitch",
+    "playing",
+    "sport",
+    "throw",
+    "toss",
+    "woman"
+  ],
+  "1F939": [
+    "act",
+    "balance",
+    "balancing",
+    "handle",
+    "juggle",
+    "juggling",
+    "manage",
+    "multitask",
+    "person",
+    "skill"
+  ],
+  "1F939-200D-2642": [
+    "act",
+    "balance",
+    "balancing",
+    "handle",
+    "juggle",
+    "juggling",
+    "man",
+    "manage",
+    "multitask",
+    "skill"
+  ],
+  "1F939-200D-2640": [
+    "act",
+    "balance",
+    "balancing",
+    "handle",
+    "juggle",
+    "juggling",
+    "manage",
+    "multitask",
+    "skill",
+    "woman"
+  ],
+  "1F9D8": [
+    "cross",
+    "legged",
+    "legs",
+    "lotus",
+    "meditation",
+    "peace",
+    "person",
+    "position",
+    "relax",
+    "serenity",
+    "yoga",
+    "yogi",
+    "zen"
+  ],
+  "1F9D8-200D-2642": [
+    "cross",
+    "legged",
+    "legs",
+    "lotus",
+    "man",
+    "meditation",
+    "peace",
+    "position",
+    "relax",
+    "serenity",
+    "yoga",
+    "yogi",
+    "zen"
+  ],
+  "1F9D8-200D-2640": [
+    "cross",
+    "legged",
+    "legs",
+    "lotus",
+    "meditation",
+    "peace",
+    "position",
+    "relax",
+    "serenity",
+    "woman",
+    "yoga",
+    "yogi",
+    "zen"
+  ],
+  "1F6C0": [
+    "bath",
+    "bathtub",
+    "person",
+    "taking",
+    "tub"
+  ],
+  "1F6CC": [
+    "bed",
+    "bedtime",
+    "good",
+    "goodnight",
+    "hotel",
+    "nap",
+    "night",
+    "person",
+    "sleep",
+    "tired",
+    "zzz"
+  ],
+  "1F9D1-200D-1F91D-200D-1F9D1": [
+    "bae",
+    "bestie",
+    "bff",
+    "couple",
+    "dating",
+    "flirt",
+    "friends",
+    "hand",
+    "hold",
+    "people",
+    "twins"
+  ],
+  "1F46D": [
+    "bae",
+    "bestie",
+    "bff",
+    "couple",
+    "dating",
+    "flirt",
+    "friends",
+    "girls",
+    "hand",
+    "hold",
+    "sisters",
+    "twins",
+    "women"
+  ],
+  "1F46B": [
+    "bae",
+    "bestie",
+    "bff",
+    "couple",
+    "dating",
+    "flirt",
+    "friends",
+    "hand",
+    "hold",
+    "man",
+    "twins",
+    "woman"
+  ],
+  "1F46C": [
+    "bae",
+    "bestie",
+    "bff",
+    "boys",
+    "brothers",
+    "couple",
+    "dating",
+    "flirt",
+    "friends",
+    "hand",
+    "hold",
+    "men",
+    "twins"
+  ],
+  "1F48F": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "date",
+    "dating",
+    "heart",
+    "love",
+    "mwah",
+    "person",
+    "romance",
+    "together",
+    "xoxo"
+  ],
+  "1F469-200D-2764-200D-1F48B-200D-1F468": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "date",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "man",
+    "mwah",
+    "person",
+    "romance",
+    "together",
+    "woman",
+    "xoxo"
+  ],
+  "1F468-200D-2764-200D-1F48B-200D-1F468": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "date",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "man",
+    "mwah",
+    "person",
+    "romance",
+    "together",
+    "xoxo"
+  ],
+  "1F469-200D-2764-200D-1F48B-200D-1F469": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "date",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "mwah",
+    "person",
+    "romance",
+    "together",
+    "woman",
+    "xoxo"
+  ],
+  "1F491": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "person",
+    "relationship",
+    "romance",
+    "together",
+    "you"
+  ],
+  "1F469-200D-2764-200D-1F468": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "man",
+    "person",
+    "relationship",
+    "romance",
+    "together",
+    "woman",
+    "you"
+  ],
+  "1F468-200D-2764-200D-1F468": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "man",
+    "person",
+    "relationship",
+    "romance",
+    "together",
+    "you"
+  ],
+  "1F469-200D-2764-200D-1F469": [
+    "anniversary",
+    "babe",
+    "bae",
+    "couple",
+    "dating",
+    "heart",
+    "kiss",
+    "love",
+    "person",
+    "relationship",
+    "romance",
+    "together",
+    "woman",
+    "you"
+  ],
+  "1F468-200D-1F469-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "man",
+    "woman"
+  ],
+  "1F468-200D-1F469-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "man",
+    "woman"
+  ],
+  "1F468-200D-1F469-200D-1F467-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "girl",
+    "man",
+    "woman"
+  ],
+  "1F468-200D-1F469-200D-1F466-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "man",
+    "woman"
+  ],
+  "1F468-200D-1F469-200D-1F467-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "man",
+    "woman"
+  ],
+  "1F468-200D-1F468-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "man"
+  ],
+  "1F468-200D-1F468-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "man"
+  ],
+  "1F468-200D-1F468-200D-1F467-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "girl",
+    "man"
+  ],
+  "1F468-200D-1F468-200D-1F466-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "man"
+  ],
+  "1F468-200D-1F468-200D-1F467-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "man"
+  ],
+  "1F469-200D-1F469-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "woman"
+  ],
+  "1F469-200D-1F469-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "woman"
+  ],
+  "1F469-200D-1F469-200D-1F467-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "girl",
+    "woman"
+  ],
+  "1F469-200D-1F469-200D-1F466-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "woman"
+  ],
+  "1F469-200D-1F469-200D-1F467-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "woman"
+  ],
+  "1F468-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "man"
+  ],
+  "1F468-200D-1F466-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "man"
+  ],
+  "1F468-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "man"
+  ],
+  "1F468-200D-1F467-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "girl",
+    "man"
+  ],
+  "1F468-200D-1F467-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "man"
+  ],
+  "1F469-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "woman"
+  ],
+  "1F469-200D-1F466-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "woman"
+  ],
+  "1F469-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "woman"
+  ],
+  "1F469-200D-1F467-200D-1F466": [
+    "boy",
+    "child",
+    "family",
+    "girl",
+    "woman"
+  ],
+  "1F469-200D-1F467-200D-1F467": [
+    "child",
+    "family",
+    "girl",
+    "woman"
+  ],
+  "1F5E3": [
+    "face",
+    "head",
+    "silhouette",
+    "speak",
+    "speaking"
+  ],
+  "1F464": [
+    "bust",
+    "mysterious",
+    "shadow",
+    "silhouette"
+  ],
+  "1F465": [
+    "bff",
+    "bust",
+    "busts",
+    "everyone",
+    "friend",
+    "friends",
+    "people",
+    "silhouette"
+  ],
+  "1FAC2": [
+    "comfort",
+    "embrace",
+    "farewell",
+    "friendship",
+    "goodbye",
+    "hello",
+    "hug",
+    "hugging",
+    "love",
+    "people",
+    "thanks"
+  ],
+  "1F46A": [
+    "child"
+  ],
+  "1F9D1-200D-1F9D1-200D-1F9D2": [
+    "adult",
+    "child",
+    "family"
+  ],
+  "1F9D1-200D-1F9D1-200D-1F9D2-200D-1F9D2": [
+    "adult",
+    "child",
+    "family"
+  ],
+  "1F9D1-200D-1F9D2": [
+    "adult",
+    "child",
+    "family"
+  ],
+  "1F9D1-200D-1F9D2-200D-1F9D2": [
+    "adult",
+    "child",
+    "family"
+  ],
+  "1F463": [
+    "barefoot",
+    "clothing",
+    "footprint",
+    "omw",
+    "print",
+    "walk"
+  ],
+  "1FAC6": [
+    "clue",
+    "crime",
+    "detective",
+    "forensics",
+    "identity",
+    "mystery",
+    "print",
+    "safety",
+    "trace"
+  ],
+  "1F435": [
+    "animal",
+    "banana",
+    "face",
+    "monkey"
+  ],
+  "1F412": [
+    "animal",
+    "banana"
+  ],
+  "1F98D": [
+    "animal"
+  ],
+  "1F9A7": [
+    "animal",
+    "ape",
+    "monkey"
+  ],
+  "1F436": [
+    "adorbs",
+    "animal",
+    "dog",
+    "face",
+    "pet",
+    "puppies",
+    "puppy"
+  ],
+  "1F415": [
+    "animal",
+    "animals",
+    "dogs",
+    "pet"
+  ],
+  "1F9AE": [
+    "accessibility",
+    "animal",
+    "blind",
+    "dog",
+    "guide"
+  ],
+  "1F415-200D-1F9BA": [
+    "accessibility",
+    "animal",
+    "assistance",
+    "dog",
+    "service"
+  ],
+  "1F429": [
+    "animal",
+    "dog",
+    "fluffy"
+  ],
+  "1F43A": [
+    "animal",
+    "face"
+  ],
+  "1F98A": [
+    "animal",
+    "face"
+  ],
+  "1F99D": [
+    "animal",
+    "curious",
+    "sly"
+  ],
+  "1F431": [
+    "animal",
+    "cat",
+    "face",
+    "kitten",
+    "kitty",
+    "pet"
+  ],
+  "1F408": [
+    "animal",
+    "animals",
+    "cats",
+    "kitten",
+    "pet"
+  ],
+  "1F408-200D-2B1B": [
+    "animal",
+    "black",
+    "cat",
+    "feline",
+    "halloween",
+    "meow",
+    "unlucky"
+  ],
+  "1F981": [
+    "alpha",
+    "animal",
+    "face",
+    "leo",
+    "mane",
+    "order",
+    "rawr",
+    "roar",
+    "safari",
+    "strong",
+    "zodiac"
+  ],
+  "1F42F": [
+    "animal",
+    "big",
+    "cat",
+    "face",
+    "predator",
+    "tiger"
+  ],
+  "1F405": [
+    "animal",
+    "big",
+    "cat",
+    "predator",
+    "zoo"
+  ],
+  "1F406": [
+    "animal",
+    "big",
+    "cat",
+    "predator",
+    "zoo"
+  ],
+  "1F434": [
+    "animal",
+    "dressage",
+    "equine",
+    "face",
+    "farm",
+    "horse",
+    "horses"
+  ],
+  "1FACE": [
+    "alces",
+    "animal",
+    "antlers",
+    "elk",
+    "mammal"
+  ],
+  "1FACF": [
+    "animal",
+    "ass",
+    "burro",
+    "hinny",
+    "mammal",
+    "mule",
+    "stubborn"
+  ],
+  "1F40E": [
+    "animal",
+    "equestrian",
+    "farm",
+    "racehorse",
+    "racing"
+  ],
+  "1F984": [
+    "face"
+  ],
+  "1F993": [
+    "animal",
+    "stripe"
+  ],
+  "1F98C": [
+    "animal"
+  ],
+  "1F9AC": [
+    "animal",
+    "buffalo",
+    "herd",
+    "wisent"
+  ],
+  "1F42E": [
+    "animal",
+    "cow",
+    "face",
+    "farm",
+    "milk",
+    "moo"
+  ],
+  "1F402": [
+    "animal",
+    "animals",
+    "bull",
+    "farm",
+    "taurus",
+    "zodiac"
+  ],
+  "1F403": [
+    "animal",
+    "buffalo",
+    "water",
+    "zoo"
+  ],
+  "1F404": [
+    "animal",
+    "animals",
+    "farm",
+    "milk",
+    "moo"
+  ],
+  "1F437": [
+    "animal",
+    "bacon",
+    "face",
+    "farm",
+    "pig",
+    "pork"
+  ],
+  "1F416": [
+    "animal",
+    "bacon",
+    "farm",
+    "pork",
+    "sow"
+  ],
+  "1F417": [
+    "animal",
+    "pig"
+  ],
+  "1F43D": [
+    "animal",
+    "face",
+    "farm",
+    "nose",
+    "pig",
+    "smell",
+    "snout"
+  ],
+  "1F40F": [
+    "animal",
+    "aries",
+    "horns",
+    "male",
+    "sheep",
+    "zodiac",
+    "zoo"
+  ],
+  "1F411": [
+    "animal",
+    "baa",
+    "farm",
+    "female",
+    "fluffy",
+    "lamb",
+    "sheep",
+    "wool"
+  ],
+  "1F410": [
+    "animal",
+    "capricorn",
+    "farm",
+    "milk",
+    "zodiac"
+  ],
+  "1F42A": [
+    "animal",
+    "desert",
+    "dromedary",
+    "hump",
+    "one"
+  ],
+  "1F42B": [
+    "animal",
+    "bactrian",
+    "camel",
+    "desert",
+    "hump",
+    "two",
+    "two-hump"
+  ],
+  "1F999": [
+    "alpaca",
+    "animal",
+    "guanaco",
+    "vicuña",
+    "wool"
+  ],
+  "1F992": [
+    "animal",
+    "spots"
+  ],
+  "1F418": [
+    "animal"
+  ],
+  "1F9A3": [
+    "animal",
+    "extinction",
+    "large",
+    "tusk",
+    "wooly"
+  ],
+  "1F98F": [
+    "animal"
+  ],
+  "1F99B": [
+    "animal",
+    "hippo"
+  ],
+  "1F42D": [
+    "animal",
+    "face",
+    "mouse"
+  ],
+  "1F401": [
+    "animal",
+    "animals"
+  ],
+  "1F400": [
+    "animal"
+  ],
+  "1F439": [
+    "animal",
+    "face",
+    "pet"
+  ],
+  "1F430": [
+    "animal",
+    "bunny",
+    "face",
+    "pet",
+    "rabbit"
+  ],
+  "1F407": [
+    "animal",
+    "bunny",
+    "pet"
+  ],
+  "1F43F": [
+    "animal",
+    "squirrel"
+  ],
+  "1F9AB": [
+    "animal",
+    "dam",
+    "teeth"
+  ],
+  "1F994": [
+    "animal",
+    "spiny"
+  ],
+  "1F987": [
+    "animal",
+    "vampire"
+  ],
+  "1F43B": [
+    "animal",
+    "face",
+    "grizzly",
+    "growl",
+    "honey"
+  ],
+  "1F43B-200D-2744": [
+    "animal",
+    "arctic",
+    "bear",
+    "polar",
+    "white"
+  ],
+  "1F428": [
+    "animal",
+    "australia",
+    "bear",
+    "down",
+    "face",
+    "marsupial",
+    "under"
+  ],
+  "1F43C": [
+    "animal",
+    "bamboo",
+    "face"
+  ],
+  "1F9A5": [
+    "lazy",
+    "slow"
+  ],
+  "1F9A6": [
+    "animal",
+    "fishing",
+    "playful"
+  ],
+  "1F9A8": [
+    "animal",
+    "stink"
+  ],
+  "1F998": [
+    "animal",
+    "joey",
+    "jump",
+    "marsupial"
+  ],
+  "1F9A1": [
+    "animal",
+    "honey",
+    "pester"
+  ],
+  "1F43E": [
+    "feet",
+    "paw",
+    "paws",
+    "print",
+    "prints"
+  ],
+  "1F983": [
+    "bird",
+    "gobble",
+    "thanksgiving"
+  ],
+  "1F414": [
+    "animal",
+    "bird",
+    "ornithology"
+  ],
+  "1F413": [
+    "animal",
+    "bird",
+    "ornithology"
+  ],
+  "1F423": [
+    "animal",
+    "baby",
+    "bird",
+    "chick",
+    "egg",
+    "hatching"
+  ],
+  "1F424": [
+    "animal",
+    "baby",
+    "bird",
+    "chick",
+    "ornithology"
+  ],
+  "1F425": [
+    "animal",
+    "baby",
+    "bird",
+    "chick",
+    "front-facing",
+    "newborn",
+    "ornithology"
+  ],
+  "1F426": [
+    "animal",
+    "ornithology"
+  ],
+  "1F427": [
+    "animal",
+    "antarctica",
+    "bird",
+    "ornithology"
+  ],
+  "1F54A": [
+    "bird",
+    "fly",
+    "ornithology",
+    "peace"
+  ],
+  "1F985": [
+    "animal",
+    "bird",
+    "ornithology"
+  ],
+  "1F986": [
+    "animal",
+    "bird",
+    "ornithology"
+  ],
+  "1F9A2": [
+    "animal",
+    "bird",
+    "cygnet",
+    "duckling",
+    "ornithology",
+    "ugly"
+  ],
+  "1F989": [
+    "animal",
+    "bird",
+    "ornithology",
+    "wise"
+  ],
+  "1F9A4": [
+    "animal",
+    "bird",
+    "extinction",
+    "large",
+    "ornithology"
+  ],
+  "1FAB6": [
+    "bird",
+    "flight",
+    "light",
+    "plumage"
+  ],
+  "1F9A9": [
+    "animal",
+    "bird",
+    "flamboyant",
+    "ornithology",
+    "tropical"
+  ],
+  "1F99A": [
+    "animal",
+    "bird",
+    "colorful",
+    "ornithology",
+    "ostentatious",
+    "peahen",
+    "pretty",
+    "proud"
+  ],
+  "1F99C": [
+    "animal",
+    "bird",
+    "ornithology",
+    "pirate",
+    "talk"
+  ],
+  "1FABD": [
+    "angelic",
+    "ascend",
+    "aviation",
+    "bird",
+    "fly",
+    "flying",
+    "heavenly",
+    "mythology",
+    "soar"
+  ],
+  "1F426-200D-2B1B": [
+    "animal",
+    "beak",
+    "bird",
+    "black",
+    "caw",
+    "corvid",
+    "crow",
+    "ornithology",
+    "raven",
+    "rook"
+  ],
+  "1FABF": [
+    "animal",
+    "bird",
+    "duck",
+    "flock",
+    "fowl",
+    "gaggle",
+    "gander",
+    "geese",
+    "honk",
+    "ornithology",
+    "silly"
+  ],
+  "1F426-200D-1F525": [
+    "ascend",
+    "ascension",
+    "emerge",
+    "fantasy",
+    "firebird",
+    "glory",
+    "immortal",
+    "rebirth",
+    "reincarnation",
+    "reinvent",
+    "renewal",
+    "revival",
+    "revive",
+    "rise",
+    "transform"
+  ],
+  "1F438": [
+    "animal",
+    "face"
+  ],
+  "1F40A": [
+    "animal",
+    "zoo"
+  ],
+  "1F422": [
+    "animal",
+    "terrapin",
+    "tortoise"
+  ],
+  "1F98E": [
+    "animal",
+    "reptile"
+  ],
+  "1F40D": [
+    "animal",
+    "bearer",
+    "ophiuchus",
+    "serpent",
+    "zodiac"
+  ],
+  "1F432": [
+    "animal",
+    "dragon",
+    "face",
+    "fairy",
+    "fairytale",
+    "tale"
+  ],
+  "1F409": [
+    "animal",
+    "fairy",
+    "fairytale",
+    "knights",
+    "tale"
+  ],
+  "1F995": [
+    "brachiosaurus",
+    "brontosaurus",
+    "dinosaur",
+    "diplodocus"
+  ],
+  "1F996": [
+    "dinosaur",
+    "rex",
+    "t",
+    "t-rex",
+    "tyrannosaurus"
+  ],
+  "1F433": [
+    "animal",
+    "beach",
+    "face",
+    "ocean",
+    "spouting",
+    "whale"
+  ],
+  "1F40B": [
+    "animal",
+    "beach",
+    "ocean"
+  ],
+  "1F42C": [
+    "animal",
+    "beach",
+    "flipper",
+    "ocean"
+  ],
+  "1F9AD": [
+    "animal",
+    "lion",
+    "ocean",
+    "sea"
+  ],
+  "1F41F": [
+    "animal",
+    "dinner",
+    "fishes",
+    "fishing",
+    "pisces",
+    "zodiac"
+  ],
+  "1F420": [
+    "animal",
+    "fish",
+    "fishes",
+    "tropical"
+  ],
+  "1F421": [
+    "animal",
+    "fish"
+  ],
+  "1F988": [
+    "animal",
+    "fish"
+  ],
+  "1F419": [
+    "animal",
+    "creature",
+    "ocean"
+  ],
+  "1F41A": [
+    "animal",
+    "beach",
+    "conch",
+    "sea",
+    "shell",
+    "spiral"
+  ],
+  "1FAB8": [
+    "change",
+    "climate",
+    "ocean",
+    "reef",
+    "sea"
+  ],
+  "1FABC": [
+    "animal",
+    "aquarium",
+    "burn",
+    "invertebrate",
+    "jelly",
+    "life",
+    "marine",
+    "ocean",
+    "ouch",
+    "plankton",
+    "sea",
+    "sting",
+    "stinger",
+    "tentacles"
+  ],
+  "1F980": [
+    "cancer",
+    "zodiac"
+  ],
+  "1F99E": [
+    "animal",
+    "bisque",
+    "claws",
+    "seafood"
+  ],
+  "1F990": [
+    "food",
+    "shellfish",
+    "small"
+  ],
+  "1F991": [
+    "animal",
+    "food",
+    "mollusk"
+  ],
+  "1F9AA": [
+    "diving",
+    "pearl"
+  ],
+  "1F40C": [
+    "animal",
+    "escargot",
+    "garden",
+    "nature",
+    "slug"
+  ],
+  "1F98B": [
+    "insect",
+    "pretty"
+  ],
+  "1F41B": [
+    "animal",
+    "garden",
+    "insect"
+  ],
+  "1F41C": [
+    "animal",
+    "garden",
+    "insect"
+  ],
+  "1F41D": [
+    "animal",
+    "bee",
+    "bumblebee",
+    "honey",
+    "insect",
+    "nature",
+    "spring"
+  ],
+  "1FAB2": [
+    "animal",
+    "bug",
+    "insect"
+  ],
+  "1F41E": [
+    "animal",
+    "beetle",
+    "garden",
+    "insect",
+    "lady",
+    "ladybird",
+    "ladybug",
+    "nature"
+  ],
+  "1F997": [
+    "animal",
+    "bug",
+    "grasshopper",
+    "insect",
+    "orthoptera"
+  ],
+  "1FAB3": [
+    "animal",
+    "insect",
+    "pest",
+    "roach"
+  ],
+  "1F577": [
+    "animal",
+    "insect"
+  ],
+  "1F578": [
+    "spider",
+    "web"
+  ],
+  "1F982": [
+    "scorpio",
+    "scorpius",
+    "zodiac"
+  ],
+  "1F99F": [
+    "bite",
+    "disease",
+    "fever",
+    "insect",
+    "malaria",
+    "pest",
+    "virus"
+  ],
+  "1FAB0": [
+    "animal",
+    "disease",
+    "insect",
+    "maggot",
+    "pest",
+    "rotting"
+  ],
+  "1FAB1": [
+    "animal",
+    "annelid",
+    "earthworm",
+    "parasite"
+  ],
+  "1F9A0": [
+    "amoeba",
+    "bacteria",
+    "science",
+    "virus"
+  ],
+  "1F490": [
+    "anniversary",
+    "birthday",
+    "date",
+    "flower",
+    "love",
+    "plant",
+    "romance"
+  ],
+  "1F338": [
+    "blossom",
+    "cherry",
+    "flower",
+    "plant",
+    "spring",
+    "springtime"
+  ],
+  "1F4AE": [
+    "flower",
+    "white"
+  ],
+  "1FAB7": [
+    "beauty",
+    "buddhism",
+    "calm",
+    "flower",
+    "hinduism",
+    "peace",
+    "purity",
+    "serenity"
+  ],
+  "1F3F5": [
+    "plant"
+  ],
+  "1F339": [
+    "beauty",
+    "elegant",
+    "flower",
+    "love",
+    "plant",
+    "red",
+    "valentine"
+  ],
+  "1F940": [
+    "dying",
+    "flower",
+    "wilted"
+  ],
+  "1F33A": [
+    "flower",
+    "plant"
+  ],
+  "1F33B": [
+    "flower",
+    "outdoors",
+    "plant",
+    "sun"
+  ],
+  "1F33C": [
+    "buttercup",
+    "dandelion",
+    "flower",
+    "plant"
+  ],
+  "1F337": [
+    "blossom",
+    "flower",
+    "growth",
+    "plant"
+  ],
+  "1FABB": [
+    "bloom",
+    "bluebonnet",
+    "flower",
+    "indigo",
+    "lavender",
+    "lilac",
+    "lupine",
+    "plant",
+    "purple",
+    "shrub",
+    "snapdragon",
+    "spring",
+    "violet"
+  ],
+  "1F331": [
+    "plant",
+    "sapling",
+    "sprout",
+    "young"
+  ],
+  "1FAB4": [
+    "decor",
+    "grow",
+    "house",
+    "nurturing",
+    "plant",
+    "pot",
+    "potted"
+  ],
+  "1F332": [
+    "christmas",
+    "evergreen",
+    "forest",
+    "pine",
+    "tree"
+  ],
+  "1F333": [
+    "deciduous",
+    "forest",
+    "green",
+    "habitat",
+    "shedding",
+    "tree"
+  ],
+  "1F334": [
+    "beach",
+    "palm",
+    "plant",
+    "tree",
+    "tropical"
+  ],
+  "1F335": [
+    "desert",
+    "drought",
+    "nature",
+    "plant"
+  ],
+  "1F33E": [
+    "ear",
+    "grain",
+    "grains",
+    "plant",
+    "rice",
+    "sheaf"
+  ],
+  "1F33F": [
+    "leaf",
+    "plant"
+  ],
+  "1F340": [
+    "4",
+    "clover",
+    "four",
+    "four-leaf",
+    "irish",
+    "leaf",
+    "lucky",
+    "plant"
+  ],
+  "1F341": [
+    "falling",
+    "leaf",
+    "maple"
+  ],
+  "1F342": [
+    "autumn",
+    "fall",
+    "fallen",
+    "falling",
+    "leaf"
+  ],
+  "1F343": [
+    "blow",
+    "flutter",
+    "fluttering",
+    "leaf",
+    "wind"
+  ],
+  "1FAB9": [
+    "branch",
+    "empty",
+    "home",
+    "nest",
+    "nesting"
+  ],
+  "1FABA": [
+    "bird",
+    "branch",
+    "egg",
+    "eggs",
+    "nest",
+    "nesting"
+  ],
+  "1F344": [
+    "fungus",
+    "toadstool"
+  ],
+  "1FABE": [
+    "bare",
+    "barren",
+    "branches",
+    "dead",
+    "drought",
+    "leafless",
+    "tree",
+    "trunk",
+    "winter",
+    "wood"
+  ],
+  "1F347": [
+    "dionysus",
+    "fruit",
+    "grape"
+  ],
+  "1F348": [
+    "cantaloupe",
+    "fruit"
+  ],
+  "1F349": [
+    "fruit"
+  ],
+  "1F34A": [
+    "c",
+    "citrus",
+    "fruit",
+    "nectarine",
+    "orange",
+    "vitamin"
+  ],
+  "1F34B": [
+    "citrus",
+    "fruit",
+    "sour"
+  ],
+  "1F34B-200D-1F7E9": [
+    "acidity",
+    "citrus",
+    "cocktail",
+    "fruit",
+    "garnish",
+    "key",
+    "margarita",
+    "mojito",
+    "refreshing",
+    "salsa",
+    "sour",
+    "tangy",
+    "tequila",
+    "tropical",
+    "zest"
+  ],
+  "1F34C": [
+    "fruit",
+    "potassium"
+  ],
+  "1F34D": [
+    "colada",
+    "fruit",
+    "pina",
+    "tropical"
+  ],
+  "1F96D": [
+    "food",
+    "fruit",
+    "tropical"
+  ],
+  "1F34E": [
+    "apple",
+    "diet",
+    "food",
+    "fruit",
+    "health",
+    "red",
+    "ripe"
+  ],
+  "1F34F": [
+    "apple",
+    "fruit",
+    "green"
+  ],
+  "1F350": [
+    "fruit"
+  ],
+  "1F351": [
+    "fruit"
+  ],
+  "1F352": [
+    "berries",
+    "cherry",
+    "fruit",
+    "red"
+  ],
+  "1F353": [
+    "berry",
+    "fruit"
+  ],
+  "1FAD0": [
+    "berries",
+    "berry",
+    "bilberry",
+    "blue",
+    "blueberry",
+    "food",
+    "fruit"
+  ],
+  "1F95D": [
+    "food",
+    "fruit",
+    "kiwi"
+  ],
+  "1F345": [
+    "food",
+    "fruit",
+    "vegetable"
+  ],
+  "1FAD2": [
+    "food"
+  ],
+  "1F965": [
+    "colada",
+    "palm",
+    "piña"
+  ],
+  "1F951": [
+    "food",
+    "fruit"
+  ],
+  "1F346": [
+    "aubergine",
+    "vegetable"
+  ],
+  "1F954": [
+    "food",
+    "vegetable"
+  ],
+  "1F955": [
+    "food",
+    "vegetable"
+  ],
+  "1F33D": [
+    "corn",
+    "crops",
+    "ear",
+    "farm",
+    "maize",
+    "maze"
+  ],
+  "1F336": [
+    "hot",
+    "pepper"
+  ],
+  "1FAD1": [
+    "bell",
+    "capsicum",
+    "food",
+    "pepper",
+    "vegetable"
+  ],
+  "1F952": [
+    "food",
+    "pickle",
+    "vegetable"
+  ],
+  "1F96C": [
+    "bok",
+    "burgers",
+    "cabbage",
+    "choy",
+    "green",
+    "kale",
+    "leafy",
+    "lettuce",
+    "salad"
+  ],
+  "1F966": [
+    "cabbage",
+    "wild"
+  ],
+  "1F9C4": [
+    "flavoring"
+  ],
+  "1F9C5": [
+    "flavoring"
+  ],
+  "1F95C": [
+    "food",
+    "nut",
+    "peanut",
+    "vegetable"
+  ],
+  "1FAD8": [
+    "food",
+    "kidney",
+    "legume",
+    "small"
+  ],
+  "1F330": [
+    "almond",
+    "plant"
+  ],
+  "1FADA": [
+    "beer",
+    "ginger",
+    "health",
+    "herb",
+    "natural",
+    "root",
+    "spice"
+  ],
+  "1FADB": [
+    "beans",
+    "beanstalk",
+    "edamame",
+    "legume",
+    "pea",
+    "pod",
+    "soybean",
+    "vegetable",
+    "veggie"
+  ],
+  "1F344-200D-1F7EB": [
+    "food",
+    "fungi",
+    "fungus",
+    "mushroom",
+    "nature",
+    "pizza",
+    "portobello",
+    "shiitake",
+    "shroom",
+    "spore",
+    "sprout",
+    "toppings",
+    "truffle",
+    "vegetable",
+    "vegetarian",
+    "veggie"
+  ],
+  "1FADC": [
+    "beet",
+    "food",
+    "garden",
+    "radish",
+    "root",
+    "salad",
+    "turnip",
+    "vegetable",
+    "vegetarian"
+  ],
+  "1F35E": [
+    "carbs",
+    "food",
+    "grain",
+    "loaf",
+    "restaurant",
+    "toast",
+    "wheat"
+  ],
+  "1F950": [
+    "bread",
+    "breakfast",
+    "crescent",
+    "food",
+    "french",
+    "roll"
+  ],
+  "1F956": [
+    "baguette",
+    "bread",
+    "food",
+    "french"
+  ],
+  "1FAD3": [
+    "arepa",
+    "bread",
+    "food",
+    "gordita",
+    "lavash",
+    "naan",
+    "pita"
+  ],
+  "1F968": [
+    "convoluted",
+    "twisted"
+  ],
+  "1F96F": [
+    "bakery",
+    "bread",
+    "breakfast",
+    "schmear"
+  ],
+  "1F95E": [
+    "breakfast",
+    "crêpe",
+    "food",
+    "hotcake",
+    "pancake"
+  ],
+  "1F9C7": [
+    "breakfast",
+    "indecisive",
+    "iron"
+  ],
+  "1F9C0": [
+    "cheese",
+    "wedge"
+  ],
+  "1F356": [
+    "bone",
+    "meat"
+  ],
+  "1F357": [
+    "bone",
+    "chicken",
+    "drumstick",
+    "hungry",
+    "leg",
+    "poultry",
+    "turkey"
+  ],
+  "1F969": [
+    "chop",
+    "cut",
+    "lambchop",
+    "meat",
+    "porkchop",
+    "red",
+    "steak"
+  ],
+  "1F953": [
+    "breakfast",
+    "food",
+    "meat"
+  ],
+  "1F354": [
+    "burger",
+    "eat",
+    "fast",
+    "food",
+    "hungry"
+  ],
+  "1F35F": [
+    "fast",
+    "food",
+    "french",
+    "fries"
+  ],
+  "1F355": [
+    "cheese",
+    "food",
+    "hungry",
+    "pepperoni",
+    "slice"
+  ],
+  "1F32D": [
+    "dog",
+    "frankfurter",
+    "hot",
+    "hotdog",
+    "sausage"
+  ],
+  "1F96A": [
+    "bread"
+  ],
+  "1F32E": [
+    "mexican"
+  ],
+  "1F32F": [
+    "mexican",
+    "wrap"
+  ],
+  "1FAD4": [
+    "food",
+    "mexican",
+    "pamonha",
+    "wrapped"
+  ],
+  "1F959": [
+    "falafel",
+    "flatbread",
+    "food",
+    "gyro",
+    "kebab",
+    "stuffed"
+  ],
+  "1F9C6": [
+    "chickpea",
+    "meatball"
+  ],
+  "1F95A": [
+    "breakfast",
+    "food"
+  ],
+  "1F373": [
+    "breakfast",
+    "easy",
+    "egg",
+    "fry",
+    "frying",
+    "over",
+    "pan",
+    "restaurant",
+    "side",
+    "sunny",
+    "up"
+  ],
+  "1F958": [
+    "casserole",
+    "food",
+    "paella",
+    "pan",
+    "shallow"
+  ],
+  "1F372": [
+    "food",
+    "pot",
+    "soup",
+    "stew"
+  ],
+  "1FAD5": [
+    "cheese",
+    "chocolate",
+    "food",
+    "melted",
+    "pot",
+    "ski"
+  ],
+  "1F963": [
+    "bowl",
+    "breakfast",
+    "cereal",
+    "congee",
+    "oatmeal",
+    "porridge",
+    "spoon"
+  ],
+  "1F957": [
+    "food",
+    "green",
+    "salad"
+  ],
+  "1F37F": [
+    "corn",
+    "movie",
+    "pop"
+  ],
+  "1F9C8": [
+    "dairy"
+  ],
+  "1F9C2": [
+    "condiment",
+    "flavor",
+    "mad",
+    "salty",
+    "shaker",
+    "taste",
+    "upset"
+  ],
+  "1F96B": [
+    "can",
+    "canned",
+    "food"
+  ],
+  "1F371": [
+    "bento",
+    "box",
+    "food"
+  ],
+  "1F358": [
+    "cracker",
+    "food",
+    "rice"
+  ],
+  "1F359": [
+    "ball",
+    "food",
+    "japanese",
+    "rice"
+  ],
+  "1F35A": [
+    "cooked",
+    "food",
+    "rice"
+  ],
+  "1F35B": [
+    "curry",
+    "food",
+    "rice"
+  ],
+  "1F35C": [
+    "bowl",
+    "chopsticks",
+    "food",
+    "noodle",
+    "pho",
+    "ramen",
+    "soup",
+    "steaming"
+  ],
+  "1F35D": [
+    "food",
+    "meatballs",
+    "pasta",
+    "restaurant"
+  ],
+  "1F360": [
+    "food",
+    "potato",
+    "roasted",
+    "sweet"
+  ],
+  "1F362": [
+    "food",
+    "kebab",
+    "restaurant",
+    "seafood",
+    "skewer",
+    "stick"
+  ],
+  "1F363": [
+    "food"
+  ],
+  "1F364": [
+    "fried",
+    "prawn",
+    "shrimp",
+    "tempura"
+  ],
+  "1F365": [
+    "cake",
+    "fish",
+    "food",
+    "pastry",
+    "restaurant",
+    "swirl"
+  ],
+  "1F96E": [
+    "autumn",
+    "cake",
+    "festival",
+    "moon",
+    "yuèbǐng"
+  ],
+  "1F361": [
+    "dessert",
+    "japanese",
+    "skewer",
+    "stick",
+    "sweet"
+  ],
+  "1F95F": [
+    "empanada",
+    "gyōza",
+    "jiaozi",
+    "pierogi",
+    "potsticker"
+  ],
+  "1F960": [
+    "cookie",
+    "fortune",
+    "prophecy"
+  ],
+  "1F961": [
+    "box",
+    "chopsticks",
+    "delivery",
+    "food",
+    "oyster",
+    "pail",
+    "takeout"
+  ],
+  "1F366": [
+    "cream",
+    "dessert",
+    "food",
+    "ice",
+    "icecream",
+    "restaurant",
+    "serve",
+    "soft",
+    "sweet"
+  ],
+  "1F367": [
+    "dessert",
+    "ice",
+    "restaurant",
+    "shaved",
+    "sweet"
+  ],
+  "1F368": [
+    "cream",
+    "dessert",
+    "food",
+    "ice",
+    "restaurant",
+    "sweet"
+  ],
+  "1F369": [
+    "breakfast",
+    "dessert",
+    "donut",
+    "food",
+    "sweet"
+  ],
+  "1F36A": [
+    "chip",
+    "chocolate",
+    "dessert",
+    "sweet"
+  ],
+  "1F382": [
+    "bday",
+    "birthday",
+    "cake",
+    "celebration",
+    "dessert",
+    "happy",
+    "pastry",
+    "sweet"
+  ],
+  "1F370": [
+    "cake",
+    "dessert",
+    "pastry",
+    "slice",
+    "sweet"
+  ],
+  "1F9C1": [
+    "bakery",
+    "dessert",
+    "sprinkles",
+    "sugar",
+    "sweet",
+    "treat"
+  ],
+  "1F967": [
+    "apple",
+    "filling",
+    "fruit",
+    "meat",
+    "pastry",
+    "pumpkin",
+    "slice"
+  ],
+  "1F36B": [
+    "bar",
+    "candy",
+    "chocolate",
+    "dessert",
+    "halloween",
+    "sweet",
+    "tooth"
+  ],
+  "1F36C": [
+    "cavities",
+    "dessert",
+    "halloween",
+    "restaurant",
+    "sweet",
+    "tooth",
+    "wrapper"
+  ],
+  "1F36D": [
+    "candy",
+    "dessert",
+    "food",
+    "restaurant",
+    "sweet"
+  ],
+  "1F36E": [
+    "dessert",
+    "pudding",
+    "sweet"
+  ],
+  "1F36F": [
+    "barrel",
+    "bear",
+    "food",
+    "honey",
+    "honeypot",
+    "jar",
+    "pot",
+    "sweet"
+  ],
+  "1F37C": [
+    "babies",
+    "baby",
+    "birth",
+    "born",
+    "bottle",
+    "drink",
+    "infant",
+    "milk",
+    "newborn"
+  ],
+  "1F95B": [
+    "drink",
+    "glass",
+    "milk"
+  ],
+  "1FAD6": [
+    "brew",
+    "drink",
+    "food",
+    "pot",
+    "tea"
+  ],
+  "1F375": [
+    "beverage",
+    "cup",
+    "drink",
+    "handle",
+    "oolong",
+    "tea",
+    "teacup"
+  ],
+  "1F376": [
+    "bar",
+    "beverage",
+    "bottle",
+    "cup",
+    "drink",
+    "restaurant"
+  ],
+  "1F37E": [
+    "bar",
+    "bottle",
+    "cork",
+    "drink",
+    "popping"
+  ],
+  "1F377": [
+    "alcohol",
+    "bar",
+    "beverage",
+    "booze",
+    "club",
+    "drink",
+    "drinking",
+    "drinks",
+    "glass",
+    "restaurant",
+    "wine"
+  ],
+  "1F378": [
+    "alcohol",
+    "bar",
+    "booze",
+    "club",
+    "cocktail",
+    "drink",
+    "drinking",
+    "drinks",
+    "glass",
+    "mad",
+    "martini",
+    "men"
+  ],
+  "1F379": [
+    "alcohol",
+    "bar",
+    "booze",
+    "club",
+    "cocktail",
+    "drink",
+    "drinking",
+    "drinks",
+    "drunk",
+    "mai",
+    "party",
+    "tai",
+    "tropical",
+    "tropics"
+  ],
+  "1F37A": [
+    "alcohol",
+    "ale",
+    "bar",
+    "beer",
+    "booze",
+    "drink",
+    "drinking",
+    "drinks",
+    "mug",
+    "octoberfest",
+    "oktoberfest",
+    "pint",
+    "stein",
+    "summer"
+  ],
+  "1F37B": [
+    "alcohol",
+    "bar",
+    "beer",
+    "booze",
+    "bottoms",
+    "cheers",
+    "clink",
+    "clinking",
+    "drinking",
+    "drinks",
+    "mugs"
+  ],
+  "1F942": [
+    "celebrate",
+    "clink",
+    "clinking",
+    "drink",
+    "glass",
+    "glasses"
+  ],
+  "1F943": [
+    "glass",
+    "liquor",
+    "scotch",
+    "shot",
+    "tumbler",
+    "whiskey",
+    "whisky"
+  ],
+  "1FAD7": [
+    "accident",
+    "drink",
+    "empty",
+    "glass",
+    "liquid",
+    "oops",
+    "pour",
+    "pouring",
+    "spill",
+    "water"
+  ],
+  "1F964": [
+    "cup",
+    "drink",
+    "juice",
+    "malt",
+    "soda",
+    "soft",
+    "straw",
+    "water"
+  ],
+  "1F9CB": [
+    "boba",
+    "bubble",
+    "food",
+    "milk",
+    "pearl",
+    "tea"
+  ],
+  "1F9C3": [
+    "beverage",
+    "box",
+    "juice",
+    "straw",
+    "sweet"
+  ],
+  "1F9C9": [
+    "drink"
+  ],
+  "1F9CA": [
+    "cold",
+    "cube",
+    "iceberg"
+  ],
+  "1F962": [
+    "hashi",
+    "jeotgarak",
+    "kuaizi"
+  ],
+  "1F37D": [
+    "cooking",
+    "dinner",
+    "eat",
+    "fork",
+    "knife",
+    "plate"
+  ],
+  "1F374": [
+    "breakfast",
+    "breaky",
+    "cooking",
+    "cutlery",
+    "delicious",
+    "dinner",
+    "eat",
+    "feed",
+    "food",
+    "fork",
+    "hungry",
+    "knife",
+    "lunch",
+    "restaurant",
+    "yum",
+    "yummy"
+  ],
+  "1F944": [
+    "eat",
+    "tableware"
+  ],
+  "1F52A": [
+    "chef",
+    "cooking",
+    "hocho",
+    "kitchen",
+    "knife",
+    "tool",
+    "weapon"
+  ],
+  "1FAD9": [
+    "condiment",
+    "container",
+    "empty",
+    "nothing",
+    "sauce",
+    "store"
+  ],
+  "1F3FA": [
+    "aquarius",
+    "cooking",
+    "drink",
+    "jug",
+    "tool",
+    "weapon",
+    "zodiac"
+  ],
+  "1F30D": [
+    "africa",
+    "earth",
+    "europe",
+    "europe-africa",
+    "globe",
+    "showing",
+    "world"
+  ],
+  "1F30E": [
+    "americas",
+    "earth",
+    "globe",
+    "showing",
+    "world"
+  ],
+  "1F30F": [
+    "asia",
+    "asia-australia",
+    "australia",
+    "earth",
+    "globe",
+    "showing",
+    "world"
+  ],
+  "1F310": [
+    "earth",
+    "globe",
+    "internet",
+    "meridians",
+    "web",
+    "world",
+    "worldwide"
+  ],
+  "1F5FA": [
+    "map",
+    "world"
+  ],
+  "1F5FE": [
+    "japan",
+    "map"
+  ],
+  "1F9ED": [
+    "direction",
+    "magnetic",
+    "navigation",
+    "orienteering"
+  ],
+  "1F3D4": [
+    "cold",
+    "mountain",
+    "snow",
+    "snow-capped"
+  ],
+  "26F0": [
+    "mountain"
+  ],
+  "1F30B": [
+    "eruption",
+    "mountain",
+    "nature"
+  ],
+  "1F5FB": [
+    "fuji",
+    "mount",
+    "mountain",
+    "nature"
+  ],
+  "1F3D5": [
+    "camping"
+  ],
+  "1F3D6": [
+    "beach",
+    "umbrella"
+  ],
+  "1F3DC": [
+    "desert"
+  ],
+  "1F3DD": [
+    "desert",
+    "island"
+  ],
+  "1F3DE": [
+    "national",
+    "park"
+  ],
+  "1F3DF": [
+    "stadium"
+  ],
+  "1F3DB": [
+    "building",
+    "classical"
+  ],
+  "1F3D7": [
+    "building",
+    "construction",
+    "crane"
+  ],
+  "1F9F1": [
+    "bricks",
+    "clay",
+    "mortar",
+    "wall"
+  ],
+  "1FAA8": [
+    "boulder",
+    "heavy",
+    "solid",
+    "stone",
+    "tough"
+  ],
+  "1FAB5": [
+    "log",
+    "lumber",
+    "timber"
+  ],
+  "1F6D6": [
+    "home",
+    "house",
+    "roundhouse",
+    "shelter",
+    "yurt"
+  ],
+  "1F3D8": [
+    "house"
+  ],
+  "1F3DA": [
+    "derelict",
+    "home",
+    "house"
+  ],
+  "1F3E0": [
+    "building",
+    "country",
+    "heart",
+    "home",
+    "ranch",
+    "settle",
+    "simple",
+    "suburban",
+    "suburbia",
+    "where"
+  ],
+  "1F3E1": [
+    "building",
+    "country",
+    "garden",
+    "heart",
+    "home",
+    "house",
+    "ranch",
+    "settle",
+    "simple",
+    "suburban",
+    "suburbia",
+    "where"
+  ],
+  "1F3E2": [
+    "building",
+    "city",
+    "cubical",
+    "job",
+    "office"
+  ],
+  "1F3E3": [
+    "building",
+    "japanese",
+    "office",
+    "post"
+  ],
+  "1F3E4": [
+    "building",
+    "european",
+    "office",
+    "post"
+  ],
+  "1F3E5": [
+    "building",
+    "doctor",
+    "medicine"
+  ],
+  "1F3E6": [
+    "building"
+  ],
+  "1F3E8": [
+    "building"
+  ],
+  "1F3E9": [
+    "building",
+    "hotel",
+    "love"
+  ],
+  "1F3EA": [
+    "24",
+    "building",
+    "convenience",
+    "hours",
+    "store"
+  ],
+  "1F3EB": [
+    "building"
+  ],
+  "1F3EC": [
+    "building",
+    "department",
+    "store"
+  ],
+  "1F3ED": [
+    "building"
+  ],
+  "1F3EF": [
+    "building",
+    "castle",
+    "japanese"
+  ],
+  "1F3F0": [
+    "building",
+    "european"
+  ],
+  "1F492": [
+    "chapel",
+    "hitched",
+    "nuptials",
+    "romance"
+  ],
+  "1F5FC": [
+    "tokyo",
+    "tower"
+  ],
+  "1F5FD": [
+    "liberty",
+    "new",
+    "ny",
+    "nyc",
+    "statue",
+    "york"
+  ],
+  "26EA": [
+    "bless",
+    "chapel",
+    "christian",
+    "cross",
+    "religion"
+  ],
+  "1F54C": [
+    "islam",
+    "masjid",
+    "muslim",
+    "religion"
+  ],
+  "1F6D5": [
+    "hindu",
+    "temple"
+  ],
+  "1F54D": [
+    "jew",
+    "jewish",
+    "judaism",
+    "religion",
+    "temple"
+  ],
+  "26E9": [
+    "religion",
+    "shinto",
+    "shrine"
+  ],
+  "1F54B": [
+    "hajj",
+    "islam",
+    "muslim",
+    "religion",
+    "umrah"
+  ],
+  "26F2": [
+    "fountain"
+  ],
+  "26FA": [
+    "camping"
+  ],
+  "1F301": [
+    "fog"
+  ],
+  "1F303": [
+    "night",
+    "star",
+    "stars"
+  ],
+  "1F3D9": [
+    "city"
+  ],
+  "1F304": [
+    "morning",
+    "mountains",
+    "over",
+    "sun",
+    "sunrise"
+  ],
+  "1F305": [
+    "morning",
+    "nature",
+    "sun"
+  ],
+  "1F306": [
+    "at",
+    "building",
+    "city",
+    "cityscape",
+    "dusk",
+    "evening",
+    "landscape",
+    "sun",
+    "sunset"
+  ],
+  "1F307": [
+    "building",
+    "dusk",
+    "sun"
+  ],
+  "1F309": [
+    "at",
+    "bridge",
+    "night"
+  ],
+  "1F3A0": [
+    "carousel",
+    "entertainment",
+    "horse"
+  ],
+  "1F6DD": [
+    "amusement",
+    "park",
+    "play",
+    "playground",
+    "playing",
+    "slide",
+    "sliding",
+    "theme"
+  ],
+  "1F3A1": [
+    "amusement",
+    "ferris",
+    "park",
+    "theme",
+    "wheel"
+  ],
+  "1F3A2": [
+    "amusement",
+    "coaster",
+    "park",
+    "roller",
+    "theme"
+  ],
+  "1F488": [
+    "barber",
+    "cut",
+    "fresh",
+    "haircut",
+    "pole",
+    "shave"
+  ],
+  "1F3AA": [
+    "circus",
+    "tent"
+  ],
+  "1F682": [
+    "caboose",
+    "engine",
+    "railway",
+    "steam",
+    "train",
+    "trains",
+    "travel"
+  ],
+  "1F683": [
+    "car",
+    "electric",
+    "railway",
+    "train",
+    "tram",
+    "travel",
+    "trolleybus"
+  ],
+  "1F684": [
+    "high-speed",
+    "railway",
+    "shinkansen",
+    "speed",
+    "train"
+  ],
+  "1F685": [
+    "bullet",
+    "high-speed",
+    "nose",
+    "railway",
+    "shinkansen",
+    "speed",
+    "train",
+    "travel"
+  ],
+  "1F686": [
+    "arrived",
+    "choo",
+    "railway"
+  ],
+  "1F687": [
+    "subway",
+    "travel"
+  ],
+  "1F688": [
+    "arrived",
+    "light",
+    "monorail",
+    "rail",
+    "railway"
+  ],
+  "1F689": [
+    "railway",
+    "train"
+  ],
+  "1F68A": [
+    "trolleybus"
+  ],
+  "1F69D": [
+    "vehicle"
+  ],
+  "1F69E": [
+    "car",
+    "mountain",
+    "railway",
+    "trip"
+  ],
+  "1F68B": [
+    "bus",
+    "car",
+    "tram",
+    "trolley",
+    "trolleybus"
+  ],
+  "1F68C": [
+    "school",
+    "vehicle"
+  ],
+  "1F68D": [
+    "bus",
+    "cars",
+    "oncoming"
+  ],
+  "1F68E": [
+    "bus",
+    "tram",
+    "trolley"
+  ],
+  "1F690": [
+    "bus",
+    "drive",
+    "van",
+    "vehicle"
+  ],
+  "1F691": [
+    "emergency",
+    "vehicle"
+  ],
+  "1F692": [
+    "engine",
+    "fire",
+    "truck"
+  ],
+  "1F693": [
+    "5–0",
+    "car",
+    "cops",
+    "patrol",
+    "police"
+  ],
+  "1F694": [
+    "car",
+    "oncoming",
+    "police"
+  ],
+  "1F695": [
+    "cab",
+    "cabbie",
+    "car",
+    "drive",
+    "vehicle",
+    "yellow"
+  ],
+  "1F696": [
+    "cab",
+    "cabbie",
+    "cars",
+    "drove",
+    "hail",
+    "oncoming",
+    "taxi",
+    "yellow"
+  ],
+  "1F697": [
+    "car",
+    "driving",
+    "vehicle"
+  ],
+  "1F698": [
+    "automobile",
+    "car",
+    "cars",
+    "drove",
+    "oncoming",
+    "vehicle"
+  ],
+  "1F699": [
+    "car",
+    "drive",
+    "recreational",
+    "sport",
+    "sportutility",
+    "utility",
+    "vehicle"
+  ],
+  "1F6FB": [
+    "automobile",
+    "car",
+    "flatbed",
+    "pick-up",
+    "pickup",
+    "transportation",
+    "truck"
+  ],
+  "1F69A": [
+    "car",
+    "delivery",
+    "drive",
+    "truck",
+    "vehicle"
+  ],
+  "1F69B": [
+    "articulated",
+    "car",
+    "drive",
+    "lorry",
+    "move",
+    "semi",
+    "truck",
+    "vehicle"
+  ],
+  "1F69C": [
+    "vehicle"
+  ],
+  "1F3CE": [
+    "car",
+    "racing",
+    "zoom"
+  ],
+  "1F3CD": [
+    "racing"
+  ],
+  "1F6F5": [
+    "motor",
+    "scooter"
+  ],
+  "1F9BD": [
+    "accessibility",
+    "manual",
+    "wheelchair"
+  ],
+  "1F9BC": [
+    "accessibility",
+    "motorized",
+    "wheelchair"
+  ],
+  "1F6FA": [
+    "auto",
+    "rickshaw",
+    "tuk"
+  ],
+  "1F6B2": [
+    "bike",
+    "class",
+    "cycle",
+    "cycling",
+    "cyclist",
+    "gang",
+    "ride",
+    "spin",
+    "spinning"
+  ],
+  "1F6F4": [
+    "kick",
+    "scooter"
+  ],
+  "1F6F9": [
+    "board",
+    "skate",
+    "skater",
+    "wheels"
+  ],
+  "1F6FC": [
+    "blades",
+    "roller",
+    "skate",
+    "skates",
+    "sport"
+  ],
+  "1F68F": [
+    "bus",
+    "busstop",
+    "stop"
+  ],
+  "1F6E3": [
+    "highway",
+    "road"
+  ],
+  "1F6E4": [
+    "railway",
+    "track",
+    "train"
+  ],
+  "1F6E2": [
+    "drum",
+    "oil"
+  ],
+  "26FD": [
+    "diesel",
+    "fuel",
+    "fuelpump",
+    "gas",
+    "gasoline",
+    "pump",
+    "station"
+  ],
+  "1F6DE": [
+    "car",
+    "circle",
+    "tire",
+    "turn",
+    "vehicle"
+  ],
+  "1F6A8": [
+    "alarm",
+    "alert",
+    "beacon",
+    "car",
+    "emergency",
+    "light",
+    "police",
+    "revolving",
+    "siren"
+  ],
+  "1F6A5": [
+    "horizontal",
+    "intersection",
+    "light",
+    "signal",
+    "stop",
+    "stoplight",
+    "traffic"
+  ],
+  "1F6A6": [
+    "drove",
+    "intersection",
+    "light",
+    "signal",
+    "stop",
+    "stoplight",
+    "traffic",
+    "vertical"
+  ],
+  "1F6D1": [
+    "octagonal",
+    "sign",
+    "stop"
+  ],
+  "1F6A7": [
+    "barrier"
+  ],
+  "1F6DF": [
+    "buoy",
+    "float",
+    "life",
+    "lifesaver",
+    "preserver",
+    "rescue",
+    "ring",
+    "safety",
+    "save",
+    "saver",
+    "swim"
+  ],
+  "26F5": [
+    "boat",
+    "resort",
+    "sailing",
+    "sea",
+    "yacht"
+  ],
+  "1F6F6": [
+    "boat"
+  ],
+  "1F6A4": [
+    "billionaire",
+    "boat",
+    "lake",
+    "luxury",
+    "millionaire",
+    "summer",
+    "travel"
+  ],
+  "1F6F3": [
+    "passenger",
+    "ship"
+  ],
+  "26F4": [
+    "boat",
+    "passenger"
+  ],
+  "1F6E5": [
+    "boat",
+    "motor",
+    "motorboat"
+  ],
+  "1F6A2": [
+    "boat",
+    "passenger",
+    "travel"
+  ],
+  "1F6E9": [
+    "aeroplane",
+    "airplane",
+    "plane",
+    "small"
+  ],
+  "1F6EB": [
+    "aeroplane",
+    "airplane",
+    "check-in",
+    "departure",
+    "departures",
+    "plane"
+  ],
+  "1F6EC": [
+    "aeroplane",
+    "airplane",
+    "arrival",
+    "arrivals",
+    "arriving",
+    "landing",
+    "plane"
+  ],
+  "1FA82": [
+    "hang-glide",
+    "parasail",
+    "skydive"
+  ],
+  "1F4BA": [
+    "chair"
+  ],
+  "1F681": [
+    "copter",
+    "roflcopter",
+    "travel",
+    "vehicle"
+  ],
+  "1F69F": [
+    "railway",
+    "suspension"
+  ],
+  "1F6A0": [
+    "cable",
+    "cableway",
+    "gondola",
+    "lift",
+    "mountain",
+    "ski"
+  ],
+  "1F6A1": [
+    "aerial",
+    "cable",
+    "car",
+    "gondola",
+    "ropeway",
+    "tramway"
+  ],
+  "1F6F0": [
+    "space"
+  ],
+  "1F680": [
+    "launch",
+    "rockets",
+    "space",
+    "travel"
+  ],
+  "1F6F8": [
+    "aliens",
+    "extra",
+    "flying",
+    "saucer",
+    "terrestrial",
+    "ufo"
+  ],
+  "1F6CE": [
+    "bell",
+    "bellhop",
+    "hotel"
+  ],
+  "1F9F3": [
+    "bag",
+    "packing",
+    "roller",
+    "suitcase",
+    "travel"
+  ],
+  "231B": [
+    "done",
+    "hourglass",
+    "sand",
+    "time",
+    "timer"
+  ],
+  "23F3": [
+    "done",
+    "flowing",
+    "hourglass",
+    "hours",
+    "not",
+    "sand",
+    "timer",
+    "waiting",
+    "yolo"
+  ],
+  "231A": [
+    "clock",
+    "time"
+  ],
+  "23F0": [
+    "alarm",
+    "clock",
+    "hours",
+    "hrs",
+    "late",
+    "time",
+    "waiting"
+  ],
+  "23F1": [
+    "clock",
+    "time"
+  ],
+  "23F2": [
+    "clock",
+    "timer"
+  ],
+  "1F570": [
+    "clock",
+    "mantelpiece",
+    "time"
+  ],
+  "1F55B": [
+    "12",
+    "12:00",
+    "clock",
+    "o’clock",
+    "time",
+    "twelve"
+  ],
+  "1F567": [
+    "12",
+    "12:30",
+    "30",
+    "clock",
+    "thirty",
+    "time",
+    "twelve"
+  ],
+  "1F550": [
+    "1",
+    "1:00",
+    "clock",
+    "one",
+    "o’clock",
+    "time"
+  ],
+  "1F55C": [
+    "1",
+    "1:30",
+    "30",
+    "clock",
+    "one",
+    "thirty",
+    "time"
+  ],
+  "1F551": [
+    "2",
+    "2:00",
+    "clock",
+    "o’clock",
+    "time",
+    "two"
+  ],
+  "1F55D": [
+    "2",
+    "2:30",
+    "30",
+    "clock",
+    "thirty",
+    "time",
+    "two"
+  ],
+  "1F552": [
+    "3",
+    "3:00",
+    "clock",
+    "o’clock",
+    "three",
+    "time"
+  ],
+  "1F55E": [
+    "3",
+    "30",
+    "3:30",
+    "clock",
+    "thirty",
+    "three",
+    "time"
+  ],
+  "1F553": [
+    "4",
+    "4:00",
+    "clock",
+    "four",
+    "o’clock",
+    "time"
+  ],
+  "1F55F": [
+    "30",
+    "4",
+    "4:30",
+    "clock",
+    "four",
+    "thirty",
+    "time"
+  ],
+  "1F554": [
+    "5",
+    "5:00",
+    "clock",
+    "five",
+    "o’clock",
+    "time"
+  ],
+  "1F560": [
+    "30",
+    "5",
+    "5:30",
+    "clock",
+    "five",
+    "thirty",
+    "time"
+  ],
+  "1F555": [
+    "6",
+    "6:00",
+    "clock",
+    "o’clock",
+    "six",
+    "time"
+  ],
+  "1F561": [
+    "30",
+    "6",
+    "6:30",
+    "clock",
+    "six",
+    "thirty"
+  ],
+  "1F556": [
+    "0",
+    "7",
+    "7:00",
+    "clock",
+    "o’clock",
+    "seven"
+  ],
+  "1F562": [
+    "30",
+    "7",
+    "7:30",
+    "clock",
+    "seven",
+    "thirty"
+  ],
+  "1F557": [
+    "8",
+    "8:00",
+    "clock",
+    "eight",
+    "o’clock",
+    "time"
+  ],
+  "1F563": [
+    "30",
+    "8",
+    "8:30",
+    "clock",
+    "eight",
+    "thirty",
+    "time"
+  ],
+  "1F558": [
+    "9",
+    "9:00",
+    "clock",
+    "nine",
+    "o’clock",
+    "time"
+  ],
+  "1F564": [
+    "30",
+    "9",
+    "9:30",
+    "clock",
+    "nine",
+    "thirty",
+    "time"
+  ],
+  "1F559": [
+    "0",
+    "10",
+    "10:00",
+    "clock",
+    "o’clock",
+    "ten"
+  ],
+  "1F565": [
+    "10",
+    "10:30",
+    "30",
+    "clock",
+    "ten",
+    "thirty",
+    "time"
+  ],
+  "1F55A": [
+    "11",
+    "11:00",
+    "clock",
+    "eleven",
+    "o’clock",
+    "time"
+  ],
+  "1F566": [
+    "11",
+    "11:30",
+    "30",
+    "clock",
+    "eleven",
+    "thirty",
+    "time"
+  ],
+  "1F311": [
+    "dark",
+    "moon",
+    "new",
+    "space"
+  ],
+  "1F312": [
+    "crescent",
+    "dreams",
+    "moon",
+    "space",
+    "waxing"
+  ],
+  "1F313": [
+    "first",
+    "moon",
+    "quarter",
+    "space"
+  ],
+  "1F314": [
+    "gibbous",
+    "moon",
+    "space",
+    "waxing"
+  ],
+  "1F315": [
+    "full",
+    "moon",
+    "space"
+  ],
+  "1F316": [
+    "gibbous",
+    "moon",
+    "space",
+    "waning"
+  ],
+  "1F317": [
+    "last",
+    "moon",
+    "quarter",
+    "space"
+  ],
+  "1F318": [
+    "crescent",
+    "moon",
+    "space",
+    "waning"
+  ],
+  "1F319": [
+    "crescent",
+    "moon",
+    "ramadan",
+    "space"
+  ],
+  "1F31A": [
+    "face",
+    "moon",
+    "new",
+    "space"
+  ],
+  "1F31B": [
+    "face",
+    "first",
+    "moon",
+    "quarter",
+    "space"
+  ],
+  "1F31C": [
+    "dreams",
+    "face",
+    "last",
+    "moon",
+    "quarter"
+  ],
+  "1F321": [
+    "weather"
+  ],
+  "1F31D": [
+    "bright",
+    "face",
+    "full",
+    "moon"
+  ],
+  "1F31E": [
+    "beach",
+    "bright",
+    "day",
+    "face",
+    "heat",
+    "shine",
+    "sun",
+    "sunny",
+    "sunshine",
+    "weather"
+  ],
+  "1FA90": [
+    "planet",
+    "ringed",
+    "saturn",
+    "saturnine"
+  ],
+  "2B50": [
+    "astronomy",
+    "medium",
+    "stars",
+    "white"
+  ],
+  "1F31F": [
+    "glittery",
+    "glow",
+    "glowing",
+    "night",
+    "shining",
+    "sparkle",
+    "star",
+    "win"
+  ],
+  "1F320": [
+    "falling",
+    "night",
+    "shooting",
+    "space",
+    "star"
+  ],
+  "1F30C": [
+    "milky",
+    "space",
+    "way"
+  ],
+  "26C5": [
+    "behind",
+    "cloud",
+    "cloudy",
+    "sun",
+    "weather"
+  ],
+  "26C8": [
+    "cloud",
+    "lightning",
+    "rain",
+    "thunder",
+    "thunderstorm"
+  ],
+  "1F324": [
+    "behind",
+    "cloud",
+    "sun",
+    "weather"
+  ],
+  "1F325": [
+    "behind",
+    "cloud",
+    "sun",
+    "weather"
+  ],
+  "1F326": [
+    "behind",
+    "cloud",
+    "rain",
+    "sun",
+    "weather"
+  ],
+  "1F327": [
+    "cloud",
+    "rain",
+    "weather"
+  ],
+  "1F328": [
+    "cloud",
+    "cold",
+    "snow",
+    "weather"
+  ],
+  "1F329": [
+    "cloud",
+    "lightning",
+    "weather"
+  ],
+  "1F32A": [
+    "cloud",
+    "weather",
+    "whirlwind"
+  ],
+  "1F32B": [
+    "cloud",
+    "weather"
+  ],
+  "1F32C": [
+    "blow",
+    "cloud",
+    "face",
+    "wind"
+  ],
+  "1F300": [
+    "dizzy",
+    "hurricane",
+    "twister",
+    "typhoon",
+    "weather"
+  ],
+  "1F308": [
+    "gay",
+    "genderqueer",
+    "glbt",
+    "glbtq",
+    "lesbian",
+    "lgbt",
+    "lgbtq",
+    "lgbtqia",
+    "nature",
+    "pride",
+    "queer",
+    "rain",
+    "trans",
+    "transgender",
+    "weather"
+  ],
+  "1F302": [
+    "closed",
+    "clothing",
+    "rain",
+    "umbrella"
+  ],
+  "26F1": [
+    "ground",
+    "rain",
+    "sun",
+    "umbrella"
+  ],
+  "26A1": [
+    "danger",
+    "electric",
+    "electricity",
+    "high",
+    "lightning",
+    "nature",
+    "thunder",
+    "thunderbolt",
+    "voltage",
+    "zap"
+  ],
+  "26C4": [
+    "cold",
+    "man",
+    "snow",
+    "snowman"
+  ],
+  "1F525": [
+    "af",
+    "burn",
+    "flame",
+    "hot",
+    "lit",
+    "litaf",
+    "tool"
+  ],
+  "1F4A7": [
+    "cold",
+    "comic",
+    "drop",
+    "nature",
+    "sad",
+    "sweat",
+    "tear",
+    "water",
+    "weather"
+  ],
+  "1F30A": [
+    "nature",
+    "ocean",
+    "surf",
+    "surfer",
+    "surfing",
+    "water",
+    "wave"
+  ],
+  "1F383": [
+    "celebration",
+    "halloween",
+    "jack",
+    "lantern",
+    "pumpkin"
+  ],
+  "1F384": [
+    "celebration",
+    "christmas",
+    "tree"
+  ],
+  "1F386": [
+    "boom",
+    "celebration",
+    "entertainment",
+    "yolo"
+  ],
+  "1F387": [
+    "boom",
+    "celebration",
+    "fireworks",
+    "sparkle"
+  ],
+  "1F9E8": [
+    "dynamite",
+    "explosive",
+    "fire",
+    "fireworks",
+    "light",
+    "pop",
+    "popping",
+    "spark"
+  ],
+  "1F388": [
+    "birthday",
+    "celebrate",
+    "celebration"
+  ],
+  "1F389": [
+    "awesome",
+    "birthday",
+    "celebrate",
+    "celebration",
+    "excited",
+    "hooray",
+    "party",
+    "popper",
+    "tada",
+    "woohoo"
+  ],
+  "1F38A": [
+    "ball",
+    "celebrate",
+    "celebration",
+    "confetti",
+    "party",
+    "woohoo"
+  ],
+  "1F38B": [
+    "banner",
+    "celebration",
+    "japanese",
+    "tanabata",
+    "tree"
+  ],
+  "1F38D": [
+    "bamboo",
+    "celebration",
+    "decoration",
+    "japanese",
+    "pine",
+    "plant"
+  ],
+  "1F38E": [
+    "celebration",
+    "doll",
+    "dolls",
+    "festival",
+    "japanese"
+  ],
+  "1F38F": [
+    "carp",
+    "celebration",
+    "streamer"
+  ],
+  "1F390": [
+    "bell",
+    "celebration",
+    "chime",
+    "wind"
+  ],
+  "1F391": [
+    "celebration",
+    "ceremony",
+    "moon",
+    "viewing"
+  ],
+  "1F9E7": [
+    "envelope",
+    "gift",
+    "good",
+    "hóngbāo",
+    "lai",
+    "luck",
+    "money",
+    "red",
+    "see"
+  ],
+  "1F380": [
+    "celebration"
+  ],
+  "1F381": [
+    "birthday",
+    "bow",
+    "box",
+    "celebration",
+    "christmas",
+    "gift",
+    "present",
+    "surprise",
+    "wrapped"
+  ],
+  "1F397": [
+    "celebration",
+    "reminder",
+    "ribbon"
+  ],
+  "1F39F": [
+    "admission",
+    "ticket",
+    "tickets"
+  ],
+  "1F3AB": [
+    "admission",
+    "stub"
+  ],
+  "1F396": [
+    "award",
+    "celebration",
+    "medal",
+    "military"
+  ],
+  "1F3C6": [
+    "champion",
+    "champs",
+    "prize",
+    "slay",
+    "sport",
+    "victory",
+    "win",
+    "winning"
+  ],
+  "1F3C5": [
+    "award",
+    "gold",
+    "medal",
+    "sports",
+    "winner"
+  ],
+  "1F947": [
+    "1st",
+    "first",
+    "gold",
+    "medal",
+    "place"
+  ],
+  "1F948": [
+    "2nd",
+    "medal",
+    "place",
+    "second",
+    "silver"
+  ],
+  "1F949": [
+    "3rd",
+    "bronze",
+    "medal",
+    "place",
+    "third"
+  ],
+  "26BD": [
+    "ball",
+    "football",
+    "futbol",
+    "soccer",
+    "sport"
+  ],
+  "26BE": [
+    "ball",
+    "sport"
+  ],
+  "1F94E": [
+    "ball",
+    "glove",
+    "sports",
+    "underarm"
+  ],
+  "1F3C0": [
+    "ball",
+    "hoop",
+    "sport"
+  ],
+  "1F3D0": [
+    "ball",
+    "game"
+  ],
+  "1F3C8": [
+    "american",
+    "ball",
+    "bowl",
+    "football",
+    "sport",
+    "super"
+  ],
+  "1F3C9": [
+    "ball",
+    "football",
+    "rugby",
+    "sport"
+  ],
+  "1F3BE": [
+    "ball",
+    "racquet",
+    "sport"
+  ],
+  "1F94F": [
+    "disc",
+    "flying",
+    "ultimate"
+  ],
+  "1F3B3": [
+    "ball",
+    "game",
+    "sport",
+    "strike"
+  ],
+  "1F3CF": [
+    "ball",
+    "bat",
+    "cricket",
+    "game"
+  ],
+  "1F3D1": [
+    "ball",
+    "field",
+    "game",
+    "hockey",
+    "stick"
+  ],
+  "1F3D2": [
+    "game",
+    "hockey",
+    "ice",
+    "puck",
+    "stick"
+  ],
+  "1F94D": [
+    "ball",
+    "goal",
+    "sports",
+    "stick"
+  ],
+  "1F3D3": [
+    "ball",
+    "bat",
+    "game",
+    "paddle",
+    "ping",
+    "pingpong",
+    "pong",
+    "table",
+    "tennis"
+  ],
+  "1F3F8": [
+    "birdie",
+    "game",
+    "racquet",
+    "shuttlecock"
+  ],
+  "1F94A": [
+    "boxing",
+    "glove"
+  ],
+  "1F94B": [
+    "arts",
+    "judo",
+    "karate",
+    "martial",
+    "taekwondo",
+    "uniform"
+  ],
+  "1F945": [
+    "goal",
+    "net"
+  ],
+  "26F3": [
+    "flag",
+    "golf",
+    "hole",
+    "sport"
+  ],
+  "26F8": [
+    "ice",
+    "skate",
+    "skating"
+  ],
+  "1F3A3": [
+    "entertainment",
+    "fish",
+    "fishing",
+    "pole",
+    "sport"
+  ],
+  "1F93F": [
+    "diving",
+    "mask",
+    "scuba",
+    "snorkeling"
+  ],
+  "1F3BD": [
+    "athletics",
+    "running",
+    "sash",
+    "shirt"
+  ],
+  "1F3BF": [
+    "ski",
+    "snow",
+    "sport"
+  ],
+  "1F6F7": [
+    "luge",
+    "sledge",
+    "sleigh",
+    "snow",
+    "toboggan"
+  ],
+  "1F94C": [
+    "curling",
+    "game",
+    "rock",
+    "stone"
+  ],
+  "1F3AF": [
+    "bull",
+    "dart",
+    "direct",
+    "entertainment",
+    "game",
+    "hit",
+    "target"
+  ],
+  "1FA80": [
+    "fluctuate",
+    "toy"
+  ],
+  "1FA81": [
+    "fly",
+    "soar"
+  ],
+  "1F52B": [
+    "gun",
+    "handgun",
+    "pistol",
+    "revolver",
+    "tool",
+    "water",
+    "weapon"
+  ],
+  "1F3B1": [
+    "8",
+    "8ball",
+    "ball",
+    "billiard",
+    "eight",
+    "game",
+    "pool"
+  ],
+  "1F52E": [
+    "ball",
+    "crystal",
+    "fairy",
+    "fairytale",
+    "fantasy",
+    "fortune",
+    "future",
+    "magic",
+    "tale",
+    "tool"
+  ],
+  "1FA84": [
+    "magic",
+    "magician",
+    "wand",
+    "witch",
+    "wizard"
+  ],
+  "1F3AE": [
+    "controller",
+    "entertainment",
+    "game",
+    "video"
+  ],
+  "1F579": [
+    "game",
+    "video",
+    "videogame"
+  ],
+  "1F3B0": [
+    "casino",
+    "gamble",
+    "gambling",
+    "game",
+    "machine",
+    "slot",
+    "slots"
+  ],
+  "1F3B2": [
+    "dice",
+    "die",
+    "entertainment",
+    "game"
+  ],
+  "1F9E9": [
+    "clue",
+    "interlocking",
+    "jigsaw",
+    "piece",
+    "puzzle"
+  ],
+  "1F9F8": [
+    "bear",
+    "plaything",
+    "plush",
+    "stuffed",
+    "teddy",
+    "toy"
+  ],
+  "1FA85": [
+    "candy",
+    "celebrate",
+    "celebration",
+    "cinco",
+    "de",
+    "festive",
+    "mayo",
+    "party",
+    "pinada",
+    "pinata"
+  ],
+  "1FAA9": [
+    "ball",
+    "dance",
+    "disco",
+    "glitter",
+    "mirror",
+    "party"
+  ],
+  "1FA86": [
+    "babooshka",
+    "baboushka",
+    "babushka",
+    "doll",
+    "dolls",
+    "matryoshka",
+    "nesting",
+    "russia"
+  ],
+  "265F": [
+    "chess",
+    "dupe",
+    "expendable",
+    "pawn"
+  ],
+  "1F0CF": [
+    "card",
+    "game",
+    "wildcard"
+  ],
+  "1F004": [
+    "dragon",
+    "game",
+    "mahjong",
+    "red"
+  ],
+  "1F3B4": [
+    "card",
+    "cards",
+    "flower",
+    "game",
+    "japanese",
+    "playing"
+  ],
+  "1F3AD": [
+    "actor",
+    "actress",
+    "art",
+    "arts",
+    "entertainment",
+    "mask",
+    "performing",
+    "theater",
+    "theatre",
+    "thespian"
+  ],
+  "1F5BC": [
+    "art",
+    "frame",
+    "framed",
+    "museum",
+    "painting",
+    "picture"
+  ],
+  "1F3A8": [
+    "art",
+    "artist",
+    "artsy",
+    "arty",
+    "colorful",
+    "creative",
+    "entertainment",
+    "museum",
+    "painter",
+    "painting",
+    "palette"
+  ],
+  "1F9F5": [
+    "needle",
+    "sewing",
+    "spool",
+    "string"
+  ],
+  "1FAA1": [
+    "embroidery",
+    "needle",
+    "sew",
+    "sewing",
+    "stitches",
+    "sutures",
+    "tailoring",
+    "thread"
+  ],
+  "1F9F6": [
+    "ball",
+    "crochet",
+    "knit"
+  ],
+  "1FAA2": [
+    "cord",
+    "rope",
+    "tangled",
+    "tie",
+    "twine",
+    "twist"
+  ],
+  "1F453": [
+    "clothing",
+    "eye",
+    "eyeglasses",
+    "eyewear"
+  ],
+  "1F576": [
+    "dark",
+    "eye",
+    "eyewear",
+    "glasses"
+  ],
+  "1F97D": [
+    "dive",
+    "eye",
+    "protection",
+    "scuba",
+    "swimming",
+    "welding"
+  ],
+  "1F97C": [
+    "clothes",
+    "coat",
+    "doctor",
+    "dr",
+    "experiment",
+    "jacket",
+    "lab",
+    "scientist",
+    "white"
+  ],
+  "1F9BA": [
+    "emergency",
+    "safety",
+    "vest"
+  ],
+  "1F454": [
+    "clothing",
+    "employed",
+    "serious",
+    "shirt",
+    "tie"
+  ],
+  "1F455": [
+    "blue",
+    "casual",
+    "clothes",
+    "clothing",
+    "collar",
+    "dressed",
+    "shirt",
+    "shopping",
+    "tshirt",
+    "weekend"
+  ],
+  "1F456": [
+    "blue",
+    "casual",
+    "clothes",
+    "clothing",
+    "denim",
+    "dressed",
+    "pants",
+    "shopping",
+    "trousers",
+    "weekend"
+  ],
+  "1F9E3": [
+    "bundle",
+    "cold",
+    "neck",
+    "up"
+  ],
+  "1F9E4": [
+    "hand"
+  ],
+  "1F9E5": [
+    "brr",
+    "bundle",
+    "cold",
+    "jacket",
+    "up"
+  ],
+  "1F9E6": [
+    "stocking"
+  ],
+  "1F457": [
+    "clothes",
+    "clothing",
+    "dressed",
+    "fancy",
+    "shopping"
+  ],
+  "1F458": [
+    "clothing",
+    "comfortable"
+  ],
+  "1F97B": [
+    "clothing",
+    "dress"
+  ],
+  "1FA71": [
+    "bathing",
+    "one-piece",
+    "suit",
+    "swimsuit"
+  ],
+  "1FA72": [
+    "bathing",
+    "one-piece",
+    "suit",
+    "swimsuit",
+    "underwear"
+  ],
+  "1FA73": [
+    "bathing",
+    "pants",
+    "suit",
+    "swimsuit",
+    "underwear"
+  ],
+  "1F459": [
+    "bathing",
+    "beach",
+    "clothing",
+    "pool",
+    "suit",
+    "swim"
+  ],
+  "1F45A": [
+    "blouse",
+    "clothes",
+    "clothing",
+    "collar",
+    "dress",
+    "dressed",
+    "lady",
+    "shirt",
+    "shopping",
+    "woman",
+    "woman’s"
+  ],
+  "1FAAD": [
+    "clack",
+    "clap",
+    "cool",
+    "cooling",
+    "dance",
+    "fan",
+    "flirt",
+    "flutter",
+    "folding",
+    "hand",
+    "hot",
+    "shy"
+  ],
+  "1F45B": [
+    "clothes",
+    "clothing",
+    "coin",
+    "dress",
+    "fancy",
+    "handbag",
+    "shopping"
+  ],
+  "1F45C": [
+    "bag",
+    "clothes",
+    "clothing",
+    "dress",
+    "lady",
+    "purse",
+    "shopping"
+  ],
+  "1F45D": [
+    "bag",
+    "clothes",
+    "clothing",
+    "clutch",
+    "dress",
+    "handbag",
+    "pouch",
+    "purse"
+  ],
+  "1F6CD": [
+    "bag",
+    "bags",
+    "hotel",
+    "shopping"
+  ],
+  "1F392": [
+    "backpacking",
+    "bag",
+    "bookbag",
+    "education",
+    "rucksack",
+    "satchel",
+    "school"
+  ],
+  "1FA74": [
+    "beach",
+    "flip",
+    "flop",
+    "sandal",
+    "sandals",
+    "shoe",
+    "thong",
+    "thongs",
+    "zōri"
+  ],
+  "1F45E": [
+    "brown",
+    "clothes",
+    "clothing",
+    "feet",
+    "foot",
+    "kick",
+    "man",
+    "man’s",
+    "shoe",
+    "shoes",
+    "shopping"
+  ],
+  "1F45F": [
+    "athletic",
+    "clothes",
+    "clothing",
+    "fast",
+    "kick",
+    "running",
+    "shoe",
+    "shoes",
+    "shopping",
+    "sneaker",
+    "tennis"
+  ],
+  "1F97E": [
+    "backpacking",
+    "boot",
+    "brown",
+    "camping",
+    "hiking",
+    "outdoors",
+    "shoe"
+  ],
+  "1F97F": [
+    "ballet",
+    "comfy",
+    "flat",
+    "flats",
+    "shoe",
+    "slip-on",
+    "slipper"
+  ],
+  "1F460": [
+    "clothes",
+    "clothing",
+    "dress",
+    "fashion",
+    "heel",
+    "heels",
+    "high-heeled",
+    "shoe",
+    "shoes",
+    "shopping",
+    "stiletto",
+    "woman"
+  ],
+  "1F461": [
+    "clothing",
+    "sandal",
+    "shoe",
+    "woman",
+    "woman’s"
+  ],
+  "1FA70": [
+    "ballet",
+    "dance",
+    "shoes"
+  ],
+  "1F462": [
+    "boot",
+    "clothes",
+    "clothing",
+    "dress",
+    "shoe",
+    "shoes",
+    "shopping",
+    "woman",
+    "woman’s"
+  ],
+  "1FAAE": [
+    "afro",
+    "comb",
+    "groom",
+    "hair",
+    "pick"
+  ],
+  "1F451": [
+    "clothing",
+    "family",
+    "king",
+    "medieval",
+    "queen",
+    "royal",
+    "royalty",
+    "win"
+  ],
+  "1F452": [
+    "clothes",
+    "clothing",
+    "garden",
+    "hat",
+    "hats",
+    "party",
+    "woman",
+    "woman’s"
+  ],
+  "1F3A9": [
+    "clothes",
+    "clothing",
+    "fancy",
+    "formal",
+    "hat",
+    "magic",
+    "top",
+    "tophat"
+  ],
+  "1F393": [
+    "cap",
+    "celebration",
+    "clothing",
+    "education",
+    "graduation",
+    "hat",
+    "scholar"
+  ],
+  "1F9E2": [
+    "baseball",
+    "bent",
+    "billed",
+    "cap",
+    "dad",
+    "hat"
+  ],
+  "1FA96": [
+    "army",
+    "helmet",
+    "military",
+    "soldier",
+    "war",
+    "warrior"
+  ],
+  "26D1": [
+    "aid",
+    "cross",
+    "face",
+    "hat",
+    "helmet",
+    "rescue",
+    "worker’s"
+  ],
+  "1F4FF": [
+    "beads",
+    "clothing",
+    "necklace",
+    "prayer",
+    "religion"
+  ],
+  "1F484": [
+    "cosmetics",
+    "date",
+    "makeup"
+  ],
+  "1F48D": [
+    "diamond",
+    "engaged",
+    "engagement",
+    "married",
+    "romance",
+    "shiny",
+    "sparkling",
+    "wedding"
+  ],
+  "1F48E": [
+    "diamond",
+    "engagement",
+    "gem",
+    "jewel",
+    "money",
+    "romance",
+    "stone",
+    "wedding"
+  ],
+  "1F507": [
+    "mute",
+    "muted",
+    "quiet",
+    "silent",
+    "sound",
+    "speaker"
+  ],
+  "1F508": [
+    "low",
+    "soft",
+    "sound",
+    "speaker",
+    "volume"
+  ],
+  "1F509": [
+    "medium",
+    "sound",
+    "speaker",
+    "volume"
+  ],
+  "1F50A": [
+    "high",
+    "loud",
+    "music",
+    "sound",
+    "speaker",
+    "volume"
+  ],
+  "1F4E2": [
+    "address",
+    "communication",
+    "loud",
+    "public",
+    "sound"
+  ],
+  "1F4E3": [
+    "cheering",
+    "sound"
+  ],
+  "1F4EF": [
+    "horn",
+    "post",
+    "postal"
+  ],
+  "1F514": [
+    "break",
+    "church",
+    "sound"
+  ],
+  "1F515": [
+    "bell",
+    "forbidden",
+    "mute",
+    "no",
+    "not",
+    "prohibited",
+    "quiet",
+    "silent",
+    "slash",
+    "sound"
+  ],
+  "1F3BC": [
+    "music",
+    "musical",
+    "note",
+    "score"
+  ],
+  "1F3B5": [
+    "music",
+    "musical",
+    "note",
+    "sound"
+  ],
+  "1F3B6": [
+    "music",
+    "musical",
+    "note",
+    "notes",
+    "sound"
+  ],
+  "1F399": [
+    "mic",
+    "microphone",
+    "music",
+    "studio"
+  ],
+  "1F39A": [
+    "level",
+    "music",
+    "slider"
+  ],
+  "1F39B": [
+    "control",
+    "knobs",
+    "music"
+  ],
+  "1F3A4": [
+    "karaoke",
+    "mic",
+    "music",
+    "sing",
+    "sound"
+  ],
+  "1F3A7": [
+    "earbud",
+    "sound"
+  ],
+  "1F4FB": [
+    "entertainment",
+    "tbt",
+    "video"
+  ],
+  "1F3B7": [
+    "instrument",
+    "music",
+    "sax"
+  ],
+  "1FA97": [
+    "box",
+    "concertina",
+    "instrument",
+    "music",
+    "squeeze",
+    "squeezebox"
+  ],
+  "1F3B8": [
+    "instrument",
+    "music",
+    "strat"
+  ],
+  "1F3B9": [
+    "instrument",
+    "keyboard",
+    "music",
+    "musical",
+    "piano"
+  ],
+  "1F3BA": [
+    "instrument",
+    "music"
+  ],
+  "1F3BB": [
+    "instrument",
+    "music"
+  ],
+  "1FA95": [
+    "music",
+    "stringed"
+  ],
+  "1F941": [
+    "drumsticks",
+    "music"
+  ],
+  "1FA98": [
+    "beat",
+    "conga",
+    "drum",
+    "instrument",
+    "long",
+    "rhythm"
+  ],
+  "1FA87": [
+    "cha",
+    "dance",
+    "instrument",
+    "music",
+    "party",
+    "percussion",
+    "rattle",
+    "shake",
+    "shaker"
+  ],
+  "1FA88": [
+    "band",
+    "fife",
+    "flautist",
+    "instrument",
+    "marching",
+    "music",
+    "orchestra",
+    "piccolo",
+    "pipe",
+    "recorder",
+    "woodwind"
+  ],
+  "1FA89": [
+    "cupid",
+    "instrument",
+    "love",
+    "music",
+    "orchestra"
+  ],
+  "1F4F1": [
+    "cell",
+    "communication",
+    "mobile",
+    "phone",
+    "telephone"
+  ],
+  "1F4F2": [
+    "arrow",
+    "build",
+    "call",
+    "cell",
+    "communication",
+    "mobile",
+    "phone",
+    "receive",
+    "telephone"
+  ],
+  "260E": [
+    "phone"
+  ],
+  "1F4DE": [
+    "communication",
+    "phone",
+    "receiver",
+    "telephone",
+    "voip"
+  ],
+  "1F4DF": [
+    "communication"
+  ],
+  "1F4E0": [
+    "communication",
+    "fax",
+    "machine"
+  ],
+  "1F50B": [
+    "battery"
+  ],
+  "1FAAB": [
+    "battery",
+    "drained",
+    "electronic",
+    "energy",
+    "low",
+    "power"
+  ],
+  "1F50C": [
+    "electric",
+    "electricity",
+    "plug"
+  ],
+  "1F4BB": [
+    "computer",
+    "office",
+    "pc",
+    "personal"
+  ],
+  "1F5A5": [
+    "computer",
+    "desktop",
+    "monitor"
+  ],
+  "1F5A8": [
+    "computer"
+  ],
+  "1F5B1": [
+    "computer",
+    "mouse"
+  ],
+  "1F5B2": [
+    "computer"
+  ],
+  "1F4BD": [
+    "computer",
+    "disk",
+    "minidisk",
+    "optical"
+  ],
+  "1F4BE": [
+    "computer",
+    "disk",
+    "floppy"
+  ],
+  "1F4BF": [
+    "blu-ray",
+    "cd",
+    "computer",
+    "disk",
+    "dvd",
+    "optical"
+  ],
+  "1F4C0": [
+    "blu-ray",
+    "cd",
+    "computer",
+    "disk",
+    "optical"
+  ],
+  "1F9EE": [
+    "calculation",
+    "calculator"
+  ],
+  "1F3A5": [
+    "bollywood",
+    "camera",
+    "cinema",
+    "film",
+    "hollywood",
+    "movie",
+    "record"
+  ],
+  "1F39E": [
+    "cinema",
+    "film",
+    "frames",
+    "movie"
+  ],
+  "1F4FD": [
+    "cinema",
+    "film",
+    "movie",
+    "projector",
+    "video"
+  ],
+  "1F3AC": [
+    "action",
+    "board",
+    "clapper",
+    "movie"
+  ],
+  "1F4FA": [
+    "tv",
+    "video"
+  ],
+  "1F4F7": [
+    "photo",
+    "selfie",
+    "snap",
+    "tbt",
+    "trip",
+    "video"
+  ],
+  "1F4F8": [
+    "camera",
+    "flash",
+    "video"
+  ],
+  "1F4F9": [
+    "camcorder",
+    "camera",
+    "tbt",
+    "video"
+  ],
+  "1F4FC": [
+    "old",
+    "school",
+    "tape",
+    "vcr",
+    "vhs",
+    "video"
+  ],
+  "1F50D": [
+    "glass",
+    "lab",
+    "left",
+    "left-pointing",
+    "magnifying",
+    "science",
+    "search",
+    "tilted",
+    "tool"
+  ],
+  "1F50E": [
+    "contact",
+    "glass",
+    "lab",
+    "magnifying",
+    "right",
+    "right-pointing",
+    "science",
+    "search",
+    "tilted",
+    "tool"
+  ],
+  "1F56F": [
+    "light"
+  ],
+  "1F4A1": [
+    "bulb",
+    "comic",
+    "electric",
+    "idea",
+    "light"
+  ],
+  "1F526": [
+    "electric",
+    "light",
+    "tool",
+    "torch"
+  ],
+  "1F3EE": [
+    "bar",
+    "lantern",
+    "light",
+    "paper",
+    "red",
+    "restaurant"
+  ],
+  "1FA94": [
+    "diya",
+    "lamp",
+    "light",
+    "oil"
+  ],
+  "1F4D4": [
+    "book",
+    "cover",
+    "decorated",
+    "decorative",
+    "education",
+    "notebook",
+    "school",
+    "writing"
+  ],
+  "1F4D5": [
+    "book",
+    "closed",
+    "education"
+  ],
+  "1F4D6": [
+    "book",
+    "education",
+    "fantasy",
+    "knowledge",
+    "library",
+    "novels",
+    "open",
+    "reading"
+  ],
+  "1F4D7": [
+    "book",
+    "education",
+    "fantasy",
+    "green",
+    "library",
+    "reading"
+  ],
+  "1F4D8": [
+    "blue",
+    "book",
+    "education",
+    "fantasy",
+    "library",
+    "reading"
+  ],
+  "1F4D9": [
+    "book",
+    "education",
+    "fantasy",
+    "library",
+    "orange",
+    "reading"
+  ],
+  "1F4DA": [
+    "book",
+    "education",
+    "fantasy",
+    "knowledge",
+    "library",
+    "novels",
+    "reading",
+    "school",
+    "study"
+  ],
+  "1F4D3": [
+    "notebook"
+  ],
+  "1F4D2": [
+    "notebook"
+  ],
+  "1F4C3": [
+    "curl",
+    "document",
+    "page",
+    "paper"
+  ],
+  "1F4DC": [
+    "paper"
+  ],
+  "1F4C4": [
+    "document",
+    "facing",
+    "page",
+    "paper",
+    "up"
+  ],
+  "1F4F0": [
+    "communication",
+    "news",
+    "paper"
+  ],
+  "1F5DE": [
+    "news",
+    "newspaper",
+    "paper",
+    "rolled",
+    "rolled-up"
+  ],
+  "1F4D1": [
+    "bookmark",
+    "mark",
+    "marker",
+    "tabs"
+  ],
+  "1F516": [
+    "mark"
+  ],
+  "1F3F7": [
+    "tag"
+  ],
+  "1F4B0": [
+    "bag",
+    "bank",
+    "bet",
+    "billion",
+    "cash",
+    "cost",
+    "dollar",
+    "gold",
+    "million",
+    "money",
+    "moneybag",
+    "paid",
+    "paying",
+    "pot",
+    "rich",
+    "win"
+  ],
+  "1FA99": [
+    "dollar",
+    "euro",
+    "gold",
+    "metal",
+    "money",
+    "rich",
+    "silver",
+    "treasure"
+  ],
+  "1F4B4": [
+    "bank",
+    "banknote",
+    "bill",
+    "currency",
+    "money",
+    "note",
+    "yen"
+  ],
+  "1F4B5": [
+    "bank",
+    "banknote",
+    "bill",
+    "currency",
+    "dollar",
+    "money",
+    "note"
+  ],
+  "1F4B6": [
+    "100",
+    "bank",
+    "banknote",
+    "bill",
+    "currency",
+    "euro",
+    "money",
+    "note",
+    "rich"
+  ],
+  "1F4B7": [
+    "bank",
+    "banknote",
+    "bill",
+    "billion",
+    "cash",
+    "currency",
+    "money",
+    "note",
+    "pound",
+    "pounds"
+  ],
+  "1F4B8": [
+    "bank",
+    "banknote",
+    "bill",
+    "billion",
+    "cash",
+    "dollar",
+    "fly",
+    "million",
+    "money",
+    "note",
+    "pay",
+    "wings"
+  ],
+  "1F4B3": [
+    "bank",
+    "card",
+    "cash",
+    "charge",
+    "credit",
+    "money",
+    "pay"
+  ],
+  "1F9FE": [
+    "accounting",
+    "bookkeeping",
+    "evidence",
+    "invoice",
+    "proof"
+  ],
+  "1F4B9": [
+    "bank",
+    "chart",
+    "currency",
+    "graph",
+    "growth",
+    "increasing",
+    "market",
+    "money",
+    "rise",
+    "trend",
+    "upward",
+    "yen"
+  ],
+  "1F4E7": [
+    "email",
+    "letter",
+    "mail"
+  ],
+  "1F4E8": [
+    "delivering",
+    "e-mail",
+    "email",
+    "envelope",
+    "incoming",
+    "letter",
+    "mail",
+    "receive",
+    "sent"
+  ],
+  "1F4E9": [
+    "arrow",
+    "communication",
+    "down",
+    "e-mail",
+    "email",
+    "envelope",
+    "letter",
+    "mail",
+    "outgoing",
+    "send",
+    "sent"
+  ],
+  "1F4E4": [
+    "box",
+    "email",
+    "letter",
+    "mail",
+    "outbox",
+    "sent",
+    "tray"
+  ],
+  "1F4E5": [
+    "box",
+    "email",
+    "inbox",
+    "letter",
+    "mail",
+    "receive",
+    "tray",
+    "zero"
+  ],
+  "1F4E6": [
+    "box",
+    "communication",
+    "delivery",
+    "parcel",
+    "shipping"
+  ],
+  "1F4EB": [
+    "closed",
+    "communication",
+    "flag",
+    "mail",
+    "mailbox",
+    "postbox",
+    "raised"
+  ],
+  "1F4EA": [
+    "closed",
+    "flag",
+    "lowered",
+    "mail",
+    "mailbox",
+    "postbox"
+  ],
+  "1F4EC": [
+    "flag",
+    "mail",
+    "mailbox",
+    "open",
+    "postbox",
+    "raised"
+  ],
+  "1F4ED": [
+    "flag",
+    "lowered",
+    "mail",
+    "mailbox",
+    "open",
+    "postbox"
+  ],
+  "1F4EE": [
+    "mail",
+    "mailbox"
+  ],
+  "1F5F3": [
+    "ballot",
+    "box"
+  ],
+  "270F": [
+    "pencil"
+  ],
+  "1F58B": [
+    "fountain",
+    "pen"
+  ],
+  "1F58A": [
+    "ballpoint"
+  ],
+  "1F58C": [
+    "painting"
+  ],
+  "1F58D": [
+    "crayon"
+  ],
+  "1F4DD": [
+    "communication",
+    "media",
+    "notes",
+    "pencil"
+  ],
+  "1F4BC": [
+    "office"
+  ],
+  "1F4C1": [
+    "file",
+    "folder"
+  ],
+  "1F4C2": [
+    "file",
+    "folder",
+    "open"
+  ],
+  "1F5C2": [
+    "card",
+    "dividers",
+    "index"
+  ],
+  "1F4C5": [
+    "date"
+  ],
+  "1F4C6": [
+    "calendar",
+    "tear-off"
+  ],
+  "1F5D2": [
+    "note",
+    "notepad",
+    "pad",
+    "spiral"
+  ],
+  "1F5D3": [
+    "calendar",
+    "pad",
+    "spiral"
+  ],
+  "1F4C7": [
+    "card",
+    "index",
+    "old",
+    "rolodex",
+    "school"
+  ],
+  "1F4C8": [
+    "chart",
+    "data",
+    "graph",
+    "growth",
+    "increasing",
+    "right",
+    "trend",
+    "up",
+    "upward"
+  ],
+  "1F4C9": [
+    "chart",
+    "data",
+    "decreasing",
+    "down",
+    "downward",
+    "graph",
+    "negative",
+    "trend"
+  ],
+  "1F4CA": [
+    "bar",
+    "chart",
+    "data",
+    "graph"
+  ],
+  "1F4CB": [
+    "do",
+    "list",
+    "notes"
+  ],
+  "1F4CC": [
+    "collage",
+    "pin"
+  ],
+  "1F4CD": [
+    "location",
+    "map",
+    "pin",
+    "pushpin",
+    "round"
+  ],
+  "1F4CE": [
+    "paperclip"
+  ],
+  "1F587": [
+    "link",
+    "linked",
+    "paperclip",
+    "paperclips"
+  ],
+  "1F4CF": [
+    "angle",
+    "edge",
+    "math",
+    "ruler",
+    "straight",
+    "straightedge"
+  ],
+  "1F4D0": [
+    "angle",
+    "math",
+    "rule",
+    "ruler",
+    "set",
+    "slide",
+    "triangle",
+    "triangular"
+  ],
+  "1F5C3": [
+    "box",
+    "card",
+    "file"
+  ],
+  "1F5C4": [
+    "cabinet",
+    "file",
+    "filing",
+    "paper"
+  ],
+  "1F5D1": [
+    "can",
+    "garbage",
+    "trash",
+    "waste"
+  ],
+  "1F512": [
+    "closed",
+    "lock",
+    "private"
+  ],
+  "1F513": [
+    "cracked",
+    "lock",
+    "open",
+    "unlock"
+  ],
+  "1F50F": [
+    "ink",
+    "lock",
+    "locked",
+    "nib",
+    "pen",
+    "privacy"
+  ],
+  "1F510": [
+    "bike",
+    "closed",
+    "key",
+    "lock",
+    "locked",
+    "secure"
+  ],
+  "1F511": [
+    "keys",
+    "lock",
+    "major",
+    "password",
+    "unlock"
+  ],
+  "1F5DD": [
+    "clue",
+    "key",
+    "lock",
+    "old"
+  ],
+  "1F528": [
+    "home",
+    "improvement",
+    "repairs",
+    "tool"
+  ],
+  "1FA93": [
+    "ax",
+    "chop",
+    "hatchet",
+    "split",
+    "wood"
+  ],
+  "26CF": [
+    "hammer",
+    "mining",
+    "tool"
+  ],
+  "1F6E0": [
+    "hammer",
+    "spanner",
+    "tool",
+    "wrench"
+  ],
+  "1F5E1": [
+    "knife",
+    "weapon"
+  ],
+  "1F4A3": [
+    "boom",
+    "comic",
+    "dangerous",
+    "explosion",
+    "hot"
+  ],
+  "1FA83": [
+    "rebound",
+    "repercussion",
+    "weapon"
+  ],
+  "1F3F9": [
+    "archer",
+    "archery",
+    "arrow",
+    "bow",
+    "sagittarius",
+    "tool",
+    "weapon",
+    "zodiac"
+  ],
+  "1F6E1": [
+    "weapon"
+  ],
+  "1FA9A": [
+    "carpenter",
+    "carpentry",
+    "cut",
+    "lumber",
+    "saw",
+    "tool",
+    "trim"
+  ],
+  "1F527": [
+    "home",
+    "improvement",
+    "spanner",
+    "tool"
+  ],
+  "1FA9B": [
+    "flathead",
+    "handy",
+    "screw",
+    "tool"
+  ],
+  "1F529": [
+    "bolt",
+    "home",
+    "improvement",
+    "nut",
+    "tool"
+  ],
+  "1F5DC": [
+    "compress",
+    "tool",
+    "vice"
+  ],
+  "1F9AF": [
+    "accessibility",
+    "blind",
+    "cane",
+    "probing",
+    "white"
+  ],
+  "1F517": [
+    "links"
+  ],
+  "26D3-200D-1F4A5": [
+    "break",
+    "breaking",
+    "broken",
+    "chain",
+    "cuffs",
+    "freedom"
+  ],
+  "26D3": [
+    "chain"
+  ],
+  "1FA9D": [
+    "catch",
+    "crook",
+    "curve",
+    "ensnare",
+    "point",
+    "selling"
+  ],
+  "1F9F0": [
+    "box",
+    "chest",
+    "mechanic",
+    "red",
+    "tool"
+  ],
+  "1F9F2": [
+    "attraction",
+    "horseshoe",
+    "magnetic",
+    "negative",
+    "positive",
+    "shape",
+    "u"
+  ],
+  "1FA9C": [
+    "climb",
+    "rung",
+    "step"
+  ],
+  "1FA8F": [
+    "bury",
+    "dig",
+    "garden",
+    "hole",
+    "plant",
+    "scoop",
+    "snow",
+    "spade"
+  ],
+  "1F9EA": [
+    "chemist",
+    "chemistry",
+    "experiment",
+    "lab",
+    "science",
+    "test",
+    "tube"
+  ],
+  "1F9EB": [
+    "bacteria",
+    "biologist",
+    "biology",
+    "culture",
+    "dish",
+    "lab",
+    "petri"
+  ],
+  "1F9EC": [
+    "biologist",
+    "evolution",
+    "gene",
+    "genetics",
+    "life"
+  ],
+  "1F52C": [
+    "experiment",
+    "lab",
+    "science",
+    "tool"
+  ],
+  "1F52D": [
+    "contact",
+    "extraterrestrial",
+    "science",
+    "tool"
+  ],
+  "1F4E1": [
+    "aliens",
+    "antenna",
+    "contact",
+    "dish",
+    "satellite",
+    "science"
+  ],
+  "1F489": [
+    "doctor",
+    "flu",
+    "medicine",
+    "needle",
+    "shot",
+    "sick",
+    "tool",
+    "vaccination"
+  ],
+  "1FA78": [
+    "bleed",
+    "blood",
+    "donation",
+    "drop",
+    "injury",
+    "medicine",
+    "menstruation"
+  ],
+  "1F48A": [
+    "doctor",
+    "drugs",
+    "medicated",
+    "medicine",
+    "pills",
+    "sick",
+    "vitamin"
+  ],
+  "1FA79": [
+    "adhesive",
+    "bandage"
+  ],
+  "1FA7C": [
+    "aid",
+    "cane",
+    "disability",
+    "help",
+    "hurt",
+    "injured",
+    "mobility",
+    "stick"
+  ],
+  "1FA7A": [
+    "doctor",
+    "heart",
+    "medicine"
+  ],
+  "1FA7B": [
+    "bones",
+    "doctor",
+    "medical",
+    "skeleton",
+    "skull",
+    "xray"
+  ],
+  "1F6AA": [
+    "back",
+    "closet",
+    "front"
+  ],
+  "1F6D7": [
+    "accessibility",
+    "hoist",
+    "lift"
+  ],
+  "1FA9E": [
+    "makeup",
+    "reflection",
+    "reflector",
+    "speculum"
+  ],
+  "1FA9F": [
+    "air",
+    "frame",
+    "fresh",
+    "opening",
+    "transparent",
+    "view"
+  ],
+  "1F6CF": [
+    "hotel",
+    "sleep"
+  ],
+  "1F6CB": [
+    "couch",
+    "hotel",
+    "lamp"
+  ],
+  "1FA91": [
+    "seat",
+    "sit"
+  ],
+  "1F6BD": [
+    "bathroom"
+  ],
+  "1FAA0": [
+    "cup",
+    "force",
+    "plumber",
+    "poop",
+    "suction",
+    "toilet"
+  ],
+  "1F6BF": [
+    "water"
+  ],
+  "1F6C1": [
+    "bath"
+  ],
+  "1FAA4": [
+    "bait",
+    "cheese",
+    "lure",
+    "mouse",
+    "mousetrap",
+    "snare",
+    "trap"
+  ],
+  "1FA92": [
+    "sharp",
+    "shave"
+  ],
+  "1F9F4": [
+    "bottle",
+    "lotion",
+    "moisturizer",
+    "shampoo",
+    "sunscreen"
+  ],
+  "1F9F7": [
+    "diaper",
+    "pin",
+    "punk",
+    "rock",
+    "safety"
+  ],
+  "1F9F9": [
+    "cleaning",
+    "sweeping",
+    "witch"
+  ],
+  "1F9FA": [
+    "farming",
+    "laundry",
+    "picnic"
+  ],
+  "1F9FB": [
+    "paper",
+    "roll",
+    "toilet",
+    "towels"
+  ],
+  "1FAA3": [
+    "cask",
+    "pail",
+    "vat"
+  ],
+  "1F9FC": [
+    "bar",
+    "bathing",
+    "clean",
+    "cleaning",
+    "lather",
+    "soapdish"
+  ],
+  "1FAE7": [
+    "bubble",
+    "burp",
+    "clean",
+    "floating",
+    "pearl",
+    "soap",
+    "underwater"
+  ],
+  "1FAA5": [
+    "bathroom",
+    "brush",
+    "clean",
+    "dental",
+    "hygiene",
+    "teeth",
+    "toiletry"
+  ],
+  "1F9FD": [
+    "absorbing",
+    "cleaning",
+    "porous",
+    "soak"
+  ],
+  "1F9EF": [
+    "extinguish",
+    "extinguisher",
+    "fire",
+    "quench"
+  ],
+  "1F6D2": [
+    "cart",
+    "shopping",
+    "trolley"
+  ],
+  "1F6AC": [
+    "smoking"
+  ],
+  "26B0": [
+    "dead",
+    "death",
+    "vampire"
+  ],
+  "1FAA6": [
+    "cemetery",
+    "dead",
+    "grave",
+    "graveyard",
+    "memorial",
+    "rip",
+    "tomb",
+    "tombstone"
+  ],
+  "26B1": [
+    "ashes",
+    "death",
+    "funeral",
+    "urn"
+  ],
+  "1F9FF": [
+    "amulet",
+    "bead",
+    "blue",
+    "charm",
+    "evil-eye",
+    "nazar",
+    "talisman"
+  ],
+  "1FAAC": [
+    "amulet",
+    "fatima",
+    "fortune",
+    "guide",
+    "hand",
+    "mary",
+    "miriam",
+    "palm",
+    "protect",
+    "protection"
+  ],
+  "1F5FF": [
+    "face",
+    "moyai",
+    "statue",
+    "stoneface",
+    "travel"
+  ],
+  "1FAA7": [
+    "card",
+    "demonstration",
+    "notice",
+    "picket",
+    "plaque",
+    "protest",
+    "sign"
+  ],
+  "1FAAA": [
+    "card",
+    "credentials",
+    "document",
+    "id",
+    "identification",
+    "license",
+    "security"
+  ],
+  "1F3E7": [
+    "atm",
+    "automated",
+    "bank",
+    "cash",
+    "money",
+    "sign",
+    "teller"
+  ],
+  "1F6AE": [
+    "bin",
+    "litter",
+    "litterbin",
+    "sign"
+  ],
+  "1F6B0": [
+    "drinking",
+    "potable",
+    "water"
+  ],
+  "267F": [
+    "access",
+    "handicap",
+    "symbol",
+    "wheelchair"
+  ],
+  "1F6B9": [
+    "bathroom",
+    "lavatory",
+    "man",
+    "men’s",
+    "restroom",
+    "room",
+    "toilet",
+    "wc"
+  ],
+  "1F6BA": [
+    "bathroom",
+    "lavatory",
+    "restroom",
+    "room",
+    "toilet",
+    "wc",
+    "woman",
+    "women’s"
+  ],
+  "1F6BB": [
+    "bathroom",
+    "lavatory",
+    "toilet",
+    "wc"
+  ],
+  "1F6BC": [
+    "baby",
+    "changing",
+    "symbol"
+  ],
+  "1F6BE": [
+    "bathroom",
+    "closet",
+    "lavatory",
+    "restroom",
+    "toilet",
+    "water",
+    "wc"
+  ],
+  "1F6C2": [
+    "control",
+    "passport"
+  ],
+  "1F6C3": [
+    "packing"
+  ],
+  "1F6C4": [
+    "arrived",
+    "baggage",
+    "bags",
+    "case",
+    "checked",
+    "claim",
+    "journey",
+    "packing",
+    "plane",
+    "ready",
+    "travel",
+    "trip"
+  ],
+  "1F6C5": [
+    "baggage",
+    "case",
+    "left",
+    "locker",
+    "luggage"
+  ],
+  "26A0": [
+    "caution"
+  ],
+  "1F6B8": [
+    "child",
+    "children",
+    "crossing",
+    "pedestrian",
+    "traffic"
+  ],
+  "26D4": [
+    "do",
+    "entry",
+    "fail",
+    "forbidden",
+    "no",
+    "not",
+    "pass",
+    "prohibited",
+    "traffic"
+  ],
+  "1F6AB": [
+    "entry",
+    "forbidden",
+    "no",
+    "not",
+    "smoke"
+  ],
+  "1F6B3": [
+    "bicycle",
+    "bicycles",
+    "bike",
+    "forbidden",
+    "no",
+    "not",
+    "prohibited"
+  ],
+  "1F6AD": [
+    "forbidden",
+    "no",
+    "not",
+    "prohibited",
+    "smoke",
+    "smoking"
+  ],
+  "1F6AF": [
+    "forbidden",
+    "litter",
+    "littering",
+    "no",
+    "not",
+    "prohibited"
+  ],
+  "1F6B1": [
+    "dry",
+    "non-drinking",
+    "non-potable",
+    "prohibited",
+    "water"
+  ],
+  "1F6B7": [
+    "forbidden",
+    "no",
+    "not",
+    "pedestrian",
+    "pedestrians",
+    "prohibited"
+  ],
+  "1F4F5": [
+    "cell",
+    "forbidden",
+    "mobile",
+    "no",
+    "not",
+    "phone",
+    "phones",
+    "prohibited",
+    "telephone"
+  ],
+  "1F51E": [
+    "18",
+    "age",
+    "eighteen",
+    "forbidden",
+    "no",
+    "not",
+    "one",
+    "prohibited",
+    "restriction",
+    "underage"
+  ],
+  "2B06": [
+    "arrow",
+    "cardinal",
+    "direction",
+    "north",
+    "up"
+  ],
+  "27A1": [
+    "arrow",
+    "cardinal",
+    "direction",
+    "east",
+    "right"
+  ],
+  "2B07": [
+    "arrow",
+    "cardinal",
+    "direction",
+    "down",
+    "south"
+  ],
+  "2B05": [
+    "arrow",
+    "cardinal",
+    "direction",
+    "left",
+    "west"
+  ],
+  "21A9": [
+    "arrow",
+    "curving",
+    "left",
+    "right"
+  ],
+  "21AA": [
+    "arrow",
+    "curving",
+    "left",
+    "right"
+  ],
+  "1F503": [
+    "arrow",
+    "arrows",
+    "clockwise",
+    "refresh",
+    "reload",
+    "vertical"
+  ],
+  "1F504": [
+    "again",
+    "anticlockwise",
+    "arrow",
+    "arrows",
+    "button",
+    "counterclockwise",
+    "deja",
+    "refresh",
+    "rewindershins",
+    "vu"
+  ],
+  "1F519": [
+    "arrow",
+    "back"
+  ],
+  "1F51A": [
+    "arrow",
+    "end"
+  ],
+  "1F51B": [
+    "arrow",
+    "mark",
+    "on!"
+  ],
+  "1F51C": [
+    "arrow",
+    "brb",
+    "omw",
+    "soon"
+  ],
+  "1F51D": [
+    "arrow",
+    "homie",
+    "top",
+    "up"
+  ],
+  "1F6D0": [
+    "place",
+    "pray",
+    "religion",
+    "worship"
+  ],
+  "269B": [
+    "atheist",
+    "atom",
+    "symbol"
+  ],
+  "1F549": [
+    "hindu",
+    "religion"
+  ],
+  "262F": [
+    "difficult",
+    "lives",
+    "religion",
+    "tao",
+    "taoist",
+    "total",
+    "yang",
+    "yin",
+    "yinyang"
+  ],
+  "271D": [
+    "christ",
+    "christian",
+    "cross",
+    "latin",
+    "religion"
+  ],
+  "262A": [
+    "crescent",
+    "islam",
+    "muslim",
+    "ramadan",
+    "religion",
+    "star"
+  ],
+  "262E": [
+    "healing",
+    "peace",
+    "peaceful",
+    "symbol"
+  ],
+  "1F54E": [
+    "candelabrum",
+    "candlestick",
+    "hanukkah",
+    "jewish",
+    "judaism",
+    "religion"
+  ],
+  "1F52F": [
+    "dotted",
+    "fortune",
+    "jewish",
+    "judaism",
+    "six-pointed",
+    "star"
+  ],
+  "1FAAF": [
+    "deg",
+    "fateh",
+    "khalsa",
+    "religion",
+    "sikh",
+    "sikhism",
+    "tegh"
+  ],
+  "264A": [
+    "gemini",
+    "horoscope",
+    "twins",
+    "zodiac"
+  ],
+  "264B": [
+    "cancer",
+    "crab",
+    "horoscope",
+    "zodiac"
+  ],
+  "264C": [
+    "horoscope",
+    "leo",
+    "lion",
+    "zodiac"
+  ],
+  "264D": [
+    "horoscope",
+    "virgo",
+    "zodiac"
+  ],
+  "264E": [
+    "balance",
+    "horoscope",
+    "justice",
+    "libra",
+    "scales",
+    "zodiac"
+  ],
+  "264F": [
+    "horoscope",
+    "scorpio",
+    "scorpion",
+    "scorpius",
+    "zodiac"
+  ],
+  "26CE": [
+    "bearer",
+    "ophiuchus",
+    "serpent",
+    "snake",
+    "zodiac"
+  ],
+  "1F500": [
+    "arrow",
+    "button",
+    "crossed",
+    "shuffle",
+    "tracks"
+  ],
+  "1F501": [
+    "arrow",
+    "button",
+    "clockwise",
+    "repeat"
+  ],
+  "1F502": [
+    "arrow",
+    "button",
+    "clockwise",
+    "once",
+    "repeat",
+    "single"
+  ],
+  "25B6": [
+    "arrow",
+    "button",
+    "play",
+    "right",
+    "triangle"
+  ],
+  "23E9": [
+    "arrow",
+    "button",
+    "double",
+    "fast",
+    "fast-forward",
+    "forward"
+  ],
+  "23ED": [
+    "arrow",
+    "button",
+    "next",
+    "scene",
+    "track",
+    "triangle"
+  ],
+  "23EF": [
+    "arrow",
+    "button",
+    "pause",
+    "play",
+    "right",
+    "triangle"
+  ],
+  "25C0": [
+    "arrow",
+    "button",
+    "left",
+    "reverse",
+    "triangle"
+  ],
+  "23EA": [
+    "arrow",
+    "button",
+    "double",
+    "fast",
+    "reverse",
+    "rewind"
+  ],
+  "23EE": [
+    "arrow",
+    "button",
+    "last",
+    "previous",
+    "scene",
+    "track",
+    "triangle"
+  ],
+  "1F53C": [
+    "arrow",
+    "button",
+    "red",
+    "up",
+    "upwards"
+  ],
+  "23EB": [
+    "arrow",
+    "button",
+    "double",
+    "fast",
+    "up"
+  ],
+  "1F53D": [
+    "arrow",
+    "button",
+    "down",
+    "downwards",
+    "red"
+  ],
+  "23EC": [
+    "arrow",
+    "button",
+    "double",
+    "down",
+    "fast"
+  ],
+  "23F8": [
+    "bar",
+    "button",
+    "double",
+    "pause",
+    "vertical"
+  ],
+  "23F9": [
+    "button",
+    "square",
+    "stop"
+  ],
+  "23FA": [
+    "button",
+    "circle",
+    "record"
+  ],
+  "23CF": [
+    "button",
+    "eject"
+  ],
+  "1F3A6": [
+    "camera",
+    "film",
+    "movie"
+  ],
+  "1F505": [
+    "brightness",
+    "button",
+    "dim",
+    "low"
+  ],
+  "1F506": [
+    "bright",
+    "brightness",
+    "button",
+    "light"
+  ],
+  "1F4F6": [
+    "antenna",
+    "bar",
+    "bars",
+    "cell",
+    "communication",
+    "mobile",
+    "phone",
+    "signal",
+    "telephone"
+  ],
+  "1F6DC": [
+    "broadband",
+    "computer",
+    "connectivity",
+    "hotspot",
+    "internet",
+    "network",
+    "router",
+    "smartphone",
+    "wi-fi",
+    "wifi",
+    "wlan"
+  ],
+  "1F4F3": [
+    "cell",
+    "communication",
+    "mobile",
+    "mode",
+    "phone",
+    "telephone",
+    "vibration"
+  ],
+  "1F4F4": [
+    "cell",
+    "mobile",
+    "off",
+    "phone",
+    "telephone"
+  ],
+  "26A7": [
+    "symbol",
+    "transgender"
+  ],
+  "1F7F0": [
+    "answer",
+    "equal",
+    "equality",
+    "equals",
+    "heavy",
+    "math",
+    "sign"
+  ],
+  "267E": [
+    "forever",
+    "unbounded",
+    "universal"
+  ],
+  "203C": [
+    "!",
+    "!!",
+    "bangbang",
+    "double",
+    "exclamation",
+    "mark",
+    "punctuation"
+  ],
+  "1F4B1": [
+    "bank",
+    "currency",
+    "exchange",
+    "money"
+  ],
+  "1F4B2": [
+    "billion",
+    "cash",
+    "charge",
+    "currency",
+    "dollar",
+    "heavy",
+    "million",
+    "money",
+    "pay",
+    "sign"
+  ],
+  "267B": [
+    "recycle",
+    "recycling",
+    "symbol"
+  ],
+  "269C": [
+    "knights"
+  ],
+  "1F531": [
+    "anchor",
+    "emblem",
+    "poseidon",
+    "ship",
+    "tool",
+    "trident"
+  ],
+  "1F4DB": [
+    "badge",
+    "name"
+  ],
+  "1F530": [
+    "beginner",
+    "chevron",
+    "green",
+    "japanese",
+    "leaf",
+    "symbol",
+    "tool",
+    "yellow"
+  ],
+  "2B55": [
+    "circle",
+    "heavy",
+    "hollow",
+    "large",
+    "o",
+    "red"
+  ],
+  "274C": [
+    "cancel",
+    "cross",
+    "mark",
+    "multiplication",
+    "multiply",
+    "x",
+    "×"
+  ],
+  "274E": [
+    "button",
+    "cross",
+    "mark",
+    "multiplication",
+    "multiply",
+    "square",
+    "x",
+    "×"
+  ],
+  "27B0": [
+    "curl",
+    "curly",
+    "loop"
+  ],
+  "27BF": [
+    "curl",
+    "curly",
+    "double",
+    "loop"
+  ],
+  "303D": [
+    "alternation",
+    "mark",
+    "part"
+  ],
+  "1FADF": [
+    "drip",
+    "holi",
+    "ink",
+    "liquid",
+    "mess",
+    "paint",
+    "spill",
+    "stain"
+  ],
+  "1F51F": [
+    "keycap"
+  ],
+  "1F520": [
+    "abcd",
+    "input",
+    "latin",
+    "letters",
+    "uppercase"
+  ],
+  "1F521": [
+    "abcd",
+    "input",
+    "latin",
+    "letters",
+    "lowercase"
+  ],
+  "1F522": [
+    "1234",
+    "input",
+    "numbers"
+  ],
+  "1F523": [
+    "%",
+    "&",
+    "input",
+    "symbols",
+    "♪",
+    "〒"
+  ],
+  "1F524": [
+    "abc",
+    "alphabet",
+    "input",
+    "latin",
+    "letters"
+  ],
+  "1F170": [
+    "blood",
+    "button",
+    "type"
+  ],
+  "1F18E": [
+    "ab",
+    "blood",
+    "button",
+    "type"
+  ],
+  "1F171": [
+    "b",
+    "blood",
+    "button",
+    "type"
+  ],
+  "1F191": [
+    "button",
+    "cl"
+  ],
+  "1F192": [
+    "button",
+    "cool"
+  ],
+  "1F193": [
+    "button",
+    "free"
+  ],
+  "1F194": [
+    "button",
+    "id",
+    "identity"
+  ],
+  "24C2": [
+    "circle",
+    "circled",
+    "m"
+  ],
+  "1F195": [
+    "button",
+    "new"
+  ],
+  "1F196": [
+    "button",
+    "ng"
+  ],
+  "1F17E": [
+    "blood",
+    "button",
+    "o",
+    "type"
+  ],
+  "1F197": [
+    "button",
+    "ok",
+    "okay"
+  ],
+  "1F17F": [
+    "button",
+    "p",
+    "parking"
+  ],
+  "1F198": [
+    "button",
+    "help",
+    "sos"
+  ],
+  "1F199": [
+    "button",
+    "mark",
+    "up",
+    "up!"
+  ],
+  "1F19A": [
+    "button",
+    "versus",
+    "vs"
+  ],
+  "1F201": [
+    "button",
+    "here",
+    "japanese",
+    "katakana"
+  ],
+  "1F202": [
+    "button",
+    "charge",
+    "japanese",
+    "katakana",
+    "service"
+  ],
+  "1F237": [
+    "amount",
+    "button",
+    "ideograph",
+    "japanese",
+    "monthly"
+  ],
+  "1F236": [
+    "button",
+    "charge",
+    "free",
+    "ideograph",
+    "japanese",
+    "not"
+  ],
+  "1F22F": [
+    "button",
+    "ideograph",
+    "japanese",
+    "reserved"
+  ],
+  "1F250": [
+    "bargain",
+    "button",
+    "ideograph",
+    "japanese"
+  ],
+  "1F239": [
+    "button",
+    "discount",
+    "ideograph",
+    "japanese"
+  ],
+  "1F21A": [
+    "button",
+    "charge",
+    "free",
+    "ideograph",
+    "japanese"
+  ],
+  "1F232": [
+    "button",
+    "ideograph",
+    "japanese",
+    "prohibited"
+  ],
+  "1F251": [
+    "acceptable",
+    "button",
+    "ideograph",
+    "japanese"
+  ],
+  "1F238": [
+    "application",
+    "button",
+    "ideograph",
+    "japanese"
+  ],
+  "1F234": [
+    "button",
+    "grade",
+    "ideograph",
+    "japanese",
+    "passing"
+  ],
+  "1F233": [
+    "button",
+    "ideograph",
+    "japanese",
+    "vacancy"
+  ],
+  "1F23A": [
+    "business",
+    "button",
+    "ideograph",
+    "japanese",
+    "open"
+  ],
+  "1F235": [
+    "button",
+    "ideograph",
+    "japanese",
+    "no",
+    "vacancy"
+  ],
+  "1F534": [
+    "circle",
+    "geometric",
+    "red"
+  ],
+  "1F7E0": [
+    "circle",
+    "orange"
+  ],
+  "1F7E1": [
+    "circle",
+    "yellow"
+  ],
+  "1F7E2": [
+    "circle",
+    "green"
+  ],
+  "1F535": [
+    "blue",
+    "circle",
+    "geometric"
+  ],
+  "1F7E3": [
+    "circle",
+    "purple"
+  ],
+  "1F7E4": [
+    "brown",
+    "circle"
+  ],
+  "26AB": [
+    "black",
+    "circle",
+    "geometric"
+  ],
+  "26AA": [
+    "circle",
+    "geometric",
+    "white"
+  ],
+  "1F7E5": [
+    "card",
+    "penalty",
+    "red",
+    "square"
+  ],
+  "1F7E7": [
+    "orange",
+    "square"
+  ],
+  "1F7E8": [
+    "card",
+    "penalty",
+    "square",
+    "yellow"
+  ],
+  "1F7E9": [
+    "green",
+    "square"
+  ],
+  "1F7E6": [
+    "blue",
+    "square"
+  ],
+  "1F7EA": [
+    "purple",
+    "square"
+  ],
+  "1F7EB": [
+    "brown",
+    "square"
+  ],
+  "2B1B": [
+    "black",
+    "geometric",
+    "large",
+    "square"
+  ],
+  "2B1C": [
+    "geometric",
+    "large",
+    "square",
+    "white"
+  ],
+  "25FC": [
+    "black",
+    "geometric",
+    "medium",
+    "square"
+  ],
+  "25FB": [
+    "geometric",
+    "medium",
+    "square",
+    "white"
+  ],
+  "25FE": [
+    "black",
+    "geometric",
+    "medium-small",
+    "square"
+  ],
+  "25FD": [
+    "geometric",
+    "medium-small",
+    "square",
+    "white"
+  ],
+  "25AA": [
+    "black",
+    "geometric",
+    "small",
+    "square"
+  ],
+  "25AB": [
+    "geometric",
+    "small",
+    "square",
+    "white"
+  ],
+  "1F536": [
+    "diamond",
+    "geometric",
+    "large",
+    "orange"
+  ],
+  "1F537": [
+    "blue",
+    "diamond",
+    "geometric",
+    "large"
+  ],
+  "1F538": [
+    "diamond",
+    "geometric",
+    "orange",
+    "small"
+  ],
+  "1F539": [
+    "blue",
+    "diamond",
+    "geometric",
+    "small"
+  ],
+  "1F53A": [
+    "geometric",
+    "pointed",
+    "red",
+    "triangle",
+    "up"
+  ],
+  "1F53B": [
+    "down",
+    "geometric",
+    "pointed",
+    "red",
+    "triangle"
+  ],
+  "1F4A0": [
+    "comic",
+    "diamond",
+    "dot",
+    "geometric"
+  ],
+  "1F518": [
+    "button",
+    "geometric",
+    "radio"
+  ],
+  "1F533": [
+    "button",
+    "geometric",
+    "outlined",
+    "square",
+    "white"
+  ],
+  "1F532": [
+    "black",
+    "button",
+    "geometric",
+    "square"
+  ],
+  "1F3C1": [
+    "checkered",
+    "chequered",
+    "finish",
+    "flag",
+    "flags",
+    "game",
+    "race",
+    "racing",
+    "sport",
+    "win"
+  ],
+  "1F6A9": [
+    "construction",
+    "flag",
+    "golf",
+    "post",
+    "triangular"
+  ],
+  "1F38C": [
+    "celebration",
+    "cross",
+    "crossed",
+    "flags",
+    "japanese"
+  ],
+  "1F3F4": [
+    "black",
+    "flag",
+    "waving"
+  ],
+  "1F3F3": [
+    "flag",
+    "waving",
+    "white"
+  ],
+  "1F3F3-200D-1F308": [
+    "bisexual",
+    "flag",
+    "gay",
+    "genderqueer",
+    "glbt",
+    "glbtq",
+    "lesbian",
+    "lgbt",
+    "lgbtq",
+    "lgbtqia",
+    "pride",
+    "queer",
+    "rainbow",
+    "trans",
+    "transgender"
+  ],
+  "1F3F3-200D-26A7": [
+    "blue",
+    "flag",
+    "light",
+    "pink",
+    "transgender",
+    "white"
+  ],
+  "1F3F4-200D-2620": [
+    "flag",
+    "jolly",
+    "pirate",
+    "plunder",
+    "roger",
+    "treasure"
+  ],
+  "1F1E6-1F1E8": [
+    "ac",
+    "flag"
+  ],
+  "1F1E6-1F1E9": [
+    "ad",
+    "flag"
+  ],
+  "1F1E6-1F1EA": [
+    "ae",
+    "flag"
+  ],
+  "1F1E6-1F1EB": [
+    "af",
+    "flag"
+  ],
+  "1F1E6-1F1EC": [
+    "ag",
+    "flag"
+  ],
+  "1F1E6-1F1EE": [
+    "ai",
+    "flag"
+  ],
+  "1F1E6-1F1F1": [
+    "al",
+    "flag"
+  ],
+  "1F1E6-1F1F2": [
+    "am",
+    "flag"
+  ],
+  "1F1E6-1F1F4": [
+    "ao",
+    "flag"
+  ],
+  "1F1E6-1F1F6": [
+    "aq",
+    "flag"
+  ],
+  "1F1E6-1F1F7": [
+    "ar",
+    "flag"
+  ],
+  "1F1E6-1F1F8": [
+    "as",
+    "flag"
+  ],
+  "1F1E6-1F1F9": [
+    "at",
+    "flag"
+  ],
+  "1F1E6-1F1FA": [
+    "au",
+    "flag"
+  ],
+  "1F1E6-1F1FC": [
+    "aw",
+    "flag"
+  ],
+  "1F1E6-1F1FD": [
+    "ax",
+    "flag"
+  ],
+  "1F1E6-1F1FF": [
+    "az",
+    "flag"
+  ],
+  "1F1E7-1F1E6": [
+    "ba",
+    "flag"
+  ],
+  "1F1E7-1F1E7": [
+    "bb",
+    "flag"
+  ],
+  "1F1E7-1F1E9": [
+    "bd",
+    "flag"
+  ],
+  "1F1E7-1F1EA": [
+    "be",
+    "flag"
+  ],
+  "1F1E7-1F1EB": [
+    "bf",
+    "flag"
+  ],
+  "1F1E7-1F1EC": [
+    "bg",
+    "flag"
+  ],
+  "1F1E7-1F1ED": [
+    "bh",
+    "flag"
+  ],
+  "1F1E7-1F1EE": [
+    "bi",
+    "flag"
+  ],
+  "1F1E7-1F1EF": [
+    "bj",
+    "flag"
+  ],
+  "1F1E7-1F1F1": [
+    "bl",
+    "flag"
+  ],
+  "1F1E7-1F1F2": [
+    "bm",
+    "flag"
+  ],
+  "1F1E7-1F1F3": [
+    "bn",
+    "flag"
+  ],
+  "1F1E7-1F1F4": [
+    "bo",
+    "flag"
+  ],
+  "1F1E7-1F1F6": [
+    "bq",
+    "flag"
+  ],
+  "1F1E7-1F1F7": [
+    "br",
+    "flag"
+  ],
+  "1F1E7-1F1F8": [
+    "bs",
+    "flag"
+  ],
+  "1F1E7-1F1F9": [
+    "bt",
+    "flag"
+  ],
+  "1F1E7-1F1FB": [
+    "bv",
+    "flag"
+  ],
+  "1F1E7-1F1FC": [
+    "bw",
+    "flag"
+  ],
+  "1F1E7-1F1FE": [
+    "by",
+    "flag"
+  ],
+  "1F1E7-1F1FF": [
+    "bz",
+    "flag"
+  ],
+  "1F1E8-1F1E6": [
+    "ca",
+    "flag"
+  ],
+  "1F1E8-1F1E8": [
+    "cc",
+    "flag"
+  ],
+  "1F1E8-1F1E9": [
+    "cd",
+    "flag"
+  ],
+  "1F1E8-1F1EB": [
+    "cf",
+    "flag"
+  ],
+  "1F1E8-1F1EC": [
+    "cg",
+    "flag"
+  ],
+  "1F1E8-1F1ED": [
+    "ch",
+    "flag"
+  ],
+  "1F1E8-1F1EE": [
+    "ci",
+    "flag"
+  ],
+  "1F1E8-1F1F0": [
+    "ck",
+    "flag"
+  ],
+  "1F1E8-1F1F1": [
+    "cl",
+    "flag"
+  ],
+  "1F1E8-1F1F2": [
+    "cm",
+    "flag"
+  ],
+  "1F1E8-1F1F3": [
+    "cn",
+    "flag"
+  ],
+  "1F1E8-1F1F4": [
+    "co",
+    "flag"
+  ],
+  "1F1E8-1F1F5": [
+    "cp",
+    "flag"
+  ],
+  "1F1E8-1F1F6": [
+    "cq",
+    "flag"
+  ],
+  "1F1E8-1F1F7": [
+    "cr",
+    "flag"
+  ],
+  "1F1E8-1F1FA": [
+    "cu",
+    "flag"
+  ],
+  "1F1E8-1F1FB": [
+    "cv",
+    "flag"
+  ],
+  "1F1E8-1F1FC": [
+    "cw",
+    "flag"
+  ],
+  "1F1E8-1F1FD": [
+    "cx",
+    "flag"
+  ],
+  "1F1E8-1F1FE": [
+    "cy",
+    "flag"
+  ],
+  "1F1E8-1F1FF": [
+    "cz",
+    "flag"
+  ],
+  "1F1E9-1F1EA": [
+    "de",
+    "flag"
+  ],
+  "1F1E9-1F1EC": [
+    "dg",
+    "flag"
+  ],
+  "1F1E9-1F1EF": [
+    "dj",
+    "flag"
+  ],
+  "1F1E9-1F1F0": [
+    "dk",
+    "flag"
+  ],
+  "1F1E9-1F1F2": [
+    "dm",
+    "flag"
+  ],
+  "1F1E9-1F1F4": [
+    "do",
+    "flag"
+  ],
+  "1F1E9-1F1FF": [
+    "dz",
+    "flag"
+  ],
+  "1F1EA-1F1E6": [
+    "ea",
+    "flag"
+  ],
+  "1F1EA-1F1E8": [
+    "ec",
+    "flag"
+  ],
+  "1F1EA-1F1EA": [
+    "ee",
+    "flag"
+  ],
+  "1F1EA-1F1EC": [
+    "eg",
+    "flag"
+  ],
+  "1F1EA-1F1ED": [
+    "eh",
+    "flag"
+  ],
+  "1F1EA-1F1F7": [
+    "er",
+    "flag"
+  ],
+  "1F1EA-1F1F8": [
+    "es",
+    "flag"
+  ],
+  "1F1EA-1F1F9": [
+    "et",
+    "flag"
+  ],
+  "1F1EA-1F1FA": [
+    "eu",
+    "flag"
+  ],
+  "1F1EB-1F1EE": [
+    "fi",
+    "flag"
+  ],
+  "1F1EB-1F1EF": [
+    "fj",
+    "flag"
+  ],
+  "1F1EB-1F1F0": [
+    "fk",
+    "flag"
+  ],
+  "1F1EB-1F1F2": [
+    "flag",
+    "fm"
+  ],
+  "1F1EB-1F1F4": [
+    "flag",
+    "fo"
+  ],
+  "1F1EB-1F1F7": [
+    "flag",
+    "fr"
+  ],
+  "1F1EC-1F1E6": [
+    "flag",
+    "ga"
+  ],
+  "1F1EC-1F1E7": [
+    "flag",
+    "gb"
+  ],
+  "1F1EC-1F1E9": [
+    "flag",
+    "gd"
+  ],
+  "1F1EC-1F1EA": [
+    "flag",
+    "ge"
+  ],
+  "1F1EC-1F1EB": [
+    "flag",
+    "gf"
+  ],
+  "1F1EC-1F1EC": [
+    "flag",
+    "gg"
+  ],
+  "1F1EC-1F1ED": [
+    "flag",
+    "gh"
+  ],
+  "1F1EC-1F1EE": [
+    "flag",
+    "gi"
+  ],
+  "1F1EC-1F1F1": [
+    "flag",
+    "gl"
+  ],
+  "1F1EC-1F1F2": [
+    "flag",
+    "gm"
+  ],
+  "1F1EC-1F1F3": [
+    "flag",
+    "gn"
+  ],
+  "1F1EC-1F1F5": [
+    "flag",
+    "gp"
+  ],
+  "1F1EC-1F1F6": [
+    "flag",
+    "gq"
+  ],
+  "1F1EC-1F1F7": [
+    "flag",
+    "gr"
+  ],
+  "1F1EC-1F1F8": [
+    "flag",
+    "gs"
+  ],
+  "1F1EC-1F1F9": [
+    "flag",
+    "gt"
+  ],
+  "1F1EC-1F1FA": [
+    "flag",
+    "gu"
+  ],
+  "1F1EC-1F1FC": [
+    "flag",
+    "gw"
+  ],
+  "1F1EC-1F1FE": [
+    "flag",
+    "gy"
+  ],
+  "1F1ED-1F1F0": [
+    "flag",
+    "hk"
+  ],
+  "1F1ED-1F1F2": [
+    "flag",
+    "hm"
+  ],
+  "1F1ED-1F1F3": [
+    "flag",
+    "hn"
+  ],
+  "1F1ED-1F1F7": [
+    "flag",
+    "hr"
+  ],
+  "1F1ED-1F1F9": [
+    "flag",
+    "ht"
+  ],
+  "1F1ED-1F1FA": [
+    "flag",
+    "hu"
+  ],
+  "1F1EE-1F1E8": [
+    "flag",
+    "ic"
+  ],
+  "1F1EE-1F1E9": [
+    "flag",
+    "id"
+  ],
+  "1F1EE-1F1EA": [
+    "flag",
+    "ie"
+  ],
+  "1F1EE-1F1F1": [
+    "flag",
+    "il"
+  ],
+  "1F1EE-1F1F2": [
+    "flag",
+    "im"
+  ],
+  "1F1EE-1F1F3": [
+    "flag",
+    "in"
+  ],
+  "1F1EE-1F1F4": [
+    "flag",
+    "io"
+  ],
+  "1F1EE-1F1F6": [
+    "flag",
+    "iq"
+  ],
+  "1F1EE-1F1F7": [
+    "flag",
+    "ir"
+  ],
+  "1F1EE-1F1F8": [
+    "flag",
+    "is"
+  ],
+  "1F1EE-1F1F9": [
+    "flag",
+    "it"
+  ],
+  "1F1EF-1F1EA": [
+    "flag",
+    "je"
+  ],
+  "1F1EF-1F1F2": [
+    "flag",
+    "jm"
+  ],
+  "1F1EF-1F1F4": [
+    "flag",
+    "jo"
+  ],
+  "1F1EF-1F1F5": [
+    "flag",
+    "jp"
+  ],
+  "1F1F0-1F1EA": [
+    "flag",
+    "ke"
+  ],
+  "1F1F0-1F1EC": [
+    "flag",
+    "kg"
+  ],
+  "1F1F0-1F1ED": [
+    "flag",
+    "kh"
+  ],
+  "1F1F0-1F1EE": [
+    "flag",
+    "ki"
+  ],
+  "1F1F0-1F1F2": [
+    "flag",
+    "km"
+  ],
+  "1F1F0-1F1F3": [
+    "flag",
+    "kn"
+  ],
+  "1F1F0-1F1F5": [
+    "flag",
+    "kp"
+  ],
+  "1F1F0-1F1F7": [
+    "flag",
+    "kr"
+  ],
+  "1F1F0-1F1FC": [
+    "flag",
+    "kw"
+  ],
+  "1F1F0-1F1FE": [
+    "flag",
+    "ky"
+  ],
+  "1F1F0-1F1FF": [
+    "flag",
+    "kz"
+  ],
+  "1F1F1-1F1E6": [
+    "flag",
+    "la"
+  ],
+  "1F1F1-1F1E7": [
+    "flag",
+    "lb"
+  ],
+  "1F1F1-1F1E8": [
+    "flag",
+    "lc"
+  ],
+  "1F1F1-1F1EE": [
+    "flag",
+    "li"
+  ],
+  "1F1F1-1F1F0": [
+    "flag",
+    "lk"
+  ],
+  "1F1F1-1F1F7": [
+    "flag",
+    "lr"
+  ],
+  "1F1F1-1F1F8": [
+    "flag",
+    "ls"
+  ],
+  "1F1F1-1F1F9": [
+    "flag",
+    "lt"
+  ],
+  "1F1F1-1F1FA": [
+    "flag",
+    "lu"
+  ],
+  "1F1F1-1F1FB": [
+    "flag",
+    "lv"
+  ],
+  "1F1F1-1F1FE": [
+    "flag",
+    "ly"
+  ],
+  "1F1F2-1F1E6": [
+    "flag",
+    "ma"
+  ],
+  "1F1F2-1F1E8": [
+    "flag",
+    "mc"
+  ],
+  "1F1F2-1F1E9": [
+    "flag",
+    "md"
+  ],
+  "1F1F2-1F1EA": [
+    "flag",
+    "me"
+  ],
+  "1F1F2-1F1EB": [
+    "flag",
+    "mf"
+  ],
+  "1F1F2-1F1EC": [
+    "flag",
+    "mg"
+  ],
+  "1F1F2-1F1ED": [
+    "flag",
+    "mh"
+  ],
+  "1F1F2-1F1F0": [
+    "flag",
+    "mk"
+  ],
+  "1F1F2-1F1F1": [
+    "flag",
+    "ml"
+  ],
+  "1F1F2-1F1F2": [
+    "flag",
+    "mm"
+  ],
+  "1F1F2-1F1F3": [
+    "flag",
+    "mn"
+  ],
+  "1F1F2-1F1F4": [
+    "flag",
+    "mo"
+  ],
+  "1F1F2-1F1F5": [
+    "flag",
+    "mp"
+  ],
+  "1F1F2-1F1F6": [
+    "flag",
+    "mq"
+  ],
+  "1F1F2-1F1F7": [
+    "flag",
+    "mr"
+  ],
+  "1F1F2-1F1F8": [
+    "flag",
+    "ms"
+  ],
+  "1F1F2-1F1F9": [
+    "flag",
+    "mt"
+  ],
+  "1F1F2-1F1FA": [
+    "flag",
+    "mu"
+  ],
+  "1F1F2-1F1FB": [
+    "flag",
+    "mv"
+  ],
+  "1F1F2-1F1FC": [
+    "flag",
+    "mw"
+  ],
+  "1F1F2-1F1FD": [
+    "flag",
+    "mx"
+  ],
+  "1F1F2-1F1FE": [
+    "flag",
+    "my"
+  ],
+  "1F1F2-1F1FF": [
+    "flag",
+    "mz"
+  ],
+  "1F1F3-1F1E6": [
+    "flag",
+    "na"
+  ],
+  "1F1F3-1F1E8": [
+    "flag",
+    "nc"
+  ],
+  "1F1F3-1F1EA": [
+    "flag",
+    "ne"
+  ],
+  "1F1F3-1F1EB": [
+    "flag",
+    "nf"
+  ],
+  "1F1F3-1F1EC": [
+    "flag",
+    "ng"
+  ],
+  "1F1F3-1F1EE": [
+    "flag",
+    "ni"
+  ],
+  "1F1F3-1F1F1": [
+    "flag",
+    "nl"
+  ],
+  "1F1F3-1F1F4": [
+    "flag",
+    "no"
+  ],
+  "1F1F3-1F1F5": [
+    "flag",
+    "np"
+  ],
+  "1F1F3-1F1F7": [
+    "flag",
+    "nr"
+  ],
+  "1F1F3-1F1FA": [
+    "flag",
+    "nu"
+  ],
+  "1F1F3-1F1FF": [
+    "flag",
+    "nz"
+  ],
+  "1F1F4-1F1F2": [
+    "flag",
+    "om"
+  ],
+  "1F1F5-1F1E6": [
+    "flag",
+    "pa"
+  ],
+  "1F1F5-1F1EA": [
+    "flag",
+    "pe"
+  ],
+  "1F1F5-1F1EB": [
+    "flag",
+    "pf"
+  ],
+  "1F1F5-1F1EC": [
+    "flag",
+    "pg"
+  ],
+  "1F1F5-1F1ED": [
+    "flag",
+    "ph"
+  ],
+  "1F1F5-1F1F0": [
+    "flag",
+    "pk"
+  ],
+  "1F1F5-1F1F1": [
+    "flag",
+    "pl"
+  ],
+  "1F1F5-1F1F2": [
+    "flag",
+    "pm"
+  ],
+  "1F1F5-1F1F3": [
+    "flag",
+    "pn"
+  ],
+  "1F1F5-1F1F7": [
+    "flag",
+    "pr"
+  ],
+  "1F1F5-1F1F8": [
+    "flag",
+    "ps"
+  ],
+  "1F1F5-1F1F9": [
+    "flag",
+    "pt"
+  ],
+  "1F1F5-1F1FC": [
+    "flag",
+    "pw"
+  ],
+  "1F1F5-1F1FE": [
+    "flag",
+    "py"
+  ],
+  "1F1F6-1F1E6": [
+    "flag",
+    "qa"
+  ],
+  "1F1F7-1F1EA": [
+    "flag",
+    "re"
+  ],
+  "1F1F7-1F1F4": [
+    "flag",
+    "ro"
+  ],
+  "1F1F7-1F1F8": [
+    "flag",
+    "rs"
+  ],
+  "1F1F7-1F1FA": [
+    "flag",
+    "ru"
+  ],
+  "1F1F7-1F1FC": [
+    "flag",
+    "rw"
+  ],
+  "1F1F8-1F1E6": [
+    "flag",
+    "sa"
+  ],
+  "1F1F8-1F1E7": [
+    "flag",
+    "sb"
+  ],
+  "1F1F8-1F1E8": [
+    "flag",
+    "sc"
+  ],
+  "1F1F8-1F1E9": [
+    "flag",
+    "sd"
+  ],
+  "1F1F8-1F1EA": [
+    "flag",
+    "se"
+  ],
+  "1F1F8-1F1EC": [
+    "flag",
+    "sg"
+  ],
+  "1F1F8-1F1ED": [
+    "flag",
+    "sh"
+  ],
+  "1F1F8-1F1EE": [
+    "flag",
+    "si"
+  ],
+  "1F1F8-1F1EF": [
+    "flag",
+    "sj"
+  ],
+  "1F1F8-1F1F0": [
+    "flag",
+    "sk"
+  ],
+  "1F1F8-1F1F1": [
+    "flag",
+    "sl"
+  ],
+  "1F1F8-1F1F2": [
+    "flag",
+    "sm"
+  ],
+  "1F1F8-1F1F3": [
+    "flag",
+    "sn"
+  ],
+  "1F1F8-1F1F4": [
+    "flag",
+    "so"
+  ],
+  "1F1F8-1F1F7": [
+    "flag",
+    "sr"
+  ],
+  "1F1F8-1F1F8": [
+    "flag",
+    "ss"
+  ],
+  "1F1F8-1F1F9": [
+    "flag",
+    "st"
+  ],
+  "1F1F8-1F1FB": [
+    "flag",
+    "sv"
+  ],
+  "1F1F8-1F1FD": [
+    "flag",
+    "sx"
+  ],
+  "1F1F8-1F1FE": [
+    "flag",
+    "sy"
+  ],
+  "1F1F8-1F1FF": [
+    "flag",
+    "sz"
+  ],
+  "1F1F9-1F1E6": [
+    "flag",
+    "ta"
+  ],
+  "1F1F9-1F1E8": [
+    "flag",
+    "tc"
+  ],
+  "1F1F9-1F1E9": [
+    "flag",
+    "td"
+  ],
+  "1F1F9-1F1EB": [
+    "flag",
+    "tf"
+  ],
+  "1F1F9-1F1EC": [
+    "flag",
+    "tg"
+  ],
+  "1F1F9-1F1ED": [
+    "flag",
+    "th"
+  ],
+  "1F1F9-1F1EF": [
+    "flag",
+    "tj"
+  ],
+  "1F1F9-1F1F0": [
+    "flag",
+    "tk"
+  ],
+  "1F1F9-1F1F1": [
+    "flag",
+    "tl"
+  ],
+  "1F1F9-1F1F2": [
+    "flag",
+    "tm"
+  ],
+  "1F1F9-1F1F3": [
+    "flag",
+    "tn"
+  ],
+  "1F1F9-1F1F4": [
+    "flag",
+    "to"
+  ],
+  "1F1F9-1F1F7": [
+    "flag",
+    "tr"
+  ],
+  "1F1F9-1F1F9": [
+    "flag",
+    "tt"
+  ],
+  "1F1F9-1F1FB": [
+    "flag",
+    "tv"
+  ],
+  "1F1F9-1F1FC": [
+    "flag",
+    "tw"
+  ],
+  "1F1F9-1F1FF": [
+    "flag",
+    "tz"
+  ],
+  "1F1FA-1F1E6": [
+    "flag",
+    "ua"
+  ],
+  "1F1FA-1F1EC": [
+    "flag",
+    "ug"
+  ],
+  "1F1FA-1F1F2": [
+    "flag",
+    "um"
+  ],
+  "1F1FA-1F1F3": [
+    "flag",
+    "un"
+  ],
+  "1F1FA-1F1F8": [
+    "flag",
+    "us"
+  ],
+  "1F1FA-1F1FE": [
+    "flag",
+    "uy"
+  ],
+  "1F1FA-1F1FF": [
+    "flag",
+    "uz"
+  ],
+  "1F1FB-1F1E6": [
+    "flag",
+    "va"
+  ],
+  "1F1FB-1F1E8": [
+    "flag",
+    "vc"
+  ],
+  "1F1FB-1F1EA": [
+    "flag",
+    "ve"
+  ],
+  "1F1FB-1F1EC": [
+    "flag",
+    "vg"
+  ],
+  "1F1FB-1F1EE": [
+    "flag",
+    "vi"
+  ],
+  "1F1FB-1F1F3": [
+    "flag",
+    "vn"
+  ],
+  "1F1FB-1F1FA": [
+    "flag",
+    "vu"
+  ],
+  "1F1FC-1F1EB": [
+    "flag",
+    "wf"
+  ],
+  "1F1FC-1F1F8": [
+    "flag",
+    "ws"
+  ],
+  "1F1FD-1F1F0": [
+    "flag",
+    "xk"
+  ],
+  "1F1FE-1F1EA": [
+    "flag",
+    "ye"
+  ],
+  "1F1FE-1F1F9": [
+    "flag",
+    "yt"
+  ],
+  "1F1FF-1F1E6": [
+    "flag",
+    "za"
+  ],
+  "1F1FF-1F1F2": [
+    "flag",
+    "zm"
+  ],
+  "1F1FF-1F1FC": [
+    "flag",
+    "zw"
+  ],
+  "1F3F4-E0067-E0062-E0065-E006E-E0067-E007F": [
+    "flag",
+    "gbeng"
+  ],
+  "1F3F4-E0067-E0062-E0073-E0063-E0074-E007F": [
+    "flag",
+    "gbsct"
+  ],
+  "1F3F4-E0067-E0062-E0077-E006C-E0073-E007F": [
+    "flag",
+    "gbwls"
+  ]
+}

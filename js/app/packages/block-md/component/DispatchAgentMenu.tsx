@@ -1,4 +1,5 @@
 import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
+import type { SplitFileMenuAction } from '@app/component/split-layout/context';
 import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
@@ -19,7 +20,7 @@ import type { CommentThread } from '@service-storage/generated/schemas/commentTh
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
-import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   discussionThreads,
@@ -162,11 +163,10 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
   { name: LAST_USED_KEY }
 );
 
-export function DispatchAgentButton() {
+export function useDispatchAgentAction() {
   const blockId = useBlockId();
   const name = useBlockDocumentName();
   const [store] = mdStore;
-  const [open, setOpen] = createSignal(false);
 
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
@@ -189,30 +189,88 @@ export function DispatchAgentButton() {
       console.error('Failed to generate task prompt', e);
       toast.failure('Failed to generate task prompt');
     }
-    setOpen(false);
   };
 
-  const handlePrimaryClick = () => {
-    executeAction(lastUsed());
+  return {
+    blockId,
+    lastUsed,
+    executeAction,
+    executeLastUsed: () => executeAction(lastUsed()),
   };
+}
+
+export function useDispatchAgentSplitFileActions(): SplitFileMenuAction[] {
+  const { executeAction } = useDispatchAgentAction();
+
+  return [
+    {
+      label: COPY_ACTION.name,
+      icon: COPY_ACTION.icon,
+      action: () => {
+        void executeAction(COPY_ACTION);
+      },
+    },
+    ...PLATFORM_ACTIONS.map((action) => ({
+      label: action.name,
+      icon: action.icon,
+      action: () => {
+        void executeAction(action);
+      },
+    })),
+    {
+      label: 'MCP setup instructions',
+      icon: PlugIcon,
+      action: openMacroMcpSetupModal,
+    },
+  ];
+}
+
+export function DispatchAgentButton(
+  props: { showPrimaryLabel?: boolean } = {}
+) {
+  const [open, setOpen] = createSignal(false);
+  const { blockId, lastUsed, executeAction, executeLastUsed } =
+    useDispatchAgentAction();
 
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
-      <ButtonGroup variant="base" size="icon-sm" depth={2} class="bg-surface">
-        <Button onClick={handlePrimaryClick} tooltip={lastUsed().name}>
+      <ButtonGroup
+        variant="ghost"
+        size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
+        depth={2}
+        class="rounded-full ring ring-edge-muted"
+      >
+        <Button
+          onClick={executeLastUsed}
+          tooltip={lastUsed().name}
+          class="bg-transparent hover:bg-ink/[0.04]"
+        >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
             class="size-3!"
           />
+          <Show when={props.showPrimaryLabel}>
+            <span class="max-w-36 truncate text-xs font-medium">
+              {lastUsed().name}
+            </span>
+          </Show>
         </Button>
         <ButtonGroup.Divider />
-        <Dropdown.Trigger class="p-1">
+        <Dropdown.Trigger
+          class="bg-transparent p-1 hover:bg-ink/[0.04]"
+          label="Agent options"
+        >
           <CaretDown class="size-3.5!" />
         </Dropdown.Trigger>
       </ButtonGroup>
       <Dropdown.Content>
         <Dropdown.Group>
-          <Dropdown.Item onSelect={() => executeAction(COPY_ACTION)}>
+          <Dropdown.Item
+            onSelect={() => {
+              executeAction(COPY_ACTION);
+              setOpen(false);
+            }}
+          >
             <Dynamic component={COPY_ACTION.icon} class="size-4 shrink-0" />
             <span class="flex-1 truncate">{COPY_ACTION.name}</span>
           </Dropdown.Item>
@@ -239,7 +297,12 @@ export function DispatchAgentButton() {
           <Dropdown.GroupLabel>Open in</Dropdown.GroupLabel>
           <For each={PLATFORM_ACTIONS}>
             {(action) => (
-              <Dropdown.Item onSelect={() => executeAction(action)}>
+              <Dropdown.Item
+                onSelect={() => {
+                  executeAction(action);
+                  setOpen(false);
+                }}
+              >
                 <Dynamic component={action.icon} class="size-4 shrink-0" />
                 <span class="flex-1 truncate">{action.name}</span>
               </Dropdown.Item>

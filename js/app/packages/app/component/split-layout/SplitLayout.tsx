@@ -1,5 +1,8 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { isSidebarVisible } from '@app/component/sidebarVisibility';
+import {
+  isSidebarVisible,
+  useSidebarCollapse,
+} from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
 import { splitContainerSelector } from '@core/dom-selectors';
@@ -52,6 +55,29 @@ function getParentSplitId(element: Element | null) {
   return splitId as SplitId;
 }
 
+function sameSplitContentIdentity(a: SplitContent, b: SplitContent) {
+  return a.type === b.type && a.id === b.id;
+}
+
+function getUrlSyncAffectedSplit(
+  splitManager: SplitManager,
+  currentPairs: SplitContent[],
+  nextPairs: SplitContent[]
+) {
+  const changedIndex = nextPairs.findIndex(
+    (nextPair, index) =>
+      !currentPairs[index] ||
+      !sameSplitContentIdentity(currentPairs[index], nextPair)
+  );
+
+  if (changedIndex < 0) return undefined;
+
+  const affectedPair = nextPairs[changedIndex];
+  return splitManager
+    .splits()
+    .find((split) => sameSplitContentIdentity(split.content, affectedPair));
+}
+
 /**
  * Creates an effect that syncs the layout manager with the URL.
  *
@@ -73,8 +99,17 @@ function createLayoutUrlSync(
   createEffect(
     on([() => splitManager.getUrlSegments().join('/')], () => {
       if (urlLayoutDrift()) {
+        const nextUrlSegments = splitManager.getUrlSegments();
+        const nextPairs = decodePairs(nextUrlSegments);
+        const affectedSplit = getUrlSyncAffectedSplit(
+          splitManager,
+          decodedPairs(),
+          nextPairs
+        );
+        const replace = affectedSplit?.lastNavigationCause === 'replace';
+
         // Flush the state to the url
-        navigate(`/${splitManager.getUrlSegments().join('/')}`);
+        navigate(`/${nextUrlSegments.join('/')}`, { replace });
       }
     })
   );
@@ -275,6 +310,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
   const [, setTabTitle] = tabTitleSignal;
+  const sidebar = useSidebarCollapse();
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =
@@ -313,7 +349,9 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <div
-        class={cn('size-full p-2 mobile:p-0', { 'pl-0': isSidebarVisible() })}
+        class={cn('size-full p-2 mobile:p-0', {
+          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
+        })}
       >
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}

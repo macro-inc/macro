@@ -12,7 +12,10 @@ import {
   createEmailFormState,
   type DraftFormAttachment,
 } from '@block-email/component/createEmailFormState';
-import { useMaybeEmailContext } from '@block-email/component/EmailContext';
+import {
+  markThreadDraftSaved,
+  useMaybeEmailContext,
+} from '@block-email/component/EmailContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
@@ -25,6 +28,7 @@ import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientC
 import { useHasPaidAccess } from '@core/auth';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_EMAIL_SIGNATURES } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -54,6 +58,7 @@ import {
 import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
+  useEmailSignature,
   useNonPrimaryEmailLinkIdHeader,
   usePrimaryEmailLinkId,
 } from '@queries/email/link';
@@ -83,6 +88,7 @@ import {
 } from './ComposeContext';
 import { ComposeLayout } from './ComposeLayout';
 import { EmailComposeToolbar } from './ComposeToolbar';
+import { SignaturePreview } from './SignaturePreview';
 
 const DRAFT_DEBOUNCE_MS = 500;
 
@@ -92,6 +98,7 @@ type UndoComposeSnapshot = {
   subject: string;
   bodyHtml: string;
   attachments: DraftFormAttachment[];
+  includeSignature: boolean;
 };
 
 let undoComposeSnapshot: UndoComposeSnapshot | null = null;
@@ -145,6 +152,13 @@ export function EmailCompose(props: EmailComposeProps) {
   // header), so a non-primary "from" inbox drafts/sends from the right account.
   const headerLinkId = () => toHeaderLinkId(link()?.id);
 
+  // The sending inbox's saved signature (empty for inboxes without one). New
+  // emails include it by default; the preview's dismiss drops it for this one
+  // message. The backend injects it on send (see include_signature below); the
+  // FE only renders the preview and signals an explicit dismiss.
+  const signature = useEmailSignature(() => link()?.id);
+  const [includeSignature, setIncludeSignature] = createSignal(true);
+
   const hasLinkError = createMemo(() => {
     if (emailLinksQuery.isPending) return false;
     return (
@@ -186,6 +200,7 @@ export function EmailCompose(props: EmailComposeProps) {
     for (const attachment of restoredSnapshot.attachments) {
       form.attachments.add(attachment);
     }
+    setIncludeSignature(restoredSnapshot.includeSignature);
     undoComposeSnapshot = null;
   }
 
@@ -357,7 +372,7 @@ export function EmailCompose(props: EmailComposeProps) {
   const [validationError, setValidationError] =
     createSignal<ComposeValidationError | null>(null);
 
-  const undoSend = async (draftId: string) => {
+  const undoSend = async (draftId: string, threadId?: string) => {
     try {
       const result = await emailClient.unscheduleMessage(
         { draftID: draftId },
@@ -372,11 +387,17 @@ export function EmailCompose(props: EmailComposeProps) {
       queryClient.invalidateQueries({
         queryKey: emailKeys.previews._def,
       });
+      // Wipe the new thread's cache when its view unmounts (replaceSplit
+      // below) so the next visit fetches fresh data without the sent message.
+      if (threadId) markThreadDraftSaved(threadId);
       replaceSplit({
         content: {
           type: 'component',
           id: 'email-compose',
           params: { draftID: draftId },
+          // reattach() strips params by default; keep draftID so the compose
+          // remount can restore the undo snapshot.
+          preserveParams: true,
         },
       });
       toast.success('Send cancelled');
@@ -389,6 +410,7 @@ export function EmailCompose(props: EmailComposeProps) {
   const sendMutation = useSendMessageMutation({
     onSuccess: (data) => {
       const draftId = data.message.db_id;
+      const threadId = data.message.thread_db_id;
       const toastId = toast.success('Email sent', {
         actions: draftId
           ? [
@@ -397,13 +419,12 @@ export function EmailCompose(props: EmailComposeProps) {
                 icon: ArrowCounterClockwise,
                 onClick: () => {
                   if (toastId != null) toast.dismiss(toastId);
-                  void undoSend(draftId);
+                  void undoSend(draftId, threadId ?? undefined);
                 },
               },
             ]
           : undefined,
         duration: 8_000,
-        mobile: true,
       });
       if (data.message.thread_db_id) {
         replaceSplit({
@@ -421,24 +442,6 @@ export function EmailCompose(props: EmailComposeProps) {
     setValidationError(null);
 
     const currentEditor = editor();
-
-    // Snapshot editor state before watermark so undo-send can restore it
-    if (currentEditor) {
-      const snapshotHtml = currentEditor.read(() =>
-        $generateHtmlFromNodes(currentEditor)
-      );
-      const draftId = currentDraftID();
-      if (draftId) {
-        undoComposeSnapshot = {
-          draftId,
-          recipients: structuredClone(unwrap(form.recipients())),
-          subject: form.subject(),
-          bodyHtml: snapshotHtml,
-          attachments: [...form.attachments.list()],
-        };
-      }
-    }
-
     const currentLink = link();
     const recipients = form.recipients();
 
@@ -479,6 +482,33 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    // Ensure the draft is saved before sending so undo-send always has a
+    // draft id to snapshot and restore (the send reuses the draft's db_id).
+    scheduleDraftSave.clear();
+    try {
+      await executeSaveDraft();
+    } catch {
+      // Draft save is best-effort; the send still works without one.
+    }
+
+    // Snapshot editor state before watermark so undo-send can restore it
+    if (currentEditor) {
+      const snapshotHtml = currentEditor.read(() =>
+        $generateHtmlFromNodes(currentEditor)
+      );
+      const draftId = currentDraftID();
+      if (draftId) {
+        undoComposeSnapshot = {
+          draftId,
+          recipients: structuredClone(unwrap(form.recipients())),
+          subject: form.subject(),
+          bodyHtml: snapshotHtml,
+          attachments: [...form.attachments.list()],
+          includeSignature: includeSignature(),
+        };
+      }
+    }
+
     // Append watermark after all validation passes so failed sends don't
     // leave orphaned watermark nodes in the editor tree.
     const cleanupWatermark = $appendWatermarkNodeToLast(
@@ -486,7 +516,7 @@ export function EmailCompose(props: EmailComposeProps) {
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(currentEditor, undefined);
+    const prepared = prepareEmailBody(currentEditor);
     if (!prepared) {
       cleanupWatermark();
       return;
@@ -510,6 +540,9 @@ export function EmailCompose(props: EmailComposeProps) {
         body_html: prepared.bodyHtml,
         body_macro: bodyMacro,
         db_id: currentDraftID(),
+        // Backend includes the signature by default for new emails; only signal
+        // an explicit dismiss. Omitting it falls through to the backend default.
+        include_signature: includeSignature() ? undefined : false,
       },
       linkId: headerLinkId(),
     });
@@ -730,6 +763,20 @@ export function EmailCompose(props: EmailComposeProps) {
       void executeSaveDraft();
     },
     hasPaidAccess,
+
+    // Read-only preview of the signature appended on send, with a per-message
+    // dismiss. Shown only when the sending inbox has a signature and it hasn't
+    // been dismissed.
+    signaturePreview: () => (
+      <Show when={ENABLE_EMAIL_SIGNATURES && includeSignature() && signature()}>
+        {(html) => (
+          <SignaturePreview
+            html={html()}
+            onDismiss={() => setIncludeSignature(false)}
+          />
+        )}
+      </Show>
+    ),
   };
 
   const panel = useContext(SplitPanelContext);

@@ -2,6 +2,7 @@ import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { groupedCacheVersion } from '@queries/soup/cache';
 import {
   parseGroupMeta,
   serializeGroupByField,
@@ -77,12 +78,16 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return mapApiSoupItemToEntity(item);
   };
 
-  const mapPageToEntities = (page: GroupQueryPage): EntityData[] => {
+  const mapPageToEntities = (
+    page: GroupQueryPage,
+    itemFilter: SoupApiItemFilter | undefined
+  ): EntityData[] => {
     const entities: EntityData[] = [];
 
     for (const id of page.group.itemIds) {
       const item = page.items[id];
       if (!item) continue;
+      if (itemFilter && !itemFilter(item)) continue;
 
       const entity = mapItemToEntity(item);
       if (entity) entities.push(entity);
@@ -92,12 +97,13 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   };
 
   const combineGroupPages = (
-    pages: GroupQueryPage[]
+    pages: GroupQueryPage[],
+    itemFilter: SoupApiItemFilter | undefined
   ): GroupQueryData | undefined => {
     if (pages.length === 0) return;
 
     return {
-      entities: pages.flatMap(mapPageToEntities),
+      entities: pages.flatMap((page) => mapPageToEntities(page, itemFilter)),
     };
   };
 
@@ -160,7 +166,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         getNextPageParam: (lastPage: GroupQueryPage): string | null => {
           return lastPage.group.nextCursor;
         },
-        select: combineGroupPages,
+        select: (pages: GroupQueryPage[]) =>
+          combineGroupPages(pages, options.meta?.itemFilter),
         initialData: {
           pages: [initialPage],
           pageParams: [null],
@@ -189,6 +196,9 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       ...query,
       data: () => {
         groupDataVersion();
+        // External cache patches (optimistic property edits, WS inserts)
+        // bump this since query.data is read untracked.
+        groupedCacheVersion();
         return untrack(query.data);
       },
       fetchNextPage: async () => {

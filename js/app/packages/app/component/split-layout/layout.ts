@@ -16,12 +16,12 @@ export function useSplitLayout() {
     options?: OpenWithSplitOptions
   ) {
     const splitManager = globalSplitManager();
+    const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
+
     if (!splitManager) {
       console.error('No split manager found');
       return;
     }
-
-    const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
 
     return splitManager.openWithSplit(content, {
       ...options,
@@ -33,12 +33,6 @@ export function useSplitLayout() {
     content: SplitContent,
     referredFrom: ReferredFrom = null
   ) {
-    const splitManager = globalSplitManager();
-    if (!splitManager) {
-      console.error('No split manager found');
-      return;
-    }
-
     return openWithSplit(content, {
       referredFrom,
       handle: splitPanelContext?.handle,
@@ -63,12 +57,14 @@ export function useSplitLayout() {
 
   function insertSplit(
     content: SplitContent,
-    referredFrom: ReferredFrom = null
+    referredFrom: ReferredFrom = null,
+    options: Pick<OpenWithSplitOptions, 'insertIndex'> = {}
   ) {
     return openWithSplit(content, {
       activate: true,
       referredFrom,
       preferNewSplit: true,
+      ...options,
     });
   }
 
@@ -79,6 +75,18 @@ export function useSplitLayout() {
       return;
     }
     return splitManager.createPopoverSplit({ content: content });
+  }
+
+  function replaceAllSplits(
+    content: SplitContent,
+    options?: { referredFrom?: ReferredFrom }
+  ) {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.error('No split manager found');
+      return;
+    }
+    return splitManager.replaceAllSplits(content, options);
   }
 
   function resetSplit() {
@@ -106,5 +114,6 @@ export function useSplitLayout() {
     insertSplit,
     resetSplit,
     popoverSplit,
+    replaceAllSplits,
   };
 }

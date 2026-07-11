@@ -67,8 +67,8 @@ export const AnimatedChannelIcon = (props: {
           animation: channel-expand-right 0.625s forwards;
         }
       `}</style>
-      <path class="channel-h channel-h-top" d="M2 5H24" />
-      <path class="channel-h channel-h-bottom" d="M0 11H22" />
+      <path class="channel-h channel-h-top" d="M2 5H23" />
+      <path class="channel-h channel-h-bottom" d="M1 11H22" />
       <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
       <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
     </svg>

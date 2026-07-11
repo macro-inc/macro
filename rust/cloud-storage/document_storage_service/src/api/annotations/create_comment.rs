@@ -104,10 +104,17 @@ pub async fn create_comment_handler(
                     .map(|c| c.sender.as_ref().unwrap_or(&c.owner).clone())
                     .collect();
 
-                let task_assignee_ids: Vec<String> = match properties_service
-                    .get_system_property_value(
+                // Server-side notification fan-out: read the task assignees
+                // outside the commenting user's session. The comment itself was
+                // already authorized by the document middleware.
+                let task_properties_access =
+                    properties::PropertiesAccessReceipt::dangerously_assert_internal(
                         &document_id,
                         models_properties::EntityType::Task,
+                    );
+                let task_assignee_ids: Vec<String> = match properties_service
+                    .get_system_property_value(
+                        &task_properties_access,
                         SystemPropertyKey::Assignees,
                     )
                     .await

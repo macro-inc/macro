@@ -3,7 +3,7 @@ import IconTextA from '@phosphor-icons/core/regular/text-aa.svg?component-solid'
 import { cn } from '@ui';
 
 type Token = { l: number; c: number; h: number };
-type ThemeChipsSize = 'sm' | 'md';
+type ThemeChipsSize = 'inline' | 'sm' | 'md';
 
 const sizeStyles: Record<
   ThemeChipsSize,
@@ -22,6 +22,13 @@ const sizeStyles: Record<
     root: 'gap-1 py-[5px] px-[5px] rounded-lg',
     accent: 'size-[6px]',
     icon: 'size-[15px]',
+  },
+  // Em-based so the chip scales with the surrounding font size (~1em tall),
+  // letting it baseline-align inline with text (e.g. the theme mention).
+  inline: {
+    root: 'gap-[0.15em] py-[0.15em] px-[0.15em] rounded-[0.3em]',
+    accent: 'size-[0.28em]',
+    icon: 'size-[0.62em]',
   },
 };
 

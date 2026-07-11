@@ -17,8 +17,8 @@ pub mod inbound;
 pub mod outbound;
 
 pub use domain::{
-    AiFeature, CompletionUsage, FeatureUsage, Price, SYSTEM_USER_ID, Usage, UsageApiParams,
-    UsageContext, UsageEvent, UsageRecorder, UsageRepo, UsageService, UsageSummary,
+    AiFeature, CompletionUsage, FeatureUsage, NoOpUsageRecorder, Price, SYSTEM_USER_ID, Usage,
+    UsageApiParams, UsageContext, UsageEvent, UsageRecorder, UsageRepo, UsageService, UsageSummary,
 };
 
 use std::sync::Arc;

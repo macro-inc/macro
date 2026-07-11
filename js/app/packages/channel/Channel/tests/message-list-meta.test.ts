@@ -1,12 +1,14 @@
 import { senderFromStorageId } from '@queries/channel/message-sender';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { describe, expect, it } from 'vitest';
 import { buildChannelMessageListMeta } from '../message-list-meta';
 
 function createMessage(
   id: string,
   createdAt: string,
-  senderId = 'user-1'
+  senderId = 'user-1',
+  sender: ApiMessageSender = senderFromStorageId(senderId)
 ): ApiChannelMessage {
   return {
     id,
@@ -14,7 +16,7 @@ function createMessage(
     content: '',
     created_at: createdAt,
     updated_at: createdAt,
-    sender: senderFromStorageId(senderId),
+    sender,
     sender_id: senderId,
     attachments: [],
     reactions: [],
@@ -34,7 +36,7 @@ describe('buildChannelMessageListMeta', () => {
       createMessage('m3', '2026-02-21T09:00:00.000Z'),
     ];
 
-    const meta = buildChannelMessageListMeta(messages, () => false);
+    const meta = buildChannelMessageListMeta(messages, () => false, true);
 
     expect(meta.m1).toEqual({
       index: 0,
@@ -42,6 +44,7 @@ describe('buildChannelMessageListMeta', () => {
       isFirstNewMessage: false,
       previousTopLevelCreatedAt: undefined,
       isGroupedWithPrevious: false,
+      reachedStart: true,
     });
     expect(meta.m2.previousTopLevelCreatedAt).toBe('2026-02-20T09:00:00.000Z');
     expect(meta.m3.previousTopLevelCreatedAt).toBe('2026-02-20T10:00:00.000Z');
@@ -56,7 +59,8 @@ describe('buildChannelMessageListMeta', () => {
 
     const meta = buildChannelMessageListMeta(
       messages,
-      (message) => message.id === 'm2' || message.id === 'm3'
+      (message) => message.id === 'm2' || message.id === 'm3',
+      true
     );
 
     expect(meta.m1.isFirstNewMessage).toBe(false);
@@ -73,10 +77,48 @@ describe('buildChannelMessageListMeta', () => {
       createMessage('m3', '2026-02-20T09:05:01.000Z'),
     ];
 
-    const meta = buildChannelMessageListMeta(messages, () => false);
+    const meta = buildChannelMessageListMeta(messages, () => false, true);
 
     expect(meta.m1.isGroupedWithPrevious).toBe(false);
     expect(meta.m2.isGroupedWithPrevious).toBe(true);
+    expect(meta.m3.isGroupedWithPrevious).toBe(true);
+  });
+
+  it('does not group agent messages triggered by different users, despite a shared bot sender_id', () => {
+    const botId = 'bot|00000000-0000-0000-0000-000000000000';
+    const agentSender = (triggeredBy: string): ApiMessageSender => ({
+      type: 'bot',
+      id: '00000000-0000-0000-0000-000000000000',
+      name: 'Macro',
+      triggered_by: triggeredBy,
+    });
+    const messages = [
+      // Two Macro-agent messages with the same bot sender_id but triggered by
+      // different users must not merge under one "from" pill.
+      createMessage(
+        'm1',
+        '2026-02-20T09:00:00.000Z',
+        botId,
+        agentSender('user-a')
+      ),
+      createMessage(
+        'm2',
+        '2026-02-20T09:01:00.000Z',
+        botId,
+        agentSender('user-b')
+      ),
+      // A third triggered by the same user as m2 groups with it.
+      createMessage(
+        'm3',
+        '2026-02-20T09:02:00.000Z',
+        botId,
+        agentSender('user-b')
+      ),
+    ];
+
+    const meta = buildChannelMessageListMeta(messages, () => false, true);
+
+    expect(meta.m2.isGroupedWithPrevious).toBe(false);
     expect(meta.m3.isGroupedWithPrevious).toBe(true);
   });
 });

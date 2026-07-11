@@ -1,4 +1,8 @@
-import type { CallStatus } from '@app/component/next-soup/filters/filter-store/types';
+import type {
+  CallStatus,
+  PropertyFilter,
+  TagFilterMode,
+} from '@app/component/next-soup/filters/filter-store/types';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -9,11 +13,13 @@ import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { useInboxPicker } from '../inbox-picker';
 import type { SearchableOption } from '../searchable-multi-select';
+import { useTagOptions } from '../tag-filter';
 import type {
   SearchFiltersController,
   SearchIndexId,
   SearchTypeValue,
 } from './search-filters-state';
+import { useSearchTagsFlag } from './search-tags-flag';
 
 export const SEARCH_INDEX_OPTIONS: {
   value: SearchIndexId;
@@ -137,6 +143,15 @@ type FacetBase = {
   reset: () => void;
 };
 
+/** Optional any-of/all-of segment on a multi facet, à la Linear's label
+ * filter. Rendered as its own dropdown segment between the facet label and
+ * the values, only while `visible` (mode is meaningless under 2 values). */
+export type FacetModeVM = {
+  value: Accessor<TagFilterMode>;
+  onSelect: (mode: TagFilterMode) => void;
+  visible: Accessor<boolean>;
+};
+
 export type SearchFacetVM = FacetBase &
   (
     | {
@@ -153,6 +168,7 @@ export type SearchFacetVM = FacetBase &
         placeholder: string;
         preserveOrder?: boolean;
         onOnly?: (id: string) => void;
+        mode?: FacetModeVM;
       }
   );
 
@@ -245,7 +261,7 @@ function multiFacet(args: {
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
-}): SearchFacetVM {
+}): Extract<SearchFacetVM, { kind: 'multi' }> {
   return {
     kind: 'multi',
     id: args.id,
@@ -282,6 +298,9 @@ export function useSearchFacets(
     selectedIds: controller.emailInbox,
     setSelectedIds: controller.setEmailInbox,
   });
+
+  const tagSource = useTagOptions();
+  const searchTags = useSearchTagsFlag();
 
   const type = singleFacet({
     id: 'type',
@@ -438,18 +457,62 @@ export function useSearchFacets(
     onChange: controller.setTaskCreatedBy,
   });
 
+  const tags: SearchFacetVM = {
+    ...multiFacet({
+      id: 'tags',
+      label: 'Tags',
+      neutralLabel: 'Any tag',
+      placeholder: 'Filter by tag...',
+      options: tagSource.options,
+      activeIds: () => controller.tags().map((t) => t.value),
+      onChange: (ids) => {
+        const byOption = tagSource.defByOption();
+        controller.setTags(
+          ids.reduce<PropertyFilter[]>((acc, id) => {
+            const propertyId = byOption.get(id);
+            if (propertyId) acc.push({ propertyId, type: 'select', value: id });
+            return acc;
+          }, [])
+        );
+      },
+    }),
+    mode: {
+      value: controller.tagMode,
+      onSelect: controller.setTagMode,
+      visible: () => controller.tags().length >= 2,
+    },
+  };
+
+  // Tags show only where tagging applies (all/documents/tasks/emails/agents/
+  // folders), gated behind both the broad tags flag and the search-view
+  // rollout flag, and hidden when the caller has no tags defined.
+  const tagFacets = (): SearchFacetVM[] =>
+    searchTags() && tagSource.enabled() && tagSource.hasTags() ? [tags] : [];
+
   return createMemo(() => {
     switch (controller.type()) {
       case 'email':
         return inboxPicker.hasMultiple()
-          ? [type, importance, inbox]
-          : [type, importance];
+          ? [type, importance, inbox, ...tagFacets()]
+          : [type, importance, ...tagFacets()];
       case 'channels':
         return [type, channelIn, channelFrom];
       case 'calls':
         return [type, callIn, callFrom, callStatus];
       case 'task':
-        return [type, taskStatus, taskPriority, taskAssignee, taskCreatedBy];
+        return [
+          type,
+          taskStatus,
+          taskPriority,
+          taskAssignee,
+          taskCreatedBy,
+          ...tagFacets(),
+        ];
+      case 'document-or-file':
+      case 'agent':
+      case 'folders':
+      case 'all':
+        return [type, ...tagFacets()];
       default:
         return [type];
     }

@@ -32,7 +32,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { MACRO_AI_BOT_ID, macroAiMentionUser } from '../macroAi';
+import { isMacroAiId, macroAiMentionUser } from '../macroAi';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
@@ -50,11 +50,13 @@ import type {
   InputHandle,
   InputPersistenceKey,
   InputSnapshot,
+  RestoreSnapshotOptions,
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
@@ -180,19 +182,23 @@ export function ChannelInput(props: ChannelInputProps) {
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
-        options?: { focus?: boolean };
+        options?: RestoreSnapshotOptions;
       }
     | undefined;
   let pendingFocus = false;
+  // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
+  // Applied on the next programmatic focus rather than at restore time.
+  let pendingCursor: RestoreSnapshotOptions['cursor'];
 
   const applySnapshot = (
     snapshot: InputSnapshot,
-    options?: { focus?: boolean }
+    options?: RestoreSnapshotOptions
   ) => {
     markdownEditor.controls.setMarkdown(snapshot.value);
+    pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
     mentionsTracker.setMentions(snapshot.mentions);
-    if (options?.focus !== false) markdownEditor.controls.focus();
+    if (options?.focus !== false) focusEditorNow();
   };
 
   const flushPendingRestore = () => {
@@ -202,25 +208,33 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => applySnapshot(restore.snapshot, restore.options));
   };
 
+  const focusEditorNow = () => {
+    if (pendingCursor === 'trailing-paragraph') {
+      pendingCursor = undefined;
+      lexicalEditor().update(() => $selectTrailingParagraph());
+    }
+    markdownEditor.controls.focus();
+  };
+
   const focusEditor = () => {
     if (!isEditorConnected) {
       pendingFocus = true;
       return;
     }
-    markdownEditor.controls.focus();
+    focusEditorNow();
   };
 
   const flushPendingFocus = () => {
     if (!pendingFocus) return;
     pendingFocus = false;
-    queueMicrotask(() => markdownEditor.controls.focus());
+    queueMicrotask(() => focusEditorNow());
   };
 
   // Macro AI is mentionable in every channel. It is surfaced through the same
   // `@`-mention typeahead as participants and re-tagged as a bot at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
     const base = props.participants?.() ?? [];
-    return base.some((user) => user.id === MACRO_AI_BOT_ID)
+    return base.some((user) => isMacroAiId(user.id))
       ? base
       : [macroAiMentionUser(), ...base];
   };
@@ -335,7 +349,12 @@ export function ChannelInput(props: ChannelInputProps) {
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
-    focus: focusEditor,
+    focus: () => {
+      // A collapsed pill hides the editor; programmatic focus implies intent
+      // to type, so expand first.
+      collapsedInput.expand();
+      focusEditor();
+    },
     send: () => inputState.commands.send(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
     insertEntityMention,
@@ -363,8 +382,6 @@ export function ChannelInput(props: ChannelInputProps) {
     },
   });
 
-  const [isFocused, setIsFocused] = createSignal(false);
-
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
       <Show when={isCollapsed()}>
@@ -379,7 +396,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
-          class="mobile:rounded-full"
+          class="mobile:rounded-full mobile:island"
           draft={inputState.view().value}
           renderDraft={(draft) => (
             <StaticMarkdown
@@ -403,13 +420,15 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          setIsFocused(false);
           collapsedInput.collapse();
         }}
-        onFocusIn={() => setIsFocused(true)}
-        active={isFocused()}
-        class={cn('rounded-xl mobile:rounded-3xl', isCollapsed() && 'hidden')}
-        depth={2}
+        class={cn(
+          'rounded-xl mobile:rounded-3xl mobile:island',
+          isCollapsed() && 'hidden'
+        )}
+        bgToken={isMobile() ? 'chrome' : undefined}
+        hideBorder={isMobile()}
+        depth={isMobile() ? 3 : 2}
         solid
       >
         <Input.DropZone

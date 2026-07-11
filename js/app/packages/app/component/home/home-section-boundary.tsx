@@ -97,7 +97,15 @@ export function HomeSectionBoundary(props: HomeSectionBoundaryProps) {
         />
       )}
     >
-      <Suspense fallback={props.fallback ?? <HomeSectionFallback />}>
+      <Suspense
+        fallback={
+          props.fallback === undefined ? (
+            <HomeSectionFallback />
+          ) : (
+            props.fallback
+          )
+        }
+      >
         {props.children}
       </Suspense>
     </ErrorBoundary>

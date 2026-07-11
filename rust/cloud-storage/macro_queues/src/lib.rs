@@ -540,6 +540,12 @@ queue! {
             dev: "push-delivery-queue-dev",
             prod: "push-delivery-queue-prod",
         },
+        /// FIFO queue for webhook event delivery.
+        pub WebhookEventQueue {
+            local: "webhook-event-queue.fifo",
+            dev: "webhook-event-queue-dev.fifo",
+            prod: "webhook-event-queue-prod.fifo",
+        },
         /// Queue for static-file-service S3 upload event notifications.
         ///
         /// Note: this value is consumed as a full SQS URL in deployed
@@ -590,6 +596,12 @@ queue! {
             local: "bulk-upload-queue",
             dev: "bulk-upload-queue-dev",
             prod: "bulk-upload-queue-prod",
+        },
+        /// Queue for document upload finalization events.
+        pub DocumentUploadFinalizerQueue {
+            local: "document-upload-finalizer-queue",
+            dev: "document-upload-finalizer-queue-dev",
+            prod: "document-upload-finalizer-queue-prod",
         },
         /// Queue for the organization retention handler
         /// (organization_retention_trigger `ORGANIZATION_RETENTION_QUEUE`).

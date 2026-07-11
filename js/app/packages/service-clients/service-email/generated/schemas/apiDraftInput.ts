@@ -11,6 +11,7 @@ import type { ApiDraftInputBodyText } from './apiDraftInputBodyText';
 import type { ApiDraftInputCc } from './apiDraftInputCc';
 import type { ApiDraftInputDbId } from './apiDraftInputDbId';
 import type { ApiDraftInputHeadersJson } from './apiDraftInputHeadersJson';
+import type { ApiDraftInputIncludeSignature } from './apiDraftInputIncludeSignature';
 import type { ApiDraftInputProviderId } from './apiDraftInputProviderId';
 import type { ApiDraftInputProviderThreadId } from './apiDraftInputProviderThreadId';
 import type { ApiDraftInputReplyingToId } from './apiDraftInputReplyingToId';
@@ -34,6 +35,10 @@ export interface ApiDraftInput {
   /** Existing message DB ID (for updating an existing draft). */
   db_id?: ApiDraftInputDbId;
   headers_json?: ApiDraftInputHeadersJson;
+  /** Per-message override for whether to include the signature on send:
+`Some(false)` to exclude (user dismissed it). Omit to use the inbox's
+default policy. Ignored for drafts. */
+  include_signature?: ApiDraftInputIncludeSignature;
   /** Provider message ID. */
   provider_id?: ApiDraftInputProviderId;
   /** Provider thread ID. */

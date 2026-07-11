@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use ai_toolset::SearchableTool;
+use ai_toolset::{RequestContext, SearchableTool};
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use macro_env_var::env_var;
@@ -127,6 +127,10 @@ pub(crate) enum ProviderAgent {
     OpenAiChatCompletions(Agent<openai::completion::CompletionModel>),
     /// An agent over the OpenAI Responses model.
     OpenAiResponses(Agent<openai::responses_api::ResponsesCompletionModel>),
+    /// A test-only agent over an arbitrary completion model (e.g. a scripted
+    /// fake), type-erased so the enum itself stays non-generic.
+    #[cfg(test)]
+    Test(Box<dyn DynStreamAgent>),
 }
 
 impl ProviderAgent {
@@ -144,6 +148,7 @@ impl ProviderAgent {
         recorder: Arc<dyn UsageRecorder>,
         usage_ctx: UsageContext,
         model: String,
+        request_context: RequestContext,
     ) -> ChatCompletionStream<'static> {
         match self {
             ProviderAgent::Anthropic(agent) => {
@@ -158,6 +163,7 @@ impl ProviderAgent {
                     recorder,
                     usage_ctx,
                     model,
+                    request_context.clone(),
                 )
                 .await
             }
@@ -173,6 +179,7 @@ impl ProviderAgent {
                     recorder,
                     usage_ctx,
                     model,
+                    request_context.clone(),
                 )
                 .await
             }
@@ -188,8 +195,26 @@ impl ProviderAgent {
                     recorder,
                     usage_ctx,
                     model,
+                    request_context.clone(),
                 )
                 .await
+            }
+            #[cfg(test)]
+            ProviderAgent::Test(agent) => {
+                agent
+                    .run_stream_dyn(
+                        prompt,
+                        history,
+                        max_turns,
+                        routing,
+                        loaded_buffer,
+                        register_loaded,
+                        recorder,
+                        usage_ctx,
+                        model,
+                        request_context.clone(),
+                    )
+                    .await
             }
         }
     }
@@ -341,7 +366,7 @@ impl ModelRouter {
     fn default_model(&self) -> RoutedModel<'static> {
         let model = Model {
             provider: Cow::Borrowed(ANTHROPIC_PROVIDER),
-            name: Cow::Borrowed(PredefinedModel::default().api_id()),
+            name: Cow::Owned(PredefinedModel::default().to_string()),
         };
         RoutedModel::Anthropic(AnthropicModel::new(model, self.anthropic.clone()))
     }
@@ -381,27 +406,45 @@ async fn drive_stream<M>(
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,
     model: String,
+    request_context: RequestContext,
 ) -> ChatCompletionStream<'static>
 where
     M: CompletionModel + 'static,
     M::StreamingResponse: GetTokenUsage + Send + Sync,
 {
-    let (bridge, mut rx) = StreamBridge::channel(routing, loaded_buffer, register_loaded);
+    let (bridge, mut rx) = StreamBridge::channel(
+        routing,
+        loaded_buffer,
+        register_loaded,
+        request_context.searchable_tools.clone(),
+        request_context.cancel.clone(),
+    );
+    // Driver-side sender for parts derived from rig stream items (thinking,
+    // usage, errors). The lifecycle hooks (text, tool call, tool response) send
+    // through their own clone inside `bridge`; both feed the same FIFO channel.
+    let driver_tx = bridge.sender();
 
     let mut rig_stream = agent
         .stream_prompt(prompt)
         .with_history(history)
         .multi_turn(max_turns)
+        .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
         .with_hook(bridge)
         .await;
 
-    let stream = async_stream::stream! {
+    // Drive the rig stream on its own task. The hook emits a tool call the
+    // moment the model finishes it — *before* the (often slow) tool executes —
+    // but rig runs that execution inside a single `rig_stream.next()` poll, so
+    // draining the channel only between polls would hold the pending tool call
+    // hidden until its response landed. Polling the rig stream here, off the
+    // consumer's path, lets every hook-emitted part flow through `rx` and out
+    // to the client as soon as it is produced — so a tool call renders in its
+    // pending state immediately and its response renders when execution
+    // finishes.
+    let driver = tokio::spawn(async move {
         let mut thinking_buf = String::new();
 
         while let Some(item) = rig_stream.next().await {
-            while let Ok(part) = rx.try_recv() {
-                yield part;
-            }
             match item {
                 Ok(MultiTurnStreamItem::StreamAssistantItem(
                     StreamedAssistantContent::ReasoningDelta { reasoning, .. },
@@ -410,7 +453,8 @@ where
                 }
                 other => {
                     if !thinking_buf.is_empty() {
-                        yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
+                        let _ = driver_tx
+                            .send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
                     }
                     match other {
                         Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
@@ -421,13 +465,13 @@ where
                                 usage.input_tokens,
                                 usage.output_tokens,
                             ));
-                            yield Ok(StreamPart::Usage(crate::stream::Usage {
+                            let _ = driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
                                 input_tokens: usage.input_tokens,
                                 output_tokens: usage.output_tokens,
-                            }));
+                            })));
                         }
                         Err(e) => {
-                            yield Err(AgentError::Streaming(e));
+                            let _ = driver_tx.send(Err(AgentError::Streaming(e)));
                         }
                         _ => {}
                     }
@@ -435,9 +479,26 @@ where
             }
         }
         if !thinking_buf.is_empty() {
-            yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
+            let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
         }
-        while let Ok(part) = rx.try_recv() {
+        // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
+        // here closes the channel, ending the consumer stream below.
+    });
+
+    // Abort the driver when the consumer drops the returned stream (e.g. on
+    // cancellation), which drops `rig_stream` and cancels any in-flight tool —
+    // matching the prior behaviour where the rig stream lived inline.
+    struct AbortOnDrop(tokio::task::JoinHandle<()>);
+    impl Drop for AbortOnDrop {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+    let guard = AbortOnDrop(driver);
+
+    let stream = async_stream::stream! {
+        let _guard = guard;
+        while let Some(part) = rx.recv().await {
             yield part;
         }
     };
@@ -445,45 +506,88 @@ where
     Box::pin(stream)
 }
 
+/// Test-only type erasure so [`ProviderAgent`] can hold an arbitrary
+/// [`Agent<M>`] (e.g. a scripted fake model) without the enum becoming generic.
+/// Mirrors the production arms: it just drives [`drive_stream`].
 #[cfg(test)]
-mod test {
-    use super::*;
+pub(crate) trait DynStreamAgent: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
+    fn run_stream_dyn<'a>(
+        &'a self,
+        prompt: Message,
+        history: Vec<Message>,
+        max_turns: usize,
+        routing: ToolRouter,
+        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
+        register_loaded: RegisterFn,
+        recorder: Arc<dyn UsageRecorder>,
+        usage_ctx: UsageContext,
+        model: String,
+        request_context: RequestContext,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
+    >;
+}
 
-    fn test_router() -> ModelRouter {
-        let anthropic = anthropic::Client::builder()
-            .api_key("test-anthropic-key")
-            .build()
-            .unwrap();
-        let openai = openai::Client::builder()
-            .api_key("test-openai-key")
-            .build()
-            .unwrap();
-        let compatible = openai::CompletionsClient::builder()
-            .api_key("test-compatible-key")
-            .base_url("http://localhost:11434/v1")
-            .build()
-            .unwrap();
-
-        ModelRouter::new(anthropic, openai).with_openai_client("local", compatible)
+#[cfg(test)]
+impl<M> DynStreamAgent for Agent<M>
+where
+    M: CompletionModel + 'static,
+    M::StreamingResponse: GetTokenUsage + Send + Sync,
+{
+    fn run_stream_dyn<'a>(
+        &'a self,
+        prompt: Message,
+        history: Vec<Message>,
+        max_turns: usize,
+        routing: ToolRouter,
+        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
+        register_loaded: RegisterFn,
+        recorder: Arc<dyn UsageRecorder>,
+        usage_ctx: UsageContext,
+        model: String,
+        request_context: RequestContext,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
+    > {
+        Box::pin(drive_stream(
+            self,
+            prompt,
+            history,
+            max_turns,
+            routing,
+            loaded_buffer,
+            register_loaded,
+            recorder,
+            usage_ctx,
+            model,
+            request_context,
+        ))
     }
+}
 
-    #[test]
-    fn openai_provider_routes_to_responses() {
-        let router = test_router();
-
-        assert!(matches!(
-            router.route("openai/gpt-5.5").unwrap(),
-            RoutedModel::OpenAiResponses(_)
-        ));
-    }
-
-    #[test]
-    fn registered_openai_compatible_provider_routes_to_chat_completions() {
-        let router = test_router();
-
-        assert!(matches!(
-            router.route("local/llama-3.3-70b").unwrap(),
-            RoutedModel::OpenAiChatCompletions(_)
-        ));
+#[cfg(test)]
+impl ProviderAgent {
+    /// Build a test-only [`ProviderAgent`] backed by `model` (a fake completion
+    /// model), wired through the same [`build_agent`] used in production.
+    pub(crate) fn test<M>(
+        model: M,
+        system_prompt: &str,
+        max_turns: usize,
+        max_tokens: u64,
+        handle: ToolServerHandle,
+    ) -> Self
+    where
+        M: CompletionModel + 'static,
+        M::StreamingResponse: GetTokenUsage + Send + Sync,
+    {
+        ProviderAgent::Test(Box::new(build_agent(
+            model,
+            None,
+            handle,
+            system_prompt,
+            max_turns,
+            max_tokens,
+        )))
     }
 }

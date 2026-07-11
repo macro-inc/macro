@@ -32,6 +32,13 @@ export default defineConfig({
         },
       },
       {
+        plugins: [tsconfigPaths()],
+        test: {
+          include: ['packages/graphql-cache/**/*.{test,spec}.{ts,tsx}'],
+          name: 'graphql-cache',
+        },
+      },
+      {
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',
@@ -78,6 +85,13 @@ export default defineConfig({
       {
         extends: './packages/core/vitest.config.ts',
         test: {
+          include: ['packages/block-md/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-md',
+        },
+      },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
           include: ['packages/channel/**/*.{test,spec}.{ts,tsx}'],
           name: 'channel',
         },
@@ -93,6 +107,13 @@ export default defineConfig({
         test: {
           include: ['packages/block-email/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-email',
+        },
+      },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
+          include: ['packages/service-clients/**/*.{test,spec}.{ts,tsx}'],
+          name: 'service-clients',
         },
       },
     ],

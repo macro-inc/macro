@@ -634,6 +634,13 @@
             },
             "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
           },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread (group mentions\nlike @here count through their per-user expansion at send time). Empty to\ninclude threads regardless of participants."
+          },
           "root_sender_ids": {
             "type": "array",
             "items": {
@@ -860,6 +867,13 @@
                     "description": "Metadata from the database. None if the chat doesn't exist in the database."
                   }
                 ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the chat."
               }
             }
           }
@@ -879,7 +893,7 @@
           },
           "hidden": {
             "type": ["boolean", "null"],
-            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced by the CRM service from the\ncaller's team receipt."
           }
         }
       },
@@ -976,6 +990,7 @@
           "STRING",
           "SELECT_NUMBER",
           "SELECT_STRING",
+          "TAG",
           "ENTITY",
           "LINK"
         ]
@@ -1498,6 +1513,13 @@
               "is_read": {
                 "type": "boolean"
               },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the thread."
+              },
               "snippet": {
                 "type": ["string", "null"]
               },
@@ -1634,6 +1656,17 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
+          },
+          "tag_filter_mode": {
+            "$ref": "#/components/schemas/TagFilterMode",
+            "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
+          },
+          "tag_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "tag option ids matched against `properties.values`, OR'd together across\nall tag definitions. Option ids are globally unique, so the match ignores\nthe owning definition id (personal and team tags combine into one OR)."
           }
         }
       },
@@ -2351,11 +2384,18 @@
                     "description": "Metadata from the database. None if the project doesn't exist in the database."
                   }
                 ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the project."
               }
             }
           }
         ],
-        "description": "ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update the project record\nevery time the project updates (specifically for updated_at and viewed_at)"
+        "description": "ProjectSearchResponseItem object with project metadata we fetch from macrodb.\nThe index carries created_at/updated_at for ranking, but viewed_at is\nper-user and deleted_at changes without a reindex, so metadata stays\ndatabase-sourced."
       },
       "ProjectSearchResult": {
         "type": "object",
@@ -2463,7 +2503,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-scoped property only",
+            "description": "User-scoped property.",
             "required": ["user_id", "scope"],
             "properties": {
               "scope": {
@@ -2477,40 +2517,22 @@
           },
           {
             "type": "object",
-            "description": "Organization-scoped property only",
-            "required": ["organization_id", "scope"],
+            "description": "Team-scoped property.",
+            "required": ["team_id", "scope"],
             "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
               "scope": {
                 "type": "string",
-                "enum": ["organization"]
+                "enum": ["team"]
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
           {
             "type": "object",
-            "description": "Both user and organization-scoped",
-            "required": ["user_id", "organization_id", "scope"],
-            "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["user_and_organization"]
-              },
-              "user_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "System-owned property (no user or org owner)",
+            "description": "System-owned property (no user or team owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -2520,7 +2542,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
+        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -3705,6 +3727,11 @@
             ]
           }
         }
+      },
+      "TagFilterMode": {
+        "type": "string",
+        "description": "How multiple `tag_option_ids` combine when filtering.",
+        "enum": ["any", "all"]
       },
       "TaskFilters": {
         "type": "object",

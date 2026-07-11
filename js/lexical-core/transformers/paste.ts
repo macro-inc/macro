@@ -1,6 +1,10 @@
 import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
 import { $createPasteNode, $isPasteNode, PasteNode } from '../nodes/PasteNode';
+import {
+  replaceElementWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // Internal Paste Node - uses XML-based format for serialization so the
 // arbitrary pasted text survives a markdown round-trip without being parsed
@@ -8,7 +12,7 @@ import { $createPasteNode, $isPasteNode, PasteNode } from '../nodes/PasteNode';
 // escapes so that XML tags inside the content don't get matched by other
 // element transformers during import (JSON.parse handles </>).
 export const I_PASTE_NODE: ElementTransformer = {
-  dependencies: [PasteNode],
+  dependencies: [PasteNode, UnknownMentionNode],
   type: 'element',
   regExp: /<m-paste>(.*?)<\/m-paste>/,
   export: (node) => {
@@ -32,6 +36,7 @@ export const I_PASTE_NODE: ElementTransformer = {
       parentNode.replace(pasteNode);
     } catch (e) {
       console.error('Error in I_PASTE_NODE replace:', e);
+      replaceElementWithUnknownMention(parentNode, 'Unknown Paste');
     }
   },
 };

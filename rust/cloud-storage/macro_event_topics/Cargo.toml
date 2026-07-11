@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "macro_event_topics"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+sealed = "0.6.0"
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

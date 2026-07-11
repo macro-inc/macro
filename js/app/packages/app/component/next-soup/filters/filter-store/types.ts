@@ -23,6 +23,8 @@ export type PropertyFilter = {
   value: string;
 };
 
+export type TagFilterMode = 'any' | 'all';
+
 export type ArrayFieldFilters = {
   documentId?: string[];
   fileType?: string[];
@@ -37,7 +39,10 @@ export type ArrayFieldFilters = {
   channelId?: string[];
   channelType?: string[];
   channelSenderId?: string[];
+  channelMessageThreadId?: string[];
   channelThreadId?: string[];
+  channelThreadRootSenderId?: string[];
+  channelThreadParticipantId?: string[];
   chatId?: string[];
   chatOwnerId?: string[];
   chatProjectId?: string[];
@@ -50,9 +55,17 @@ export type ArrayFieldFilters = {
   foreignEntitySource?: string[];
   crmCompanyId?: string[];
   properties?: PropertyFilter[];
+  // Selected tags. Kept separate from `properties` because tags combine as a
+  // single OR across all tag definitions (personal + team), whereas `properties`
+  // AND across distinct definitions. Each entry carries its owning definition id
+  // (needed for the soup literal) and option id.
+  tagFilters?: PropertyFilter[];
 };
 
 export type ScalarFieldFilters = {
+  // How the selected tagFilters combine: 'any' (default when absent) matches
+  // items holding at least one selected tag, 'all' requires every one.
+  tagFilterMode?: TagFilterMode;
   documentSeen?: boolean;
   documentDone?: boolean;
   isEmailAttachment?: boolean;
@@ -64,6 +77,8 @@ export type ScalarFieldFilters = {
   channelSeen?: boolean;
   channelDone?: boolean;
   channelImportance?: boolean;
+  channelThreadSeen?: boolean;
+  channelThreadDone?: boolean;
   chatSeen?: boolean;
   chatDone?: boolean;
   folderSeen?: boolean;

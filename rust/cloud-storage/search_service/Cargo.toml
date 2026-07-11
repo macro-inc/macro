@@ -28,13 +28,16 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
-indexmap = "2"
+indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
 macro_auth = { path = "../macro_auth" }
 macro_db_client = { path = "../macro_db_client" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
-properties_db_client = { path = "../properties_db_client" }
+properties = { path = "../properties", default-features = false, features = [
+  "outbound",
+] }
+system_properties = { path = "../system_properties" }
 readonly_pool = { path = "../readonly_pool" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }

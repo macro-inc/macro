@@ -119,6 +119,8 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         collapse: true,
         ids_only: false,
         subject_only: false,
+        tag_option_ids: vec![],
+        match_all_tags: false,
     }
     .into();
 
@@ -156,6 +158,8 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         collapse: true,
         ids_only: false,
         subject_only: false,
+        tag_option_ids: vec![],
+        match_all_tags: false,
     }
     .into();
 
@@ -438,5 +442,61 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
         .any(|f| f["bool"]["filter"].is_array() && f["bool"]["must_not"].is_array());
     assert!(has_importance_filter);
 
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .tag_option_ids(vec![
+            "00000001-0000-0000-0003-000000000001".to_string(),
+            "00000001-0000-0000-0003-000000000002".to_string(),
+        ]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+
+    let nested: Vec<&serde_json::Value> = filter
+        .iter()
+        .filter(|f| f.get("nested").is_some())
+        .collect();
+    assert_eq!(
+        nested.len(),
+        1,
+        "tags collapse to one nested clause: {filter:?}"
+    );
+
+    let tags = &nested[0]["nested"];
+    assert_eq!(tags["path"], "properties");
+    assert_eq!(tags["ignore_unmapped"], true);
+    // No definition_id term: match is on the globally-unique option ids alone.
+    assert_eq!(
+        tags["query"],
+        serde_json::json!({
+            "terms": {"properties.values": [
+                "00000001-0000-0000-0003-000000000001",
+                "00000001-0000-0000-0003-000000000002"
+            ]}
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .tag_option_ids(vec![]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter.iter().any(|f| f.get("nested").is_some()),
+        "empty tag_option_ids should emit no nested clause: {filter:?}"
+    );
     Ok(())
 }

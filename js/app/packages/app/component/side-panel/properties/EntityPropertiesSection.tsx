@@ -1,8 +1,14 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { isReservedPropertyDefinitionName } from '@companies/crm/team-crm-config';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import {
+  ENABLE_TAGS_FE_FLAG,
+  ENABLE_TAGS_FE_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@phosphor/plus.svg';
 import DeleteIcon from '@phosphor/x.svg';
@@ -15,10 +21,12 @@ import {
   usePropertiesContext,
 } from '@property/context/PropertiesContext';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
+import { TagsRow } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -43,12 +51,33 @@ export interface EntityPropertiesSectionProps {
   propertyFilter?: (property: Property) => boolean;
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   showAddProperty?: boolean;
+  showTags?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
   pinnedPropertyIds?: () => string[];
   pinnedPropertyDefinitionOrder?: readonly string[];
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
+  /**
+   * Placeholder properties shown (and editable) even when the entity has no
+   * value row for them yet — e.g. builtin CRM company defaults. Fetched
+   * properties with the same definition id take precedence.
+   */
+  defaultProperties?: () => Property[];
+  /**
+   * Fetched properties with these definition ids are dropped before
+   * merging with `defaultProperties` — e.g. the system Stage row when the
+   * team has its own stage set.
+   */
+  hidePropertyDefinitionIds?: string[];
 }
+
+const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  'DOCUMENT',
+  'TASK',
+  'THREAD',
+  'PROJECT',
+  'CHAT',
+]);
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
@@ -57,13 +86,53 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.includeMetadata ?? false
   );
 
+  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
+    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
+  });
+
+  const tagsQuery = useTagsQuery();
+  const tagDefinitionIds = createMemo(
+    () =>
+      new Set(
+        (tagsQuery.data ?? [])
+          .map((set) => set.definition?.id)
+          .filter((id): id is string => !!id)
+      )
+  );
+
+  // Fetched properties merged with any default placeholders whose
+  // definition the entity doesn't carry yet. Hidden definitions and
+  // reserved internal definitions (`__macro:*`) are dropped first.
+  const mergedProperties = createMemo(() => {
+    const hiddenDefinitionIds = new Set(props.hidePropertyDefinitionIds ?? []);
+    const fetched = properties().filter(
+      (property) =>
+        !hiddenDefinitionIds.has(property.propertyDefinitionId) &&
+        !isReservedPropertyDefinitionName(property.displayName)
+    );
+    const defaults = props.defaultProperties?.() ?? [];
+    if (defaults.length === 0) return fetched;
+    const fetchedDefinitionIds = new Set(
+      fetched.map((property) => property.propertyDefinitionId)
+    );
+    return [
+      ...fetched,
+      ...defaults.filter(
+        (property) => !fetchedDefinitionIds.has(property.propertyDefinitionId)
+      ),
+    ];
+  });
+
   const filteredPinnedProperties = createMemo(() => {
     const defaultPinnedIds = props.defaultPinnedPropertyIds?.() ?? [];
     const pinnedIds = props.pinnedPropertyIds?.() ?? [];
     const usesPinnedFilter =
       props.defaultPinnedPropertyIds !== undefined ||
       props.pinnedPropertyIds !== undefined;
-    const pinned = properties().filter((property) => {
+    const pinned = mergedProperties().filter((property) => {
+      if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
       if (props.propertyFilter && !props.propertyFilter(property)) {
         return false;
       }
@@ -168,6 +237,23 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         >
           <Show when={isLoading()}>
             <SidePanel.Loading />
+          </Show>
+
+          <Show
+            when={
+              tagsFlag().enabled &&
+              props.showTags !== false &&
+              TAGGABLE_ENTITY_TYPES.has(props.entityType)
+            }
+          >
+            <div class="mb-2 flex items-center gap-3">
+              <span class="text-ink-muted">Tags</span>
+              <TagsRow
+                entityId={props.entityId}
+                entityType={props.entityType}
+                canEdit={props.canEdit}
+              />
+            </div>
           </Show>
 
           <Show when={gridPinnedProperties().length > 0}>

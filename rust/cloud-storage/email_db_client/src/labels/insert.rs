@@ -273,14 +273,15 @@ pub async fn insert_message_labels(
 
     // get back label ids to use in junction table insert
     #[derive(Debug)]
-    struct LabelId {
+    struct LabelMapping {
         id: Uuid,
+        provider_label_id: String,
     }
 
-    let label_mappings: Vec<LabelId> = sqlx::query_as!(
-        LabelId,
+    let label_mappings: Vec<LabelMapping> = sqlx::query_as!(
+        LabelMapping,
         r#"
-        SELECT id
+        SELECT id, provider_label_id
         FROM email_labels
         WHERE link_id = $1 AND provider_label_id = ANY($2)
         "#,
@@ -290,11 +291,21 @@ pub async fn insert_message_labels(
     .fetch_all(&mut *tx)
     .await?;
 
+    // labels can be missing if they were created after the last label sync; skip them
     if label_mappings.len() != provider_label_ids.len() {
-        anyhow::bail!(
-            "Could not find all expected labels in database after upsert. link_id: {}, provider_label_ids: {:?}",
-            link_id,
-            provider_label_ids
+        let found: std::collections::HashSet<&str> = label_mappings
+            .iter()
+            .map(|m| m.provider_label_id.as_str())
+            .collect();
+        let missing: Vec<&String> = provider_label_ids
+            .iter()
+            .filter(|id| !found.contains(id.as_str()))
+            .collect();
+        tracing::warn!(
+            link_id = %link_id,
+            message_id = %message_id,
+            missing_provider_label_ids = ?missing,
+            "Some message labels not found in database, skipping them"
         );
     }
 

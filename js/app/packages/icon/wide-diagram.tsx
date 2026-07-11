@@ -62,7 +62,7 @@ export const AnimatedDiagramIcon = (props: {
         <rect
           class="cover-right"
           fill="black"
-          x="13.3125"
+          x="13.125"
           y="0.5625"
           width="4.125"
           height="4.125"
@@ -92,7 +92,7 @@ export const AnimatedDiagramIcon = (props: {
       {/* Square nodes (drawn on top) */}
       <rect
         class="right-node"
-        x="13.3125"
+        x="13.125"
         y="0.5625"
         width="4.125"
         height="4.125"
@@ -100,7 +100,7 @@ export const AnimatedDiagramIcon = (props: {
       />
       <rect
         class="left-node"
-        x="0.5625"
+        x="0.75"
         y="0.5625"
         width="4.125"
         height="4.125"

@@ -77,6 +77,10 @@ use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
     get_short_id::ShortIdResponse,
 };
+use favorites::domain::models::{Favorite, FavoritesList};
+use favorites::inbound::axum_router::{
+    AddFavoriteRequest, FavoriteEntityRef, ReorderFavoritesRequest,
+};
 use foreign_entity::domain::models::ForeignEntity;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
@@ -254,6 +258,10 @@ use utoipa::OpenApi;
         call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
+        webhook::inbound::axum_router::create_webhook,
+        webhook::inbound::axum_router::delete_webhook,
+        webhook::inbound::axum_router::patch_webhook,
+        webhook::inbound::axum_router::validate_webhook,
         call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -280,6 +288,12 @@ use utoipa::OpenApi;
         projects::revert_delete_project::handler,
 
         entity::get_entity_permission::handler,
+
+        // favorites
+        favorites::inbound::axum_router::list_favorites_handler,
+        favorites::inbound::axum_router::add_favorite_handler,
+        favorites::inbound::axum_router::remove_favorite_by_entity_handler,
+        favorites::inbound::axum_router::reorder_favorites_handler,
 
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
@@ -396,6 +410,11 @@ use utoipa::OpenApi;
             SoupProject,
             SoupForeignEntity,
             ForeignEntity,
+            Favorite,
+            FavoritesList,
+            AddFavoriteRequest,
+            FavoriteEntityRef,
+            ReorderFavoritesRequest,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview,
@@ -502,6 +521,14 @@ use utoipa::OpenApi;
             call::domain::models::RingStatusResponse,
             SoupCallRecord,
             SoupCallRecordParticipant,
+
+            // Webhooks
+            webhook::domain::models::CreateWebhookRequest,
+            webhook::domain::models::PatchWebhookRequest,
+            webhook::domain::models::ValidateWebhookResponse,
+            webhook::domain::models::Webhook,
+            webhook::domain::models::WebhookFilter,
+            webhook::domain::models::WebhookStatus,
 
             DocumentSubType,
 

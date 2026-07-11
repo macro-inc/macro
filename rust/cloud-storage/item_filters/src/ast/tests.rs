@@ -344,6 +344,7 @@ fn it_expands_channel_thread_filters() {
             thread_ids: vec![thread_id.to_string()],
             channel_ids: vec![channel_id.to_string()],
             root_sender_ids: vec!["macro|hello@test.com".to_string()],
+            participant_ids: vec!["macro|participant@test.com".to_string()],
         },
         ..Default::default()
     };
@@ -385,6 +386,35 @@ fn it_expands_single_channel_thread_id() {
     let exp = json!({
         "l": {
             "ThreadId": thread_id
+        }
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_single_channel_thread_participant() {
+    let f = EntityFilters {
+        channel_thread_filters: crate::ChannelThreadFilters {
+            participant_ids: vec!["macro|participant@test.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .channel_thread_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "Participant": "macro|participant@test.com"
         }
     });
 
@@ -1436,4 +1466,102 @@ fn crm_scope_accepts_non_empty_variants_on_deserialize() {
     assert!(matches!(domains, CrmScope::Domains(d) if d == vec!["acme.com".to_string()]));
     let addresses: CrmScope = serde_json::from_str(r#"{"Addresses":["a@acme.com"]}"#).unwrap();
     assert!(matches!(addresses, CrmScope::Addresses(a) if a == vec!["a@acme.com".to_string()]));
+}
+
+#[test]
+fn properties_filter_can_apply_to_respects_literal_entity_types() {
+    use properties::{
+        PropertiesLiteral, PropertyEntityType, PropertyMatchValue, properties_filter_can_apply_to,
+    };
+    let lit = |entity_type| {
+        Expr::Literal(PropertiesLiteral {
+            property_definition_id: Uuid::new_v4(),
+            entity_type,
+            value: PropertyMatchValue::SelectOption(Uuid::new_v4()),
+        })
+    };
+
+    let untyped = lit(None);
+    assert!(properties_filter_can_apply_to(
+        &untyped,
+        &[PropertyEntityType::Thread]
+    ));
+
+    let task_only = lit(Some(PropertyEntityType::Task));
+    assert!(!properties_filter_can_apply_to(
+        &task_only,
+        &[PropertyEntityType::Thread]
+    ));
+
+    let either = Expr::or(lit(Some(PropertyEntityType::Task)), lit(None));
+    assert!(properties_filter_can_apply_to(
+        &either,
+        &[PropertyEntityType::Thread]
+    ));
+
+    let negated = Expr::is_not(lit(Some(PropertyEntityType::Task)));
+    assert!(properties_filter_can_apply_to(
+        &negated,
+        &[PropertyEntityType::Thread]
+    ));
+}
+
+#[test]
+fn properties_filter_matches_propertyless_evaluates_literals_as_false() {
+    use properties::{
+        PropertiesLiteral, PropertyMatchValue, properties_filter_matches_propertyless,
+    };
+    let lit = || {
+        Expr::Literal(PropertiesLiteral {
+            property_definition_id: Uuid::new_v4(),
+            entity_type: None,
+            value: PropertyMatchValue::SelectOption(Uuid::new_v4()),
+        })
+    };
+
+    assert!(!properties_filter_matches_propertyless(&lit()));
+    assert!(!properties_filter_matches_propertyless(&Expr::or(
+        lit(),
+        lit()
+    )));
+    assert!(properties_filter_matches_propertyless(&Expr::is_not(lit())));
+    assert!(!properties_filter_matches_propertyless(&Expr::and(
+        lit(),
+        Expr::is_not(lit())
+    )));
+}
+
+#[test]
+fn requests_crm_admin_finds_hidden_true_anywhere_in_tree() {
+    let ast_with = |tree: Expr<CrmCompanyLiteral>| EntityFilterAst {
+        crm_company_filter: Some(Arc::new(tree)),
+        ..EntityFilterAst::default()
+    };
+
+    // Bare literal.
+    assert!(ast_with(Expr::val(CrmCompanyLiteral::Hidden(true))).requests_crm_admin());
+    // Hidden(false) is visible-only — no admin needed.
+    assert!(!ast_with(Expr::val(CrmCompanyLiteral::Hidden(false))).requests_crm_admin());
+    // Nested under And with an id filter.
+    assert!(
+        ast_with(Expr::and(
+            Expr::val(CrmCompanyLiteral::Id(Uuid::from_u128(1))),
+            Expr::val(CrmCompanyLiteral::Hidden(true)),
+        ))
+        .requests_crm_admin()
+    );
+    // Conservative under Not.
+    assert!(
+        ast_with(Expr::is_not(Expr::val(CrmCompanyLiteral::Hidden(true)))).requests_crm_admin()
+    );
+    // No crm_company_filter at all.
+    assert!(!EntityFilterAst::default().requests_crm_admin());
+}
+
+#[test]
+fn requests_crm_scope_reflects_email_crm_scope_tag() {
+    let mut ast = EntityFilterAst::default();
+    assert!(!ast.requests_crm_scope());
+    ast.email_filter.crm_scope = Some(CrmScope::Domains(vec!["example.com".into()]));
+    assert!(ast.requests_crm_scope());
 }

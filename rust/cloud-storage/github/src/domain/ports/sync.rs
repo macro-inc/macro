@@ -51,12 +51,15 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         references: &[TeamTaskReference],
     ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
 
-    /// Looks up the macro user ID associated with a GitHub user ID via the `github_links` table.
-    /// Returns `None` if no link exists.
-    fn get_macro_id_by_github_user_id(
+    /// Maps GitHub user IDs to the Macro user IDs linked to them via the `github_links` table.
+    ///
+    /// A GitHub user ID absent from the result has no link; a GitHub user ID may map to
+    /// multiple Macro users because `github_links.github_user_id` is not unique (many Macro
+    /// users may share one GitHub account).
+    fn get_macro_ids_by_github_user_ids(
         &self,
-        github_user_id: &str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+        github_user_ids: &[String],
+    ) -> impl Future<Output = Result<std::collections::HashMap<String, Vec<String>>, Self::Err>> + Send;
 
     /// Maps GitHub logins to the Macro user IDs linked to them via the `github_links` table.
     ///
@@ -93,6 +96,20 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         installation_id: &str,
         sources: &[GithubAppInstallationSource],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Records the GitHub user that installed a GitHub App installation,
+    /// replacing any previously recorded installer for the installation.
+    fn upsert_installation_installer(
+        &self,
+        installation_id: &str,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Returns the installation IDs installed by the given GitHub user.
+    fn get_installation_ids_by_installer(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 }
 
 /// Client interface for making GitHub sync API calls.
@@ -153,6 +170,18 @@ pub trait GithubSyncService: Send + Sync + 'static {
 
     /// Returns the github sync app installation url
     fn get_github_sync_app_url(&self) -> &str;
+
+    /// Associates any GitHub App installations installed by the given GitHub
+    /// user with that user's Macro sources (teams or user), then backfills
+    /// open pull requests for newly associated installations.
+    ///
+    /// Intended to be called when a `github_links` row is created after the
+    /// app was installed, since the installation webhook could not resolve a
+    /// Macro user at install time.
+    fn associate_installations_for_github_user(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
 
     /// Generates an installation access token for the github sync app
     fn generate_installation_access_token(

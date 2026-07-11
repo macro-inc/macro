@@ -1,0 +1,227 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { cn, Layer } from '@ui';
+import { For, type JSX, Show } from 'solid-js';
+
+interface SlotProps {
+  class?: string;
+  children?: JSX.Element;
+}
+
+export interface InboxCardAttachment {
+  id: string;
+  /** Media url; when absent, `fallback` fills the tile instead. */
+  src?: string;
+  kind?: 'image' | 'video';
+  thumbSrc?: string;
+  alt?: string;
+  /** Tile contents when there's no `src` (e.g. a non-media entity preview). */
+  fallback?: () => JSX.Element;
+}
+
+interface RootProps extends SlotProps {
+  /** De-emphasize the row (e.g. already read). */
+  dimmed?: boolean;
+  selected?: boolean;
+  highlighted?: boolean;
+  onClick?: (event: MouseEvent) => void;
+}
+
+function Root(props: RootProps): JSX.Element {
+  const interactive = (): boolean => Boolean(props.onClick);
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (!interactive()) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    props.onClick?.(event as unknown as MouseEvent);
+  };
+
+  return (
+    <div
+      class={cn(
+        // `pl-9` reserves a fixed left column for the select checkbox (rendered
+        // by the row wrapper) so content never reflows when it appears on hover.
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-9',
+
+        {
+          'bg-accent/8': props.selected,
+          'bg-accent/16': props.selected && props.highlighted,
+          'bg-hover/50':
+            props.highlighted && !props.selected && !isTouchDevice(),
+          'hover:bg-hover/50':
+            !props.highlighted && !props.selected && !isTouchDevice(),
+        },
+        props.class
+      )}
+      data-unread={props.dimmed ? undefined : true}
+      role={interactive() ? 'button' : undefined}
+      tabIndex={interactive() ? 0 : undefined}
+      onClick={props.onClick}
+      onKeyDown={onKeyDown}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+interface IconProps extends SlotProps {
+  /** Avatar image url; falls back to `fallback` when absent. */
+  src?: string;
+  /** Shown when there's no `src` (e.g. initials or an icon). */
+  fallback?: JSX.Element;
+}
+
+function Icon(props: IconProps): JSX.Element {
+  return (
+    <span
+      class={cn(
+        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible',
+        props.class
+      )}
+    >
+      <Layer depth={3}>
+        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface text-ink-extra-muted">
+          <Show when={props.src} fallback={props.fallback}>
+            {(src) => <img src={src()} alt="" class="size-full object-cover" />}
+          </Show>
+        </span>
+      </Layer>
+      {props.children}
+    </span>
+  );
+}
+
+function Body(props: SlotProps): JSX.Element {
+  return (
+    <div class={cn('flex min-w-0 flex-col', props.class)}>{props.children}</div>
+  );
+}
+
+function Header(props: SlotProps): JSX.Element {
+  return (
+    <div class={cn('flex min-w-0 items-center gap-1 text-sm', props.class)}>
+      {props.children}
+    </div>
+  );
+}
+
+function Title(props: SlotProps): JSX.Element {
+  return (
+    <div
+      class={cn(
+        'min-w-0 flex-1 truncate text-sm font-normal text-ink-extra-muted group-data-unread/inbox-item:text-ink group-data-unread/inbox-item:font-medium',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+function Content(props: SlotProps): JSX.Element {
+  return (
+    <div
+      class={cn(
+        'min-w-0 text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+function Attachments(props: {
+  items: InboxCardAttachment[];
+  max?: number;
+  class?: string;
+  /** When set, media tiles become clickable and call this with the item index. */
+  onOpen?: (index: number) => void;
+}): JSX.Element {
+  const max = (): number => props.max ?? 4;
+  const visible = (): InboxCardAttachment[] => props.items.slice(0, max());
+  const overflow = (): number =>
+    Math.max(props.items.length - visible().length, 0);
+
+  return (
+    <div
+      class={cn('flex max-w-full flex-wrap items-center gap-1.5', props.class)}
+    >
+      <For each={visible()}>
+        {(attachment, index) => (
+          <Show when={attachment.src} fallback={attachment.fallback?.()}>
+            {(src) => {
+              const media = () =>
+                attachment.kind === 'video' ? (
+                  <video
+                    src={src()}
+                    muted
+                    playsinline
+                    preload="metadata"
+                    class="size-12 rounded-lg border border-edge object-cover"
+                  />
+                ) : (
+                  <img
+                    src={attachment.thumbSrc ?? src()}
+                    alt={attachment.alt ?? ''}
+                    loading="lazy"
+                    class="size-12 rounded-lg border border-edge object-cover"
+                  />
+                );
+
+              return props.onOpen ? (
+                <button
+                  type="button"
+                  class="rounded-lg transition-opacity hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onOpen?.(index());
+                  }}
+                >
+                  {media()}
+                </button>
+              ) : (
+                media()
+              );
+            }}
+          </Show>
+        )}
+      </For>
+      <Show when={overflow() > 0}>
+        <div class="grid size-12 place-items-center rounded-lg border border-edge bg-surface text-xs font-medium text-ink-muted">
+          +{overflow()}
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+interface MetaProps extends SlotProps {
+  timestamp?: string;
+}
+
+function Meta(props: MetaProps): JSX.Element {
+  return (
+    <div
+      class={cn(
+        'flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted mt-1',
+        props.class
+      )}
+    >
+      <Show when={props.timestamp}>
+        <span class="shrink-0">{props.timestamp}</span>
+      </Show>
+      {props.children}
+    </div>
+  );
+}
+
+export const InboxCard = {
+  Root,
+  Icon,
+  Body,
+  Header,
+  Title,
+  Content,
+  Attachments,
+  Meta,
+};

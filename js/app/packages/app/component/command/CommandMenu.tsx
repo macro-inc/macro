@@ -226,6 +226,9 @@ export function CommandMenuInner(props: {
         );
         CommandState.setQuery('');
         CommandState.setCommandScopeCommands(nestedCommands);
+        CommandState.activateCommandScopePlaceholder(
+          command.activateCommandScopeId
+        );
         CommandState.setSelectedIndex(0);
         return;
       }
@@ -264,6 +267,7 @@ export function CommandMenuInner(props: {
             {
               referredFrom: 'kommand-menu',
               preferNewSplit: openInNewSplit,
+              reopen: blockName === 'channel' ? 'latest' : undefined,
             }
           );
         }
@@ -519,6 +523,11 @@ export function CommandMenuInner(props: {
     if (!isInCommandScope()) return;
     CommandState.clearCommandScopeCommands();
     CommandState.setSelectedIndex(0);
+    // Match the Escape/Backspace handlers: restore the menu's hotkey scope.
+    // Clicking the back button doesn't focus it in some browsers, so without
+    // this the sub-view's command scope stays active and stray keypresses
+    // (e.g. digits) would be routed to it.
+    setActiveScope(hotkeyScope);
   };
 
   const resultsHeight = () => {
@@ -561,7 +570,10 @@ export function CommandMenuInner(props: {
         <input
           type="text"
           class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
-          placeholder={isEntityActionMode() ? 'Search actions...' : 'Search...'}
+          placeholder={
+            CommandState.commandScopePlaceholder() ??
+            (isEntityActionMode() ? 'Search actions...' : 'Search...')
+          }
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
@@ -571,7 +583,7 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <Panel.Toolbar
           class={cn(
-            'bg-surface px-1.5 border-0',
+            'bg-surface pl-2.5 pr-1.5 pt-2 border-0',
             isEntityActionMode() && 'gap-1.5'
           )}
         >

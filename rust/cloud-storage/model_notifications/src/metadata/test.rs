@@ -107,12 +107,13 @@ fn github_pr_status_changed_tagged_content_serializes_with_type_name() {
 fn github_pr_status_changed_formats_title_and_body() {
     let event = github_pr_status_changed();
 
+    // The GitHub login names the actor even when a Macro sender id is present.
     let title = event
         .format_title(Some(uid("macro|pr.sender@macro.com")))
         .unwrap();
     let body = event.format_body(None).unwrap();
 
-    assert_eq!(title, "pr.sender merged a pull request");
+    assert_eq!(title, "octocat merged a pull request");
     assert_eq!(body, "macro/app#42: Add GitHub PR notifications");
 }
 
@@ -155,7 +156,7 @@ fn github_pr_status_changed_notif_event_deserializes_and_renders_in_app() {
         event
             .format_title(Some(uid("macro|pr.sender@macro.com")))
             .unwrap(),
-        "pr.sender merged a pull request"
+        "octocat merged a pull request"
     );
     assert_eq!(
         event.format_body(None).unwrap(),
@@ -302,15 +303,27 @@ fn github_review_requested_serializes_flat_and_formats() {
         notification
             .format_title(Some(uid("macro|pr.sender@macro.com")))
             .unwrap(),
-        "pr.sender requested your review"
-    );
-    assert_eq!(
-        notification.format_title(None).unwrap(),
         "octocat requested your review"
     );
     assert_eq!(
         notification.format_body(None).unwrap(),
         "macro/app#42: Add GitHub PR notifications"
+    );
+
+    // Without a GitHub login the title stays actor-less; the Macro sender id
+    // never substitutes for the GitHub identity.
+    let no_login = GithubReviewRequested {
+        common: GithubPrNotificationCommon {
+            sender_github_login: None,
+            ..github_pr_common()
+        },
+        ..notification
+    };
+    assert_eq!(
+        no_login
+            .format_title(Some(uid("macro|pr.sender@macro.com")))
+            .unwrap(),
+        "Your review was requested"
     );
 }
 
@@ -339,7 +352,7 @@ fn github_pr_comment_serializes_and_formats_with_snippet() {
         notification
             .format_title(Some(uid("macro|pr.sender@macro.com")))
             .unwrap(),
-        "pr.sender commented on a pull request"
+        "octocat commented on a pull request"
     );
     assert_eq!(
         notification.format_body(None).unwrap(),
@@ -380,7 +393,7 @@ fn github_pr_mention_serializes_and_formats() {
         notification
             .format_title(Some(uid("macro|pr.sender@macro.com")))
             .unwrap(),
-        "pr.sender mentioned you on a pull request"
+        "octocat mentioned you on a pull request"
     );
     assert_eq!(
         notification.format_body(None).unwrap(),
@@ -412,7 +425,7 @@ fn github_pr_review_serializes_and_formats_by_state() {
         notification
             .format_title(Some(uid("macro|pr.sender@macro.com")))
             .unwrap(),
-        "pr.sender requested changes on your pull request"
+        "octocat requested changes on your pull request"
     );
     assert_eq!(
         notification.format_body(None).unwrap(),

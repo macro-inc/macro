@@ -64,45 +64,24 @@ impl<
             return;
         };
 
-        let reviewer_macro_id = match self
-            .repo
-            .get_macro_id_by_github_user_id(&reviewer_github_user_id)
-            .await
-        {
-            Ok(Some(macro_id)) => macro_id,
-            Ok(None) => {
-                tracing::trace!(
-                    reviewer_github_user_id=%reviewer_github_user_id,
-                    "skipping review-requested notification for unmapped reviewer"
-                );
-                return;
-            }
-            Err(error) => {
-                tracing::warn!(
-                    error=?error,
-                    reviewer_github_user_id=%reviewer_github_user_id,
-                    "failed to map review-requested reviewer"
-                );
-                return;
-            }
-        };
-        let reviewer = match MacroUserIdStr::try_from(reviewer_macro_id.clone()) {
-            Ok(reviewer) => reviewer,
-            Err(error) => {
-                tracing::warn!(
-                    error=?error,
-                    macro_id=%reviewer_macro_id,
-                    "review-requested reviewer mapping is not a valid Macro user ID"
-                );
-                return;
-            }
-        };
+        let reviewers = self
+            .macro_users_for_github_user_id(&reviewer_github_user_id)
+            .await;
+        if reviewers.is_empty() {
+            tracing::trace!(
+                reviewer_github_user_id=%reviewer_github_user_id,
+                "skipping review-requested notification for unmapped reviewer"
+            );
+            return;
+        }
 
         let reviewer_login = Self::payload_string(&event.payload, &["requested_reviewer", "login"]);
         let sender_id = self.notification_sender_id(event).await;
         for upsert in upserts {
             let recipients = self.notification_recipient_ids(&upsert.source).await;
-            if !recipients.contains(&reviewer) {
+            let scoped_reviewers: HashSet<_> =
+                recipients.intersection(&reviewers).cloned().collect();
+            if scoped_reviewers.is_empty() {
                 tracing::trace!(
                     source_id=%upsert.source.source_id(),
                     source_type=%upsert.source.source_type(),
@@ -121,7 +100,7 @@ impl<
                 notification,
                 upsert.foreign_entity_id,
                 sender_id.clone(),
-                HashSet::from([reviewer.clone()]),
+                scoped_reviewers,
             )
             .await;
         }
@@ -255,7 +234,7 @@ impl<
             }
         };
 
-        let author = self.pull_request_author_macro_user(event).await;
+        let authors = self.pull_request_author_macro_users(event).await;
         let review_github_id = event
             .payload
             .get("review")
@@ -270,11 +249,9 @@ impl<
         for upsert in upserts {
             let recipients = self.notification_recipient_ids(&upsert.source).await;
 
-            let review_recipient = author
-                .as_ref()
-                .filter(|author| recipients.contains(*author))
-                .cloned();
-            if let Some(review_recipient) = &review_recipient {
+            let review_recipients: HashSet<_> =
+                recipients.intersection(&authors).cloned().collect();
+            if !review_recipients.is_empty() {
                 let notification = GithubPrReview {
                     common: Self::github_pr_common(event, pull_request, upsert.foreign_entity_id),
                     review_github_id,
@@ -286,7 +263,7 @@ impl<
                     notification,
                     upsert.foreign_entity_id,
                     sender_id.clone(),
-                    HashSet::from([review_recipient.clone()]),
+                    review_recipients.clone(),
                 )
                 .await;
             }
@@ -294,7 +271,7 @@ impl<
             // Review wins for the author: drop them from the mention fan-out.
             let mut mention_recipients: HashSet<_> =
                 recipients.intersection(&mentioned_users).cloned().collect();
-            if let Some(review_recipient) = &review_recipient {
+            for review_recipient in &review_recipients {
                 mention_recipients.remove(review_recipient);
             }
             if !mention_recipients.is_empty() {
@@ -393,54 +370,82 @@ impl<
         }
     }
 
-    /// Resolve the pull request author from `pull_request.user.id` to a Macro
-    /// user via `github_links`. Returns `None` (with a trace) when unmapped.
-    async fn pull_request_author_macro_user(
+    /// Resolve the pull request author from `pull_request.user.id` to the Macro
+    /// users linked to that GitHub account via `github_links`. Returns an empty
+    /// set (with a trace) when unmapped; a single GitHub account may be linked
+    /// to several Macro users, so all of them are returned.
+    async fn pull_request_author_macro_users(
         &self,
         event: &ValidatedGithubWebhookEvent,
-    ) -> Option<MacroUserIdStr<'static>> {
-        let author_github_user_id = event
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let Some(author_github_user_id) = event
             .payload
             .get("pull_request")
             .and_then(|pull_request| pull_request.get("user"))
             .and_then(|user| user.get("id"))
             .and_then(|id| id.as_u64())
-            .map(|id| id.to_string())?;
+            .map(|id| id.to_string())
+        else {
+            return HashSet::new();
+        };
 
-        let macro_id = match self
+        let authors = self
+            .macro_users_for_github_user_id(&author_github_user_id)
+            .await;
+        if authors.is_empty() {
+            tracing::trace!(
+                author_github_user_id=%author_github_user_id,
+                "pull request author has no Macro mapping"
+            );
+        }
+
+        authors
+    }
+
+    /// Resolve a single GitHub user ID to the Macro users linked to it via
+    /// `github_links`. Unmapped GitHub user IDs and invalid Macro IDs are
+    /// skipped. A GitHub account may be linked to several Macro users.
+    async fn macro_users_for_github_user_id(
+        &self,
+        github_user_id: &str,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let links = match self
             .repo
-            .get_macro_id_by_github_user_id(&author_github_user_id)
+            .get_macro_ids_by_github_user_ids(std::slice::from_ref(&github_user_id.to_string()))
             .await
         {
-            Ok(Some(macro_id)) => macro_id,
-            Ok(None) => {
-                tracing::trace!(
-                    author_github_user_id=%author_github_user_id,
-                    "pull request author has no Macro mapping"
-                );
-                return None;
-            }
+            Ok(links) => links,
             Err(error) => {
                 tracing::warn!(
                     error=?error,
-                    author_github_user_id=%author_github_user_id,
-                    "failed to map pull request author"
+                    github_user_id=%github_user_id,
+                    "failed to map GitHub user ID to Macro users"
                 );
-                return None;
+                return HashSet::new();
             }
         };
 
-        match MacroUserIdStr::try_from(macro_id.clone()) {
-            Ok(author) => Some(author),
-            Err(error) => {
-                tracing::warn!(
-                    error=?error,
-                    macro_id=%macro_id,
-                    "pull request author mapping is not a valid Macro user ID"
-                );
-                None
-            }
-        }
+        let Some(macro_ids) = links.get(github_user_id) else {
+            return HashSet::new();
+        };
+
+        macro_ids
+            .iter()
+            .filter_map(
+                |macro_id| match MacroUserIdStr::try_from(macro_id.clone()) {
+                    Ok(user_id) => Some(user_id),
+                    Err(error) => {
+                        tracing::warn!(
+                            error=?error,
+                            macro_id=%macro_id,
+                            github_user_id=%github_user_id,
+                            "GitHub user mapping is not a valid Macro user ID"
+                        );
+                        None
+                    }
+                },
+            )
+            .collect()
     }
 
     /// Resolve the Macro users @mentioned in `text` via their `github_links`

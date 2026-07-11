@@ -7,10 +7,11 @@ import { cn } from '@ui';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
-import type { MessageSelectionState } from './context';
-import { MessageSelectionProvider, useMessage } from './context';
+import { isUnifiedInputMode } from '../unified-input-mode';
+import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
+import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
 import type { MessageActions, MessageData } from './types';
 
 type ChannelMessageProps = {
@@ -20,8 +21,12 @@ type ChannelMessageProps = {
   listMeta?: ChannelMessageListMeta;
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
-  highlighted?: boolean;
-  selectionState?: MessageSelectionState;
+  selected?: boolean;
+  /**
+   * The unified-input mode's floating reply/edit input, or message
+   * navigation, points at this message.
+   */
+  targeted?: boolean;
   onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
@@ -43,10 +48,11 @@ function MessageContentSlot(props: {
 
   return (
     <Switch>
-      <Match when={isEditing() && props.messageEditor}>
+      <Match when={isEditing() && !isUnifiedInputMode() && props.messageEditor}>
         {(messageEditor) => (
           <MessageEditorContent
             channelId={props.channelId}
+            message={message()}
             messageEditor={messageEditor()}
             participants={props.participants}
             class={props.class}
@@ -126,14 +132,17 @@ function RegularMessageLayout(props: {
       <Message.Slot placement="icon">
         <Message.SenderIcon />
       </Message.Slot>
-      <Message.Slot placement="header" class="flex items-center gap-1 min-w-0">
-        <Message.SenderName />
-        <Message.AgentBadge />
-        <Message.EditedIndicator />
-        {/* On message hover, timestamp floats above actions. */}
-        <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1 group-hover/message:bg-surface group-hover/message:rounded-md">
-          <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+      <Message.Slot placement="header" class="flex flex-col gap-0.5 min-w-0">
+        <div class="flex items-center gap-1 min-w-0">
+          <Message.SenderName />
+          <Message.AgentBadge />
+          <Message.EditedIndicator />
+          {/* On message hover, timestamp floats above actions. */}
+          <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1 group-hover/message:bg-surface group-hover/message:rounded-md">
+            <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+          </div>
         </div>
+        <Message.FromPill />
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot
@@ -191,22 +200,30 @@ export function ChannelMessage(props: ChannelMessageProps) {
   const isGrouped = () => props.listMeta?.isGroupedWithPrevious === true;
 
   return (
-    <Message.Root
-      message={props.message}
-      actions={props.actions}
-      highlighted={props.highlighted}
-      selected={props.selectionState?.isSelected}
-      onClick={props.onClick}
-      ref={(el) =>
-        touchHandler(el, () => ({
-          touchClassName: 'channel-message-long-press-highlight',
-          // Yield to the native image callout when long-pressing an image.
-          skipSelectors: ['img'],
-          onLongPress: () => drawerManager?.open(props.message, props.actions),
-        }))
-      }
-    >
-      <MessageSelectionProvider value={props.selectionState}>
+    <MaybeSwipeToReplyRow message={props.message} actions={props.actions}>
+      <Message.Root
+        class="w-full"
+        message={props.message}
+        actions={props.actions}
+        selected={props.selected}
+        targeted={
+          props.targeted ||
+          // In unified-input mode the edit happens in the floating input; the
+          // accent bar marks the message it is bound to.
+          (isUnifiedInputMode() &&
+            isEditingMessage(props.messageEditor, props.message.id))
+        }
+        onClick={props.onClick}
+        ref={(el) =>
+          touchHandler(el, () => ({
+            touchClassName: 'channel-message-long-press-highlight',
+            // Yield to the native image callout when long-pressing an image.
+            skipSelectors: ['img'],
+            onLongPress: () =>
+              drawerManager?.open(props.message, props.actions),
+          }))
+        }
+      >
         <Switch>
           <Match when={props.message.deleted_at != null}>
             <DeletedMessageLayout />
@@ -226,7 +243,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
             />
           </Match>
         </Switch>
-      </MessageSelectionProvider>
-    </Message.Root>
+      </Message.Root>
+    </MaybeSwipeToReplyRow>
   );
 }

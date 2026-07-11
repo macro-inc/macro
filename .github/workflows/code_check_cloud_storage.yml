@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/src/workflows/code_check_cloud_storage.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs
 name: cloud storage code check
 env:
   CARGO_INCREMENTAL: '0'
@@ -30,6 +30,7 @@ jobs:
       with:
         clean: 'false'
         fetch-depth: '0'
+        persist-credentials: 'false'
     - name: Setup Rust
       uses: './.github/actions/setup-rust'
       with:
@@ -114,11 +115,13 @@ jobs:
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
+      SQLX_OFFLINE: 'true'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
+        persist-credentials: 'false'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -218,6 +221,7 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
+        persist-credentials: 'false'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:

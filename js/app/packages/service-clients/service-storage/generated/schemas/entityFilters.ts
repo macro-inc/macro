@@ -14,6 +14,7 @@ import type { EmailFilters } from './emailFilters';
 import type { ForeignEntityFilters } from './foreignEntityFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
+import type { TagFilterMode } from './tagFilterMode';
 
 /**
  * a bundle of all of the filters for each entity type
@@ -39,4 +40,11 @@ export interface EntityFilters {
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */
   property_filters?: PropertyFilter[];
+  /** How the `tag_option_ids` combine: `any` (default) matches entities
+holding at least one selected tag, `all` requires every selected tag. */
+  tag_filter_mode?: TagFilterMode;
+  /** tag option ids matched against `properties.values`, OR'd together across
+all tag definitions. Option ids are globally unique, so the match ignores
+the owning definition id (personal and team tags combine into one OR). */
+  tag_option_ids?: string[];
 }

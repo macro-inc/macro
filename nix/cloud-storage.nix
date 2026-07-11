@@ -28,18 +28,26 @@
         [
           openssl
           openssl.dev
+          # librdkafka 2.12's cmake config header always defines
+          # WITH_OAUTHBEARER_OIDC (via #cmakedefine01), and rdkafka_conf.c
+          # guards its curl include with #ifdef instead of #if, so the bundled
+          # cmake-build needs curl headers even with WITH_CURL=0. Headers only;
+          # nothing links against libcurl.
+          curl.dev
           glib
           glib.dev
           libclang
           xz.out
         ]
-        ++ pkgs.lib.optionals isLinux [
-          glibc.dev
-          gcc
-        ]
         ++ pkgs.lib.optionals isDarwin [
           libiconv
         ];
+
+      # Do not add glibc.dev directly to buildInputs/libraries on Linux. The
+      # GCC wrapper already adds glibc headers as an -idirafter path; adding
+      # glibc.dev through the setup hook turns it into an early -isystem path,
+      # which breaks libstdc++'s #include_next <stdlib.h> while building C++
+      # sources such as bundled librdkafka.
 
       # Include Cargo sources plus the .sqlx offline query cache.
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
@@ -152,6 +160,7 @@
         nativeBuildInputs =
           with pkgs;
           [
+            cmake
             git
             pkg-config
           ]
@@ -515,6 +524,24 @@
         # zig links the final binary (cargo-zigbuild); drop the host-only mold arg.
         RUSTFLAGS = "";
         CARGO_PROFILE = "release";
+        # cargo-zigbuild compiles C with zig cc, which ignores the Nix
+        # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
+        # buildInputs provides to host builds (see the note on `libraries`;
+        # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
+        # invisible here. Pass the include path explicitly; cc-rs and
+        # cmake-rs both honor CFLAGS/CXXFLAGS.
+        CFLAGS = "-I${pkgs.curl.dev}/include";
+        CXXFLAGS = "-I${pkgs.curl.dev}/include";
+        # commonArgs pins OPENSSL_NO_VENDOR=1 so host builds use the Nix
+        # openssl, and openssl-sys honors that env var even when the crate's
+        # `vendored` feature (rdkafka `ssl-vendored`) is enabled. Lambdas
+        # can't use the Nix openssl: its shared libs need glibc >= 2.38
+        # symbols while zig links against the pinned Lambda glibc, and the
+        # /nix/store rpath doesn't exist in the Lambda runtime anyway. Flip
+        # the override off so openssl-src compiles OpenSSL with zig cc
+        # against the pinned glibc and links it statically — same idea as
+        # AWS_LC_SYS_CMAKE_BUILDER above.
+        OPENSSL_NO_VENDOR = "0";
         # Lambdas don't need max opt; matches the cargo-lambda CI setting.
         CARGO_PROFILE_RELEASE_OPT_LEVEL = "2";
         # aws-lc-sys (aws-lc-rs / rustls default crypto, pulled via aws-sdk &
@@ -527,6 +554,9 @@
           pkgs.zig
           pkgs.cmake
           pkgs.nasm
+          # openssl-src (vendored OpenSSL, see OPENSSL_NO_VENDOR below) runs
+          # OpenSSL's perl-based Configure.
+          pkgs.perl
         ];
         # zig needs a writable cache inside the sandbox ($HOME is read-only).
         preBuild = ''
@@ -638,6 +668,7 @@
           parallel
           docker-compose
           curl
+          kcat
           xz
           unzip
           zip
@@ -648,6 +679,9 @@
           zig
           cmake
           nasm
+          # openssl-src (vendored OpenSSL for zigbuild cross builds, see the
+          # OPENSSL_NO_VENDOR notes above) runs OpenSSL's perl-based Configure.
+          perl
           (writeShellScriptBin "rustup" ''
             set -euo pipefail
             rustc_path="$(${coreutils}/bin/readlink -f "$(command -v rustc)")"
@@ -686,6 +720,7 @@
           sccache
           rustToolchain
           python3
+          vitejs
         ]
         ++ pkgs.lib.optionals isLinux [ mold ];
 
@@ -763,22 +798,65 @@
       // deployLambdaPackages;
 
       devShells = {
-        default = pkgs.mkShell (
-          {
-            buildInputs = shellTools ++ libraries;
-            PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-            RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-            # Keep local cargo-lambda builds on the same aws-lc-sys path as
-            # the Nix lambda derivations. The default cc builder rejects
-            # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
-            AWS_LC_SYS_CMAKE_BUILDER = "1";
-          }
-          // pkgs.lib.optionalAttrs isLinux {
-            LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
-            BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
-          }
-        );
+        default =
+          let
+            pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
+              pkgs.openssl.dev
+            ];
+          in
+          pkgs.mkShell (
+            {
+              buildInputs = shellTools ++ libraries;
+              PKG_CONFIG_PATH = pkgConfigPath;
+              # Cargo build scripts use the Nix pkg-config wrapper, which prefers
+              # the target-specific search path when PKG_CONFIG_PATH_FOR_TARGET is set.
+              # librdkafka is built from the bundled sources via rdkafka's
+              # cmake-build feature, so no system librdkafka.pc is needed here.
+              PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+              RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # rdkafka's ssl-vendored feature exists for the Lambda
+              # derivations (see lambdaCommonArgs); local builds keep using
+              # the Nix openssl instead of vendoring, which would need perl
+              # on PATH and a from-source OpenSSL compile.
+              OPENSSL_NO_VENDOR = "1";
+              # Keep local cargo-lambda builds on the same aws-lc-sys path as
+              # the Nix lambda derivations. The default cc builder rejects
+              # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
+              AWS_LC_SYS_CMAKE_BUILDER = "1";
+              # cargo-zigbuild compiles C with zig cc, which ignores the Nix
+              # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
+              # buildInputs provides to host builds (see the note on `libraries`;
+              # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
+              # invisible to zigbuild cross builds. cc-rs and cmake-rs honor
+              # these target-scoped forms, so only the Linux cross targets get
+              # the include path; host builds keep their Nix cc-wrapper flags.
+              CFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              CXXFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              CFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              CXXFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              # Default for local SQLx/cargo workflows so individual crates do
+              # not need their own .env files. The run-local/run-dev env
+              # resolver ignores this localhost default: run-dev needs
+              # Doppler's dev DATABASE_URL, run-local its container-side URL.
+              DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
+            }
+            // pkgs.lib.optionalAttrs isDarwin {
+              # The bundled librdkafka C++ build is a native macOS build.
+              # cmake-rs supplies an `arm64-apple-macosx` target flag, while
+              # the Nix clang wrapper is configured for `arm64-apple-darwin`.
+              # Passing both through the wrapper makes Apple SDK headers
+              # incompatible with Nix's libc++ headers. Use Apple's compiler
+              # for native host C/C++ builds; Nix still supplies the SDK,
+              # dependency flags, and cross-compilation toolchain.
+              CC = "/usr/bin/clang";
+              CXX = "/usr/bin/clang++";
+            }
+            // pkgs.lib.optionalAttrs isLinux {
+              LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
+              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
+            }
+          );
       };
     };
 }

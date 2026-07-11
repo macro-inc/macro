@@ -1,12 +1,9 @@
-import { useSettingsState } from "@core/constant/SettingsState";
-import { useSplitLayout } from "../split-layout/layout";
-import { Show } from "solid-js";
-import { Button } from "@ui";
-import { cn } from "@ui";
-
-import { TOKENS } from "@core/hotkey/tokens";
+import { useSettingsState } from '@core/constant/SettingsState';
+import { TOKENS } from '@core/hotkey/tokens';
 import IconGear from '@icon/macro-gear.svg';
-
+import { Button, cn } from '@ui';
+import { Show } from 'solid-js';
+import { useSplitLayout } from '../split-layout/layout';
 
 export function SettingsButton() {
   const { settingsOpen, toggleSettings } = useSettingsState();
@@ -23,9 +20,14 @@ export function SettingsButton() {
         hotkey={TOKENS.global.toggleSettings}
         onClick={() => toggleSettings()}
       >
-        <IconGear class={cn("size-4.5 box-content rounded-full hover:bg-transparent p-1", settingsOpen() && 'bg-accent/20 text-accent hover:text-ink hover:bg-hover',
-        !settingsOpen() &&
-          'hover:text-accent hover:bg-accent/20')} />
+        <IconGear
+          class={cn(
+            'size-4.5 box-content rounded-full hover:bg-transparent p-1',
+            settingsOpen() &&
+              'bg-accent/20 text-accent hover:text-ink hover:bg-hover',
+            !settingsOpen() && 'hover:text-accent hover:bg-accent/20'
+          )}
+        />
       </Button>
     </Show>
   );

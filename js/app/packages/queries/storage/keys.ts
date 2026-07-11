@@ -81,12 +81,8 @@ export const entityKeys = createQueryKeys('entity', {
 export const taskSimilaritySearchKeys = createQueryKeys(
   'taskSimilaritySearch',
   {
-    forInput: (input: {
-      title: string;
-      markdown: string;
-      shareWithTeam: boolean;
-    }) => ({
-      queryKey: [input.title, input.markdown, input.shareWithTeam],
+    forInput: (input: { title: string; markdown: string }) => ({
+      queryKey: [input.title, input.markdown],
     }),
   }
 );

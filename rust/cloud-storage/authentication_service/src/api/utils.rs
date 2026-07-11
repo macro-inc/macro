@@ -1,4 +1,6 @@
+use crate::api::context::ApiContext;
 use cookie::{Cookie, SameSite};
+use email::domain::ports::{FirstInboxProvisionOutcome, FirstInboxProvisioner};
 use macro_auth::constant::{MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE};
 use macro_env::Environment;
 use macro_env_var::maybe_env_vars;
@@ -121,4 +123,51 @@ pub fn create_refresh_token_cookie(token: &str) -> Cookie<'static> {
         time::OffsetDateTime::now_utc() + time::Duration::days(365),
     ));
     cookie
+}
+
+/// If this account was created during the auth flow that is completing (the
+/// create-user webhook marks it in the cache), appends `signed_up=true` to the
+/// redirect URL so the app can attribute the session as a signup for
+/// analytics. Best-effort: never fails the login.
+pub async fn append_signed_up_param_if_new_user(
+    macro_cache_client: &macro_cache_client::MacroCache,
+    email: &str,
+    redirect_url: &mut Url,
+) {
+    match macro_cache_client.take_user_just_signed_up(email).await {
+        Ok(true) => {
+            redirect_url
+                .query_pairs_mut()
+                .append_pair("signed_up", "true");
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::error!(error=?e, "unable to check just-signed-up marker");
+        }
+    }
+}
+
+/// Provisions the user's primary inbox as a side effect of authentication,
+/// the moment a fresh access token exists. Fire-and-forget so the login
+/// response is never delayed. The email service arbitrates: a login without a
+/// usable Gmail grant is an expected no-op, and init is idempotent and recurs
+/// on every login, so a lost attempt only delays provisioning until the next one.
+pub fn spawn_first_inbox_provision(ctx: &ApiContext, access_token: &str) {
+    let email_service_client = ctx.email_service_client.clone();
+    let access_token = access_token.to_string();
+
+    tokio::spawn(async move {
+        match email_service_client
+            .provision_first_inbox(&access_token)
+            .await
+        {
+            Ok(FirstInboxProvisionOutcome::Provisioned) => {
+                tracing::info!("first-inbox provision: inbox initialized on login");
+            }
+            Ok(FirstInboxProvisionOutcome::Skipped) => {}
+            Err(e) => {
+                tracing::warn!(error=?e, "first-inbox provision: init failed");
+            }
+        }
+    });
 }

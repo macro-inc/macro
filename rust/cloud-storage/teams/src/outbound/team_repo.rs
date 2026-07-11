@@ -135,6 +135,7 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -142,13 +143,14 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, owner_id, seat_count)
-            VALUES ($1, $2, $3, 1)
+            INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)
+            VALUES ($1, $2, $3, 1, $4, TRUE)
             RETURNING id, name, slug, owner_id
             "#,
             id,
             team_name,
             user_id.as_ref(),
+            subscription_id.to_string(),
         )
         .try_map(|row| {
             Ok(Team {
@@ -344,12 +346,13 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name)
+        self.create_team_inner(user_id, team_name, subscription_id)
             .await
             .map_err(|e| e.into())
     }

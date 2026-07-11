@@ -42,6 +42,7 @@ import {
   onMount,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 
@@ -58,6 +59,9 @@ function ChipWithUserTooltip(props: {
       triggerAs="div"
       trigger={props.chip}
       content={props.renderTooltip(() => setOpen(false))}
+      // Chips mount under the cursor when a recipient is picked via keyboard;
+      // don't treat that as a hover.
+      requirePointerMovement
     />
   );
 }
@@ -202,8 +206,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             const name = getRecipientOptionName(option);
             const email = getRecipientOptionEmail(option);
 
-            const contactInfo =
-              name && name !== email ? `${name} | ${email}` : email;
+            // Render the email at reduced opacity (no pipe separator) when a
+            // display name is present; otherwise show the email on its own.
+            const showEmail = Boolean(name) && name !== email && Boolean(email);
 
             // Use appropriate id for UserIcon based on type
             const iconId = props.disabled ? '?' : option.id;
@@ -217,7 +222,10 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
                     props.disabled && 'italic'
                   )}
                 >
-                  {contactInfo}
+                  <Show when={showEmail} fallback={name || email}>
+                    {name}
+                    <span class="ml-[0.5em] opacity-50">{email}</span>
+                  </Show>
                 </p>
               </Combobox.ItemLabel>
             );
@@ -258,6 +266,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   inputRef?: (ref: HTMLInputElement) => void;
   inputId?: string;
   focusOnMount?: boolean;
+  /** Open the suggestions dropdown when the input gains focus (default true) */
+  openOnFocus?: boolean;
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
   noPadding?: boolean;
@@ -269,6 +279,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   horizontalScroll?: boolean;
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  portalScope?: 'local';
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -282,6 +293,18 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const [disabled, setDisabled] = createSignal(false);
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+  const [portalSearchRef, setPortalSearchRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  const portalMount = () => {
+    if (props.portalScope !== 'local') return undefined;
+    return (
+      portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
+    );
+  };
+  const shouldRenderPortal = () =>
+    props.portalScope !== 'local' || portalMount() !== undefined;
 
   // The chips container caps its height and scrolls; keep the input's line
   // visible as chips push it down.
@@ -329,9 +352,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   }
 
   const placeholderText = () => {
-    return props.selectedOptions.length === 0
-      ? 'Select recipients'
-      : 'select more recipients';
+    return props.selectedOptions.length === 0 ? 'Select recipients' : undefined;
   };
 
   const userId = useUserId();
@@ -394,18 +415,47 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return email ? email.split('@')[1] : undefined;
   });
 
-  // Create search function for recipients - only used for initial sorting with no query
-  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
-    config: FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+  const baseRecipientSearchConfig =
+    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
       currentUserDomain,
       getRecipientOptionEmail
-    ),
+    );
+
+  // Create search function for recipients - only used for initial sorting with no query
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
+    config: {
+      ...baseRecipientSearchConfig,
+      brevityWeight: 1,
+      timeWeight: 1.5,
+      boostFn: (item) => {
+        const sameDomainBoost = baseRecipientSearchConfig.boostFn?.(item) ?? 0;
+        const isSearching = untrack(() => inputValue().trim().length > 0);
+        if (!isSearching) return sameDomainBoost;
+
+        const personBoost =
+          item.kind === 'user' || item.kind === 'contact' ? 0.25 : 0;
+        return sameDomainBoost * 0.125 + personBoost;
+      },
+      useViewedAt: true,
+    },
     getName: getRecipientOptionTextValue,
     isChannelItem: (item) => item.kind === 'channel',
-    getTimestamp: (item) => ({
-      lastInteraction:
-        item.kind === 'user' ? item.data.lastInteraction : undefined,
-    }),
+    getTimestamp: (item) => {
+      if (item.kind === 'user') {
+        return { lastInteraction: item.data.lastInteraction };
+      }
+      if (item.kind === 'channel') {
+        const channel = item.data as typeof item.data & {
+          interacted_at?: string | null;
+          viewed_at?: string | null;
+        };
+        return {
+          viewedAt: channel.viewed_at,
+          updatedAt: channel.interacted_at ?? channel.updated_at,
+        };
+      }
+      return {};
+    },
   });
 
   const selectedEmails = createMemo(() => {
@@ -462,14 +512,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   });
 
   const options = createMemo(() => {
-    const { emails, sorted } = recipients();
+    const { raw, emails, sorted } = recipients();
     const currentUserInput = inputValue();
 
     // Check if currentUserInput matches any existing email
     const hasExactEmailMatch =
       currentUserInput && emails.has(currentUserInput.toLowerCase());
 
-    const allOptions = [...sorted, ...customUsers()];
+    const searchTerm = currentUserInput.trim();
+    const searched = searchTerm
+      ? recipientSearch(raw, searchTerm).map((item) => item.item)
+      : sorted;
+
+    const allOptions = [...searched, ...customUsers()];
 
     // Only add custom input if it doesn't match an existing email
     if (
@@ -488,6 +543,26 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     }
 
     return allOptions as CombinedRecipientItem<K>[];
+  });
+
+  const visibleOptionKeys = createMemo(
+    () =>
+      new Set(
+        (options() as CombinedRecipientItem[]).map(getRecipientOptionValue)
+      )
+  );
+
+  // Kobalte resolves selected values against the `options` prop
+  // (getOptionsFromValues) and silently drops any selection it can't find
+  // there, so selected options that the search filtered out must stay in the
+  // collection. `defaultFilter` keeps them hidden from the dropdown.
+  const optionsWithSelected = createMemo(() => {
+    const visible = options() as CombinedRecipientItem[];
+    const keys = visibleOptionKeys();
+    const hiddenSelected = (
+      props.selectedOptions as CombinedRecipientItem[]
+    ).filter((option) => !keys.has(getRecipientOptionValue(option)));
+    return [...visible, ...hiddenSelected];
   });
 
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(
@@ -520,11 +595,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         onOpenChange={setIsOpen}
         disabled={props.disabled}
         validationState={invalid() ? 'invalid' : 'valid'}
-        options={options() as CombinedRecipientItem[]}
+        options={optionsWithSelected()}
         optionLabel={getRecipientOptionLabel}
         optionValue={getRecipientOptionValue}
         optionTextValue={getRecipientOptionTextValue}
         optionDisabled={getOptionDisabled}
+        defaultFilter={(option) =>
+          visibleOptionKeys().has(getRecipientOptionValue(option))
+        }
         value={props.selectedOptions as CombinedRecipientItem[]}
         onChange={debouncedHandleChange}
         onInputChange={onInputChange}
@@ -536,7 +614,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
         class={cn(
           'ph-no-capture w-full text-sm offset-2 bg-surface rounded-2xl',
-          !props.hideBorder && 'ring-1 ring-edge',
+          !props.hideBorder && 'ring ring-edge',
           !props.noPadding && 'p-2',
           props.class
         )}
@@ -682,6 +760,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                     class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                     classList={{ 'ml-1': selectedLen() === 0 }}
+                    onFocus={() => {
+                      if (props.openOnFocus ?? true) setIsOpen(true);
+                    }}
                     onKeyDown={(e) => {
                       if (
                         (e.key === 'a' && e.ctrlKey) ||
@@ -724,58 +805,61 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           }}
         </Combobox.Control>
 
-        <Combobox.Portal>
-          <Layer depth={2}>
-            <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
-              <Combobox.Listbox
-                ref={setListboxRef}
-                class="flex flex-col gap-1"
-                scrollToItem={scrollToItem()}
-                autoFocus="first"
-              >
-                {(items) => {
-                  const arr = Array.from(items());
-                  const count = arr.length;
-                  const visibleCount = Math.min(
-                    count,
-                    RECIPIENT_OPTION_MAX_VISIBLE_COUNT
-                  );
-                  const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
+        <div class="hidden" ref={setPortalSearchRef} />
+        <Show when={shouldRenderPortal()}>
+          <Combobox.Portal mount={portalMount()}>
+            <Layer depth={2}>
+              <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
+                <Combobox.Listbox
+                  ref={setListboxRef}
+                  class="flex flex-col gap-1"
+                  scrollToItem={scrollToItem()}
+                  autoFocus="first"
+                >
+                  {(items) => {
+                    const arr = Array.from(items());
+                    const count = arr.length;
+                    const visibleCount = Math.min(
+                      count,
+                      RECIPIENT_OPTION_MAX_VISIBLE_COUNT
+                    );
+                    const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
 
-                  const [handle, setHandle] =
-                    createSignal<VirtualizerHandle | null>(null);
+                    const [handle, setHandle] =
+                      createSignal<VirtualizerHandle | null>(null);
 
-                  setScrollToItem(() => (key: string) => {
-                    const virtualizerHandle = handle();
-                    if (virtualizerHandle) {
-                      const ndx = arr.findIndex((item) => item.key === key);
-                      if (ndx > -1) {
-                        virtualizerHandle.scrollToIndex(ndx, {
-                          align: 'nearest',
-                        });
+                    setScrollToItem(() => (key: string) => {
+                      const virtualizerHandle = handle();
+                      if (virtualizerHandle) {
+                        const ndx = arr.findIndex((item) => item.key === key);
+                        if (ndx > -1) {
+                          virtualizerHandle.scrollToIndex(ndx, {
+                            align: 'nearest',
+                          });
+                        }
                       }
-                    }
-                  });
+                    });
 
-                  return (
-                    <VList
-                      data={arr}
-                      itemSize={RECIPIENT_OPTION_HEIGHT_PX}
-                      style={{
-                        height: `${height}px`,
-                      }}
-                      ref={setHandle}
-                    >
-                      {(item) => {
-                        return <RecipientComboboxItem {...item} />;
-                      }}
-                    </VList>
-                  );
-                }}
-              </Combobox.Listbox>
-            </Combobox.Content>
-          </Layer>
-        </Combobox.Portal>
+                    return (
+                      <VList
+                        data={arr}
+                        itemSize={RECIPIENT_OPTION_HEIGHT_PX}
+                        style={{
+                          height: `${height}px`,
+                        }}
+                        ref={setHandle}
+                      >
+                        {(item) => {
+                          return <RecipientComboboxItem {...item} />;
+                        }}
+                      </VList>
+                    );
+                  }}
+                </Combobox.Listbox>
+              </Combobox.Content>
+            </Layer>
+          </Combobox.Portal>
+        </Show>
         <Combobox.ErrorMessage class="text-xs text-failure mt-1">
           *At least one participant is required
         </Combobox.ErrorMessage>

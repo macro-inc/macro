@@ -99,12 +99,15 @@ pub(in crate::api::search) async fn filter_chats(
 }
 
 /// Performs the name search over chat names
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db), err)]
 pub(in crate::api::search::simple) async fn search_names<'a>(
     db: &Pool<Postgres>,
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
     filter_chat_response: &FilterChatResponse,
     term: String,
+    tag_option_ids: &[String],
+    match_all_tags: bool,
     limit: u32,
     cursor: models_search_cursor::SearchCursorOption,
 ) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
@@ -128,6 +131,8 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         &chat_uuids,
         term,
         filter_chat_response.ids_only,
+        tag_option_ids,
+        match_all_tags,
         limit,
         inner_cursor,
     )

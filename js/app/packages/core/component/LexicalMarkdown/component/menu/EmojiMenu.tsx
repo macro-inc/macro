@@ -1,4 +1,5 @@
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
+import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -130,6 +131,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
   onCleanup(cleanupRootListener);
 
   function insertEmoji(emoji: string) {
+    recordEmojiUsage(emoji);
     props.editor.dispatchCommand(REMOVE_EMOJI_SEARCH_COMMAND, undefined);
     props.editor.dispatchCommand(INSERT_TEXT_COMMAND, emoji);
   }

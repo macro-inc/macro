@@ -5,11 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { CreatePropertyDefinitionRequestAllOf } from './createPropertyDefinitionRequestAllOf';
-import type { PropertyOwner } from './propertyOwner';
+import type { CreatePropertyScope } from './createPropertyScope';
+import type { PropertyDataType } from './propertyDataType';
 
 /**
  * Request to create a new property definition.
  */
-export type CreatePropertyDefinitionRequest = PropertyOwner &
-  CreatePropertyDefinitionRequestAllOf;
+export interface CreatePropertyDefinitionRequest {
+  data_type: PropertyDataType;
+  display_name: string;
+  scope: CreatePropertyScope;
+}

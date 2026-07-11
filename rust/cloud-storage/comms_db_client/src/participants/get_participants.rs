@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use channels::domain::models::{ChannelParticipant, Sender};
+use channels::domain::models::{ChannelParticipant, ChannelSender};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::Transaction;
@@ -26,7 +26,7 @@ impl From<DbParticipantRole> for channels::domain::models::ParticipantRole {
 
 // XXX: This is a shim until we correctly implement https://macro.com/app/task/019ed710-f261-7059-b890-5ade6e11f4cd
 fn validate_participant_user_id(user_id: &str) -> Result<(), sqlx::Error> {
-    Sender::parse_storage_str(user_id)
+    ChannelSender::parse_from_str(user_id)
         .map(|_| ())
         .map_err(|err| sqlx::Error::Decode(Box::new(err)))
 }

@@ -1,5 +1,5 @@
-use macro_user_id::email::ReadEmailParts;
-use macro_user_id::user_id::BorrowedUserIdStr;
+use channel_sender::ChannelSender;
+use either::Either;
 use nom::{
     Finish, IResult, Parser,
     branch::alt,
@@ -58,9 +58,7 @@ pub trait XmlTaggedParsed<'de>: Deserialize<'de> {
 #[non_exhaustive]
 pub struct ParsedUserMention<'a> {
     #[serde(borrow)]
-    pub user_id: BorrowedUserIdStr<'a>,
-    #[serde(borrow)]
-    pub email: Cow<'a, str>,
+    pub user_id: ChannelSender<'a>,
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedUserMention<'de> {
@@ -321,7 +319,10 @@ impl XmlFormatter for PlainTextFormatter {
     }
 
     fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", user.user_id.0.email_part().email_str())
+        match &user.user_id.0 {
+            Either::Left(_l) => write!(f, "Macro"),
+            Either::Right(r) => write!(f, "{}", r.email_part().as_ref()),
+        }
     }
 
     fn format_contact(

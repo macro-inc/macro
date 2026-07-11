@@ -1,14 +1,13 @@
-import { isReplyAllEligible } from '@block-email/util/recipientConversion';
 import type { ReplyType } from '@block-email/util/replyType';
-import { useEmail } from '@core/context/user';
-import ArrowBendDoubleUpLeft from '@phosphor/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { type Setter, Show } from 'solid-js';
+import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
+import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
 export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];
@@ -20,10 +19,8 @@ export function MessageActions(props: {
   isLastMessage?: boolean;
   hiddenActions?: EmailMessageAction[];
 }) {
+  const ctx = useEmailContext();
   const formRegistry = getEmailFormRegistry();
-  const userEmail = useEmail();
-  const shouldShowReplyAll = () =>
-    isReplyAllEligible(props.message, userEmail() ?? '');
 
   const canShowActions = () => {
     if (!props.showActions) return false;
@@ -37,13 +34,14 @@ export function MessageActions(props: {
 
   const onChangeReplyType = (type: ReplyType) => {
     return createCallback(() => {
-      props.setShowReply(true);
-      const form = formRegistry.getOrInit({
-        type: 'replying_to',
-        messageID: props.message.db_id ?? '',
+      openEmailReplyComposerForMessage({
+        ctx,
+        formRegistry,
+        message: props.message,
+        replyType: type,
+        isLastMessage: props.isLastMessage,
+        setShowReply: props.setShowReply,
       });
-      form.setReplyType(type);
-      form.setShouldFocusInput(true);
     });
   };
 
@@ -58,23 +56,10 @@ export function MessageActions(props: {
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
           class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
-          onClick={onChangeReplyType('reply')}
+          onClick={onChangeReplyType('reply-all')}
           tooltip="Reply"
         >
           <ArrowBendUpLeft class="size-3.5" />
-        </Button>
-      </Show>
-      <Show
-        when={
-          shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
-        }
-      >
-        <Button
-          class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
-          onClick={onChangeReplyType('reply-all')}
-          tooltip="Reply all"
-        >
-          <ArrowBendDoubleUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>

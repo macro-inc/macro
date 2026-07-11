@@ -23,9 +23,9 @@ export function PageNumberInput() {
 
   const getWidthClass = (value: number | string) => {
     const strLength = value.toString().length;
-    if (strLength < 2) return 'w-[14px]';
-    if (strLength < 3) return 'w-[19px]';
-    return 'w-[36px]';
+    if (strLength < 2) return 'w-8';
+    if (strLength < 3) return 'w-9';
+    return 'w-11';
   };
 
   const onBlur = createCallback((_e: FocusEvent) => {
@@ -61,13 +61,14 @@ export function PageNumberInput() {
     <Show when={getPageCount() > 0}>
       <div class="text-sm font-medium text-ink flex align-middle items-center justify-start">
         <div
-          class="flex flex-row items-center justify-center"
+          class="flex flex-row items-center justify-center gap-1.5"
           onClick={() => inputRef?.select()}
         >
-          <div class="px-1 hover:bg-hover hover-transition-bg cursor-default focus-within:bg-active">
+          <div class="cursor-default">
             <input
               class={cn(
-                'py-0.5 px-0 text-sm bg-transparent text-ink font-medium cursor-default text-center border-none flex-initial focus:bg-surface',
+                'rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent',
+                'font-medium cursor-default text-center',
                 getWidthClass(currentPageNumber())
               )}
               step="1"
@@ -88,7 +89,7 @@ export function PageNumberInput() {
               }}
             />
           </div>
-          <div class="select-none whitespace-nowrap">
+          <div class="select-none whitespace-nowrap text-ink-muted">
             /&thinsp;{getPageCount()}
           </div>
         </div>

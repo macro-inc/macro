@@ -1,5 +1,6 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
-import type { InfiniteData } from '@tanstack/solid-query';
+import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
+import { createSignal } from 'solid-js';
 
 import { queryClient } from '../../client';
 import {
@@ -18,6 +19,20 @@ type GroupedGroupPage = {
 };
 
 type GroupedGroupInfiniteData = InfiniteData<GroupedGroupPage, unknown>;
+
+const [groupedCacheVersionSignal, setGroupedCacheVersion] = createSignal(0);
+
+/**
+ * Bumped whenever grouped soup caches are patched outside the query lifecycle
+ * (optimistic updates, WS inserts/removals). Grouped views read group data
+ * untracked behind a local version signal, so they subscribe to this to pick
+ * up external patches.
+ */
+export const groupedCacheVersion = groupedCacheVersionSignal;
+
+function bumpGroupedCacheVersion() {
+  setGroupedCacheVersion((version) => version + 1);
+}
 
 /** Runtime guard for the normalized grouped parent page shape. */
 function isGroupedPage(page: unknown): page is SoupAstItemsGroupedPage {
@@ -137,6 +152,7 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
     if (!changed) continue;
 
     query.setData({ ...prev, pages }, { manual: true });
+    bumpGroupedCacheVersion();
   }
 }
 
@@ -157,18 +173,17 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     const meta = getSoupQueryMeta(query.meta);
     if (!meta.groupBy || meta.groupKey == null) continue;
 
-    const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
+    const filter = meta.itemFilter;
+    const nextGroupKeys =
+      filter && !filter(entity)
+        ? []
+        : computeGroupKeysForItem(entity, meta.groupBy);
     if (nextGroupKeys === undefined) {
       queryClient.invalidateQueries({ queryKey: query.queryKey });
       continue;
     }
 
-    const filter = meta.itemFilter;
-    let shouldHave = nextGroupKeys.includes(meta.groupKey);
-
-    if (filter && !filter(entity)) {
-      shouldHave = false;
-    }
+    const shouldHave = nextGroupKeys.includes(meta.groupKey);
 
     let changed = false;
 
@@ -200,12 +215,26 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
         continue;
       }
 
+      // Membership unchanged: still refresh the item's data so in-place
+      // edits (e.g. a property change that doesn't move it between groups)
+      // reach the rendered rows.
+      if (shouldHave && hasEntity && page.items[entityId] !== entity) {
+        changed = true;
+        pages.push({
+          ...page,
+          items: { ...page.items, [entityId]: entity },
+        });
+        index += 1;
+        continue;
+      }
+
       pages.push(page);
       index += 1;
     }
 
     if (changed) {
       query.setData({ ...prev, pages }, { manual: true });
+      bumpGroupedCacheVersion();
     }
   }
 }
@@ -287,6 +316,7 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string) {
       },
       { manual: true }
     );
+    bumpGroupedCacheVersion();
   }
 }
 
@@ -329,12 +359,16 @@ export function removeGroupedPage(
 }
 
 /** Removes items from all expanded group queries while preserving unaffected pages. */
-export function removeGroupQueries(entityIds: Set<string>) {
+export function removeGroupQueries(
+  entityIds: Set<string>,
+  keyFilter?: (key: QueryKey) => boolean
+) {
   const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
   });
 
   for (const query of queries) {
+    if (keyFilter && !keyFilter(query.queryKey)) continue;
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
     if (!prev?.pages?.length) continue;
 
@@ -375,6 +409,7 @@ export function removeGroupQueries(entityIds: Set<string>) {
 
     if (changed) {
       query.setData({ ...prev, pages }, { manual: true });
+      bumpGroupedCacheVersion();
     }
   }
 }
@@ -422,7 +457,14 @@ function syncMembership(
     );
   }
 
-  if (!changed) return page;
+  // Data-only refresh: membership is unchanged but the cached item is stale
+  // (e.g. a property edit that doesn't move it between groups).
+  const dataChanged =
+    nextGroups.size > 0 &&
+    page.items[entityId] !== undefined &&
+    page.items[entityId] !== entity;
+
+  if (!changed && !dataChanged) return page;
 
   const newGroupsExist = nextGroups.size > 0;
   const nextItems: Record<string, SoupApiItem> = {};

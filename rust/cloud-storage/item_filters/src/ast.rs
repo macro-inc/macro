@@ -262,6 +262,24 @@ impl EntityFilterAst {
         }))
     }
 
+    /// True when this filter asks the query to expand visibility across
+    /// the requesting user's team via a CRM-scoped email attribute
+    /// (`crm_domains` / `crm_addresses`). Queries carrying it require a
+    /// team receipt.
+    pub fn requests_crm_scope(&self) -> bool {
+        self.email_filter.crm_scope.is_some()
+    }
+
+    /// True when this filter asks for data only admin/owner team members
+    /// may see — currently a `Hidden(true)` CRM-company literal anywhere
+    /// in the tree (including under `Not`, so `Not(Hidden(true))` is
+    /// conservatively treated as admin-requesting).
+    pub fn requests_crm_admin(&self) -> bool {
+        self.crm_company_filter
+            .as_deref()
+            .is_some_and(crm_company_requests_admin)
+    }
+
     /// mock function to create the an empty ast
     #[cfg(feature = "mock")]
     pub fn mock_empty() -> Self {
@@ -277,6 +295,21 @@ impl EntityFilterAst {
             foreign_entity_filter: None,
             properties_filter: None,
         }
+    }
+}
+
+/// Walks a `CrmCompanyLiteral` tree checking for any `Hidden(true)`
+/// literal. `And`/`Or`/`Not` all recurse: the role gate must stay
+/// conservative, so any path reaching a `Hidden(true)` literal counts as
+/// admin-requesting regardless of surrounding negation.
+fn crm_company_requests_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
+    match expr {
+        Expr::Literal(CrmCompanyLiteral::Hidden(true)) => true,
+        Expr::Literal(_) => false,
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            crm_company_requests_admin(a) || crm_company_requests_admin(b)
+        }
+        Expr::Not(a) => crm_company_requests_admin(a),
     }
 }
 

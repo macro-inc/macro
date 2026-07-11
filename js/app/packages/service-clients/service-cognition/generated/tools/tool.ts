@@ -24,6 +24,11 @@ type ToolParserMap = {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
   };
+  EditDocument: {
+    call: types.EditDocument;
+    response: types.EditDocumentResponse;
+  };
+  GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
@@ -32,6 +37,10 @@ type ToolParserMap = {
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
+  };
+  ListCompanies: {
+    call: types.ListCompanies;
+    response: types.ListCompaniesResponse;
   };
   ListEntities: {
     call: types.ListEntities;
@@ -43,6 +52,7 @@ type ToolParserMap = {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
   };
+  ListTags: { call: types.ListTags; response: types.ListTagsResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
@@ -85,6 +95,14 @@ type ToolParserMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SelfKnowledge: {
+    call: types.SelfKnowledge;
+    response: types.SelfKnowledgeResponse;
+  };
+  SendChannelMessage: {
+    call: types.SendChannelMessage;
+    response: types.SendChannelMessageResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -120,6 +138,14 @@ const toolParserMap = {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
   },
+  EditDocument: {
+    call: schemas.EditDocument,
+    response: schemas.EditDocumentResponse,
+  },
+  GetCompany: {
+    call: schemas.GetCompany,
+    response: schemas.GetCompanyResponse,
+  },
   GetEntityProperties: {
     call: schemas.GetEntityProperties,
     response: schemas.GetEntityPropertiesResponse,
@@ -128,6 +154,10 @@ const toolParserMap = {
   ListCallRecords: {
     call: schemas.ListCallRecords,
     response: schemas.ListCallRecordsResponse,
+  },
+  ListCompanies: {
+    call: schemas.ListCompanies,
+    response: schemas.ListCompaniesResponse,
   },
   ListEntities: {
     call: schemas.ListEntities,
@@ -145,6 +175,7 @@ const toolParserMap = {
     call: schemas.ListNotifications,
     response: schemas.ListNotificationsResponse,
   },
+  ListTags: { call: schemas.ListTags, response: schemas.ListTagsResponse },
   ListTeamMembers: {
     call: schemas.ListTeamMembers,
     response: schemas.ListTeamMembersResponse,
@@ -196,6 +227,14 @@ const toolParserMap = {
     call: schemas.SearchTools,
     response: schemas.SearchToolsResponse,
   },
+  SelfKnowledge: {
+    call: schemas.SelfKnowledge,
+    response: schemas.SelfKnowledgeResponse,
+  },
+  SendChannelMessage: {
+    call: schemas.SendChannelMessage,
+    response: schemas.SendChannelMessageResponse,
+  },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
@@ -239,6 +278,11 @@ type ToolDataMap = {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
   };
+  EditDocument: {
+    call: types.EditDocument;
+    response: types.EditDocumentResponse;
+  };
+  GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
@@ -247,6 +291,10 @@ type ToolDataMap = {
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
+  };
+  ListCompanies: {
+    call: types.ListCompanies;
+    response: types.ListCompaniesResponse;
   };
   ListEntities: {
     call: types.ListEntities;
@@ -258,6 +306,7 @@ type ToolDataMap = {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
   };
+  ListTags: { call: types.ListTags; response: types.ListTagsResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
@@ -300,6 +349,14 @@ type ToolDataMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SelfKnowledge: {
+    call: types.SelfKnowledge;
+    response: types.SelfKnowledgeResponse;
+  };
+  SendChannelMessage: {
+    call: types.SendChannelMessage;
+    response: types.SendChannelMessageResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

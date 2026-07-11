@@ -19,7 +19,15 @@ use foreign_entity::domain::{
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
-    ast::{EntityFilterAst, ExpandErr, crm_company::CrmCompanyLiteral},
+    ast::{
+        EntityFilterAst, ExpandErr,
+        crm_company::CrmCompanyLiteral,
+        email::EmailLiteral,
+        properties::{
+            PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to,
+            properties_filter_matches_propertyless,
+        },
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -30,6 +38,7 @@ use models_pagination::{
 };
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -307,17 +316,20 @@ impl SoupRequest<Option<EntityFilterAst>> {
         &self,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Option<GetEmailsRequest> {
-        let entity_ast: Option<&EntityFilterAst> = match &self.cursor {
-            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
-            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
-                filter,
-                ..
-            }))) => filter.as_ref(),
-            SoupQuery::Frecency(_) => None,
-        };
+        let entity_ast = self.entity_ast();
         let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
         if self.link_ids.is_empty() {
+            return None;
+        }
+
+        // A properties filter that cannot match threads makes the email
+        // branch empty, so the sub-request is skipped. Otherwise it is ANDed
+        // into the email tree so the query returns exactly matching threads.
+        let properties_filter = entity_ast.and_then(|a| a.properties_filter.as_deref());
+        if let Some(propf) = properties_filter
+            && !properties_filter_can_apply_to(propf, &[PropertyEntityType::Thread])
+        {
             return None;
         }
 
@@ -329,7 +341,10 @@ impl SoupRequest<Option<EntityFilterAst>> {
             query: match &self.cursor {
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
-                    f.as_ref().and_then(|f| f.email_filter.tree.clone()),
+                    with_properties_filter(
+                        f.as_ref().and_then(|f| f.email_filter.tree.clone()),
+                        properties_filter,
+                    ),
                 )),
                 SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
@@ -340,7 +355,10 @@ impl SoupRequest<Option<EntityFilterAst>> {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
-                    filter: filter.as_ref().and_then(|f| f.email_filter.tree.clone()),
+                    filter: with_properties_filter(
+                        filter.as_ref().and_then(|f| f.email_filter.tree.clone()),
+                        properties_filter,
+                    ),
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,
@@ -350,7 +368,32 @@ impl SoupRequest<Option<EntityFilterAst>> {
         })
     }
 
+    /// The request's entity filter ast, regardless of cursor position.
+    pub(crate) fn entity_ast(&self) -> Option<&EntityFilterAst> {
+        match &self.cursor {
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(_, f))) => f.as_ref(),
+            SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
+                filter,
+                ..
+            }))) => filter.as_ref(),
+            SoupQuery::Frecency(_) => None,
+        }
+    }
+
+    /// True when an active properties filter can never match an entity with
+    /// no property rows. Property-less sub-requests (channels, channel
+    /// threads, calls, CRM companies, foreign entities) are skipped so pages
+    /// only contain rows the filter applies to.
+    fn properties_filter_blocks_propertyless(&self) -> bool {
+        self.entity_ast()
+            .and_then(|a| a.properties_filter.as_deref())
+            .is_some_and(|p| !properties_filter_matches_propertyless(p))
+    }
+
     pub(crate) fn build_call_request(&self) -> Option<GetCallRecordsRequest> {
+        if self.properties_filter_blocks_propertyless() {
+            return None;
+        }
         Some(GetCallRecordsRequest {
             user_id: self.user.clone(),
             limit: self.limit as u32,
@@ -382,6 +425,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
         &self,
         team_receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Option<GetCrmCompaniesRequest> {
+        if self.properties_filter_blocks_propertyless() {
+            return None;
+        }
         let receipt = team_receipt.as_ref()?;
         // Re-wrap the verified team receipt as the CRM capability token the
         // service now requires; a malformed receipt skips the sub-request.
@@ -450,6 +496,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
+        if self.properties_filter_blocks_propertyless() {
+            return None;
+        }
         Some(GetChannelsRequest {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
@@ -476,6 +525,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_comms_thread_request(&self) -> Option<GetThreadReplyRowsRequest> {
+        if self.properties_filter_blocks_propertyless() {
+            return None;
+        }
         let query = match &self.cursor {
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                 *t,
@@ -506,6 +558,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_foreign_entity_query(&self) -> Option<ForeignEntityListQuery> {
+        if self.properties_filter_blocks_propertyless() {
+            return None;
+        }
         match &self.cursor {
             SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                 *t,
@@ -544,6 +599,32 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 }
 
+/// ANDs a properties filter into the email filter tree as thread-level
+/// [EmailLiteral::Property] conditions, so the email query returns exactly
+/// the threads that satisfy it.
+fn with_properties_filter(
+    tree: Option<Arc<Expr<EmailLiteral>>>,
+    properties_filter: Option<&Expr<PropertiesLiteral>>,
+) -> Option<Arc<Expr<EmailLiteral>>> {
+    let Some(propf) = properties_filter else {
+        return tree;
+    };
+    let mapped = map_properties_to_email(propf);
+    Some(Arc::new(match tree {
+        Some(tree) => Expr::and((*tree).clone(), mapped),
+        None => mapped,
+    }))
+}
+
+fn map_properties_to_email(expr: &Expr<PropertiesLiteral>) -> Expr<EmailLiteral> {
+    match expr {
+        Expr::And(a, b) => Expr::and(map_properties_to_email(a), map_properties_to_email(b)),
+        Expr::Or(a, b) => Expr::or(map_properties_to_email(a), map_properties_to_email(b)),
+        Expr::Not(a) => Expr::Not(Box::new(map_properties_to_email(a))),
+        Expr::Literal(lit) => Expr::Literal(EmailLiteral::Property(lit.clone())),
+    }
+}
+
 /// Parameters for fetching CRM companies to fold into the soup feed.
 #[derive(Debug)]
 pub struct GetCrmCompaniesRequest {
@@ -559,8 +640,8 @@ pub struct GetCrmCompaniesRequest {
     pub company_ids: Vec<Uuid>,
     /// Optional `crm_companies.hidden` filter. `None` = visible only
     /// (default); `Some(false)` = visible only (explicit); `Some(true)`
-    /// = hidden only. The admin/owner role check is enforced upstream
-    /// in soup's axum router before reaching this request.
+    /// = hidden only. The admin/owner role check is enforced by the CRM
+    /// service from `access` when this request is executed.
     pub hidden: Option<bool>,
     /// Which timestamp column to sort by.
     pub sort: CrmCompanyListSort,
@@ -713,6 +794,14 @@ pub enum SoupErr {
     /// CRM lookup failed.
     #[error("A CRM error has occurred, see logs for more details")]
     CrmErr,
+    /// The filter requested CRM-scoped data but the caller has no
+    /// qualifying team membership.
+    #[error("CRM-scoped queries require team membership")]
+    CrmTeamRequired,
+    /// The filter requested hidden CRM companies but the caller's team
+    /// role is below admin/owner.
+    #[error("Querying hidden CRM companies requires admin/owner team role")]
+    CrmAdminRequired,
     /// Foreign entity lookup failed.
     #[error(transparent)]
     ForeignEntityErr(#[from] ForeignEntityError),

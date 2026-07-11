@@ -33,6 +33,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
     call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
@@ -322,6 +323,7 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
+        user_id: MacroUserIdStr<'_>,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
         use frecency::domain::models::AggregateFrecency;
@@ -360,7 +362,7 @@ where
             .collect();
 
         self.soup_storage
-            .populate_properties(&mut items)
+            .populate_properties(user_id, &mut items)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -446,25 +448,41 @@ where
             limit,
         } = req;
 
-        Ok(Either::Right(
-            self.crm_service
-                .list_companies_for_soup(
-                    &access,
-                    user_id.as_ref(),
-                    &company_ids,
-                    hidden,
-                    sort,
-                    cursor,
-                    limit,
-                )
+        let mut items: Vec<SoupItem> = self
+            .crm_service
+            .list_companies_for_soup(
+                &access,
+                user_id.as_ref(),
+                &company_ids,
+                hidden,
+                sort,
+                cursor,
+                limit,
+            )
+            .await
+            .map_err(|err| match err {
+                crm::domain::model::CrmError::AdminRoleRequired => SoupErr::CrmAdminRequired,
+                _ => SoupErr::CrmErr,
+            })?
+            .into_iter()
+            .map(|company| SoupItem::CrmCompany(SoupCrmCompany::from(company)))
+            .collect();
+
+        // Companies are fetched outside the main soup queries (which hydrate
+        // their own items), so attach entity properties here.
+        if !items.is_empty() {
+            self.soup_storage
+                .populate_properties(user_id, &mut items)
                 .await
-                .map_err(|_| SoupErr::CrmErr)?
-                .into_iter()
-                .map(|company| FrecencySoupItem {
-                    item: SoupItem::CrmCompany(SoupCrmCompany::from(company)),
-                    frecency_score: None,
-                }),
-        ))
+                .map_err(anyhow::Error::from)?;
+        }
+
+        Ok(Either::Right(items.into_iter().map(|item| {
+            FrecencySoupItem {
+                item,
+                frecency_score: None,
+            }
+        })))
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -545,6 +563,19 @@ where
         let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);
 
+        // CRM-scoped visibility (team-wide email scope or hidden CRM
+        // companies) requires a team receipt. Without this check the CRM
+        // sub-request would silently skip for no-team callers, disguising
+        // "no access" as "no data". The admin/owner role gate for hidden
+        // companies lives one layer down in the CRM service, derived from
+        // the receipt itself.
+        if let Some(ast) = req.entity_ast()
+            && (ast.requests_crm_scope() || ast.requests_crm_admin())
+            && team_receipt.is_none()
+        {
+            return Err(SoupErr::CrmTeamRequired);
+        }
+
         // Borrow before email's builder consumes team_receipt.
         let crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
@@ -567,7 +598,7 @@ where
                     },
                 );
 
-                let email_soup_fut = self.handle_email_request(email_request);
+                let email_soup_fut = self.handle_email_request(req.user.copied(), email_request);
 
                 let comms_soup_fut = self.handle_comms_request(comms_request);
 
@@ -632,5 +663,17 @@ where
         req: GroupedSortRequest<'_>,
     ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
         self.handle_grouped_soup_request(req).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, SoupErr> {
+        Ok(self
+            .soup_storage
+            .caller_tag_sets(user_id)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 }

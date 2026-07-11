@@ -3,7 +3,7 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
-import { type Accessor, createSignal, type JSX } from 'solid-js';
+import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
@@ -99,6 +99,14 @@ type ThreadListProps = {
 const NEAR_TOP_THRESHOLD = 800;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
+// After an imperative scroll-to-bottom, hold the viewport at the true bottom for
+// this long. virtua targets a scroll offset from its cached item sizes and stops
+// correcting ~150ms after the last measurement, and the scroller runs with
+// `overflow-anchor: none`, so a last message that grows afterwards (a loading
+// image or video, a new reaction, an opening reply input) is left cut off. The
+// re-pin window absorbs that late growth so a single action lands fully down.
+const SCROLL_TO_BOTTOM_SETTLE_MS = 1000;
+
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
   tag: 'bottom',
   align: 'end',
@@ -157,6 +165,7 @@ export function ThreadList(props: ThreadListProps) {
   let nearBottomFired = false;
   let previousScrollOffset: number | undefined;
   let explicitScrollDownDistance = 0;
+  let cancelPinToBottom: (() => void) | undefined;
 
   const scrollIntent = createScrollIntentTracker();
 
@@ -237,12 +246,17 @@ export function ThreadList(props: ThreadListProps) {
       case 'index': {
         const targetIndex = resolveTargetIndex(target);
         if (targetIndex < 0) return true; // target gone, nothing to verify
-        const currentIndex = handle.findItemIndex(
-          handle.scrollOffset + insets().start
-        );
-        // Consider correct if the target is within a reasonable range of
-        // the current viewport (within ±5 items accounts for alignment).
-        return Math.abs(currentIndex - targetIndex) <= 5;
+        // Correct when the target item intersects the usable viewport.
+        // Comparing item indexes against the top-of-viewport item breaks for
+        // center/end alignment — a target near the end of the list rests in
+        // the lower half of the viewport, so a fixed index distance from the
+        // top item reports a perfect landing as a miss.
+        const itemTop = handle.getItemOffset(targetIndex);
+        const itemBottom = itemTop + handle.getItemSize(targetIndex);
+        const viewportTop = handle.scrollOffset + insets().start;
+        const viewportBottom =
+          handle.scrollOffset + handle.viewportSize - insets().end;
+        return itemBottom > viewportTop && itemTop < viewportBottom;
       }
     }
   };
@@ -289,6 +303,53 @@ export function ThreadList(props: ThreadListProps) {
     });
   };
 
+  // Scroll to the newest message, then keep re-pinning to the true bottom for a
+  // short window so late-settling content can't leave the last message cut off.
+  // Aborts on a real scroll gesture (wheel up or touch drag), not on taps.
+  const pinToBottom = (handle: VirtualizerHandle): boolean => {
+    cancelPinToBottom?.();
+
+    const didScroll = scrollToTarget(handle, { tag: 'bottom', align: 'end' });
+    const el = scrollRef;
+    if (!didScroll || !el) return didScroll;
+
+    let rafId = 0;
+    const start = performance.now();
+
+    const stop = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointerdown', onPointerDown);
+      if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
+    };
+
+    function onWheel(event: WheelEvent) {
+      if (event.deltaY < 0) stop();
+    }
+
+    // A press on a message, reply button, or reaction is not a scroll and must
+    // not cancel pinning. Only a wheel-up or a touch drag is the user scrolling.
+    function onPointerDown(event: PointerEvent) {
+      if (event.pointerType === 'touch') stop();
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: true });
+    el.addEventListener('pointerdown', onPointerDown, { passive: true });
+    cancelPinToBottom = stop;
+
+    const tick = () => {
+      if (getDistanceFromBottom(handle) > 1) el.scrollTop = el.scrollHeight;
+      if (performance.now() - start >= SCROLL_TO_BOTTOM_SETTLE_MS) {
+        stop();
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return true;
+  };
+
   const createNavigation = (
     handle: VirtualizerHandle
   ): ThreadListNavigation => ({
@@ -310,8 +371,7 @@ export function ThreadList(props: ThreadListProps) {
     scrollToTop: (align = 'start') =>
       scrollToTarget(handle, { tag: 'top', align }),
 
-    scrollToBottom: (align = 'end') =>
-      scrollToTarget(handle, { tag: 'bottom', align }),
+    scrollToBottom: () => pinToBottom(handle),
 
     scrollToId: (id, opts = {}) =>
       scrollToTarget(handle, { tag: 'id', id, align: opts.align }),
@@ -372,6 +432,25 @@ export function ThreadList(props: ThreadListProps) {
     });
   }
 
+  let disposed = false;
+
+  // A preview-pane mount can hand over the virtualizer before layout, with a
+  // zero-height viewport — the initial scroll then lands wherever and always
+  // needs the onScrollEnd retry. Wait (bounded) for a measured viewport.
+  function scrollOnMountWhenMeasured(
+    handle: VirtualizerHandle,
+    framesLeft = 30
+  ) {
+    if (disposed || initialScrollStarted) return;
+    if (handle.viewportSize > 0 || framesLeft <= 0) {
+      scrollOnMount(handle);
+      return;
+    }
+    requestAnimationFrame(() =>
+      scrollOnMountWhenMeasured(handle, framesLeft - 1)
+    );
+  }
+
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
@@ -419,6 +498,7 @@ export function ThreadList(props: ThreadListProps) {
         distanceFromBottom: getDistanceFromBottom(handle),
       });
       requestAnimationFrame(() => {
+        const offsetBeforeRetry = handle.scrollOffset;
         const retryScrolled = scrollToInitialTarget(
           handle,
           initialScrollTarget
@@ -427,7 +507,21 @@ export function ThreadList(props: ThreadListProps) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
           completeInitialScroll(handle);
+          return;
         }
+        // A retry that lands on the current position moves nothing, so no
+        // scroll events (and no onScrollEnd) follow. Finalize on the next
+        // frame or `didInitialScroll` stays false for the life of the mount,
+        // deadlocking everything gated on it (target navigation, scroll
+        // pagination, goToLatest).
+        requestAnimationFrame(() => {
+          if (didInitialScroll()) return;
+          if (handle.scrollOffset !== offsetBeforeRetry) return;
+          console.debug(
+            'ThreadList: retry did not move the scroll, completing'
+          );
+          completeInitialScroll(handle);
+        });
       });
       return;
     }
@@ -505,6 +599,11 @@ export function ThreadList(props: ThreadListProps) {
     }
   };
 
+  onCleanup(() => {
+    disposed = true;
+    cancelPinToBottom?.();
+  });
+
   return (
     <>
       <div
@@ -539,7 +638,7 @@ export function ThreadList(props: ThreadListProps) {
               props.onNavigationReady(createNavigation(ref));
             }
             resetInitialScroll();
-            scrollOnMount(ref);
+            scrollOnMountWhenMeasured(ref);
           }}
           scrollRef={scrollRef}
           startMargin={insets().start}

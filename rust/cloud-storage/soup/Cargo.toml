@@ -32,7 +32,14 @@ axum = [
   "models_soup/schema",
 ]
 inbound = ["email/inbound", "entity_access/inbound", "ports"]
-outbound = ["crm/outbound", "dep:readonly_pool", "dep:sqlx", "ports"]
+outbound = [
+  "crm/outbound",
+  "dep:properties",
+  "dep:readonly_pool",
+  "dep:sqlx",
+  "ports",
+  "properties/outbound",
+]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 
@@ -65,7 +72,7 @@ models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 non_empty = { path = "../non_empty" }
-properties_db_client = { path = "../properties_db_client/" }
+properties = { path = "../properties", default-features = false, optional = true }
 readonly_pool = { path = "../readonly_pool", optional = true }
 recursion = { workspace = true }
 rootcause = { workspace = true }

@@ -11,8 +11,10 @@ import {
   $createClassedBlockNode,
   $isClassedBlockNode,
   ClassedBlockNode,
+  isAllowedTagName,
 } from '../nodes/ClassedBlockNode';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import { I_HTML_RENDER } from './htmlRender';
 import { I_EQUATION_NODE } from './katex';
 import {
   I_CONTACT_MENTION,
@@ -20,6 +22,10 @@ import {
   I_USER_MENTION,
 } from './mentions';
 import { xmlMatcher } from './transformers';
+import {
+  replaceElementWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 const TAG_MACRO_QUOTE = 'm-email-thread-embed';
 const REG_EXP_XML_MACRO_QUOTE = xmlMatcher(TAG_MACRO_QUOTE, '');
@@ -29,6 +35,7 @@ const REG_EXP_HTML_BLOCKQUOTE_TAG = /<\/?blockquote\b[^>]*>/gi;
 
 // Transformers used inside macro_quote blocks
 const MACRO_QUOTE_TRANSFORMERS = [
+  I_HTML_RENDER,
   ...CUSTOM_TRANSFORMERS,
   I_EQUATION_NODE,
   I_USER_MENTION,
@@ -40,6 +47,7 @@ const MACRO_QUOTE_TRANSFORMERS = [
 function htmlBlockquoteTransformers() {
   return [
     HTML_BLOCKQUOTE,
+    I_HTML_RENDER,
     ...CUSTOM_TRANSFORMERS,
     I_EQUATION_NODE,
     I_USER_MENTION,
@@ -181,7 +189,7 @@ export const HTML_BLOCKQUOTE: MultilineElementTransformer = {
 };
 
 export const I_MACRO_QUOTE: ElementTransformer = {
-  dependencies: [ClassedBlockNode],
+  dependencies: [ClassedBlockNode, UnknownMentionNode],
   type: 'element',
   regExp: REG_EXP_XML_MACRO_QUOTE,
 
@@ -224,12 +232,18 @@ export const I_MACRO_QUOTE: ElementTransformer = {
       );
 
       if (!metadataMatch || !metadataMatch[1]) {
-        console.error('Error parsing macro-quote: no metadata found');
-        return;
+        throw new Error('Missing macro-quote metadata');
       }
 
       const metadata = JSON.parse(metadataMatch[1]);
       const { tag, classes } = metadata;
+      if (
+        typeof tag !== 'string' ||
+        !isAllowedTagName(tag) ||
+        !Array.isArray(classes)
+      ) {
+        throw new Error('Invalid macro-quote metadata');
+      }
 
       // Extract content after metadata
       const contentStart = metadataMatch[0].length;
@@ -237,7 +251,10 @@ export const I_MACRO_QUOTE: ElementTransformer = {
       const content = xmlContent.substring(contentStart, contentEnd);
 
       // Create the ClassedBlockNode
-      const classedBlockNode = $createClassedBlockNode({ tag, classes });
+      const classedBlockNode = $createClassedBlockNode({
+        tag: tag as keyof HTMLElementTagNameMap,
+        classes,
+      });
 
       // Parse and append children
       $convertFromMarkdownString(
@@ -249,6 +266,7 @@ export const I_MACRO_QUOTE: ElementTransformer = {
       node.replace(classedBlockNode);
     } catch (error) {
       console.error('Error parsing macro-quote:', error);
+      replaceElementWithUnknownMention(node, 'Unknown Email Thread');
     }
   },
 };

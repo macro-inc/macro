@@ -27,19 +27,25 @@ type InputDataBase = {
   placeholder?: string;
   value?: string;
   isDraggedOver?: boolean;
-  isDraggingOverChannel?: boolean;
-  isValidChannelDrag?: boolean;
   showFormatRibbon?: boolean;
   hasPendingAttachments?: boolean;
   attachments?: InputAttachmentData[];
 };
 
 export type ChannelInputMode = InputDataBase & { mode: 'channel' };
-export type ReplyInputMode = InputDataBase & { mode: 'reply' };
+export type ReplyInputMode = InputDataBase & {
+  mode: 'reply';
+  /** Where the reply input is hosted. Defaults to 'inline' (in the thread). */
+  host?: 'inline' | 'unified';
+};
 export type InputData = ChannelInputMode | ReplyInputMode;
 
 export const isReplyInput = (input: InputData): input is ReplyInputMode =>
   input.mode === 'reply';
+
+/** A reply input rendered inline inside a thread (not the unified input). */
+export const isInlineReplyInput = (input: InputData): input is ReplyInputMode =>
+  isReplyInput(input) && input.host !== 'unified';
 
 export type InputActionEvent = MouseEvent | KeyboardEvent;
 
@@ -75,6 +81,19 @@ export type InputCommands = {
   removeAttachment: (attachment: InputAttachmentData) => void;
 };
 
+export type RestoreSnapshotOptions = {
+  focus?: boolean;
+  /**
+   * `'trailing-paragraph'` places the caret at the end of the restored
+   * content's trailing paragraph, appending an empty one when the content
+   * ends in a non-paragraph block (e.g. a quote-reply's blockquote) — so
+   * typing never extends the block itself. With `focus: false` the caret
+   * is placed when the input is next focused programmatically (e.g. via a
+   * focus request), so the restore itself never steals focus.
+   */
+  cursor?: 'trailing-paragraph';
+};
+
 export type InputHandle = {
   clear: () => void;
   focus: () => void;
@@ -82,7 +101,7 @@ export type InputHandle = {
   attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (
     snapshot: InputSnapshot,
-    options?: { focus?: boolean }
+    options?: RestoreSnapshotOptions
   ) => void;
   /**
    * Inserts a mention for a dragged soup entity into the editor. Only provided

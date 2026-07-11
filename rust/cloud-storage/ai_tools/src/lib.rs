@@ -11,6 +11,7 @@ mod display_results;
 mod schemas;
 pub mod search;
 mod search_tools;
+mod self_knowledge;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
@@ -20,6 +21,7 @@ use anthropic::toolset::anthropic_toolset;
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
+use crm::inbound::toolset::crm_toolset;
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
@@ -27,6 +29,7 @@ use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::read;
 use search_tools::{LoadTools, SearchTools};
+use self_knowledge::SelfKnowledge;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
@@ -42,15 +45,16 @@ pub use tool_context::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
     TaskPropertiesAdapter, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
-    ToolChannelMessagesService, ToolChannelToolContext, ToolChatService, ToolChatToolContext,
-    ToolCommsService, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolForeignEntityService, ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
+    ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
+    ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolForeignEntityService,
+    ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
     ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
     ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,
-    build_properties_service, build_properties_tool_context, build_task_properties_adapter,
-    build_team_tool_context,
+    build_channel_tool_context_with_dispatcher, build_crm_tool_context, build_properties_service,
+    build_properties_tool_context, build_task_properties_adapter, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
@@ -73,6 +77,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 pub(crate) fn subagent_toolset() -> AiToolSet {
     AsyncToolCollection::new()
         .add_toolset(search_toolset())
+        .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
@@ -80,6 +85,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())
         .add_subtoolset::<ToolChannelToolContext>(channel_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
+        .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
 

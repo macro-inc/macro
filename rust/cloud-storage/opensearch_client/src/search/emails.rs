@@ -2,6 +2,7 @@ use crate::{
     Result, delegate_methods,
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
+        properties::build_tag_filter,
         utils::should_wildcard_field_query_builder,
     },
 };
@@ -115,6 +116,10 @@ pub(crate) struct EmailQueryBuilder {
     importance: Option<bool>,
     /// When true, only search the subject field (for name-only search mode)
     subject_only: bool,
+    /// Tag option ids the thread must carry (definition-agnostic)
+    tag_option_ids: Vec<String>,
+    /// Whether the thread must carry every tag option id instead of any
+    match_all_tags: bool,
 }
 
 impl EmailQueryBuilder {
@@ -130,6 +135,8 @@ impl EmailQueryBuilder {
             exclude_labels: Vec::new(),
             importance: None,
             subject_only: false,
+            tag_option_ids: Vec::new(),
+            match_all_tags: false,
         }
     }
 
@@ -187,6 +194,16 @@ impl EmailQueryBuilder {
 
     pub fn subject_only(mut self, subject_only: bool) -> Self {
         self.subject_only = subject_only;
+        self
+    }
+
+    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
+        self.tag_option_ids = tag_option_ids;
+        self
+    }
+
+    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
+        self.match_all_tags = match_all_tags;
         self
     }
 
@@ -252,6 +269,13 @@ impl EmailQueryBuilder {
 
         if !self.include_labels.is_empty() {
             content_bool_query.filter(QueryType::terms("labels", self.include_labels.clone()));
+        }
+
+        // Tag filter: nested clause(s) matching the option ids in
+        // `properties.values`. Thread-level properties are denormalized onto
+        // every message doc, so filtering per doc filters the thread.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+            content_bool_query.filter(nested);
         }
 
         for label in &self.exclude_labels {
@@ -366,6 +390,8 @@ pub struct EmailSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub subject_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
 }
 
 impl From<EmailSearchArgs> for EmailQueryBuilder {
@@ -388,6 +414,8 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .subject_only(args.subject_only)
+            .tag_option_ids(args.tag_option_ids)
+            .match_all_tags(args.match_all_tags)
     }
 }
 

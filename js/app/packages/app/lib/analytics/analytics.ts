@@ -113,6 +113,14 @@ const initializePosthog = (instance: PostHog) => {
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
     before_send: (cr) => {
+      if (cr) {
+        cr.properties.env = DEV_MODE_ENV
+          ? 'DEV'
+          : PROD_MODE_ENV
+            ? 'PROD'
+            : 'LOCAL';
+      }
+
       if (cr?.event !== '$exception') return cr;
 
       const exceptionValues = cr.properties.$exception_values;

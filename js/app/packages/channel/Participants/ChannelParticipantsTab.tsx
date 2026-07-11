@@ -12,11 +12,18 @@ import {
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { ChannelBotsPanel } from './ChannelBotsPanel';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';
 
-export function ChannelParticipantsTab(props: { channelId: string }) {
+export function ChannelParticipantsTab(props: {
+  channelId: string;
+  botManagementEnabled: boolean;
+  inviteBotFocusRequest: number;
+  onCreateBot: () => void;
+  onOpenBot: (botId: string) => void;
+}) {
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const channelType = useChannelType(props.channelId);
@@ -56,6 +63,9 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const removeParticipant = (participantId: string) => {
     if (!isEditable()) return;
 
+    const participant = participants().find((p) => p.user_id === participantId);
+    if (participant?.role === 'owner') return;
+
     removeParticipantsMutation.mutate({
       channelId: props.channelId,
       participants: [participantId],
@@ -75,8 +85,8 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
 
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
-      <div class="max-w-200 size-full">
-        <Panel depth={2} class="h-full overflow-hidden text-ink">
+      <div class="max-w-200 size-full flex flex-col gap-2">
+        <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
           <Panel.Header class="px-6">
             <div class="text-sm font-semibold">Participants</div>
           </Panel.Header>
@@ -109,6 +119,15 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
             </div>
           </Panel.Body>
         </Panel>
+        <Show when={props.botManagementEnabled}>
+          <ChannelBotsPanel
+            channelId={props.channelId}
+            editable={isEditable()}
+            inviteFocusRequest={props.inviteBotFocusRequest}
+            onCreateBot={props.onCreateBot}
+            onOpenBot={props.onOpenBot}
+          />
+        </Show>
       </div>
     </div>
   );

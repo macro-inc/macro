@@ -49,6 +49,12 @@ type MessageRootProps = {
   setThreadAppendMountTarget?: (el: HTMLElement) => void;
   onThreadAppend?: () => void;
   hideConnectors?: boolean;
+  /**
+   * When true, disables the default `bg-hover` background applied on hover.
+   * Useful when a consumer applies its own hover/background styling to the
+   * message wrapper and the core hover background would conflict.
+   */
+  disableHoverBackground?: boolean;
   children: JSX.Element;
   setMessageBodyRef?: Setter<HTMLDivElement | undefined>;
   isTarget?: boolean;
@@ -219,7 +225,7 @@ const Root: Component<MessageRootProps> = (props) => {
         classList={{
           'bg-accent': props.isTarget,
           'bg-active': props.focused,
-          'bg-hover': hover(),
+          'bg-hover': hover() && !props.disableHoverBackground,
         }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}

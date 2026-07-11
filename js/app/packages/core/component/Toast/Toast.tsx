@@ -4,7 +4,7 @@ import CheckIcon from '@phosphor/check.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import Spinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn, Layer, Surface } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -116,16 +116,13 @@ interface ToastAction {
 
 /**
  * Common options for all toast calls.
- *
- * Note: by default, toasts do NOT render on mobile. Pass `mobile: true` to opt
- * in to the mobile-styled toast region (centered above the mobile dock).
  */
 interface ToastOptions {
   subtext?: string;
   /** Auto-dismiss duration in ms. When omitted, the toast uses a default 3s timer. */
   duration?: number;
-  /** When true, render this toast on mobile (in the mobile-specific region). */
-  mobile?: boolean;
+  /** When true, don't render this toast on mobile. */
+  hideOnMobile?: boolean;
 }
 
 interface ToastSuccessOptions extends ToastOptions {
@@ -233,7 +230,10 @@ function dismiss(toastId: number) {
 }
 
 // Tell users that an action has failed, because of us
-function failure(message: string, options?: ToastOptions) {
+function failure(
+  message: string,
+  options?: ToastOptions & { actions?: ToastAction[] }
+) {
   dismissIfRecent(message, ToastType.FAILURE);
   createToast(message, ToastType.FAILURE, options);
 }
@@ -288,7 +288,11 @@ function ToastBodyWrapper(props: {
         </Surface>
       }
     >
-      {props.children}
+      <Layer depth={3}>
+        <div class="island relative w-[90vw] p-2 rounded-xl">
+          {props.children}
+        </div>
+      </Layer>
     </Show>
   );
 }
@@ -454,22 +458,20 @@ function ToastContent(props: {
             {(s) => (
               <>
                 <div class="flex items-center gap-2 justify-between">
-                  <Show when={!props.mobile}>
-                    <div
-                      class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75"
-                      style={{ 'background-color': s().borderColor }}
-                    >
-                      <Dynamic
-                        component={s().icon}
-                        class={cn(
-                          'size-3.5 text-surface',
-                          props.toastType === ToastType.LOADING
-                            ? 'animate-spin'
-                            : ''
-                        )}
-                      />
-                    </div>
-                  </Show>
+                  <div
+                    class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75"
+                    style={{ 'background-color': s().borderColor }}
+                  >
+                    <Dynamic
+                      component={s().icon}
+                      class={cn(
+                        'size-3.5 text-surface',
+                        props.toastType === ToastType.LOADING
+                          ? 'animate-spin'
+                          : ''
+                      )}
+                    />
+                  </div>
                   <Toast.Title
                     class={cn(
                       'font-semibold grow shrink truncate text-left',
@@ -527,10 +529,13 @@ async function promise<T>(
     error?: string | ((error: any) => string);
     toastTypeDeterminer?: (result: T) => ToastType;
     subtext?: string;
-    mobile?: boolean;
+    /** When true, don't render the loading/result toasts on mobile. */
+    hideOnMobile?: boolean;
   }
 ): Promise<T> {
-  const useMobile = options.mobile && isMobile();
+  if (isMobile() && options.hideOnMobile) return promiseArg;
+
+  const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
   const skipOpenAnimation = dismissActiveToast(region);
 
@@ -564,7 +569,9 @@ async function promise<T>(
         const toastType =
           options.toastTypeDeterminer?.(result) ?? ToastType.SUCCESS;
 
-        createToast(successMessage, toastType, { mobile: options.mobile });
+        createToast(successMessage, toastType, {
+          hideOnMobile: options.hideOnMobile,
+        });
       }
 
       return result;
@@ -576,7 +583,7 @@ async function promise<T>(
           typeof options.error === 'function'
             ? options.error(error)
             : options.error;
-        failure(errorMessage, { mobile: options.mobile });
+        failure(errorMessage, { hideOnMobile: options.hideOnMobile });
       }
       throw error;
     });
@@ -589,10 +596,9 @@ function createToast(
   toastType: ToastType,
   options?: ToastSuccessOptions
 ) {
-  const { subtext, actions, duration, stack, mobile } = options ?? {};
+  const { subtext, actions, duration, stack, hideOnMobile } = options ?? {};
 
-  // On mobile, toasts only render when explicitly opted in via `mobile: true`.
-  if (isMobile() && !mobile) return undefined;
+  if (isMobile() && hideOnMobile) return undefined;
 
   if (!stack) {
     const key = createToastKey(message, toastType);
@@ -602,7 +608,7 @@ function createToast(
     }
   }
 
-  const useMobile = mobile && isMobile();
+  const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
   const skipOpenAnimation = dismissActiveToast(region);
 
@@ -656,10 +662,9 @@ function embed(
     persistent?: boolean;
     duration?: number;
     region?: string;
-    mobile?: boolean;
   }
 ) {
-  const useMobile = options?.mobile && isMobile();
+  const useMobile = isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
   const skipOpenAnimation = dismissActiveToast(region);
@@ -694,11 +699,10 @@ function custom(
     persistent?: boolean;
     duration?: number;
     region?: string;
-    mobile?: boolean;
     onDismiss?: () => void;
   }
 ): number {
-  const useMobile = options?.mobile && isMobile();
+  const useMobile = isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
   const skipOpenAnimation = dismissActiveToast(region);

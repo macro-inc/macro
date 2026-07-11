@@ -32,7 +32,10 @@ import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
+  AddFavoriteRequest,
   CallRecordPreview,
+  Favorite,
+  FavoritesList,
   ForeignEntity,
   GithubPullRequestsResponse,
   GroupedSoupGroupPage,
@@ -43,6 +46,7 @@ import type {
   PostGroupedSoupAstRequest,
   PostSoupAstRequest,
   PostSoupRequest,
+  ReorderFavoritesRequest,
   SoupPage,
   View,
   ViewsResponse,
@@ -56,7 +60,9 @@ import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessa
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
 import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
+import type { BotToken } from './generated/schemas/botToken';
 import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
 import { ChannelType } from './generated/schemas/channelType';
 import {
@@ -65,6 +71,8 @@ import {
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
+import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
+import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
@@ -205,6 +213,7 @@ export type ItemType =
   | 'channel'
   | 'email'
   | 'channel_message'
+  | 'channel_thread'
   | 'call'
   | 'automation'
   | 'foreign'
@@ -222,6 +231,7 @@ export type { ApiChannelContextMessage } from './generated/schemas/apiChannelCon
 export type { ApiChannelMessage } from './generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
+export type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
 export type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 
@@ -252,6 +262,32 @@ export type TaskSimilaritySearchResponse = {
 
 type WithBotId = { bot_id: string };
 type WithChannelId = { channel_id: string };
+
+type CreateBotRequest = {
+  team_id?: string;
+  name: string;
+  handle: string;
+  description?: string;
+  avatar_url?: string;
+};
+
+type PatchBotRequest = {
+  name?: string;
+  handle?: string;
+  description?: string;
+  avatar_url?: string;
+};
+
+type CreateBotTokenRequest = {
+  label?: string;
+  expires_at?: string;
+};
+
+type CreateBotTokenResponse = {
+  token: BotToken;
+  bearer_token: string;
+};
+
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
@@ -351,6 +387,9 @@ const enhancements = {
 } as const;
 
 const { showPaywall } = usePaywallState();
+
+/** Machine-readable code the backend returns when a document name is too long. */
+export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
 export const storageServiceClient = {
   async ping() {
@@ -475,6 +514,71 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getBots() {
+    return (
+      await dssFetch<Bot[]>(`/bots`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async createBot(args: CreateBotRequest) {
+    return (
+      await dssFetch<Bot>(`/bots`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async getBot(args: WithBotId) {
+    return (
+      await dssFetch<Bot>(`/bots/${args.bot_id}`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async patchBot(args: WithBotId & PatchBotRequest) {
+    const { bot_id, ...request } = args;
+    return (
+      await dssFetch<Bot>(`/bots/${bot_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async deleteBot(args: WithBotId) {
+    return await dssFetch(`/bots/${args.bot_id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async createBotToken(args: WithBotId & CreateBotTokenRequest) {
+    const { bot_id, ...request } = args;
+    return (
+      await dssFetch<CreateBotTokenResponse>(`/bots/${bot_id}/tokens`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async getBotTokens(args: WithBotId) {
+    return (
+      await dssFetch<BotToken[]>(`/bots/${args.bot_id}/tokens`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async revokeBotToken(args: WithBotId & { token_id: string }) {
+    return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getBotChannels(args: WithBotId) {
     const { bot_id } = args;
     return (
@@ -484,11 +588,41 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getChannelBots(args: WithChannelId) {
+    return (
+      await dssFetch<Bot[]>(`/channels/${args.channel_id}/bots`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async addBotToChannel(args: WithChannelId & WithBotId) {
+    return await dssFetch(`/channels/${args.channel_id}/bots`, {
+      method: 'POST',
+      body: JSON.stringify({ bot_id: args.bot_id }),
+    });
+  },
+
   async removeBotFromChannel(args: WithBotId & WithChannelId) {
     const { bot_id, channel_id } = args;
     return await dssFetch(`/bots/${bot_id}/channels/${channel_id}`, {
       method: 'DELETE',
     });
+  },
+
+  async createChannelScopedBot(
+    args: WithChannelId & CreateChannelScopedBotRequest
+  ) {
+    const { channel_id, ...request } = args;
+    return (
+      await dssFetch<CreateChannelScopedBotResponse>(
+        `/channels/${channel_id}/bots/scoped`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      )
+    ).map((result) => result);
   },
 
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
@@ -1008,18 +1142,49 @@ export const storageServiceClient = {
   },
 
   async createDocument(request: CreateDocumentRequest) {
-    const result = await dssFetch<CreateDocumentResponse>(`/documents`, {
+    const result = await fetchWithToken<
+      CreateDocumentResponse,
+      typeof DOCUMENT_NAME_TOO_LONG_CODE
+    >(`${dssHost}/documents`, {
       method: 'POST',
       body: JSON.stringify(request),
+      // A custom handler replaces safeFetch's default status mapping. For an
+      // over-length name the backend returns a machine-readable code plus the
+      // limit; forward both (limit carried as JSON in message, since ResultError
+      // is only { code, message }) so the UI can render its own copy without
+      // hardcoding the number. 403 is preserved explicitly; other statuses keep
+      // the HTTP_ERROR shape callers branch on.
+      errorResponseHandler: async (response) => {
+        const body = (await response.json().catch(() => null)) as {
+          code?: string;
+          maxLength?: number;
+        } | null;
+        if (body?.code === DOCUMENT_NAME_TOO_LONG_CODE) {
+          return {
+            code: DOCUMENT_NAME_TOO_LONG_CODE,
+            message: JSON.stringify({ maxLength: body.maxLength }),
+          };
+        }
+        if (response.status === 403) {
+          return { code: 'FORBIDDEN', message: 'Forbidden' };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
     });
 
     if (!result.isOk()) {
-      const errors = result.error;
+      // The DOCUMENT_NAME_TOO_LONG code is carried at runtime for callers to
+      // branch on, but it is not part of the generated client's error union, so
+      // narrow back to it to satisfy StorageServiceClient.
+      const errors = result.error as ResultError<FetchWithTokenErrorCode>[];
 
       if (errors[0].message.includes('403')) {
         showPaywall(PaywallKey.FILE_LIMIT);
       }
-      return err(result.error);
+      return err(errors);
     }
 
     const { data } = result.value;
@@ -1177,11 +1342,7 @@ export const storageServiceClient = {
     ).map((result) => result.duplicates);
   },
 
-  async searchSimilarTasks(params: {
-    taskName: string;
-    markdown?: string;
-    shareWithTeam?: boolean;
-  }) {
+  async searchSimilarTasks(params: { taskName: string; markdown?: string }) {
     return (
       await dssFetch<TaskSimilaritySearchResponse>(
         `/documents/similarity_search`,
@@ -1190,7 +1351,6 @@ export const storageServiceClient = {
           body: JSON.stringify({
             taskName: params.taskName,
             markdown: params.markdown,
-            shareWithTeam: params.shareWithTeam ?? false,
           }),
         }
       )
@@ -2061,6 +2221,33 @@ export const storageServiceClient = {
     async deleteView(params) {
       return await dssFetch(`/saved_views/${params.savedViewId}`, {
         method: 'DELETE',
+        body: JSON.stringify(params),
+      });
+    },
+  },
+
+  favorites: {
+    async getFavorites() {
+      return await dssFetch<FavoritesList>('/favorites');
+    },
+    async addFavorite(params: AddFavoriteRequest) {
+      return await dssFetch<Favorite>('/favorites', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+    async removeFavoriteByEntity(params: {
+      entityType: AddFavoriteRequest['entityType'];
+      entityId: string;
+    }) {
+      return await dssFetch(
+        `/favorites/${params.entityType}/${encodeURIComponent(params.entityId)}`,
+        { method: 'DELETE' }
+      );
+    },
+    async reorderFavorites(params: ReorderFavoritesRequest) {
+      return await dssFetch('/favorites/reorder', {
+        method: 'PATCH',
         body: JSON.stringify(params),
       });
     },

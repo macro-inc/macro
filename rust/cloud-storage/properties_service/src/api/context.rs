@@ -1,11 +1,9 @@
-use axum::extract::FromRef;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
-use sqlx::PgPool;
-use std::sync::Arc;
 
 use properties::PropertiesServiceImpl;
+use properties::inbound::axum_router::PropertiesRouterState;
 
 /// The concrete notification ingress service type.
 type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -21,13 +19,4 @@ pub type PropertiesService = PropertiesServiceImpl<
 >;
 
 /// Minimal state required by properties handlers.
-/// This can be extracted from any state that implements `FromRef<PropertiesHandlerState>`.
-#[derive(Clone, FromRef)]
-pub struct PropertiesHandlerState {
-    /// Macrodb database connection (contains properties tables and permission tables)
-    pub db: PgPool,
-    /// The properties service implementation
-    pub properties_service: Arc<PropertiesService>,
-    /// The entity access service for permission checks
-    pub entity_access_service: Arc<EntityAccessServiceType>,
-}
+pub type PropertiesHandlerState = PropertiesRouterState<PropertiesService, EntityAccessServiceType>;

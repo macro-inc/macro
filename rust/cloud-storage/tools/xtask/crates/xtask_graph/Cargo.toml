@@ -1,0 +1,11 @@
+[package]
+description = "Shared guppy PackageGraph builder for the graph-based xtask commands"
+edition = "2024"
+name = "xtask_graph"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+guppy = { workspace = true }
+xtask_paths = { path = "../xtask_paths" }

@@ -3,7 +3,7 @@ use crate::api::{
     oauth2::{OAuthState, format_redirect_uri},
     utils::{
         create_access_token_cookie, create_refresh_token_cookie, default_redirect_url,
-        generate_session_code,
+        generate_session_code, spawn_first_inbox_provision,
     },
 };
 use axum::{
@@ -109,6 +109,8 @@ pub(in crate::api::oauth2) async fn handler(
     // Set cookies
     cookies.add(create_access_token_cookie(&access_token));
     cookies.add(create_refresh_token_cookie(&refresh_token));
+
+    spawn_first_inbox_provision(ctx, &access_token);
 
     match environment {
         Environment::Local => Ok(StatusCode::OK.into_response()), // We don't really care about redirect in local

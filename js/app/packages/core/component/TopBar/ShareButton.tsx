@@ -785,6 +785,13 @@ export function ShareModal(props: ShareModalProps) {
             subtext: accessLevelText(accessLevel),
           });
         }
+
+        analytics.track('share_entity', {
+          entityType: props.itemType,
+          entityId: props.id,
+          shareMethod: 'channel',
+          accessLevel,
+        });
       } else {
         toast.alert('Failed to change channel access', {
           subtext: 'Please try again',
@@ -828,6 +835,8 @@ export function ShareModal(props: ShareModalProps) {
 
             analytics.track('share_entity', {
               entityType: 'chat',
+              entityId: props.id,
+              shareMethod: 'public_link',
               accessLevel,
               isPublic: true,
             });
@@ -859,6 +868,8 @@ export function ShareModal(props: ShareModalProps) {
 
             analytics.track('share_entity', {
               entityType: 'document',
+              entityId: props.id,
+              shareMethod: 'public_link',
               accessLevel,
               isPublic: true,
             });
@@ -890,6 +901,8 @@ export function ShareModal(props: ShareModalProps) {
 
             analytics.track('share_entity', {
               entityType: 'project',
+              entityId: props.id,
+              shareMethod: 'public_link',
               accessLevel,
               isPublic: true,
             });

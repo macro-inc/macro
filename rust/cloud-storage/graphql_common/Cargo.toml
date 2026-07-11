@@ -1,0 +1,15 @@
+[package]
+name = "graphql_common"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true }
+axum = { workspace = true }
+filter_ast = { path = "../filter_ast" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+tokio = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

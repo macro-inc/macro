@@ -4,6 +4,7 @@ import {
   normalizeRGBA,
   parseRGBA,
   rgbaToOklch,
+  stripContentBackgrounds,
 } from '../transform-email-colors';
 
 describe('parseRGBA', () => {
@@ -86,6 +87,64 @@ describe('rgbaToOklch', () => {
   it('returns null for null input', () => {
     const result = rgbaToOklch(null);
     expect(result).toBeNull();
+  });
+});
+
+describe('stripContentBackgrounds', () => {
+  function render(html: string): HTMLElement {
+    const root = document.createElement('div');
+    root.innerHTML = html;
+    document.body.appendChild(root);
+    return root;
+  }
+
+  function bg(el: Element | null) {
+    return (el as HTMLElement).style.backgroundColor;
+  }
+
+  it('strips light page-like backgrounds', () => {
+    const root = render(
+      '<div id="page" style="background-color:#ffffff">text</div>'
+    );
+    stripContentBackgrounds(root);
+    expect(bg(root.querySelector('#page'))).toBe('transparent');
+    root.remove();
+  });
+
+  it('keeps dark/colored backgrounds', () => {
+    const root = render(
+      '<a id="btn" style="background-color:#7e82c9;color:#ffffff">button</a>'
+    );
+    stripContentBackgrounds(root);
+    expect(bg(root.querySelector('#btn'))).toBe('rgb(126, 130, 201)');
+    root.remove();
+  });
+
+  it('keeps a light background layered on a kept colored ancestor (1px-border button trick)', () => {
+    // Outer div is a colored "border", inner anchor is the light button face
+    // with text color matching the border. Stripping the face would leave
+    // same-on-same invisible text.
+    const root = render(
+      '<div id="border" style="background-color:#51b1e7;padding:1px">' +
+        '<a id="face" style="background-color:#e4ecf2;color:#51b1e7">Very disappointed</a>' +
+        '</div>'
+    );
+    stripContentBackgrounds(root);
+    expect(bg(root.querySelector('#border'))).toBe('rgb(81, 177, 231)');
+    expect(bg(root.querySelector('#face'))).toBe('rgb(228, 236, 242)');
+    root.remove();
+  });
+
+  it('strips nested light backgrounds once the ancestor light bg is stripped', () => {
+    const root = render(
+      '<div id="outer" style="background-color:#ffffff">' +
+        '<div id="inner" style="background-color:#f2f2f2">text</div>' +
+        '</div>'
+    );
+    stripContentBackgrounds(root);
+    expect(bg(root.querySelector('#outer'))).toBe('transparent');
+    expect(bg(root.querySelector('#inner'))).toBe('transparent');
+    root.remove();
   });
 });
 

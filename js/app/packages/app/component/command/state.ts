@@ -36,6 +36,14 @@ interface ICommandState {
   clearCommandScopeCommands: () => void;
   isInCommandScope: Accessor<boolean>;
 
+  /** input placeholder while a command scope is active */
+  commandScopePlaceholder: Accessor<string | undefined>;
+  registerCommandScopePlaceholder: (
+    scopeId: string,
+    placeholder: string
+  ) => () => void;
+  activateCommandScopePlaceholder: (scopeId: string) => void;
+
   /** entity action mode (for selection modification commands) */
   entityActionEntities: Accessor<EntityData[]>;
   setEntityActionEntities: Setter<EntityData[]>;
@@ -66,6 +74,25 @@ function createCommandState(): ICommandState {
     EntityData[]
   >([]);
 
+  /** Optional input placeholders for command scopes, keyed by scope id. */
+  const commandScopePlaceholders = new Map<string, string>();
+  const [commandScopePlaceholder, setCommandScopePlaceholder] =
+    createSignal<string>();
+
+  function registerCommandScopePlaceholder(
+    scopeId: string,
+    placeholder: string
+  ) {
+    commandScopePlaceholders.set(scopeId, placeholder);
+    return () => {
+      commandScopePlaceholders.delete(scopeId);
+    };
+  }
+
+  function activateCommandScopePlaceholder(scopeId: string) {
+    setCommandScopePlaceholder(commandScopePlaceholders.get(scopeId));
+  }
+
   function toggle() {
     setIsOpen((prev) => !prev);
   }
@@ -92,6 +119,7 @@ function createCommandState(): ICommandState {
 
   function clearCommandScopeCommands() {
     setCommandScopeCommands([]);
+    setCommandScopePlaceholder(undefined);
   }
 
   function isInCommandScope() {
@@ -160,6 +188,10 @@ function createCommandState(): ICommandState {
     setCommandScopeCommands,
     clearCommandScopeCommands,
     isInCommandScope,
+
+    commandScopePlaceholder,
+    registerCommandScopePlaceholder,
+    activateCommandScopePlaceholder,
 
     entityActionEntities,
     setEntityActionEntities,

@@ -60,8 +60,11 @@ export function useIsTeamAdmin(): Accessor<boolean> {
 }
 
 export function invalidateUserTeams() {
-  return queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: teamKeys.userTeams.queryKey,
+  });
+  queryClient.invalidateQueries({
+    queryKey: teamKeys.currentTeam.queryKey,
   });
 }
 

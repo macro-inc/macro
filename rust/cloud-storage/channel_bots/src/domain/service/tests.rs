@@ -294,6 +294,7 @@ fn context_message(
         edited_at: None,
         deleted_at: None,
         bot_profile: None,
+        triggered_by: None,
     }
 }
 
@@ -307,6 +308,7 @@ fn thread_reply(id: Uuid, sender_id: &str, content: &str) -> ThreadReply {
         created_at: now,
         updated_at: now,
         edited_at: None,
+        triggered_by: None,
         reactions: Vec::new(),
         attachments: Vec::new(),
     }
@@ -326,12 +328,13 @@ fn mention_event(
             id: trigger_id,
             channel_id,
             thread_id,
-            sender_id: Sender::User(user_id(sender_email)),
+            sender_id: Sender::new_from_user(user_id(sender_email)),
             content: content.to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             edited_at: None,
             deleted_at: None,
+            triggered_by: None,
         },
         reply_thread_id: thread_id.unwrap_or(trigger_id),
         requesting_user: user_id(sender_email),

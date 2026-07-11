@@ -5,11 +5,18 @@ import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { usePreviewPaneVisiblity } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_NEW_INBOX_FLAG,
+  ENABLE_NEW_INBOX_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -22,24 +29,27 @@ import { useSoup } from '../../soup-context';
 export function SoupFiltersBar() {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
+
   const [filterDropdownOpen, setFilterDropdownOpen] = createSignal(false);
 
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
   const soup = useSoup();
+  const { setPreviewOpen } = useSoupView();
+
+  const { isWideSplitPanel, previewOpen, selectedEntity } =
+    usePreviewPaneVisiblity();
 
   const togglePreview = () => {
-    const currentPreview = soup.previewEntity();
-    if (currentPreview) {
+    if (previewOpen()) {
+      setPreviewOpen(false);
       soup.setPreviewEntity(undefined);
       return;
     }
-    const focused = soup.focus.id();
-    if (!focused) {
-      return;
-    }
+
     analytics.track('preview_panel_use');
-    soup.setPreviewEntity(focused);
+    soup.setPreviewEntity(selectedEntity()?.id);
+    setPreviewOpen(true);
   };
 
   registerHotkey({
@@ -58,12 +68,27 @@ export function SoupFiltersBar() {
     return content.type === 'component' && content.id === 'search';
   });
 
+  // The new inbox hides sort (it's fixed to updated_at for this view).
+  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
+    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
+  });
+  const isNewInbox = createMemo(() => {
+    const content = panel.handle.content();
+    return (
+      content.type === 'component' &&
+      content.id === 'inbox' &&
+      newInboxFlag().enabled
+    );
+  });
+
   return (
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
         <div class="flex items-start gap-1 min-w-0 flex-1">
           <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
-            <SoupViewContextSort />
+            <Show when={!isNewInbox()}>
+              <SoupViewContextSort />
+            </Show>
             <SoupViewContextGroup />
             <UnifiedFilterDropdown
               open={filterDropdownOpen}
@@ -73,15 +98,21 @@ export function SoupFiltersBar() {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <Tooltip hotkey={TOKENS.unifiedList.togglePreview} label="Preview">
+        <Tooltip
+          hotkey={
+            isWideSplitPanel() ? TOKENS.unifiedList.togglePreview : undefined
+          }
+          label={isWideSplitPanel() ? 'Preview' : 'No space for preview'}
+        >
           <Button
             onClick={togglePreview}
             variant="base"
             size="sm"
             depth={2}
             class="bg-surface"
+            disabled={!isWideSplitPanel()}
           >
-            {soup.previewEntity() ? <EyeSlashIcon /> : <EyeIcon />}
+            {previewOpen() ? <EyeSlashIcon /> : <EyeIcon />}
             <span>Preview</span>
           </Button>
         </Tooltip>

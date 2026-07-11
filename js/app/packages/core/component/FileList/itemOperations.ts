@@ -127,6 +127,12 @@ export async function renameItem(args: {
     return false;
   }
 
+  analytics.track('update_entity', {
+    entityType: itemType,
+    entityId: id,
+    property: 'name',
+  });
+
   return true;
 }
 
@@ -200,6 +206,12 @@ export async function deleteItem(args: {
     if (!removed) return false;
   }
 
+  analytics.track('delete_entity', {
+    entityType: itemType,
+    entityId: id,
+    deleteType: 'soft',
+  });
+
   refetchResources();
   return true;
 }
@@ -241,7 +253,8 @@ export async function bulkDelete(
 export async function moveToFolder(args: {
   itemType: ItemType;
   id: string;
-  folderId: string;
+  /** null removes the item from its folder */
+  folderId: string | null;
 }): Promise<boolean> {
   const { itemType, id, folderId } = args;
   const accessLevel = await getItemAccessLevel({ itemType, id });
@@ -251,24 +264,25 @@ export async function moveToFolder(args: {
 
   let result;
   switch (itemType) {
+    // Storage/chat backends clear the folder on empty string; email on null.
     case 'document': {
       result = await storageServiceClient.editDocument({
         documentId: id,
-        projectId: folderId,
+        projectId: folderId ?? '',
       });
       break;
     }
     case 'project': {
       result = await storageServiceClient.projects.edit({
         id,
-        projectParentId: folderId,
+        projectParentId: folderId ?? '',
       });
       break;
     }
     case 'chat': {
       result = await cognitionApiServiceClient.editChatProject({
         chat_id: id,
-        project_id: folderId,
+        project_id: folderId ?? '',
       });
       break;
     }
@@ -287,6 +301,14 @@ export async function moveToFolder(args: {
   if (result.isErr()) {
     return false;
   }
+
+  analytics.track('update_entity', {
+    entityType: itemType,
+    entityId: id,
+    property: 'parent_project',
+    newProjectId: folderId,
+  });
+
   refetchResources();
   return true;
 }
@@ -369,6 +391,13 @@ export async function copyItem(args: {
     default:
       return null;
   }
+
+  analytics.track('create_entity', {
+    entityType: itemType,
+    entityId: newId,
+    via: 'duplicate',
+    sourceEntityId: id,
+  });
 
   refetchResources();
   return newId;
@@ -507,7 +536,11 @@ export async function permanentlyDelete(args: {
     return false;
   }
 
-  analytics.track('delete_entity', { entityType: itemType });
+  analytics.track('delete_entity', {
+    entityType: itemType,
+    entityId: id,
+    deleteType: 'permanent',
+  });
   return true;
 }
 

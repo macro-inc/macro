@@ -263,6 +263,8 @@ type RemoteCursorsOverlayProps = {
 };
 
 function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
+  const tagHideAt = new Map<string, number>();
+
   createEffect(
     on(
       () => props.awareness.remote(),
@@ -270,10 +272,21 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
     )
   );
 
+  // Purge entries for cursors that have left so the tag resets on next appearance.
+  createEffect(() => {
+    const active = new Set(
+      props.remoteCursors().map((c) => c.user ?? 'Anonymous')
+    );
+    for (const user of [...tagHideAt.keys()]) {
+      if (!active.has(user)) tagHideAt.delete(user);
+    }
+  });
+
   return (
     <Portal mount={props.anchorElem}>
       <For each={props.remoteCursors()}>
         {(cursor) => {
+          const userKey = cursor.user ?? 'Anonymous';
           const userName = cursor.user
             ? idToEmail(cursor.user).split('@')[0]
             : 'Anonymous';
@@ -286,10 +299,19 @@ function RemoteCursorsOverlay(props: RemoteCursorsOverlayProps) {
 
           const userTagHeight = 20;
 
-          const [shouldShow, setShouldShow] = createSignal<boolean>(true);
-          setTimeout(() => {
-            setShouldShow(false);
-          }, 1500);
+          // HACK: for now we ensure AI names stick around by ensuring they conform to the name pattern. We prob want to take a param instead.
+          const isAI = userKey.endsWith('(AI)');
+
+          if (!tagHideAt.has(userKey)) {
+            tagHideAt.set(userKey, Date.now() + 1500);
+          }
+          const remaining = tagHideAt.get(userKey)! - Date.now();
+          const [shouldShow, setShouldShow] = createSignal<boolean>(
+            isAI || remaining > 0
+          );
+          if (!isAI && remaining > 0) {
+            setTimeout(() => setShouldShow(false), remaining);
+          }
 
           return (
             <>

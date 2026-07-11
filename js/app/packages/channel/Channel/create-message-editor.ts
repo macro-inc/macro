@@ -25,6 +25,11 @@ type CreateMessageEditorOptions = {
   channelId: () => string;
   participantIds: () => string[];
   patchMessage: (input: PatchMessageInput) => void;
+  /**
+   * Called when an edit session ends — saved, cancelled, or abandoned by
+   * starting an edit on a different message.
+   */
+  onEditEnded?: (message: MessageData) => void;
 };
 
 export type MessageEditor = {
@@ -40,9 +45,19 @@ export function createMessageEditor(
 ): MessageEditor {
   const [editState, setEditState] = createSignal<MessageEditState>();
 
+  const endEdit = (message: MessageData) => {
+    setEditState(undefined);
+    options.onEditEnded?.(message);
+  };
+
   const start: MessageEditor['start'] = (message: MessageData) => {
+    const previous = editState();
+    if (previous && previous.messageId !== message.id) {
+      options.onEditEnded?.(previous.message);
+    }
     setEditState({
       messageId: message.id,
+      message,
       snapshot: buildMessageEditSnapshot(message),
     });
   };
@@ -55,8 +70,9 @@ export function createMessageEditor(
   };
 
   const cancel: MessageEditor['cancel'] = (messageId: string) => {
-    if (editState()?.messageId !== messageId) return;
-    setEditState(undefined);
+    const current = editState();
+    if (!current || current.messageId !== messageId) return;
+    endEdit(current.message);
   };
 
   const save: MessageEditor['save'] = (message, snapshot) => {
@@ -80,7 +96,7 @@ export function createMessageEditor(
     const hasAttachmentChanges =
       attachmentIDsToDelete.length > 0 || newAttachments.length > 0;
     if (!hasContentChanged && !hasAttachmentChanges) {
-      setEditState(undefined);
+      endEdit(message);
       return;
     }
 
@@ -92,7 +108,7 @@ export function createMessageEditor(
       attachmentIDsToDelete,
       attachmentsToAdd: newAttachments.length > 0 ? newAttachments : undefined,
     });
-    setEditState(undefined);
+    endEdit(message);
   };
 
   return {

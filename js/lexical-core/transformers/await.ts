@@ -1,10 +1,10 @@
 import type { TextMatchTransformer } from '@lexical/markdown';
 import type { TextNode } from 'lexical';
+import { $createAwaitNode, $isAwaitNode, AwaitNode } from '../nodes/AwaitNode';
 import {
-  $createAwaitNode,
-  $isAwaitNode,
-  AwaitNode,
-} from '../nodes/AwaitNode';
+  replaceTextWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 /**
  * Internal transformer for persisted await placeholders.
@@ -14,7 +14,7 @@ import {
  * static channel markdown can render the same placeholder node.
  */
 export const I_AWAIT_NODE: TextMatchTransformer = {
-  dependencies: [AwaitNode],
+  dependencies: [AwaitNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-await>(.*?)<\/m-await>/,
   importRegExp: /<m-await>(.*?)<\/m-await>/,
@@ -37,6 +37,7 @@ export const I_AWAIT_NODE: TextMatchTransformer = {
       );
     } catch (e) {
       console.error('Error in I_AWAIT_NODE replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Await');
     }
   },
 };

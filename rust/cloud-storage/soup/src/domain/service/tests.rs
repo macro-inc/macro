@@ -506,6 +506,7 @@ fn channel_thread_message(
         updated_at,
         edited_at: None,
         deleted_at: None,
+        triggered_by: None,
         thread: ThreadInfo {
             reply_count: 1,
             latest_reply_at: Some(DateTime::default() + Days::new(1)),
@@ -517,6 +518,7 @@ fn channel_thread_message(
                 created_at: DateTime::default() + Days::new(1),
                 updated_at: DateTime::default() + Days::new(1),
                 edited_at: None,
+                triggered_by: None,
                 reactions: Vec::new(),
                 attachments: Vec::new(),
             }],
@@ -835,6 +837,55 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
 }
 
 #[tokio::test]
+async fn crm_filters_without_team_receipt_are_rejected() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    let hidden_companies_filter = EntityFilters {
+        crm_company_filters: item_filters::CrmCompanyFilters {
+            company_ids: vec![],
+            hidden: Some(true),
+        },
+        ..EntityFilters::default()
+    };
+    let crm_scope_filter = EntityFilters {
+        email_filters: item_filters::EmailFilters {
+            crm_domains: vec!["example.com".to_string()],
+            ..item_filters::EmailFilters::default()
+        },
+        ..EntityFilters::default()
+    };
+
+    for filters in [hidden_companies_filter, crm_scope_filter] {
+        let err = SoupImpl::new(
+            MockSoupRepo::new(),
+            FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+            NoopEmailPreviewService,
+            NoopCommsService,
+            NoopCallRecordQueryService,
+            NoOpCrmService,
+            RecordingForeignEntityService::new(Vec::new()),
+        )
+        .get_user_soup(
+            SoupRequest {
+                email_preview_view: PreviewView::StandardLabel(
+                    email::domain::models::PreviewViewStandardLabel::Inbox,
+                ),
+                link_ids: vec![],
+                soup_type: SoupType::UnExpanded,
+                limit: 20,
+                cursor: SoupQuery::new_sort_simple(SimpleSortMethod::UpdatedAt, filters),
+                user: user.clone(),
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, SoupErr::CrmTeamRequired), "{err:?}");
+    }
+}
+
+#[tokio::test]
 async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
     let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
     let foreign_entity_service =
@@ -922,7 +973,7 @@ async fn it_should_not_query_frecency() {
         });
     soup_mock
         .expect_populate_properties()
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1533,7 +1584,7 @@ async fn cursor_should_return_simple_sort() {
         });
     soup_mock
         .expect_populate_properties()
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1667,7 +1718,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         });
     soup_mock
         .expect_populate_properties()
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1719,7 +1770,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         });
     soup_mock
         .expect_populate_properties()
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1771,7 +1822,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         });
     soup_mock
         .expect_populate_properties()
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1835,7 +1886,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         });
     soup_mock
         .expect_populate_properties()
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,

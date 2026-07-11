@@ -120,7 +120,6 @@ export const useApplyPreset = () => {
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
-    email: user.email(),
     isTeamAdmin: isTeamAdmin(),
   });
 
@@ -175,6 +174,20 @@ export const useApplyPreset = () => {
         if (!query) continue;
 
         mergedFilters = mergeQuery(mergedFilters, query);
+      }
+
+      // Tags are a query-only refinement with no backing predicate, so the
+      // predicate-driven reconstruction above never carries them. Preserve the
+      // active selection (and its combine mode) explicitly like any other
+      // refinement.
+      const activeTagFilters = queryFilters.state.include.tagFilters;
+      if (activeTagFilters?.length) {
+        mergedFilters = mergeQuery(mergedFilters, {
+          include: {
+            tagFilters: activeTagFilters.map((t) => ({ ...t })),
+            tagFilterMode: queryFilters.state.include.tagFilterMode,
+          },
+        });
       }
 
       nextFilters = mergedFilters;

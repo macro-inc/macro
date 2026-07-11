@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE webhook\n            SET\n                last_failure_at = GREATEST(COALESCE(last_failure_at, $2), $2),\n                updated_at = GREATEST(updated_at, $2)\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "373397112fdf355b6fa294d50eee28cae14ac674f49c11349823e4b3c2e13938"
+}

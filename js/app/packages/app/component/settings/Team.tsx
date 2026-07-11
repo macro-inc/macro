@@ -1,68 +1,71 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
-import PlusIcon from '@phosphor/plus.svg';
-import UsersIcon from '@phosphor/users.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import XIcon from '@phosphor/x.svg';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { SERVER_HOSTS } from '@core/constant/servers';
+import { useUserId } from '@core/context/user';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { debouncedDependent } from '@core/util/debounce';
+import { fuzzyFilter } from '@core/util/fuzzy';
+import { getWebOrigin } from '@core/util/webOrigin';
+import { formatRelativeTimestamp } from '@entity';
+import GithubIcon from '@icon/mcp-github.svg';
+import type { CollectionNode } from '@kobalte/core';
+import { Select } from '@kobalte/core/select';
+import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import LinkIcon from '@phosphor/link.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-
-import { Tooltip } from '@ui';
-import { Button } from '@ui';
-import { Dialog, Panel } from '@ui';
-import { cn } from '@ui';
+import PlusIcon from '@phosphor/plus.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
+import TrashIcon from '@phosphor/trash.svg';
+import UsersIcon from '@phosphor/users.svg';
+import XIcon from '@phosphor/x.svg';
 import {
-  SettingsCard,
-  SettingsPage,
-  SettingsRow,
-  SettingsSection,
-} from './primitives';
-import { Select } from '@kobalte/core/select';
-import { useUserId } from '@core/context/user';
-import { useDisplayName, tryMacroId, macroIdToEmail } from '@core/user';
+  useJoinTeamMutation,
+  useRejectInvitationMutation,
+  useUserInvitesQuery,
+} from '@queries/team/invitations';
+import {
+  useDeleteTeamInviteMutation,
+  useInviteToTeamMutation,
+  useTeamInvitesQuery,
+} from '@queries/team/invites';
+import { useRemoveUserFromTeamMutation } from '@queries/team/members';
+import {
+  useCreateTeamWithInvitesMutation,
+  useDeleteTeamMutation,
+  usePatchTeamMutation,
+  useTeamQuery,
+  useUserTeamsQuery,
+} from '@queries/team/teams';
+import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
+import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
+import { TeamRole } from '@service-auth/generated/schemas/teamRole';
+import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
 import {
   createMemo,
   createSignal,
   For,
   Index,
-  mapArray,
   Match,
+  mapArray,
+  onCleanup,
   Show,
   Suspense,
   Switch,
 } from 'solid-js';
-import type { CollectionNode } from '@kobalte/core';
-import {
-  useUserTeamsQuery,
-  useTeamQuery,
-  usePatchTeamMutation,
-  useDeleteTeamMutation,
-  useCreateTeamWithInvitesMutation,
-} from '@queries/team/teams';
-import {
-  useTeamInvitesQuery,
-  useDeleteTeamInviteMutation,
-  useInviteToTeamMutation,
-} from '@queries/team/invites';
-import {
-  useUserInvitesQuery,
-  useJoinTeamMutation,
-  useRejectInvitationMutation,
-} from '@queries/team/invitations';
-import { useRemoveUserFromTeamMutation } from '@queries/team/members';
-import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
-import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { formatRelativeTimestamp } from '@entity';
-import { useHasPaidAccess } from '@core/auth/license';
-import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
+import {
+  IntegrationRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from './primitives';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
-import { debouncedDependent } from '@core/util/debounce';
-import { fuzzyFilter } from '@core/util/fuzzy';
 
 function useRequiresPaidUpgrade() {
   const hasPaidAccess = useHasPaidAccess();
@@ -124,7 +127,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-surface ring-1 ring-edge rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="z-50 bg-surface ring ring-edge rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -387,6 +390,23 @@ function InviteRow(props: {
   isOwner: boolean;
   onCancel: () => void;
 }) {
+  const [copied, setCopied] = createSignal(false);
+  let copyResetTimeout: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(copyResetTimeout));
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`
+      );
+    } catch (err) {
+      console.error('Failed to copy to clipboard', err);
+      return;
+    }
+    setCopied(true);
+    clearTimeout(copyResetTimeout);
+    copyResetTimeout = setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
       <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -404,6 +424,18 @@ function InviteRow(props: {
         </div>
       </div>
       <Show when={props.isOwner}>
+        <Tooltip label={copied() ? 'Copied' : 'Copy invite link'}>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="shrink-0"
+            onClick={handleCopyLink}
+          >
+            <Show when={copied()} fallback={<LinkIcon class="size-4" />}>
+              <CheckIcon class="size-4" />
+            </Show>
+          </Button>
+        </Tooltip>
         <Tooltip label="Cancel invite">
           <Button
             variant="ghost"
@@ -462,12 +494,7 @@ function UserInviteRow(props: {
           variant="active"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
-          tooltip={
-            props.requiresUpgrade
-              ? 'Joining a team requires a paid plan'
-              : undefined
-          }
-          onClick={props.requiresUpgrade ? props.onUpgrade : props.onAccept}
+          onClick={props.onAccept}
         >
           <Show when={props.isAccepting} fallback="Join">
             <SpinnerIcon class="size-4 animate-spin" />
@@ -760,7 +787,12 @@ const TEAM_FIELD_CLASS = 'settings-input w-56 mobile:w-32';
 function ReadOnlyField(props: { value: string; tooltip: string }) {
   return (
     <Tooltip label={props.tooltip} placement="top">
-      <input type="text" value={props.value} disabled class={TEAM_FIELD_CLASS} />
+      <input
+        type="text"
+        value={props.value}
+        disabled
+        class={TEAM_FIELD_CLASS}
+      />
     </Tooltip>
   );
 }
@@ -1198,6 +1230,26 @@ function TeamManagement(props: {
           </SettingsCard>
         </SettingsSection>
 
+        <SettingsSection title="Connections">
+          <SettingsCard>
+            <IntegrationRow
+              icon={<GithubIcon />}
+              title="GitHub App"
+              description="Connect your team's repositories for pull request sync."
+            >
+              <a
+                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              >
+                Configure app
+                <ArrowUpRightIcon class="size-3.5 opacity-70" />
+              </a>
+            </IntegrationRow>
+          </SettingsCard>
+        </SettingsSection>
+
         <SettingsSection
           title="Members"
           actions={
@@ -1292,9 +1344,7 @@ function TeamManagement(props: {
           </Show>
         </SettingsSection>
 
-        <Show
-          when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}
-        >
+        <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
           <SettingsSection title="Pending invites">
             <SettingsCard>
               <For each={invitesQuery.data?.invites ?? []}>

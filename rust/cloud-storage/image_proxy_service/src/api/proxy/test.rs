@@ -127,6 +127,18 @@ fn test_is_private_ip_public() {
     assert!(!is_private_ip(&"2607:f8b0:4004:800::200e".parse().unwrap()));
 }
 
+#[test]
+fn test_is_retryable_without_ua() {
+    // UA-rejection symptoms — worth a no-UA retry.
+    assert!(ProxyError::UpstreamStatus(StatusCode::FORBIDDEN).is_retryable_without_ua());
+    assert!(ProxyError::NotAnImage("text/html".into()).is_retryable_without_ua());
+    // Not UA-related — retrying without a UA wouldn't help.
+    assert!(!ProxyError::UpstreamTimeout("timed out".into()).is_retryable_without_ua());
+    assert!(!ProxyError::UpstreamConnect("refused".into()).is_retryable_without_ua());
+    assert!(!ProxyError::PrivateIp.is_retryable_without_ua());
+    assert!(!ProxyError::InvalidScheme.is_retryable_without_ua());
+}
+
 fn response_with_status_and_location(status: u16, location: Option<&str>) -> reqwest::Response {
     let mut builder = axum::http::Response::builder().status(status);
     if let Some(location) = location {

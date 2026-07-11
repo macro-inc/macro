@@ -192,7 +192,7 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
       listeners: this._options?.listeners,
       serializer,
       buffer: this._options?.buffer,
-    } as WebsocketOptions<NewSend, NewReceive>;
+    } as unknown as WebsocketOptions<NewSend, NewReceive>;
 
     if (serializer.binaryType !== undefined) {
       return newBuilder.withBinaryType(serializer.binaryType);

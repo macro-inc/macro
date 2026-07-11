@@ -1,3 +1,4 @@
+use crate::SoupProperty;
 use chrono::{DateTime, Utc};
 use crm::domain::model::{CrmCompanyForSoup, CrmDomain};
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,10 @@ pub struct SoupCrmCompany {
     /// Domains associated with this company, ordered by creation time
     /// ascending (primary first).
     pub domains: Vec<SoupCrmDomain>,
+    /// Properties attached to this company (system CRM properties like
+    /// Stage / Owner / Revenue plus any custom ones).
+    #[serde(default)]
+    pub properties: Vec<SoupProperty>,
 }
 
 impl From<CrmCompanyForSoup> for SoupCrmCompany {
@@ -86,6 +91,7 @@ impl From<CrmCompanyForSoup> for SoupCrmCompany {
                 .into_iter()
                 .map(SoupCrmDomain::from)
                 .collect(),
+            properties: Vec::new(),
         }
     }
 }

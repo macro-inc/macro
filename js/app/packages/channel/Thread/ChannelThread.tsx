@@ -1,5 +1,6 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
@@ -7,6 +8,7 @@ import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThrea
 import { createEffect, createSignal, on, Show, untrack } from 'solid-js';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
+import { isUnifiedInputMode } from '../unified-input-mode';
 import { createThreadHotkeys } from './create-thread-hotkeys';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
@@ -32,6 +34,17 @@ export function ChannelThread(props: ThreadProps) {
     (hasReplies() && thread().reply_count > DEFAULT_VISIBLE_REPLY_COUNT);
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
+
+  // The unified input's reply binding, resolved against this thread.
+  // `undefined` unless the binding points into this thread; otherwise it is
+  // bound either to the root or to one of this thread's replies.
+  const unifiedReplyBinding = () => {
+    const target = props.unifiedReplyTarget;
+    if (!isUnifiedInputMode() || target?.threadId !== props.data().id) {
+      return undefined;
+    }
+    return { boundToRoot: !target.replyId, boundReplyId: target.replyId };
+  };
 
   const repliesQuery = useThreadRepliesQuery(
     props.channelId,
@@ -84,7 +97,23 @@ export function ChannelThread(props: ThreadProps) {
   );
 
   const isThreadFocused = () => !!replySelection.selectedId();
+
+  // Channel navigation landed on this root message (and not on one of its
+  // replies).
+  const isRootNavTargeted = () =>
+    !!props.targetThreadId &&
+    props.targetThreadId === props.data().id &&
+    !props.activeTargetReplyId;
+
   const selectThreadMessage = () => {
+    // Clicking the navigation-targeted message releases the target instead
+    // of toggling selection.
+    if (isRootNavTargeted()) {
+      props.onClearTarget?.(props.data().id);
+      return;
+    }
+    // On touch devices, we want to block "click to select"
+    if (isTouchDevice()) return;
     if (isSelected() && !isThreadFocused()) {
       props.onClearSelection?.();
       return;
@@ -95,6 +124,14 @@ export function ChannelThread(props: ThreadProps) {
   };
 
   const selectReply = (replyId: string) => {
+    // Clicking the navigation-targeted reply releases the target instead of
+    // toggling selection.
+    if (props.activeTargetReplyId === replyId) {
+      props.onClearTarget?.(props.data().id);
+      return;
+    }
+    // On touch devices, we want to block "click to select"
+    if (isTouchDevice()) return;
     if (isSelected() && replySelection.selectedId() === replyId) {
       replySelection.clear();
       props.onClearSelection?.();
@@ -145,32 +182,40 @@ export function ChannelThread(props: ThreadProps) {
     getUniqueReplyUserIds(activeReplies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
+  // Replying to this thread — inline input open, or the unified input bound.
+  const isReplyingToThread = () =>
+    props.isReplying() || unifiedReplyBinding() !== undefined;
   const shouldShowCollapsedIndicator = () =>
-    !props.isReplying() && !props.isExpanded() && collapsedRepliesCount() > 0;
+    !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
+    !isUnifiedInputMode() &&
     hasReplies() &&
     !!replyAction() &&
-    !props.isReplying() &&
+    !isReplyingToThread() &&
     !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
 
   createEffect(
     on(
-      [() => props.selectedReplyId, () => props.targetReplyId, loadedReplies],
-      ([selectedReplyId, _targetReplyId, replies]) => {
-        if (!selectedReplyId) {
+      [
+        () => props.activeTargetReplyId,
+        () => props.targetReplyId,
+        loadedReplies,
+      ],
+      ([activeTargetReplyId, _targetReplyId, replies]) => {
+        if (!activeTargetReplyId) {
           if (replySelection.selectedId()) replySelection.clear();
           return;
         }
-        const found = replies.some((r) => r.id === selectedReplyId);
+        const found = replies.some((r) => r.id === activeTargetReplyId);
         if (!found) {
           if (replySelection.selectedId()) replySelection.clear();
           return;
         }
         props.onSelectMessage?.(props.data().id);
-        replySelection.select(selectedReplyId);
+        replySelection.select(activeTargetReplyId);
       }
     )
   );
@@ -221,6 +266,7 @@ export function ChannelThread(props: ThreadProps) {
   return (
     <DebugSuspense name="ChannelThread.root">
       <Thread.Row
+        channelId={props.channelId()}
         message={props.data()}
         listMeta={props.listMeta}
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
@@ -239,20 +285,22 @@ export function ChannelThread(props: ThreadProps) {
                 messageEditor={props.messageEditor}
                 participants={props.participants}
                 onClick={selectThreadMessage}
-                highlighted={isSelected() && !isThreadFocused()}
-                selectionState={
-                  isSelected() && !isThreadFocused()
-                    ? { isSelected: true }
-                    : undefined
+                selected={isSelected() && !isThreadFocused()}
+                targeted={
+                  // The unified input's reply is bound to this root, or
+                  // channel navigation landed on it.
+                  unifiedReplyBinding()?.boundToRoot || isRootNavTargeted()
                 }
               />
             </DebugSuspense>
           </MarkMessageNotifications>
-          <Show when={hasReplies() || props.isReplying()}>
+          <Show
+            when={hasReplies() || (props.isReplying() && !isUnifiedInputMode())}
+          >
             <div class="relative w-full">
               <DebugSuspense name="ChannelThread.reply-rail">
                 <Thread.ReplyRailDecorations
-                  isReplying={props.isReplying}
+                  isReplying={isReplyingToThread}
                   firstThreadReplyNewMessage={firstReplyIsNewMessage()}
                 />
               </DebugSuspense>
@@ -269,12 +317,16 @@ export function ChannelThread(props: ThreadProps) {
                       isNewMessage={props.isNewMessage}
                       onReady={setReplyListHandle}
                       selectedReplyId={replySelection.selectedId}
+                      targetedReplyId={() =>
+                        props.activeTargetReplyId ??
+                        unifiedReplyBinding()?.boundReplyId
+                      }
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
                     />
                   </DebugSuspense>
 
-                  <Show when={props.isReplying()}>
+                  <Show when={props.isReplying() && !isUnifiedInputMode()}>
                     <div
                       ref={(el) => {
                         attachReplyInputRef(el);
@@ -294,6 +346,7 @@ export function ChannelThread(props: ThreadProps) {
                         replyInputState={props.replyInputState}
                         setReplyInputState={props.setReplyInputState}
                         setIsReplying={props.setIsReplying}
+                        replyInputHandle={props.replyInputHandle}
                         setReplyInputEl={props.setReplyInputEl}
                         setReplyInputHandle={props.setReplyInputHandle}
                         focusRequest={props.replyInputFocusRequest}
@@ -319,9 +372,13 @@ export function ChannelThread(props: ThreadProps) {
                       <Show when={shouldShowReplyButton()}>
                         <Thread.ReplyButton
                           getFocusTarget={() =>
-                            replyInputContainerRef?.querySelector<HTMLElement>(
-                              '[contenteditable]'
-                            ) ?? null
+                            !isUnifiedInputMode()
+                              ? (replyInputContainerRef?.querySelector<HTMLElement>(
+                                  '[contenteditable]'
+                                ) ?? null)
+                              : document.querySelector<HTMLElement>(
+                                  `[data-input-id="thread-reply-input-${props.data().id}"] [contenteditable]`
+                                )
                           }
                           onClick={(event) =>
                             replyAction()?.({ message: props.data(), event })

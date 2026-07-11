@@ -13,6 +13,11 @@
   display: contents;
 }
 
+/* Email composer collapses the appended quoted thread behind an expander pill */
+.quote-collapsed .macro_quote {
+  display: none;
+}
+
 .md * {
   caret-color: currentcolor;
 }
@@ -609,4 +614,19 @@ mark {
 .opt-accept .md-diff-delete {
   opacity: 0.25;
   text-decoration: line-through;
+}
+
+.diff-insert {
+  background: color-mix(
+    in srgb,
+    var(--diff-author, hsl(145, 63%, 42%)) 24%,
+    transparent
+  );
+  border-radius: 2px;
+}
+
+.diff-delete {
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-author, hsl(0, 65%, 55%));
+  opacity: 0.6;
 }

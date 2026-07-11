@@ -138,6 +138,9 @@ async fn main() -> anyhow::Result<()> {
         FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
         (*sqs_client).clone(),
         crm_service,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         config.sent_undo_delay_secs,
     ));
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(

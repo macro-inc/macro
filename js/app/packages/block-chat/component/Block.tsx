@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { SidePanel } from '@app/component/side-panel';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -9,6 +10,7 @@ import { Show } from 'solid-js';
 import { chatBlockData } from '../signal/chatBlockData';
 import { Chat } from './Chat';
 import { ModalsProvider } from './ModalsProvider';
+import { ChatSidePanelSections } from './sidepanel/ChatSidePanelSections';
 
 export default function ChatBlock() {
   useBlockEntityCommands();
@@ -24,7 +26,12 @@ export default function ChatBlock() {
           entity={{ type: 'chat', id: blockId }}
         />
         <ModalsProvider>
-          <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
+          <SidePanel.Layout defaultOpen={false}>
+            <ChatSidePanelSections />
+            <Show when={chatBlockData()}>
+              {(data) => <Chat data={data()} />}
+            </Show>
+          </SidePanel.Layout>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>

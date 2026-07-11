@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_attachments_sfs (id, attachment_id, sfs_id)\n        SELECT $1, $2, $3\n        WHERE $2::uuid IS NULL\n           OR EXISTS (SELECT 1 FROM email_attachments WHERE id = $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "576221b6d3f191b995698d851ced4332fd14b911132220d622990149d33a533d"
+}

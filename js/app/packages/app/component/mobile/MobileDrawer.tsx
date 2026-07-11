@@ -47,8 +47,23 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
  *
  * Also handles default styling, which can be overridden via the `class` prop.
  */
-function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
-  const [local, rest] = splitProps(props, ['class']);
+function MobileDrawerContent(
+  props: ComponentProps<typeof Drawer.Content> & {
+    /** Maximum height as a percentage of the viewport (vh). Clamped to 100. Defaults to 80. */
+    maxHeight?: number;
+    /** Initial/start height as a percentage of the viewport (vh). Clamped to 100. Fits content when omitted. */
+    targetHeight?: number;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'class',
+    'maxHeight',
+    'targetHeight',
+  ]);
+
+  const maxHeight = () => Math.min(100, local.maxHeight ?? 80);
+  const targetHeight = () =>
+    local.targetHeight != null ? Math.min(100, local.targetHeight) : undefined;
 
   onCleanup(() => {
     clearTimeout(scrollTimer);
@@ -56,16 +71,23 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   });
 
   return (
-    <Layer depth={1}>
+    <Layer depth={0}>
       <Drawer.Content
         onFocusIn={(e: FocusEvent) => {
           scrollToFocusedInput(e);
         }}
+        style={{
+          '--drawer-max-h': `${maxHeight()}vh`,
+          ...(targetHeight() != null
+            ? { '--drawer-h': `${targetHeight()}vh` }
+            : {}),
+        }}
         class={cn(
           'portal-scope',
-          'bottom-(--virtual-keyboard-height,0) fixed inset-x-0 z-modal bg-surface rounded-t-2xl flex flex-col max-h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          'bottom-(--virtual-keyboard-height,0) fixed inset-x-0 z-modal bg-surface rounded-t-2xl flex flex-col max-h-(--drawer-max-h) data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
           virtualKeyboardVisible()
-            ? 'pb-0 max-h-[calc(80vh-var(--virtual-keyboard-height))] overflow-y-auto'
+            ? 'pb-0 max-h-[calc(var(--drawer-max-h)-var(--virtual-keyboard-height))] overflow-y-auto'
             : 'pb-(--safe-bottom)',
           local.class
         )}

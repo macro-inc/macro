@@ -62,6 +62,7 @@
 		"lint:ci": "cd app && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
 		"check": "cd app && tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
 		"lint": "cd app && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
+		"lint:oxlint": "cd app && bunx --yes oxlint@1.73.0",
 		"format": "cd app && bunx --bun @biomejs/biome format --write"
 	},
 	"trustedDependencies": [

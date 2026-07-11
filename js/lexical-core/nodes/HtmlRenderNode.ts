@@ -83,7 +83,12 @@ export class HtmlRenderNode extends DecoratorBlockNode<
 
   static importDOM(): DOMConversionMap<HTMLDivElement> | null {
     const convert = (domNode: HTMLElement) => {
-      if (!domNode.hasAttribute('data-html-render')) {
+      // The backend sanitizer strips data-* attributes but keeps classes, so
+      // the class marker is what survives a draft save/restore round-trip
+      if (
+        !domNode.hasAttribute('data-html-render') &&
+        !domNode.classList.contains('macro_html_render')
+      ) {
         return null;
       }
 
@@ -107,6 +112,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   exportDOM() {
     const host = document.createElement('div');
     host.setAttribute('data-html-render', 'true');
+    host.className = 'macro_html_render';
 
     const template = document.createElement('template');
     template.setAttribute('shadowrootmode', 'open');

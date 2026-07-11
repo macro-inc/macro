@@ -39,6 +39,16 @@ pub trait EmailMessageEnqueuer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// The sending inbox's signature preferences, used by the send pipeline to
+/// decide whether to inject the signature into the outgoing body.
+#[derive(Debug, Clone, Default)]
+pub struct LinkEmailSettings {
+    /// The saved signature HTML (already sanitized server-side), if any.
+    pub signature: Option<String>,
+    /// Whether the signature should be added on replies and forwards.
+    pub signature_on_replies_forwards: bool,
+}
+
 pub trait EmailRepo: Send + Sync + 'static {
     type Err: Send;
     fn previews_for_view_cursor(
@@ -290,6 +300,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<EmailFilter>, Self::Err>> + Send;
+
+    /// Fetch the inbox's signature preferences. Defaults to "no signature" so
+    /// repos that don't override it (and the send path when settings are
+    /// missing) simply skip signature injection.
+    fn fetch_email_settings(
+        &self,
+        _link_id: Uuid,
+    ) -> impl Future<Output = Result<LinkEmailSettings, EmailErr>> + Send {
+        async { Ok(LinkEmailSettings::default()) }
+    }
 }
 
 /// Read-only trait for fetching email thread previews.
@@ -510,4 +530,149 @@ impl EmailMessageEnqueuer for NoOpEnqueuer {
     ) -> Result<(), Self::Err> {
         Ok(())
     }
+}
+
+/// No-op [`EmailService`] for binaries that need to satisfy the bound but
+/// never call email — e.g. schema-only GraphQL SDL export. Every method
+/// errors; swap for a real implementation if you actually need email.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpEmailService;
+
+fn no_op_email_err() -> EmailErr {
+    EmailErr::RepoErr(anyhow::anyhow!("no-op email service"))
+}
+
+impl EmailService for NoOpEmailService {
+    async fn get_email_thread_previews(
+        &self,
+        _req: GetEmailsRequest,
+    ) -> Result<PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>, EmailErr>
+    {
+        Err(no_op_email_err())
+    }
+
+    async fn get_link_by_auth_id_and_macro_id(
+        &self,
+        _auth_id: &str,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_link_by_macro_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_owned_link_for_thread(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _thread_id: Uuid,
+    ) -> Result<Option<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_thread_with_messages(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Thread>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_thread_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<ParsedThread>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn create_draft(
+        &self,
+        _link: &Link,
+        _accessible_inboxes: &[Link],
+        _input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn send_message(
+        &self,
+        _link: &Link,
+        _accessible_inboxes: &[Link],
+        _input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn list_labels(&self, _link: &Link) -> Result<Vec<LinkLabel>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn update_thread_labels(
+        &self,
+        _access_token: &str,
+        _link: &Link,
+        _thread_id: Uuid,
+        _label_id: Uuid,
+        _add: bool,
+    ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn update_thread_project(
+        &self,
+        _thread_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
+    ) -> Result<Option<String>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn upsert_email_filter(
+        &self,
+        _link: &Link,
+        _input: UpsertEmailFilterInput,
+    ) -> Result<EmailFilter, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn delete_email_filter(&self, _link: &Link, _filter_id: Uuid) -> Result<bool, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn list_email_filters(&self, _link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
+/// Outcome of a first-inbox provisioning attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirstInboxProvisionOutcome {
+    /// The inbox was provisioned and a backfill was started.
+    Provisioned,
+    /// The service declined the request as a no-op: the inbox is already
+    /// initialized or the user holds no Gmail grant. Expected, not an error.
+    Skipped,
+}
+
+/// Port for provisioning the calling user's primary inbox.
+pub trait FirstInboxProvisioner: Send + Sync + 'static {
+    /// Provisions the caller's primary inbox. Idempotent, so safe to invoke on
+    /// every authentication.
+    fn provision_first_inbox(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = anyhow::Result<FirstInboxProvisionOutcome>> + Send;
 }

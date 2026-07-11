@@ -51,40 +51,8 @@
           && rel != "app/tauri/target";
       };
 
-      bunDeps = pkgs.stdenvNoCC.mkDerivation {
-        pname = "macro-js-bun-deps";
-        version = appVersion;
-        src = jsSrc;
-
-        nativeBuildInputs = with pkgs; [
-          bun
-          git
-        ];
-
-        dontConfigure = true;
-        dontBuild = true;
-        dontFixup = true;
-
-        installPhase = ''
-          runHook preInstall
-
-          export HOME="$TMPDIR"
-          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
-          bun install --frozen-lockfile --no-progress
-
-          mkdir -p "$out"
-          cp -a node_modules "$out/node_modules"
-
-          runHook postInstall
-        '';
-
-        outputHashAlgo = "sha256";
-        outputHashMode = "recursive";
-        outputHash =
-          if isAarch64Darwin then
-            "sha256-R0C2jkhk/QiS5v5Lm5cLiv3qU/8UzssTF37+8f3wrH4="
-          else
-            "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
+      nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
+        src = jsRoot;
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {
@@ -92,29 +60,34 @@
         version = appVersion;
         src = jsSrc;
 
-        nativeBuildInputs = with pkgs; [
-          bun
-          git
+        nativeBuildInputs = [
+          pkgs.bun
+          pkgs.git
         ];
 
         dontConfigure = true;
 
         buildPhase = ''
-          runHook preBuild
+            runHook preBuild
 
-          export HOME="$TMPDIR"
-          cp -a ${bunDeps}/node_modules ./node_modules
-          chmod -R u+w ./node_modules
+            cp -a ${nodeModules}/. .
 
-          printf production > app/tauri/src-tauri/.macro-tauri-env
-          (
-            cd app/packages/app
-            MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
-            printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
-          )
+            vite_resolve_replacement='      resolve: {
+          alias: [
+            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
+          ],'
+            substituteInPlace app/packages/app/vite.base.ts \
+              --replace-fail "      resolve: {" "$vite_resolve_replacement"
 
-          runHook postBuild
+            printf production > app/tauri/src-tauri/.macro-tauri-env
+            (
+              cd app/packages/app
+              MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+              printf '${appVersion}+${gitRev}\n' > dist/semver.txt
+              BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            )
+
+            runHook postBuild
         '';
 
         installPhase = ''
@@ -130,10 +103,8 @@
         outputHashes = {
           "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" =
             "sha256-v0Pn8kiRXaczNrFNjXct7yZUQ50qP68l8ivQDumu7Hw=";
-          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fwebsocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
-            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
-          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
-            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =
+            "sha256-ngH5sltERe8DlP/zjsin9jmlGOZFeABk8SxJ5AnZG18=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
             "sha256-5HamTWAZPtUSWOfP3TgtiqFJvunlPXy9/C0TLHQpXlU=";
           "git+https://github.com/voxelbee/tauri-plugin-virtual-keyboard?branch=main#70e8e8325b5ff7d681ef5f3b996ac083d4fc5a01" =
@@ -167,6 +138,8 @@
         '';
       };
 
+      gioTlsModulePath = "${pkgs.glib-networking}/lib/gio/modules";
+
       wrappedTauriDesktop = pkgs.symlinkJoin {
         name = "macro-tauri-desktop-${appVersion}";
         paths = [ tauri.app ];
@@ -192,8 +165,10 @@
                 pkgs.gst_all_1.gst-plugins-bad
                 pkgs.gst_all_1.gst-libav
                 pkgs.openssl
+                pkgs.glib-networking
               ]
             } \
+            --prefix GIO_EXTRA_MODULES : "${gioTlsModulePath}" \
             --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
             --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${
               lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
@@ -234,8 +209,10 @@
         buildPhase = ''
           cat > linuxdeploy-wrapper.c <<'EOF'
           #include <dirent.h>
+          #include <errno.h>
           #include <stdio.h>
           #include <stdlib.h>
+          #include <sys/stat.h>
           #include <string.h>
           #include <unistd.h>
 
@@ -274,6 +251,69 @@
             closedir(dir);
           }
 
+          static int install_gio_tls_hook(const char *appdir) {
+            if (appdir == NULL) {
+              fprintf(stderr, "cannot install TLS hook: missing --appdir\n");
+              return 1;
+            }
+
+            size_t appdir_len = strlen(appdir);
+            char *hooks_dir = malloc(appdir_len + strlen("/apprun-hooks") + 1);
+            if (hooks_dir == NULL) {
+              perror("malloc TLS hook directory");
+              return 1;
+            }
+            sprintf(hooks_dir, "%s/apprun-hooks", appdir);
+            if (mkdir(hooks_dir, 0755) != 0 && errno != EEXIST) {
+              perror("mkdir TLS hook directory");
+              free(hooks_dir);
+              return 1;
+            }
+
+            char *hook_path = malloc(strlen(hooks_dir) + strlen("/macro-gio-tls.sh") + 2);
+            if (hook_path == NULL) {
+              perror("malloc TLS hook path");
+              free(hooks_dir);
+              return 1;
+            }
+            sprintf(hook_path, "%s/macro-gio-tls.sh", hooks_dir);
+
+            FILE *hook = fopen(hook_path, "w");
+            if (hook == NULL) {
+              perror("fopen TLS hook");
+              free(hook_path);
+              free(hooks_dir);
+              return 1;
+            }
+
+            int failed = 0;
+            if (fputs("#! /usr/bin/env bash\n"
+                      "export APPDIR=\"''${APPDIR:-\"$(dirname \"$(realpath \"$0\")\")\"}\"\n"
+                      "gio_modules=\"$APPDIR/usr/lib/gio/modules\"\n"
+                      "if [ -d \"$gio_modules\" ]; then\n"
+                      "  case \":''${GIO_EXTRA_MODULES:-}:\" in\n"
+                      "    *:\"$gio_modules\":*) ;;\n"
+                      "    *) export GIO_EXTRA_MODULES=\"$gio_modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}\" ;;\n"
+                      "  esac\n"
+                      "fi\n",
+                      hook) == EOF) {
+              perror("write TLS hook");
+              failed = 1;
+            }
+            if (fclose(hook) != 0) {
+              perror("close TLS hook");
+              failed = 1;
+            }
+            if (!failed && chmod(hook_path, 0755) != 0) {
+              perror("chmod TLS hook");
+              failed = 1;
+            }
+
+            free(hook_path);
+            free(hooks_dir);
+            return failed;
+          }
+
           int main(int argc, char **argv) {
             const char *appdir = NULL;
             for (int i = 1; i < argc; i++) {
@@ -284,6 +324,9 @@
               }
             }
             sanitize_appdir(appdir);
+            if (install_gio_tls_hook(appdir) != 0) {
+              return 1;
+            }
 
             char *slash = strrchr(argv[0], '/');
             if (slash != NULL) {
@@ -333,7 +376,7 @@
       tauriLinuxdeployAppimagePluginSource = pkgs.fetchurl {
         # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
         url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage";
-        hash = "sha256-mS1QKiSOFKsYVEjd9vbn0lVYy4TUYjw1TDrzUMJfzLM=";
+        hash = "sha256-psPPOB4jSR61J5Tsuiqb1F5k2okJetKF4l72l0nuKa4=";
       };
       tauriLinuxdeployAppimagePluginExtracted = pkgs.appimageTools.extractType2 {
         pname = "linuxdeploy-plugin-appimage";
@@ -374,6 +417,7 @@
         pkgs.gst_all_1.gst-plugins-bad
         pkgs.gst_all_1.gst-libav
         pkgs.openssl
+        pkgs.glib-networking
       ];
       tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;
       tauriRuntimeClosure = pkgs.closureInfo {
@@ -391,6 +435,10 @@
           linux.appimage.files = {
             "/usr/bin/xdg-mime" = "${pkgs.xdg-utils}/bin/xdg-mime";
             "/usr/bin/xdg-open" = "${pkgs.xdg-utils}/bin/xdg-open";
+            "/usr/lib/gio/modules/giomodule.cache" = "${pkgs.glib-networking}/lib/gio/modules/giomodule.cache";
+            "/usr/lib/gio/modules/libgiognomeproxy.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiognomeproxy.so";
+            "/usr/lib/gio/modules/libgiognutls.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiognutls.so";
+            "/usr/lib/gio/modules/libgiolibproxy.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiolibproxy.so";
           };
         };
       };
@@ -693,20 +741,22 @@
         };
       };
 
-      packages =
-        lib.optionalAttrs isLinux {
-          tauri-frontend = frontend;
-          tauri-desktop = wrappedTauriDesktop;
-          tauri-desktop-unwrapped = tauri.app;
-          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-        }
-        // lib.optionalAttrs isX86_64Linux {
-          tauri-desktop-appimage = tauriDesktopAppImage;
-        }
-        // lib.optionalAttrs isAarch64Darwin {
-          tauri-frontend = frontend;
-          tauri-desktop-dmg = tauriDesktopDmg;
-          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-        };
+      packages = {
+        js-node-modules = nodeModules;
+      }
+      // lib.optionalAttrs isLinux {
+        tauri-frontend = frontend;
+        tauri-desktop = wrappedTauriDesktop;
+        tauri-desktop-unwrapped = tauri.app;
+        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+      }
+      // lib.optionalAttrs isX86_64Linux {
+        tauri-desktop-appimage = tauriDesktopAppImage;
+      }
+      // lib.optionalAttrs isAarch64Darwin {
+        tauri-frontend = frontend;
+        tauri-desktop-dmg = tauriDesktopDmg;
+        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+      };
     };
 }

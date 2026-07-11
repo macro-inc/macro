@@ -7,10 +7,12 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
+import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
@@ -83,6 +85,26 @@ function getAliasOrType(content: SplitContent): string {
     : content.aliasContext?.alias || content.type;
 }
 
+/**
+ * The `type/id` URL pair for a split's content. The settings panel is stored
+ * internally as `component/settings` content, but serializes as
+ * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
+ * settings page is open. Reads the active-tab signal, so the URL updates
+ * reactively as the tab changes. `decodePairs` maps `settings/<tab>` back to
+ * the internal `component/settings` content on the way in.
+ *
+ * This applies on mobile too: settings docks as a split there, and now that
+ * settings is no longer a standalone `/settings/:tab` route, `settings/<tab>`
+ * is claimed by the split layout like any other split — so there's no reason
+ * to keep the tab out of the URL.
+ */
+function contentUrlSegments(content: SplitContent): string[] {
+  if (content.type === 'component' && content.id === 'settings') {
+    return ['settings', settingsTabToSlug(activeTabId())];
+  }
+  return [getAliasOrType(content), content.id].map(String);
+}
+
 function keyOfSplitContent(s: SplitContent): SplitKey {
   return `${s.type}:${s.id}`;
 }
@@ -135,6 +157,7 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
+  | 'fork'
   | null;
 
 export type SplitState = {
@@ -151,6 +174,7 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+  insertIndex?: number;
   /**
    * Optional prior navigation entries to pre-populate this split's history stack.
    * The `content` field is appended as the final (current) entry.
@@ -166,7 +190,16 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
+  insertIndex?: number;
   handle?: SplitHandle;
+  /**
+   * Ask the block to land on its latest content via the `goToLatest` block
+   * method. Covers content that is already mounted (e.g. a channel open in
+   * another split parked at an old scroll position), which would otherwise
+   * just be activated as-is. Omit when navigating to a specific location
+   * within the block.
+   */
+  reopen?: 'latest';
 };
 
 /**
@@ -326,6 +359,9 @@ export type SplitManager = {
 
   /** Close all popover splits */
   closeAllPopovers: () => void;
+
+  /** Splits not excluded by the current exclusion filter, in order. */
+  getVisibleSplits: () => SplitState[];
 
   /** Count of splits not excluded by the current exclusion filter. */
   getVisibleSplitCount: () => number;
@@ -799,8 +835,7 @@ export function createSplitLayout(
   const getUrlSegments = () => {
     return state.splits
       .filter((s) => !isExcluded(s))
-      .flatMap((s) => [getAliasOrType(s.content), s.content.id])
-      .map(String);
+      .flatMap((s) => contentUrlSegments(s.content));
   };
 
   const getUrl = () => {
@@ -915,9 +950,8 @@ export function createSplitLayout(
 
         removeSplit(currentSplit.id);
       },
-      getUrlSegments: () =>
-        [getAliasOrType(content()), content().id].map(String),
-      getUrl: () => getAliasOrType(content()) + '/' + content().id,
+      getUrlSegments: () => contentUrlSegments(content()),
+      getUrl: () => contentUrlSegments(content()).join('/'),
       isFirst: () => state.splits.at(0)?.id === id,
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
@@ -989,8 +1023,14 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
-      options;
+    const {
+      content,
+      activate,
+      referredFrom,
+      allowDuplicate,
+      initialHistory,
+      insertIndex,
+    } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -1014,7 +1054,17 @@ export function createSplitLayout(
       initialHistory,
     });
 
-    setState('splits', (previousSplits) => [...previousSplits, split]);
+    setState('splits', (previousSplits) => {
+      if (insertIndex === undefined) return [...previousSplits, split];
+
+      const nextSplits = [...previousSplits];
+      nextSplits.splice(
+        Math.max(0, Math.min(insertIndex, nextSplits.length)),
+        0,
+        split
+      );
+      return nextSplits;
+    });
 
     const handle = getSplit(split.id)!;
 
@@ -1230,6 +1280,16 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
+    if (options.reopen === 'latest') {
+      // Fire-and-forget so it covers every open path (fresh mount, duplicate
+      // activation, interceptor-consumed navigation). The block-handle proxy
+      // waits for the block and method to register before invoking.
+      void orchestrator
+        .getBlockHandle(content.id)
+        .then((handle) => handle?.goToLatest())
+        .catch((e) => console.error('openWithSplit: goToLatest failed', e));
+    }
+
     if (navigationInterceptor) {
       const result = navigationInterceptor(content, options);
       if (result.handled) return undefined;
@@ -1276,6 +1336,7 @@ export function createSplitLayout(
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
+        insertIndex: options.insertIndex,
       });
     }
   }
@@ -1301,6 +1362,8 @@ export function createSplitLayout(
     const id = state.activeSplitId;
     return id ? getSplit(id) : undefined;
   };
+
+  const getVisibleSplits = () => state.splits.filter((s) => !isExcluded(s));
 
   return {
     splits: () => state.splits,
@@ -1332,8 +1395,8 @@ export function createSplitLayout(
     closeAllPopovers,
     popovers: () => state.popovers,
     canAppendSplit,
-    getVisibleSplitCount: () =>
-      state.splits.filter((s) => !isExcluded(s)).length,
+    getVisibleSplits,
+    getVisibleSplitCount: () => getVisibleSplits().length,
     setExclusionFilter: (fn) => {
       exclusionFilter = fn;
     },

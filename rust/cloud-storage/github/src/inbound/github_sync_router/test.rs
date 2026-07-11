@@ -42,6 +42,13 @@ impl GithubSyncService for MockGithubSyncService {
     ) -> Result<GithubInstallationAccessToken, GithubError> {
         unimplemented!()
     }
+
+    async fn associate_installations_for_github_user(
+        &self,
+        _github_user_id: &str,
+    ) -> Result<(), GithubError> {
+        unimplemented!()
+    }
 }
 
 fn mock_router(sync_app_url: &str) -> Router {

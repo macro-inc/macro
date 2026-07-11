@@ -35,6 +35,7 @@ on:
           - opensearch
           - search-event-queue
           - search-text-extractor-queue
+          - kafka-cluster
       environment:
         type: choice
         required: true

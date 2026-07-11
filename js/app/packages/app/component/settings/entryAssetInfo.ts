@@ -45,7 +45,8 @@ export async function loadEntryAssetInfo(): Promise<EntryAssetInfo> {
   try {
     const indexUrl = new URL('index.html', loadedEntryUrl);
     indexUrl.searchParams.set('__macro_bundle_probe', Date.now().toString());
-    const browserFetch = window.__MACRO_BROWSER_FETCH__ ?? window.fetch.bind(window);
+    const browserFetch =
+      window.__MACRO_BROWSER_FETCH__ ?? window.fetch.bind(window);
     const response = await browserFetch(indexUrl.href, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`Fresh index fetch failed with ${response.status}`);

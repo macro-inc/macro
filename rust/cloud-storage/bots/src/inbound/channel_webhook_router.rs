@@ -243,7 +243,7 @@ where
     let response = state
         .channel_poster
         .post_message(
-            Sender::Bot(authenticated.bot_id),
+            Sender::new_from_bot(authenticated.bot_id),
             path.channel_id,
             PostMessageRequest {
                 content,
@@ -252,6 +252,8 @@ where
                 attachments: Vec::new(),
                 nonce: None,
                 notification_policy: Default::default(),
+                // External webhook bot posting on its own; no triggering user.
+                triggered_by: None,
             },
         )
         .await?;
