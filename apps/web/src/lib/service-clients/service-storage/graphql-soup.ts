@@ -507,6 +507,18 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
     .exhaustive();
 }
 
+/**
+ * Maps a GraphQL soup response to the REST `SoupPage` shape consumed by
+ * the existing soup pipeline (both the imperative fetch below and the
+ * reactive urql subscriptions).
+ */
+export function mapGraphqlSoupPage(data: SoupQuery): SoupPage {
+  return {
+    items: data.user.soup.items.map(mapGraphqlSoupItem),
+    next_cursor: data.user.soup.nextCursor ?? undefined,
+  };
+}
+
 export async function fetchGraphqlSoup(
   input: GraphqlSoupInput
 ): Promise<SoupPage> {
@@ -536,10 +548,7 @@ export async function fetchGraphqlSoup(
         )
         .toPromise();
       if (cached.data) {
-        return {
-          items: cached.data.user.soup.items.map(mapGraphqlSoupItem),
-          next_cursor: cached.data.user.soup.nextCursor ?? undefined,
-        };
+        return mapGraphqlSoupPage(cached.data);
       }
     }
     throw result.error;
@@ -550,8 +559,5 @@ export async function fetchGraphqlSoup(
     throw new Error('GraphQL Soup query returned no data');
   }
 
-  return {
-    items: data.user.soup.items.map(mapGraphqlSoupItem),
-    next_cursor: data.user.soup.nextCursor ?? undefined,
-  };
+  return mapGraphqlSoupPage(data);
 }
