@@ -7,7 +7,7 @@ use crate::domain::{
     ports::{EmailRepo, RecipientsByMessageId},
 };
 use entity_access::domain::models::{
-    AccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
+    AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use frecency::domain::ports::FrecencyQueryService;
 use std::collections::HashMap;
@@ -278,14 +278,8 @@ where
             .map_err(anyhow::Error::from)?
             .into_iter()
             .map(|l| ParsedLabel {
-                id: Some(l.id),
-                link_id: l.link_id,
                 provider_id: l.provider_label_id,
                 name: l.name,
-                created_at: l.created_at,
-                message_list_visibility: Some(l.message_list_visibility),
-                label_list_visibility: Some(l.label_list_visibility),
-                type_: Some(l.type_),
             })
             .collect();
 
@@ -302,12 +296,7 @@ where
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
-        let mut thread_ids = Vec::with_capacity(receipts.len());
-        for receipt in receipts {
-            let thread_id = Uuid::parse_str(&receipt.entity().entity_id)
-                .map_err(|err| EmailErr::RepoErr(anyhow::anyhow!("invalid thread id: {err}")))?;
-            thread_ids.push(thread_id);
-        }
+        let thread_ids = email_thread_ids_from_receipts(receipts)?;
 
         if thread_ids.is_empty() {
             return Ok(HashMap::new());
@@ -357,6 +346,21 @@ where
     }
 }
 
+fn email_thread_ids_from_receipts(
+    receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+) -> Result<Vec<Uuid>, EmailErr> {
+    receipts
+        .into_iter()
+        .map(|receipt| {
+            if receipt.entity().entity_type != EntityType::EmailThread {
+                return Err(EmailErr::Unauthorized);
+            }
+            Uuid::parse_str(&receipt.entity().entity_id)
+                .map_err(|err| EmailErr::RepoErr(anyhow::anyhow!("invalid thread id: {err}")))
+        })
+        .collect()
+}
+
 fn parsed_message_from_row(
     row: MessageRow,
     sender: Option<ContactInfo>,
@@ -387,14 +391,8 @@ fn parsed_message_from_row(
         labels: labels
             .into_iter()
             .map(|label| ParsedLabel {
-                id: label.id,
-                link_id: label.link_id,
                 provider_id: label.provider_label_id,
                 name: label.name.unwrap_or_default(),
-                created_at: label.created_at,
-                message_list_visibility: label.message_list_visibility,
-                label_list_visibility: label.label_list_visibility,
-                type_: label.type_,
             })
             .collect(),
         body_parsed,
@@ -411,5 +409,53 @@ fn parsed_message_from_row(
         has_attachments: row.has_attachments,
         created_at: row.created_at,
         updated_at: row.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use macro_user_id::user_id::MacroUserIdStr;
+
+    fn receipt(entity_id: &str, entity_type: EntityType) -> EntityAccessReceipt<ViewAccessLevel> {
+        EntityAccessReceipt::dangerously_assert_authenticated_user(
+            MacroUserIdStr::try_from_email("reader@example.com").unwrap(),
+            entity_id,
+            entity_type,
+        )
+    }
+
+    #[test]
+    fn content_receipts_must_be_for_email_threads() {
+        let error = email_thread_ids_from_receipts(vec![receipt(
+            &Uuid::new_v4().to_string(),
+            EntityType::Document,
+        )])
+        .unwrap_err();
+
+        assert!(matches!(error, EmailErr::Unauthorized));
+    }
+
+    #[test]
+    fn content_receipts_must_contain_uuid_thread_ids() {
+        let error =
+            email_thread_ids_from_receipts(vec![receipt("not-a-uuid", EntityType::EmailThread)])
+                .unwrap_err();
+
+        assert!(matches!(error, EmailErr::RepoErr(_)));
+    }
+
+    #[test]
+    fn content_receipts_are_translated_to_a_single_batch() {
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+
+        let ids = email_thread_ids_from_receipts(vec![
+            receipt(&first.to_string(), EntityType::EmailThread),
+            receipt(&second.to_string(), EntityType::EmailThread),
+        ])
+        .unwrap();
+
+        assert_eq!(ids, vec![first, second]);
     }
 }

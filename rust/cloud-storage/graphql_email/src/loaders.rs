@@ -2,33 +2,21 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use email::domain::{models::ParsedMessage, ports::EmailContentService};
-use entity_access::domain::{
-    models::{AccessError, AccessLevel, EntityPermission, EntityType, ViewAccessLevel},
-    ports::EntityAccessService,
-};
-use futures::{StreamExt, stream};
+use entity_access::domain::{models::AccessError, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-const MAX_CONCURRENT_ACCESS_CHECKS: usize = 8;
 pub(crate) const MAX_EMAIL_CONTENT_KEYS: usize = 20;
 
 /// Result of loading the newest non-draft content message for one email thread.
 #[derive(Debug, Clone)]
 pub enum EmailContentLoad {
     /// The thread has a non-draft content message.
-    Found(Box<LoadedEmailContent>),
+    Found(Box<ParsedMessage>),
     /// The thread is absent, inaccessible, or has no content messages.
     Missing,
     /// An internal failure occurred. Details are logged, never exposed.
     Failed,
-}
-
-/// Authorized email content plus the caller's actual thread access level.
-#[derive(Debug, Clone)]
-pub struct LoadedEmailContent {
-    pub(crate) message: ParsedMessage,
-    pub(crate) access_level: AccessLevel,
 }
 
 /// A request for the newest non-draft content message belonging to an email thread.
@@ -77,21 +65,20 @@ where
         user_id: &MacroUserIdStr<'static>,
         keys: Vec<EmailContentKey>,
     ) -> HashMap<EmailContentKey, EmailContentLoad> {
-        let access_results = stream::iter(keys.into_iter().map(|key| async move {
-            let result = self
-                .entity_access_service
-                .generate_entity_access_receipt::<ViewAccessLevel>(
-                    user_id,
-                    None,
-                    &key.thread_id,
-                    EntityType::EmailThread,
-                )
-                .await;
+        let thread_ids = keys
+            .iter()
+            .map(|key| key.thread_id.clone())
+            .collect::<Vec<_>>();
+        let mut receipts = self
+            .entity_access_service
+            .generate_email_thread_view_access_receipts(user_id, None, &thread_ids)
+            .await;
+        let access_results = keys.into_iter().map(|key| {
+            let result = receipts
+                .remove(&key.thread_id)
+                .unwrap_or(Err(AccessError::Internal));
             (key, result)
-        }))
-        .buffer_unordered(MAX_CONCURRENT_ACCESS_CHECKS)
-        .collect::<Vec<_>>()
-        .await;
+        });
 
         let mut loads = HashMap::with_capacity(access_results.len());
         let mut authorized = Vec::new();
@@ -101,16 +88,7 @@ where
             match access_result {
                 Ok(receipt) => match Uuid::parse_str(&key.thread_id) {
                     Ok(thread_id) => {
-                        let access_level = match receipt.entity_permission() {
-                            EntityPermission::AccessLevel { access_level } => *access_level,
-                            EntityPermission::ChannelRole { .. }
-                            | EntityPermission::TeamRole { .. } => {
-                                tracing::error!(thread_id = %key.thread_id, "email thread receipt carried a non-item role");
-                                loads.insert(key, EmailContentLoad::Failed);
-                                continue;
-                            }
-                        };
-                        keys_by_thread_id.insert(thread_id, (key, access_level));
+                        keys_by_thread_id.insert(thread_id, key);
                         authorized.push(receipt);
                     }
                     Err(error) => {
@@ -142,22 +120,18 @@ where
             .await
         {
             Ok(mut messages) => {
-                for (thread_id, (key, access_level)) in keys_by_thread_id {
-                    let load =
-                        messages
-                            .remove(&thread_id)
-                            .map_or(EmailContentLoad::Missing, |message| {
-                                EmailContentLoad::Found(Box::new(LoadedEmailContent {
-                                    message,
-                                    access_level,
-                                }))
-                            });
+                for (thread_id, key) in keys_by_thread_id {
+                    let load = messages
+                        .remove(&thread_id)
+                        .map_or(EmailContentLoad::Missing, |message| {
+                            EmailContentLoad::Found(Box::new(message))
+                        });
                     loads.insert(key, load);
                 }
             }
             Err(error) => {
                 tracing::error!(?error, "bulk email content load failed");
-                for (key, _) in keys_by_thread_id.into_values() {
+                for key in keys_by_thread_id.into_values() {
                     loads.insert(key, EmailContentLoad::Failed);
                 }
             }
@@ -239,6 +213,13 @@ pub fn email_content_loader(
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use email::domain::models::EmailErr;
+    use entity_access::domain::models::{
+        AccessLevel, CallChannelInfo, EntityAccessReceipt, EntityPermission, EntityType,
+        RequiredPermission, UserTeamInfo, ViewAccessLevel,
+    };
+    use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+
     use super::*;
 
     #[derive(Default)]
@@ -257,6 +238,121 @@ mod tests {
             keys.into_iter()
                 .map(|key| (key, EmailContentLoad::Missing))
                 .collect()
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestAccessService {
+        allow: bool,
+    }
+
+    impl EntityAccessService for TestAccessService {
+        async fn generate_entity_access_receipt<T: RequiredPermission>(
+            &self,
+            _user_id: &MacroUserId<Lowercase<'_>>,
+            _user_org_id: Option<i64>,
+            entity_id: &str,
+            entity_type: EntityType,
+        ) -> Result<EntityAccessReceipt<T>, AccessError> {
+            if !self.allow {
+                return Err(AccessError::Unauthorized);
+            }
+            Ok(EntityAccessReceipt::dangerously_assert_authenticated_user(
+                MacroUserIdStr::try_from_email("reader@example.com").unwrap(),
+                entity_id,
+                entity_type,
+            ))
+        }
+
+        async fn get_access_level(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<Option<AccessLevel>, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn check_access(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _required_level: AccessLevel,
+        ) -> Result<AccessLevel, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn check_public_access(
+            &self,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _required_level: AccessLevel,
+        ) -> Result<AccessLevel, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn get_entity_permission(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _user_org_id: Option<i64>,
+        ) -> Result<EntityPermission, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn get_crm_entity_permission_with_team(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<(EntityPermission, Uuid), AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn get_users_by_entity(
+            &self,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn get_call_channel(
+            &self,
+            _call_id: &Uuid,
+        ) -> Result<Option<CallChannelInfo>, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn get_call_channel_by_channel_id(
+            &self,
+            _channel_id: &Uuid,
+        ) -> Result<Option<CallChannelInfo>, AccessError> {
+            Err(AccessError::Internal)
+        }
+
+        async fn get_user_team(
+            &self,
+            _user_id: &MacroUserId<Lowercase<'_>>,
+        ) -> Result<Option<UserTeamInfo>, AccessError> {
+            Err(AccessError::Internal)
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingContentService {
+        calls: AtomicUsize,
+    }
+
+    impl EmailContentService for RecordingContentService {
+        async fn get_latest_messages_parsed(
+            &self,
+            _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(HashMap::new())
         }
     }
 
@@ -301,5 +397,47 @@ mod tests {
 
         assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
         assert!(error.to_string().contains("at most 20 threads"));
+    }
+
+    #[tokio::test]
+    async fn authorized_keys_reach_the_email_domain() {
+        let content = Arc::new(RecordingContentService::default());
+        let service = EmailContentEdgeService::new(
+            content.clone(),
+            Arc::new(TestAccessService { allow: true }),
+        );
+        let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+        let requested = key(1);
+
+        let loaded = service
+            .get_email_content(&user_id, vec![requested.clone()])
+            .await;
+
+        assert_eq!(content.calls.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            loaded.get(&requested),
+            Some(EmailContentLoad::Missing)
+        ));
+    }
+
+    #[tokio::test]
+    async fn unauthorized_keys_do_not_reach_the_email_domain() {
+        let content = Arc::new(RecordingContentService::default());
+        let service = EmailContentEdgeService::new(
+            content.clone(),
+            Arc::new(TestAccessService { allow: false }),
+        );
+        let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+        let requested = key(1);
+
+        let loaded = service
+            .get_email_content(&user_id, vec![requested.clone()])
+            .await;
+
+        assert_eq!(content.calls.load(Ordering::SeqCst), 0);
+        assert!(matches!(
+            loaded.get(&requested),
+            Some(EmailContentLoad::Missing)
+        ));
     }
 }

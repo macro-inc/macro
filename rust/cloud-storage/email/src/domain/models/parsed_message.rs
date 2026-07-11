@@ -1,27 +1,15 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::{LabelListVisibility, LabelType, MessageListVisibility, contact::ContactInfo};
+use super::contact::ContactInfo;
 
 /// A lightweight label representation for parsed messages.
 #[derive(Debug, Clone)]
 pub struct ParsedLabel {
-    /// Database ID of the label, when persisted.
-    pub id: Option<Uuid>,
-    /// Link ID the label belongs to.
-    pub link_id: Uuid,
     /// The provider label ID (e.g., "INBOX", "DRAFT").
     pub provider_id: String,
     /// The human-readable label name.
     pub name: String,
-    /// When the label was created.
-    pub created_at: DateTime<Utc>,
-    /// Message-list visibility, when known.
-    pub message_list_visibility: Option<MessageListVisibility>,
-    /// Label-list visibility, when known.
-    pub label_list_visibility: Option<LabelListVisibility>,
-    /// System or user label type, when known.
-    pub type_: Option<LabelType>,
 }
 
 /// A lightweight message with parsed body text, without attachments or scheduled send times.

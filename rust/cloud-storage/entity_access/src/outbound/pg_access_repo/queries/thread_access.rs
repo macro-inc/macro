@@ -9,6 +9,46 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use uuid::Uuid;
 
+#[derive(sqlx::FromRow)]
+struct OwnedEmailThreadRow {
+    id: Uuid,
+}
+
+/// Return the requested threads owned by, or inbox-delegated to, `user_id`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "runtime query is covered by the repository integration test"
+)]
+pub async fn get_owned_email_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, OwnedEmailThreadRow>(
+        r#"
+        SELECT t.id
+        FROM email_threads t
+        JOIN email_links l ON l.id = t.link_id
+        WHERE t.id = ANY($1)
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM macro_user_links mul
+                  WHERE mul.link_id = l.id
+                    AND mul.primary_macro_id = $2
+              )
+          )
+        "#,
+    )
+    .bind(thread_ids)
+    .bind(user_id.as_ref())
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|row| row.id).collect())
+}
+
 /// Get the highest access level a user has for an email thread.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_thread_access(

@@ -21,7 +21,6 @@ fn soup_response_schema_exposes_frontend_fields() {
         "properties: [GraphqlSoupProperty!]!",
         "latestContentMessage: GraphqlSoupEmailMessage",
         "type GraphqlSoupEmailMessage {",
-        "accessLevel: String!",
         "bodyParsed: String",
         "bodyHtmlSanitized: String",
         "bodyReplyless: String",

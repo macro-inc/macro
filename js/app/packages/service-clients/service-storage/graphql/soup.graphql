@@ -1,4 +1,4 @@
-query Soup($input: SoupInput!, $includeEmailContent: Boolean!) {
+query Soup($input: SoupInput!) {
   user {
     id
     soup(input: $input) {
@@ -101,56 +101,6 @@ query Soup($input: SoupInput!, $includeEmailContent: Boolean!) {
             }
             properties {
               ...SoupPropertyFields
-            }
-            latestEmailMessage: latestContentMessage
-              @include(if: $includeEmailContent) {
-              id
-              threadId
-              linkId
-              accessLevel
-              subject
-              snippet
-              internalDateTs
-              sentAt
-              isRead
-              isStarred
-              isSent
-              hasAttachments
-              from {
-                email
-                name
-                photoUrl
-              }
-              to {
-                email
-                name
-                photoUrl
-              }
-              cc {
-                email
-                name
-                photoUrl
-              }
-              bcc {
-                email
-                name
-                photoUrl
-              }
-              labels {
-                id
-                linkId
-                providerLabelId
-                name
-                createdAt
-                messageListVisibility
-                labelListVisibility
-                type
-              }
-              bodyText
-              bodyHtmlSanitized
-              bodyReplyless
-              createdAt
-              updatedAt
             }
           }
           ... on GraphqlSoupChannel {

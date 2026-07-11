@@ -3,19 +3,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
-  ApiMessage,
   SendMessageResponse,
   ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
-import {
-  type GraphqlEmailThreadPreload,
-  getGraphqlEmailThreadPreload,
-} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   type SolidInfiniteQueryOptions,
@@ -93,100 +87,6 @@ function flattenThreadPages(
   };
 }
 
-function mapPreloadedContact(
-  contact: GraphqlEmailThreadPreload['message']['to'][number]
-) {
-  return {
-    email: contact.email,
-    name: contact.name,
-    photo_url: contact.photoUrl,
-  };
-}
-
-function mapPreloadedMessage(preload: GraphqlEmailThreadPreload): ApiMessage {
-  const { message } = preload;
-  return {
-    attachments: preload.attachments.map((attachment) => ({
-      content_id: attachment.contentId,
-      db_id: attachment.id,
-      filename: attachment.filename,
-      mime_type: attachment.mimeType,
-      provider_id: attachment.providerAttachmentId,
-      size_bytes: attachment.sizeBytes,
-    })),
-    attachments_draft: [],
-    attachments_forwarded: [],
-    bcc: message.bcc.map(mapPreloadedContact),
-    body_html_sanitized: message.bodyHtmlSanitized,
-    body_replyless: message.bodyReplyless,
-    body_text: message.bodyText,
-    cc: message.cc.map(mapPreloadedContact),
-    created_at: message.createdAt,
-    db_id: message.id,
-    from: message.from ? mapPreloadedContact(message.from) : null,
-    has_attachments: message.hasAttachments,
-    internal_date_ts: message.internalDateTs,
-    is_draft: false,
-    is_read: message.isRead,
-    is_sent: message.isSent,
-    is_starred: message.isStarred,
-    labels: message.labels.map((label) => ({
-      created_at: label.createdAt,
-      id: label.id,
-      label_list_visibility:
-        label.labelListVisibility === 'LabelShow' ||
-        label.labelListVisibility === 'LabelShowIfUnread' ||
-        label.labelListVisibility === 'LabelHide'
-          ? label.labelListVisibility
-          : null,
-      link_id: label.linkId,
-      message_list_visibility:
-        label.messageListVisibility === 'Show' ||
-        label.messageListVisibility === 'Hide'
-          ? label.messageListVisibility
-          : null,
-      name: label.name,
-      provider_label_id: label.providerLabelId,
-      type_:
-        label.type === 'System' || label.type === 'User' ? label.type : null,
-    })),
-    link_id: message.linkId,
-    sent_at: message.sentAt,
-    snippet: message.snippet,
-    subject: message.subject,
-    thread_db_id: message.threadId,
-    to: message.to.map(mapPreloadedContact),
-    updated_at: message.updatedAt,
-  };
-}
-
-function mapPreloadedThread(preload: GraphqlEmailThreadPreload): Thread {
-  const { message, thread } = preload;
-  const accessLevel = (() => {
-    switch (message.accessLevel) {
-      case 'owner':
-      case 'edit':
-      case 'comment':
-      case 'view':
-        return message.accessLevel;
-      default:
-        return 'view';
-    }
-  })();
-  return {
-    access_level: accessLevel,
-    created_at: thread.createdAt,
-    db_id: thread.id,
-    inbox_visible: thread.inboxVisible,
-    is_read: thread.isRead,
-    link_id: message.linkId,
-    messages: [mapPreloadedMessage(preload)],
-    project_id: thread.projectId,
-    provider_id: thread.providerId,
-    updated_at: thread.updatedAt,
-  };
-}
-
 /**
  * Imperatively fetch a thread (for use outside of components).
  * Returns cached data if fresh, otherwise fetches from server.
@@ -198,27 +98,6 @@ export async function fetchAndCacheThread(
   threadId: string
 ): ReturnType<typeof emailClient.getThread> {
   let data: InfiniteData<Thread, number> | undefined;
-
-  const queryKey = emailKeys.threadMessages(threadId).queryKey;
-  const cached =
-    queryClient.getQueryData<InfiniteData<Thread, number>>(queryKey);
-  const userInfo = queryClient.getQueryData<UserInfoData>(
-    authKeys.userInfo.queryKey
-  );
-  const preload =
-    cached || userInfo?.authenticated !== true
-      ? undefined
-      : getGraphqlEmailThreadPreload(threadId, userInfo.id);
-  if (preload) {
-    const thread = mapPreloadedThread(preload);
-    queryClient.setQueryData<InfiniteData<Thread, number>>(
-      queryKey,
-      { pages: [thread], pageParams: [0] },
-      { updatedAt: 0 }
-    );
-    void queryClient.prefetchInfiniteQuery(threadQueryOptions(threadId));
-    return ok({ thread });
-  }
 
   const result = await catchToResult(
     async () =>

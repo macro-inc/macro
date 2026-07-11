@@ -588,7 +588,6 @@ type GraphqlSoupEmailMessage {
 	id: ID!
 	threadId: ID!
 	linkId: ID!
-	accessLevel: String!
 	subject: String
 	snippet: String
 	internalDateTs: String
@@ -612,14 +611,8 @@ type GraphqlSoupEmailMessage {
 }
 
 type GraphqlSoupEmailMessageLabel {
-	id: ID
-	linkId: ID!
 	providerLabelId: String!
 	name: String!
-	createdAt: String!
-	messageListVisibility: String
-	labelListVisibility: String
-	type: String
 }
 
 type GraphqlSoupEmailParticipant {
