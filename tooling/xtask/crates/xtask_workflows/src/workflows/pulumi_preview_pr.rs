@@ -5,8 +5,8 @@
 
 use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step, Strategy,
-    Use, Workflow,
+    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
+    Workflow,
 };
 
 use crate::workflows::runners;
@@ -174,6 +174,7 @@ fn changed_files() -> Step<Use> {
             "#}
             .trim_end(),
         ))
+        .add_with(("write_output_files", true))
 }
 
 fn detect_affected_services() -> Step<Run> {
@@ -189,7 +190,7 @@ fn detect_affected_services() -> Step<Run> {
               service_changed=false
 
               # Workspace/build-system changes can affect every deployable.
-              for file in $CHANGED_FILES; do
+              while IFS= read -r file; do
                 if [[ "$file" == "Cargo.toml" || "$file" == "Cargo.lock" || \
                       "$file" == "Cross.toml" || "$file" == "clippy.toml" || \
                       "$file" == "rust-toolchain.toml" || "$file" == .cargo/* || \
@@ -216,24 +217,24 @@ fn detect_affected_services() -> Step<Run> {
                   service_changed=true
                   break
                 fi
-              done
+              done < .github/outputs/all_changed_files.txt
 
               # Get all source and stack globs for this service.
               service_paths=$(echo "$config" | jq -r --arg s "$service" \
                 '(.services[$s].source_paths // [])[], (.services[$s].stack_path // empty)')
 
-              # Check if any changed files match service paths. CHANGED_FILES is a
-              # space-separated list passed via env — never inlined into the script
-              # body, so a crafted filename can't inject shell syntax.
+              # Check if any changed files match service paths. The action writes
+              # the list to disk so very large PRs cannot exceed the runner's
+              # environment/argument-size limit.
               if [[ "$service_changed" != "true" ]]; then
-                for file in $CHANGED_FILES; do
+                while IFS= read -r file; do
                   while IFS= read -r path; do
                     if [[ -n "$path" && "$file" == $path ]]; then
                       service_changed=true
                       break 2
                     fi
                   done <<< "$service_paths"
-                done
+                done < .github/outputs/all_changed_files.txt
               fi
 
               if [[ "$service_changed" == "true" ]]; then
@@ -253,10 +254,6 @@ fn detect_affected_services() -> Step<Run> {
             fi
         "#})
         .id("detect")
-        .add_env(Env::new(
-            "CHANGED_FILES",
-            "${{ steps.changed-files.outputs.all_changed_files }}",
-        ))
 }
 
 fn summary() -> Step<Run> {

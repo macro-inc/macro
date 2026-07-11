@@ -39,6 +39,7 @@ fn changed_files() -> Step<gh_workflow::Use> {
         .id("changed-files")
         .add_with(("json", true))
         .add_with(("escape_json", false))
+        .add_with(("write_output_files", true))
 }
 
 fn label_by_paths() -> Step<gh_workflow::Use> {
@@ -48,15 +49,14 @@ fn label_by_paths() -> Step<gh_workflow::Use> {
             "github-script",
             "f28e40c7f34bde8b3046d885e986cb6290c5673b",
         )
-        .add_env((
-            "CHANGED_FILES_JSON",
-            "${{ steps.changed-files.outputs.all_changed_files }}",
-        ))
         .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
         .add_with((
             "script",
             indoc::indoc! {r#"
-                const changedFiles = JSON.parse(process.env.CHANGED_FILES_JSON || '[]');
+                const fs = require('fs');
+                const changedFiles = JSON.parse(
+                  fs.readFileSync('.github/outputs/all_changed_files.json', 'utf8')
+                );
                 const labels = new Set();
 
                 // Define path-to-label mappings

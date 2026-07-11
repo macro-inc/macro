@@ -26,12 +26,16 @@ jobs:
       with:
         json: 'true'
         escape_json: 'false'
+        write_output_files: 'true'
     - name: Label based on paths
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          const changedFiles = JSON.parse(process.env.CHANGED_FILES_JSON || '[]');
+          const fs = require('fs');
+          const changedFiles = JSON.parse(
+            fs.readFileSync('.github/outputs/all_changed_files.json', 'utf8')
+          );
           const labels = new Set();
 
           // Define path-to-label mappings
@@ -68,5 +72,3 @@ jobs:
           } else {
             console.log('No matching labels found for changed files');
           }
-      env:
-        CHANGED_FILES_JSON: ${{ steps.changed-files.outputs.all_changed_files }}

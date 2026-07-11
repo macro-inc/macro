@@ -110,9 +110,7 @@ const users = readJson<SeedUser[]>(
 const documents = readJson<SeedDocument[]>(
   'tooling/seed_cli/seed/documents/documents.json'
 );
-const channels = readJson<SeedChannel[]>(
-  'tooling/seed_cli/seed/channels.json'
-);
+const channels = readJson<SeedChannel[]>('tooling/seed_cli/seed/channels.json');
 const channelMessages = readJson<SeedChannelMessage[]>(
   'tooling/seed_cli/seed/channel_messages.json'
 );

@@ -202,6 +202,9 @@ deny = [
     "macro_entrypoint",
     "native_app_server",         # Dev tooling only
     "notification_sandbox",      # This is not production code its just tooling
+    "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
+    "tracing-web",               # External WASM tracing layer
+    "loom",                      # External concurrency testing dependency
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
     "tracing-panic",             # External crate allowed to use tracing-subscriber
     "tracing-tree",
