@@ -18,6 +18,7 @@ import { propertiesServiceClient } from '../../service-clients/service-propertie
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
+import { setEntityProperty } from '../../service-clients/service-storage/graphql-properties';
 import { queryClient } from '../client';
 import {
   getSoupEntityById,
@@ -26,6 +27,7 @@ import {
   type SoupTransaction,
 } from '../soup/cache';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
 export function useEntityPropertiesQuery(
@@ -261,17 +263,14 @@ export function useAddEntityPropertyMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: AddEntityPropertyParams) => {
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.setEntityProperty({
-            entity_type: vars.entityType,
-            entity_id: vars.entityId,
-            property_id: vars.propertyDefinitionId,
-            body: {
-              value: null,
-            },
-          })
-      );
+      // New attachments have no assignment id until the server responds, so
+      // this write is never optimistic; onSettled invalidation refetches.
+      await setEntityProperty({
+        entityType: vars.entityType,
+        entityId: vars.entityId,
+        propertyDefinitionId: vars.propertyDefinitionId,
+        value: null,
+      });
     },
     ...withCallbacks<void, Error, AddEntityPropertyParams>(
       {
@@ -493,17 +492,20 @@ export function useBulkSaveEntityPropertiesMutation(
             item.property.isMultiSelect
           );
 
-          return throwOnErr(
-            async () =>
-              await propertiesServiceClient.setEntityProperty({
-                entity_type: item.entityType,
-                entity_id: item.entityId,
-                property_id: getPropertyDefinitionId(item.property),
-                body: {
-                  value: propertyValue,
-                },
-              })
-          );
+          return setEntityProperty({
+            entityType: item.entityType,
+            entityId: item.entityId,
+            propertyDefinitionId: getPropertyDefinitionId(item.property),
+            value: propertyValue,
+            // GraphQL path only: updates the normalized property record
+            // referenced by soup query results. The TanStack optimistic
+            // transaction below stays until soup consumers move to
+            // reactive urql queries.
+            optimisticProperty: buildOptimisticSetEntityProperty(
+              item.property,
+              item.apiValues
+            ),
+          });
         })
       );
     },

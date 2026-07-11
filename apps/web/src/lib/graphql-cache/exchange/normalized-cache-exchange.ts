@@ -17,6 +17,16 @@
  * - `network-only`: skip read; response still written to cache.
  * - `cache-only`: hit → emit; miss → emit `data: undefined`, no network.
  *
+ * Mutations:
+ * - With an optimistic response (see `executeOptimisticMutation`): an
+ *   in-memory optimistic layer is installed *before* the mutation is
+ *   forwarded; dependent queries re-execute immediately. The layer commits
+ *   with the real response on success and rolls back on error. No synthetic
+ *   result is emitted — the caller's mutation promise resolves only with
+ *   the network result.
+ * - Without one: forwarded normally; successful responses are normalized
+ *   through the standard write path so dependent cached queries update.
+ *
  * Cache failures are never fatal: any host error degrades to the network.
  */
 
@@ -42,6 +52,15 @@ import {
   tap,
 } from 'wonka';
 import type { CacheHost } from '../host/types';
+import { optimisticContextOf } from './optimistic';
+
+/**
+ * Private operation-context field carrying the optimistic transaction id
+ * from forward time to result time. Lives on the operation (not keyed by
+ * urql operation key): identical concurrent mutations share a key but each
+ * carries its own transaction.
+ */
+const TRANSACTION_CONTEXT_KEY = 'normalizedCacheTransaction';
 
 const queryTextCache = new WeakMap<object, string>();
 
@@ -158,6 +177,36 @@ export function normalizedCacheExchange(
         return undefined;
       }
 
+      /**
+       * Installs the optimistic layer (when the mutation carries one) and
+       * only then releases the mutation to the network. Cache failures
+       * degrade to a plain, non-optimistic network mutation.
+       */
+      async function prepareMutation(op: Operation): Promise<void> {
+        const optimistic = optimisticContextOf(op);
+        if (!optimistic) {
+          enqueueForward(op);
+          return;
+        }
+        try {
+          const begin = await host.beginOptimisticWrite({
+            query: queryText(op),
+            operationName: operationName(op),
+            variables: op.variables as Record<string, unknown> | undefined,
+            data: optimistic.optimisticResponse,
+          });
+          enqueueForward(
+            makeOperation(op.kind, op, {
+              ...op.context,
+              [TRANSACTION_CONTEXT_KEY]: begin.transactionId,
+            })
+          );
+        } catch (error) {
+          options.onCacheError?.(error, op);
+          enqueueForward(op);
+        }
+      }
+
       async function writeThrough(
         result: OperationResult
       ): Promise<OperationResult> {
@@ -172,6 +221,38 @@ export function normalizedCacheExchange(
               data: result.data,
               identity: options.extractIdentity?.(result.data),
             });
+          } catch (error) {
+            options.onCacheError?.(error, op);
+          }
+        } else if (op.kind === 'mutation') {
+          const transactionId: unknown = op.context[TRANSACTION_CONTEXT_KEY];
+          try {
+            if (typeof transactionId === 'string') {
+              if (result.error || result.data == null) {
+                await host.rollbackOptimisticWrite(transactionId);
+              } else {
+                // Atomic replace: dependents move straight from the
+                // optimistic data to the real response, never flickering
+                // back to the pre-mutation state.
+                await host.commitOptimisticWrite(transactionId, {
+                  query: queryText(op),
+                  operationName: operationName(op),
+                  variables: op.variables as
+                    | Record<string, unknown>
+                    | undefined,
+                  data: result.data,
+                });
+              }
+            } else if (result.data != null && !result.error) {
+              // Plain mutation write-through: normalized entities update
+              // dependent cached queries.
+              await host.writeQuery({
+                query: queryText(op),
+                operationName: operationName(op),
+                variables: op.variables as Record<string, unknown> | undefined,
+                data: result.data,
+              });
+            }
           } catch (error) {
             options.onCacheError?.(error, op);
           }
@@ -193,9 +274,23 @@ export function normalizedCacheExchange(
         })
       );
 
+      // Mutations are held until their optimistic layer (if any) is
+      // installed, then re-injected through the forward queue. Emits
+      // nothing itself — the network result is the only mutation emission.
+      const mutationPrep$ = pipe(
+        shared,
+        filter((op) => op.kind === 'mutation'),
+        mergeMap((op) =>
+          pipe(
+            fromPromise(prepareMutation(op)),
+            mergeMap(() => empty as Source<OperationResult>)
+          )
+        )
+      );
+
       const passthrough$ = pipe(
         shared,
-        filter((op) => op.kind !== 'query'),
+        filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
         tap((op) => {
           if (op.kind === 'teardown') {
             activeOps.delete(op.key);
@@ -211,7 +306,7 @@ export function normalizedCacheExchange(
       );
 
       void unsubscribePush;
-      return merge([cacheResults$, forwarded$]);
+      return merge([cacheResults$, mutationPrep$, forwarded$]);
     };
   };
 }

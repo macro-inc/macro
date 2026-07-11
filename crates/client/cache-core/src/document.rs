@@ -20,7 +20,7 @@ pub enum DocumentError {
     NoOperation,
     #[error("operation `{0}` not found")]
     UnknownOperation(String),
-    #[error("only queries are supported (got {0})")]
+    #[error("only queries and mutations are supported (got {0})")]
     UnsupportedOperationType(String),
     #[error("fragment `{0}` is not defined")]
     UnknownFragment(String),
@@ -59,9 +59,17 @@ pub enum Selection {
     },
 }
 
+/// Kind of an executable operation. Subscriptions are rejected at parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperationKind {
+    Query,
+    Mutation,
+}
+
 #[derive(Debug)]
 pub struct Operation {
     pub name: Option<String>,
+    pub kind: OperationKind,
     pub selection_set: Vec<Selection>,
 }
 
@@ -113,13 +121,17 @@ impl Document {
 
         let mut operations = Vec::new();
         for op in operations_cst {
-            if let Some(ty) = op.operation_type() {
-                // Queries only for now; mutations/subscriptions are Phase 5+.
-                if ty.query_token().is_none() {
+            // Shorthand (no operation type keyword) is a query.
+            let kind = match op.operation_type() {
+                None => OperationKind::Query,
+                Some(ty) if ty.query_token().is_some() => OperationKind::Query,
+                Some(ty) if ty.mutation_token().is_some() => OperationKind::Mutation,
+                // Subscriptions are not cacheable.
+                Some(ty) => {
                     let label = ty.syntax().text().to_string();
                     return Err(DocumentError::UnsupportedOperationType(label));
                 }
-            }
+            };
             let selection_set = convert_selection_set(
                 op.selection_set()
                     .ok_or(DocumentError::Malformed("operation without selection set"))?,
@@ -128,6 +140,7 @@ impl Document {
             )?;
             operations.push(Operation {
                 name: op.name().map(|n| n.text().to_string()),
+                kind,
                 selection_set,
             });
         }
@@ -426,8 +439,27 @@ mod tests {
     }
 
     #[test]
-    fn rejects_mutations() {
-        let err = Document::parse("mutation M { doThing }").unwrap_err();
+    fn parses_operation_kinds() {
+        let doc = Document::parse(DOC).unwrap();
+        assert_eq!(
+            doc.operation(Some("Soup")).unwrap().kind,
+            OperationKind::Query
+        );
+
+        let doc = Document::parse("mutation M { doThing }").unwrap();
+        assert_eq!(
+            doc.operation(Some("M")).unwrap().kind,
+            OperationKind::Mutation
+        );
+
+        // Shorthand operations are queries.
+        let doc = Document::parse("{ user { id } }").unwrap();
+        assert_eq!(doc.operation(None).unwrap().kind, OperationKind::Query);
+    }
+
+    #[test]
+    fn rejects_subscriptions() {
+        let err = Document::parse("subscription S { doThing }").unwrap_err();
         assert!(matches!(err, DocumentError::UnsupportedOperationType(_)));
     }
 

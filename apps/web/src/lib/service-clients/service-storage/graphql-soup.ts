@@ -82,7 +82,7 @@ let cachedClient: Client | undefined;
  * different user wipes and rebinds the cache). See @graphql-cache/scope.
  * Any failure falls back to the plain fetch client for the session.
  */
-function getGraphqlSoupClient(): Client {
+export function getGraphqlSoupClient(): Client {
   if (!graphqlCacheEnabled()) return graphqlSoupClient;
   cachedClient ??= (() => {
     try {
