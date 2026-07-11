@@ -10,12 +10,6 @@
 /js
 /rust
 
-# User-facing applications and shared JavaScript packages are not part of most
-# backend service build contexts. The lexical service has a Dockerfile-specific
-# ignore file because it installs the root JavaScript workspace.
-/apps
-/packages
-
 # Secrets and local configuration
 .env
 .env.*
