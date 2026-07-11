@@ -3,6 +3,7 @@ use crate::error::AgentError;
 use crate::hook::{RegisterFn, ToolRouter};
 use crate::model::PredefinedModel;
 use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::observe::{self, AgentObserver, MessageObserve, ObserveHandle};
 use crate::stream::ChatCompletionStream;
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
@@ -30,6 +31,7 @@ pub struct AgentLoop {
     max_turns: usize,
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
+    observer: Option<Arc<dyn AgentObserver>>,
 }
 
 impl AgentLoop {
@@ -46,7 +48,21 @@ impl AgentLoop {
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
+            observer: observe::shared(),
         }
+    }
+
+    /// Override the [`AgentObserver`] (the default is resolved from the
+    /// environment; see [`observe::shared`]).
+    pub fn with_observer(mut self, observer: Arc<dyn AgentObserver>) -> Self {
+        self.observer = Some(observer);
+        self
+    }
+
+    /// Disable observation for this loop regardless of the environment.
+    pub fn without_observer(mut self) -> Self {
+        self.observer = None;
+        self
     }
 
     /// Override the model.
@@ -222,6 +238,11 @@ impl AgentLoop {
 
         let agent = build(handle, &system_prompt, self.max_turns, self.max_tokens);
 
+        let observe = self
+            .observer
+            .clone()
+            .map(|observer| ObserveHandle::start(observer, &usage_ctx, &self.model));
+
         Session {
             agent,
             history: Vec::new(),
@@ -233,6 +254,7 @@ impl AgentLoop {
             usage_ctx,
             model: self.model.clone(),
             request_context,
+            observe,
         }
     }
 
@@ -281,6 +303,8 @@ pub struct Session {
     usage_ctx: UsageContext,
     model: String,
     request_context: RequestContext,
+    /// Per-session observer state; `None` when observation is off.
+    observe: Option<Arc<ObserveHandle>>,
 }
 
 impl Session {
@@ -306,6 +330,9 @@ impl Session {
             )));
         };
 
+        let observe: Option<Arc<MessageObserve>> =
+            self.observe.as_ref().map(ObserveHandle::begin_message);
+
         let stream = self
             .agent
             .run_stream(
@@ -319,6 +346,7 @@ impl Session {
                 self.usage_ctx.clone(),
                 self.model.clone(),
                 self.request_context.clone(),
+                observe,
             )
             .await;
 

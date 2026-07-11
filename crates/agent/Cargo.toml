@@ -6,6 +6,9 @@ version = "0.1.0"
 
 [features]
 debug-messages = []
+# Ships the reference 0rrery HTTP emitter (and its reqwest dependency).
+# The AgentObserver port itself is always available.
+orrery = ["dep:reqwest"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -14,6 +17,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true, optional = true }
 # Macro fork of rig (upstream main + with_non_strict_tools() on Responses
 # API models). Drop back to crates.io once the patch lands upstream.
 rig-core = { git = "https://github.com/macro-inc/rig", branch = "feat/responses-api-non-strict-tools" }
@@ -23,6 +27,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true }
+uuid = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 ai_usage = { path = "../ai_usage" }

@@ -1,6 +1,7 @@
 /// A [`rig_core::agent::PromptHook`] that bridges RIG lifecycle events into
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
+use crate::observe::MessageObserve;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};
 use rig_core::agent::{
@@ -58,6 +59,8 @@ pub struct StreamBridge {
     searchable_catalog: Arc<Vec<SearchableTool>>,
     /// the user has requested the stream stop
     cancel: CancellationToken,
+    /// Observer for this message's tool spans; `None` when observation is off.
+    observe: Option<Arc<MessageObserve>>,
 }
 
 impl StreamBridge {
@@ -74,6 +77,7 @@ impl StreamBridge {
         register_loaded: RegisterFn,
         searchable_catalog: Arc<Vec<SearchableTool>>,
         cancel: CancellationToken,
+        observe: Option<Arc<MessageObserve>>,
     ) -> (
         Self,
         mpsc::UnboundedReceiver<Result<StreamPart, AgentError>>,
@@ -87,6 +91,7 @@ impl StreamBridge {
                 register_loaded,
                 searchable_catalog,
                 cancel,
+                observe,
             },
             rx,
         )
@@ -184,6 +189,9 @@ where
                 display_name,
             },
         });
+        if let Some(observe) = &self.observe {
+            observe.tool_started(&id, tool_name);
+        }
         let _ = self.tx.send(Ok(StreamPart::ToolCall(ToolCall {
             id,
             name: tool_name.to_owned(),
@@ -226,6 +234,13 @@ where
                 description: result.to_owned(),
             },
         };
+        if let Some(observe) = &self.observe {
+            let (id, ok) = match &response {
+                ToolResponse::Json { id, .. } => (id, true),
+                ToolResponse::Err { id, .. } => (id, false),
+            };
+            observe.tool_finished(id, tool_name, ok);
+        }
         let _ = self.tx.send(Ok(StreamPart::ToolResponse(response)));
         HookAction::Continue
     }

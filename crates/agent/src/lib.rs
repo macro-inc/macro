@@ -9,6 +9,8 @@ mod convert;
 mod error;
 mod hook;
 mod model;
+/// Fire-and-forget observation of agent runs (0rrery emitter).
+pub mod observe;
 mod stream;
 /// Structured output via prompted JSON generation.
 pub mod structured_output;

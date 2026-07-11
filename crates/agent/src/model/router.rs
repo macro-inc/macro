@@ -36,6 +36,7 @@ use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
 use crate::error::AgentError;
 use crate::hook::{RegisterFn, StreamBridge, ToolRouter};
+use crate::observe::MessageObserve;
 use crate::stream::{ChatCompletionStream, StreamPart};
 
 env_var! {
@@ -149,6 +150,7 @@ impl ProviderAgent {
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        observe: Option<Arc<MessageObserve>>,
     ) -> ChatCompletionStream<'static> {
         match self {
             ProviderAgent::Anthropic(agent) => {
@@ -164,6 +166,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    observe.clone(),
                 )
                 .await
             }
@@ -180,6 +183,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    observe.clone(),
                 )
                 .await
             }
@@ -196,6 +200,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    observe.clone(),
                 )
                 .await
             }
@@ -213,6 +218,7 @@ impl ProviderAgent {
                         usage_ctx,
                         model,
                         request_context.clone(),
+                        observe.clone(),
                     )
                     .await
             }
@@ -407,6 +413,7 @@ async fn drive_stream<M>(
     usage_ctx: UsageContext,
     model: String,
     request_context: RequestContext,
+    observe: Option<Arc<MessageObserve>>,
 ) -> ChatCompletionStream<'static>
 where
     M: CompletionModel + 'static,
@@ -418,6 +425,7 @@ where
         register_loaded,
         request_context.searchable_tools.clone(),
         request_context.cancel.clone(),
+        observe.clone(),
     );
     // Driver-side sender for parts derived from rig stream items (thinking,
     // usage, errors). The lifecycle hooks (text, tool call, tool response) send
@@ -443,6 +451,7 @@ where
     // finishes.
     let driver = tokio::spawn(async move {
         let mut thinking_buf = String::new();
+        let mut stream_errored = false;
 
         while let Some(item) = rig_stream.next().await {
             match item {
@@ -465,12 +474,16 @@ where
                                 usage.input_tokens,
                                 usage.output_tokens,
                             ));
+                            if let Some(observe) = &observe {
+                                observe.llm_usage(&model, usage.input_tokens, usage.output_tokens);
+                            }
                             let _ = driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
                                 input_tokens: usage.input_tokens,
                                 output_tokens: usage.output_tokens,
                             })));
                         }
                         Err(e) => {
+                            stream_errored = true;
                             let _ = driver_tx.send(Err(AgentError::Streaming(e)));
                         }
                         _ => {}
@@ -480,6 +493,9 @@ where
         }
         if !thinking_buf.is_empty() {
             let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
+        }
+        if let Some(observe) = &observe {
+            observe.finish(!stream_errored);
         }
         // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
         // here closes the channel, ending the consumer stream below.
@@ -524,6 +540,7 @@ pub(crate) trait DynStreamAgent: Send + Sync {
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        observe: Option<Arc<MessageObserve>>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     >;
@@ -547,6 +564,7 @@ where
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        observe: Option<Arc<MessageObserve>>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     > {
@@ -562,6 +580,7 @@ where
             usage_ctx,
             model,
             request_context,
+            observe,
         ))
     }
 }

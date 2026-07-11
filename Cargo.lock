@@ -67,6 +67,7 @@ dependencies = [
  "non_empty",
  "prompt",
  "regex",
+ "reqwest 0.13.4",
  "rig-core",
  "schemars 1.2.1",
  "serde",
@@ -77,6 +78,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 

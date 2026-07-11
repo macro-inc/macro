@@ -40,8 +40,14 @@ async fn on_tool_result_drains_buffer_and_registers_loaded_tools() {
     let (register, registered) = recording_register();
     let routing: ToolRouter = Arc::new(|_| None);
     let token = CancellationToken::new();
-    let (bridge, _rx) =
-        StreamBridge::channel(routing, buffer.clone(), register, Arc::new(vec![]), token);
+    let (bridge, _rx) = StreamBridge::channel(
+        routing,
+        buffer.clone(),
+        register,
+        Arc::new(vec![]),
+        token,
+        None,
+    );
 
     let action = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_result(
         &bridge,
@@ -73,7 +79,8 @@ async fn on_tool_result_registers_nothing_when_buffer_empty() {
     let (register, registered) = recording_register();
     let routing: ToolRouter = Arc::new(|_| None);
     let token = CancellationToken::new();
-    let (bridge, _rx) = StreamBridge::channel(routing, buffer, register, Arc::new(vec![]), token);
+    let (bridge, _rx) =
+        StreamBridge::channel(routing, buffer, register, Arc::new(vec![]), token, None);
 
     let _ = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_result(
         &bridge,
@@ -114,6 +121,7 @@ async fn invalid_call_to_searchable_tool_loads_it_and_retries() {
         register,
         catalog,
         CancellationToken::new(),
+        None,
     );
 
     let action = <StreamBridge as PromptHook<AnthropicModel>>::on_invalid_tool_call(
@@ -141,6 +149,7 @@ async fn invalid_call_to_unknown_tool_retries_with_feedback_without_loading() {
         register,
         catalog,
         CancellationToken::new(),
+        None,
     );
 
     let action = <StreamBridge as PromptHook<AnthropicModel>>::on_invalid_tool_call(
