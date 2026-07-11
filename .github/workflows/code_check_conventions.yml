@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/code_check_conventions.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_conventions.rs
 name: conventions code check
 'on':
   pull_request:
@@ -29,9 +29,11 @@ jobs:
       with:
         filters: |
           should_run:
-            - 'rust/**'
-            - 'js/app/**'
-            - 'js/lexical-core/**'
+            - 'crates/**'
+            - 'services/**'
+            - 'tooling/xtask/**'
+            - 'apps/web/**'
+            - 'packages/**'
             - 'rules/**'
             - 'sgconfig.yml'
             - '.github/workflows/code_check_conventions.yml'

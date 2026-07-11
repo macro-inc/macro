@@ -4,7 +4,7 @@ import { stack } from '../../shared';
 
 /**
  * Infrastructure wiring required by services that host the `ai_tools` crate
- * (see `rust/cloud-storage/ai_tools/src/build_context.rs`). Callers spread
+ * (see `crates/ai_tools/src/build_context.rs`). Callers spread
  * these into their service's IAM role and container environment alongside any
  * service-specific values.
  */

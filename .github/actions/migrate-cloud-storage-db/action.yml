@@ -13,7 +13,7 @@ runs:
       with:
         sparse-checkout: |
           .github/
-          rust/cloud-storage/macro_db_client
+          crates/macro_db_client
     
     - name: Get database URL from Secrets Manager
       id: get-db-url
@@ -44,7 +44,7 @@ runs:
 
     - name: Run database migrations
       shell: bash
-      working-directory: rust/cloud-storage/macro_db_client
+      working-directory: crates/macro_db_client
       env:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
       run: |

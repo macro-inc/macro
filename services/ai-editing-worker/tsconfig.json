@@ -1,0 +1,63 @@
+{
+	"compilerOptions": {
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"target": "es2022",
+		"verbatimModuleSyntax": false,
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"moduleDetection": "force",
+		"downlevelIteration": true,
+		"noImplicitAny": false,
+		"strictNullChecks": false,
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"moduleResolution": "Bundler",
+		"module": "es2022",
+		"noEmit": true,
+		"lib": [
+			"es2023",
+			"dom"
+		],
+		"types": [
+			"@types/node",
+			"bun-types"
+		],
+		"baseUrl": ".",
+		"paths": {
+			"@loro-mirror/*": [
+				"../../packages/loro-mirror/*"
+			],
+			"@core/*": [
+				"../../apps/web/packages/core/*"
+			],
+			"@service-sync/*": [
+				"../../apps/web/packages/service-clients/service-sync/*"
+			],
+			"@websocket": [
+				"../../apps/web/packages/websocket"
+			],
+			"@websocket/*": [
+				"../../apps/web/packages/websocket/*"
+			],
+			"@lexical-core": [
+				"../../packages/lexical-core"
+			],
+			"@lexical-core/*": [
+				"../../packages/lexical-core/*"
+			]
+		}
+	},
+	"exclude": [
+		"node_modules",
+		"../../packages/lexical-core/nodes",
+		"../../packages/lexical-core/transformers",
+		"../../packages/loro-mirror"
+	],
+	"include": [
+		"src",
+		"scripts",
+		"wasm.d.ts",
+		"prompts.d.ts"
+	]
+}

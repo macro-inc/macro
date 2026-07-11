@@ -1,13 +1,13 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/check_generated.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_generated.rs
 name: check generated workflows
 'on':
   pull_request:
     branches:
     - main
     paths:
-    - rust/cloud-storage/tools/xtask/**
-    - rust/cloud-storage/macro_event_topics/**
+    - tooling/xtask/**
+    - crates/macro_event_topics/**
     - '.github/workflows/**'
     - '.github/kafka-cluster-topics.json'
 jobs:
@@ -25,6 +25,6 @@ jobs:
         sccache: 'false'
         rust-cache: 'false'
     - name: verify workflows are up to date
-      run: cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- workflows --check
+      run: cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check
     - name: verify kafka cluster topics are up to date
-      run: cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- kafka-topics --check
+      run: cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check

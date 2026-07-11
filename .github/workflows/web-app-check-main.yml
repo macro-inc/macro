@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
 'on':
   pull_request:
@@ -25,25 +25,26 @@ jobs:
       with:
         filters: |
           should_run:
-            - 'js/package.json'
-            - 'js/bun.lock'
-            - 'js/app/package.json'
-            - 'js/app/packages/**'
-            - 'js/app/src/**'
-            - 'js/app/biome.jsonc'
-            - 'js/lexical-core/**'
-            - 'js/lexical-service/**'
+            - 'package.json'
+            - 'bun.lock'
+            - 'apps/web/package.json'
+            - 'apps/web/packages/**'
+            - 'apps/web/biome.jsonc'
+            - 'packages/**'
+            - 'services/lexical-service/**'
             - '.github/actions/setup-cachix/**'
             - '.github/actions/setup-reqs-web/**'
             - '.github/workflows/web-app-check-main.yml'
           api_changed:
-            - 'rust/cloud-storage/**/*.rs'
-            - 'rust/cloud-storage/Cargo.toml'
-            - 'rust/cloud-storage/Cargo.lock'
+            - 'crates/**/*.rs'
+            - 'services/**/*.rs'
+            - 'tooling/xtask/**/*.rs'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
             - 'flake.nix'
             - 'flake.lock'
-            - 'js/app/scripts/generate-api-schema.ts'
-            - 'js/app/scripts/services.ts'
+            - 'apps/web/scripts/generate-api-schema.ts'
+            - 'apps/web/scripts/services.ts'
             - '.github/actions/setup-cachix/**'
             - '.github/actions/setup-reqs-web/**'
             - '.github/workflows/web-app-check-main.yml'
@@ -77,13 +78,13 @@ jobs:
     - name: Generate API Types
       if: needs.path-check.outputs.api_changed == 'true'
       run: bun run gen-api -- --check
-      working-directory: js/app
+      working-directory: apps/web
     - name: show sccache stats
       if: always() && needs.path-check.outputs.api_changed == 'true'
       run: sccache --show-stats || true
     - name: Check Types
       run: bun run --bun --silent tsc --project ./packages/app/tsconfig.json
-      working-directory: js/app
+      working-directory: apps/web
   biome-check:
     needs:
     - path-check
@@ -109,7 +110,7 @@ jobs:
         dev-shell: 'true'
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
-      working-directory: js/app
+      working-directory: apps/web
   tailwind:
     needs:
     - path-check
@@ -135,7 +136,7 @@ jobs:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Check Tailwind Classes
       run: just check-tailwind
-      working-directory: js/app
+      working-directory: apps/web
   test:
     needs:
     - path-check
@@ -160,7 +161,7 @@ jobs:
         playwright: 'true'
     - name: Test
       run: bunx vitest
-      working-directory: js/app
+      working-directory: apps/web
   cycles:
     needs:
     - path-check
@@ -184,7 +185,7 @@ jobs:
         dev-shell: 'true'
     - name: Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
-      working-directory: js/app
+      working-directory: apps/web
   build:
     needs:
     - path-check
@@ -208,7 +209,7 @@ jobs:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Build
       run: bun run build
-      working-directory: js/app
+      working-directory: apps/web
   status-check:
     needs:
     - path-check

@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/deploy_ai_editing_worker.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_ai_editing_worker.rs
 name: Deploy AI Editing Worker
 'on':
   push:
@@ -7,12 +7,12 @@ name: Deploy AI Editing Worker
     - main
     paths:
     - '.github/workflows/deploy_ai_editing_worker.yml'
-    - js/bun.lock
-    - js/package.json
-    - js/ai-editing-worker/**
-    - js/app/packages/core/**
-    - js/app/packages/websocket/**
-    - js/loro-mirror/**
+    - bun.lock
+    - package.json
+    - services/ai-editing-worker/**
+    - apps/web/packages/core/**
+    - apps/web/packages/websocket/**
+    - packages/loro-mirror/**
   workflow_dispatch:
     inputs:
       environment:
@@ -37,16 +37,15 @@ jobs:
         node-version: '22'
     - name: Install dependencies
       run: bun install --frozen-lockfile
-      working-directory: js
     - name: Install worker dependencies
       run: bun install --frozen-lockfile
-      working-directory: js/ai-editing-worker
+      working-directory: services/ai-editing-worker
     - name: Deploy with wrangler
       run: bun run deploy-${{ inputs.environment || 'dev' }}
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      working-directory: js/ai-editing-worker
+      working-directory: services/ai-editing-worker
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false

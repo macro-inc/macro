@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/assign_labels.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/assign_labels.rs
 name: Auto Label PRs
 'on':
   pull_request:
@@ -36,8 +36,13 @@ jobs:
 
           // Define path-to-label mappings
           const pathMappings = [
-            { path: 'rust/cloud-storage', label: 'cloud-storage' },
-            { path: 'js/app', label: 'web-app' },
+            { path: 'crates/', label: 'cloud-storage' },
+            { path: 'services/', label: 'cloud-storage' },
+            { path: 'tooling/xtask/', label: 'cloud-storage' },
+            { path: 'Cargo.', label: 'cloud-storage' },
+            { path: 'rust-toolchain.toml', label: 'cloud-storage' },
+            { path: 'apps/web/', label: 'web-app' },
+            { path: 'packages/', label: 'web-app' },
             { path: 'infra', label: 'infra' }
           ];
 

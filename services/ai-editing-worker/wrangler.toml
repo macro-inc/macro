@@ -1,0 +1,96 @@
+name = "ai-editing-worker"
+main = "src/index.ts"
+compatibility_date = "2025-07-22"
+compatibility_flags = ["nodejs_compat", "enable_request_signal", "global_fetch_strictly_public"]
+
+[alias]
+"loro-crdt" = "loro-crdt/bundler"
+"@observability/logger" = "./src/logger-shim.ts"
+"@core" = "../../apps/web/packages/core"
+"@service-sync" = "../../apps/web/packages/service-clients/service-sync"
+"@loro-mirror" = "../../packages/loro-mirror"
+"@lexical-core" = "../../packages/lexical-core"
+"@websocket" = "../../apps/web/packages/websocket/index.ts"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces"
+database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
+
+[vars]
+SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service.macro.com"
+
+[dev]
+port = 8933
+
+[env.local.vars]
+SYNC_WS_BASE = "ws://sync-service:8787"
+DSS_BASE = "http://document-storage-service:8080"
+SEARCH_SERVICE_BASE = "http://search-processing-service:8080"
+CONTACTS_SERVICE_BASE = "http://contacts-service:8080"
+AUTH_SERVICE_BASE = "http://connection-gateway:8080"
+
+# Local dev uses an on-disk SQLite shard, so the id is only a reference.
+[[env.local.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces"
+database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
+
+[env.dev.vars]
+SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage-dev.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+
+[[env.dev.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces"
+database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
+
+[env.playground]
+name = "ai-editing-worker-playground"
+
+[env.playground.vars]
+SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage-dev.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+
+[[env.playground.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces-playground"
+database_id = "28cdeacb-6468-449b-a1c7-a193b220501e"
+
+[env.prod]
+name = "ai-editing-worker"
+
+[env.prod.vars]
+SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service.macro.com"
+
+[[env.prod.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces-prod"
+database_id = "2af569f1-2edb-4e6a-99a2-f2f9ee82c0d1"

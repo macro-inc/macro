@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "seed_cli"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+channels = { path = "../../crates/channels", default-features = false, features = ["outbound"] }
+chrono = { workspace = true }
+clap = { workspace = true }
+comms_db_client = { path = "../../crates/comms_db_client" }
+email_db_client = { path = "../../crates/email_db_client" }
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
+fusionauth = { path = "../../crates/fusionauth" }
+futures = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_db_client = { path = "../../crates/macro_db_client" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+mockall = { workspace = true }
+model = { path = "../../crates/model" }
+model-entity = { path = "../../crates/model-entity" }
+models_email = { path = "../../crates/models_email" }
+models_permissions = { path = "../../crates/models_permissions" }
+rand = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+tempfile = "3"

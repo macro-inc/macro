@@ -1,21 +1,24 @@
 .direnv/*
 .envrc
-**/.env
+**/.env*
+**/*.env
 **/.dev.vars
 .idea/
 **/.DS_Store
 .run/
 .claude/.local
 temp/
-.env.local
 run-local.fish
 **/node_modules
 **/.wrangler
+**/dist
+**/test-results
 **/result
 **/result-*
 .pi/plan/
 .pi/plans/
 # Per-instance generated local-stack artifacts (compose override, env, kickstart, Caddyfile).
 infra/local/generated/
-**/target/*
+**/target/
+**/ai_tools/schemas/
 .pi/outputs/

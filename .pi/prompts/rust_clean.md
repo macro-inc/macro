@@ -2,9 +2,9 @@
 description: Cleanup rust code
 ---
 
-You will clean up the rust code in `rust/cloud-storage`.
+You will clean up the Rust code in `crates/`, `services/`, and `tooling/`.
 
-Inside of `rust/cloud-storage` run the following commands in order:
+From the repository root, run the following commands in order:
 1. `just prepare_db`
 1. `just clippy`
 1. `just check`  

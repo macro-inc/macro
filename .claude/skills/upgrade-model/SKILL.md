@@ -29,7 +29,7 @@ Derive from the model name:
 
 ### 2. Add model to AI crate (if it doesn't already exist)
 
-File: `rust/cloud-storage/ai/src/types/model/mod.rs`
+File: `crates/agent/src/model/predefined_model.rs`
 
 Check if the enum variant already exists. If not, add all of the following:
 
@@ -55,7 +55,7 @@ Check if the enum variant already exists. If not, add all of the following:
    {CONST_NAME} => Model::{ENUM_VARIANT},
    ```
 
-File: `rust/cloud-storage/ai/src/types/model/metadata.rs`
+File: `crates/agent/src/model/predefined_model.rs`
 
 5. **Metadata** in `fn metadata()`:
    ```rust
@@ -72,30 +72,30 @@ File: `rust/cloud-storage/ai/src/types/model/metadata.rs`
 
 ### 3. Update DCS constants
 
-File: `rust/cloud-storage/document_cognition_service/src/core/model.rs`
+File: `services/document_cognition_service/src/core/model.rs`
 
 - If upgrading the **fast** slot: change the first entry in `CHAT_MODELS` and update `FALLBACK_MODEL`.
 - If upgrading the **good** slot: change the second entry in `CHAT_MODELS`.
 
 ### 4. Update DCS chat message handler
 
-File: `rust/cloud-storage/document_cognition_service/src/api/ws/chat_message/mod.rs`
+File: `services/document_cognition_service/src/api/ws/chat_message/mod.rs`
 
 Search for the old model variant being used in the model selection logic (e.g. `Model::Claude45Opus`). Update it to the new variant.
 
 ### 5. Verify Rust compiles
 
 ```bash
-cd rust/cloud-storage && cargo check -p ai -p document_cognition_service
+cargo check -p agent -p document_cognition_service
 ```
 
 Fix any compilation errors before proceeding.
 
 ### 6. Generate frontend types
 
-Run from `js/app/`:
+Run from `apps/web/`:
 ```bash
-cd js/app && bun install && bun run gen-api
+cd apps/web && bun install && bun run gen-api
 ```
 
 This builds all Rust OpenAPI and models binaries from local code, generates `openapi.json`, runs orval for TypeScript types, and generates `model.ts` from the local models binary. All generated files will reflect your local Rust changes.
@@ -103,7 +103,7 @@ This builds all Rust OpenAPI and models binaries from local code, generates `ope
 ### 7. Run `bun check` to find frontend usages
 
 ```bash
-cd js/app && bun check
+cd apps/web && bun check
 ```
 
 This will report TypeScript errors everywhere the old model string is used. Fix each one. Common locations:
@@ -117,14 +117,14 @@ Replace old model strings and update display names.
 ### 8. Format and verify
 
 ```bash
-cd js/app && bun format && bun check
+cd apps/web && bun format && bun check
 ```
 
 The only errors remaining should be **pre-existing** ones unrelated to models (e.g. `three`, `@aws-crypto/sha256-js` type issues). All model-related errors must be resolved.
 
 Finally, run the CI check:
 ```bash
-cd js/app && bun run gen-api -- --check
+cd apps/web && bun run gen-api -- --check
 ```
 
 This must pass.

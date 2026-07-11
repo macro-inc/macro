@@ -49,7 +49,7 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build for Production
-        working-directory: js/app
+        working-directory: apps/web
         run: just build-prod
         env:
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-app-prod-build
-          path: js/app/packages/app/dist
+          path: apps/web/packages/app/dist
           retention-days: 7
 
   deploy:
@@ -89,7 +89,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: web-app-prod-build
-          path: js/app/packages/app/dist
+          path: apps/web/packages/app/dist
       - name: Install infra dependencies
         run: |
           cd infra
@@ -112,7 +112,7 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           DD_HOST: https://api.us5.datadoghq.com/
       - name: Upload sourcemaps to Datadog
-        working-directory: js/app/packages/app
+        working-directory: apps/web/packages/app
         run: bun run ddupload:prod
         env:
           DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
@@ -131,9 +131,9 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: web-app-prod-build
-          path: js/app/packages/app/dist
+          path: apps/web/packages/app/dist
       - name: Create Web App Artifact
-        run: tar -czf web-app-${{ github.ref_name }}.tar.gz -C js/app/packages/app/dist .
+        run: tar -czf web-app-${{ github.ref_name }}.tar.gz -C apps/web/packages/app/dist .
       - name: Upload Release Artifacts
         uses: softprops/action-gh-release@v2
         with:

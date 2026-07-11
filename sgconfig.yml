@@ -5,7 +5,7 @@
 #   - local runs    (bunx @ast-grep/cli scan)
 #   - CodeRabbit    (reviews.tools.ast-grep.rule_dirs in .coderabbit.yaml)
 #
-# Rules encode conventions from STYLE_GUIDE.md (repo root). severity: error
+# Rules encode conventions from docs/STYLE_GUIDE.md (repo root). severity: error
 # rules are CI-blocking (zero existing violations); severity: warning rules
 # surface on changed code via CodeRabbit without failing CI while existing
 # violations are burned down.

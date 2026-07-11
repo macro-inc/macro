@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "upload_extractor_lambda_handler"
+publish = false
+version = "0.1.0"
+
+[features]
+local = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["sqs"] }
+chrono = { workspace = true }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
+dynamodb_client = { path = "../../crates/dynamodb_client" }
+futures = { workspace = true }
+lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+model = { path = "../../crates/model" }
+model-entity = { path = "../../crates/model-entity" }
+models_bulk_upload = { path = "../../crates/models_bulk_upload" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+sha2 = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client" }
+tempfile = "3.19.1"
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+walkdir = "2.3.2"
+zip = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["connection_gateway_client"]

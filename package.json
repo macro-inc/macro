@@ -1,6 +1,90 @@
 {
-  "dependencies": {},
-  "devDependencies": {
-    "@apidevtools/json-schema-ref-parser": "^15.3.5"
-  }
+	"name": "@coparse/js",
+	"dependencies": {
+		"@lexical/code": "0.45.0",
+		"@lexical/headless": "0.45.0",
+		"@lexical/history": "0.45.0",
+		"@lexical/html": "0.45.0",
+		"@lexical/link": "0.45.0",
+		"@lexical/list": "0.45.0",
+		"@lexical/mark": "0.45.0",
+		"@lexical/markdown": "0.45.0",
+		"@lexical/plain-text": "0.45.0",
+		"@lexical/rich-text": "0.45.0",
+		"@lexical/selection": "0.45.0",
+		"@lexical/table": "0.45.0",
+		"@lexical/utils": "0.45.0",
+		"bebop-tools": "3.1.3",
+		"idb": "^8.0.3",
+		"lexical": "0.45.0"
+	},
+	"overrides": {
+		"@lexical/clipboard": "0.45.0",
+		"@lexical/code": "0.45.0",
+		"@lexical/code-core": "0.45.0",
+		"@lexical/code-prism": "0.45.0",
+		"@lexical/dragon": "0.45.0",
+		"@lexical/extension": "0.45.0",
+		"@lexical/headless": "0.45.0",
+		"@lexical/history": "0.45.0",
+		"@lexical/html": "0.45.0",
+		"@lexical/internal": "0.45.0",
+		"@lexical/link": "0.45.0",
+		"@lexical/list": "0.45.0",
+		"@lexical/mark": "0.45.0",
+		"@lexical/markdown": "0.45.0",
+		"@lexical/plain-text": "0.45.0",
+		"@lexical/rich-text": "0.45.0",
+		"@lexical/selection": "0.45.0",
+		"@lexical/table": "0.45.0",
+		"@lexical/text": "0.45.0",
+		"@lexical/utils": "0.45.0",
+		"@kobalte/core": "0.13.11",
+		"@solid-primitives/resize-observer": "2.1.5",
+		"@solid-primitives/storage": "4.3.4",
+		"lexical": "0.45.0",
+		"cross-spawn": "7.0.6",
+		"undici": ">=6.24.0",
+		"flatted": ">=3.4.0",
+		"minimatch": ">=3.1.4",
+		"rollup": ">=4.59.0",
+		"ajv": ">=6.14.0"
+	},
+	"packageManager": "bun@1.3.5",
+	"patchedDependencies": {
+		"solid-gesture@0.0.3": "apps/web/patches/solid-gesture@0.0.3.patch",
+		"@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
+		"@lexical/markdown@0.45.0": "apps/web/patches/@lexical%2Fmarkdown@0.45.0.patch",
+		"@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
+		"virtua@0.48.8": "apps/web/patches/virtua@0.48.8.patch",
+		"@tanstack/solid-query@5.90.3": "apps/web/patches/@tanstack%2Fsolid-query@5.90.3.patch"
+	},
+	"private": true,
+	"scripts": {
+		"fix": "cd apps/web && bunx --bun @biomejs/biome check --write",
+		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
+		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
+		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
+		"lint:oxlint": "cd apps/web && bunx --yes oxlint@1.73.0",
+		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
+	},
+	"trustedDependencies": [
+		"@pulumi/aws-native",
+		"@pulumi/awsx",
+		"@pulumi/command",
+		"@pulumi/synced-folder",
+		"aws-sdk",
+		"docker-classic",
+		"esbuild"
+	],
+	"workspaces": [
+		"apps/web",
+		"apps/web/packages/*",
+		"packages/loro-mirror",
+		"packages/lexical-core",
+		"services/lexical-service"
+	],
+	"devDependencies": {
+		"@apidevtools/json-schema-ref-parser": "^15.3.5"
+	}
 }

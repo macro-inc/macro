@@ -1,15 +1,35 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/pulumi_preview_pr.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/pulumi_preview_pr.rs
 name: Pulumi Preview on PR
 on:
   pull_request:
     branches:
     - main
     paths:
-    - rust/cloud-storage/**
+    - Cargo.toml
+    - Cargo.lock
+    - Cross.toml
+    - clippy.toml
+    - rust-toolchain.toml
+    - .cargo/**
+    - .config/**
+    - .sqlx/**
+    - crates/**
+    - services/**
+    - tooling/xtask/**
+    - tooling/just/**
+    - static_assets/**
+    - docker/**
+    - flake.nix
+    - flake.lock
+    - nix/**
+    - nix-support/**
+    - infra/**
     - .github/workflows/pulumi_preview_pr.yml
     - .github/workflows/reusable_preview_service.yml
     - .github/actions/preview-cloud-storage-pulumi/**
+    - .github/actions/setup-cachix/**
+    - .github/scripts/build-cloud-storage-lambdas-nix.sh
     - .github/services-config.json
 permissions:
   contents: read
@@ -30,7 +50,30 @@ jobs:
       uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62
       with:
         files: |-
-          rust/cloud-storage/**
+          Cargo.toml
+          Cargo.lock
+          Cross.toml
+          clippy.toml
+          rust-toolchain.toml
+          .cargo/**
+          .config/**
+          .sqlx/**
+          crates/**
+          services/**
+          tooling/xtask/**
+          tooling/just/**
+          static_assets/**
+          docker/**
+          flake.nix
+          flake.lock
+          nix/**
+          nix-support/**
+          infra/**
+          .github/workflows/pulumi_preview_pr.yml
+          .github/workflows/reusable_preview_service.yml
+          .github/actions/preview-cloud-storage-pulumi/**
+          .github/actions/setup-cachix/**
+          .github/scripts/build-cloud-storage-lambdas-nix.sh
           .github/services-config.json
     - id: detect
       name: Detect affected services
@@ -44,27 +87,53 @@ jobs:
         for service in $(echo "$config" | jq -r '.services | keys[]'); do
           service_changed=false
 
-          # Get paths for this service
-          source_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].source_path // ""')
-          stack_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].stack_path // ""')
-          additional_paths=$(echo "$config" | jq -r --arg s "$service" '.services[$s].additional_paths[]? // ""')
+          # Workspace/build-system changes can affect every deployable.
+          for file in $CHANGED_FILES; do
+            if [[ "$file" == "Cargo.toml" || "$file" == "Cargo.lock" || \
+                  "$file" == "Cross.toml" || "$file" == "clippy.toml" || \
+                  "$file" == "rust-toolchain.toml" || "$file" == .cargo/* || \
+                  "$file" == .config/* || "$file" == .sqlx/* || \
+                  "$file" == crates/* || "$file" == tooling/xtask/* || \
+                  "$file" == tooling/just/* || "$file" == static_assets/* || \
+                  "$file" == docker/* || "$file" == "flake.nix" || \
+                  "$file" == "flake.lock" || "$file" == nix/* || \
+                  "$file" == nix-support/* || "$file" == infra/packages/* ]]; then
+              service_changed=true
+              break
+            fi
+            # Root infra manifests/configuration are shared by every stack.
+            if [[ "$file" == infra/* && "${file#infra/}" != */* ]]; then
+              service_changed=true
+              break
+            fi
+            if [[ "$file" == ".github/services-config.json" || \
+                  "$file" == ".github/workflows/pulumi_preview_pr.yml" || \
+                  "$file" == ".github/workflows/reusable_preview_service.yml" || \
+                  "$file" == .github/actions/preview-cloud-storage-pulumi/* || \
+                  "$file" == .github/actions/setup-cachix/* || \
+                  "$file" == ".github/scripts/build-cloud-storage-lambdas-nix.sh" ]]; then
+              service_changed=true
+              break
+            fi
+          done
+
+          # Get all source and stack globs for this service.
+          service_paths=$(echo "$config" | jq -r --arg s "$service" \
+            '(.services[$s].source_paths // [])[], (.services[$s].stack_path // empty)')
 
           # Check if any changed files match service paths. CHANGED_FILES is a
           # space-separated list passed via env — never inlined into the script
           # body, so a crafted filename can't inject shell syntax.
-          for file in $CHANGED_FILES; do
-            if [[ -n "$source_path" && "$file" == $source_path ]]; then
-              service_changed=true
-            elif [[ -n "$stack_path" && "$file" == $stack_path ]]; then
-              service_changed=true
-            elif [[ -n "$additional_paths" ]]; then
-              for path in $additional_paths; do
-                if [[ "$file" == $path ]]; then
+          if [[ "$service_changed" != "true" ]]; then
+            for file in $CHANGED_FILES; do
+              while IFS= read -r path; do
+                if [[ -n "$path" && "$file" == $path ]]; then
                   service_changed=true
+                  break 2
                 fi
-              done
-            fi
-          done
+              done <<< "$service_paths"
+            done
+          fi
 
           if [[ "$service_changed" == "true" ]]; then
             services+=("$service")

@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/deploy_web_app_dev_push.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app_dev_push.rs
 name: Deploy web app dev on push to main
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       with:
         token: ${{ github.token }}
         diff: |
-          web-app: ./infra/stacks/web-app/** ./js/app/packages/** ./js/app/package.json ./js/package.json ./js/lexical-core/**
+          web-app: ./infra/stacks/web-app/** ./apps/web/** ./packages/** ./package.json ./bun.lock
   deploy_web_app:
     needs:
     - check-to-deploy

@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/deploy_web_app.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app.rs
 name: Deploy Web App
 on:
   workflow_call:
@@ -72,7 +72,7 @@ jobs:
         VITE_DD_HASH: ${{ github.sha }}
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-      working-directory: js/app
+      working-directory: apps/web
     - name: Install infra dependencies
       run: bun install
       working-directory: infra
@@ -99,13 +99,13 @@ jobs:
         DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
         DATADOG_SITE: us5.datadoghq.com
         DATADOG_API_HOST: api.us5.datadoghq.com
-      working-directory: js/app/packages/app
+      working-directory: apps/web/packages/app
     - name: Upload production build
       if: ${{ inputs.environment == 'prod' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: web-app-build
-        path: js/app/packages/app/dist
+        path: apps/web/packages/app/dist
         overwrite: 'true'
 concurrency:
   group: deploy-web-app-${{ inputs.environment }}

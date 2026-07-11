@@ -16,7 +16,7 @@ Launch a local Swagger UI to explore a service's OpenAPI specification.
 
 ## Available Services
 
-The OpenAPI specs are located at `js/app/packages/service-clients/service-<name>/openapi.json`:
+The OpenAPI specs are located at `apps/web/packages/service-clients/service-<name>/openapi.json`:
 
 - `auth` - Authentication service
 - `cognition` - Cognition service
@@ -35,11 +35,11 @@ The OpenAPI specs are located at `js/app/packages/service-clients/service-<name>
 
 1. Parse the service name from the argument: `$ARGUMENTS`
 2. If no argument provided, list available services and ask user to specify one
-3. Validate the service exists at `js/app/packages/service-clients/service-<name>/openapi.json`
+3. Validate the service exists at `apps/web/packages/service-clients/service-<name>/openapi.json`
 4. Create a temporary directory and HTML file to serve Swagger UI with OpenAPI 3.1.0 support:
 
 ```bash
-SPEC_PATH=$(realpath js/app/packages/service-clients/service-<name>/openapi.json)
+SPEC_PATH=$(realpath apps/web/packages/service-clients/service-<name>/openapi.json)
 TEMP_DIR=$(mktemp -d)
 cp "$SPEC_PATH" "$TEMP_DIR/openapi.json"
 ```
