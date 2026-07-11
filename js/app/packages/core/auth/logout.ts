@@ -4,6 +4,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
 import { authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -16,6 +17,7 @@ export function useLogout() {
     document.cookie =
       'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
     syncLoginStorage(false);
+    clearDocumentQueryCache(queryClient);
 
     queryClient.setQueryData(authKeys.userInfo.queryKey, {
       id: '',

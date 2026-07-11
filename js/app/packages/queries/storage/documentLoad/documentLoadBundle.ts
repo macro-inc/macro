@@ -1,9 +1,9 @@
-import { LoadErrors, loadResult } from '@core/block';
-import type { ResultError } from '@core/util/result';
+import { type LoadErrors, loadResult } from '@core/block';
+import { catchToResult, type ResultError, throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import { err, ok, type Result } from 'neverthrow';
+import type { Result } from 'neverthrow';
 import { queryClient } from '../../client';
 import { documentLoadKeys } from './keys';
 
@@ -23,22 +23,21 @@ const GC_TIME = 60 * 1000;
 
 async function resolveDocumentLoadBundle(
   documentId: string
-): Promise<LoadBundleResult> {
+): Promise<DocumentLoadBundle> {
   const [maybeDocument, maybeToken] = await Promise.all([
-    loadResult(storageServiceClient.getDocumentMetadata({ documentId })),
-    storageServiceClient.permissionsTokens.createPermissionToken({
-      document_id: documentId,
-    }),
+    throwOnErr(() => storageServiceClient.getDocumentMetadata({ documentId })),
+    throwOnErr(() =>
+      storageServiceClient.permissionsTokens.createPermissionToken({
+        document_id: documentId,
+      })
+    ),
   ]);
 
-  if (maybeToken.isErr()) return LoadErrors.UNAUTHORIZED;
-  if (maybeDocument.isErr()) return err(maybeDocument.error);
-
-  return ok({
-    documentMetadata: maybeDocument.value.documentMetadata,
-    userAccessLevel: maybeDocument.value.userAccessLevel,
-    token: maybeToken.value.token,
-  });
+  return {
+    documentMetadata: maybeDocument.documentMetadata,
+    userAccessLevel: maybeDocument.userAccessLevel,
+    token: maybeToken.token,
+  };
 }
 
 export function documentLoadQueryOptions(documentId: string) {
@@ -54,7 +53,11 @@ export function documentLoadQueryOptions(documentId: string) {
 export function fetchDocumentLoadBundle(
   documentId: string
 ): Promise<LoadBundleResult> {
-  return queryClient.fetchQuery(documentLoadQueryOptions(documentId));
+  return loadResult(
+    catchToResult(() =>
+      queryClient.fetchQuery(documentLoadQueryOptions(documentId))
+    )
+  );
 }
 
 export function seedDocumentLoadBundle(
@@ -63,6 +66,6 @@ export function seedDocumentLoadBundle(
 ) {
   queryClient.setQueryData(
     documentLoadKeys.bundle(documentId).queryKey,
-    ok(bundle)
+    bundle
   );
 }

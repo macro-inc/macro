@@ -38,13 +38,13 @@ export const definition = defineBlock({
         });
       }
 
-      const maybeBundle = await fetchDocumentLoadBundle(documentId);
+      const [maybeBundle, maybeLocation] = await Promise.all([
+        fetchDocumentLoadBundle(documentId),
+        loadResult(fetchDocumentLocation({ documentId })),
+      ]);
       if (maybeBundle.isErr()) return err(maybeBundle.error);
       const { token, documentMetadata, userAccessLevel } = maybeBundle.value;
 
-      const maybeLocation = await loadResult(
-        fetchDocumentLocation({ documentId })
-      );
       if (maybeLocation.isErr()) return err(maybeLocation.error);
 
       let location = maybeLocation.value;

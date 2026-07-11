@@ -1,12 +1,12 @@
 import {
+  catchToResult,
   type ResultError,
   type ResultType,
-  ThrownResultError,
   throwOnErr,
 } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
-import { err, ok, type Result } from 'neverthrow';
+import { ok, type Result } from 'neverthrow';
 import { queryClient } from '../client';
 import { documentLocationKeys } from './keys';
 
@@ -73,12 +73,9 @@ async function requestDocumentLocation(
 export async function fetchDocumentLocation(
   args: DocumentLocationArgs
 ): Promise<Result<DocumentLocation, ResultError<string>[]>> {
-  try {
-    return ok(await queryClient.fetchQuery(documentLocationQueryOptions(args)));
-  } catch (error) {
-    if (error instanceof ThrownResultError) return err(error.errors);
-    throw error;
-  }
+  return catchToResult(() =>
+    queryClient.fetchQuery(documentLocationQueryOptions(args))
+  );
 }
 
 function invalidateDocumentLocation(args: DocumentLocationArgs) {
