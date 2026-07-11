@@ -1,4 +1,4 @@
-import { refetchDocumentShareButtonResource } from '@core/component/TopBar/shareButtonRefetch';
+import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
 import { invalidatePreview } from '@queries/preview';

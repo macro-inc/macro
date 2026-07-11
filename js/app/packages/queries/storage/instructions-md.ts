@@ -1,3 +1,9 @@
+import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import {
+  getTextContent,
+  initializeEditorWithState,
+} from '@core/component/LexicalMarkdown/utils';
+
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';
@@ -56,20 +62,15 @@ const getInstructionsMdText = async (id: string | null | undefined) => {
     documentId: id,
   });
 
-  const [wrapperModule, utilsModule] = await Promise.all([
-    import('@core/component/LexicalMarkdown/context/LexicalWrapperContext'),
-    import('@core/component/LexicalMarkdown/utils'),
-  ]);
-
-  const { editor } = wrapperModule.createLexicalWrapper({
+  const { editor } = createLexicalWrapper({
     type: 'markdown',
     namespace: 'instructions-md-text-extractor',
     isInteractable: () => false,
   });
 
-  utilsModule.initializeEditorWithState(editor, rawState);
+  initializeEditorWithState(editor, rawState);
 
-  const plaintext = utilsModule.getTextContent(editor);
+  const plaintext = getTextContent(editor);
 
   return plaintext;
 };

@@ -1,16 +1,11 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { Permissions } from '@core/component/SharePermissions';
+import { ShareModal } from '@core/component/TopBar/ShareButton';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
-
-const ShareModal = lazy(() =>
-  import('@core/component/TopBar/ShareButton').then((module) => ({
-    default: module.ShareModal,
-  }))
-);
+import { createSignal, Show } from 'solid-js';
 
 type ShareableEntityType = 'document' | 'chat' | 'project';
 
@@ -81,18 +76,16 @@ export const GlobalShareModal = () => {
         const entity = () => propsAccessor().entity;
 
         return (
-          <Suspense>
-            <ShareModal
-              isSharePermOpen={modalOpen()}
-              setIsSharePermOpen={handleSetIsOpen}
-              id={entity().id}
-              blockAlias={getEntityBlockAlias(entity())}
-              itemType={getEntityItemType(entity())}
-              name={entity().name}
-              userPermissions={Permissions.OWNER}
-              owner={entity().ownerId}
-            />
-          </Suspense>
+          <ShareModal
+            isSharePermOpen={modalOpen()}
+            setIsSharePermOpen={handleSetIsOpen}
+            id={entity().id}
+            blockAlias={getEntityBlockAlias(entity())}
+            itemType={getEntityItemType(entity())}
+            name={entity().name}
+            userPermissions={Permissions.OWNER}
+            owner={entity().ownerId}
+          />
         );
       }}
     </Show>

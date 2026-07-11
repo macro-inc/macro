@@ -4,7 +4,7 @@ import {
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/signal/location';
+import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import {
   type ItemLike,

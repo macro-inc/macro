@@ -1,6 +1,6 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/shareDrawer';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { InlineEntity } from '@entity';
 import { cn } from '@ui';

@@ -1,24 +1,22 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { createInputAttachmentTracker } from '@channel/Input/attachment-tracker';
-import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
-import { createConfiguredChannelMarkdownEditor } from '@channel/Input/configured-markdown-editor';
-import { createInputState } from '@channel/Input/create-input-state';
-import { FormatButtons } from '@channel/Input/FormatButtons';
-import { Input } from '@channel/Input/Input';
-import { createMentionsTracker } from '@channel/Input/mentions-tracker';
-import { buildPostMessageRequest } from '@channel/Input/message-payload';
-import type {
-  InputAttachmentData,
-  InputAttachmentKind,
-  InputAttachmentTracker,
-  InputSnapshot,
-} from '@channel/Input/types';
-import { uploadInputAttachments } from '@channel/Input/upload-attachments';
-import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import {
   applyInlineFormat,
   applyNodeFormat,
-} from '@channel/Input/utils/formatting';
+  createConfiguredChannelMarkdownEditor,
+  createInputAttachmentTracker,
+  createInputState,
+  createMentionsTracker,
+  FormatButtons,
+  Input,
+  type InputAttachmentData,
+  type InputAttachmentKind,
+  type InputAttachmentTracker,
+  type InputSnapshot,
+  uploadInputAttachments,
+} from '@channel/Input';
+import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
+import { buildPostMessageRequest } from '@channel/Input/message-payload';
+import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -48,7 +46,7 @@ import {
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { isIOS } from '@solid-primitives/platform';
-import { Button } from '@ui/components/Button';
+import { Button } from '@ui';
 import {
   type Accessor,
   createEffect,

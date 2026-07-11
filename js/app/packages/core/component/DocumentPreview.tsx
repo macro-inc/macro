@@ -2,7 +2,7 @@ import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
-import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
+import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/constants';
 import {
   type BlockAlias,
   type BlockName,
