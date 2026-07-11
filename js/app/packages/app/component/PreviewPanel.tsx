@@ -14,8 +14,10 @@ import {
 import { createContextProvider } from '@solid-primitives/context';
 import {
   type Component,
+  createMemo,
   createRenderEffect,
   createSignal,
+  on,
   Show,
   Suspense,
 } from 'solid-js';
@@ -115,19 +117,16 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   };
   const [interactedWith, setInteractedWith] = createSignal(false);
 
-  createRenderEffect((prevId: string) => {
-    const id = props.selectedEntity.id;
-    if (id !== prevId) {
+  // Key on the id: the entity object is live, and unrelated notification
+  // churn must not re-target the previewed channel.
+  const selectedEntityId = createMemo(() => props.selectedEntity.id);
+
+  createRenderEffect(
+    on(selectedEntityId, () => {
       setInteractedWith(false);
-    }
-
-    void navigateChannelEntityToTarget(
-      props.selectedEntity,
-      props.orchestrator
-    );
-
-    return id;
-  }, props.selectedEntity.id);
+      navigateChannelEntityToTarget(props.selectedEntity, props.orchestrator);
+    })
+  );
 
   createRenderEffect(() => {
     // noop: previously we constrained toolbarLeft width based on the main split's
