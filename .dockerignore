@@ -10,6 +10,9 @@
 /js
 /rust
 
+# User-facing applications are not part of backend service build contexts.
+/apps
+
 # Secrets and local configuration
 .env
 .env.*
