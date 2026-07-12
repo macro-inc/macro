@@ -127,7 +127,7 @@ function HomeContent() {
       }</style>
 
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 mobile:pb-(--mobile-content-inset-bottom) md:pt-16">
+        <div class="home-content mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-10 mobile:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom) md:pt-16">
           <header class="flex items-center gap-2.5">
             <AnimatedHeroLogo class="size-6 shrink-0 text-accent" />
             <h1 class="text-xl font-normal tracking-tight text-ink">
