@@ -18,20 +18,6 @@ import type { SoupPropertyFieldsFragment } from '../../service-clients/service-s
 type GraphqlPropertyValue = NonNullable<SoupPropertyFieldsFragment['value']>;
 
 /**
- * The GraphQL value object has non-null list fields and nullable scalars;
- * every variant starts from this empty shape and fills in its own field.
- */
-const EMPTY_VALUE_FIELDS: Omit<GraphqlPropertyValue, 'kind'> = {
-  boolValue: null,
-  numberValue: null,
-  stringValue: null,
-  dateValue: null,
-  selectOptionIds: [],
-  entityReferences: [],
-  links: [],
-};
-
-/**
  * `PropertyApiValues` → the GraphQL property value as the server would
  * return it. `null` mirrors the REST behavior of clearing the value when
  * the variant carries nothing.
@@ -43,28 +29,28 @@ export function apiValuesToGraphqlPropertyValue(
     case 'STRING':
       return apiValues.value != null
         ? {
-            ...EMPTY_VALUE_FIELDS,
-            kind: 'String',
+            __typename: 'GraphqlStringPropertyValue',
             stringValue: apiValues.value,
           }
         : null;
     case 'NUMBER':
       return apiValues.value != null
         ? {
-            ...EMPTY_VALUE_FIELDS,
-            kind: 'Number',
+            __typename: 'GraphqlNumberPropertyValue',
             numberValue: apiValues.value,
           }
         : null;
     case 'BOOLEAN':
       return apiValues.value != null
-        ? { ...EMPTY_VALUE_FIELDS, kind: 'Boolean', boolValue: apiValues.value }
+        ? {
+            __typename: 'GraphqlBooleanPropertyValue',
+            boolValue: apiValues.value,
+          }
         : null;
     case 'DATE':
       return apiValues.value != null
         ? {
-            ...EMPTY_VALUE_FIELDS,
-            kind: 'Date',
+            __typename: 'GraphqlDatePropertyValue',
             dateValue: apiValues.value.toISOString(),
           }
         : null;
@@ -72,17 +58,15 @@ export function apiValuesToGraphqlPropertyValue(
     case 'SELECT_NUMBER':
       return apiValues.values != null && apiValues.values.length > 0
         ? {
-            ...EMPTY_VALUE_FIELDS,
-            kind: 'SelectOption',
-            selectOptionIds: apiValues.values,
+            __typename: 'GraphqlSelectOptionPropertyValue',
+            optionIds: apiValues.values,
           }
         : null;
     case 'ENTITY':
       return apiValues.refs != null && apiValues.refs.length > 0
         ? {
-            ...EMPTY_VALUE_FIELDS,
-            kind: 'EntityReference',
-            entityReferences: apiValues.refs.map((ref) => ({
+            __typename: 'GraphqlEntityReferencePropertyValue',
+            references: apiValues.refs.map((ref) => ({
               entityId: ref.entity_id,
               entityType: ref.entity_type,
               specificMessageId: ref.specific_message_id ?? null,
@@ -91,7 +75,10 @@ export function apiValuesToGraphqlPropertyValue(
         : null;
     case 'LINK':
       return apiValues.values != null && apiValues.values.length > 0
-        ? { ...EMPTY_VALUE_FIELDS, kind: 'Link', links: apiValues.values }
+        ? {
+            __typename: 'GraphqlLinkPropertyValue',
+            urls: apiValues.values,
+          }
         : null;
     default: {
       const exhaustiveCheck: never = apiValues;

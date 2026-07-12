@@ -9,29 +9,28 @@ import {
   buildOptimisticSetEntityProperty,
 } from './graphql-optimistic';
 
-const emptyLists = {
-  boolValue: null,
-  numberValue: null,
-  stringValue: null,
-  dateValue: null,
-  selectOptionIds: [],
-  entityReferences: [],
-  links: [],
-};
-
 describe('apiValuesToGraphqlPropertyValue', () => {
   it('converts each populated variant', () => {
     expect(
       apiValuesToGraphqlPropertyValue({ valueType: 'STRING', value: 'hi' })
-    ).toEqual({ ...emptyLists, kind: 'String', stringValue: 'hi' });
+    ).toEqual({
+      __typename: 'GraphqlStringPropertyValue',
+      stringValue: 'hi',
+    });
 
     expect(
       apiValuesToGraphqlPropertyValue({ valueType: 'NUMBER', value: 3 })
-    ).toEqual({ ...emptyLists, kind: 'Number', numberValue: 3 });
+    ).toEqual({
+      __typename: 'GraphqlNumberPropertyValue',
+      numberValue: 3,
+    });
 
     expect(
       apiValuesToGraphqlPropertyValue({ valueType: 'BOOLEAN', value: false })
-    ).toEqual({ ...emptyLists, kind: 'Boolean', boolValue: false });
+    ).toEqual({
+      __typename: 'GraphqlBooleanPropertyValue',
+      boolValue: false,
+    });
 
     expect(
       apiValuesToGraphqlPropertyValue({
@@ -39,8 +38,7 @@ describe('apiValuesToGraphqlPropertyValue', () => {
         value: new Date('2026-07-10T00:00:00.000Z'),
       })
     ).toEqual({
-      ...emptyLists,
-      kind: 'Date',
+      __typename: 'GraphqlDatePropertyValue',
       dateValue: '2026-07-10T00:00:00.000Z',
     });
 
@@ -51,9 +49,8 @@ describe('apiValuesToGraphqlPropertyValue', () => {
         values: ['opt-1'],
       })
     ).toEqual({
-      ...emptyLists,
-      kind: 'SelectOption',
-      selectOptionIds: ['opt-1'],
+      __typename: 'GraphqlSelectOptionPropertyValue',
+      optionIds: ['opt-1'],
     });
     expect(
       apiValuesToGraphqlPropertyValue({
@@ -61,9 +58,8 @@ describe('apiValuesToGraphqlPropertyValue', () => {
         values: ['opt-1', 'opt-2'],
       })
     ).toEqual({
-      ...emptyLists,
-      kind: 'SelectOption',
-      selectOptionIds: ['opt-1', 'opt-2'],
+      __typename: 'GraphqlSelectOptionPropertyValue',
+      optionIds: ['opt-1', 'opt-2'],
     });
 
     expect(
@@ -79,9 +75,8 @@ describe('apiValuesToGraphqlPropertyValue', () => {
         ],
       })
     ).toEqual({
-      ...emptyLists,
-      kind: 'EntityReference',
-      entityReferences: [
+      __typename: 'GraphqlEntityReferencePropertyValue',
+      references: [
         {
           entityId: 'doc-1',
           entityType: 'DOCUMENT',
@@ -96,7 +91,10 @@ describe('apiValuesToGraphqlPropertyValue', () => {
         valueType: 'LINK',
         values: ['https://a'],
       })
-    ).toEqual({ ...emptyLists, kind: 'Link', links: ['https://a'] });
+    ).toEqual({
+      __typename: 'GraphqlLinkPropertyValue',
+      urls: ['https://a'],
+    });
   });
 
   it('maps empty variants to null (clearing the value)', () => {
@@ -164,9 +162,8 @@ describe('buildOptimisticSetEntityProperty', () => {
       isSystem: true,
       isMetadata: false,
       value: {
-        ...emptyLists,
-        kind: 'SelectOption',
-        selectOptionIds: ['opt-done'],
+        __typename: 'GraphqlSelectOptionPropertyValue',
+        optionIds: ['opt-done'],
       },
     });
   });
