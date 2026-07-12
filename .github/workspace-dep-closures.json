@@ -2733,7 +2733,6 @@
       "crates/foreign_entity",
       "crates/frecency",
       "crates/graphql_common",
-      "crates/graphql_notification",
       "crates/graphql_properties",
       "crates/graphql_soup",
       "crates/invite_email",

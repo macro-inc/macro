@@ -18,6 +18,8 @@ use graphql_soup::{SharedSoupService, SoupInput, SoupPage, resolve_soup};
 use model_user::axum_extractor::MacroUserExtractor;
 use soup::domain::ports::{NoOpSoupService, SoupService};
 
+use crate::SoupNotificationEdges;
+
 /// GraphQL Soup schema type.
 ///
 /// `S` is the soup service, `E` the email service, `EAS` the entity access
@@ -172,7 +174,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: SoupInput,
-    ) -> async_graphql::Result<SoupPage<NR>> {
-        resolve_soup::<S, E, EAS, St, NR>(&self.service, ctx, input).await
+    ) -> async_graphql::Result<SoupPage<SoupNotificationEdges<NR>>> {
+        resolve_soup::<S, E, EAS, St, SoupNotificationEdges<NR>>(&self.service, ctx, input).await
     }
 }

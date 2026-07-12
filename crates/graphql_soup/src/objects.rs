@@ -1,10 +1,5 @@
-use std::marker::PhantomData;
-
-use async_graphql::{Context, ID, Json, Object, Union};
+use async_graphql::{ID, Json, Object, ObjectType, Union};
 use graphql_common::GraphqlSoupEntityType;
-use graphql_notification::{
-    GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
-};
 use graphql_properties::GraphqlSoupProperty;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
@@ -24,21 +19,30 @@ use models_soup::{
 use serde_json::Value;
 use soup::domain::models::FrecencySoupItem;
 
+/// Extension fields attached to every top-level Soup entity.
+///
+/// The concrete edge object is supplied by the schema composition crate and
+/// flattened into each Soup entity's GraphQL fields.
+pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
+    /// Construct the edge object for a Soup entity.
+    fn from_entity(entity: model_entity::Entity<'static>) -> Self;
+}
+
 /// Page returned by `Query.soup`.
-pub struct SoupPage<R: SoupNotificationEdgeReader> {
-    items: Vec<GraphqlSoupItem<R>>,
+pub struct SoupPage<E: SoupEntityEdges> {
+    items: Vec<GraphqlSoupItem<E>>,
     next_cursor: Option<String>,
     has_more: bool,
 }
 
 /// Page returned by `Query.soup`.
 #[Object(name = "SoupPage")]
-impl<R> SoupPage<R>
+impl<E> SoupPage<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     /// Items in the current page.
-    async fn items(&self) -> &[GraphqlSoupItem<R>] {
+    async fn items(&self) -> &[GraphqlSoupItem<E>] {
         &self.items
     }
 
@@ -53,7 +57,7 @@ where
     }
 }
 
-impl<R: SoupNotificationEdgeReader> From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage<R> {
+impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage<E> {
     fn from(page: PaginatedOpaqueCursor<FrecencySoupItem>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
@@ -65,17 +69,17 @@ impl<R: SoupNotificationEdgeReader> From<PaginatedOpaqueCursor<FrecencySoupItem>
 }
 
 /// GraphQL Soup item envelope.
-pub struct GraphqlSoupItem<R: SoupNotificationEdgeReader> {
+pub struct GraphqlSoupItem<E: SoupEntityEdges> {
     id: String,
     entity_type: GraphqlSoupEntityType,
     frecency_score: f64,
-    entity: GraphqlSoupEntity<R>,
+    entity: GraphqlSoupEntity<E>,
 }
 
 #[Object(name = "GraphqlSoupItem")]
-impl<R> GraphqlSoupItem<R>
+impl<E> GraphqlSoupItem<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.id.clone())
@@ -89,12 +93,12 @@ where
         self.frecency_score
     }
 
-    async fn entity(&self) -> &GraphqlSoupEntity<R> {
+    async fn entity(&self) -> &GraphqlSoupEntity<E> {
         &self.entity
     }
 }
 
-impl<R: SoupNotificationEdgeReader> From<FrecencySoupItem> for GraphqlSoupItem<R> {
+impl<E: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E> {
     fn from(item: FrecencySoupItem) -> Self {
         let FrecencySoupItem {
             item,
@@ -116,61 +120,102 @@ impl<R: SoupNotificationEdgeReader> From<FrecencySoupItem> for GraphqlSoupItem<R
 
 /// GraphQL union over expanded Soup entity variants.
 #[derive(Union)]
-pub enum GraphqlSoupEntity<R: SoupNotificationEdgeReader> {
+pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     /// Document entity.
-    Document(GraphqlSoupDocument<R>),
+    Document(GraphqlSoupDocument<E>),
     /// Chat entity.
-    Chat(GraphqlSoupChat<R>),
+    Chat(GraphqlSoupChat<E>),
     /// Project entity.
-    Project(GraphqlSoupProject<R>),
+    Project(GraphqlSoupProject<E>),
     /// Email thread entity.
-    EmailThread(GraphqlSoupEmailThread<R>),
+    EmailThread(GraphqlSoupEmailThread<E>),
     /// Channel entity.
-    Channel(GraphqlSoupChannel<R>),
+    Channel(GraphqlSoupChannel<E>),
     /// Channel thread entity.
-    ChannelThread(GraphqlSoupChannelThread<R>),
+    ChannelThread(GraphqlSoupChannelThread<E>),
     /// Call entity.
-    Call(GraphqlSoupCall<R>),
+    Call(GraphqlSoupCall<E>),
     /// CRM company entity.
-    CrmCompany(GraphqlSoupCrmCompany<R>),
+    CrmCompany(GraphqlSoupCrmCompany<E>),
     /// Foreign entity.
-    ForeignEntity(GraphqlSoupForeignEntity<R>),
+    ForeignEntity(GraphqlSoupForeignEntity<E>),
 }
 
-impl<R> From<SoupItem> for GraphqlSoupEntity<R>
+impl<E> From<SoupItem> for GraphqlSoupEntity<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     fn from(item: SoupItem) -> Self {
         match item {
-            SoupItem::Document(item) => Self::Document(GraphqlSoupDocument(item, PhantomData)),
-            SoupItem::Chat(item) => Self::Chat(GraphqlSoupChat(item, PhantomData)),
-            SoupItem::Project(item) => Self::Project(GraphqlSoupProject(item, PhantomData)),
+            SoupItem::Document(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
+                );
+                Self::Document(GraphqlSoupDocument(item, edges))
+            }
+            SoupItem::Chat(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Chat.with_entity_string(item.id.to_string()),
+                );
+                Self::Chat(GraphqlSoupChat(item, edges))
+            }
+            SoupItem::Project(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Project.with_entity_string(item.id.to_string()),
+                );
+                Self::Project(GraphqlSoupProject(item, edges))
+            }
             SoupItem::EmailThread(item) => {
-                Self::EmailThread(GraphqlSoupEmailThread(item, PhantomData))
+                let edges = E::from_entity(
+                    model_entity::EntityType::EmailThread
+                        .with_entity_string(item.thread.id.to_string()),
+                );
+                Self::EmailThread(GraphqlSoupEmailThread(item, edges))
             }
-            SoupItem::Channel(item) => Self::Channel(GraphqlSoupChannel(item, PhantomData)),
+            SoupItem::Channel(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Channel
+                        .with_entity_string(item.channel.channel.id.0.to_string()),
+                );
+                Self::Channel(GraphqlSoupChannel(item, edges))
+            }
             SoupItem::ChannelThread(item) => {
-                Self::ChannelThread(GraphqlSoupChannelThread(item, PhantomData))
+                let edges = E::from_entity(
+                    model_entity::EntityType::ChannelMessage
+                        .with_entity_string(item.id.to_string()),
+                );
+                Self::ChannelThread(GraphqlSoupChannelThread(item, edges))
             }
-            SoupItem::Call(item) => Self::Call(GraphqlSoupCall(item, PhantomData)),
+            SoupItem::Call(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Call.with_entity_string(item.call_id.to_string()),
+                );
+                Self::Call(GraphqlSoupCall(item, edges))
+            }
             SoupItem::CrmCompany(item) => {
-                Self::CrmCompany(GraphqlSoupCrmCompany(item, PhantomData))
+                let edges = E::from_entity(
+                    model_entity::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
+                );
+                Self::CrmCompany(GraphqlSoupCrmCompany(item, edges))
             }
             SoupItem::ForeignEntity(item) => {
-                Self::ForeignEntity(GraphqlSoupForeignEntity(item, PhantomData))
+                let edges = E::from_entity(
+                    model_entity::EntityType::ForeignEntity
+                        .with_entity_string(item.foreign_entity_id.clone()),
+                );
+                Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges))
             }
         }
     }
 }
 
 /// GraphQL document entity.
-pub struct GraphqlSoupDocument<R: SoupNotificationEdgeReader>(SoupDocument, PhantomData<R>);
+pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument, E);
 
 #[Object(name = "GraphqlSoupDocument")]
-impl<R> GraphqlSoupDocument<R>
+impl<E> GraphqlSoupDocument<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
@@ -224,15 +269,9 @@ where
             .collect()
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::Document.with_entity_string(self.0.id.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
@@ -269,12 +308,12 @@ impl GraphqlSoupDocumentSubType {
 }
 
 /// GraphQL chat entity.
-pub struct GraphqlSoupChat<R: SoupNotificationEdgeReader>(SoupChat, PhantomData<R>);
+pub struct GraphqlSoupChat<E: SoupEntityEdges>(SoupChat, E);
 
 #[Object(name = "GraphqlSoupChat")]
-impl<R> GraphqlSoupChat<R>
+impl<E> GraphqlSoupChat<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
@@ -321,25 +360,19 @@ where
             .collect()
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::Chat.with_entity_string(self.0.id.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
 /// GraphQL project entity.
-pub struct GraphqlSoupProject<R: SoupNotificationEdgeReader>(SoupProject, PhantomData<R>);
+pub struct GraphqlSoupProject<E: SoupEntityEdges>(SoupProject, E);
 
 #[Object(name = "GraphqlSoupProject")]
-impl<R> GraphqlSoupProject<R>
+impl<E> GraphqlSoupProject<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
@@ -382,15 +415,9 @@ where
             .collect()
     }
 
-    async fn notifications<'a>(
-        &'a self,
-        ctx: &'a Context<'a>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::Project.with_entity_string(self.0.id.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
@@ -573,15 +600,12 @@ impl GraphqlSoupEmailAttachment {
 }
 
 /// GraphQL email thread entity.
-pub struct GraphqlSoupEmailThread<R: SoupNotificationEdgeReader>(
-    SoupEnrichedEmailThreadPreview,
-    PhantomData<R>,
-);
+pub struct GraphqlSoupEmailThread<E: SoupEntityEdges>(SoupEnrichedEmailThreadPreview, E);
 
 #[Object(name = "GraphqlSoupEmailThread")]
-impl<R> GraphqlSoupEmailThread<R>
+impl<E> GraphqlSoupEmailThread<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.thread.id.to_string())
@@ -701,15 +725,9 @@ where
             .collect()
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::EmailThread.with_entity_string(self.0.thread.id.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
@@ -785,9 +803,9 @@ impl GraphqlSoupChannelMessage {
 }
 
 /// GraphQL channel entity.
-pub struct GraphqlSoupChannel<R: SoupNotificationEdgeReader>(SoupChannel, PhantomData<R>);
+pub struct GraphqlSoupChannel<E: SoupEntityEdges>(SoupChannel, E);
 
-impl<R: SoupNotificationEdgeReader> GraphqlSoupChannel<R> {
+impl<E: SoupEntityEdges> GraphqlSoupChannel<E> {
     fn channel_type_name(channel_type: ChannelType) -> &'static str {
         match channel_type {
             ChannelType::Public => "public",
@@ -799,9 +817,9 @@ impl<R: SoupNotificationEdgeReader> GraphqlSoupChannel<R> {
 }
 
 #[Object(name = "GraphqlSoupChannel")]
-impl<R> GraphqlSoupChannel<R>
+impl<E> GraphqlSoupChannel<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.channel.channel.id.0.to_string())
@@ -887,29 +905,19 @@ where
             .map(GraphqlSoupChannelMessage)
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::Channel
-                .with_entity_string(self.0.channel.channel.id.0.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
 /// GraphQL channel thread entity.
-pub struct GraphqlSoupChannelThread<R: SoupNotificationEdgeReader>(
-    SoupChannelThread,
-    PhantomData<R>,
-);
+pub struct GraphqlSoupChannelThread<E: SoupEntityEdges>(SoupChannelThread, E);
 
 #[Object(name = "GraphqlSoupChannelThread")]
-impl<R> GraphqlSoupChannelThread<R>
+impl<E> GraphqlSoupChannelThread<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
@@ -943,15 +951,9 @@ where
         self.0.thread.reply_count
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::ChannelMessage.with_entity_string(self.0.id.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
@@ -988,12 +990,12 @@ impl GraphqlSoupCallParticipant {
 }
 
 /// GraphQL call entity.
-pub struct GraphqlSoupCall<R: SoupNotificationEdgeReader>(SoupCallRecord, PhantomData<R>);
+pub struct GraphqlSoupCall<E: SoupEntityEdges>(SoupCallRecord, E);
 
 #[Object(name = "GraphqlSoupCall")]
-impl<R> GraphqlSoupCall<R>
+impl<E> GraphqlSoupCall<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.call_id.to_string())
@@ -1074,25 +1076,19 @@ where
             .collect()
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::Call.with_entity_string(self.0.call_id.to_string()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
 /// GraphQL CRM company entity.
-pub struct GraphqlSoupCrmCompany<R: SoupNotificationEdgeReader>(SoupCrmCompany, PhantomData<R>);
+pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany, E);
 
 #[Object(name = "GraphqlSoupCrmCompany")]
-impl<R> GraphqlSoupCrmCompany<R>
+impl<E> GraphqlSoupCrmCompany<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
@@ -1147,21 +1143,19 @@ where
             .collect()
     }
 
-    async fn notifications(&self) -> Vec<GraphqlSoupNotification> {
-        Vec::new()
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
 
 /// GraphQL foreign entity.
-pub struct GraphqlSoupForeignEntity<R: SoupNotificationEdgeReader>(
-    SoupForeignEntity,
-    PhantomData<R>,
-);
+pub struct GraphqlSoupForeignEntity<E: SoupEntityEdges>(SoupForeignEntity, E);
 
 #[Object(name = "GraphqlSoupForeignEntity")]
-impl<R> GraphqlSoupForeignEntity<R>
+impl<E> GraphqlSoupForeignEntity<E>
 where
-    R: SoupNotificationEdgeReader,
+    E: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.0.id.to_string())
@@ -1195,15 +1189,8 @@ where
         self.0.updated_at.to_rfc3339()
     }
 
-    async fn notifications(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
-        load_entity_notifications::<R>(
-            ctx,
-            model_entity::EntityType::ForeignEntity
-                .with_entity_string(self.0.foreign_entity_id.clone()),
-        )
-        .await
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
     }
 }
