@@ -1,6 +1,5 @@
 use async_graphql::{ID, Json, Object, ObjectType, Union};
 use graphql_common::GraphqlSoupEntityType;
-use graphql_properties::GraphqlSoupProperty;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     call_record::{SoupCallRecord, SoupCallRecordParticipant},
@@ -29,20 +28,21 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 }
 
 /// Page returned by `Query.soup`.
-pub struct SoupPage<E: SoupEntityEdges> {
-    items: Vec<GraphqlSoupItem<E>>,
+pub struct SoupPage<E: SoupEntityEdges, PE: SoupEntityEdges> {
+    items: Vec<GraphqlSoupItem<E, PE>>,
     next_cursor: Option<String>,
     has_more: bool,
 }
 
 /// Page returned by `Query.soup`.
 #[Object(name = "SoupPage")]
-impl<E> SoupPage<E>
+impl<E, PE> SoupPage<E, PE>
 where
     E: SoupEntityEdges,
+    PE: SoupEntityEdges,
 {
     /// Items in the current page.
-    async fn items(&self) -> &[GraphqlSoupItem<E>] {
+    async fn items(&self) -> &[GraphqlSoupItem<E, PE>] {
         &self.items
     }
 
@@ -57,7 +57,9 @@ where
     }
 }
 
-impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage<E> {
+impl<E: SoupEntityEdges, PE: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>>
+    for SoupPage<E, PE>
+{
     fn from(page: PaginatedOpaqueCursor<FrecencySoupItem>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
@@ -69,17 +71,18 @@ impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupP
 }
 
 /// GraphQL Soup item envelope.
-pub struct GraphqlSoupItem<E: SoupEntityEdges> {
+pub struct GraphqlSoupItem<E: SoupEntityEdges, PE: SoupEntityEdges> {
     id: String,
     entity_type: GraphqlSoupEntityType,
     frecency_score: f64,
-    entity: GraphqlSoupEntity<E>,
+    entity: GraphqlSoupEntity<E, PE>,
 }
 
 #[Object(name = "GraphqlSoupItem")]
-impl<E> GraphqlSoupItem<E>
+impl<E, PE> GraphqlSoupItem<E, PE>
 where
     E: SoupEntityEdges,
+    PE: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.id.clone())
@@ -93,12 +96,12 @@ where
         self.frecency_score
     }
 
-    async fn entity(&self) -> &GraphqlSoupEntity<E> {
+    async fn entity(&self) -> &GraphqlSoupEntity<E, PE> {
         &self.entity
     }
 }
 
-impl<E: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E> {
+impl<E: SoupEntityEdges, PE: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E, PE> {
     fn from(item: FrecencySoupItem) -> Self {
         let FrecencySoupItem {
             item,
@@ -120,15 +123,15 @@ impl<E: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E> {
 
 /// GraphQL union over expanded Soup entity variants.
 #[derive(Union)]
-pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
+pub enum GraphqlSoupEntity<E: SoupEntityEdges, PE: SoupEntityEdges> {
     /// Document entity.
-    Document(GraphqlSoupDocument<E>),
+    Document(GraphqlSoupDocument<PE>),
     /// Chat entity.
-    Chat(GraphqlSoupChat<E>),
+    Chat(GraphqlSoupChat<PE>),
     /// Project entity.
-    Project(GraphqlSoupProject<E>),
+    Project(GraphqlSoupProject<PE>),
     /// Email thread entity.
-    EmailThread(GraphqlSoupEmailThread<E>),
+    EmailThread(GraphqlSoupEmailThread<PE>),
     /// Channel entity.
     Channel(GraphqlSoupChannel<E>),
     /// Channel thread entity.
@@ -136,37 +139,38 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     /// Call entity.
     Call(GraphqlSoupCall<E>),
     /// CRM company entity.
-    CrmCompany(GraphqlSoupCrmCompany<E>),
+    CrmCompany(GraphqlSoupCrmCompany<PE>),
     /// Foreign entity.
     ForeignEntity(GraphqlSoupForeignEntity<E>),
 }
 
-impl<E> From<SoupItem> for GraphqlSoupEntity<E>
+impl<E, PE> From<SoupItem> for GraphqlSoupEntity<E, PE>
 where
     E: SoupEntityEdges,
+    PE: SoupEntityEdges,
 {
     fn from(item: SoupItem) -> Self {
         match item {
             SoupItem::Document(item) => {
-                let edges = E::from_entity(
+                let edges = PE::from_entity(
                     model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
                 );
                 Self::Document(GraphqlSoupDocument(item, edges))
             }
             SoupItem::Chat(item) => {
-                let edges = E::from_entity(
+                let edges = PE::from_entity(
                     model_entity::EntityType::Chat.with_entity_string(item.id.to_string()),
                 );
                 Self::Chat(GraphqlSoupChat(item, edges))
             }
             SoupItem::Project(item) => {
-                let edges = E::from_entity(
+                let edges = PE::from_entity(
                     model_entity::EntityType::Project.with_entity_string(item.id.to_string()),
                 );
                 Self::Project(GraphqlSoupProject(item, edges))
             }
             SoupItem::EmailThread(item) => {
-                let edges = E::from_entity(
+                let edges = PE::from_entity(
                     model_entity::EntityType::EmailThread
                         .with_entity_string(item.thread.id.to_string()),
                 );
@@ -193,7 +197,7 @@ where
                 Self::Call(GraphqlSoupCall(item, edges))
             }
             SoupItem::CrmCompany(item) => {
-                let edges = E::from_entity(
+                let edges = PE::from_entity(
                     model_entity::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
                 );
                 Self::CrmCompany(GraphqlSoupCrmCompany(item, edges))
@@ -258,15 +262,6 @@ where
             .sub_type
             .as_ref()
             .map(GraphqlSoupDocumentSubType::from)
-    }
-
-    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
-        self.0
-            .properties
-            .iter()
-            .cloned()
-            .map(GraphqlSoupProperty::from)
-            .collect()
     }
 
     #[graphql(flatten)]
@@ -351,15 +346,6 @@ where
         self.0.deleted_at.map(|ts| ts.to_rfc3339())
     }
 
-    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
-        self.0
-            .properties
-            .iter()
-            .cloned()
-            .map(GraphqlSoupProperty::from)
-            .collect()
-    }
-
     #[graphql(flatten)]
     async fn edges(&self) -> E {
         self.1.clone()
@@ -404,15 +390,6 @@ where
 
     async fn deleted_at(&self) -> Option<String> {
         self.0.deleted_at.map(|ts| ts.to_rfc3339())
-    }
-
-    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
-        self.0
-            .properties
-            .iter()
-            .cloned()
-            .map(GraphqlSoupProperty::from)
-            .collect()
     }
 
     #[graphql(flatten)]
@@ -713,15 +690,6 @@ where
             .labels
             .iter()
             .map(GraphqlSoupEmailLabel::from)
-            .collect()
-    }
-
-    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
-        self.0
-            .properties
-            .iter()
-            .cloned()
-            .map(GraphqlSoupProperty::from)
             .collect()
     }
 
@@ -1131,15 +1099,6 @@ where
             .domains
             .iter()
             .map(|domain| domain.domain.clone())
-            .collect()
-    }
-
-    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
-        self.0
-            .properties
-            .iter()
-            .cloned()
-            .map(GraphqlSoupProperty::from)
             .collect()
     }
 

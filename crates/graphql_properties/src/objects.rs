@@ -1,6 +1,8 @@
-use async_graphql::{Enum, ID, Object, SimpleObject};
+use async_graphql::{Context, Enum, ID, Object, SimpleObject, dataloader::DataLoader};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::SoupProperty;
+
+use crate::loaders::{EntityPropertiesLoader, SoupPropertyEdgeReader};
 
 /// GraphQL representation of supported Soup property data types.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +41,26 @@ impl From<models_properties::DataType> for GraphqlSoupDataType {
             models_properties::DataType::Link => Self::Link,
         }
     }
+}
+
+/// Load properties attached to an entity through the request-scoped loader.
+pub async fn load_entity_properties<R>(
+    ctx: &Context<'_>,
+    entity: model_entity::Entity<'static>,
+) -> async_graphql::Result<Vec<GraphqlSoupProperty>>
+where
+    R: SoupPropertyEdgeReader,
+{
+    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let properties = loader
+        .load_one(model_entity::OwnedEntity::from(entity))
+        .await
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?
+        .unwrap_or_default();
+    Ok(properties
+        .into_iter()
+        .map(GraphqlSoupProperty::from)
+        .collect())
 }
 
 /// GraphQL property assignment attached to a Soup entity.

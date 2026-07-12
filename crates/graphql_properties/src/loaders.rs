@@ -35,6 +35,20 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
     > + Send;
 }
 
+/// Property reader used by schema-only GraphQL construction.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpSoupPropertyEdgeReader;
+
+impl SoupPropertyEdgeReader for NoOpSoupPropertyEdgeReader {
+    async fn get_properties(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        keys: &[model_entity::Entity<'static>],
+    ) -> Result<HashMap<model_entity::Entity<'static>, Vec<SoupProperty>>, rootcause::Report> {
+        Ok(keys.iter().cloned().map(|key| (key, Vec::new())).collect())
+    }
+}
+
 /// GraphQL property reader backed by the properties domain service and the
 /// canonical entity access service.
 pub struct PropertiesSoupPropertyEdgeReader<P, A> {

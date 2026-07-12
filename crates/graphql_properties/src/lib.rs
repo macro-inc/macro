@@ -2,15 +2,16 @@
 //! property filter inputs, and the DataLoader-backed entity property edge.
 #![deny(missing_docs)]
 
-mod inputs;
 mod loaders;
 mod mutations;
 mod objects;
 
-pub use inputs::{GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr};
+pub use graphql_common::{
+    GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr, GraphqlPropertyEntityType,
+};
 pub use loaders::{
-    EntityPropertiesLoader, PropertiesSoupPropertyEdgeReader, SoupPropertyEdgeReader,
-    entity_properties_loader,
+    EntityPropertiesLoader, NoOpSoupPropertyEdgeReader, PropertiesSoupPropertyEdgeReader,
+    SoupPropertyEdgeReader, entity_properties_loader,
 };
 pub use mutations::{
     EntityPropertyWriter, NoOpEntityPropertyWriter, PropertiesEntityPropertyWriter,
@@ -18,4 +19,5 @@ pub use mutations::{
 };
 pub use objects::{
     GraphqlSoupProperty, GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue,
+    load_entity_properties,
 };

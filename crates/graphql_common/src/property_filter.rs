@@ -1,9 +1,16 @@
+//! Legacy GraphQL bridge for property-aware Soup filters.
+//!
+//! Soup historically returned and filtered properties directly. New code
+//! should avoid adding property concepts to Soup, and existing usages should
+//! move toward the properties domain boundary so this module can be removed.
+
 use async_graphql::{Enum, ID};
 use filter_ast::Expr;
-use graphql_common::{IntoFilterExpr, filter_expr_input, parse_id};
 use item_filters::ast::properties::{
     EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue,
 };
+
+use crate::{IntoFilterExpr, filter_expr_input, parse_id};
 
 filter_expr_input!(
     GraphqlPropertiesExpr,

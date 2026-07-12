@@ -20,7 +20,6 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
-graphql_properties = { path = "../graphql_properties" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }

@@ -10,10 +10,6 @@ mod objects;
 mod resolvers;
 
 pub use graphql_common::{GraphqlSoupEntityType, GraphqlSoupRequestParts};
-pub use graphql_properties::{
-    EntityPropertiesLoader, GraphqlSoupProperty, GraphqlSoupPropertyEntityReference,
-    GraphqlSoupPropertyValue, SoupPropertyEdgeReader, entity_properties_loader,
-};
 pub use inputs::{GraphqlSimpleSortMethod, SoupInput};
 pub use objects::{
     GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelThread, GraphqlSoupChat,

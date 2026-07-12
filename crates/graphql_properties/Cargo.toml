@@ -8,9 +8,7 @@ version = "0.1.0"
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
-filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
-item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }

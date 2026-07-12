@@ -5,9 +5,9 @@ use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use graphql_common::{
-    IntoFilterExpr, filter_expr_input, optional_tree, parse_id, parse_macro_user_id,
+    GraphqlPropertiesExpr, IntoFilterExpr, filter_expr_input, optional_tree, parse_id,
+    parse_macro_user_id,
 };
-use graphql_properties::GraphqlPropertiesExpr;
 use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{

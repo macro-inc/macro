@@ -77,11 +77,11 @@ where
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
 /// into a Soup request, and executes it against the Soup service.
-pub async fn resolve_soup<S, E, EAS, St, Edges>(
+pub async fn resolve_soup<S, E, EAS, St, Edges, ExtendedEdges>(
     service: &S,
     ctx: &Context<'_>,
     input: SoupInput,
-) -> async_graphql::Result<SoupPage<Edges>>
+) -> async_graphql::Result<SoupPage<Edges, ExtendedEdges>>
 where
     S: SoupService,
     E: EmailService,
@@ -90,6 +90,7 @@ where
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
     Edges: SoupEntityEdges,
+    ExtendedEdges: SoupEntityEdges,
 {
     let Cached(MacroUserExtractor { macro_user_id, .. }) =
         extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
