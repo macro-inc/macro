@@ -1,8 +1,8 @@
 [package]
-name = "graphql_soup"
-version = "0.1.0"
 edition = "2024"
+name = "graphql_soup"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
@@ -22,11 +22,10 @@ filter_ast = { path = "../filter_ast" }
 graphql_common = { path = "../graphql_common" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
 model_file_type = { path = "../model_file_type" }
 model_user = { path = "../model_user", features = ["axum"] }
-model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }
-models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 serde = { workspace = true }
 serde_json = { workspace = true }

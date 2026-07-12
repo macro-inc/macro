@@ -8,71 +8,18 @@ use email::{
     inbound::axum::{axum_impls::MultiEmailLinkExtractor, previews_router::EmailRouterState},
 };
 use entity_access::{
-    domain::{
-        models::{EntityAccessReceipt, MemberTeamRole},
-        ports::EntityAccessService,
-    },
+    domain::{models::MemberTeamRole, ports::EntityAccessService},
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
 };
 use graphql_common::extract_part;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::TypeEraseCursor;
-use soup::domain::{models::SoupRequest, ports::SoupService};
+use soup::domain::ports::SoupService;
 
 use crate::{
     inputs::SoupInput,
     objects::{SoupEntityEdges, SoupPage},
 };
-
-/// Shared wrapper for a concrete Soup service.
-pub struct SharedSoupService<S>(Arc<S>);
-
-impl<S> Clone for SharedSoupService<S> {
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
-    }
-}
-
-impl<S> SharedSoupService<S> {
-    /// Create a shared Soup service wrapper.
-    pub fn new(service: Arc<S>) -> Self {
-        Self(service)
-    }
-}
-
-impl<S> SoupService for SharedSoupService<S>
-where
-    S: SoupService,
-{
-    async fn get_user_soup<T>(
-        &self,
-        req: SoupRequest<T>,
-        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
-    where
-        SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
-        T: Clone + serde::Serialize + Send,
-    {
-        self.0.get_user_soup(req, team_receipt).await
-    }
-
-    async fn get_user_soup_grouped(
-        &self,
-        req: soup::domain::models::GroupedSortRequest<'_>,
-    ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
-        self.0.get_user_soup_grouped(req).await
-    }
-
-    async fn caller_tag_sets<'a>(
-        &self,
-        user_id: macro_user_id::user_id::MacroUserIdStr<'a>,
-    ) -> Result<
-        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
-        soup::domain::models::SoupErr,
-    >{
-        self.0.caller_tag_sets(user_id).await
-    }
-}
 
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input

@@ -6001,7 +6001,6 @@ dependencies = [
  "model_file_type",
  "model_user",
  "models_pagination",
- "models_properties",
  "models_soup",
  "serde",
  "serde_json",

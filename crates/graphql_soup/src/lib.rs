@@ -17,4 +17,4 @@ pub use objects::{
     GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupItem, GraphqlSoupProject,
     SoupEntityEdges, SoupPage,
 };
-pub use resolvers::{SharedSoupService, resolve_soup};
+pub use resolvers::resolve_soup;

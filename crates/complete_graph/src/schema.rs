@@ -17,7 +17,7 @@ use graphql_properties::{
     EntityPropertyWriter, NoOpEntityPropertyWriter, NoOpSoupPropertyEdgeReader,
     PropertiesMutationRoot, SoupPropertyEdgeReader,
 };
-use graphql_soup::{SharedSoupService, SoupInput, SoupPage, resolve_soup};
+use graphql_soup::{SoupInput, SoupPage, resolve_soup};
 use model_user::axum_extractor::MacroUserExtractor;
 use soup::domain::ports::{NoOpSoupService, SoupService};
 
@@ -33,8 +33,7 @@ pub type SoupSchema<S, E, EAS, St, W, NR, PR> =
     Schema<SoupQueryRoot<S, E, EAS, St, NR, PR>, PropertiesMutationRoot<W>, EmptySubscription>;
 
 /// GraphQL Soup schema type backed by a shared soup service.
-pub type SharedSoupSchema<S, E, EAS, St, W, NR, PR> =
-    SoupSchema<SharedSoupService<S>, E, EAS, St, W, NR, PR>;
+pub type SharedSoupSchema<S, E, EAS, St, W, NR, PR> = SoupSchema<Arc<S>, E, EAS, St, W, NR, PR>;
 
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
@@ -135,7 +134,7 @@ where
     NR: SoupNotificationEdgeReader,
     PR: SoupPropertyEdgeReader,
 {
-    build_schema_with_service(SharedSoupService::new(service))
+    build_schema_with_service(service)
 }
 
 #[Object]
