@@ -15,7 +15,7 @@ use super::{Mode, proxy, repo_root, stage::Stage};
 
 /// The app dir where `bun run dev` runs.
 fn app_dir() -> std::path::PathBuf {
-    repo_root().join("apps/web/packages/app")
+    repo_root().join("apps/web")
 }
 
 /// Host-facing frontend URL.

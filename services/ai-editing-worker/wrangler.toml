@@ -6,11 +6,11 @@ compatibility_flags = ["nodejs_compat", "enable_request_signal", "global_fetch_s
 [alias]
 "loro-crdt" = "loro-crdt/bundler"
 "@observability/logger" = "./src/logger-shim.ts"
-"@core" = "../../apps/web/packages/core"
-"@service-sync" = "../../apps/web/packages/service-clients/service-sync"
+"@core" = "../../apps/web/src/lib/core"
+"@service-sync" = "../../apps/web/src/lib/service-clients/service-sync"
 "@loro-mirror" = "../../packages/loro-mirror"
 "@lexical-core" = "../../packages/lexical-core"
-"@websocket" = "../../apps/web/packages/websocket/index.ts"
+"@websocket" = "../../apps/web/src/lib/websocket/index.ts"
 
 [[rules]]
 type = "Text"

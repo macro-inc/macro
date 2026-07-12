@@ -10,8 +10,8 @@ name: Deploy AI Editing Worker
     - bun.lock
     - package.json
     - services/ai-editing-worker/**
-    - apps/web/packages/core/**
-    - apps/web/packages/websocket/**
+    - apps/web/src/lib/core/**
+    - apps/web/src/lib/websocket/**
     - packages/loro-mirror/**
   workflow_dispatch:
     inputs:

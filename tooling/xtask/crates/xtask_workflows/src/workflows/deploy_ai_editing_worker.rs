@@ -32,8 +32,8 @@ pub fn deploy_ai_editing_worker() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("bun.lock"))
                     .add_path(xtask_paths::repo_glob!("package.json"))
                     .add_path(xtask_paths::repo_glob!("services/ai-editing-worker/**"))
-                    .add_path(xtask_paths::repo_glob!("apps/web/packages/core/**"))
-                    .add_path(xtask_paths::repo_glob!("apps/web/packages/websocket/**"))
+                    .add_path(xtask_paths::repo_glob!("apps/web/src/lib/core/**"))
+                    .add_path(xtask_paths::repo_glob!("apps/web/src/lib/websocket/**"))
                     .add_path(xtask_paths::repo_glob!("packages/loro-mirror/**")),
             )
             .workflow_dispatch(WorkflowDispatch::default().inputs(HashMap::from([(

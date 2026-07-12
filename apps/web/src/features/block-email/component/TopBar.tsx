@@ -1,0 +1,248 @@
+import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
+import { useSidePanel } from '@app/component/side-panel';
+import { SplitFileMenu } from '@app/component/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  SplitTitleFileMenu,
+  StaticSplitLabel,
+} from '@app/component/split-layout/components/SplitLabel';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/features/chat/ChatWithAgentButton';
+import { useMaybeSoup } from '@app/features/next-soup/soup-context';
+import {
+  openEntityInSplitFromUnifiedList,
+  trashEmails,
+} from '@app/features/next-soup/utils';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+  useShareDialogContext,
+} from '@core/component/TopBar/ShareButton';
+import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
+import { isMobile } from '@core/mobile/isMobile';
+import IconShared from '@icon/wide-share.svg';
+import { AnimatedTaskIcon } from '@icon/wide-task';
+import CheckIcon from '@phosphor/check.svg';
+import ProhibitIcon from '@phosphor/prohibit.svg';
+import TrashIcon from '@phosphor/trash.svg';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { onCleanup, Show } from 'solid-js';
+import { useEmailContext } from './EmailContext';
+
+export function TopBar(props: {
+  id: string;
+  title: string;
+  isDraft?: boolean;
+  onCreateTask?: () => void;
+}) {
+  const splitPanel = useSplitPanel();
+  const shareCtx = useShareDialogContext();
+  const emailCtx = useEmailContext();
+  const soup = useMaybeSoup();
+  const linksQuery = useEmailLinksQuery();
+  const sidePanel = useSidePanel();
+
+  if (splitPanel?.splitHotkeyScope) {
+    const reg = registerHotkey({
+      hotkey: ']',
+      scopeId: splitPanel.splitHotkeyScope,
+      hotkeyToken: TOKENS.block.toggleSidePanel,
+      description: 'Toggle Side Panel',
+      keyDownHandler: () => {
+        if (!sidePanel) return false;
+        if (!sidePanel.hasSections()) return false;
+        sidePanel.toggle();
+        return true;
+      },
+    });
+    onCleanup(() => reg.dispose());
+  }
+
+  const isInvite = () => {
+    const row = soup?.items.get(props.id);
+    const entity = row?.original;
+    return entity?.type === 'email' && entity.hasIcsAttachment === true;
+  };
+
+  const isOwnThread = () => {
+    const thread = emailCtx.thread();
+    const links = linksQuery.data?.links;
+    if (!thread || !links) return false;
+    return links.some((link) => link.id === thread.link_id);
+  };
+
+  const trashThread = () => {
+    const thread = emailCtx.thread();
+    if (!thread?.db_id) return;
+
+    // Calculate next row before trashing so we can navigate to it
+    const nextRow = (() => {
+      if (!soup) return undefined;
+      const currentIndex = soup.focus.index();
+      return soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
+    })();
+
+    const handle = trashEmails([thread.db_id]);
+
+    if (soup && nextRow) {
+      soup.selection.clear();
+      soup.focus.set(nextRow.id);
+      openEntityInSplitFromUnifiedList(nextRow.original, {});
+    }
+
+    const toastId = toast.success('Moved to Trash', {
+      actions: [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Restored from Trash'),
+              () => toast.failure('Failed to restore from Trash')
+            );
+          },
+        },
+      ],
+      duration: 10_000,
+    });
+
+    handle.done.catch(() => {
+      toast.failure('Failed to move to Trash');
+    });
+  };
+
+  const shareTool: BlockTool = {
+    label: 'Share',
+    icon: IconShared,
+    action: () => shareCtx.open(),
+    condition: () => ENABLE_EMAIL_SHARING,
+    buttonComponent: () => <ShareTrigger />,
+    focusTarget: getShareDrawerRecipientInput,
+  };
+
+  const emailActions: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () => {
+        const threadId = emailCtx.thread()?.db_id;
+        if (!threadId) return;
+        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+      },
+      condition: () => !!emailCtx.thread()?.db_id,
+    },
+    shareTool,
+    {
+      label: 'Task',
+      icon: AnimatedTaskIcon,
+      action: () => props.onCreateTask?.(),
+      condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
+    },
+    {
+      label: 'Mark done',
+      icon: CheckIcon,
+      action: () => {
+        const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
+        if (command) {
+          runCommand(command);
+        } else {
+          emailCtx.archiveThread();
+        }
+      },
+      condition: isOwnThread,
+    },
+    {
+      label: 'Delete',
+      icon: TrashIcon,
+      action: trashThread,
+      condition: isOwnThread,
+    },
+    {
+      label: 'Block Sender',
+      icon: ProhibitIcon,
+      action: () => emailCtx.blockSender(),
+      condition: isOwnThread,
+    },
+  ];
+
+  const tools: BlockTool[] = [
+    {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () => {
+        const threadId = emailCtx.thread()?.db_id;
+        if (!threadId) return;
+        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+      },
+      condition: () => !!emailCtx.thread()?.db_id,
+      buttonComponent: () => {
+        const id = emailCtx.thread()?.db_id;
+        return id ? (
+          <ChatWithAgentButton
+            entity={{ type: 'email', id, name: props.title }}
+          />
+        ) : null;
+      },
+    },
+    shareTool,
+  ];
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <StaticSplitLabel
+          class="ph-no-capture"
+          iconType={isInvite() ? 'emailInvite' : 'email'}
+          colorIcon={isInvite()}
+          label={isMobile() ? '' : props.title}
+          badges={
+            props.isDraft
+              ? [
+                  <SplitHeaderBadge
+                    text="draft"
+                    tooltip="This is a Draft Email"
+                  />,
+                ]
+              : undefined
+          }
+        />
+      </SplitHeaderLeft>
+
+      <SplitTitleFileMenu>
+        <Show
+          when={emailActions.some(
+            (action) => !action.condition || action.condition()
+          )}
+        >
+          <SplitFileMenu
+            id={props.id}
+            itemType="email"
+            name={props.title}
+            ops={[]}
+            tools={emailActions}
+          />
+        </Show>
+      </SplitTitleFileMenu>
+
+      <ResponsiveBlockToolbar
+        tools={tools}
+        ops={[]}
+        id={props.id}
+        itemType="email"
+        name={props.title}
+      />
+    </>
+  );
+}

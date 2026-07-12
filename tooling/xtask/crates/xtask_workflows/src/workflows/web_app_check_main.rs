@@ -171,7 +171,7 @@ fn paths_filter() -> Step<Use> {
                   - 'package.json'
                   - 'bun.lock'
                   - 'apps/web/package.json'
-                  - 'apps/web/packages/**'
+                  - 'apps/web/src/**'
                   - 'apps/web/biome.jsonc'
                   - 'packages/**'
                   - 'services/lexical-service/**'
@@ -214,7 +214,7 @@ fn show_sccache_stats() -> Step<Run> {
 
 fn check_types() -> Step<Run> {
     Step::new("Check Types")
-        .run("bun run --bun --silent tsc --project ./packages/app/tsconfig.json")
+        .run("bun run --bun --silent tsc --project ./tsconfig.json")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

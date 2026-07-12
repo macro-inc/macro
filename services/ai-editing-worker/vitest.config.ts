@@ -21,13 +21,13 @@ export default defineConfig({
   plugins: [mdAsText()],
   resolve: {
     alias: {
-      '@core': repoPath('../../apps/web/packages/core'),
+      '@core': repoPath('../../apps/web/src/lib/core'),
       '@service-sync': repoPath(
-        '../../apps/web/packages/service-clients/service-sync'
+        '../../apps/web/src/lib/service-clients/service-sync'
       ),
       '@loro-mirror': repoPath('../../packages/loro-mirror'),
       '@lexical-core': repoPath('../../packages/lexical-core'),
-      '@websocket': repoPath('../../apps/web/packages/websocket'),
+      '@websocket': repoPath('../../apps/web/src/lib/websocket'),
     },
   },
 });

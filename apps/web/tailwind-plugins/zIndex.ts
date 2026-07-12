@@ -1,5 +1,5 @@
 import plugin from 'tailwindcss/plugin';
-import * as stackingContext from '../packages/core/constant/stackingContext';
+import * as stackingContext from '../src/lib/core/constant/stackingContext';
 
 // Compute the key names once, at the top level
 const zIndexKeys = Object.keys(stackingContext).map((key) =>

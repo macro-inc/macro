@@ -29,16 +29,16 @@
 				"../../packages/loro-mirror/*"
 			],
 			"@core/*": [
-				"../../apps/web/packages/core/*"
+				"../../apps/web/src/lib/core/*"
 			],
 			"@service-sync/*": [
-				"../../apps/web/packages/service-clients/service-sync/*"
+				"../../apps/web/src/lib/service-clients/service-sync/*"
 			],
 			"@websocket": [
-				"../../apps/web/packages/websocket"
+				"../../apps/web/src/lib/websocket"
 			],
 			"@websocket/*": [
-				"../../apps/web/packages/websocket/*"
+				"../../apps/web/src/lib/websocket/*"
 			],
 			"@lexical-core": [
 				"../../packages/lexical-core"

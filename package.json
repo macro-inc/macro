@@ -63,7 +63,7 @@
 	"scripts": {
 		"fix": "cd apps/web && bunx --bun @biomejs/biome check --write",
 		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
+		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project tsconfig.json",
 		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
 		"lint:oxlint": "cd apps/web && bunx --yes oxlint@1.73.0",
 		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
@@ -79,7 +79,6 @@
 	],
 	"workspaces": [
 		"apps/web",
-		"apps/web/packages/*",
 		"packages/loro-mirror",
 		"packages/lexical-core",
 		"services/lexical-service"

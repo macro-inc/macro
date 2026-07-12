@@ -28,7 +28,7 @@ jobs:
             - 'package.json'
             - 'bun.lock'
             - 'apps/web/package.json'
-            - 'apps/web/packages/**'
+            - 'apps/web/src/**'
             - 'apps/web/biome.jsonc'
             - 'packages/**'
             - 'services/lexical-service/**'
@@ -83,7 +83,7 @@ jobs:
       if: always() && needs.path-check.outputs.api_changed == 'true'
       run: sccache --show-stats || true
     - name: Check Types
-      run: bun run --bun --silent tsc --project ./packages/app/tsconfig.json
+      run: bun run --bun --silent tsc --project ./tsconfig.json
       working-directory: apps/web
   biome-check:
     needs:

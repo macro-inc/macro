@@ -1,6 +1,6 @@
 //! Normalize → denormalize round-trip tests against a realistic (trimmed)
 //! Soup query, mirroring
-//! `apps/web/packages/service-clients/service-storage/graphql/soup.graphql`.
+//! `apps/web/src/lib/service-clients/service-storage/graphql/soup.graphql`.
 
 use cache_core::denormalize::{ReadOutcome, denormalize};
 use cache_core::document::Document;

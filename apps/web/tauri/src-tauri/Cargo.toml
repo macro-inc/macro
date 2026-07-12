@@ -42,7 +42,7 @@ tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-deep-link = "=2.4.5"
 tokio-util = { version = "0.7", features = ["io"] }
 # seanaye/feat/ws-replay-buffer; keep both plugin revs identical, and keep the
-# TauriMessage/ReplayEnvelope types in packages/websocket/platform/tauri-websocket.ts
+# TauriMessage/ReplayEnvelope types in src/lib/websocket/platform/tauri-websocket.ts
 # in sync when bumping
 tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "06474e4c446600627cf37a11f0c22c27bcf764ca", features = [
   "unsafe-headers",

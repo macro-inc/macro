@@ -36,14 +36,14 @@ java-server/pdfreader/target
 **/target/*
 
 
-packages/**/node_modules
-packages/app/.vscode/**/*
+src/**/node_modules
+/.vscode/**/*
 
 CodeSignTool/
 
 # Backend
-packages/app/backend.jar
-packages/app/backend_lib
+/backend.jar
+/backend_lib
 **/build
 **/.build
 **/dist
@@ -70,6 +70,14 @@ node_modules
 
 
 packages/pdfium-worker/**/*
+
+# Generated app assets
+/public/preloadScripts
+/public/assets
+/public/README.md
+/public/worker.**
+/public/worker-*.js
+/public/pdfium*
 
 *storybook.log
 

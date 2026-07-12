@@ -204,7 +204,7 @@ TypeScript · `[ui]` UI / UX conventions
 - **FE-24** `[ui]` Truncated/collapsed controls get a tooltip (matching the app's
   tooltip pattern) so the lost label stays discoverable. (#4492)
 - **FE-25** `[ui]` Semantic color tokens, not raw Tailwind palette classes — the default
-  palette is disabled via `--color-*: initial` in `apps/web/packages/app/index.css`, so
+  palette is disabled via `--color-*: initial` in `apps/web/src/index.css`, so
   classes like `text-red-500` silently render nothing. (enforced: ast-grep
   `tsx-no-raw-tailwind-palette`, CI error · also: AGENTS.md)
 - **FE-26** `[ui]` Prefer composition over configurability; keep reusable components

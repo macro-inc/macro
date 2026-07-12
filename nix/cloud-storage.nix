@@ -746,7 +746,7 @@
         gen-api =
           let
             openApiFiles = pkgs.lib.cleanSourceWith {
-              src = ../apps/web/packages/service-clients;
+              src = ../apps/web/src/lib/service-clients;
               filter = path: type: type == "directory" || pkgs.lib.hasSuffix "openapi.json" (baseNameOf path);
             };
             crateToDir = {

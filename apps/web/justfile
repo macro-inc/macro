@@ -25,11 +25,11 @@ ios-prepare-tauri-api:
 [private]
 dev-tauri: ensure-cache-wasm
     printf development > tauri/src-tauri/.macro-tauri-env
-    cd packages/app && bun run --bun dev
+    bun run --bun dev
 
 # List available local service names
 local-services:
-    @sed -n "s/.*'\([a-z][-a-z]*\)':.*/\1/p" packages/core/constant/servers.ts | sort -u
+    @sed -n "s/.*'\([a-z][-a-z]*\)':.*/\1/p" src/lib/core/constant/servers.ts | sort -u
 
 # Run the app with local services (defaults to ALL)
 # This assumes you have followed the docs/RUNNING_LOCALLY.md instructions
@@ -37,40 +37,40 @@ servers := 'ALL'
 port := '3000'
 
 local:
-    cd packages/app && PORT='{{port}}' VITE_LOCAL_SERVERS='{{servers}}' bun run --bun dev
+    PORT='{{port}}' VITE_LOCAL_SERVERS='{{servers}}' bun run --bun dev
 
 local-sync-playground:
-    cd packages/app && VITE_LOCAL_SERVERS='ALL' VITE_SYNC_SERVICE_HOST='sync-service-playground.macroverse.workers.dev' bun run --bun dev
+    VITE_LOCAL_SERVERS='ALL' VITE_SYNC_SERVICE_HOST='sync-service-playground.macroverse.workers.dev' bun run --bun dev
 
 local-dcs:
-    cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev
+    VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev
 
 local-dss:
-    cd packages/app && VITE_LOCAL_SERVERS='document-storage-service' bun run --bun dev
+    VITE_LOCAL_SERVERS='document-storage-service' bun run --bun dev
 
 local-search: ensure-cache-wasm
-    cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev
+    VITE_LOCAL_SERVERS='search-service' bun run --bun dev
 
 local-email: ensure-cache-wasm
-    cd packages/app && VITE_LOCAL_SERVERS='email-service' bun run --bun dev
+    VITE_LOCAL_SERVERS='email-service' bun run --bun dev
 
-# All app builds need the gitignored wasm pkg (packages/graphql-cache/wasm):
+# All app builds need the gitignored wasm pkg (src/lib/graphql-cache/wasm):
 # without it the cache worker's dynamic import 404s at runtime and the
 # normalized cache silently degrades to network-only.
 build-dev: build-cache-wasm
-    cd packages/app && MODE=development NODE_ENV=production bun run --bun build
+    MODE=development NODE_ENV=production bun run --bun build
 
 build-staging: build-cache-wasm
-    cd packages/app && MODE=staging NODE_ENV=production bun run --bun build
+    MODE=staging NODE_ENV=production bun run --bun build
 
 build-prod: build-cache-wasm
-    cd packages/app && MODE=production NODE_ENV=production bun run --bun build
+    MODE=production NODE_ENV=production bun run --bun build
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
 build-tauri: build-cache-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
-    cd packages/app && MODE=production NODE_ENV=production bun run --bun build
+    MODE=production NODE_ENV=production bun run --bun build
 
 # Build the bundle, zip it, and install it at
 # tooling/native_app_server/app-archive.zip for the bundle
@@ -81,7 +81,7 @@ dist-archive: build-prod
     set -euo pipefail
     TARGET="$(cd {{ justfile_directory() }}/../../tooling/native_app_server && pwd)/app-archive.zip"
     rm -f "$TARGET"
-    (cd packages/app/dist && zip -qr "$TARGET" .)
+    (cd dist && zip -qr "$TARGET" .)
     echo "Archive: $TARGET"
 
 bundle-smoke-server *ARGS:
@@ -93,13 +93,13 @@ test-watch:
     bunx --bun vitest
 
 test-email-rendering:
-    cd packages/core/email/tests && bunx playwright test && bunx playwright show-report
+    cd src/lib/core/email/tests && bunx playwright test && bunx playwright show-report
 
 test-email-rendering-update:
-    cd packages/core/email/tests && bunx playwright test --update-snapshots
+    cd src/lib/core/email/tests && bunx playwright test --update-snapshots
 
 preview-prod:
-    cd packages/app && MODE=production NODE_ENV=production bun run preview:prod
+    MODE=production NODE_ENV=production bun run preview:prod
 
 lint-staged:
     bunx --bun biome lint --staged
@@ -108,10 +108,10 @@ lint-ci:
     bunx --bun biome ci --changed
 
 storybook:
-    cd packages/ui && bun run storybook
+    cd src/components/ui && bun run storybook
 
 build-storybook:
-    cd packages/ui && bun run build-storybook
+    cd src/components/ui && bun run build-storybook
 
 java-build:
     bun scripts/createBackend.js
@@ -154,11 +154,11 @@ cycles:
 cycles-ci:
     bunx --bun biome lint --changed --only=nursery/noImportCycles
 
-# Build the GraphQL cache wasm module into packages/graphql-cache/wasm
+# Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
 # (gitignored). Unconditional — CI app builds must never skip it (schema or
 # engine changes alter the wasm without a cache-wasm version bump).
 build-cache-wasm:
-    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/packages/graphql-cache/wasm
+    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to

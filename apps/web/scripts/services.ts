@@ -13,7 +13,7 @@ export const services: Service[] = [
 		dev: "https://cloud-storage-dev.macro.com/api-doc/openapi.json",
 		prod: "https://cloud-storage.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8086/api-doc/openapi.json",
-		output: "../packages/service-clients/service-storage/",
+		output: "../src/lib/service-clients/service-storage/",
 		orvalKey: "storageService",
 	},
 	{
@@ -21,7 +21,7 @@ export const services: Service[] = [
 		dev: "https://cloud-storage-dev.macro.com/properties/api-doc/openapi.json",
 		prod: "https://cloud-storage.macro.com/properties/api-doc/openapi.json",
 		local: "http://localhost:8086/properties/api-doc/openapi.json",
-		output: "../packages/service-clients/service-properties/",
+		output: "../src/lib/service-clients/service-properties/",
 		orvalKey: "propertiesService",
 	},
 	{
@@ -29,7 +29,7 @@ export const services: Service[] = [
 		dev: "https://document-cognition-dev.macro.com/api-doc/openapi.json",
 		prod: "https://document-cognition-dev.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8085/api-doc/openapi.json",
-		output: "../packages/service-clients/service-cognition/",
+		output: "../src/lib/service-clients/service-cognition/",
 		orvalKey: "cognitionService",
 	},
 	{
@@ -37,7 +37,7 @@ export const services: Service[] = [
 		dev: "https://auth-service-dev.macro.com/api-doc/openapi.json",
 		prod: "https://auth-service.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8080/api-doc/openapi.json",
-		output: "../packages/service-clients/service-auth/",
+		output: "../src/lib/service-clients/service-auth/",
 		orvalKey: "authService",
 	},
 	{
@@ -45,7 +45,7 @@ export const services: Service[] = [
 		dev: "https://notifications-dev.macro.com/api-doc/openapi.json",
 		prod: "https://notifications.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8089/api-doc/openapi.json",
-		output: "../packages/service-clients/service-notification/",
+		output: "../src/lib/service-clients/service-notification/",
 		orvalKey: "notificationService",
 	},
 	{
@@ -53,7 +53,7 @@ export const services: Service[] = [
 		dev: "https://static-file-service-dev.macro.com/api/api-doc/openapi.json",
 		prod: "https://static-file-service.macro.com/api/api-doc/openapi.json",
 		local: "http://localhost:8094/api/api-doc/openapi.json",
-		output: "../packages/service-clients/service-static-files/",
+		output: "../src/lib/service-clients/service-static-files/",
 		orvalKey: "staticFileService",
 	},
 	{
@@ -61,7 +61,7 @@ export const services: Service[] = [
 		dev: "https://connection-gateway-dev.macro.com/api-doc/openapi.json",
 		prod: "https://connection-gateway-service.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8082/api-doc/openapi.json",
-		output: "../packages/service-clients/service-connection/",
+		output: "../src/lib/service-clients/service-connection/",
 		orvalKey: "connectionGateway",
 	},
 	{
@@ -69,7 +69,7 @@ export const services: Service[] = [
 		dev: "https://contacts-dev.macro.com/api-doc/openapi.json",
 		prod: "https://contacts.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8083/api-doc/openapi.json",
-		output: "../packages/service-clients/service-contacts/",
+		output: "../src/lib/service-clients/service-contacts/",
 		orvalKey: "contactService",
 	},
 	{
@@ -77,7 +77,7 @@ export const services: Service[] = [
 		dev: "https://unfurl-service-dev.macro.com/api-doc/openapi.json",
 		prod: "https://unfurl-service.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8095/api-doc/openapi.json",
-		output: "../packages/service-clients/service-unfurl/",
+		output: "../src/lib/service-clients/service-unfurl/",
 		orvalKey: "unfurlService",
 	},
 	{
@@ -85,7 +85,7 @@ export const services: Service[] = [
 		dev: "https://email-service-dev.macro.com/api-doc/openapi.json",
 		prod: "https://email-service.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8087/api-doc/openapi.json",
-		output: "../packages/service-clients/service-email/",
+		output: "../src/lib/service-clients/service-email/",
 		orvalKey: "emailService",
 	},
 	{
@@ -93,7 +93,7 @@ export const services: Service[] = [
 		dev: "https://search-service-dev.macro.com/api-doc/openapi.json",
 		prod: "https://search-service.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8093/api-doc/openapi.json",
-		output: "../packages/service-clients/service-search/",
+		output: "../src/lib/service-clients/service-search/",
 		orvalKey: "searchService",
 	},
 	{
@@ -101,7 +101,7 @@ export const services: Service[] = [
 		dev: "https://scheduled-action-dev.macro.com/api-doc/openapi.json",
 		prod: "https://scheduled-action.macro.com/api-doc/openapi.json",
 		local: "http://localhost:8099/api-doc/openapi.json",
-		output: "../packages/service-clients/service-scheduled-action/",
+		output: "../src/lib/service-clients/service-scheduled-action/",
 		orvalKey: "scheduledActionService",
 	},
 ];
@@ -111,7 +111,7 @@ export const documentCognitionBase: Service = {
 	dev: "https://document-cognition-dev.macro.com",
 	prod: "https://document-cognition.macro.com",
 	local: "http://localhost:8085",
-	output: "../packages/service-clients/service-cognition/",
+	output: "../src/lib/service-clients/service-cognition/",
 	orvalKey: "cognitionService",
 };
 

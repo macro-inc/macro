@@ -50,7 +50,7 @@ fn static_file_block_is_mode_specific() {
 /// Rust, so this test is what keeps the two in sync.
 #[test]
 fn frontend_wires_every_inventory_prefix() {
-    let servers = repo_root().join("apps/web/packages/core/constant/servers.ts");
+    let servers = repo_root().join("apps/web/src/lib/core/constant/servers.ts");
     let src = std::fs::read_to_string(&servers)
         .unwrap_or_else(|e| panic!("reading {}: {e}", servers.display()));
     for svc in inventory::RUST_SERVICES {

@@ -34,7 +34,7 @@ import { networkInterfaces } from 'node:os';
  *      curl http://<MAC-LAN-IP>:3001/__scenario/incompatible-102
  *
  * This script creates fixture archives under .bundle-smoke/ from the current
- * packages/app/dist output. Commit this script and the just recipe, but do not
+ * dist output. Commit this script and the just recipe, but do not
  * commit generated .bundle-smoke artifacts or local IP/build-setting values.
  */
 
