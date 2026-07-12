@@ -1,11 +1,11 @@
-import type { LoroManager } from '@core/collab/manager';
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import { registerList } from '@lexical/list';
 import { CODE } from '@lexical/markdown';
 import { registerPlainText } from '@lexical/plain-text';
 import { registerRichText } from '@lexical/rich-text';
-import { ALL_TRANSFORMERS, type EditorType } from '@lexical-core';
-import { HR } from '@lexical-core/transformers/transformers';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import { ALL_TRANSFORMERS, type EditorType } from '@macro-inc/lexical-core';
+import { HR } from '@macro-inc/lexical-core/transformers/transformers';
 import type { EditorState, LexicalEditor, UpdateListener } from 'lexical';
 import {
   type Accessor,

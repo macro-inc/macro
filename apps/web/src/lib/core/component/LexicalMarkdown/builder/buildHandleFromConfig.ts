@@ -1,5 +1,5 @@
 import { handleFileFolderDrop } from '@core/util/upload';
-import type { EditorType } from '@lexical-core';
+import type { EditorType } from '@macro-inc/lexical-core';
 import type { SerializedEditorState } from 'lexical';
 import { createSignal } from 'solid-js';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';

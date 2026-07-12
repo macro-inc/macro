@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';

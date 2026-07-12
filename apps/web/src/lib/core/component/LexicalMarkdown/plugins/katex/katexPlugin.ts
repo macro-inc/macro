@@ -1,5 +1,5 @@
 import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
-import { $createEquationNode, $isEquationNode } from '@lexical-core';
+import { $createEquationNode, $isEquationNode } from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $getNodeByKey,

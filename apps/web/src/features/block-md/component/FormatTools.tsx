@@ -10,9 +10,11 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/';
 import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
+import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import type { ElementName } from '@lexical-core';
+import type { ElementName } from '@macro-inc/lexical-core';
 import CaretRight from '@phosphor/caret-right.svg';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Check from '@phosphor/check-square.svg';
@@ -44,8 +46,6 @@ import TextSuper from '@phosphor/text-superscript.svg';
 import TextT from '@phosphor/text-t.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
 import { Button, Dropdown, Hotkey, SingleSelectCheck } from '@ui';
-import { toast } from 'core/component/Toast/Toast';
-import type { ValidHotkey } from 'core/hotkey/types';
 import {
   COMMAND_PRIORITY_LOW,
   FOCUS_COMMAND,

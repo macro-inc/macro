@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';

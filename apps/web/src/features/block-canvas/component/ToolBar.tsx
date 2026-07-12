@@ -11,7 +11,7 @@ import {
   ENABLE_CANVAS_IMAGES,
   ENABLE_CANVAS_TEXT,
 } from '@core/constant/featureFlags';
-
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
@@ -25,7 +25,6 @@ import PencilSimple from '@phosphor/pencil-simple.svg';
 import Rectangle from '@phosphor/rectangle.svg';
 import Text from '@phosphor/text-t.svg';
 import { Button, cn, Dropdown, Hotkey } from '@ui';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Tools } from '../constants';

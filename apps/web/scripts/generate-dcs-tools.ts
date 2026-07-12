@@ -158,7 +158,7 @@ async function generateToolsFile(schema: FrontendSchemas) {
   const contents = `${warning}
 
 
-import type { ResultError } from 'core/util/result';
+import type { ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
 import * as schemas from './schemas';
 import type * as types from './types';

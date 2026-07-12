@@ -1,5 +1,7 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   type EntityData,
   EntityRowIcon,
@@ -12,8 +14,6 @@ import {
 import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import { useSplitLayout } from 'app/component/split-layout/layout';
-import { globalSplitManager } from 'app/signal/splitLayout';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

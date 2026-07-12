@@ -1,5 +1,5 @@
-import { SidePanel } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
 import type { Property } from '@property/types';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';

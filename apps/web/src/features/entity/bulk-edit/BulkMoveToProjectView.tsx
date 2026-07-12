@@ -1,16 +1,19 @@
 import { analytics } from '@app/lib/analytics';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
-import { type EntityData, InlineEntity } from '@entity';
+import {
+  createBulkMoveToProjectDssEntityMutation,
+  type EntityData,
+  InlineEntity,
+} from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
 import FolderPlusIcon from '@phosphor-icons/core/regular/folder-plus.svg?component-solid';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { createProject, useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { Button, cn } from '@ui';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
   createMemo,

@@ -1,48 +1,56 @@
 {
-    "name": "loro-mirror-monorepo",
+    "name": "@loro-mirror/core",
     "version": "0.1.0",
-    "private": true,
-    "description": "A state management library for Loro CRDT with immutable data pattern support",
+    "description": "Core functionality for Loro Mirror - a state management library with Loro CRDT synchronization",
+    "main": "dist/index.cjs",
+    "module": "dist/index.mjs",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "bun": "./src/index.ts",
+            "workerd": "./src/index.ts",
+            "worker": "./src/index.ts",
+            "browser": "./src/index.ts",
+            "development": "./src/index.ts",
+            "production": "./src/index.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.cjs",
+            "default": "./dist/index.mjs"
+        }
+    },
+    "files": [
+        "src",
+        "dist"
+    ],
     "scripts": {
-        "build": "pnpm -r build",
-        "test": "pnpm -r test",
-        "lint": "pnpm -r lint",
-        "typecheck": "pnpm -r typecheck"
+        "build": "tsc --emitDeclarationOnly && bun build src/index.ts --target node --format esm --packages external --outfile dist/index.mjs && bun build src/index.ts --target node --format cjs --packages external --outfile dist/index.cjs",
+        "prepack": "bun run build",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "biome lint src",
+        "typecheck": "tsc --noEmit"
     },
     "keywords": [
         "loro",
         "crdt",
-        "state-management",
-        "immutable"
+        "state",
+        "management",
+        "sync",
+        "mirror"
     ],
     "author": "",
     "license": "MIT",
-    "devDependencies": {
-        "@rollup/plugin-commonjs": "^28.0.2",
-        "@rollup/plugin-node-resolve": "^16.0.0",
-        "@types/node": "^18.0.0",
-        "@typescript-eslint/eslint-plugin": "^5.0.0",
-        "@typescript-eslint/parser": "^5.0.0",
-        "eslint": "^9.26.0",
-        "rollup": "^4.34.8",
-        "rollup-plugin-typescript2": "^0.36.0",
-        "typescript": "^4.7.0",
-        "vite": "^6.4.2",
-        "vitest": "^3.0.7"
+    "dependencies": {
+        "immer": "^10.0.3"
     },
-    "pnpm": {
-        "overrides": {
-            "brace-expansion": "^2.0.1",
-            "js-yaml": "4.1.1",
-            "minimatch": ">=3.1.4",
-            "flatted": ">=3.4.2",
-            "rollup": ">=4.59.0",
-            "ajv": ">=6.14.0",
-            "picomatch@2": "~2.3.2",
-            "picomatch@4": "~4.0.4"
-        },
-        "onlyBuiltDependencies": [
-            "esbuild"
-        ]
+    "peerDependencies": {
+        "loro-crdt": "^1.4.4"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.4.12",
+        "loro-crdt": "1.13.3",
+        "typescript": "^5.9.3",
+        "vitest": "^3.2.4"
     }
 }

@@ -6,7 +6,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { $getRoot } from "lexical";
 import type { SerializedEditorState } from "lexical";
-import { $getId, $updateAllNodeIds } from "@lexical-core/plugins/nodeIdPlugin";
+import { $getId, $updateAllNodeIds } from "@macro-inc/lexical-core/plugins/nodeIdPlugin";
 import {
 	createEditingSession,
 	loadSnapshot,
@@ -21,13 +21,13 @@ import {
 } from "../src/ai-editing/awareness/awareness-source";
 import { DocumentEditor } from "../src/ai-editing/editor/document-editor";
 import { type CodeRunner, runEditorCode } from "../src/ai-editing/runtime";
-import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "@lexical-core/markdown-loro-schema";
-import type { InferType } from "@loro-mirror/packages/core/src";
+import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "@macro-inc/lexical-core/markdown-loro-schema";
+import type { InferType } from "@loro-mirror/core";
 import { createWorkerSyncSource, createWorkerAwareness } from "../src/sources";
-import { LoroManager } from "@core/collab/manager";
-import { SyncEngine } from "@core/collab/engine";
-import { InMemoryWALStore, WALSyncer } from "@core/collab/wal";
-import type { RawUpdate } from "@core/collab/shared";
+import { LoroManager } from "@macro-inc/collaboration/collab/manager";
+import { SyncEngine } from "@macro-inc/collaboration/collab/engine";
+import { InMemoryWALStore, WALSyncer } from "@macro-inc/collaboration/collab/wal";
+import type { RawUpdate } from "@macro-inc/collaboration/collab/shared";
 
 const argv = await yargs(hideBin(process.argv)).usage("$0 <wss-url>").help().parse();
 const wssUrl = argv._[0] as string | undefined;

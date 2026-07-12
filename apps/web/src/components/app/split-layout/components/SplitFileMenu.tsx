@@ -1,7 +1,7 @@
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { makeFavoriteAction } from '@app/features/next-soup/actions';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';

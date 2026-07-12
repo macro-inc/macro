@@ -41,7 +41,7 @@ reviews:
     - "!**/node_modules/**"
     - "!**/dist/**"
     - "!packages/loro-mirror/**"
-    - "!apps/web/packages/service-clients/src/generated/**"
+    - "!apps/web/src/lib/service-clients/**/generated/**"
     - "!**/*.gen.ts"
 
   # Path-specific review instructions
@@ -70,7 +70,7 @@ reviews:
         - Check `solid-primitives` before writing custom reactive utilities.
         - Avoid deprecated SolidJS APIs: `blockSignals`, `blockMemos`, `blockResources`, etc.
         - Primitive UI components should be pure and prefer composition over complex global state/context.
-        - If a Lexical Node is created or modified with breaking changes, the lexical version counter must be incremented (packages/core/component/LexicalMarkdown/version.ts).
+        - If a Lexical Node is created or modified with breaking changes, the lexical version counter must be incremented (`apps/web/src/lib/core/component/LexicalMarkdown/version.ts`).
 
     - path: "infra/**/*.ts"
       instructions: |

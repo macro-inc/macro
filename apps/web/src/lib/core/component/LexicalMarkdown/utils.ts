@@ -28,12 +28,12 @@ import {
   EXTERNAL_TRANSFORMERS,
   INITIALIZE_LOCAL_STATUS,
   INTERNAL_TRANSFORMERS,
-} from '@lexical-core';
-import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
+} from '@macro-inc/lexical-core';
+import { SKIP_SCROLL_INTO_VIEW_TAG } from '@macro-inc/lexical-core/constants';
 import {
   $getId,
   INITIALIZE_DOCUMENT_IDS,
-} from '@lexical-core/plugins/nodeIdPlugin';
+} from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import {
   $addUpdateTag,
   $createParagraphNode,

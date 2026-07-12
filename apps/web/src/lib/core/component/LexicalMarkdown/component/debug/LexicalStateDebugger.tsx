@@ -1,5 +1,5 @@
 import { CodeNode } from '@lexical/code';
-import type { CommentNode, ElementName } from '@lexical-core';
+import type { CommentNode, ElementName } from '@macro-inc/lexical-core';
 import {
   $getId,
   $getPeerId,
@@ -8,7 +8,7 @@ import {
   DocumentMentionNode,
   ImageNode,
   UserMentionNode,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import { cn, Layer } from '@ui';
 import {
   $getNodeByKey,

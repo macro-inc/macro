@@ -1,5 +1,5 @@
+import { activeElement } from '@app/signal/focus';
 import { isEditableInput } from '@core/util/isEditableInput';
-import { activeElement } from 'app/signal/focus';
 import { createMemo } from 'solid-js';
 import { activeScope, hotkeyScopeTree } from './state';
 import type { HotkeyCommand, ValidHotkey } from './types';

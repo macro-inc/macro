@@ -1,5 +1,5 @@
 import { $isListItemNode } from '@lexical/list';
-import { $createDocumentMentionNode } from '@lexical-core';
+import { $createDocumentMentionNode } from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $getNodeByKey,

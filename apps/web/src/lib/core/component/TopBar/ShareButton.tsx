@@ -1,6 +1,6 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useChannelParticipants } from '@channel/use-channel-participants';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,

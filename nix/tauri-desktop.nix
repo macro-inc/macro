@@ -39,6 +39,7 @@
           && !(lib.hasPrefix "apps/web/node_modules/" rel)
           && !(lib.hasPrefix "apps/web/dist/" rel)
           && !(lib.hasPrefix "apps/web/tauri/target/" rel)
+          && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
           && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
@@ -48,7 +49,39 @@
           && rel != "node_modules"
           && rel != "apps/web/node_modules"
           && rel != "apps/web/dist"
-          && rel != "apps/web/tauri/target";
+          && rel != "apps/web/tauri/target"
+          && rel != "apps/web/src/lib/graphql-cache/wasm";
+      };
+
+      rootCargoVendorDir = craneLib.vendorCargoDeps {
+        src = ../.;
+        cargoLock = ../Cargo.lock;
+        outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
+      };
+
+      cacheWasmPackage = craneLib.mkCargoDerivation {
+        pname = "macro-cache-wasm";
+        version = appVersion;
+        src = jsSrc;
+        cargoVendorDir = rootCargoVendorDir;
+        nativeBuildInputs = [
+          pkgs.binaryen
+          pkgs.wasm-bindgen-cli
+          pkgs.wasm-pack
+        ];
+        doCheck = false;
+        buildPhaseCargoCommand = ''
+          wasm-pack build crates/client/cache-wasm \
+            --target web \
+            --release \
+            --mode no-install \
+            --out-dir "$PWD/apps/web/src/lib/graphql-cache/wasm"
+        '';
+        installPhaseCommand = ''
+          mkdir -p $out
+          cp -a apps/web/src/lib/graphql-cache/wasm/. $out/
+        '';
+        doInstallCargoArtifacts = false;
       };
 
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
@@ -77,14 +110,14 @@
             # so make that directory writable inside the Nix build sandbox.
             chmod u+w apps/web
 
-            vite_resolve_replacement='      resolve: {
-          alias: [
-            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },
-          ],'
             substituteInPlace apps/web/vite.base.ts \
-              --replace-fail "      resolve: {" "$vite_resolve_replacement"
+              --replace-fail \
+                "          // NIX_TAURI_ALIAS" \
+                '          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },'
 
             printf production > apps/web/tauri/src-tauri/.macro-tauri-env
+            mkdir -p apps/web/src/lib/graphql-cache/wasm
+            cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
             (
               cd apps/web
               MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts

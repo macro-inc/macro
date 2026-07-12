@@ -1,10 +1,10 @@
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
-} from '@app/component/ResponsiveBlockToolbar';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+} from '@components/app/ResponsiveBlockToolbar';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';

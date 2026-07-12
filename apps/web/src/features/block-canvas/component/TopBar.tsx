@@ -1,20 +1,20 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useIsAuthenticated } from '@core/auth';
 import { createBlockSignal, useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
@@ -23,6 +23,7 @@ import {
   REFERENCES_DRAWER_ID,
   ReferencesButton,
 } from '@core/component/ReferencesModal';
+import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -41,7 +42,6 @@ import DownloadSimple from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { toast } from 'core/component/Toast/Toast';
 import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';

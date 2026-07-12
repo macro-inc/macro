@@ -14,7 +14,7 @@ import {
   HorizontalRuleNode,
   ImageNode,
   VideoNode,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import CheckSquare from '@phosphor/check-square.svg';
 import CodeBlock from '@phosphor/code-block.svg';
 import VideoIcon from '@phosphor/file-video.svg';

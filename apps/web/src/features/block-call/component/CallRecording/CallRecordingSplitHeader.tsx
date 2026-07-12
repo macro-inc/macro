@@ -1,20 +1,20 @@
 import {
-  type BlockTool,
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { useCall } from '@channel/Call/use-call';
+import {
+  type BlockTool,
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@components/app/ResponsiveBlockToolbar';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {

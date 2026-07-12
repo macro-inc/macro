@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -25,7 +26,6 @@ import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn, Dialog, Hotkey, Surface } from '@ui';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,

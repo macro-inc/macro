@@ -1,5 +1,5 @@
 import { useSettingsState } from '@core/constant/SettingsState';
-import type { ThemeMentionDecoratorProps } from '@lexical-core';
+import type { ThemeMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';

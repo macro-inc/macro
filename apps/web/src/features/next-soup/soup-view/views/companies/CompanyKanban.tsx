@@ -1,6 +1,3 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { PreviewPanel } from '@app/component/PreviewPanel';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
@@ -14,6 +11,9 @@ import {
   useClosedStageIds,
   useCrmPermissions,
 } from '@companies/crm/team-crm-config';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { PreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';

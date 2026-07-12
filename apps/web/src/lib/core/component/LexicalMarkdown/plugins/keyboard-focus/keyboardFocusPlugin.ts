@@ -1,5 +1,5 @@
 import { mergeRegister } from '@lexical/utils';
-import { $isSelectionInsideCode } from '@lexical-core';
+import { $isSelectionInsideCode } from '@macro-inc/lexical-core';
 import {
   $getRoot,
   $getSelection,

@@ -1,4 +1,3 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { CollapsedMessage } from '@block-email/component/CollapsedMessage';
 import { useEmailContext } from '@block-email/component/EmailContext';
@@ -6,6 +5,7 @@ import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { toast } from '@core/component/Toast/Toast';

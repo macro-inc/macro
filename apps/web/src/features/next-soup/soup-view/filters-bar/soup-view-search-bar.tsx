@@ -1,12 +1,12 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
-import { markdownToPlainText } from '@lexical-core/utils/parsers';
+import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import XIcon from '@phosphor/x.svg?component-solid';
 import { cn, Hotkey } from '@ui';
 import {

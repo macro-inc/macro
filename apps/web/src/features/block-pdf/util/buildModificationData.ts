@@ -1,3 +1,4 @@
+import { modificationDataReplacer } from '@coparse/document-processing-types';
 import type Term from '../model/Term';
 import type TocItem from '../model/TocItem';
 import type { IBookmark } from '../type/Bookmark';
@@ -8,6 +9,8 @@ import {
 } from '../type/coParse';
 import type { IPlaceable } from '../type/placeables';
 import { hashString, hashStringSync } from './hash';
+
+export { modificationDataReplacer };
 
 export function getBookmarks(items: TocItem[]): IBookmark[] {
   return items.map(
@@ -55,20 +58,6 @@ export function getSaveModificationData({
 
   return { modificationData: serverModificationData };
 }
-
-export const modificationDataReplacer = (key: string, value: any) => {
-  // TODO: this is a workaround to convert the Set to an Array because JSON.stringify will return an empty object
-  if (key === 'pageRange') {
-    return Array.from(value);
-  }
-
-  // Workaround for floating point precision issues that were affecting hash consistency
-  if (typeof value === 'number' && !Number.isInteger(value)) {
-    return parseFloat(value.toFixed(12));
-  }
-
-  return value;
-};
 
 export const hashModificationData = async (
   modificationData: IModificationData | IModificationDataOnServer

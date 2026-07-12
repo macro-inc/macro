@@ -6,7 +6,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { throwOnErr } from '@core/util/result';
 import { Dialog } from '@kobalte/core/dialog';
-import { constrainImageDimensions } from '@lexical-core/utils/media';
+import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import ExpandIcon from '@phosphor/arrows-out-simple.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import ThreeDotsIcon from '@phosphor/dots-three-vertical.svg';

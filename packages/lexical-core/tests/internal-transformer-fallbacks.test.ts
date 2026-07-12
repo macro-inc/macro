@@ -72,7 +72,10 @@ describe('internal transformer fallbacks', () => {
     );
 
     editor.getEditorState().read(() => {
-      const node = $getRoot().getFirstChild()?.getFirstChild();
+      const paragraph = $getRoot().getFirstChild();
+      const node = $isParagraphNode(paragraph)
+        ? paragraph.getFirstChild()
+        : null;
       expect(node?.getType()).toBe('user-mention');
     });
   });

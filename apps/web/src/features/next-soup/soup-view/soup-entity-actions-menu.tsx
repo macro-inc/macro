@@ -1,4 +1,4 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';

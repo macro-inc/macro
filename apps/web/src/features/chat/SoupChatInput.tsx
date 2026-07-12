@@ -1,7 +1,8 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import {
   ChatInputProvider,
   useChatInputContext,
@@ -14,13 +15,12 @@ import {
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { createRenameDssEntityMutation } from '@macro-entity';
+import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { ChatInput } from 'core/component/AI/component/input/ChatInput';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount } from 'solid-js';
 
 function SoupChatInputInner() {

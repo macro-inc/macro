@@ -1,14 +1,14 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { SplitToolbarRight } from '@components/app/split-layout/components/SplitToolbar';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';

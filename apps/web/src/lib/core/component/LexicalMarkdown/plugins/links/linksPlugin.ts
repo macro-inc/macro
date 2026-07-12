@@ -13,7 +13,7 @@ import {
   $wrapNodeInElement,
   mergeRegister,
 } from '@lexical/utils';
-import { $createUnlinkedTextNode } from '@lexical-core/nodes/UnlinkedTextNode';
+import { $createUnlinkedTextNode } from '@macro-inc/lexical-core/nodes/UnlinkedTextNode';
 import type { LexicalEditor } from 'lexical';
 import {
   $createParagraphNode,

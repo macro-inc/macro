@@ -1,18 +1,12 @@
 {
   "include": [
     "./src/**/*",
-    "./src/lib/core/component/Emoji/cldr-tags.json",
-    "../../packages/loro-mirror/**/*",
-    "../../packages/lexical-core/**/*"
+    "./src/lib/core/component/Emoji/cldr-tags.json"
   ],
   "exclude": [
-    "./node_module/**/*",
     "./tests/**/*",
     "./src/lib/core/**/*.spec.ts",
-    "./src/features/block-code/scripts/**/*",
-    "./src/lib/service-clients/service-sync/scripts/**/*",
-    "../../packages/lexical-core/tests/**/*",
-    "../../packages/lexical-core/scripts/**/*"
+    "./src/features/block-code/scripts/**/*"
   ],
   "compilerOptions": {
     "noImplicitAny": true,
@@ -23,9 +17,9 @@
     "moduleResolution": "bundler",
     "skipDefaultLibCheck": true,
     "skipLibCheck": true,
-    "importHelpers": true,
     "target": "ESNext",
     "module": "esnext",
+    "noEmit": true,
     "lib": [
       "dom",
       "esnext",
@@ -34,14 +28,10 @@
     ],
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "declaration": true,
-    "declarationMap": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "emitDeclarationOnly": true,
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
-    "sourceMap": true,
     "preserveWatchOutput": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
@@ -53,8 +43,6 @@
       "@types/gtag.js",
       "@types/facebook-pixel"
     ],
-    "composite": true,
-    "incremental": true,
     "paths": {
       "loro-crdt": [
         "../../node_modules/loro-crdt"
@@ -66,31 +54,22 @@
         "./src/lib/graphql-cache/*"
       ],
       "@filesystem": [
-        "./src/lib/filesystem/src"
+        "./src/lib/filesystem/main.ts"
       ],
       "@filesystem/*": [
-        "./src/lib/filesystem/src/*"
-      ],
-      "@coparse/filesystem": [
-        "./src/lib/filesystem/src/main.ts"
-      ],
-      "@coparse/filesystem/*": [
         "./src/lib/filesystem/*"
       ],
       "@coparse/document-processing-types": [
-        "./src/lib/document-processing-types/src/index.ts"
+        "./src/lib/document-processing-types/index.ts"
       ],
       "@core/*": [
         "./src/lib/core/*"
       ],
-      "core/*": [
-        "./src/lib/core/*"
-      ],
       "@macro/tauri": [
-        "./src/lib/tauri/src"
+        "./src/lib/tauri"
       ],
       "@macro/tauri/*": [
-        "./src/lib/tauri/src/*"
+        "./src/lib/tauri/*"
       ],
       "@phosphor/*": [
         "../../node_modules/@phosphor-icons/core/assets/regular/*"
@@ -139,9 +118,6 @@
       ],
       "@service-email/*": [
         "./src/lib/service-clients/service-email/*"
-      ],
-      "@service-insight/*": [
-        "./src/lib/service-clients/service-insight/*"
       ],
       "@service-properties/*": [
         "./src/lib/service-clients/service-properties/*"
@@ -194,12 +170,6 @@
       "@block-video/*": [
         "./src/features/block-video/*"
       ],
-      "@block-ai/*": [
-        "./src/features/block-ai/*"
-      ],
-      "@macro-entity": [
-        "./src/features/entity/macro-entity/src/index.tsx"
-      ],
       "@icon/*": [
         "./src/components/icon/*"
       ],
@@ -207,10 +177,10 @@
         "./src/lib/design/*"
       ],
       "@observability": [
-        "./src/lib/observability/src/"
+        "./src/lib/observability/"
       ],
       "@observability/*": [
-        "./src/lib/observability/src/*"
+        "./src/lib/observability/*"
       ],
       "@service-sync": [
         "./src/lib/service-clients/service-sync"
@@ -220,21 +190,6 @@
       ],
       "@service-contacts/*": [
         "./src/lib/service-clients/service-contacts/*"
-      ],
-      "@loro-mirror/*": [
-        "../../packages/loro-mirror/*"
-      ],
-      "@websocket": [
-        "./src/lib/websocket"
-      ],
-      "@websocket/*": [
-        "./src/lib/websocket/*"
-      ],
-      "@lexical-core": [
-        "../../packages/lexical-core/"
-      ],
-      "@lexical-core/*": [
-        "../../packages/lexical-core/*"
       ],
       "@baby-gl": [
         "./src/lib/baby-gl/"
@@ -254,10 +209,7 @@
       "@animate/*": [
         "./src/lib/animate/*"
       ],
-      "@app/component/*": [
-        "./src/components/app/*"
-      ],
-      "app/component/*": [
+      "@components/app/*": [
         "./src/components/app/*"
       ],
       "@app/constants/*": [
@@ -270,9 +222,6 @@
         "./src/lib/preferences/*"
       ],
       "@app/signal/*": [
-        "./src/lib/signals/*"
-      ],
-      "app/signal/*": [
         "./src/lib/signals/*"
       ],
       "@app/util/*": [
@@ -294,22 +243,20 @@
         "./src/features/theme/*"
       ],
       "@entity": [
-        "./src/features/entity/src/index.ts"
+        "./src/features/entity/index.ts"
       ],
       "@entity/mocks/*": [
         "./src/features/entity/mocks/*"
       ],
       "@entity/*": [
-        "./src/features/entity/src/*"
+        "./src/features/entity/*"
       ],
       "@property": [
-        "./src/features/property/src/index.ts"
+        "./src/features/property/index.ts"
       ],
       "@property/*": [
-        "./src/features/property/src/*"
-      ],
-    },
-    "rootDir": "../..",
-    "outDir": "./dist"
+        "./src/features/property/*"
+      ]
+    }
   }
 }

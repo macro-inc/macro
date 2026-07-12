@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { getWebOrigin } from '@core/util/webOrigin';

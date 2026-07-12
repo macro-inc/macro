@@ -1,11 +1,11 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';

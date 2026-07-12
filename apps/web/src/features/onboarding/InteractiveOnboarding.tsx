@@ -1,7 +1,7 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { CommandState } from '@app/features/command';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';

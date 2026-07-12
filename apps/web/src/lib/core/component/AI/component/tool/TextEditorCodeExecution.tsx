@@ -1,4 +1,5 @@
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { asFileType } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
@@ -8,14 +9,12 @@ import {
   allSupportedExtensionSet,
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
-
 import Terminal from '@phosphor-icons/core/regular/terminal.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   TextEditorCodeExecutionContent,
   TextEditorCodeExecutionResult,
 } from '@service-cognition/generated/tools/types';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
 
 // Type alias for backwards compatibility with discriminated union variant

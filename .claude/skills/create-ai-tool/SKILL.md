@@ -76,7 +76,7 @@ Run from `apps/web/`:
 bun gen-tools
 ```
 
-This builds `crates/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/packages/service-clients/service-cognition/generated/tools/`.
+This builds `crates/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
 
 ## Step 9: Check what frontend UI is needed
 
@@ -85,11 +85,11 @@ Run from `apps/web/`:
 bun check
 ```
 
-This runs `tsc --noEmit` and will report type errors — specifically, the `toolHandlers` map in `apps/web/packages/core/component/AI/component/tool/handler.tsx` will be missing your new tool name. The errors tell you exactly what to implement.
+This runs `tsc --noEmit` and will report type errors — specifically, the `toolHandlers` map in `apps/web/src/lib/core/component/AI/component/tool/handler.tsx` will be missing your new tool name. The errors tell you exactly what to implement.
 
 ## Step 10: Read existing tool UI for patterns
 
-The tool UI components live at `apps/web/packages/core/component/AI/component/tool/`. Study existing renderers:
+The tool UI components live at `apps/web/src/lib/core/component/AI/component/tool/`. Study existing renderers:
 - `Search.tsx` — search results rendering
 - `ReadContent.tsx` / `ReadMetadata.tsx` — document tool UI
 - `SendEmail.tsx` — email tool UI  
@@ -102,9 +102,9 @@ Each tool needs a handler object implementing `ToolHandler` (from `ToolRenderer.
 
 ## Step 11: Write the tool UI
 
-1. Create a new component file at `apps/web/packages/core/component/AI/component/tool/YourTool.tsx`
+1. Create a new component file at `apps/web/src/lib/core/component/AI/component/tool/YourTool.tsx`
 2. Export a handler using `createToolRenderer`
-3. Register it in `apps/web/packages/core/component/AI/component/tool/handler.tsx`:
+3. Register it in `apps/web/src/lib/core/component/AI/component/tool/handler.tsx`:
    - Import your handler
    - Add it to the `toolHandlers` map with the key matching your tool's schema title
 

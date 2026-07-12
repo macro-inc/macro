@@ -1,11 +1,11 @@
-import { FavoriteIcon } from '@app/component/FavoriteIcon';
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { favoriteDisplayName, favoriteSplitContent } from '@app/util/favorites';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { createHotkeyGroup, registerHotkey } from 'core/hotkey/hotkeys';
 import { createEffect, onCleanup } from 'solid-js';
 import { CommandState } from './state';
 

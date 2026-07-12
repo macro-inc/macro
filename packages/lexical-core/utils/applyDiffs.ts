@@ -10,8 +10,8 @@ import {
   type LexicalNode,
 } from 'lexical';
 import { match, P } from 'ts-pattern';
-import { $getNodeById, type NodeIdMappings } from '../plugins/nodeIdPlugin';
 import { $createDiffTextNode, type DiffStatus } from '../nodes/DiffTextNode';
+import { $getNodeById, type NodeIdMappings } from '../plugins/nodeIdPlugin';
 import {
   type DeleteDiff,
   type Diff,

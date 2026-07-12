@@ -1,7 +1,7 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID } from '@app/constants/list-views';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,

@@ -1,4 +1,4 @@
-import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import type { LexicalSession } from './ai-toolkit/session';
 import type { AwarenessSource } from './awareness';

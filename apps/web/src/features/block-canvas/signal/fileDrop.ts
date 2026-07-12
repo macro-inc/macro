@@ -16,9 +16,9 @@ import {
 } from '@block-canvas/util/svg';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
 import { createBlockSignal } from '@core/block';
+import { toast } from '@core/component/Toast/Toast';
 import { CANVAS_SVG_IMPORT } from '@core/constant/featureFlags';
 import { uploadFile } from '@core/util/upload';
-import { toast } from 'core/component/Toast/Toast';
 import { nanoid } from 'nanoid';
 import { createSignal } from 'solid-js';
 import { getTextNodeHeight } from '../util/style';

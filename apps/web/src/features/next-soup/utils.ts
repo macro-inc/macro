@@ -1,7 +1,3 @@
-import type {
-  ReferredFrom,
-  SplitHandle,
-} from '@app/component/split-layout/layoutManager';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
@@ -13,6 +9,10 @@ import {
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
+import type {
+  ReferredFrom,
+  SplitHandle,
+} from '@components/app/split-layout/layoutManager';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
@@ -31,11 +31,11 @@ import {
   isHitSnippetEntity,
   isSearchEntity,
   isWithNotification,
+  queryKeys,
   type SearchLocation,
   toNotificationEntity,
   type WithSearch,
 } from '@entity';
-import { queryKeys } from '@macro-entity';
 import {
   compositeEntity,
   getAllNotificationsFromGroup,

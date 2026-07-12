@@ -1,4 +1,10 @@
-import { z } from 'zod';
+import {
+  PdfColorSchema as ColorSchema,
+  type PdfColor as IColor,
+} from '@coparse/document-processing-types';
+
+export type { IColor };
+export { ColorSchema };
 
 export const DEFAULT_COLOR: IColor = { red: 0, green: 0, blue: 0 };
 
@@ -124,12 +130,3 @@ export class Color {
     return true;
   }
 }
-
-export const ColorSchema = z.object({
-  red: z.number(),
-  green: z.number(),
-  blue: z.number(),
-  alpha: z.number().optional(),
-});
-
-export type IColor = z.infer<typeof ColorSchema>;

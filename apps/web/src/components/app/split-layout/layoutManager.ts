@@ -1141,36 +1141,65 @@ export function createSplitLayout(
       }
     }
 
+    // Assign existing splits before creating replacements. Matching by content
+    // after the same-position fast path lets a split keep its identity (and its
+    // history/mount) when browser navigation merely moves it to another index.
+    const assignments = new Array<SplitState | undefined>(newSplits.length);
+
     for (let i = 0; i < newSplits.length; i++) {
       const newContent = newSplits[i];
       const splitAtSameIndex = visibleSplits[i];
 
-      // Reuse split at same index if content matches
       if (
         splitAtSameIndex &&
+        !usedIds.has(splitAtSameIndex.id) &&
         sameContent(splitAtSameIndex.content, newContent)
       ) {
-        resultSplits.push(splitAtSameIndex);
+        assignments[i] = splitAtSameIndex;
         usedIds.add(splitAtSameIndex.id);
-      } else {
-        // Build new split with fresh history
-        const newSplit = buildSplit({
-          initialContent: newContent,
-          referredFrom: null,
-        });
-        // Reuse the ID from the split at the same index to keep ids stable
-        if (splitAtSameIndex) {
-          newSplit.id = splitAtSameIndex.id;
-          usedIds.add(splitAtSameIndex.id);
-          setSplitNamesById(
-            produce((map) => {
-              delete map[splitAtSameIndex.id];
-              return map;
-            })
-          );
-        }
-        resultSplits.push(newSplit);
       }
+    }
+
+    for (let i = 0; i < newSplits.length; i++) {
+      if (assignments[i]) continue;
+
+      const existing = visibleSplits.find(
+        (split) =>
+          !usedIds.has(split.id) && sameContent(split.content, newSplits[i])
+      );
+      if (existing) {
+        assignments[i] = existing;
+        usedIds.add(existing.id);
+      }
+    }
+
+    for (let i = 0; i < newSplits.length; i++) {
+      const existing = assignments[i];
+      if (existing) {
+        resultSplits.push(existing);
+        continue;
+      }
+
+      const newSplit = buildSplit({
+        initialContent: newSplits[i],
+        referredFrom: null,
+      });
+      const splitAtSameIndex = visibleSplits[i];
+
+      // A true replacement can retain the slot's ID, but never steal an ID
+      // already assigned to content that moved elsewhere.
+      if (splitAtSameIndex && !usedIds.has(splitAtSameIndex.id)) {
+        newSplit.id = splitAtSameIndex.id;
+        setSplitNamesById(
+          produce((map) => {
+            delete map[splitAtSameIndex.id];
+            return map;
+          })
+        );
+      }
+
+      usedIds.add(newSplit.id);
+      resultSplits.push(newSplit);
     }
 
     // Clean up contentChangeListeners and splitNamesById for removed splits

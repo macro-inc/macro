@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';

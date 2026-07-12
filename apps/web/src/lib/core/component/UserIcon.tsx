@@ -1,3 +1,4 @@
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
@@ -15,7 +16,6 @@ import MacroLogo from '@icon/macro-logo.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import {
   createMemo,
   createSignal,

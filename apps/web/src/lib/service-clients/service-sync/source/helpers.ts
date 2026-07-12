@@ -1,15 +1,21 @@
+import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
   LiveSyncSource,
   TimeoutError,
-} from '@core/collab/source';
-import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
+} from '@macro-inc/collaboration/collab/source';
+import {
+  createSyncSocket,
+  type SyncWebsocket,
+} from '@macro-inc/collaboration/sync-service/socket';
+import {
+  mapToSyncStatus,
+  SyncServiceSource,
+} from '@macro-inc/collaboration/sync-service/source';
+import type { UrlResolver } from '@macro-inc/collaboration/websocket';
+import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
 import { storageServiceClient } from '@service-storage/client';
-import type { UrlResolver } from '@websocket';
-import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { ResultAsync } from 'neverthrow';
-import { createSyncSocket, type SyncWebsocket } from './socket';
-import { mapToSyncStatus, SyncServiceSource } from './source';
 
 const SYNC_SERVICE_WS_URL = `${SYNC_SERVICE_HOSTS['ws']}/document`;
 

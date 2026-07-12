@@ -4,12 +4,19 @@
   "description": "Core lexical types, nodes, and utilities for. Includes custom nodes (CommentNode, ImageNode, EquationNode, etc.), plugins (nodeIdPlugin, peerIdPlugin), and markdown transformers for Lexical editor.",
   "main": "index.ts",
   "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./transformers": "./transformers/index.ts",
+    "./utils": "./utils/index.ts",
+    "./*": "./*.ts"
+  },
   "scripts": {
     "generate-golden": "bun run scripts/generate-golden.ts"
   },
   "keywords": [],
   "author": "seamus",
   "dependencies": {
+    "@loro-mirror/core": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/cerebras": "^2.0.57",
     "@ai-sdk/google": "^3.0.83",

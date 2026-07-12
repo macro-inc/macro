@@ -1,4 +1,4 @@
-import { SidePanel } from '@app/component/side-panel/SidePanel';
+import { SidePanel } from '@components/app/side-panel/SidePanel';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import CheckCircle from '@phosphor/check-circle.svg';
 import Circle from '@phosphor/circle.svg';

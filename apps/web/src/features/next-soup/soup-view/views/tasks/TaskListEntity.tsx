@@ -1,10 +1,10 @@
 import '@entity/composed/ListEntity.css';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
   SwipableRowContext,
-} from '@app/component/mobile/SwipableRow';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+} from '@components/app/mobile/SwipableRow';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {

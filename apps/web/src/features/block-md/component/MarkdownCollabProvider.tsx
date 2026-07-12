@@ -1,13 +1,4 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { createAwareness } from '@core/collab/awareness';
-import { createSyncEngine } from '@core/collab/engine';
-import { logSyncService } from '@core/collab/logger';
-import type { LoroManager } from '@core/collab/manager';
-import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
-} from '@core/collab/snapshot-store';
-import { createWALSyncSource } from '@core/collab/wal';
 import {
   $convertLexicalSelectionToCursors,
   $createSelectionFromPeerAwareness,
@@ -37,6 +28,15 @@ import {
   CodeNode,
 } from '@lexical/code';
 import { mergeRegister } from '@lexical/utils';
+import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
+import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
+import { logSyncService } from '@macro-inc/collaboration/collab/logger';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+} from '@macro-inc/collaboration/collab/snapshot-store';
+import { createWALSyncSource } from '@macro-inc/collaboration/collab/wal';
 import {
   $isCustomCodeNode,
   $updateAllNodeIds,
@@ -46,7 +46,7 @@ import {
   type NodeIdMappings,
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import type { NodeKey, UpdateListenerPayload } from 'lexical';
 import {
   $addUpdateTag,

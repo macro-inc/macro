@@ -1,4 +1,4 @@
-import { SidePanel } from '@app/component/side-panel';
+import { SidePanel } from '@components/app/side-panel';
 import { useCompanyQuery } from '@queries/crm/companies';
 import { CompanyContactsSection } from './CompanyContactsSection';
 import { CompanyDiscussionSection } from './CompanyDiscussionSection';

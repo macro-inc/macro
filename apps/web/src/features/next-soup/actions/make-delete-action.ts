@@ -1,7 +1,7 @@
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';

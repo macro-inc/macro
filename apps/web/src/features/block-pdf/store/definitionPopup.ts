@@ -9,7 +9,6 @@ import type Term from '../model/Term';
 import { InvalidActionError } from '../util/errors';
 import { estimateTextWidth } from '../util/estimateTextWidth';
 
-// src/src/context/PopupContext.ts
 /* --------------------------------------------------------------------------- *
  * Helper functions
  * --------------------------------------------------------------------------- */

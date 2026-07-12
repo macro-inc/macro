@@ -2,6 +2,7 @@ import { indentWithTab, toggleComment } from '@codemirror/commands';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { useBlockId } from '@core/block';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   blockMetadataSignal,
@@ -11,7 +12,6 @@ import {
 import { storageServiceClient } from '@service-storage/client';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { basicSetup } from 'codemirror';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
   createMemo,

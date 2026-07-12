@@ -1,5 +1,5 @@
 import { currentThemeId, isThemeSaved, showDarkThemes, showLightThemes, themes } from '../signals/themeSignals';
-import { useAnalytics } from 'app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { applyTheme, isTokensDark } from '../utils/themeUtils';
 import { ThemeChips } from './ThemeChips';
 import { ThemeCrud } from './ThemeCrud';

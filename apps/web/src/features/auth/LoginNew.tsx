@@ -1,5 +1,5 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useEmailLinks } from '@core/email-link';

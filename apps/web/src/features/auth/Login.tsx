@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';

@@ -1,5 +1,7 @@
 // PDF.js decided to not annotate the types for annotations, so here we are
 
+export { PdfShapeType as ShapeType } from '@coparse/document-processing-types';
+
 type Direction = 'ltr' | 'rtl';
 export type Rect = [number, number, number, number];
 interface Coord {
@@ -41,14 +43,6 @@ export const AnnotationType = {
   THREED: 25,
   REDACT: 26,
 } as const;
-
-/** see `AnnotationType` in pdfjs-dist/types/src/shared/util.d.ts */
-export enum ShapeType {
-  CIRCLE = 'circle',
-  TRIANGLE = 'triangle',
-  RECTANGLE = 'rectangle',
-  SQUARE = 'square',
-}
 
 // Copied from pdf.js#dist/lib/shared/util.js for convenience
 export const AnnotationFlag = {

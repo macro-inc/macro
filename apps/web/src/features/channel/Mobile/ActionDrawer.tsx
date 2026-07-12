@@ -1,4 +1,4 @@
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { focusInput } from '@core/directive/focusInput';

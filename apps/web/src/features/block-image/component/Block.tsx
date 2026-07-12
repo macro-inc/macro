@@ -1,5 +1,5 @@
-import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';

@@ -1,6 +1,6 @@
-import type { SplitId } from '@app/component/split-layout/layoutManager';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
+import type { SplitId } from '@components/app/split-layout/layoutManager';
 
 type SearchSplitOverrides = {
   query: string;

@@ -1,11 +1,11 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
   useSidePanel,
-} from '@app/component/side-panel';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+} from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';

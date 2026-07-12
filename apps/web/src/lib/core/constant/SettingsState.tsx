@@ -1,7 +1,7 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';

@@ -27,10 +27,15 @@ jobs:
           should_run:
             - 'package.json'
             - 'bun.lock'
-            - 'apps/web/package.json'
-            - 'apps/web/src/**'
-            - 'apps/web/biome.jsonc'
+            - 'apps/web/**'
             - 'packages/**'
+            - 'crates/client/cache-core/**'
+            - 'crates/client/cache-idb/**'
+            - 'crates/client/cache-wasm/**'
+            - 'static_assets/schema.graphql'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'rust-toolchain.toml'
             - 'services/lexical-service/**'
             - '.github/actions/setup-cachix/**'
             - '.github/actions/setup-reqs-web/**'
@@ -85,6 +90,9 @@ jobs:
     - name: Check Types
       run: bun run --bun --silent tsc --project ./tsconfig.json
       working-directory: apps/web
+    - name: Check Collaboration Package Types
+      run: bun run type-check
+      working-directory: packages/collaboration
   biome-check:
     needs:
     - path-check
@@ -111,6 +119,9 @@ jobs:
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: apps/web
+    - name: Run Collaboration Package Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: packages/collaboration
   tailwind:
     needs:
     - path-check
@@ -186,6 +197,9 @@ jobs:
     - name: Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: apps/web
+    - name: Collaboration Package Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: packages/collaboration
   build:
     needs:
     - path-check
@@ -208,7 +222,7 @@ jobs:
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Build
-      run: bun run build
+      run: just build-dev
       working-directory: apps/web
   status-check:
     needs:

@@ -1,7 +1,7 @@
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { SyncSourceStatus } from '@core/collab/source';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { blockSyncSourceSignal } from '@core/signal/load';
+import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import CloudIcon from '@phosphor/cloud.svg';
 import CloudWarningIcon from '@phosphor/cloud-warning.svg';
 import { Button } from '@ui';

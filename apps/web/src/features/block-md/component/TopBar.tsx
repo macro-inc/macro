@@ -1,25 +1,25 @@
 import {
-  type BlockTool,
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useSidePanel } from '@app/component/side-panel';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  StaticSplitLabel,
-} from '@app/component/split-layout/components/SplitLabel';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
+import {
+  type BlockTool,
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@components/app/ResponsiveBlockToolbar';
+import { useSidePanel } from '@components/app/side-panel';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import {
+  BlockItemSplitLabel,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';

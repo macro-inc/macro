@@ -1,6 +1,6 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import type { DiffStatus } from '@lexical-core';
+import type { DiffStatus } from '@macro-inc/lexical-core';
 import type { SerializedEditorState } from 'lexical';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { useHistory } from './HistoryContext';

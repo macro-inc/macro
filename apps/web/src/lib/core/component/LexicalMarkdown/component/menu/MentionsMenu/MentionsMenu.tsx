@@ -1,4 +1,5 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
@@ -16,7 +17,6 @@ import type { HistoryItem as Item } from '@queries/history/history';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
 import { Surface } from '@ui';
-import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,

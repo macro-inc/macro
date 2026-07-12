@@ -12,13 +12,13 @@ import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
-
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -28,6 +28,7 @@ import {
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -35,19 +36,17 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { trackMention } from '@core/signal/mention';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
-
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import { logger } from '@observability';
 import ChevronDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
-
 import Trash from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
@@ -81,8 +80,6 @@ import type {
 } from '@service-email/generated/schemas';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
-import { iosCursorScrollPlugin } from 'core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { $addUpdateTag, $getRoot } from 'lexical';
 import {
   type Accessor,

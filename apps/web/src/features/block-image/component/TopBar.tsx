@@ -1,12 +1,12 @@
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';

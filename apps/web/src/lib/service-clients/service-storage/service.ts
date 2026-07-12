@@ -1,4 +1,7 @@
-import { CoParseSchema, TSegmentSchema } from '@block-pdf/type/coParse';
+import {
+  PdfCoParseSchema as CoParseSchema,
+  PdfSegmentSchema as TSegmentSchema,
+} from '@coparse/document-processing-types';
 import {
   asRawShape,
   fetchErrorsSvc,

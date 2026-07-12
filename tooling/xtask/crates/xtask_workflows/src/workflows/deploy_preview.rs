@@ -14,22 +14,14 @@ use gh_workflow::{
     Run, Step, Use, Workflow,
 };
 
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::{runners, steps, vars, web_artifact_paths::WEB_ARTIFACT_PATHS};
 
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
 
 /// Build the workflow.
 pub fn deploy_preview() -> Workflow {
     Workflow::new("Deploy Preview")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_path(xtask_paths::repo_glob!("package.json"))
-                .add_path(xtask_paths::repo_glob!("bun.lock"))
-                .add_path(xtask_paths::repo_glob!("apps/web/**"))
-                .add_path(xtask_paths::repo_glob!("packages/**")),
-        ))
+        .on(Event::default().pull_request(pull_request_event()))
         .concurrency(
             Concurrency::new(Expression::new(
                 "preview-${{ github.event.pull_request.number }}",
@@ -38,6 +30,15 @@ pub fn deploy_preview() -> Workflow {
         )
         .add_env(("PREVIEW_BUCKET", PREVIEW_BUCKET))
         .add_job("deploy", deploy())
+}
+
+fn pull_request_event() -> PullRequest {
+    WEB_ARTIFACT_PATHS.iter().copied().fold(
+        PullRequest::default()
+            .add_type(PullRequestType::Opened)
+            .add_type(PullRequestType::Synchronize),
+        PullRequest::add_path,
+    )
 }
 
 fn deploy() -> Job {

@@ -1,5 +1,6 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
+import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
@@ -17,7 +18,6 @@ import type {
   UseInfiniteQueryResult,
   UseQueryResult,
 } from '@tanstack/solid-query';
-import { createSocketEffect } from '@websocket/index';
 import {
   type Accessor,
   createEffect,

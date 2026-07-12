@@ -1,10 +1,13 @@
 import type { ListItemNode } from '@lexical/list';
-import { $isDateMentionNode, $isUserMentionNode } from '@lexical-core';
+import {
+  $isDateMentionNode,
+  $isUserMentionNode,
+} from '@macro-inc/lexical-core';
 import {
   parseContactMentions,
   parseDocumentMentions,
   parseGroupMentions,
-} from '@lexical-core/utils/parsers';
+} from '@macro-inc/lexical-core/utils/parsers';
 import { isValid } from 'date-fns';
 import { $isElementNode, type LexicalNode } from 'lexical';
 import { $elementNodeToMarkdown } from '../../utils';

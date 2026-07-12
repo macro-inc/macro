@@ -11,7 +11,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { embeddedCodeBlock } from '@core/component/LexicalMarkdown/theme';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
-import { getSupportedLanguageFromFileExtension } from '@lexical-core';
+import { getSupportedLanguageFromFileExtension } from '@macro-inc/lexical-core';
 import { onCleanup, onMount } from 'solid-js';
 
 export function CodeMarkdown() {

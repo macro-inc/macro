@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useGetRootViewer } from '@block-pdf/signal/pdfViewer';
 import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import type { PdfRootLayout } from '@block-pdf/type/comments';

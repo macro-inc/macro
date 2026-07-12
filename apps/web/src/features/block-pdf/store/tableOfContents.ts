@@ -73,7 +73,6 @@ const defaultState: ITableOfContentsContext = {
   aiTocIdToSectionMap: {},
 };
 
-// From: src/src/context/TableOfContentsContext.ts
 /* -------------------------------------------------------------------------- *
  * Types
  * -------------------------------------------------------------------------- */
@@ -1331,7 +1330,6 @@ export function findSectionByUuid(
   return foundSection;
 }
 
-// From: src/src/atoms/tableOfContents.tsx
 const tableOfContentStore =
   createBlockStore<ITableOfContentsContext>(defaultState);
 

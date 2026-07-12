@@ -1,4 +1,4 @@
-import { markdownToPlainText } from '@lexical-core/utils/parsers';
+import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 
 const MAX_LENGTH = 80;
 

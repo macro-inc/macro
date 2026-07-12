@@ -1,5 +1,5 @@
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import type { JSX } from 'solid-js';
 import { buildConfig } from './MarkdownConfigBuilder';
 import { MarkdownShell } from './MarkdownShell';

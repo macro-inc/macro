@@ -3,6 +3,7 @@ import {
   type BlockAlias,
   type BlockName,
   BlockRegistry,
+  ConcreteBlockRegistry,
   type FileTypeString,
   type MimeType,
 } from '@core/block';
@@ -20,8 +21,27 @@ const discoveredBlockDefinitions = Object.values<AnyBlockDefinition>(
   })
 );
 
-if (discoveredBlockDefinitions.length === 0) {
-  throw new Error('No block definitions were discovered');
+const definitionNames = discoveredBlockDefinitions.map(
+  (definition) => definition.name
+);
+const duplicateDefinitionNames = definitionNames.filter(
+  (name, index) => definitionNames.indexOf(name) !== index
+);
+if (duplicateDefinitionNames.length > 0) {
+  throw new Error(
+    `Duplicate block definitions discovered: ${[...new Set(duplicateDefinitionNames)].join(', ')}`
+  );
+}
+
+// `write` is a legacy virtual block name that resolves to `pdf` when the
+// DOCX-to-PDF feature is enabled; every other concrete block needs a module.
+const missingBlockDefinitions = ConcreteBlockRegistry.filter(
+  (name) => !definitionNames.includes(name)
+);
+if (missingBlockDefinitions.length > 0) {
+  throw new Error(
+    `Missing block definitions: ${missingBlockDefinitions.join(', ')}`
+  );
 }
 
 export const blocks = Object.fromEntries(

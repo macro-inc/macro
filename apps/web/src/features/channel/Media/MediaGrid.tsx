@@ -1,4 +1,4 @@
-import { constrainImageDimensions } from '@lexical-core/utils/media';
+import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import ExpandIcon from '@phosphor/arrows-out-simple.svg';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';

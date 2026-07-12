@@ -1,12 +1,3 @@
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { useSplitBackInterceptor } from '@app/component/split-layout/back-interceptor';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import {
-  SplitHeaderBadge,
-  StaticSplitLabel,
-} from '@app/component/split-layout/components/SplitLabel';
-import { SplitPanelContext } from '@app/component/split-layout/context';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
   createEmailFormState,
@@ -25,6 +16,15 @@ import {
   prepareEmailBody,
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
+import { SplitPanelContext } from '@components/app/split-layout/context';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
@@ -42,7 +42,7 @@ import { $generateHtmlFromNodes } from '@lexical/html';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import { logger } from '@observability/logger';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';

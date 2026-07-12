@@ -1,4 +1,3 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { SoupState } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/base';
 import {
@@ -11,6 +10,7 @@ import {
   intersectEntityPools,
   nameFuzzySearchFilter,
 } from '@app/features/next-soup/search-utils';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';

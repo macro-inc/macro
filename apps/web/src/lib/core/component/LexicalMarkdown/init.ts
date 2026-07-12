@@ -18,8 +18,11 @@ import {
   UserMentionNode,
   VideoNode,
   WatermarkNode,
-} from '@lexical-core';
-import { clearDecorators, setDecorator } from '@lexical-core/decoratorRegistry';
+} from '@macro-inc/lexical-core';
+import {
+  clearDecorators,
+  setDecorator,
+} from '@macro-inc/lexical-core/decoratorRegistry';
 import { Await } from './component/decorator/Await';
 import { ContactMention } from './component/decorator/ContactMention';
 import { DateMention } from './component/decorator/DateMention';

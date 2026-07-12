@@ -1,9 +1,9 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { activeElement } from '@app/signal/focus';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   isSidebarVisible,
   useSidebarCollapse,
-} from '@app/component/sidebarVisibility';
-import { activeElement } from '@app/signal/focus';
+} from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
 import { splitContainerSelector } from '@core/dom-selectors';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';

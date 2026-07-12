@@ -6,7 +6,7 @@ import {
 } from '@core/block';
 import { isTauri } from '@core/util/platform';
 import { mergeRegister } from '@lexical/utils';
-import { $createPasteNode, PasteNode } from '@lexical-core';
+import { $createPasteNode, PasteNode } from '@macro-inc/lexical-core';
 import { parseThemeV2Json } from '@theme/utils/themeValidation';
 import {
   $getSelection,

@@ -32,7 +32,7 @@ import {
   type UserMentionNode,
   type VideoNode,
   type WatermarkNode,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import {
   $getRoot,
@@ -67,7 +67,7 @@ import {
   ENABLE_SVG_PREVIEW,
 } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
-import type { SearchMatchNode } from '@lexical-core/nodes/SearchMatchNode';
+import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
 import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';

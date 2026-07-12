@@ -1,35 +1,36 @@
 import {
-  type BlockTool,
-  ResponsivePermissionsBadge,
-  ToolButton,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import {
-  type FileOperation,
-  SplitFileMenu,
-} from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import {
-  BlockItemSplitLabel,
-  SplitTitleFileMenu,
-} from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
+import {
+  type BlockTool,
+  ResponsivePermissionsBadge,
+  ToolButton,
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import {
+  type FileOperation,
+  SplitFileMenu,
+} from '@components/app/split-layout/components/SplitFileMenu';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import {
+  BlockItemSplitLabel,
+  SplitTitleFileMenu,
+} from '@components/app/split-layout/components/SplitLabel';
+import {
+  SplitToolbarLeft,
+  SplitToolbarRight,
+} from '@components/app/split-layout/components/SplitToolbar';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
+import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -44,7 +45,6 @@ import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import IconShared from '@icon/wide-share.svg';
 import Info from '@phosphor/info.svg';
-import { toast } from 'core/component/Toast/Toast';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 

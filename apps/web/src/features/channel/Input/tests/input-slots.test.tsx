@@ -30,7 +30,7 @@ vi.mock('@core/util/upload', () => ({
 // Several service clients in StaticMarkdown's import graph build websocket
 // connections at module scope, which jsdom cannot do. Stub the builder so
 // every module-scope socket is inert.
-vi.mock('@websocket', async (importOriginal) => {
+vi.mock('@macro-inc/collaboration/websocket', async (importOriginal) => {
   const actual = await importOriginal<object>();
   const socket = {
     addEventListener: () => {},

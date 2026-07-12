@@ -1,5 +1,5 @@
-import { SidePanel } from '@app/component/side-panel';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';

@@ -3,7 +3,7 @@
  */
 import { tailContext } from '@core/component/LexicalMarkdown/tailContext';
 import { $convertFromMarkdownString } from '@lexical/markdown';
-import { ALL_TRANSFORMERS, SupportedNodeTypes } from '@lexical-core';
+import { ALL_TRANSFORMERS, SupportedNodeTypes } from '@macro-inc/lexical-core';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import {
   type ChatStreamController,

@@ -1,5 +1,5 @@
-import { SupportedNodeTypes } from '@lexical-core/node-list';
-import { $createCustomCodeNode } from '@lexical-core/nodes/CustomCodeNode';
+import { SupportedNodeTypes } from '@macro-inc/lexical-core/node-list';
+import { $createCustomCodeNode } from '@macro-inc/lexical-core/nodes/CustomCodeNode';
 import {
   $createParagraphNode,
   $createTextNode,

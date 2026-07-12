@@ -1,5 +1,9 @@
 import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
-import { $createAwaitNode, $isAwaitNode, type AwaitNode } from '@lexical-core';
+import {
+  $createAwaitNode,
+  $isAwaitNode,
+  type AwaitNode,
+} from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $createTextNode,

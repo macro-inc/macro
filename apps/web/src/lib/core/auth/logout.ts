@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';

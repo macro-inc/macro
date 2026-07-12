@@ -1,6 +1,6 @@
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { buildMentionMarkdownString } from '@lexical-core/utils/mentions';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { buildMentionMarkdownString } from '@macro-inc/lexical-core/utils/mentions';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,

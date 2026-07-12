@@ -1,15 +1,15 @@
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
+import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   getShareDrawerRecipientInput,
@@ -22,7 +22,6 @@ import IconShared from '@icon/wide-share.svg';
 import ChatDebugIcon from '@phosphor/chat-text.svg';
 import Info from '@phosphor/info.svg';
 import Notepad from '@phosphor/notepad.svg';
-import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {

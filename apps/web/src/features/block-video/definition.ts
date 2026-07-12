@@ -5,11 +5,11 @@ import {
   loadResult,
   type MimeType,
 } from '@core/block';
+import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_VIDEO_BLOCK } from '@core/constant/featureFlags';
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadataFileType } from '@service-storage/generated/schemas/documentMetadataFileType';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
-import { toast } from 'core/component/Toast/Toast';
 import { err, ok } from 'neverthrow';
 import BlockVideo from './component/Block';
 

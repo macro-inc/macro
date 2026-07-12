@@ -1,7 +1,7 @@
 import { DatePicker } from '@core/component/DatePicker';
 import { formatDate } from '@core/util/dateParser';
-import type { DateMentionDecoratorProps } from '@lexical-core';
-import { $isDateMentionNode } from '@lexical-core';
+import type { DateMentionDecoratorProps } from '@macro-inc/lexical-core';
+import { $isDateMentionNode } from '@macro-inc/lexical-core';
 import ClockIcon from '@phosphor/clock.svg';
 import { differenceInCalendarDays } from 'date-fns';
 import {

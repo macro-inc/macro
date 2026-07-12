@@ -1,5 +1,5 @@
 import { $convertToMarkdownString } from '@lexical/markdown';
-import { ALL_TRANSFORMERS } from '@lexical-core';
+import { ALL_TRANSFORMERS } from '@macro-inc/lexical-core';
 import { useUpdateInstructionsMdTextCache } from '@queries/storage/instructions-md';
 import { debounce } from '@solid-primitives/scheduled';
 import { $getRoot, type LexicalEditor, type UpdateListener } from 'lexical';

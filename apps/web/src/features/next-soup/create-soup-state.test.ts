@@ -2,20 +2,8 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 // Mock external dependencies
-vi.mock('@app/features/next-soup/filters/filters', () => ({
-  SOUP_FILTERS: {},
-  FILTER_GROUPS: [],
-}));
-
-vi.mock('@app/features/next-soup/filters', () => ({
-  createFilterState: vi.fn(() => ({
-    active: () => [],
-    isActive: () => false,
-    toggle: vi.fn(),
-    setAll: vi.fn(),
-    clear: vi.fn(),
-    available: {},
-  })),
+vi.mock('@app/features/next-soup/filters/configs/', () => ({
+  SOUP_FILTERS: [],
 }));
 
 vi.mock('@app/features/next-soup/soup-view/sort-options', () => ({

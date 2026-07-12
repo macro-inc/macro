@@ -4,8 +4,8 @@ import {
   type Websocket,
   WebsocketBuilder,
   WebsocketEvent,
-} from '@websocket';
-import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
+} from '@macro-inc/collaboration/websocket';
+import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 

@@ -1,10 +1,10 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { makeMarkDoneAction } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { URL_PARAMS } from '@block-email/constants';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   getPermissions,
   hasPermissions,

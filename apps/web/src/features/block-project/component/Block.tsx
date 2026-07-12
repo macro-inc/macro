@@ -1,8 +1,3 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { SidePanel } from '@app/component/side-panel';
-import { SplitPanelContext } from '@app/component/split-layout/context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   createSoupState,
@@ -12,10 +7,16 @@ import { defineQueryFilters } from '@app/features/next-soup/filters/filter-store
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { getIsSpecialProject } from '@block-project/isSpecial';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { SidePanel } from '@components/app/side-panel';
+import { SplitPanelContext } from '@components/app/split-layout/context';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
+import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
@@ -29,7 +30,6 @@ import {
 } from '@core/util/upload';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
-import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
 import { ProjectSidePanelSections } from './sidepanel/ProjectSidePanelSections';

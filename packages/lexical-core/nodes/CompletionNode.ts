@@ -17,7 +17,6 @@ export type SerializedCompletionNode = Spread<
 >;
 
 export class CompletionNode extends ElementNode {
-  child: LexicalNode;
   __isTransparent: boolean;
 
   constructor(key?: NodeKey, isTransparent: boolean = true) {

@@ -5,7 +5,7 @@ import {
   isSerializedImageNode,
   isSerializedVideoNode,
   type NodeIdMappings,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import deepEqual from 'fast-deep-equal';
 import {
   $getEditor,

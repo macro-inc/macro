@@ -1,21 +1,20 @@
-import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createNumericParser } from '@block-canvas/util/parse';
+import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import {
   useBlockId,
   useBlockNestedContext,
   useIsNestedBlock,
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { toast } from '@core/component/Toast/Toast';
+import { createMethodRegistration } from '@core/orchestrator';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
-
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
-import { toast } from 'core/component/Toast/Toast';
-import { createMethodRegistration } from 'core/orchestrator';
 import {
   createEffect,
   createMemo,

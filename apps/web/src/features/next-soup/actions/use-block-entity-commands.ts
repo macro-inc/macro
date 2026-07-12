@@ -1,10 +1,10 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';

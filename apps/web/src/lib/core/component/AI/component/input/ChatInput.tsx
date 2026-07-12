@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';

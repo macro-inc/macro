@@ -1,10 +1,10 @@
-import { triggerFocusInput } from '@core/directive/focusInput';
-import { isMobile } from '@core/mobile/isMobile';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import {
   SwipableRow,
   SwipableRowContext,
-} from 'app/component/mobile/SwipableRow';
+} from '@components/app/mobile/SwipableRow';
+import { triggerFocusInput } from '@core/directive/focusInput';
+import { isMobile } from '@core/mobile/isMobile';
+import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
 

@@ -1,12 +1,12 @@
-import { isAiPeer } from '@core/collab/ai-peer';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
   buildDiffState,
   buildWhoMap,
   diffStates,
   serializedEditorStateToMarkdown,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import { syncServiceClient } from '@service-sync/client';

@@ -1,10 +1,3 @@
-import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import {
-  SplitHeaderBadge,
-  StaticSplitLabel,
-} from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import {
   applyInlineFormat,
   applyNodeFormat,
@@ -19,6 +12,13 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
+import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
+import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';

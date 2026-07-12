@@ -2,8 +2,8 @@ import '@entity/composed/ListEntity.css';
 import {
   SwipableRow,
   SwipableRowContext,
-} from '@app/component/mobile/SwipableRow';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+} from '@components/app/mobile/SwipableRow';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createEntityDraggable, Entity, unreadFilterFn } from '@entity';

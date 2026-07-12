@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 

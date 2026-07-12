@@ -8,8 +8,8 @@ import {
   getUniqueGithubLogins,
   getUniqueSenderIds,
   isGithubNotificationType,
-} from '../src/extractors-notification/notification-description-helpers';
-import type { Notification } from '../src/types/notification';
+} from '../extractors-notification/notification-description-helpers';
+import type { Notification } from '../types/notification';
 
 const githubNotification = (
   login: string | null | undefined,

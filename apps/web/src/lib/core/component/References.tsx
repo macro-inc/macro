@@ -1,7 +1,7 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { SidePanel } from '@app/component/side-panel';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { SidePanel } from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';

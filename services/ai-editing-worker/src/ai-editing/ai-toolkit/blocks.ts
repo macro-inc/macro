@@ -4,8 +4,8 @@ import {
   $createQuoteNode,
   type HeadingTagType,
 } from '@lexical/rich-text';
-import { $isCustomCodeNode } from '@lexical-core/nodes/CustomCodeNode';
-import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
+import { $isCustomCodeNode } from '@macro-inc/lexical-core/nodes/CustomCodeNode';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import {
   $createParagraphNode,
   $createTextNode,

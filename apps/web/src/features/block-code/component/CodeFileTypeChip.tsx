@@ -2,8 +2,8 @@ import { useBlockId } from '@core/block';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { createUpdateFileTypeMutation } from '@entity';
 import { Popover } from '@kobalte/core/popover';
-import { createUpdateFileTypeMutation } from '@macro-entity';
 import { FileType } from '@service-storage/generated/schemas/fileType';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 

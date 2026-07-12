@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';

@@ -1,4 +1,4 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createSignal, For } from 'solid-js';

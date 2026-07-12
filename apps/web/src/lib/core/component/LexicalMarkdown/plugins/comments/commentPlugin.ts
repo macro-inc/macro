@@ -12,7 +12,7 @@ import {
   $isCommentNode,
   $removePeerId,
   CommentNode,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import {
   $getNodeByKey,
   $getRoot,

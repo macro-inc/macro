@@ -1,4 +1,3 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { GroupDropdown } from '@app/features/next-soup/soup-view/filters-bar/group-dropdown';
 import {
@@ -8,6 +7,7 @@ import {
 } from '@app/features/next-soup/soup-view/group-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_SOUP_GROUP_BY_OVERRIDE } from '@core/constant/featureFlags';
 import { createMemo, createSignal, Show } from 'solid-js';
 

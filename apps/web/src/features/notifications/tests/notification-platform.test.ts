@@ -1,4 +1,4 @@
-import type { SplitManager } from '@app/component/split-layout/layoutManager';
+import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlatformNotificationState } from '../components/PlatformNotificationProvider';
 import type { PlatformNotificationHandle } from '../notification-platform';
@@ -8,7 +8,7 @@ vi.mock('@app/util/favicon', () => ({
   getFaviconUrl: () => 'favicon.ico',
 }));
 
-vi.mock('@lexical-core', () => ({
+vi.mock('@macro-inc/lexical-core', () => ({
   markdownToPlainText: (content: string) => content,
 }));
 

@@ -13,6 +13,13 @@ env:
     - bun.lock
     - apps/web/**
     - packages/**
+    - crates/client/cache-core/**
+    - crates/client/cache-idb/**
+    - crates/client/cache-wasm/**
+    - static_assets/schema.graphql
+    - Cargo.toml
+    - Cargo.lock
+    - rust-toolchain.toml
 jobs:
   deploy:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci

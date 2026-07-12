@@ -1,6 +1,6 @@
-import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { getFaviconUrl } from '@app/util/favicon';
-import { markdownToPlainText } from '@lexical-core';
+import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { GITHUB_EVENT_TYPES } from './github-event-types';

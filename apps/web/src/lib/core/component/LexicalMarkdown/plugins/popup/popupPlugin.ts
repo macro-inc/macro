@@ -5,7 +5,7 @@ import {
   type TableSelection,
 } from '@lexical/table';
 import { mergeRegister } from '@lexical/utils';
-import { ALL_TRANSFORMERS } from '@lexical-core';
+import { ALL_TRANSFORMERS } from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $getEditor,

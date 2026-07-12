@@ -1,8 +1,7 @@
-import { SplitBottomPanel } from '@app/component/split-layout/components/SplitBottomPanel';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
+import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import { useBlockId } from '@core/block';
-import type { LoroManager } from '@core/collab/manager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
@@ -40,6 +39,7 @@ import {
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
+import { createMethodRegistration } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
@@ -49,6 +49,7 @@ import {
 import { useCanEdit } from '@core/signal/permissions';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   AwaitNode,
   CommentNode,
@@ -56,11 +57,10 @@ import {
   InlineSearchNode,
   type PeerIdValidator,
   peerIdPlugin,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import WarningIcon from '@phosphor/warning.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { createMethodRegistration } from 'core/orchestrator';
 import type { EditorState } from 'lexical';
 import {
   type Accessor,

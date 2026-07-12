@@ -1,5 +1,5 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { SidePanel } from '@app/component/side-panel';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import {
   StaticMarkdown,

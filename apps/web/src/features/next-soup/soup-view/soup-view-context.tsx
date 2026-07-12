@@ -1,6 +1,3 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useEntryState } from '@app/component/split-layout/entry-state';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
   entityMatchesTagFilter,
   isListViewID,
@@ -40,6 +37,9 @@ import {
 } from '@app/features/next-soup/utils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useDealStages } from '@companies/crm/deal-stages';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useEntryState } from '@components/app/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   ENABLE_GRAPHQL_SOUP_FLAG,

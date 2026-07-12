@@ -1,5 +1,5 @@
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
-import { SwipableRowProvider } from '@app/component/mobile/SwipableRow';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { touchHandler } from '@core/directive/touchHandler';
 import {
   type EmailEntity,

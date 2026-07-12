@@ -1,6 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';

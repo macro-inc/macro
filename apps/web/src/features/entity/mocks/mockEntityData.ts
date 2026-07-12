@@ -7,9 +7,9 @@ import type {
   EmailEntity,
   ProjectEntity,
   TaskEntity,
-} from '../src/types/entity';
-import type { Notification, WithNotification } from '../src/types/notification';
-import type { WithSearch } from '../src/types/search';
+} from '../types/entity';
+import type { Notification, WithNotification } from '../types/notification';
+import type { WithSearch } from '../types/search';
 
 const MOCK_USER_IDS = {
   owner: 'macro|alex@example.com',

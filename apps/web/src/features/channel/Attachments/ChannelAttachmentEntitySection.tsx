@@ -1,10 +1,10 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import {
   compileToAst,
   defineQueryFilters,
   type Query,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { EntityData } from '@entity';
 import {
   type ChannelAttachmentsData,

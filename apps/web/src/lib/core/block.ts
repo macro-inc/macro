@@ -1,12 +1,12 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
 import type { BlockMarkdownProps } from '@block-md/component/Block';
+import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type {
   InitialSync,
   LiveSyncSource,
   TimeoutError,
-} from '@core/collab/source';
-import type { IDocumentStorageServiceFile } from '@filesystem/file';
+} from '@macro-inc/collaboration/collab/source';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas/getDocumentResponseData';
@@ -66,6 +66,13 @@ export const BlockRegistry = [
   'automation',
   'pr',
 ] as const;
+
+/** Block names that resolve through another concrete block implementation. */
+export const VirtualBlockRegistry = ['write'] as const;
+const virtualBlockNames = new Set<string>(VirtualBlockRegistry);
+export const ConcreteBlockRegistry = BlockRegistry.filter(
+  (name) => !virtualBlockNames.has(name)
+);
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
 

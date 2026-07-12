@@ -1,5 +1,6 @@
 import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useRenderState } from '@block-canvas/store/RenderState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { PopupPreview } from '@core/component/DocumentPreview';
@@ -11,7 +12,6 @@ import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';
 import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import {
   createEffect,
   createMemo,

@@ -9,7 +9,7 @@ import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
-import type { EditorType } from '@lexical-core';
+import type { EditorType } from '@macro-inc/lexical-core';
 import { isIOS } from '@solid-primitives/platform';
 import type { Accessor } from 'solid-js';
 

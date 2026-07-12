@@ -1,4 +1,4 @@
-import type { EditorType } from '@lexical-core';
+import type { EditorType } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';

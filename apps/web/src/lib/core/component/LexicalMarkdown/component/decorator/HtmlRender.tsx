@@ -1,4 +1,4 @@
-import type { HtmlRenderDecoratorProps } from '@lexical-core/nodes/HtmlRenderNode';
+import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
 import { type Component, createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 

@@ -1,5 +1,6 @@
-import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
+import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { toast } from '@core/component/Toast/Toast';
 import { useShareDialogContext } from '@core/component/TopBar/ShareButton';
 import {
   useBlockDocumentDownloadName,
@@ -10,7 +11,6 @@ import ShareFat from '@icon/wide-share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
-import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';

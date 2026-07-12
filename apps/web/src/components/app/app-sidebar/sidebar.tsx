@@ -1,18 +1,3 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import {
-  CollapsibleSidebarSection,
-  type CollapsibleSidebarSectionItem,
-} from '@app/component/app-sidebar/collapsible-sidebar-section';
-import {
-  SidebarPromoCard,
-  SidebarPromoHint,
-} from '@app/component/app-sidebar/sidebar-promo';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import type {
-  ReferredFrom,
-  SplitContent,
-  SplitHandle,
-} from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
@@ -31,11 +16,26 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/features/team-invitations/invite-modal';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
+import {
+  CollapsibleSidebarSection,
+  type CollapsibleSidebarSectionItem,
+} from '@components/app/app-sidebar/collapsible-sidebar-section';
+import {
+  SidebarPromoCard,
+  SidebarPromoHint,
+} from '@components/app/app-sidebar/sidebar-promo';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import type {
+  ReferredFrom,
+  SplitContent,
+  SplitHandle,
+} from '@components/app/split-layout/layoutManager';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';

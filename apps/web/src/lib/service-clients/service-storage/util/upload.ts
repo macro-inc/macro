@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import type { FileTypeString, MimeType } from '@core/block';
+import { createUploadToast, toast } from '@core/component/Toast/Toast';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { contentHash } from '@core/util/hash';
@@ -14,7 +15,6 @@ import {
 import { filenameWithoutExtension } from '@service-storage/util/filename';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { storageWS } from '@service-storage/websocket';
-import { createUploadToast, toast } from 'core/component/Toast/Toast';
 import { FileTypeMap } from '../fileTypeMap';
 import { uploadDocx } from './uploadDocx';
 

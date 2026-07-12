@@ -1,4 +1,4 @@
-import { FloatRegions } from '@app/component/mobile/float-regions/float-region-state';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { isPlatform } from '@core/util/platform';
 import {

@@ -1,5 +1,3 @@
-import { PillTabs } from '@app/component/mobile/PillTabs';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
 import type { FilterContext } from '@app/features/next-soup/filters/configs';
@@ -16,6 +14,8 @@ import {
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { PillTabs } from '@components/app/mobile/PillTabs';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';

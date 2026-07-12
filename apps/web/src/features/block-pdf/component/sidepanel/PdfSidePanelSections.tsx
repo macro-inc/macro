@@ -1,9 +1,9 @@
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   FileDetailsSection,
   FilePropertiesSection,
   SidePanel,
-} from '@app/component/side-panel';
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+} from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';

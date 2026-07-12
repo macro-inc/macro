@@ -1,16 +1,16 @@
-import {
-  CollapsibleSidebarSection,
-  type CollapsibleSidebarSectionItem,
-} from '@app/component/app-sidebar/collapsible-sidebar-section';
-import type { SidebarState } from '@app/component/app-sidebar/sidebar';
-import { useSenderName } from '@app/component/app-sidebar/utils';
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
+import {
+  CollapsibleSidebarSection,
+  type CollapsibleSidebarSectionItem,
+} from '@components/app/app-sidebar/collapsible-sidebar-section';
+import type { SidebarState } from '@components/app/app-sidebar/sidebar';
+import { useSenderName } from '@components/app/app-sidebar/utils';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import {
   ContextMenuContent,
   MenuGroup,

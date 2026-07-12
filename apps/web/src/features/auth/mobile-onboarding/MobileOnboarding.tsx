@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useIsAuthenticated } from '@core/context/user';
 import LogoIcon from '@icon/macro-logo.svg';

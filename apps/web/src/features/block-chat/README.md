@@ -1,17 +1,4 @@
-# chat-block
+# Chat block
 
-This package is part of the Macro frontend workspace.
-
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run src/index.ts
-```
-
-This project was created using `bun init` in bun v1.1.23. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+Chat document rendering and interaction for the web app. This is an app-local
+feature; install, test, and run it through `apps/web`.

@@ -1,5 +1,5 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import type { PlanTier } from '@app/features/paywall/plans';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { usePermissions, useUserId } from '@core/context/user';

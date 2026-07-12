@@ -3,9 +3,9 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
+import { platformFetch } from '@core/util/platformFetch';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import { platformFetch } from 'core/util/platformFetch';
 import type { Result } from 'neverthrow';
 import type { FileMetadata } from './generated/schemas/fileMetadata';
 import type { PutFileRequest } from './generated/schemas/putFileRequest';

@@ -1,7 +1,7 @@
 import { isMacroAgentId, MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 
-export { diffAuthorColor as userColor } from '@lexical-core';
+export { diffAuthorColor as userColor } from '@macro-inc/lexical-core';
 
 export function userLabel(userId: string): string {
   if (userId === 'unknown') return 'Unknown';

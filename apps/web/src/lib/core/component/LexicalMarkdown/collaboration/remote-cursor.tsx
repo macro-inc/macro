@@ -1,13 +1,13 @@
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { idToEmail } from '@core/user';
+import { createDOMRange, createRectsFromDOMRange } from '@lexical/selection';
 import {
   type Awareness,
   isAwarenessWithSelection,
   type PeerAwareness,
-} from '@core/collab/awareness';
-import type { LoroManager } from '@core/collab/manager';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { idToEmail } from '@core/user';
-import { createDOMRange, createRectsFromDOMRange } from '@lexical/selection';
-import type { NodeIdMappings } from '@lexical-core';
+} from '@macro-inc/collaboration/collab/awareness';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import { $getNodeByKey, $isTextNode, type LexicalEditor } from 'lexical';
 import {

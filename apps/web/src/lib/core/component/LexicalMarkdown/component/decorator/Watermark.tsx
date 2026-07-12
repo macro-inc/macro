@@ -1,4 +1,4 @@
-import type { WatermarkDecoratorProps } from '@lexical-core/nodes/WatermarkNode';
+import type { WatermarkDecoratorProps } from '@macro-inc/lexical-core/nodes/WatermarkNode';
 import type { Component } from 'solid-js';
 
 export const Watermark: Component<WatermarkDecoratorProps> = (props) => {

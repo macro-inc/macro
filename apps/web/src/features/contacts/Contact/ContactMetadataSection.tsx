@@ -1,5 +1,5 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useCompanyQuery } from '@queries/crm/companies';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { type JSX, Show } from 'solid-js';

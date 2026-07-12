@@ -1,6 +1,6 @@
 import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { pressedKeys } from 'core/hotkey/state';
+import { pressedKeys } from '@core/hotkey/state';
 import { batch, untrack } from 'solid-js';
 import { type Anchor, OPERATION_LOGGING, Tools } from '../constants';
 import {

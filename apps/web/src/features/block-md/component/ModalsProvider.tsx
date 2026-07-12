@@ -1,4 +1,4 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId, useBlockName } from '@core/block';
 import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import { NotificationsDrawer } from '@core/component/NotificationsModal';

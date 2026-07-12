@@ -25,7 +25,7 @@ gh api "repos/${REPO}/dependabot/alerts" \
 
 ## Step 2: Group alerts by manifest/lockfile
 
-Group the alerts by their `manifest` field (e.g. `apps/web/bun.lock`, `Cargo.lock`, `apps/web/packages/loro-mirror/pnpm-lock.yaml`). This determines which override mechanism to use.
+Group the alerts by their `manifest` field (e.g. `bun.lock`, `Cargo.lock`, `packages/loro-mirror/pnpm-lock.yaml`). This determines which override mechanism to use.
 
 ## Step 3: Determine override strategy per manifest
 

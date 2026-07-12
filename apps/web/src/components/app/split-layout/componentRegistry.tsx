@@ -1,4 +1,3 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
@@ -7,6 +6,7 @@ import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';

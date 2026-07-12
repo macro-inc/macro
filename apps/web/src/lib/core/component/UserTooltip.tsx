@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';

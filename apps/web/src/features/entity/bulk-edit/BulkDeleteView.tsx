@@ -1,6 +1,9 @@
-import { type EntityData, InlineEntity } from '@entity';
+import {
+  createBulkDeleteDssItemsMutation,
+  type EntityData,
+  InlineEntity,
+} from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { createBulkDeleteDssItemsMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button, cn } from '@ui';
 import { For, onMount, Show } from 'solid-js';

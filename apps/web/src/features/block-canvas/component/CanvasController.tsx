@@ -14,7 +14,9 @@ import {
 import { fileDrop } from '@core/directive/fileDrop';
 import { observedSize } from '@core/directive/observedSize';
 import { HEIC_EXTENSIONS, HEIC_MIME_TYPES } from '@core/heic/constants';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
@@ -35,8 +37,6 @@ import { createCallback } from '@solid-primitives/rootless';
 import { throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { cn, Hotkey } from '@ui';
-import { registerHotkey } from 'core/hotkey/hotkeys';
-import { createMethodRegistration } from 'core/orchestrator';
 import { usePinch } from 'solid-gesture';
 import {
   createEffect,

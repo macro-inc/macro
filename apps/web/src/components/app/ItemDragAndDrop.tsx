@@ -1,3 +1,8 @@
+import {
+  EntityIcon,
+  type EntityIconSelector,
+  getEntityIconType,
+} from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { UserIcon } from '@core/component/UserIcon';
 import type { EntityDragData } from '@entity';
@@ -9,11 +14,6 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { Layer } from '@ui';
-import {
-  EntityIcon,
-  type EntityIconSelector,
-  getEntityIconType,
-} from 'core/component/EntityIcon';
 import {
   type Accessor,
   createContext,

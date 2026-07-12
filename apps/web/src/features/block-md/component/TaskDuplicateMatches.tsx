@@ -1,5 +1,5 @@
-import { SidePanel } from '@app/component/side-panel';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';

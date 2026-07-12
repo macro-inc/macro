@@ -2,8 +2,6 @@ import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken, unsetTokenPromise } from '@core/util/fetchWithToken';
-import { getMacroApiToken } from '@service-auth/fetch';
-import { createCallback } from '@solid-primitives/rootless';
 import {
   ArrayQueue,
   createSocketEffect,
@@ -11,8 +9,10 @@ import {
   LinearBackoff,
   type Websocket,
   WebsocketBuilder,
-} from '@websocket';
-import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
+} from '@macro-inc/collaboration/websocket';
+import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import { getMacroApiToken } from '@service-auth/fetch';
+import { createCallback } from '@solid-primitives/rootless';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 
 const wsHost: string = SERVER_HOSTS['connection-gateway'];

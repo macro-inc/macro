@@ -1,8 +1,11 @@
-import { CREATABLE_BLOCKS, runCreateAction } from '@app/component/Launcher';
-import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import {
+  CREATABLE_BLOCKS,
+  runCreateAction,
+} from '@app/features/command/Launcher';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {

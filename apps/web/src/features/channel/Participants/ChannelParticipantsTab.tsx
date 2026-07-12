@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { idToEmail } from '@core/user';

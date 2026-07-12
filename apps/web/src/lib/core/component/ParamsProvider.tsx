@@ -1,6 +1,6 @@
+import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
-import { createMethodRegistration } from 'core/orchestrator';
 import {
   type Accessor,
   createContext,

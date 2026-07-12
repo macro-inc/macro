@@ -4,7 +4,7 @@ import {
   $isCompletionNode,
   CompletionNode,
   SupportedNodeTypes,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import {
   $addUpdateTag,
   $getNodeByKey,
@@ -31,7 +31,7 @@ import { createEffect, createSignal, on, type Setter } from 'solid-js';
 import { theme } from '../../theme';
 import { $traverseNodes, setEditorStateFromMarkdown } from '../../utils';
 
-export {} from '@lexical-core';
+export {} from '@macro-inc/lexical-core';
 
 import type { createBlockSignal } from '@core/block';
 import type { SetStoreFunction } from 'solid-js/store';

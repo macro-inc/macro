@@ -20,7 +20,7 @@ import {
   type ImageNode,
   type MediaType,
   type VideoNode,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fileExtension } from '@service-storage/util/filename';
 import {

@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockId } from '@core/block';
 import type { DeleteCommentInfo } from '@core/comments/commentType';

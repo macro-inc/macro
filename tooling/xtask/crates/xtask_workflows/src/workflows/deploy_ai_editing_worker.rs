@@ -21,8 +21,7 @@ pub fn deploy_ai_editing_worker() -> Workflow {
     Workflow::new("Deploy AI Editing Worker")
         .on(Event::default()
             // Only redeploy when the worker or something it bundles changes.
-            // Paths mirror the wrangler aliases in
-            // `services/ai-editing-worker/wrangler.toml`.
+            // Paths cover the worker and every workspace package it bundles.
             .push(
                 Push::default()
                     .add_branch("main")
@@ -32,8 +31,8 @@ pub fn deploy_ai_editing_worker() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("bun.lock"))
                     .add_path(xtask_paths::repo_glob!("package.json"))
                     .add_path(xtask_paths::repo_glob!("services/ai-editing-worker/**"))
-                    .add_path(xtask_paths::repo_glob!("apps/web/src/lib/core/**"))
-                    .add_path(xtask_paths::repo_glob!("apps/web/src/lib/websocket/**"))
+                    .add_path(xtask_paths::repo_glob!("packages/collaboration/**"))
+                    .add_path(xtask_paths::repo_glob!("packages/lexical-core/**"))
                     .add_path(xtask_paths::repo_glob!("packages/loro-mirror/**")),
             )
             .workflow_dispatch(WorkflowDispatch::default().inputs(HashMap::from([(
@@ -64,7 +63,6 @@ fn deploy() -> Job {
         .add_step(setup_bun())
         .add_step(setup_node())
         .add_step(install_deps())
-        .add_step(install_worker_deps())
         .add_step(deploy_step())
 }
 
@@ -80,12 +78,6 @@ fn setup_node() -> Step<Use> {
 
 fn install_deps() -> Step<Run> {
     Step::new("Install dependencies").run("bun install --frozen-lockfile")
-}
-
-fn install_worker_deps() -> Step<Run> {
-    Step::new("Install worker dependencies")
-        .run("bun install --frozen-lockfile")
-        .working_directory(xtask_paths::repo_dir!("services/ai-editing-worker"))
 }
 
 fn deploy_step() -> Step<Run> {

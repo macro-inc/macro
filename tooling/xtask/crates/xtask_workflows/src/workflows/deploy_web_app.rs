@@ -183,9 +183,6 @@ fn upload_production_build() -> Step<Use> {
         ) // v4
         .if_condition(Expression::new("${{ inputs.environment == 'prod' }}"))
         .add_with(("name", "web-app-build"))
-        .add_with((
-            "path",
-            xtask_paths::runtime_path!("apps/web/dist").as_str(),
-        ))
+        .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
         .add_with(("overwrite", true))
 }

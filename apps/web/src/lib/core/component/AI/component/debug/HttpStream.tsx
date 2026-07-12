@@ -1,5 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
+import { WebsocketConnectionState } from '@macro-inc/collaboration/websocket';
 import { connectionGatewayClient } from '@service-connection/client';
 import {
   state as connectionState,
@@ -8,7 +9,6 @@ import {
 } from '@service-connection/websocket';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, cn } from '@ui';
-import { WebsocketConnectionState } from '@websocket';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
 interface StreamChunk {

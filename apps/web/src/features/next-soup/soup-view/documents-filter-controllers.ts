@@ -1,4 +1,4 @@
-import type { SplitId } from '@app/component/split-layout/layoutManager';
+import type { SplitId } from '@components/app/split-layout/layoutManager';
 
 type DocumentsFilterController = {
   toggleMarkdownFilter: () => void;

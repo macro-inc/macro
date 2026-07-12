@@ -1,8 +1,3 @@
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -37,6 +32,11 @@ import {
   isOpenCallTabRequested,
 } from '@channel/Channel/link';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';

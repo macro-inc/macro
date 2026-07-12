@@ -9,7 +9,7 @@ import {
   $isClassedBlockNode,
   type ClassedBlockNode,
   type DocumentMentionInfo,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import {
   $addUpdateTag,

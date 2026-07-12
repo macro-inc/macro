@@ -353,7 +353,7 @@ export type AnalyticsInterface = {
  * Singleton analytics instance for use in utility functions that cannot use hooks.
  *
  * @deprecated **Do not use in components.** Use `useAnalytics()` hook from
- * `@app/component/analytics-context` instead. This singleton exists only for
+ * `@app/lib/analytics/analytics-context` instead. This singleton exists only for
  * standalone utility functions (e.g., upload.ts) that run outside Solid context.
  */
 export const analytics = createAnalytics();

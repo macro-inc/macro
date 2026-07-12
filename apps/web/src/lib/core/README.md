@@ -1,13 +1,18 @@
 # Core
 
-Core library for Macro.
+Shared app infrastructure used across Macro's web and desktop surfaces. This
+directory is internal to `apps/web`; it is not a standalone package or public
+API.
 
-Components are made with SolidJS and TailwindCSS.
+It contains the block runtime, collaboration primitives, cross-cutting Solid
+contexts, and low-level components and utilities that are genuinely shared by
+multiple features. Product-specific code should stay under `src/features`.
 
-## Usage
+Imports use the `@core/*` alias configured in `apps/web/tsconfig.json`:
 
-Test and develop your components by putting them in `src/App.tsx` and then run
-
-```bash
-$ bun run dev
+```ts
+import { toast } from '@core/component/Toast/Toast';
 ```
+
+Run the core test project from `apps/web` with
+`bunx vitest run --project core`.

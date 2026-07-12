@@ -1,7 +1,3 @@
-import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
-import { FloatRegions } from '@app/component/mobile/float-regions/float-region-state';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -17,6 +13,11 @@ import {
 } from '@channel/Message';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
+import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
+import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -28,7 +29,10 @@ import {
   extractUserMentions,
   trimEdgeUserMentions,
 } from '@core/util/taskExtraction';
-import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
+import {
+  buildMentionMarkdownString,
+  markdownToPlainText,
+} from '@macro-inc/lexical-core';
 import {
   invalidateChannelsActivity,
   useUpdateChannelsActivityMutation,
@@ -52,7 +56,6 @@ import {
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { queryClient } from '@queries/client';
 import { useBeforeLeave } from '@solidjs/router';
-import { SwipableRowProvider } from 'app/component/mobile/SwipableRow';
 import {
   type Accessor,
   createEffect,

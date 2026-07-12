@@ -1,6 +1,5 @@
 import './block.css';
 
-import { SidePanel } from '@app/component/side-panel';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   type LocationBlockParams,
@@ -8,13 +7,14 @@ import {
   pendingLocationParamsSignal,
 } from '@block-pdf/signal/location';
 import { showTabBarSignal } from '@block-pdf/signal/placeables';
+import { SidePanel } from '@components/app/side-panel';
 import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, leading } from '@solid-primitives/scheduled';
 import { type BeforeLeaveEventArgs, useBeforeLeave } from '@solidjs/router';
-import { createMethodRegistration } from 'core/orchestrator';
 import {
   createEffect,
   createResource,

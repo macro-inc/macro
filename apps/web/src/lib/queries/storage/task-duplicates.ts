@@ -1,4 +1,4 @@
-import { markdownToEmbeddingText } from '@lexical-core/utils/parsers';
+import { markdownToEmbeddingText } from '@macro-inc/lexical-core/utils/parsers';
 import { queryClient } from '@queries/client';
 import {
   storageServiceClient,

@@ -1,5 +1,5 @@
-import { SidePanel } from '@app/component/side-panel';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';

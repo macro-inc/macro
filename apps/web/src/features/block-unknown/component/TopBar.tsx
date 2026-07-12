@@ -1,12 +1,12 @@
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -16,6 +16,7 @@ import {
   REFERENCES_DRAWER_ID,
   ReferencesButton,
 } from '@core/component/ReferencesModal';
+import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -32,7 +33,6 @@ import DownloadSimple from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';
 
 export function TopBar() {

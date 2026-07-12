@@ -1,5 +1,5 @@
-import type { SplitFileMenuAction } from '@app/component/split-layout/context';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import type { SplitFileMenuAction } from '@components/app/split-layout/context';
 import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';

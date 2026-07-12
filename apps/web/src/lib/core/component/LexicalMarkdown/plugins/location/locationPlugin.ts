@@ -1,6 +1,6 @@
 import type { BlockName } from '@core/block';
 import { mergeRegister } from '@lexical/utils';
-import { $getId, type NodeIdMappings } from '@lexical-core';
+import { $getId, type NodeIdMappings } from '@macro-inc/lexical-core';
 import {
   $getNodeByKey,
   $getRoot,

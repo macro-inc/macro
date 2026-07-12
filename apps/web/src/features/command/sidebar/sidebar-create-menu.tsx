@@ -1,6 +1,6 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { CREATABLE_BLOCKS } from '@app/component/Launcher';
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
+import { CREATABLE_BLOCKS } from '@app/features/command/Launcher';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { getIconConfig } from '@core/component/EntityIcon';

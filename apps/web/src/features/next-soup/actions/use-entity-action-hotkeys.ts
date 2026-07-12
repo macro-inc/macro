@@ -1,11 +1,11 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { isListViewID } from '@app/constants/list-views';
 import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { isShareableEntityType } from '@app/features/sharing/global-share-modal/GlobalShareModal';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';

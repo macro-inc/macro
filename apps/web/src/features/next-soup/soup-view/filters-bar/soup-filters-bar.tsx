@@ -1,9 +1,3 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { SearchFiltersRow } from '@app/features/next-soup/soup-view/filters-bar/search/search-filters-row';
 import { SoupActiveFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-active-filters-bar';
 import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
@@ -12,7 +6,13 @@ import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  SplitToolbarLeft,
+  SplitToolbarRight,
+} from '@components/app/split-layout/components/SplitToolbar';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,

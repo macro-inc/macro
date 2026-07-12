@@ -1,4 +1,4 @@
-import type { SelectionCodec } from '@core/collab/awareness';
+import type { SelectionCodec } from '@macro-inc/collaboration/collab/awareness';
 import { Cursor } from 'loro-crdt';
 
 /** A cursor for a node in a Loro document */

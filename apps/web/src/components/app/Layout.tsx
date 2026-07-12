@@ -1,13 +1,3 @@
-import {
-  AppSidebar,
-  GoToHotkeys,
-  type SidebarState,
-} from '@app/component/app-sidebar/sidebar';
-import {
-  isSidebarVisible,
-  SidebarCollapseContext,
-  SidebarVisibilityContext,
-} from '@app/component/sidebarVisibility';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
@@ -15,6 +5,12 @@ import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthentic
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
+import {
+  createMenuOpen,
+  Launcher,
+  setCreateMenuOpen,
+} from '@app/features/command/Launcher';
+import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -30,9 +26,20 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
+import {
+  AppSidebar,
+  GoToHotkeys,
+  type SidebarState,
+} from '@components/app/app-sidebar/sidebar';
+import {
+  isSidebarVisible,
+  SidebarCollapseContext,
+  SidebarVisibilityContext,
+} from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
+import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
@@ -40,7 +47,6 @@ import { makePersisted } from '@solid-primitives/storage';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
-import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
   createMemo,
@@ -54,12 +60,10 @@ import {
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
-import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
-import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 

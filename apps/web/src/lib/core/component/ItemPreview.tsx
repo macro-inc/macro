@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -20,7 +21,6 @@ import {
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { cn } from '@ui';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import {
   type Accessor,
   type ComponentProps,

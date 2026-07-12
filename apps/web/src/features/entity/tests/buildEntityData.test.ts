@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { CallStatus } from '../src/types/entity';
-import { buildEntityData } from '../src/utils/buildEntityData';
+import type { CallStatus } from '../types/entity';
+import { buildEntityData } from '../utils/buildEntityData';
 
 const base = { id: 'id-1', name: 'Hello', ownerId: 'user-1' };
 

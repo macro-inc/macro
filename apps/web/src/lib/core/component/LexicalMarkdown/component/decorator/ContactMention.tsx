@@ -1,10 +1,10 @@
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import type { ContactMentionDecoratorProps } from '@lexical-core';
+import type { ContactMentionDecoratorProps } from '@macro-inc/lexical-core';
 import BuildingIcon from '@phosphor/buildings.svg';
 import UserIcon from '@phosphor/user.svg';
 import { cn } from '@ui';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';

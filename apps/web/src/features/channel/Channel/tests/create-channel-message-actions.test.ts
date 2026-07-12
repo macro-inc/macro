@@ -3,7 +3,7 @@ import type { MessageData } from '../../Message';
 import { createChannelMessageActions } from '../create-channel-message-actions';
 
 // Mock analytics context
-vi.mock('@app/component/analytics-context', () => ({
+vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({
     track: vi.fn(),
     identify: vi.fn(),

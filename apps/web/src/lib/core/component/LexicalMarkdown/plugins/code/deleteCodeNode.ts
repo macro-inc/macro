@@ -1,5 +1,5 @@
 import { $isCodeNode } from '@lexical/code';
-import { $isCustomCodeNode } from '@lexical-core';
+import { $isCustomCodeNode } from '@macro-inc/lexical-core';
 import type { LexicalEditor, NodeKey } from 'lexical';
 import { removeNodeAndRestoreSelection } from '../shared/removeNodeAndRestoreSelection';
 

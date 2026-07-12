@@ -21,13 +21,7 @@ export default defineConfig({
   plugins: [mdAsText()],
   resolve: {
     alias: {
-      '@core': repoPath('../../apps/web/src/lib/core'),
-      '@service-sync': repoPath(
-        '../../apps/web/src/lib/service-clients/service-sync'
-      ),
-      '@loro-mirror': repoPath('../../packages/loro-mirror'),
-      '@lexical-core': repoPath('../../packages/lexical-core'),
-      '@websocket': repoPath('../../apps/web/src/lib/websocket'),
+      '@macro-inc/lexical-core': repoPath('../../packages/lexical-core'),
     },
   },
 });

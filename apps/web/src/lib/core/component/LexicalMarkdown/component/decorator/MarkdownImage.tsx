@@ -8,8 +8,11 @@ import { debouncedDependent } from '@core/util/debounce';
 
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
-import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
-import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
+import {
+  $isImageNode,
+  type ImageDecoratorProps,
+} from '@macro-inc/lexical-core';
+import { calculateEffectiveDimensions } from '@macro-inc/lexical-core/utils/media';
 import ImageIcon from '@phosphor/image-broken.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import { debounce } from '@solid-primitives/scheduled';

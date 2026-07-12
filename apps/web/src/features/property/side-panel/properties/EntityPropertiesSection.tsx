@@ -1,6 +1,6 @@
-import { SidePanel } from '@app/component/side-panel/SidePanel';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isReservedPropertyDefinitionName } from '@companies/crm/team-crm-config';
+import { SidePanel } from '@components/app/side-panel/SidePanel';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';

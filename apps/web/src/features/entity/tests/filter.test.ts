@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { EntityData } from '../src/types/entity';
-import type { WithNotification } from '../src/types/notification';
-import { unreadFilterFn } from '../src/utils/filter';
+import type { EntityData } from '../types/entity';
+import type { WithNotification } from '../types/notification';
+import { unreadFilterFn } from '../utils/filter';
 
 describe('unreadFilterFn', () => {
   describe('email entities', () => {
@@ -29,8 +29,8 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
         notifications: () => [
-          { viewedAt: null } as any,
-          { viewedAt: 1234567890 } as any,
+          { viewed_at: null } as any,
+          { viewed_at: 1234567890 } as any,
         ],
       } as any;
 
@@ -41,8 +41,8 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
         notifications: () => [
-          { viewedAt: 1234567890 } as any,
-          { viewedAt: 9876543210 } as any,
+          { viewed_at: 1234567890 } as any,
+          { viewed_at: 9876543210 } as any,
         ],
       } as any;
 
@@ -90,9 +90,9 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'channel',
         notifications: () => [
-          { viewedAt: null } as any,
-          { viewedAt: null } as any,
-          { viewedAt: null } as any,
+          { viewed_at: null } as any,
+          { viewed_at: null } as any,
+          { viewed_at: null } as any,
         ],
       } as any;
 
@@ -103,10 +103,10 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'channel',
         notifications: () => [
-          { viewedAt: 1234567890 } as any,
-          { viewedAt: 1234567890 } as any,
-          { viewedAt: null } as any,
-          { viewedAt: 1234567890 } as any,
+          { viewed_at: 1234567890 } as any,
+          { viewed_at: 1234567890 } as any,
+          { viewed_at: null } as any,
+          { viewed_at: 1234567890 } as any,
         ],
       } as any;
 
@@ -116,12 +116,12 @@ describe('unreadFilterFn', () => {
     it('handles different entity types correctly', () => {
       const documentEntity: WithNotification<EntityData> = {
         type: 'document',
-        notifications: () => [{ viewedAt: null } as any],
+        notifications: () => [{ viewed_at: null } as any],
       } as any;
 
       const channelEntity: WithNotification<EntityData> = {
         type: 'channel',
-        notifications: () => [{ viewedAt: null } as any],
+        notifications: () => [{ viewed_at: null } as any],
       } as any;
 
       expect(unreadFilterFn(documentEntity)).toBe(true);
@@ -130,20 +130,20 @@ describe('unreadFilterFn', () => {
   });
 
   describe('edge cases', () => {
-    it('handles notifications with viewedAt as 0', () => {
+    it('handles notifications with viewed_at as 0', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
-        notifications: () => [{ viewedAt: 0 } as any],
+        notifications: () => [{ viewed_at: 0 } as any],
       } as any;
 
-      // viewedAt: 0 is falsy and treated as unread by the filter
+      // viewed_at: 0 is falsy and treated as unread by the filter
       expect(unreadFilterFn(entity)).toBe(true);
     });
 
-    it('handles notifications with undefined viewedAt', () => {
+    it('handles notifications with undefined viewed_at', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
-        notifications: () => [{ viewedAt: undefined } as any],
+        notifications: () => [{ viewed_at: undefined } as any],
       } as any;
 
       expect(unreadFilterFn(entity)).toBe(true);
@@ -153,7 +153,7 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'email',
         isRead: false,
-        notifications: () => [{ viewedAt: 1234567890 } as any],
+        notifications: () => [{ viewed_at: 1234567890 } as any],
       } as any;
 
       // For email type, should only check isRead

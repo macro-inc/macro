@@ -3,7 +3,10 @@ import { debouncedDependent } from '@core/util/debounce';
 
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
-import { $isVideoNode, type VideoDecoratorProps } from '@lexical-core';
+import {
+  $isVideoNode,
+  type VideoDecoratorProps,
+} from '@macro-inc/lexical-core';
 import VideoIcon from '@phosphor/file-video.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';

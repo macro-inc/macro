@@ -1,15 +1,4 @@
-# connection-service
+# Connection service client
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.1.23. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+App-local client and generated bindings for the connection service. Install,
+test, and regenerate it through `apps/web`.

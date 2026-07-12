@@ -1,6 +1,9 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { runCreateAction, setCreateMenuOpen } from '@app/component/Launcher';
 import type { ListView } from '@app/constants/list-views';
+import {
+  runCreateAction,
+  setCreateMenuOpen,
+} from '@app/features/command/Launcher';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { hapticImpact } from '@core/mobile/haptics';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import { AnimatedChannelIcon } from '@icon/wide-channel';

@@ -1,7 +1,7 @@
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import { createBulkRemoveFromProjectDssEntityMutation } from '@macro-entity';
+import { createBulkRemoveFromProjectDssEntityMutation } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';
 

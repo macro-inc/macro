@@ -2,7 +2,7 @@ import {
   GithubPullRequestChecksContent,
   GithubPullRequestDetailsContent,
   SidePanel,
-} from '@app/component/side-panel';
+} from '@components/app/side-panel';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import type { Accessor } from 'solid-js';
 

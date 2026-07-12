@@ -3,7 +3,7 @@ import type {
   GithubPrStatusChanged,
 } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
-import type { Notification } from '../src/types/notification';
+import type { Notification } from '../types/notification';
 import {
   extractMessageContent,
   extractNotificationSenderIds,
@@ -11,7 +11,7 @@ import {
   filterValidNotifications,
   getNotificationActionText,
   isNotificationUnread,
-} from '../src/utils/notification';
+} from '../utils/notification';
 
 const GITHUB_PR_FOREIGN_ENTITY_ID = '123e4567-e89b-12d3-a456-426614174000';
 
@@ -136,7 +136,7 @@ describe('notification utils', () => {
       expect(result[0].id).toBe('1');
     });
 
-    it('keeps all valid notification types', () => {
+    it('keeps all enabled notification types', () => {
       const notifications: Notification[] = [
         {
           id: '1',
@@ -154,7 +154,11 @@ describe('notification utils', () => {
       ];
 
       const result = filterValidNotifications(notifications);
-      expect(result).toHaveLength(4);
+      expect(result.map((notification) => notification.id)).toEqual([
+        '1',
+        '3',
+        '4',
+      ]);
     });
   });
 

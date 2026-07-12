@@ -1,6 +1,6 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import {

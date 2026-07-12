@@ -1,12 +1,7 @@
-import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import {
-  type GroupedHistory,
-  type GroupingConfig,
-  getDocumentHistory,
-} from '@core/collab/time-travel';
+import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
@@ -21,16 +16,19 @@ import {
 import { initializeEditorWithState } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-
-import { CommentNode, InlineSearchNode, peerIdPlugin } from '@lexical-core';
+import {
+  CommentNode,
+  InlineSearchNode,
+  peerIdPlugin,
+} from '@macro-inc/lexical-core';
 import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import { storageServiceClient } from '@service-storage/client';
 import type { SyncServiceVersionID } from '@service-storage/generated/schemas/syncServiceVersionID';
 import { syncServiceClient } from '@service-sync/client';
 import { Button } from '@ui';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -44,6 +42,11 @@ import {
   Suspense,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import {
+  type GroupedHistory,
+  type GroupingConfig,
+  getDocumentHistory,
+} from '../history/time-travel';
 
 export const HISTORY_DRAWER_ID = 'history';
 

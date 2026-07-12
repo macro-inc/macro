@@ -1,4 +1,4 @@
-import { toXml } from '@lexical-core/transformers/xml';
+import { toXml } from '@macro-inc/lexical-core/transformers/xml';
 import type { LexicalSession } from './ai-toolkit';
 
 /** Prefix each line with a 1-indexed `N | ` gutter -- the line addressing the agents read. */

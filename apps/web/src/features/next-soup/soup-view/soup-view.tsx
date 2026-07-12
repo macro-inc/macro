@@ -1,22 +1,3 @@
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@app/component/GlobalAppState';
-import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
-import { PullToRefresh } from '@app/component/mobile/PullToRefresh';
-import { SwipableRowProvider } from '@app/component/mobile/SwipableRow';
-import {
-  PreviewPanel,
-  useMaybePreviewPanel,
-} from '@app/component/PreviewPanel';
-import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import { SplitPanelContext } from '@app/component/split-layout/context';
-import { useEntryState } from '@app/component/split-layout/entry-state';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
@@ -82,6 +63,25 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
+import {
+  PreviewPanel,
+  useMaybePreviewPanel,
+} from '@components/app/PreviewPanel';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import { SplitPanelContext } from '@components/app/split-layout/context';
+import { useEntryState } from '@components/app/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';

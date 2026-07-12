@@ -1,14 +1,15 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { isListViewID } from '@app/constants/list-views';
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { getSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
   hotkeyScopeTree,
   setActiveScope,
@@ -22,7 +23,6 @@ import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
   createMemo,

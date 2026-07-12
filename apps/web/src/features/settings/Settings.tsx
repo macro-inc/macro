@@ -1,12 +1,12 @@
-import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
-import { PillTabs } from '@app/component/mobile/PillTabs';
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
+import { Billing } from '@app/features/settings/Billing';
+import { Bots } from '@app/features/settings/Bots';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { PillTabs } from '@components/app/mobile/PillTabs';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import { Billing } from '@app/features/settings/Billing';
-import { Bots } from '@app/features/settings/Bots';
+} from '@components/app/split-layout/components/SplitHeader';
 import { useLogout } from '@core/auth/logout';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {

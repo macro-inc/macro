@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { PDFPopup } from '@block-pdf/component/PDFPopup';
 import {
   disableOverlayClickSignal,

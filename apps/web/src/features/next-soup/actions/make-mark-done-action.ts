@@ -1,5 +1,3 @@
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import {
   applyEntitiesDoneOptimistic,
@@ -10,6 +8,8 @@ import {
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_NEW_INBOX_FLAG,

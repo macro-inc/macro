@@ -1,20 +1,37 @@
+import { fileURLToPath } from 'node:url';
 import solidPlugin from 'vite-plugin-solid';
+import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [tsconfigPaths(), solidPlugin()],
+  plugins: [
+    tsconfigPaths(),
+    solidPlugin(),
+    solidSvg({ defaultAsComponent: true }),
+  ],
+  resolve: {
+    dedupe: ['solid-js'],
+    alias: {
+      '@solid-primitives/refs': fileURLToPath(
+        new URL(
+          '../../node_modules/@solid-primitives/refs/dist/index.js',
+          import.meta.url
+        )
+      ),
+      '@solid-primitives/transition-group': fileURLToPath(
+        new URL(
+          '../../node_modules/@solid-primitives/transition-group/dist/index.js',
+          import.meta.url
+        )
+      ),
+    },
+  },
   test: {
     exclude: [...configDefaults.exclude],
     projects: [
-      {
-        // WebSocket tests with Node.js environment
-        extends: './src/lib/websocket/vitest.config.ts',
-        test: {
-          include: ['src/lib/websocket/**/*.test.{ts,tsx}'],
-          name: 'websocket',
-        },
-      },
+      '../../packages/collaboration/vitest.collab.config.ts',
+      '../../packages/collaboration/vitest.transport.config.ts',
       {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
@@ -114,6 +131,23 @@ export default defineConfig({
         test: {
           include: ['src/lib/service-clients/**/*.{test,spec}.{ts,tsx}'],
           name: 'service-clients',
+        },
+      },
+      {
+        // App-shell and feature tests without a specialized environment.
+        extends: './src/lib/core/vitest.config.ts',
+        test: {
+          environment: 'jsdom',
+          exclude: [
+            ...configDefaults.exclude,
+            'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email}/**/*',
+          ],
+          include: [
+            'src/components/**/*.{test,spec}.{ts,tsx}',
+            'src/features/**/*.{test,spec}.{ts,tsx}',
+            'src/routes/**/*.{test,spec}.{ts,tsx}',
+          ],
+          name: 'app',
         },
       },
     ],

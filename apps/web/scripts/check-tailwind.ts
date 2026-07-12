@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { execSync } from 'child_process';
-import { extname, relative } from 'path';
+import { execFileSync } from 'child_process';
+import { extname } from 'path';
 
 interface Violation {
   file: string;
@@ -22,70 +22,75 @@ const PROHIBITED_TAILWIND_REGEX =
 const FILE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js'];
 
 function getChangedLines(baseBranch: string = 'origin/dev'): ChangedLine[] {
-  try {
-    // Get the diff with context to parse added/modified lines
-    const output = execSync(`git diff --unified=0 ${baseBranch}...HEAD`, {
+  // Limit the diff at the source so a large repository migration cannot fill
+  // Node's output buffer before the relevant app lines are parsed. Using an
+  // argument array also keeps the CI-provided base branch out of a shell.
+  const output = execFileSync(
+    'git',
+    ['diff', '--unified=0', `${baseBranch}...HEAD`, '--', 'apps/web/src'],
+    {
+      cwd: execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        encoding: 'utf8',
+      }).trim(),
       encoding: 'utf8',
-      stdio: 'pipe',
-    });
+      maxBuffer: 128 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
 
-    const changedLines: ChangedLine[] = [];
-    const lines = output.split('\n');
-    let currentFile = '';
-    let currentLineNumber = 0;
+  const changedLines: ChangedLine[] = [];
+  const lines = output.split('\n');
+  let currentFile = '';
+  let currentLineNumber = 0;
 
-    for (const line of lines) {
-      // Parse file headers
-      if (line.startsWith('diff --git')) {
-        const match = line.match(/diff --git a\/(.*) b\/(.*)/);
-        if (match) {
-          const filePath = match[2];
-          const ext = extname(filePath);
-          if (
-            FILE_EXTENSIONS.includes(ext) &&
-            filePath.startsWith('packages/')
-          ) {
-            currentFile = filePath;
-          } else {
-            currentFile = '';
-          }
+  for (const line of lines) {
+    // Parse file headers
+    if (line.startsWith('diff --git')) {
+      const match = line.match(/diff --git a\/(.*) b\/(.*)/);
+      if (match) {
+        const filePath = match[2];
+        const ext = extname(filePath);
+        if (
+          FILE_EXTENSIONS.includes(ext) &&
+          filePath.startsWith('apps/web/src/')
+        ) {
+          currentFile = filePath;
+        } else {
+          currentFile = '';
         }
-        continue;
       }
-
-      // Skip if we're not in a relevant file
-      if (!currentFile) continue;
-
-      // Parse hunk headers to get line numbers
-      if (line.startsWith('@@')) {
-        const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-        if (match) {
-          currentLineNumber = parseInt(match[1], 10);
-        }
-        continue;
-      }
-
-      // Check added lines (lines starting with +, but not +++)
-      if (line.startsWith('+') && !line.startsWith('+++')) {
-        const content = line.slice(1); // Remove the + prefix
-        changedLines.push({
-          file: currentFile,
-          lineNumber: currentLineNumber,
-          content: content,
-        });
-        currentLineNumber++;
-      } else if (line.startsWith(' ')) {
-        // Context line, increment line number
-        currentLineNumber++;
-      }
-      // Lines starting with - are deletions, don't increment currentLineNumber
+      continue;
     }
 
-    return changedLines;
-  } catch (error) {
-    console.warn(`Warning: Could not get changed lines: ${error}`);
-    return [];
+    // Skip if we're not in a relevant file
+    if (!currentFile) continue;
+
+    // Parse hunk headers to get line numbers
+    if (line.startsWith('@@')) {
+      const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (match) {
+        currentLineNumber = parseInt(match[1], 10);
+      }
+      continue;
+    }
+
+    // Check added lines (lines starting with +, but not +++)
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      const content = line.slice(1); // Remove the + prefix
+      changedLines.push({
+        file: currentFile,
+        lineNumber: currentLineNumber,
+        content: content,
+      });
+      currentLineNumber++;
+    } else if (line.startsWith(' ')) {
+      // Context line, increment line number
+      currentLineNumber++;
+    }
+    // Lines starting with - are deletions, don't increment currentLineNumber
   }
+
+  return changedLines;
 }
 
 function checkChangedLines(changedLines: ChangedLine[]): Violation[] {
@@ -113,8 +118,7 @@ function checkChangedLines(changedLines: ChangedLine[]): Violation[] {
 }
 
 function formatViolations(
-  violations: Violation[],
-  workspaceRoot: string
+  violations: Violation[]
 ): void {
   if (violations.length === 0) {
     console.log('✅ No prohibited Tailwind classes found in changed lines!');
@@ -137,8 +141,7 @@ function formatViolations(
   );
 
   for (const [file, fileViolations] of Object.entries(groupedByFile)) {
-    const relativePath = relative(workspaceRoot, file);
-    console.log(`📄 ${relativePath}`);
+    console.log(`📄 ${file}`);
 
     for (const violation of fileViolations) {
       console.log(
@@ -154,8 +157,6 @@ function formatViolations(
 }
 
 async function main(): Promise<void> {
-  const workspaceRoot = process.cwd();
-
   console.log(
     '🔍 Checking for prohibited Tailwind classes in changed lines...\n'
   );
@@ -180,7 +181,7 @@ async function main(): Promise<void> {
     const violations = checkChangedLines(changedLines);
 
     console.log('');
-    formatViolations(violations, workspaceRoot);
+    formatViolations(violations);
 
     if (violations.length > 0) {
       process.exit(1);

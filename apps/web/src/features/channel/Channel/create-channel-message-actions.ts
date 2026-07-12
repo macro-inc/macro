@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { getWebOrigin } from '@core/util/webOrigin';
 import type { Accessor } from 'solid-js';

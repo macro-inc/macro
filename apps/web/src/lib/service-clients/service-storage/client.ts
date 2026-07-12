@@ -1,11 +1,11 @@
 import {
-  CoParseSchema,
-  type ICoParse,
-  type IModificationDataOnServer,
-  IModificationDataOnServerSchema,
-  type TSegment,
-} from '@block-pdf/type/coParse';
-import { modificationDataReplacer } from '@block-pdf/util/buildModificationData';
+  PdfCoParseSchema as CoParseSchema,
+  type PdfCoParse as ICoParse,
+  type PdfModificationDataOnServer as IModificationDataOnServer,
+  PdfModificationDataOnServerSchema as IModificationDataOnServerSchema,
+  modificationDataReplacer,
+  type PdfSegment as TSegment,
+} from '@coparse/document-processing-types';
 import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -22,11 +22,10 @@ import {
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
+import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
-import { platformFetch } from 'core/util/platformFetch';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelWithLatest } from './channel-list-types';

@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import MacroLogo from '@core/component/MacroLogo';
 import { isMobile } from '@core/mobile/isMobile';

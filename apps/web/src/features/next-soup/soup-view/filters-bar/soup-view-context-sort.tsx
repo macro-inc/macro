@@ -1,4 +1,3 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { SortDropdown } from '@app/features/next-soup/soup-view/filters-bar/sort-dropdown';
 import {
@@ -11,6 +10,7 @@ import {
   TASK_SORT_OPTIONS,
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';

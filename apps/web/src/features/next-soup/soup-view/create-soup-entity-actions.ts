@@ -1,12 +1,12 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { isListViewID } from '@app/constants/list-views';
 import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   getChannelParams,
   goToChannelMessage,
 } from '@block-channel/utils/link';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';

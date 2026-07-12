@@ -1,6 +1,9 @@
-import { type EntityData, InlineEntity } from '@entity';
+import {
+  createBulkRenameDssEntityMutation,
+  type EntityData,
+  InlineEntity,
+} from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import { createBulkRenameDssEntityMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button, cn, SegmentedControl } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';

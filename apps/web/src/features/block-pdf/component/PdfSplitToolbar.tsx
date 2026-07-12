@@ -1,8 +1,8 @@
+import { showTabBarSignal } from '@block-pdf/signal/placeables';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
-import { showTabBarSignal } from '@block-pdf/signal/placeables';
+} from '@components/app/split-layout/components/SplitToolbar';
 import { ENABLE_PDF_MARKUP } from '@core/constant/featureFlags';
 import { useCanEdit } from '@core/signal/permissions';
 import Tabs from '@phosphor/tabs.svg';

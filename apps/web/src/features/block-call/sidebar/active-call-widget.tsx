@@ -1,8 +1,8 @@
-import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { stopCallRinger } from '@channel/Call/CallStartedNotifier';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
+import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';

@@ -25,10 +25,6 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: {},
 }));
 
-vi.mock('@macro-entity', () => ({
-  queryKeys: { all: { channel: ['channel'] } },
-}));
-
 import {
   type ChannelMessagesData,
   getChannelMessagesQueryKey,

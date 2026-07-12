@@ -1,5 +1,5 @@
 import { mergeRegister } from '@lexical/utils';
-import type { PeerIdValidator } from '@lexical-core';
+import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
   $createInlineSearchNode,
@@ -9,7 +9,7 @@ import {
   InlineSearchNode,
   InlineSearchNodesType,
   validTriggerPosition,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import {
   $insertNodes,
   COMMAND_PRIORITY_CRITICAL,

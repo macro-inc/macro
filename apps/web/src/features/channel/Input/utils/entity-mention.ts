@@ -1,6 +1,6 @@
 import { itemToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
-import type { DocumentMentionInfo } from '@lexical-core';
+import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 
 // Keep these in sync with `@block-channel/constants` `URL_PARAMS`. They are
 // inlined here to avoid a circular dependency (`@block-channel` imports

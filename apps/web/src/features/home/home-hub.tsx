@@ -1,7 +1,7 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useChatInputContext } from '@core/component/AI/context';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useSettingsState } from '@core/constant/SettingsState';

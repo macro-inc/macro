@@ -1,6 +1,6 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import type { EditorType } from '@lexical-core';
+import type { EditorType } from '@macro-inc/lexical-core';
 import type { HistoryItem } from '@queries/history/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';

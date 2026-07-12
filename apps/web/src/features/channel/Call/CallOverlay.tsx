@@ -1,4 +1,4 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';

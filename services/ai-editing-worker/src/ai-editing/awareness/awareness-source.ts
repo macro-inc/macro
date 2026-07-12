@@ -8,8 +8,8 @@
  * name + color → distinct peer → distinct cursor).
  */
 
-import type { MarkdownLoroSchemaType } from '@lexical-core/markdown-loro-schema';
-import type { Mirror } from '@loro-mirror/packages/core/src';
+import type { Mirror } from '@loro-mirror/core';
+import type { MarkdownLoroSchemaType } from '@macro-inc/lexical-core/markdown-loro-schema';
 import {
   type Container,
   EphemeralStore,

@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
@@ -23,6 +23,11 @@ import {
   isCheckboxToTaskPluginEnabled,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import {
+  $getLocationUrl,
+  $getSelectionLocation,
+  type PersistentLocation,
+} from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
+import {
   HIGHLIGHT_SELECTED_NODES,
   POPUP_REPLACE_TEXT,
   popupPlugin,
@@ -40,7 +45,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
-import type { NodeIdMappings } from '@lexical-core';
+import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -53,11 +58,6 @@ import { generateTitle } from '@service-cognition/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Layer } from '@ui';
-import {
-  $getLocationUrl,
-  $getSelectionLocation,
-  type PersistentLocation,
-} from 'core/component/LexicalMarkdown/plugins/location/locationPlugin';
 import { $getRoot, COMMAND_PRIORITY_HIGH, type RangeSelection } from 'lexical';
 import {
   createEffect,

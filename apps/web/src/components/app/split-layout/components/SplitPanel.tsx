@@ -1,17 +1,17 @@
-import { MobileTopEdgeFade } from '@app/component/mobile/MobileEdgeFade';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { splitContainerAttribute } from '@core/dom-selectors';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
-import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
   createMemo,

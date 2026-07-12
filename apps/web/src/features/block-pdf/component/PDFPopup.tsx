@@ -1,4 +1,5 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
@@ -18,7 +19,6 @@ import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { generateTitle } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
-import { useSplitLayout } from 'app/component/split-layout/layout';
 import {
   createEffect,
   createMemo,

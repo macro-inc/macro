@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { CrmCompanyEntity } from '@entity';
 import type { CompanyContact } from '@queries/crm/companies';
 import { createMemo, createSignal, For, Show } from 'solid-js';

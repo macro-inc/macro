@@ -1,4 +1,4 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { onCleanup, type ParentProps, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';

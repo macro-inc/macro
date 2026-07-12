@@ -1,11 +1,20 @@
 # AI editing
 
-The general idea is that we have a worker that takes an english request for a
-document, and dispatches agents to actually produce edits on the doucment.
+The general idea is that we have a worker that takes an English request for a
+document and dispatches agents to produce edits on the document.
 
-We do this by having a Clouflare worker joins the document as a real Loro peer,
-makes its edits through the same CRDT system everyone else uses, and streams them
+We do this by having a Cloudflare worker join the document as a real Loro peer,
+make its edits through the same CRDT system everyone else uses, and stream them
 out keystroke by keystroke.
+
+## Shared-code boundary
+
+The worker and web app share the Loro collaboration engine, sync-service wire
+transport, and WebSocket runtime through `@macro-inc/collaboration`. Browser
+authentication and sync HTTP policy stay in `apps/web`; the package accepts an
+environment-specific URL resolver instead. The worker is part of the root Bun
+workspace, so the collaboration and Lexical packages resolve one dependency
+graph in both runtimes.
 
 # Flow
 

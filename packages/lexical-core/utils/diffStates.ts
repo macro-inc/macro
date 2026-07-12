@@ -1,9 +1,8 @@
-import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
-import { type Diff, NEWLINE } from './diffTypes';
 import { diffChars } from 'diff';
+import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 import { match } from 'ts-pattern';
 import type { WordRun } from './diffTypes';
-
+import { type Diff, NEWLINE } from './diffTypes';
 
 type SerNode = {
   type: string;

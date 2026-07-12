@@ -1,6 +1,6 @@
 import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
 import { $dfsIterator, mergeRegister } from '@lexical/utils';
-import type { PeerIdValidator } from '@lexical-core';
+import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
   $createAwaitNode,
@@ -14,7 +14,7 @@ import {
   InlineSearchNode,
   InlineSearchNodesType,
   validTriggerPosition,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import {
   $getNodeByKey,
   $insertNodes,

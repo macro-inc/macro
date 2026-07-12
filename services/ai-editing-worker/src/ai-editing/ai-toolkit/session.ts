@@ -1,14 +1,17 @@
 import { registerCodeHighlighting } from '@lexical/code';
 import { $convertFromMarkdownString } from '@lexical/markdown';
-import { NodeReplacements, SupportedNodeTypes } from '@lexical-core/node-list';
+import {
+  NodeReplacements,
+  SupportedNodeTypes,
+} from '@macro-inc/lexical-core/node-list';
 import {
   $getId,
   $setId,
   $updateAllNodeIds,
   type NodeIdMappings,
   nodeIdPlugin,
-} from '@lexical-core/plugins/nodeIdPlugin';
-import { INTERNAL_TRANSFORMERS } from '@lexical-core/transformers';
+} from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { INTERNAL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
 import {
   $createParagraphNode,
   $getRoot,

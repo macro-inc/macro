@@ -1,8 +1,8 @@
+import type { Theme } from '@core/component/Themes';
 import { IS_MAC } from '@core/constant/isMac';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { cn } from '@ui';
-import type { Theme } from 'core/component/Themes';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 
 const modifierMap = {

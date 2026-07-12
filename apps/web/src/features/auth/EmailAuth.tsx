@@ -1,5 +1,5 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';

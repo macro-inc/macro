@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { truncatedPath } from '../src/utils/path';
+import { truncatedPath } from '../utils/path';
 
 describe('truncatedPath', () => {
   describe('basic functionality', () => {

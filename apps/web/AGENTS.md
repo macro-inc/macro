@@ -9,7 +9,8 @@
 
 ### General
 - All API/network calls live in service-clients.
-- All queries & mutations are defined in the queries package.
+- Shared server-state queries and mutations live in `src/lib/queries`; keep
+  feature-specific query orchestration with its owning feature.
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.

@@ -1,6 +1,6 @@
-import { SidePanel } from '@app/component/side-panel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-call/constants';
+import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
 import { createMethodRegistration } from '@core/orchestrator';

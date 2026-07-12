@@ -2,7 +2,7 @@ import {
   CREATABLE_BLOCKS,
   type CreatableBlock,
   LauncherInner,
-} from '@app/component/Launcher';
+} from '@app/features/command/Launcher';
 import {
   createSoupState,
   type SoupState,

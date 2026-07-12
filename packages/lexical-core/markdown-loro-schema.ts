@@ -1,4 +1,4 @@
-import { type SchemaType, schema } from '../loro-mirror/packages/core/src';
+import { type SchemaType, schema } from '@loro-mirror/core';
 
 const markdownNodeSchema = schema.LoroMap({
   $: schema.LoroMap({} as any, {

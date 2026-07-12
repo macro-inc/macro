@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useUserId } from '@core/context/user';

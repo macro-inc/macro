@@ -1,11 +1,3 @@
-import {
-  AnalyticsContextProvider,
-  useAnalytics,
-} from '@app/component/analytics-context';
-import { GlobalAppStateProvider } from '@app/component/GlobalAppState';
-import { Layout } from '@app/component/Layout';
-import { ReactiveFavicon } from '@app/component/ReactiveFavicon';
-import { LAYOUT_ROUTE } from '@app/component/split-layout/SplitLayoutRoute';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
@@ -19,6 +11,10 @@ import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
+import {
+  AnalyticsContextProvider,
+  useAnalytics,
+} from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
@@ -26,6 +22,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { CallKitSync } from '@channel/Call/use-callkit';
+import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
+import { Layout } from '@components/app/Layout';
+import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
+import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -38,6 +38,7 @@ import {
   useUserInfo,
 } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
+import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
@@ -51,9 +52,9 @@ import {
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
+import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
-import { Provider as EntityProvider } from '@macro-entity';
 import {
   BrowserNotificationModal,
   createNotificationSource,
@@ -94,7 +95,6 @@ import {
   systemThemeEffect,
 } from '@theme/utils/themeUtils';
 import { Button } from '@ui';
-import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,

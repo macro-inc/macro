@@ -3,7 +3,7 @@ import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { InlineSearchNode } from '@lexical-core';
+import { InlineSearchNode } from '@macro-inc/lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';

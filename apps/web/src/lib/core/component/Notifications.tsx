@@ -1,4 +1,4 @@
-import { SidePanel } from '@app/component/side-panel';
+import { SidePanel } from '@components/app/side-panel';
 import type { Entity as EntityRef } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { NotificationRow } from '@entity';

@@ -1,8 +1,13 @@
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
+import { defaultSelectionData } from '@core/component/LexicalMarkdown/plugins';
+import {
+  NODE_TRANSFORM,
+  type NodeTransformType,
+} from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { fileSelector } from '@core/directive/fileSelector';
@@ -12,11 +17,6 @@ import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
 import { Button, SendButton, Tooltip } from '@ui';
-import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
-import {
-  NODE_TRANSFORM,
-  type NodeTransformType,
-} from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { useCompose } from './ComposeContext';

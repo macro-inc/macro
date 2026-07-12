@@ -1,15 +1,3 @@
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@app/component/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -19,6 +7,18 @@ import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import {
+  ResponsiveBlockToolbar,
+  ResponsivePermissionsBadge,
+} from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -26,6 +26,7 @@ import {
   REFERENCES_DRAWER_ID,
   ReferencesButton,
 } from '@core/component/ReferencesModal';
+import { toast } from '@core/component/Toast/Toast';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
   getShareDrawerRecipientInput,
@@ -35,6 +36,7 @@ import {
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { platformFetch } from '@core/util/platformFetch';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/wide-share.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
@@ -45,8 +47,6 @@ import {
   storageServiceClient,
 } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { toast } from 'core/component/Toast/Toast';
-import { platformFetch } from 'core/util/platformFetch';
 import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { PdfSplitToolbar } from './PdfSplitToolbar';

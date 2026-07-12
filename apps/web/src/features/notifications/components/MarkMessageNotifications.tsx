@@ -1,4 +1,4 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   isChannelNotification,
   useNotificationsForEntity,

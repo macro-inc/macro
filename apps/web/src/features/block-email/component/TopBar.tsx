@@ -1,14 +1,3 @@
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
-import { useSidePanel } from '@app/component/side-panel';
-import { SplitFileMenu } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import {
-  SplitHeaderBadge,
-  SplitTitleFileMenu,
-  StaticSplitLabel,
-} from '@app/component/split-layout/components/SplitLabel';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -19,6 +8,17 @@ import {
   openEntityInSplitFromUnifiedList,
   trashEmails,
 } from '@app/features/next-soup/utils';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@components/app/ResponsiveBlockToolbar';
+import { useSidePanel } from '@components/app/side-panel';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  SplitTitleFileMenu,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,

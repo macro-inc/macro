@@ -1,5 +1,5 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import type { AnalyticsProvider } from '@app/lib/analytics';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';

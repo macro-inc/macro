@@ -1,6 +1,6 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
 

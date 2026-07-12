@@ -1,7 +1,7 @@
 import {
   MobileDrawer,
   scrollToFocusedInput,
-} from '@app/component/mobile/MobileDrawer';
+} from '@components/app/mobile/MobileDrawer';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { createMemo, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';

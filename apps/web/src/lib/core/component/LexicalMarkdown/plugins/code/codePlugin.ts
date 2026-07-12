@@ -9,7 +9,7 @@ import {
   $createCustomCodeNode,
   $isCustomCodeNode,
   CustomCodeNode,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $getSelection,

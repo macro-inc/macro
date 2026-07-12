@@ -1,9 +1,9 @@
-import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
-import { HeaderTitleMenu } from '@app/component/split-layout/components/HeaderTitleMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { HeaderTitleMenu } from '@components/app/split-layout/components/HeaderTitleMenu';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { SplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';

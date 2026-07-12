@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { $convertFromMarkdownString } from '@lexical/markdown';
-import { ALL_TRANSFORMERS, SupportedNodeTypes } from '@lexical-core';
+import { ALL_TRANSFORMERS, SupportedNodeTypes } from '@macro-inc/lexical-core';
 import { createEditor, type EditorState } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { tailContext } from './tailContext';

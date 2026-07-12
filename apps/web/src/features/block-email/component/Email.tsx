@@ -1,12 +1,12 @@
-import { SidePanel } from '@app/component/side-panel';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import {
   EmailProvider,
   useEmailContext,
 } from '@block-email/component/EmailContext';
+import { SidePanel } from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -18,7 +18,7 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import { buildMentionMarkdownString } from '@lexical-core';
+import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';

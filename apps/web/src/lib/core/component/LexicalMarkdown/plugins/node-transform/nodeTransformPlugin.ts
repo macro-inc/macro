@@ -18,8 +18,8 @@ import {
   QuoteNode,
 } from '@lexical/rich-text';
 import { $setBlocksType } from '@lexical/selection';
-import type { ElementName } from '@lexical-core';
-import { CustomCodeNode } from '@lexical-core';
+import type { ElementName } from '@macro-inc/lexical-core';
+import { CustomCodeNode } from '@macro-inc/lexical-core';
 import type {
   ElementNode,
   Klass,

@@ -1,6 +1,6 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 
 type ChannelMessageThreadCardProps = {
   channelId: string;

@@ -1,5 +1,5 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';

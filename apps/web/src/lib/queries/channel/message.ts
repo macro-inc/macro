@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';

@@ -1,4 +1,4 @@
-import type { SplitManager } from '@app/component/split-layout/layoutManager';
+import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { until } from '@solid-primitives/promise';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 

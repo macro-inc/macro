@@ -1,10 +1,4 @@
-import type { SidebarState } from '@app/component/app-sidebar/sidebar';
-import { FavoriteIcon } from '@app/component/FavoriteIcon';
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@app/component/GlobalAppState';
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   favoriteIconType,
@@ -14,6 +8,12 @@ import {
 } from '@app/util/favorites';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
+import type { SidebarState } from '@components/app/app-sidebar/sidebar';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   ContextMenuContent,
   MenuGroup,

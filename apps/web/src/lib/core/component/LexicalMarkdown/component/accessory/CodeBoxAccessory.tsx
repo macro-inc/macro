@@ -12,7 +12,7 @@ import {
   LanguageDefinitions,
   normalizedLanguage,
   type SupportedLanguage,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import Braces from '@phosphor/brackets-curly.svg';
 import Copy from '@phosphor/copy.svg';
 import FileC from '@phosphor/file-c.svg';

@@ -1,5 +1,5 @@
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 
 interface EmailHotkeyHandlers {
   replyToFocusedMessage: () => boolean;

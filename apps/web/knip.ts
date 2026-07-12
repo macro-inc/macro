@@ -4,7 +4,10 @@ const config: KnipConfig = {
   entry: [
     'src/index.tsx',
     'src/index.css',
-    'src/features/block-*/**/*.{ts,tsx}',
+    // Block definitions are discovered with import.meta.glob at runtime. Treat
+    // those discovery roots as entries; their imports make the rest of each
+    // block reachable without hiding dead block-local files from Knip.
+    'src/features/block-*/definition.ts',
     'src/lib/workers/**/*.{js,ts,tsx}',
   ],
   project: ['src/**/*.{js,ts,tsx}'],
@@ -14,7 +17,6 @@ const config: KnipConfig = {
     '**/generated/**',
     'scripts/**',
     '../../packages/loro-mirror/**',
-    'src/lib/service-storage/**',
     '**/vite.config.ts',
     '**/vite-ci.config.ts',
     '**/vite.base.ts',

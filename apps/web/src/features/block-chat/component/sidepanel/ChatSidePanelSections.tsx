@@ -1,10 +1,10 @@
+import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import {
   DateValueDisplay,
   FolderLink,
   OwnerValue,
   SidePanel,
-} from '@app/component/side-panel';
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+} from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
 import { useChatDataQuery } from '@queries/cognition/chat-data';

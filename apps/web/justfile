@@ -138,9 +138,6 @@ gen-dcs-models:
 clean-env:
     bun scripts/clean-env.js
 
-pkg:
-    bun scripts/pkg.ts
-
 check-tailwind:
     bun scripts/check-tailwind.ts
 

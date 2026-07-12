@@ -1,4 +1,3 @@
-import { SplitBottomPanel } from '@app/component/split-layout/components/SplitBottomPanel';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
@@ -6,12 +5,12 @@ import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
+import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import {
   type BlockName,
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
-import type { LoroManager } from '@core/collab/manager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -102,7 +101,13 @@ import {
   mediaPlugin,
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
+import { normalizeEnterPlugin } from '@core/component/LexicalMarkdown/plugins/normalize-enter/';
 import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
+import {
+  autoRegister,
+  lazyRegister,
+  registerInternalLayoutShiftListener,
+} from '@core/component/LexicalMarkdown/plugins/shared/utils';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
@@ -136,6 +141,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockFileSignal,
   blockHandleSignal,
@@ -148,6 +154,7 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EntityDragEvent } from '@entity';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
   AwaitNode,
@@ -156,20 +163,13 @@ import {
   InlineSearchNode,
   type PeerIdValidator,
   peerIdPlugin,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import WarningIcon from '@phosphor/warning.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
-import {
-  autoRegister,
-  lazyRegister,
-  registerInternalLayoutShiftListener,
-} from 'core/component/LexicalMarkdown/plugins/shared/utils';
-import { createMethodRegistration } from 'core/orchestrator';
 import { $getRoot, $isElementNode, type EditorState } from 'lexical';
 import {
   type Accessor,

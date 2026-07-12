@@ -1,4 +1,3 @@
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import {
   applyInlineFormat,
   applyNodeFormat,
@@ -18,6 +17,7 @@ import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';

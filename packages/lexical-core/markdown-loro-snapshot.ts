@@ -1,12 +1,13 @@
+import { type InferType, Mirror } from '@loro-mirror/core';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
-import { type InferType, Mirror } from '../loro-mirror/packages/core/src';
 import { MARKDOWN_GOLDEN } from './markdown-golden.1';
 import { MARKDOWN_LORO_SCHEMA } from './markdown-loro-schema';
 import { markdownToSerializedEditorStateWithIds } from './utils/markdown-state';
 
 // HACK: hack to get around async nature of mirror sync,
-// which we have no control over. Keep this in sync with app/packages/core/collab/utils.ts.
+// which we have no control over. Keep this in sync with
+// packages/collaboration/src/collab/utils.ts.
 async function awaitMirrorSync() {
   await Promise.resolve();
   await Promise.resolve();

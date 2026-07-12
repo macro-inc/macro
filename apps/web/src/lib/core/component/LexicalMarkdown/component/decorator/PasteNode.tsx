@@ -1,4 +1,4 @@
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -6,7 +6,7 @@ import {
   $convertPasteToText,
   $isPasteNode,
   type PasteNodeDecoratorProps,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import Copy from '@phosphor/copy.svg';
 import DotsThree from '@phosphor/list.svg';
 import TextT from '@phosphor/text-t.svg';

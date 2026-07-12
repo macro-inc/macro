@@ -1,4 +1,4 @@
-import { useAnalytics } from '@app/component/analytics-context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { JsonType } from 'posthog-js';
 import {

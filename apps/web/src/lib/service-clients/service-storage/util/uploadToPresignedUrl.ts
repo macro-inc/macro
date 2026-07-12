@@ -1,6 +1,5 @@
+import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-
-import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
 
 export async function uploadToPresignedUrl({

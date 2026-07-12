@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';

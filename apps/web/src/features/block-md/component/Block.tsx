@@ -1,19 +1,25 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { SidePanel } from '@app/component/side-panel';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
-import { createLoroManager, type LoroManager } from '@core/collab/manager';
-import type { RawUpdate } from '@core/collab/shared';
-import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
-} from '@core/collab/snapshot-store';
-import { BrowserWALStore, LORO_WAL_DB_NAME } from '@core/collab/wal';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
+import {
+  createLoroManager,
+  type LoroManager,
+} from '@macro-inc/collaboration/collab/manager';
+import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
+import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+} from '@macro-inc/collaboration/collab/snapshot-store';
+import {
+  BrowserWALStore,
+  LORO_WAL_DB_NAME,
+} from '@macro-inc/collaboration/collab/wal';
+import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';

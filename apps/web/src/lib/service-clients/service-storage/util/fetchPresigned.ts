@@ -1,6 +1,6 @@
 import type { FetchError } from '@core/service';
+import { platformFetch } from '@core/util/platformFetch';
 import type { ObjectLike, ResultError } from '@core/util/result';
-import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
 
 type ResultMap = {

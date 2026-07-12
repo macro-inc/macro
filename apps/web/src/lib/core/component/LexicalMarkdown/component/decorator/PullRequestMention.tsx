@@ -1,11 +1,11 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $isPullRequestMentionNode,
   type PullRequestMentionDecoratorProps,
-} from '@lexical-core';
+} from '@macro-inc/lexical-core';
 import OpenIcon from '@phosphor/arrows-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import GitMerge from '@phosphor/git-merge.svg';

@@ -1,17 +1,18 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
+import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
+import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
+import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import {
   alternateProviderModel,
@@ -49,11 +50,10 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { createRenameDssEntityMutation } from '@macro-entity';
+import { createRenameDssEntityMutation } from '@entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
 
 export function Chat(props: { data: ChatData }) {

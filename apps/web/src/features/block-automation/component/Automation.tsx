@@ -1,7 +1,7 @@
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';

@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';

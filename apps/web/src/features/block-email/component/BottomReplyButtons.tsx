@@ -1,4 +1,4 @@
-import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
+import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';

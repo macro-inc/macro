@@ -1,8 +1,8 @@
-import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
 import {
   EntityModalActionFooter,
   EntityModalTitle,
 } from '@app/features/entity/entity-modal/EntityModal';
+import { getSplitPanelRef } from '@components/app/split-layout/layoutUtils';
 import clickOutside from '@core/directive/clickOutside';
 import { Dialog } from '@kobalte/core/dialog';
 import {

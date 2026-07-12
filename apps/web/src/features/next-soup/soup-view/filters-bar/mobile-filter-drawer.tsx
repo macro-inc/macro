@@ -1,9 +1,3 @@
-import {
-  MobileDrawer,
-  scrollToFocusedInput,
-} from '@app/component/mobile/MobileDrawer';
-import { pressPulse } from '@app/component/mobile/pressPulse';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import {
@@ -26,6 +20,12 @@ import {
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  MobileDrawer,
+  scrollToFocusedInput,
+} from '@components/app/mobile/MobileDrawer';
+import { pressPulse } from '@components/app/mobile/pressPulse';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';

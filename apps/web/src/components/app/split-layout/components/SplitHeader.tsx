@@ -1,7 +1,7 @@
-import { useSidebarCollapse } from '@app/component/sidebarVisibility';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
   ContextMenuContent,

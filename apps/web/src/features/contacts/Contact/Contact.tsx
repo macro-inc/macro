@@ -1,4 +1,4 @@
-import { SidePanel } from '@app/component/side-panel';
+import { SidePanel } from '@components/app/side-panel';
 import { useContactQuery } from '@queries/crm/contacts';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Show } from 'solid-js';

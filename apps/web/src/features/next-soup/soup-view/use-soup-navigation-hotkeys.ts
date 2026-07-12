@@ -1,6 +1,6 @@
-import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { isListViewID } from '@app/constants/list-views';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';

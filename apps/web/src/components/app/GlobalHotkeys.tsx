@@ -1,11 +1,16 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import {
   COMMAND_MENU_CATEGORY_LEADER_KEY,
   COMMAND_MENU_CATEGORY_SCOPE,
   CREATE_MENU_COMMAND_SCOPE,
 } from '@app/constants/hotkeys';
 import { type CategoryFilter, CommandState } from '@app/features/command';
+import {
+  CREATABLE_BLOCKS,
+  createMenuOpen,
+  setCreateMenuOpen,
+} from '@app/features/command/Launcher';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -22,6 +27,7 @@ import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
@@ -48,13 +54,7 @@ import {
 } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type Component, onCleanup } from 'solid-js';
-import {
-  CREATABLE_BLOCKS,
-  createMenuOpen,
-  setCreateMenuOpen,
-} from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 
 const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{

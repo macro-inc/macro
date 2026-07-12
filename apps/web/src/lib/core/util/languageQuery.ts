@@ -16,7 +16,7 @@ import {
   isExtensionSupported as lexicalExtensionSupported,
   isSupportedLanguage as lexicalLanguageSupported,
   supportedExtensions as lexicalSupportedExtensions,
-} from '@lexical-core/utils';
+} from '@macro-inc/lexical-core/utils';
 
 /**
  * Check if an extension is supported by block-code.

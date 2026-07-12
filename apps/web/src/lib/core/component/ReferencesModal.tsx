@@ -1,5 +1,5 @@
-import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
 import Quotes from '@phosphor/quotes.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';

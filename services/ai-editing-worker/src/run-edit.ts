@@ -1,7 +1,10 @@
-import { LoroManager } from '@core/collab/manager';
-import type { RawUpdate } from '@core/collab/shared';
-import { InMemoryWALStore, WALSyncer } from '@core/collab/wal';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
+import { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
+import {
+  InMemoryWALStore,
+  WALSyncer,
+} from '@macro-inc/collaboration/collab/wal';
+import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { LanguageModel } from 'ai';
 import { supervisor } from './ai-editing/agents';
 import type { DocumentOp } from './ai-editing/editor';

@@ -1,5 +1,5 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type BlockAlias, type BlockName, useMaybeBlockId } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';

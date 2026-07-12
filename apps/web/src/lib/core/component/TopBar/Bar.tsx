@@ -1,14 +1,14 @@
-import { isInBlock, useIsNestedBlock } from '@core/block';
-import { observedSize } from '@core/directive/observedSize';
-import { TOP_BAR_HEIGHT } from '@core/signal/layout';
-import { throttle } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
 import {
   SplitBackButton,
   SplitCloseButton,
   SplitCreateButton,
   SplitForwardButton,
-} from 'app/component/split-layout/SplitButtons';
+} from '@components/app/split-layout/SplitButtons';
+import { isInBlock, useIsNestedBlock } from '@core/block';
+import { observedSize } from '@core/directive/observedSize';
+import { TOP_BAR_HEIGHT } from '@core/signal/layout';
+import { throttle } from '@solid-primitives/scheduled';
+import { cn } from '@ui';
 import type { Accessor, JSX, Setter } from 'solid-js';
 import {
   createContext,

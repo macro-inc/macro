@@ -1,4 +1,9 @@
 import type { ListView } from '@app/constants/list-views';
+import {
+  CREATABLE_BLOCKS,
+  runCreateAction,
+} from '@app/features/command/Launcher';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -30,14 +35,12 @@ import { useLocation } from '@solidjs/router';
 import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { CREATABLE_BLOCKS, runCreateAction } from '../Launcher';
 import { useSplitLayout } from '../split-layout/layout';
 import {
   type MobileTouchIconComponent,
   MobileTouchMenu,
   type MobileTouchMenuItem,
 } from './MobileTouchMenu';
-import { SearchState } from './mobileSearchState';
 import { pressPulse } from './pressPulse';
 
 // Keeps the directive import from being tree-shaken / lint-flagged.

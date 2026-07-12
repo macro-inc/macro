@@ -1,5 +1,5 @@
-import { useAnalytics } from '@app/component/analytics-context';
-import { SplitPanelContext } from '@app/component/split-layout/context';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { SplitPanelContext } from '@components/app/split-layout/context';
 import type { OwnedBlockHandle } from '@core/orchestrator';
 import { useQueryClient } from '@queries/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';

@@ -1,13 +1,13 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { platformFetch } from '@core/util/platformFetch';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { action, useSearchParams, useSubmission } from '@solidjs/router';
 import { cn } from '@ui';
-import { platformFetch } from 'core/util/platformFetch';
 import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
 

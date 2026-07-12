@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
@@ -49,7 +50,6 @@ import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { cn, Layer, Surface, Tooltip } from '@ui';
-import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,

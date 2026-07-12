@@ -1,5 +1,5 @@
 import type { EntityId } from '@core/types';
-import { createReconnectEffect } from '@websocket/index';
+import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
 import { ok } from 'neverthrow';
 
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';

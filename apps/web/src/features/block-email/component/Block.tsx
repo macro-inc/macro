@@ -1,6 +1,6 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';

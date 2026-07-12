@@ -70,6 +70,7 @@ fn typescript() -> Job {
         .add_step(generate_api_types())
         .add_step(show_sccache_stats())
         .add_step(check_types())
+        .add_step(check_collaboration_types())
 }
 
 fn biome_check() -> Job {
@@ -79,6 +80,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
+        .add_step(run_collaboration_biome())
 }
 
 fn tailwind() -> Job {
@@ -106,6 +108,7 @@ fn cycles() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
+        .add_step(collaboration_cycles_import_check())
 }
 
 fn build() -> Job {
@@ -157,6 +160,8 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
 }
 
 fn paths_filter() -> Step<Use> {
+    let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
+
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -166,32 +171,9 @@ fn paths_filter() -> Step<Use> {
         .id("filter")
         .add_with((
             "filters",
-            indoc::indoc! {r#"
-                should_run:
-                  - 'package.json'
-                  - 'bun.lock'
-                  - 'apps/web/package.json'
-                  - 'apps/web/src/**'
-                  - 'apps/web/biome.jsonc'
-                  - 'packages/**'
-                  - 'services/lexical-service/**'
-                  - '.github/actions/setup-cachix/**'
-                  - '.github/actions/setup-reqs-web/**'
-                  - '.github/workflows/web-app-check-main.yml'
-                api_changed:
-                  - 'crates/**/*.rs'
-                  - 'services/**/*.rs'
-                  - 'tooling/xtask/**/*.rs'
-                  - 'Cargo.toml'
-                  - 'Cargo.lock'
-                  - 'flake.nix'
-                  - 'flake.lock'
-                  - 'apps/web/scripts/generate-api-schema.ts'
-                  - 'apps/web/scripts/services.ts'
-                  - '.github/actions/setup-cachix/**'
-                  - '.github/actions/setup-reqs-web/**'
-                  - '.github/workflows/web-app-check-main.yml'
-            "#},
+            format!(
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-cachix/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'tooling/xtask/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'flake.nix'\n  - 'flake.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-cachix/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\n"
+            ),
         ))
 }
 
@@ -218,10 +200,22 @@ fn check_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn check_collaboration_types() -> Step<Run> {
+    Step::new("Check Collaboration Package Types")
+        .run("bun run type-check")
+        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
 fn run_biome() -> Step<Run> {
     Step::new("Run Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn run_collaboration_biome() -> Step<Run> {
+    Step::new("Run Collaboration Package Biome")
+        .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
+        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
 fn check_tailwind_classes() -> Step<Run> {
@@ -242,9 +236,15 @@ fn cycles_import_check() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn collaboration_cycles_import_check() -> Step<Run> {
+    Step::new("Collaboration Package Cycles Import Check")
+        .run("biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles")
+        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
 fn run_build() -> Step<Run> {
     Step::new("Build")
-        .run("bun run build")
+        .run("just build-dev")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

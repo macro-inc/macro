@@ -1,5 +1,5 @@
 import { createDOMRange } from '@lexical/selection';
-import type { NodeIdMappings } from '@lexical-core';
+import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import {
   $getNodeByKey,

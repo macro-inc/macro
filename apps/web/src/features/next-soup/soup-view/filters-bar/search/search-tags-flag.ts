@@ -1,5 +1,5 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_TAGS_SEARCH_FE_FLAG,
   ENABLE_TAGS_SEARCH_FE_OVERRIDE,

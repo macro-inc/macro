@@ -7,7 +7,7 @@ import {
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
 import { utf8Encode } from '@core/util/string';
-import { createRenameDssEntityMutation } from '@macro-entity';
+import { createRenameDssEntityMutation } from '@entity';
 import { refetchHistory } from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';

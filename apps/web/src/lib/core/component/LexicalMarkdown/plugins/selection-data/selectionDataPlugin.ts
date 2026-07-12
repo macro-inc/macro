@@ -6,7 +6,7 @@ import { $isAutoLinkNode, $isLinkNode } from '@lexical/link';
 import type { ListNode } from '@lexical/list';
 // import { mergeRegister } from '@lexical/utils';
 import type { HeadingNode } from '@lexical/rich-text';
-import type { ElementName } from '@lexical-core';
+import type { ElementName } from '@macro-inc/lexical-core';
 import {
   $getSelection,
   $isNodeSelection,

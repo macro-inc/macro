@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';

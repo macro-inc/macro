@@ -1,9 +1,6 @@
 import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
-import { describe, expect, it } from 'vitest';
-import {
-  formatRelativeTimestamp,
-  formatTimestamp,
-} from '../src/utils/timestamp';
+import { describe, expect, it, vi } from 'vitest';
+import { formatRelativeTimestamp, formatTimestamp } from '../utils/timestamp';
 
 describe('formatTimestamp', () => {
   describe('Date object handling', () => {
@@ -131,14 +128,17 @@ describe('formatRelativeTimestamp', () => {
 
   describe('yesterday', () => {
     it('formats yesterday with time', () => {
-      // Create yesterday's date
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      yesterday.setHours(14, 30, 0, 0); // 2:30 PM
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date(2026, 6, 11, 18, 0, 0));
+        const yesterday = new Date(2026, 6, 10, 14, 30, 0);
 
-      const result = formatRelativeTimestamp(yesterday);
-      expect(result).toContain('yesterday');
-      expect(result).toMatch(/\d{1,2}:\d{2}(am|pm)/i);
+        const result = formatRelativeTimestamp(yesterday);
+        expect(result).toContain('yesterday');
+        expect(result).toMatch(/\d{1,2}:\d{2}(am|pm)/i);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

@@ -1,4 +1,4 @@
-import { GithubPullRequestStatusIcon } from '@app/component/side-panel';
+import { GithubPullRequestStatusIcon } from '@components/app/side-panel';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import { TOKENS } from '@core/hotkey/tokens';
 import { copyBranchNameToClipboard } from '@core/util/branchName';

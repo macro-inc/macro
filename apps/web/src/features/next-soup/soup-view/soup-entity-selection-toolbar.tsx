@@ -1,6 +1,6 @@
-import { useAnalytics } from '@app/component/analytics-context';
 import { CommandState } from '@app/features/command/state';
 import { EntitySelectionToolbarModal } from '@app/features/entity/EntitySelectionToolbarModal';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { EntityData } from '@entity';
 
 interface SoupEntitySelectionToolbarProps {

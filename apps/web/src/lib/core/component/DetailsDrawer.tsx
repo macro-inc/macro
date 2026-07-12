@@ -1,4 +1,4 @@
-import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
+import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon } from '@core/component/UserIcon';

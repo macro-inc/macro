@@ -1,5 +1,5 @@
-import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';

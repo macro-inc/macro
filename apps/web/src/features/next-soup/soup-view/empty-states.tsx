@@ -1,6 +1,6 @@
-import { runCreateAction } from '@app/component/Launcher';
 import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
+import { runCreateAction } from '@app/features/command/Launcher';
 import type { BlockAlias, BlockName } from '@core/block';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';

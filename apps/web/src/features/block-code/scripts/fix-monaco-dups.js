@@ -1,4 +1,6 @@
 // scripts/optimize-dependencies.js
+
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Glob } from 'bun';
@@ -6,8 +8,12 @@ import { Glob } from 'bun';
 async function optimizeDependencies() {
   console.log('🔍 Scanning for duplicate Monaco VS Code packages...');
 
-  // Find all Monaco packages
-  const rootNodeModules = resolve(__dirname, '../../../../../node_modules');
+  // Resolve from Git rather than from this feature's depth so future source
+  // reorganizations cannot silently point the cleanup at the wrong directory.
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+  }).trim();
+  const rootNodeModules = resolve(repoRoot, 'node_modules');
 
   // Use Bun's Glob API correctly
   const glob = new Glob('**/@codingame/monaco-vscode-*-common/package.json');
@@ -70,7 +76,7 @@ async function optimizeDependencies() {
 
   // Update package.json with resolutions
   if (Object.keys(resolutions).length > 0) {
-    const packageJsonPath = resolve('package.json');
+    const packageJsonPath = resolve(repoRoot, 'apps/web/package.json');
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
     packageJson.dependencies = {
       ...(packageJson.dependencies || {}),

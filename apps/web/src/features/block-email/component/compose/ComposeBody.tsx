@@ -1,8 +1,8 @@
-import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { addUserMentionToCc } from '@block-email/util/mentionToCc';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';

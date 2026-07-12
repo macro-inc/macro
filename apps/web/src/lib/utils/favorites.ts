@@ -1,5 +1,5 @@
-import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { getChannelParams } from '@block-channel/utils/link';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';

@@ -1,4 +1,4 @@
-import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
+import { getSplitPanelRef } from '@components/app/split-layout/layoutUtils';
 import { isInBlock } from '@core/block';
 import clickOutside from '@core/directive/clickOutside';
 import { blockElementSignal } from '@core/signal/blockElement';

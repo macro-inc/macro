@@ -1,7 +1,7 @@
-import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { toast } from 'core/component/Toast/Toast';
+import { toast } from '@core/component/Toast/Toast';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { blockData } from '../signal/blockData';
 import { ModalsProvider } from './ModalsProvider';

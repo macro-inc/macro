@@ -15,6 +15,7 @@ import {
   handleFoldersInput,
   zipFiles,
 } from '@core/client/zipWorkerClient';
+import { toast } from '@core/component/Toast/Toast';
 import {
   blockAcceptedMimetypeToFileExtension,
   blockAcceptsFileExtension,
@@ -36,7 +37,6 @@ import {
   type UploadSuccess as DssUploadSuccessResult,
   upload as dssUpload,
 } from '@service-storage/util/upload';
-import { toast } from 'core/component/Toast/Toast';
 
 const MAX_FILE_BYTE_SIZE = 2 * 1000 * 1000 * 1000; // 2GB
 

@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import IconGear from '@icon/macro-gear.svg';

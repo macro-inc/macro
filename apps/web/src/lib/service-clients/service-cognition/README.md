@@ -1,15 +1,4 @@
-# cognition-service
+# Cognition service client
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.1.23. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+App-local client, generated types, and tool bindings for the document cognition
+service. Regenerate it through the scripts exposed by `apps/web`.

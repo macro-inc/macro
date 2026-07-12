@@ -1,5 +1,3 @@
-import { SidePanel } from '@app/component/side-panel';
-import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -8,8 +6,9 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
+import { SidePanel } from '@components/app/side-panel';
+import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockAliasedName, useBlockId } from '@core/block';
-import type { LoroManager } from '@core/collab/manager';
 import {
   editorFocusSignal,
   getSaveState,
@@ -31,6 +30,7 @@ import {
 } from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import {

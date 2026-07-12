@@ -1,4 +1,3 @@
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import {
@@ -25,6 +24,7 @@ import {
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';

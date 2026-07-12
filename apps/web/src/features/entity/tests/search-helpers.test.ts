@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 import {
   getSearchIcon,
   getSenderId,
-} from '../src/extractors-search/search-helpers';
-import type { ContentHitData } from '../src/types/search';
+} from '../extractors-search/search-helpers';
+import type { ContentHitData } from '../types/search';
 
 describe('search-helpers', () => {
   describe('getSenderId', () => {
