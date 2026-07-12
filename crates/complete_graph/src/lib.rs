@@ -8,7 +8,7 @@ mod schema;
 #[cfg(test)]
 mod sdl_test;
 
-pub use edges::{SoupNotificationEdges, SoupPropertyEdges};
+pub use edges::SoupEdges;
 pub use graphql_common::GraphqlSoupRequestParts;
 pub use graphql_notification::{
     EntityNotificationsLoader, SoupNotificationEdgeReader, entity_notifications_loader,

@@ -28,21 +28,20 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 }
 
 /// Page returned by `Query.soup`.
-pub struct SoupPage<E: SoupEntityEdges, PE: SoupEntityEdges> {
-    items: Vec<GraphqlSoupItem<E, PE>>,
+pub struct SoupPage<E: SoupEntityEdges> {
+    items: Vec<GraphqlSoupItem<E>>,
     next_cursor: Option<String>,
     has_more: bool,
 }
 
 /// Page returned by `Query.soup`.
 #[Object(name = "SoupPage")]
-impl<E, PE> SoupPage<E, PE>
+impl<E> SoupPage<E>
 where
     E: SoupEntityEdges,
-    PE: SoupEntityEdges,
 {
     /// Items in the current page.
-    async fn items(&self) -> &[GraphqlSoupItem<E, PE>] {
+    async fn items(&self) -> &[GraphqlSoupItem<E>] {
         &self.items
     }
 
@@ -57,9 +56,7 @@ where
     }
 }
 
-impl<E: SoupEntityEdges, PE: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>>
-    for SoupPage<E, PE>
-{
+impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage<E> {
     fn from(page: PaginatedOpaqueCursor<FrecencySoupItem>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
@@ -71,18 +68,17 @@ impl<E: SoupEntityEdges, PE: SoupEntityEdges> From<PaginatedOpaqueCursor<Frecenc
 }
 
 /// GraphQL Soup item envelope.
-pub struct GraphqlSoupItem<E: SoupEntityEdges, PE: SoupEntityEdges> {
+pub struct GraphqlSoupItem<E: SoupEntityEdges> {
     id: String,
     entity_type: GraphqlSoupEntityType,
     frecency_score: f64,
-    entity: GraphqlSoupEntity<E, PE>,
+    entity: GraphqlSoupEntity<E>,
 }
 
 #[Object(name = "GraphqlSoupItem")]
-impl<E, PE> GraphqlSoupItem<E, PE>
+impl<E> GraphqlSoupItem<E>
 where
     E: SoupEntityEdges,
-    PE: SoupEntityEdges,
 {
     async fn id(&self) -> ID {
         ID(self.id.clone())
@@ -96,12 +92,12 @@ where
         self.frecency_score
     }
 
-    async fn entity(&self) -> &GraphqlSoupEntity<E, PE> {
+    async fn entity(&self) -> &GraphqlSoupEntity<E> {
         &self.entity
     }
 }
 
-impl<E: SoupEntityEdges, PE: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E, PE> {
+impl<E: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E> {
     fn from(item: FrecencySoupItem) -> Self {
         let FrecencySoupItem {
             item,
@@ -123,15 +119,15 @@ impl<E: SoupEntityEdges, PE: SoupEntityEdges> From<FrecencySoupItem> for Graphql
 
 /// GraphQL union over expanded Soup entity variants.
 #[derive(Union)]
-pub enum GraphqlSoupEntity<E: SoupEntityEdges, PE: SoupEntityEdges> {
+pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     /// Document entity.
-    Document(GraphqlSoupDocument<PE>),
+    Document(GraphqlSoupDocument<E>),
     /// Chat entity.
-    Chat(GraphqlSoupChat<PE>),
+    Chat(GraphqlSoupChat<E>),
     /// Project entity.
-    Project(GraphqlSoupProject<PE>),
+    Project(GraphqlSoupProject<E>),
     /// Email thread entity.
-    EmailThread(GraphqlSoupEmailThread<PE>),
+    EmailThread(GraphqlSoupEmailThread<E>),
     /// Channel entity.
     Channel(GraphqlSoupChannel<E>),
     /// Channel thread entity.
@@ -139,38 +135,37 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges, PE: SoupEntityEdges> {
     /// Call entity.
     Call(GraphqlSoupCall<E>),
     /// CRM company entity.
-    CrmCompany(GraphqlSoupCrmCompany<PE>),
+    CrmCompany(GraphqlSoupCrmCompany<E>),
     /// Foreign entity.
     ForeignEntity(GraphqlSoupForeignEntity<E>),
 }
 
-impl<E, PE> From<SoupItem> for GraphqlSoupEntity<E, PE>
+impl<E> From<SoupItem> for GraphqlSoupEntity<E>
 where
     E: SoupEntityEdges,
-    PE: SoupEntityEdges,
 {
     fn from(item: SoupItem) -> Self {
         match item {
             SoupItem::Document(item) => {
-                let edges = PE::from_entity(
+                let edges = E::from_entity(
                     model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
                 );
                 Self::Document(GraphqlSoupDocument(item, edges))
             }
             SoupItem::Chat(item) => {
-                let edges = PE::from_entity(
+                let edges = E::from_entity(
                     model_entity::EntityType::Chat.with_entity_string(item.id.to_string()),
                 );
                 Self::Chat(GraphqlSoupChat(item, edges))
             }
             SoupItem::Project(item) => {
-                let edges = PE::from_entity(
+                let edges = E::from_entity(
                     model_entity::EntityType::Project.with_entity_string(item.id.to_string()),
                 );
                 Self::Project(GraphqlSoupProject(item, edges))
             }
             SoupItem::EmailThread(item) => {
-                let edges = PE::from_entity(
+                let edges = E::from_entity(
                     model_entity::EntityType::EmailThread
                         .with_entity_string(item.thread.id.to_string()),
                 );
@@ -197,7 +192,7 @@ where
                 Self::Call(GraphqlSoupCall(item, edges))
             }
             SoupItem::CrmCompany(item) => {
-                let edges = PE::from_entity(
+                let edges = E::from_entity(
                     model_entity::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
                 );
                 Self::CrmCompany(GraphqlSoupCrmCompany(item, edges))

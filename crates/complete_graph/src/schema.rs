@@ -21,7 +21,7 @@ use graphql_soup::{SharedSoupService, SoupInput, SoupPage, resolve_soup};
 use model_user::axum_extractor::MacroUserExtractor;
 use soup::domain::ports::{NoOpSoupService, SoupService};
 
-use crate::{SoupNotificationEdges, SoupPropertyEdges};
+use crate::SoupEdges;
 
 /// GraphQL Soup schema type.
 ///
@@ -183,12 +183,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: SoupInput,
-    ) -> async_graphql::Result<SoupPage<SoupNotificationEdges<NR>, SoupPropertyEdges<NR, PR>>> {
-        resolve_soup::<S, E, EAS, St, SoupNotificationEdges<NR>, SoupPropertyEdges<NR, PR>>(
-            &self.service,
-            ctx,
-            input,
-        )
-        .await
+    ) -> async_graphql::Result<SoupPage<SoupEdges<NR, PR>>> {
+        resolve_soup::<S, E, EAS, St, SoupEdges<NR, PR>>(&self.service, ctx, input).await
     }
 }
