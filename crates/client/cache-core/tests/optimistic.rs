@@ -18,7 +18,14 @@ query Soup($input: SoupInput!) {
           __typename
           ... on GraphqlSoupDocument {
             id
-            properties { id displayName value { kind stringValue } }
+            properties {
+              id
+              displayName
+              value {
+                __typename
+                ... on GraphqlStringPropertyValue { stringValue: value }
+              }
+            }
           }
         }
       }
@@ -33,7 +40,10 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
   setEntityProperty(input: $input) {
     id
     displayName
-    value { kind stringValue }
+    value {
+      __typename
+      ... on GraphqlStringPropertyValue { stringValue: value }
+    }
   }
 }
 "#;
@@ -74,7 +84,10 @@ fn soup_page(display_name: &str, value: &str) -> Json {
                         "properties": [{
                             "id": "prop-1",
                             "displayName": display_name,
-                            "value": { "kind": "String", "stringValue": value }
+                            "value": {
+                                "__typename": "GraphqlStringPropertyValue",
+                                "stringValue": value
+                            }
                         }]
                     }
                 }],
@@ -89,7 +102,10 @@ fn mutation_response(display_name: &str, value: &str) -> Json {
         "setEntityProperty": {
             "id": "prop-1",
             "displayName": display_name,
-            "value": { "kind": "String", "stringValue": value }
+            "value": {
+                "__typename": "GraphqlStringPropertyValue",
+                "stringValue": value
+            }
         }
     })
 }
@@ -232,10 +248,7 @@ fn begin_composes_over_base_without_persisting() {
         let Some(CacheValue::Object(value)) = stored.fields.get("value") else {
             panic!("stored value shape");
         };
-        assert_eq!(
-            value.get("stringValue"),
-            Some(&CacheValue::String("todo".into()))
-        );
+        assert_eq!(value.get("value"), Some(&CacheValue::String("todo".into())));
     });
 }
 
@@ -523,11 +536,7 @@ fn different_fields_on_same_record_compose() {
                 MUTATION,
                 Some("SetEntityProperty"),
                 &mutation_vars("todo"),
-                &json!({ "setEntityProperty": {
-                    "id": "prop-1",
-                    "displayName": "Stage",
-                    "value": { "kind": "String", "stringValue": "todo" }
-                }}),
+                &mutation_response("Stage", "todo"),
             )
             .await
             .unwrap();
@@ -537,11 +546,7 @@ fn different_fields_on_same_record_compose() {
                 MUTATION,
                 Some("SetEntityProperty"),
                 &mutation_vars("doing"),
-                &json!({ "setEntityProperty": {
-                    "id": "prop-1",
-                    "displayName": "Stage",
-                    "value": { "kind": "String", "stringValue": "doing" }
-                }}),
+                &mutation_response("Stage", "doing"),
             )
             .await
             .unwrap();
@@ -558,11 +563,7 @@ fn different_fields_on_same_record_compose() {
                 MUTATION,
                 Some("SetEntityProperty"),
                 &mutation_vars("todo"),
-                &json!({ "setEntityProperty": {
-                    "id": "prop-1",
-                    "displayName": "Stage",
-                    "value": { "kind": "String", "stringValue": "todo" }
-                }}),
+                &mutation_response("Stage", "todo"),
             )
             .await
             .unwrap();
