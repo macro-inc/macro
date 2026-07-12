@@ -9,6 +9,7 @@ use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
+use tokio::sync::Notify;
 
 /// A tool that echoes its input.
 #[derive(Deserialize, JsonSchema)]
@@ -188,4 +189,96 @@ async fn without_observer_changes_nothing() {
     let collected = util::drive(&mut session, "call the tool").await;
     assert!(collected.error.is_none());
     assert_eq!(collected.content(), "done");
+}
+
+/// A tool that blocks until the test drops the stream. `started` lets the test
+/// wait until the tool is genuinely mid-flight before cancelling.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "stall_tool", description = "Blocks until cancelled.")]
+struct StallTool {}
+
+#[async_trait]
+impl AsyncTool<Arc<Notify>> for StallTool {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        service_context: ServiceContext<Arc<Notify>>,
+        _request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        service_context.notify_one();
+        std::future::pending::<()>().await;
+        unreachable!("pending future never resolves")
+    }
+}
+
+/// Dropping the stream mid-tool (abrupt cancellation) must still close the
+/// message span — `message_finished ok=false` — and end the session exactly
+/// once. This is the `Drop` fallback on `MessageObserve`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropped_stream_still_finishes_the_message_span() {
+    let model = MockCompletionModel::from_stream_turns([vec![
+        MockStreamEvent::tool_call("call-1", "stall_tool", serde_json::json!({})),
+        MockStreamEvent::final_response_with_default_usage(),
+    ]]);
+    let recording = Arc::new(Recording::default());
+    let started = Arc::new(Notify::new());
+    let mut session = util::test_loop()
+        .with_observer(recording.clone())
+        .test_session(
+            util::single_tool_set::<StallTool, Arc<Notify>>(),
+            Arc::new(started.clone()),
+            "test preamble",
+            util::usage_ctx(),
+            model,
+        )
+        .await;
+
+    let mut stream = session
+        .send_message(vec![crate::Message::user("stall")])
+        .await
+        .expect("stream starts");
+    // Drain until the tool is running, then drop the stream (client abort).
+    while util::next_within(&mut stream, std::time::Duration::from_secs(5))
+        .await
+        .is_some()
+    {
+        if recording
+            .events()
+            .iter()
+            .any(|e| e.starts_with("tool_started"))
+        {
+            break;
+        }
+    }
+    started.notified().await;
+    drop(stream);
+    drop(session);
+    tokio::task::yield_now().await;
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let events = recording.events();
+    let finishes: Vec<&String> = events
+        .iter()
+        .filter(|e| e.starts_with("message_finished"))
+        .collect();
+    assert_eq!(
+        finishes.len(),
+        1,
+        "exactly one message_finished: {events:?}"
+    );
+    assert!(
+        finishes[0].ends_with("ok=false"),
+        "aborted message closes as not-ok: {events:?}"
+    );
+    assert_eq!(
+        events.iter().filter(|e| *e == "session_ended").count(),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        events.last().map(String::as_str),
+        Some("session_ended"),
+        "{events:?}"
+    );
 }

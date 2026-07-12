@@ -15,7 +15,7 @@ use macro_env_var::maybe_env_var;
 use std::sync::Arc;
 #[cfg(feature = "orrery")]
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(feature = "orrery")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -144,6 +144,7 @@ impl ObserveHandle {
             handle: self.clone(),
             span_id,
             llm_calls: AtomicU64::new(0),
+            finished: AtomicBool::new(false),
         })
     }
 }
@@ -160,6 +161,7 @@ pub(crate) struct MessageObserve {
     handle: Arc<ObserveHandle>,
     span_id: String,
     llm_calls: AtomicU64,
+    finished: AtomicBool,
 }
 
 impl MessageObserve {
@@ -194,11 +196,24 @@ impl MessageObserve {
         );
     }
 
-    /// Report the exchange finishing.
+    /// Report the exchange finishing. Idempotent: only the first call emits.
     pub(crate) fn finish(&self, ok: bool) {
+        if self.finished.swap(true, Ordering::Relaxed) {
+            return;
+        }
         self.handle
             .observer
             .message_finished(&self.handle.session_id, &self.span_id, ok);
+    }
+}
+
+/// Fallback close: an aborted stream (client drop / cancellation) never reaches
+/// the driver's `finish` call, so close the span as not-ok here. The `Arc` to
+/// the session's [`ObserveHandle`] is still held at this point, so this always
+/// emits before `session_ended`.
+impl Drop for MessageObserve {
+    fn drop(&mut self) {
+        self.finish(false);
     }
 }
 
