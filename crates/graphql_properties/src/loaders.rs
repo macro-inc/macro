@@ -4,7 +4,7 @@ use async_graphql::dataloader::{DataLoader, Loader};
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::SoupProperty;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use rootcause::markers::{Cloneable, Dynamic};
 
 fn property_entity_type(
@@ -20,7 +20,7 @@ fn property_entity_type(
 }
 
 /// Reader used by GraphQL property edges.
-pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
+pub trait EntityPropertyReader: Send + Sync + 'static {
     /// Load properties for the requested entity keys on behalf of the given
     /// user. Entities the user cannot view yield an empty property list.
     fn get_properties(
@@ -29,7 +29,7 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
         keys: &[model_entity::Entity<'static>],
     ) -> impl Future<
         Output = Result<
-            HashMap<model_entity::Entity<'static>, Vec<SoupProperty>>,
+            HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
             rootcause::Report,
         >,
     > + Send;
@@ -37,26 +37,29 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
 
 /// Property reader used by schema-only GraphQL construction.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct NoOpSoupPropertyEdgeReader;
+pub struct NoOpEntityPropertyReader;
 
-impl SoupPropertyEdgeReader for NoOpSoupPropertyEdgeReader {
+impl EntityPropertyReader for NoOpEntityPropertyReader {
     async fn get_properties(
         &self,
         _user_id: &MacroUserIdStr<'static>,
         keys: &[model_entity::Entity<'static>],
-    ) -> Result<HashMap<model_entity::Entity<'static>, Vec<SoupProperty>>, rootcause::Report> {
+    ) -> Result<
+        HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
+        rootcause::Report,
+    > {
         Ok(keys.iter().cloned().map(|key| (key, Vec::new())).collect())
     }
 }
 
 /// GraphQL property reader backed by the properties domain service and the
 /// canonical entity access service.
-pub struct PropertiesSoupPropertyEdgeReader<P, A> {
+pub struct PropertiesEntityPropertyReader<P, A> {
     properties_service: Arc<P>,
     entity_access_service: Arc<A>,
 }
 
-impl<P, A> PropertiesSoupPropertyEdgeReader<P, A> {
+impl<P, A> PropertiesEntityPropertyReader<P, A> {
     /// Create a property edge reader from the services supplied by the
     /// application composition root.
     pub fn new(properties_service: Arc<P>, entity_access_service: Arc<A>) -> Self {
@@ -67,7 +70,7 @@ impl<P, A> PropertiesSoupPropertyEdgeReader<P, A> {
     }
 }
 
-impl<P, A> SoupPropertyEdgeReader for PropertiesSoupPropertyEdgeReader<P, A>
+impl<P, A> EntityPropertyReader for PropertiesEntityPropertyReader<P, A>
 where
     P: properties::PropertiesService,
     A: EntityAccessService,
@@ -76,7 +79,10 @@ where
         &self,
         user_id: &MacroUserIdStr<'static>,
         keys: &[model_entity::Entity<'static>],
-    ) -> Result<HashMap<model_entity::Entity<'static>, Vec<SoupProperty>>, rootcause::Report> {
+    ) -> Result<
+        HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
+        rootcause::Report,
+    > {
         let mut result = keys
             .iter()
             .cloned()
@@ -139,10 +145,7 @@ where
                 entity_type,
             };
             if let Some(properties) = properties_by_entity.get(&batch_key) {
-                result.insert(
-                    key.clone(),
-                    properties.iter().cloned().map(SoupProperty::from).collect(),
-                );
+                result.insert(key.clone(), properties.clone());
             }
         }
 
@@ -165,9 +168,9 @@ impl<R> EntityPropertiesLoader<R> {
 
 impl<R> Loader<model_entity::OwnedEntity> for EntityPropertiesLoader<R>
 where
-    R: SoupPropertyEdgeReader,
+    R: EntityPropertyReader,
 {
-    type Value = Vec<SoupProperty>;
+    type Value = Vec<EntityPropertyWithDefinition>;
     type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(
@@ -201,7 +204,7 @@ pub fn entity_properties_loader<R>(
     reader: R,
 ) -> DataLoader<EntityPropertiesLoader<R>>
 where
-    R: SoupPropertyEdgeReader,
+    R: EntityPropertyReader,
 {
     DataLoader::new(EntityPropertiesLoader::new(user_id, reader), tokio::spawn)
 }

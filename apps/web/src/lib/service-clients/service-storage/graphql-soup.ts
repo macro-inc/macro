@@ -113,11 +113,11 @@ export type GraphqlSoupInput = SoupInput;
 
 type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem['entity'];
-type GraphqlSoupProperty = Extract<
+type GraphqlProperty = Extract<
   GraphqlSoupEntity,
   { __typename: 'GraphqlSoupDocument' }
 >['properties'][number];
-type GraphqlSoupPropertyValue = NonNullable<GraphqlSoupProperty['value']>;
+type GraphqlPropertyValue = NonNullable<GraphqlProperty['value']>;
 type GraphqlSoupDocument = Extract<
   GraphqlSoupEntity,
   { __typename: 'GraphqlSoupDocument' }
@@ -129,66 +129,66 @@ type GraphqlSoupChannelMessage = NonNullable<
   >['latestMessage']
 >;
 
-const GRAPHQL_PROPERTY_VALUE_KINDS = [
-  'Boolean',
-  'Number',
-  'String',
-  'Date',
-  'SelectOption',
-  'EntityReference',
-  'Link',
-] as const;
-
-type GraphqlPropertyValueKind = (typeof GRAPHQL_PROPERTY_VALUE_KINDS)[number];
-
-function isGraphqlPropertyValueKind(
-  kind: string
-): kind is GraphqlPropertyValueKind {
-  return GRAPHQL_PROPERTY_VALUE_KINDS.includes(
-    kind as GraphqlPropertyValueKind
-  );
-}
-
 function mapGraphqlPropertyValue(
-  value: GraphqlSoupPropertyValue | null | undefined
+  value: GraphqlPropertyValue | null | undefined
 ) {
   if (!value) return value;
-  if (!isGraphqlPropertyValueKind(value.kind)) return undefined;
 
-  return match(value.kind)
-    .with('Boolean', () => ({
-      type: 'Boolean' as const,
-      value: value.boolValue ?? false,
+  return match(value)
+    .with(
+      { __typename: 'GraphqlBooleanPropertyValue' },
+      ({ boolValue }) => ({
+        type: 'Boolean' as const,
+        value: boolValue,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlNumberPropertyValue' },
+      ({ numberValue }) => ({
+        type: 'Number' as const,
+        value: numberValue,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlStringPropertyValue' },
+      ({ stringValue }) => ({
+        type: 'String' as const,
+        value: stringValue,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlDatePropertyValue' },
+      ({ dateValue }) => ({
+        type: 'Date' as const,
+        value: dateValue,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlSelectOptionPropertyValue' },
+      ({ optionIds }) => ({
+        type: 'SelectOption' as const,
+        value: optionIds,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlEntityReferencePropertyValue' },
+      ({ references }) => ({
+        type: 'EntityReference' as const,
+        value: references.map((reference) => ({
+          entity_id: reference.entityId,
+          entity_type: reference.entityType,
+          specific_message_id: reference.specificMessageId ?? undefined,
+        })),
+      })
+    )
+    .with({ __typename: 'GraphqlLinkPropertyValue' }, ({ urls }) => ({
+      type: 'Link' as const,
+      value: urls,
     }))
-    .with('Number', () => ({
-      type: 'Number' as const,
-      value: value.numberValue ?? 0,
-    }))
-    .with('String', () => ({
-      type: 'String' as const,
-      value: value.stringValue ?? '',
-    }))
-    .with('Date', () => ({
-      type: 'Date' as const,
-      value: value.dateValue ?? '',
-    }))
-    .with('SelectOption', () => ({
-      type: 'SelectOption' as const,
-      value: value.selectOptionIds,
-    }))
-    .with('EntityReference', () => ({
-      type: 'EntityReference' as const,
-      value: value.entityReferences.map((ref) => ({
-        entity_id: ref.entityId,
-        entity_type: ref.entityType,
-        specific_message_id: ref.specificMessageId ?? undefined,
-      })),
-    }))
-    .with('Link', () => ({ type: 'Link' as const, value: value.links }))
     .exhaustive();
 }
 
-function mapGraphqlProperties(properties: GraphqlSoupProperty[]) {
+function mapGraphqlProperties(properties: GraphqlProperty[]) {
   return properties.map((property) => ({
     id: property.id,
     definition: {

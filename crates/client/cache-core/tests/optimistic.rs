@@ -38,7 +38,7 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
 }
 "#;
 
-const PROPERTY_KEY: &str = "GraphqlSoupProperty:prop-1";
+const PROPERTY_KEY: &str = "GraphqlProperty:prop-1";
 
 fn query_vars() -> serde_json::Map<String, Json> {
     let Json::Object(map) = json!({ "input": { "limit": 10 } }) else {

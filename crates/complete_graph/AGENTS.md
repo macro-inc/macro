@@ -19,7 +19,7 @@ Clients key cache records by `__typename:id`. Consequences:
   can appear, across all queries, arguments, and parent objects.
 - **Only name a field `id` when it is the object's global identity.** If a
   type carries a reference to something else's id, name it accordingly:
-  - `GraphqlSoupProperty.id` is the globally unique entity-property assignment
+  - `GraphqlProperty.id` is the globally unique entity-property assignment
     id. `propertyDefinitionId` remains separate because definitions are shared
     while assignment values are per-entity.
   - `GraphqlSoupChannelMessage.id` (renamed from `messageId`) — it *is* the

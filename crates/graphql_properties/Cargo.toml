@@ -12,7 +12,6 @@ graphql_common = { path = "../graphql_common" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
-models_soup = { path = "../models_soup" }
 properties = { path = "../properties", default-features = false, features = [
   "ports",
 ] }

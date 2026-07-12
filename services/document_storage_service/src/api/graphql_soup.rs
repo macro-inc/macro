@@ -54,7 +54,7 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
         .into_response();
     };
 
-    let property_reader = complete_graph::PropertiesSoupPropertyEdgeReader::new(
+    let property_reader = complete_graph::PropertiesEntityPropertyReader::new(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
     );

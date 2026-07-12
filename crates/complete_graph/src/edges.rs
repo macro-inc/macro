@@ -4,7 +4,7 @@ use async_graphql::{Context, Object};
 use graphql_notification::{
     GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
 };
-use graphql_properties::{GraphqlSoupProperty, SoupPropertyEdgeReader, load_entity_properties};
+use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
 
 /// Notification and property fields attached to property-bearing Soup entities.
@@ -28,7 +28,7 @@ impl<NR, PR> Clone for SoupEdges<NR, PR> {
 impl<NR, PR> SoupEntityEdges for SoupEdges<NR, PR>
 where
     NR: SoupNotificationEdgeReader,
-    PR: SoupPropertyEdgeReader,
+    PR: EntityPropertyReader,
 {
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -42,12 +42,9 @@ where
 impl<NR, PR> SoupEdges<NR, PR>
 where
     NR: SoupNotificationEdgeReader,
-    PR: SoupPropertyEdgeReader,
+    PR: EntityPropertyReader,
 {
-    async fn properties(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupProperty>> {
+    async fn properties(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlProperty>> {
         load_entity_properties::<PR>(ctx, self.entity.clone()).await
     }
 

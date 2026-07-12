@@ -159,7 +159,7 @@ async fn optimistic_write_round_trip() {
     assert_eq!(begin["affectedOps"], serde_json::json!(["tab1:1"]));
     assert_eq!(
         begin["changed"],
-        serde_json::json!(["GraphqlSoupProperty:prop-1"])
+        serde_json::json!(["GraphqlProperty:prop-1"])
     );
 
     // The optimistic layer is visible through reads.
@@ -190,7 +190,7 @@ async fn optimistic_write_round_trip() {
     let commit: serde_json::Value = serde_wasm_bindgen::from_value(commit).unwrap();
     assert_eq!(
         commit["changed"],
-        serde_json::json!(["GraphqlSoupProperty:prop-1"])
+        serde_json::json!(["GraphqlProperty:prop-1"])
     );
     assert_eq!(commit["affectedOps"], serde_json::json!(["tab1:1"]));
 

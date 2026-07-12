@@ -65,7 +65,7 @@ impl GraphqlPropertyMatchValue {
     }
 }
 
-/// GraphQL entity type supported by property filters.
+/// An entity type supported by the properties domain.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlPropertyEntityType {
     /// Channel entity.
@@ -97,6 +97,21 @@ impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
+        }
+    }
+}
+
+impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
+    fn from(value: models_properties::EntityType) -> Self {
+        match value {
+            models_properties::EntityType::Channel => Self::Channel,
+            models_properties::EntityType::Chat => Self::Chat,
+            models_properties::EntityType::Company => Self::Company,
+            models_properties::EntityType::Document => Self::Document,
+            models_properties::EntityType::Project => Self::Project,
+            models_properties::EntityType::Task => Self::Task,
+            models_properties::EntityType::Thread => Self::Thread,
+            models_properties::EntityType::User => Self::User,
         }
     }
 }

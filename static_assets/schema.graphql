@@ -1,3 +1,13 @@
+"""
+A Boolean property value.
+"""
+type GraphqlBooleanPropertyValue {
+	"""
+	The stored Boolean.
+	"""
+	value: Boolean!
+}
+
 input GraphqlCallBinaryExpr {
 	left: GraphqlCallExpr!
 	right: GraphqlCallExpr!
@@ -136,6 +146,16 @@ input GraphqlDateLiteral @oneOf {
 	lte: String
 }
 
+"""
+A date-time property value.
+"""
+type GraphqlDatePropertyValue {
+	"""
+	The stored date-time formatted as RFC 3339.
+	"""
+	value: String!
+}
+
 input GraphqlDocumentBinaryExpr {
 	left: GraphqlDocumentExpr!
 	right: GraphqlDocumentExpr!
@@ -241,6 +261,16 @@ input GraphqlEntityReferenceInput {
 	specificMessageId: ID
 }
 
+"""
+An entity-reference property value.
+"""
+type GraphqlEntityReferencePropertyValue {
+	"""
+	The referenced entities.
+	"""
+	references: [GraphqlPropertyEntityReference!]!
+}
+
 input GraphqlForeignEntityBinaryExpr {
 	left: GraphqlForeignEntityExpr!
 	right: GraphqlForeignEntityExpr!
@@ -260,6 +290,26 @@ input GraphqlForeignEntityLiteral @oneOf {
 	includesMe: Boolean
 	notificationDone: Boolean
 	notificationSeen: Boolean
+}
+
+"""
+A link property value.
+"""
+type GraphqlLinkPropertyValue {
+	"""
+	The stored URLs.
+	"""
+	urls: [String!]!
+}
+
+"""
+A numeric property value.
+"""
+type GraphqlNumberPropertyValue {
+	"""
+	The stored number.
+	"""
+	value: Float!
 }
 
 input GraphqlProjectBinaryExpr {
@@ -315,8 +365,107 @@ input GraphqlPropertiesLiteral {
 	value: GraphqlPropertyMatchValue!
 }
 
+type GraphqlProperty {
+	"""
+	The globally unique identifier of this entity-property assignment.
+	"""
+	id: ID!
+	"""
+	The identifier of the shared property definition.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	The user-facing name of the property.
+	"""
+	displayName: String!
+	"""
+	The type of value accepted by the property.
+	"""
+	dataType: GraphqlPropertyDataType!
+	"""
+	Whether the property can contain more than one value.
+	"""
+	isMultiSelect: Boolean!
+	"""
+	The required entity type for entity-reference properties, when constrained.
+	"""
+	specificEntityType: GraphqlPropertyEntityType
+	"""
+	Whether this property is managed by the system.
+	"""
+	isSystem: Boolean!
+	"""
+	Whether this property describes entity metadata.
+	"""
+	isMetadata: Boolean!
+	"""
+	The current value, represented by exactly one typed union variant.
+	"""
+	value: GraphqlPropertyValue
+}
+
 """
-GraphQL entity type supported by property filters.
+A property definition's supported value type.
+"""
+enum GraphqlPropertyDataType {
+	"""
+	Boolean true/false values.
+	"""
+	BOOLEAN
+	"""
+	Date and time values.
+	"""
+	DATE
+	"""
+	Numeric values.
+	"""
+	NUMBER
+	"""
+	String or text values.
+	"""
+	STRING
+	"""
+	A select property with numeric options.
+	"""
+	SELECT_NUMBER
+	"""
+	A select property with string options.
+	"""
+	SELECT_STRING
+	"""
+	User- or team-scoped colored labels.
+	"""
+	TAG
+	"""
+	References to other entities.
+	"""
+	ENTITY
+	"""
+	URL values.
+	"""
+	LINK
+}
+
+"""
+An entity reference stored in a property value.
+"""
+type GraphqlPropertyEntityReference {
+	"""
+	The referenced entity's identifier.
+	"""
+	entityId: String!
+	"""
+	The referenced entity's property-domain type.
+	"""
+	entityType: GraphqlPropertyEntityType!
+	"""
+	The specific message identifier when the reference targets a thread message.
+	"""
+	specificMessageId: ID
+}
+
+"""
+An entity type supported by the properties domain.
 """
 enum GraphqlPropertyEntityType {
 	"""
@@ -365,6 +514,21 @@ input GraphqlPropertyMatchValue @oneOf {
 	Entity reference id to match.
 	"""
 	entityRef: String
+}
+
+"""
+A property value represented by a type-safe GraphQL union.
+"""
+union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
+
+"""
+A select-option property value.
+"""
+type GraphqlSelectOptionPropertyValue {
+	"""
+	The selected option identifiers.
+	"""
+	optionIds: [ID!]!
 }
 
 input GraphqlSetPropertyValue @oneOf {
@@ -425,7 +589,7 @@ type GraphqlSoupCall {
 	participantCount: Int!
 	participantIds: [String!]!
 	participants: [GraphqlSoupCallParticipant!]!
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -451,7 +615,7 @@ type GraphqlSoupChannel {
 	participants: [GraphqlSoupChannelParticipant!]!
 	latestMessage: GraphqlSoupChannelMessage
 	latestNonThreadMessage: GraphqlSoupChannelMessage
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -483,7 +647,7 @@ type GraphqlSoupChannelThread {
 	updatedAt: String!
 	effectiveUpdatedAt: String!
 	replyCount: Int!
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -497,7 +661,7 @@ type GraphqlSoupChat {
 	updatedAt: String!
 	viewedAt: String
 	deletedAt: String
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -512,50 +676,8 @@ type GraphqlSoupCrmCompany {
 	updatedAt: String!
 	viewedAt: String
 	domains: [String!]!
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
-}
-
-"""
-GraphQL representation of supported Soup property data types.
-"""
-enum GraphqlSoupDataType {
-	"""
-	Boolean true/false values.
-	"""
-	BOOLEAN
-	"""
-	Date and time values.
-	"""
-	DATE
-	"""
-	Numeric values.
-	"""
-	NUMBER
-	"""
-	String/text values.
-	"""
-	STRING
-	"""
-	Select property with numeric options.
-	"""
-	SELECT_NUMBER
-	"""
-	Select property with string options.
-	"""
-	SELECT_STRING
-	"""
-	Tag property - user- or team-scoped colored labels (always multi-select).
-	"""
-	TAG
-	"""
-	Entity reference property.
-	"""
-	ENTITY
-	"""
-	Link value Property.
-	"""
-	LINK
 }
 
 type GraphqlSoupDocument {
@@ -569,7 +691,7 @@ type GraphqlSoupDocument {
 	viewedAt: String
 	deletedAt: String
 	subType: GraphqlSoupDocumentSubType
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -632,7 +754,7 @@ type GraphqlSoupEmailThread {
 	participants: [GraphqlSoupEmailParticipant!]!
 	attachments: [GraphqlSoupEmailAttachment!]!
 	labels: [GraphqlSoupEmailLabel!]!
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -708,7 +830,7 @@ type GraphqlSoupForeignEntity {
 	metadata: JSON!
 	createdAt: String!
 	updatedAt: String!
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -743,87 +865,18 @@ type GraphqlSoupProject {
 	updatedAt: String!
 	viewedAt: String
 	deletedAt: String
-	properties: [GraphqlSoupProperty!]!
+	properties: [GraphqlProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
-type GraphqlSoupProperty {
-	"""
-	Globally unique id of this property assignment.
-	"""
-	id: ID!
-	"""
-	Id of the shared property definition.
-	"""
-	propertyDefinitionId: ID!
-	displayName: String!
-	dataType: GraphqlSoupDataType!
-	isMultiSelect: Boolean!
-	specificEntityType: GraphqlSoupPropertyEntityType
-	isSystem: Boolean!
-	isMetadata: Boolean!
-	value: GraphqlSoupPropertyValue
-}
-
 """
-GraphQL entity reference stored in a property value.
+A string property value.
 """
-type GraphqlSoupPropertyEntityReference {
-	entityId: String!
-	entityType: GraphqlSoupPropertyEntityType!
-	specificMessageId: ID
-}
-
-"""
-GraphQL entity type supported by Soup properties.
-"""
-enum GraphqlSoupPropertyEntityType {
+type GraphqlStringPropertyValue {
 	"""
-	Channel entity.
+	The stored string.
 	"""
-	CHANNEL
-	"""
-	Chat entity.
-	"""
-	CHAT
-	"""
-	Company entity.
-	"""
-	COMPANY
-	"""
-	Document entity.
-	"""
-	DOCUMENT
-	"""
-	Project entity.
-	"""
-	PROJECT
-	"""
-	Task entity.
-	"""
-	TASK
-	"""
-	Thread entity.
-	"""
-	THREAD
-	"""
-	User entity.
-	"""
-	USER
-}
-
-"""
-GraphQL representation of a property value.
-"""
-type GraphqlSoupPropertyValue {
-	kind: String!
-	boolValue: Boolean
-	numberValue: Float
-	stringValue: String
-	dateValue: String
-	selectOptionIds: [ID!]!
-	entityReferences: [GraphqlSoupPropertyEntityReference!]!
-	links: [String!]!
+	value: String!
 }
 
 type GraphqlUser {
@@ -846,7 +899,7 @@ type PropertiesMutationRoot {
 	"""
 	Set or attach one property on an entity.
 	"""
-	setEntityProperty(input: SetEntityPropertyInput!): GraphqlSoupProperty!
+	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
 }
 
 input SetEntityPropertyInput {

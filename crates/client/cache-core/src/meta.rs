@@ -135,10 +135,10 @@ mod tests {
         // Property assignments have globally unique database ids and are
         // normalized independently from their shared definitions.
         assert_eq!(
-            type_meta("GraphqlSoupProperty").unwrap().key_fields,
+            type_meta("GraphqlProperty").unwrap().key_fields,
             Some(&["id"][..])
         );
-        assert!(field_meta("GraphqlSoupProperty", "propertyDefinitionId").is_some());
+        assert!(field_meta("GraphqlProperty", "propertyDefinitionId").is_some());
         // No id field → embedded.
         assert_eq!(type_meta("SoupPage").unwrap().key_fields, None);
         assert_eq!(
@@ -151,9 +151,9 @@ mod tests {
 
     #[test]
     fn field_shapes() {
-        // properties: [GraphqlSoupProperty!]!
+        // properties: [GraphqlProperty!]!
         let f = field_meta("GraphqlSoupDocument", "properties").unwrap();
-        assert_eq!(f.ty.name, "GraphqlSoupProperty");
+        assert_eq!(f.ty.name, "GraphqlProperty");
         assert_eq!(f.ty.kind, FieldKind::Composite);
         assert!(!f.ty.nullable && f.ty.list && !f.ty.item_nullable);
 

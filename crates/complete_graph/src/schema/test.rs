@@ -269,7 +269,7 @@ struct TestHarness {
         TestState,
         NoOpEntityPropertyWriter,
         NoOpSoupNotificationEdgeReader,
-        NoOpSoupPropertyEdgeReader,
+        NoOpEntityPropertyReader,
     >,
     state: TestState,
     inbox_calls: Arc<AtomicUsize>,

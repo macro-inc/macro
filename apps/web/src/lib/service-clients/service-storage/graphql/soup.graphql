@@ -190,7 +190,7 @@ query Soup($input: SoupInput!) {
   }
 }
 
-fragment SoupPropertyFields on GraphqlSoupProperty {
+fragment SoupPropertyFields on GraphqlProperty {
   id
   propertyDefinitionId
   displayName
@@ -200,18 +200,32 @@ fragment SoupPropertyFields on GraphqlSoupProperty {
   isSystem
   isMetadata
   value {
-    kind
-    boolValue
-    numberValue
-    stringValue
-    dateValue
-    selectOptionIds
-    entityReferences {
-      entityId
-      entityType
-      specificMessageId
+    __typename
+    ... on GraphqlBooleanPropertyValue {
+      boolValue: value
     }
-    links
+    ... on GraphqlNumberPropertyValue {
+      numberValue: value
+    }
+    ... on GraphqlStringPropertyValue {
+      stringValue: value
+    }
+    ... on GraphqlDatePropertyValue {
+      dateValue: value
+    }
+    ... on GraphqlSelectOptionPropertyValue {
+      optionIds
+    }
+    ... on GraphqlEntityReferencePropertyValue {
+      references {
+        entityId
+        entityType
+        specificMessageId
+      }
+    }
+    ... on GraphqlLinkPropertyValue {
+      urls
+    }
   }
 }
 

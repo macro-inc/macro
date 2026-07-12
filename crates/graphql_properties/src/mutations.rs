@@ -4,13 +4,13 @@ use entity_access::domain::ports::EntityAccessService;
 use graphql_common::{GraphqlPropertyEntityType, parse_id};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::shared::EntityReference;
-use models_soup::SoupProperty;
 use properties::{PropertiesAccessReceipt, PropertiesService, access_entity_type};
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
-use crate::objects::GraphqlSoupProperty;
+use crate::objects::GraphqlProperty;
 
 /// Mutation root for entity property writes.
 #[derive(Default)]
@@ -32,7 +32,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> impl Future<Output = Result<SoupProperty, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyWithDefinition, rootcause::Report>> + Send;
 }
 
 /// Property writer used by schema-only GraphQL construction.
@@ -46,7 +46,7 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
         _entity_id: String,
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
-    ) -> Result<SoupProperty, rootcause::Report> {
+    ) -> Result<EntityPropertyWithDefinition, rootcause::Report> {
         Err(rootcause::report!("property writer is not configured"))
     }
 }
@@ -84,7 +84,7 @@ where
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<SoupProperty, rootcause::Report> {
+    ) -> Result<EntityPropertyWithDefinition, rootcause::Report> {
         let entity_access_receipt = self
             .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
@@ -101,13 +101,11 @@ where
         )
         .map_err(|err| rootcause::report!(err))?;
 
-        let property = self
+        Ok(self
             .properties_service
             .set_entity_property(&access, property_definition_id, value)
             .await
-            .map_err(|err| rootcause::report!(err))?;
-
-        Ok(property.into())
+            .map_err(|err| rootcause::report!(err))?)
     }
 }
 
@@ -203,7 +201,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: SetEntityPropertyInput,
-    ) -> async_graphql::Result<GraphqlSoupProperty> {
+    ) -> async_graphql::Result<GraphqlProperty> {
         let writer = ctx.data::<T>()?;
         let property_definition_id =
             parse_id(input.property_definition_id, "propertyDefinitionId")?;
@@ -254,7 +252,7 @@ mod tests {
     #[derive(Clone)]
     struct CapturingWriter {
         write: Arc<Mutex<Option<CapturedWrite>>>,
-        property: SoupProperty,
+        property: EntityPropertyWithDefinition,
     }
 
     impl EntityPropertyWriter for CapturingWriter {
@@ -264,7 +262,7 @@ mod tests {
             entity_id: String,
             property_definition_id: Uuid,
             value: Option<SetPropertyValue>,
-        ) -> Result<SoupProperty, rootcause::Report> {
+        ) -> Result<EntityPropertyWithDefinition, rootcause::Report> {
             *self.write.lock().expect("capture mutex poisoned") =
                 Some((entity_type, entity_id, property_definition_id, value));
             Ok(self.property.clone())
@@ -276,10 +274,18 @@ mod tests {
         let property_assignment_id = Uuid::from_u128(3);
         let property_definition_id = Uuid::from_u128(1);
         let option_id = Uuid::from_u128(2);
+        let now = chrono::Utc::now();
         let writer = CapturingWriter {
             write: Arc::default(),
-            property: SoupProperty {
-                id: property_assignment_id,
+            property: EntityPropertyWithDefinition {
+                property: models_properties::service::entity_property::EntityProperty {
+                    id: property_assignment_id,
+                    entity_id: "task-1".to_owned(),
+                    entity_type: models_properties::EntityType::Task,
+                    property_definition_id,
+                    created_at: now,
+                    updated_at: now,
+                },
                 definition: models_properties::service::property_definition::PropertyDefinition {
                     id: property_definition_id,
                     owner: models_properties::PropertyOwner::System,
@@ -287,8 +293,8 @@ mod tests {
                     data_type: models_properties::DataType::SelectString,
                     is_multi_select: false,
                     specific_entity_type: Some(models_properties::EntityType::Task),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
+                    created_at: now,
+                    updated_at: now,
                     is_system: true,
                     is_metadata: false,
                 },
@@ -297,6 +303,7 @@ mod tests {
                         option_id,
                     ]),
                 ),
+                options: None,
             },
         };
         let writer_data = writer.clone();
@@ -326,8 +333,10 @@ mod tests {
                         isSystem
                         isMetadata
                         value {{
-                            kind
-                            selectOptionIds
+                            __typename
+                            ... on GraphqlSelectOptionPropertyValue {{
+                                optionIds
+                            }}
                         }}
                     }}
                 }}
@@ -349,8 +358,8 @@ mod tests {
                     "isSystem": true,
                     "isMetadata": false,
                     "value": {
-                        "kind": "SelectOption",
-                        "selectOptionIds": [option_id.to_string()],
+                        "__typename": "GraphqlSelectOptionPropertyValue",
+                        "optionIds": [option_id.to_string()],
                     },
                 }
             })

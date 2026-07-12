@@ -10,14 +10,16 @@ pub use graphql_common::{
     GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr, GraphqlPropertyEntityType,
 };
 pub use loaders::{
-    EntityPropertiesLoader, NoOpSoupPropertyEdgeReader, PropertiesSoupPropertyEdgeReader,
-    SoupPropertyEdgeReader, entity_properties_loader,
+    EntityPropertiesLoader, EntityPropertyReader, NoOpEntityPropertyReader,
+    PropertiesEntityPropertyReader, entity_properties_loader,
 };
 pub use mutations::{
     EntityPropertyWriter, NoOpEntityPropertyWriter, PropertiesEntityPropertyWriter,
     PropertiesMutationRoot,
 };
 pub use objects::{
-    GraphqlSoupProperty, GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue,
-    load_entity_properties,
+    GraphqlBooleanPropertyValue, GraphqlDatePropertyValue, GraphqlEntityReferencePropertyValue,
+    GraphqlLinkPropertyValue, GraphqlNumberPropertyValue, GraphqlProperty, GraphqlPropertyDataType,
+    GraphqlPropertyEntityReference, GraphqlPropertyValue, GraphqlSelectOptionPropertyValue,
+    GraphqlStringPropertyValue, load_entity_properties,
 };
