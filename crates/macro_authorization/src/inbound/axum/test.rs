@@ -193,6 +193,37 @@ async fn bearer_token_takes_precedence_over_cookie() {
 }
 
 #[tokio::test]
+async fn malformed_query_falls_back_to_other_or_absent_credentials() {
+    let (router, service) = test_router();
+    let malformed_query = "macro-api-token=query&macro-api-token=invalid";
+
+    let bearer_request = empty_body(
+        request(&format!("/required?{malformed_query}")).header("authorization", "Bearer bearer"),
+    );
+    let (status, body) = send(&router, bearer_request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], BEARER_USER_ID);
+
+    let cookie_request = empty_body(
+        request(&format!("/required?{malformed_query}"))
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+    );
+    let (status, body) = send(&router, cookie_request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], COOKIE_USER_ID);
+
+    let (status, body) = send(
+        &router,
+        empty_body(request(&format!("/optional?{malformed_query}"))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], Value::Null);
+    assert_eq!(body["user_context"]["user_id"], "");
+    assert_eq!(service.calls(), ["bearer", "cookie"]);
+}
+
+#[tokio::test]
 async fn required_rejects_missing_credentials() {
     let (router, service) = test_router();
 

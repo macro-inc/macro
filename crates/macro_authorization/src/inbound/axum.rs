@@ -162,11 +162,12 @@ async fn extract_token<S>(
 where
     S: Send + Sync,
 {
-    let Query(query) = Query::<AuthorizationQuery>::from_request_parts(parts, state)
+    let query_token = Query::<AuthorizationQuery>::from_request_parts(parts, state)
         .await
-        .map_err(|_| rejection("unauthorized"))?;
+        .ok()
+        .and_then(|Query(query)| query.macro_api_token);
 
-    if let Some(token) = query.macro_api_token {
+    if let Some(token) = query_token {
         return Ok(Some(token));
     }
 
