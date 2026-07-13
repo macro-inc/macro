@@ -1,9 +1,16 @@
+//! Legacy GraphQL bridge for property-aware Soup filters.
+//!
+//! Soup historically returned and filtered properties directly. New code
+//! should avoid adding property concepts to Soup, and existing usages should
+//! move toward the properties domain boundary so this module can be removed.
+
 use async_graphql::{Enum, ID};
 use filter_ast::Expr;
-use graphql_common::{IntoFilterExpr, filter_expr_input, parse_id};
 use item_filters::ast::properties::{
     EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue,
 };
+
+use crate::{IntoFilterExpr, filter_expr_input, parse_id};
 
 filter_expr_input!(
     GraphqlPropertiesExpr,
@@ -58,7 +65,7 @@ impl GraphqlPropertyMatchValue {
     }
 }
 
-/// GraphQL entity type supported by property filters.
+/// An entity type supported by the properties domain.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlPropertyEntityType {
     /// Channel entity.
@@ -77,6 +84,36 @@ pub enum GraphqlPropertyEntityType {
     Thread,
     /// User entity.
     User,
+}
+
+impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
+    fn from(value: GraphqlPropertyEntityType) -> Self {
+        match value {
+            GraphqlPropertyEntityType::Channel => Self::Channel,
+            GraphqlPropertyEntityType::Chat => Self::Chat,
+            GraphqlPropertyEntityType::Company => Self::Company,
+            GraphqlPropertyEntityType::Document => Self::Document,
+            GraphqlPropertyEntityType::Project => Self::Project,
+            GraphqlPropertyEntityType::Task => Self::Task,
+            GraphqlPropertyEntityType::Thread => Self::Thread,
+            GraphqlPropertyEntityType::User => Self::User,
+        }
+    }
+}
+
+impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
+    fn from(value: models_properties::EntityType) -> Self {
+        match value {
+            models_properties::EntityType::Channel => Self::Channel,
+            models_properties::EntityType::Chat => Self::Chat,
+            models_properties::EntityType::Company => Self::Company,
+            models_properties::EntityType::Document => Self::Document,
+            models_properties::EntityType::Project => Self::Project,
+            models_properties::EntityType::Task => Self::Task,
+            models_properties::EntityType::Thread => Self::Thread,
+            models_properties::EntityType::User => Self::User,
+        }
+    }
 }
 
 impl From<GraphqlPropertyEntityType> for PropertyEntityType {

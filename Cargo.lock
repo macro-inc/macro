@@ -2856,6 +2856,7 @@ dependencies = [
  "graphql_properties",
  "graphql_soup",
  "macro_user_id",
+ "model-entity",
  "model_user",
  "models_pagination",
  "soup",
@@ -5937,8 +5938,10 @@ dependencies = [
  "async-graphql",
  "axum",
  "filter_ast",
+ "item_filters",
  "macro_user_id",
  "model-entity",
+ "models_properties",
  "tokio",
  "uuid",
  "workspace-hack",
@@ -5949,9 +5952,9 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "graphql_common",
  "macro_user_id",
+ "model-entity",
  "notification",
  "rootcause",
  "serde_json",
@@ -5964,17 +5967,17 @@ name = "graphql_properties"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
- "filter_ast",
+ "chrono",
+ "entity_access",
  "graphql_common",
- "item_filters",
  "macro_user_id",
+ "model-entity",
  "models_properties",
- "models_soup",
  "properties",
  "rootcause",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -5991,15 +5994,12 @@ dependencies = [
  "entity_access",
  "filter_ast",
  "graphql_common",
- "graphql_notification",
- "graphql_properties",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_file_type",
  "model_user",
  "models_pagination",
- "models_properties",
  "models_soup",
  "serde",
  "serde_json",
@@ -8085,6 +8085,30 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_authorization"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "cookie",
+ "http-body-util",
+ "jsonwebtoken 10.3.0",
+ "macro_auth",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "urlencoding",
  "workspace-hack",
 ]
 

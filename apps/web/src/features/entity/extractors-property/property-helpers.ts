@@ -5,7 +5,6 @@ import {
 } from '@property/constants';
 import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { nanoid } from 'nanoid';
 import {
   COMPANY_STAGE_OPTIONS,
   TASK_STATUS_OPTIONS,
@@ -152,7 +151,7 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
   const options = getSystemPropertyOptions(definition.id);
 
   const baseProperty = {
-    propertyId: nanoid(8), // SoupProperty doesn't have a property ID, generate one
+    propertyId: soupProperty.id,
     propertyDefinitionId: definition.id,
     displayName: definition.display_name,
     isMultiSelect: definition.is_multi_select,
@@ -314,6 +313,7 @@ const COMPANY_DEFAULT_PROPERTY_DEFS = [
 export function buildCompanyDefaultProperties(): Property[] {
   return COMPANY_DEFAULT_PROPERTY_DEFS.map((def) =>
     soupPropertyToProperty({
+      id: def.id,
       definition: {
         id: def.id,
         display_name: def.displayName,

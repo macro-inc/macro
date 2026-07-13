@@ -63,10 +63,6 @@ type DeletePropertyOptionArgs = {
   definition_id: string;
   option_id: string;
 };
-type SetPropertyStatusCompleteArgs = {
-  entity_type: PropertiesEntityType;
-  entity_id: string;
-};
 type GetBulkEntityPropertiesArgs = {
   body: BulkEntityPropertiesRequest;
 };
@@ -218,14 +214,6 @@ export const propertiesServiceClient = {
       }
     );
 
-    return result.map(() => ({ success: true }));
-  },
-
-  setPropertyStatusComplete: async (args: SetPropertyStatusCompleteArgs) => {
-    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/status/complete`;
-    const result = await propertiesFetch<{}>(url, {
-      method: 'PATCH',
-    });
     return result.map(() => ({ success: true }));
   },
 

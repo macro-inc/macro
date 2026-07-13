@@ -246,31 +246,13 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self, value))]
-    async fn update_entity_property_value_if_exists(
-        &self,
-        entity_id: &str,
-        entity_type: EntityType,
-        property_definition_id: Uuid,
-        value: Option<PropertyValue>,
-    ) -> Result<(), Self::Err> {
-        entity_property_queries::update_entity_property_value_if_exists(
-            &self.pool,
-            entity_id,
-            entity_type,
-            property_definition_id,
-            value,
-        )
-        .await
-    }
-
-    #[tracing::instrument(skip(self, value))]
     async fn upsert_entity_property(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<models_properties::service::entity_property::EntityProperty, Self::Err> {
         entity_property_queries::upsert_entity_property(
             &self.pool,
             entity_id,
@@ -322,12 +304,18 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         task_id: Uuid,
         parent_task_id: Option<Uuid>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Option<models_properties::service::entity_property::EntityProperty>, Self::Err>
+    {
         task_property_queries::link_parent_task(&self.pool, task_id, parent_task_id).await
     }
 
     #[tracing::instrument(skip(self))]
-    async fn link_subtasks(&self, task_id: Uuid, subtask_ids: Vec<Uuid>) -> Result<(), Self::Err> {
+    async fn link_subtasks(
+        &self,
+        task_id: Uuid,
+        subtask_ids: Vec<Uuid>,
+    ) -> Result<Option<models_properties::service::entity_property::EntityProperty>, Self::Err>
+    {
         task_property_queries::link_subtasks(&self.pool, task_id, subtask_ids).await
     }
 

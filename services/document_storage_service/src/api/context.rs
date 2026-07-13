@@ -48,7 +48,12 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::{
+    domain::{
+        models::EditAccessLevel, ports::EntityAccessService as _, service::EntityAccessServiceImpl,
+    },
+    outbound::PgAccessRepository,
+};
 use favorites::{
     domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
@@ -139,6 +144,9 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEmailService,
     EntityAccessService,
     ApiContext,
+    complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
+    Arc<ai_tools::ToolNotificationService>,
+    complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
@@ -156,6 +164,7 @@ pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository
 pub(crate) struct TaskPropertiesAdapter {
     pub system_properties: Arc<SystemPropertiesService>,
     pub properties: Arc<PropertiesService>,
+    pub entity_access_service: Arc<EntityAccessService>,
 }
 
 impl TaskPropertiesPort for TaskPropertiesAdapter {
@@ -187,14 +196,24 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
         let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
 
-        let access = self
-            .properties
-            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+        let entity_access_receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &user_id,
+                None,
+                entity_id,
+                properties::access_entity_type(models_properties::EntityType::Task),
+            )
             .await?;
+        let access = properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
+            entity_access_receipt,
+            models_properties::EntityType::Task,
+        )?;
 
         self.properties
             .set_entity_property(&access, property_definition_id, value)
             .await
+            .map(|_| ())
             .map_err(Into::into)
     }
 
@@ -353,7 +372,7 @@ pub(crate) struct ApiContext {
     #[cfg(feature = "graphql")]
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     #[cfg(feature = "graphql")]
-    pub graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader>,
+    pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,

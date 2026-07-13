@@ -1,22 +1,22 @@
 [package]
-name = "graphql_properties"
-version = "0.1.0"
 edition = "2024"
+name = "graphql_properties"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
-async-trait = { workspace = true }
-filter_ast = { path = "../filter_ast" }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false }
 graphql_common = { path = "../graphql_common" }
-item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
-models_soup = { path = "../models_soup" }
 properties = { path = "../properties", default-features = false, features = [
   "ports",
 ] }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -15,6 +15,9 @@ import { DecoratorBlockNode } from './DecoratorBlockNode';
 
 export type HtmlRenderData = {
   html: string;
+  /** Display-only hint: adapt colors to the app theme when rendering
+   * (mirrors the email message view). Undefined = decide from content. */
+  adaptColors?: boolean;
 };
 
 export type SerializedHtmlRenderNode = Spread<
@@ -31,6 +34,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   DecoratorComponent<HtmlRenderDecoratorProps> | undefined
 > {
   __html: string;
+  __adaptColors?: boolean;
 
   static getType() {
     return 'html-render';
@@ -41,16 +45,20 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   }
 
   static clone(node: HtmlRenderNode) {
-    return new HtmlRenderNode(node.__html, node.__key);
+    return new HtmlRenderNode(node.__html, node.__adaptColors, node.__key);
   }
 
-  constructor(html: string, key?: NodeKey) {
+  constructor(html: string, adaptColors?: boolean, key?: NodeKey) {
     super('left', key);
     this.__html = html;
+    this.__adaptColors = adaptColors;
   }
 
   static importJSON(serializedNode: SerializedHtmlRenderNode) {
-    const node = $createHtmlRenderNode({ html: serializedNode.html });
+    const node = $createHtmlRenderNode({
+      html: serializedNode.html,
+      adaptColors: serializedNode.adaptColors,
+    });
     $applyIdFromSerialized(node, serializedNode);
     return node;
   }
@@ -59,6 +67,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
     return {
       ...super.exportJSON(),
       html: this.__html,
+      adaptColors: this.__adaptColors,
       type: HtmlRenderNode.getType(),
       version: 1,
     };
@@ -67,6 +76,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   exportComponentProps(): HtmlRenderData {
     return {
       html: this.__html,
+      adaptColors: this.__adaptColors,
     };
   }
 
@@ -100,7 +110,12 @@ export class HtmlRenderNode extends DecoratorBlockNode<
         ? dsdTemplate.innerHTML
         : (htmlFromAttr ?? domNode.innerHTML);
 
-      const node = $createHtmlRenderNode({ html: htmlString });
+      const node = $createHtmlRenderNode({
+        html: htmlString,
+        adaptColors: domNode.classList.contains('macro_html_render_adapt')
+          ? true
+          : undefined,
+      });
       return { node };
     };
 
@@ -112,7 +127,10 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   exportDOM() {
     const host = document.createElement('div');
     host.setAttribute('data-html-render', 'true');
-    host.className = 'macro_html_render';
+    // Class markers survive the backend sanitizer (data-* attributes don't)
+    host.className = this.__adaptColors
+      ? 'macro_html_render macro_html_render_adapt'
+      : 'macro_html_render';
 
     const template = document.createElement('template');
     template.setAttribute('shadowrootmode', 'open');
@@ -141,6 +159,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
       return () =>
         decorator({
           html: this.__html,
+          adaptColors: this.__adaptColors,
           key: this.getKey(),
           theme: config.theme,
         });
@@ -149,7 +168,7 @@ export class HtmlRenderNode extends DecoratorBlockNode<
 }
 
 export function $createHtmlRenderNode(params: HtmlRenderData): HtmlRenderNode {
-  const node = new HtmlRenderNode(params.html);
+  const node = new HtmlRenderNode(params.html, params.adaptColors);
   return $applyNodeReplacement(node);
 }
 

@@ -8,7 +8,11 @@
  * src/lib/graphql-cache/wasm/ (gitignored).
  */
 
-import type { ReadResult, WriteResult } from '../protocol';
+import type {
+  OptimisticWriteResult,
+  ReadResult,
+  WriteResult,
+} from '../protocol';
 
 export interface CacheEngine {
   readQuery(
@@ -25,6 +29,21 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<WriteResult>;
+  beginOptimisticWrite(
+    originOpId: string | undefined,
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown
+  ): Promise<OptimisticWriteResult>;
+  commitOptimisticWrite(
+    transactionId: string,
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown
+  ): Promise<WriteResult>;
+  rollbackOptimisticWrite(transactionId: string): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
   externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;

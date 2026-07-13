@@ -49,8 +49,16 @@ export default defineConfig({
         },
       },
       {
-        plugins: [tsconfigPaths()],
+        // Resolve solid-js to its reactive browser build (the default
+        // server-side build is inert), needed by the solid/ bindings.
+        plugins: [tsconfigPaths(), solidPlugin()],
+        ssr: {
+          resolve: {
+            conditions: ['browser', 'development'],
+          },
+        },
         test: {
+          environment: 'jsdom',
           include: ['src/lib/graphql-cache/**/*.{test,spec}.{ts,tsx}'],
           name: 'graphql-cache',
         },

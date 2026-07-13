@@ -69,6 +69,17 @@ type ChannelEntityLatestMessage = {
   mentions: string[];
 };
 
+/**
+ * The message a channel-family row activates when opened. Stamped at row
+ * construction by producers whose row stands for one specific message (e.g.
+ * search hits). Rows without a target are containers — the driving
+ * notification decides at click time.
+ */
+export type ChannelEntityTarget = {
+  messageId: string;
+  threadId?: string;
+};
+
 export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'public' | 'team';
@@ -76,6 +87,7 @@ export type ChannelEntity = EntityBase & {
   participantIds?: string[];
   latestMessage?: ChannelEntityLatestMessage;
   latestRootMessage?: ChannelEntityLatestMessage;
+  target?: ChannelEntityTarget;
 };
 
 export type ChannelMessageEntity = EntityBase & {
@@ -87,6 +99,7 @@ export type ChannelMessageEntity = EntityBase & {
   threadId?: string;
   senderId: string;
   content: string;
+  target?: ChannelEntityTarget;
 };
 
 export type ChannelThreadEntity = EntityBase & {
@@ -95,6 +108,7 @@ export type ChannelThreadEntity = EntityBase & {
   channelType?: ChannelEntity['channelType'];
   messageId: string;
   threadId: string;
+  target?: ChannelEntityTarget;
   senderId: string;
   sender: SoupMessageSender;
   content: string;

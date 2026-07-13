@@ -1,0 +1,40 @@
+[package]
+edition = "2024"
+name = "macro_authorization"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:macro_auth",
+  "dep:macro_user_id",
+  "dep:model-error-response",
+  "dep:serde",
+  "dep:tracing",
+]
+default = ["axum", "outbound"]
+outbound = ["dep:macro_auth", "dep:tracing"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+macro_auth = { path = "../macro_auth", optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user" }
+rootcause = { workspace = true }
+serde = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+cookie = { workspace = true }
+http-body-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+serde_json = { workspace = true }
+serde_urlencoded = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { workspace = true, features = ["util"] }
+urlencoding = { workspace = true }

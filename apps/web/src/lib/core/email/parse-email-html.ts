@@ -5,7 +5,7 @@ import { proxyEmailImages } from './proxy-email-images';
  * Strips @media (prefers-color-scheme: ...) rules from CSS content.
  * This prevents email dark mode styles from conflicting with our forced backgrounds.
  */
-function stripColorSchemeMediaQueries(cssContent: string): string {
+export function stripColorSchemeMediaQueries(cssContent: string): string {
   try {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(cssContent);

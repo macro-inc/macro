@@ -156,6 +156,7 @@ function buildStagePropertyStub(
   if (!definition) {
     // System default — same stub the CRM list/kanban always used.
     return soupPropertyToProperty({
+      id: SYSTEM_PROPERTY_IDS.STAGE,
       definition: {
         id: SYSTEM_PROPERTY_IDS.STAGE,
         display_name: 'Stage',
@@ -171,6 +172,7 @@ function buildStagePropertyStub(
     });
   }
   const property = soupPropertyToProperty({
+    id: definition.definition.id,
     definition: {
       id: definition.definition.id,
       display_name: definition.definition.display_name,

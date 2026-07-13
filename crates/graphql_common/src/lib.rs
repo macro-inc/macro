@@ -9,9 +9,14 @@ pub use filter_ast;
 mod entity_type;
 mod extract;
 mod filter_input;
+mod property_filter;
 mod request_context;
 
 pub use entity_type::GraphqlSoupEntityType;
 pub use extract::extract_part;
 pub use filter_input::{IntoFilterExpr, optional_tree, parse_id, parse_macro_user_id, parse_uuid};
+pub use property_filter::{
+    GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr, GraphqlPropertiesLiteral,
+    GraphqlPropertyEntityType, GraphqlPropertyMatchValue,
+};
 pub use request_context::GraphqlSoupRequestParts;

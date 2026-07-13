@@ -36,7 +36,7 @@ function $buildForwardEditorState() {
   wrapper.append(header);
 
   const quote = $createQuoteNode();
-  quote.append(new HtmlRenderNode(QUOTED_HTML));
+  quote.append(new HtmlRenderNode(QUOTED_HTML, true));
   wrapper.append(quote);
   root.append(wrapper);
 }
@@ -84,6 +84,8 @@ describe('HtmlRenderNode - m-html-render transformer', () => {
       }
       expect(htmlNodes).toHaveLength(1);
       expect(htmlNodes[0].exportComponentProps().html).toBe(QUOTED_HTML);
+      // The display hint survives the markdown round-trip too
+      expect(htmlNodes[0].exportComponentProps().adaptColors).toBe(true);
     });
   });
 });

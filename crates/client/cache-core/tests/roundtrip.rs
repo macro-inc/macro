@@ -50,7 +50,8 @@ query Soup($input: SoupInput!) {
   }
 }
 
-fragment SoupPropertyFields on GraphqlSoupProperty {
+fragment SoupPropertyFields on GraphqlProperty {
+  id
   propertyDefinitionId
   displayName
   dataType
@@ -58,14 +59,10 @@ fragment SoupPropertyFields on GraphqlSoupProperty {
   isSystem
   isMetadata
   value {
-    kind
-    boolValue
-    selectOptionIds
-    entityReferences {
-      entityId
-      entityType
+    __typename
+    ... on GraphqlSelectOptionPropertyValue {
+      optionIds
     }
-    links
   }
 }
 
@@ -105,6 +102,7 @@ fn response_data() -> Json {
                         "updatedAt": "2026-07-01T00:00:00Z",
                         "properties": [
                             {
+                                "id": "entity-prop-1",
                                 "propertyDefinitionId": "prop-1",
                                 "displayName": "Status",
                                 "dataType": "select",
@@ -112,13 +110,8 @@ fn response_data() -> Json {
                                 "isSystem": true,
                                 "isMetadata": false,
                                 "value": {
-                                    "kind": "SelectOption",
-                                    "boolValue": null,
-                                    "selectOptionIds": ["opt-1"],
-                                    "entityReferences": [
-                                        { "entityId": "proj-9", "entityType": "PROJECT" }
-                                    ],
-                                    "links": []
+                                    "__typename": "GraphqlSelectOptionPropertyValue",
+                                    "optionIds": ["opt-1"]
                                 }
                             }
                         ]
@@ -171,6 +164,7 @@ fn normalizes_expected_records() {
     assert_eq!(
         keys,
         vec![
+            "GraphqlProperty:entity-prop-1",
             "GraphqlSoupChannel:ch-1",
             "GraphqlSoupChannelMessage:msg-1",
             "GraphqlSoupDocument:doc-1",
@@ -189,10 +183,11 @@ fn normalizes_expected_records() {
     ));
     assert!(!doc_record.fields.contains_key("documentName"));
 
-    // Properties embedded (not their own records), message keyed by messageId.
+    // Property assignments and messages are normalized by their ids.
     assert!(matches!(
         doc_record.fields.get("properties"),
-        Some(CacheValue::List(items)) if matches!(&items[0], CacheValue::Object(_))
+        Some(CacheValue::List(items))
+            if matches!(&items[0], CacheValue::Ref(k) if k.0 == "GraphqlProperty:entity-prop-1")
     ));
     let channel = &records[&EntityKey("GraphqlSoupChannel:ch-1".into())];
     assert!(matches!(
@@ -233,6 +228,7 @@ fn round_trip_reproduces_response() {
     assert_eq!(
         dep_keys,
         vec![
+            "GraphqlProperty:entity-prop-1",
             "GraphqlSoupChannel:ch-1",
             "GraphqlSoupChannelMessage:msg-1",
             "GraphqlSoupDocument:doc-1",

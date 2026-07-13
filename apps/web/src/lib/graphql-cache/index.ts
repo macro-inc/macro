@@ -3,6 +3,10 @@
  * Design doc: apps/web/docs/graphql-normalized-cache-plan.md
  */
 
+export {
+  executeOptimisticMutation,
+  type OptimisticMutationContext,
+} from './exchange/optimistic';
 export type {
   CacheHost,
   CacheReadArgs,
@@ -14,6 +18,7 @@ export type {
   CachePush,
   CacheRequest,
   CacheResponse,
+  OptimisticWriteResult,
   ReadResult,
   WriteResult,
 } from './protocol';

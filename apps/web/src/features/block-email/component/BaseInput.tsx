@@ -97,6 +97,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { isPersonalMessage } from '../util/isPersonalMessage';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -1485,6 +1486,11 @@ export function BaseInput(props: {
       replyingTo,
       replyType: effectiveReplyType(),
       visible: !currentlyAppended,
+      isPersonal: isPersonalMessage(
+        replyingTo,
+        userEmail(),
+        ctx.messages.personalSenders()
+      ),
     });
 
     editor()?.update(() => {

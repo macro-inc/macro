@@ -63,6 +63,7 @@
         pname = "macro-cache-wasm";
         version = appVersion;
         src = jsSrc;
+        cargoArtifacts = null;
         cargoVendorDir = rootCargoVendorDir;
         nativeBuildInputs = [
           pkgs.binaryen
@@ -70,6 +71,10 @@
           pkgs.wasm-pack
         ];
         doCheck = false;
+        preBuild = ''
+          export HOME="$TMPDIR"
+          export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
+        '';
         buildPhaseCargoCommand = ''
           wasm-pack build crates/client/cache-wasm \
             --target web \

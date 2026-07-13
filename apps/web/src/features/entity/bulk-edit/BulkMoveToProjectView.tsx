@@ -306,15 +306,21 @@ export const BulkMoveToProjectView = (props: {
       newItems = result;
     }
 
-    // Reset focus when items change — use newItems directly to avoid re-tracking
+    // Reset selection when it's no longer visible (e.g. filtered out by
+    // search) — use untrack/newItems directly to avoid re-tracking
     const fi = untrack(focusedIndex);
-    if (newItems.length > 0 && fi === -1) {
-      setFocusedIndex(0);
-      setSelectedProject(newItems[0]);
-    } else if (fi >= newItems.length) {
-      const newIndex = Math.max(0, newItems.length - 1);
-      setFocusedIndex(newIndex);
-      setSelectedProject(newItems[newIndex] || null);
+    const selected = untrack(selectedProject);
+    const selectionVisible =
+      selected != null && newItems.some((item) => item.id === selected.id);
+    if (!selectionVisible) {
+      if (newItems.length > 0) {
+        const newIndex = Math.min(Math.max(fi, 0), newItems.length - 1);
+        setFocusedIndex(newIndex);
+        setSelectedProject(newItems[newIndex]);
+      } else {
+        setFocusedIndex(-1);
+        setSelectedProject(null);
+      }
     }
   };
 

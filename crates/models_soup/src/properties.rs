@@ -5,6 +5,7 @@ use models_properties::service::{
     property_definition::PropertyDefinition, property_value::PropertyValue,
 };
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// A property attached to a Soup item.
 ///
@@ -14,6 +15,9 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupProperty {
+    /// Globally unique id of the assignment attaching this property to an entity.
+    pub id: Uuid,
+
     /// The property definition
     pub definition: PropertyDefinition,
 
@@ -30,6 +34,7 @@ impl From<EntityPropertyWithDefinition> for SoupProperty {
     /// should be fetched separately when needed for editing UI.
     fn from(prop: EntityPropertyWithDefinition) -> Self {
         Self {
+            id: prop.property.id,
             definition: prop.definition,
             value: prop.value,
         }

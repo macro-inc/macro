@@ -1,52 +1,9 @@
 //! General entity property query helpers.
 
-use models_properties::service::property_value::PropertyValue;
+use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
-
-/// Atomically update a property value if the property is attached to the entity.
-/// No-op if the property is not attached.
-pub async fn update_entity_property_value_if_exists(
-    pool: &Pool<Postgres>,
-    entity_id: &str,
-    entity_type: EntityType,
-    property_definition_id: Uuid,
-    value: Option<PropertyValue>,
-) -> anyhow::Result<()> {
-    // Serialize PropertyValue to JSONB (or NULL if None)
-    let value_json = match value {
-        Some(v) => serde_json::to_value(&v)?,
-        None => serde_json::Value::Null,
-    };
-
-    tracing::debug!(value_json = ?value_json, "updating entity property if exists");
-
-    // Atomic update - only updates if the property is already attached
-    let result = sqlx::query!(
-        r#"
-        UPDATE entity_properties
-        SET values = $4, updated_at = NOW()
-        WHERE entity_id = $1
-          AND entity_type = $2
-          AND property_definition_id = $3
-        "#,
-        entity_id,
-        entity_type as EntityType,
-        property_definition_id,
-        value_json
-    )
-    .execute(pool)
-    .await?;
-
-    if result.rows_affected() > 0 {
-        tracing::debug!("successfully updated entity property");
-    } else {
-        tracing::debug!("entity property not attached, no-op");
-    }
-
-    Ok(())
-}
 
 /// Upsert an entity property value (insert or update).
 /// If the property doesn't exist, it will be created and attached to the entity.
@@ -57,7 +14,7 @@ pub async fn upsert_entity_property(
     entity_type: EntityType,
     property_definition_id: Uuid,
     value: Option<PropertyValue>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<EntityProperty> {
     let id = macro_uuid::generate_uuid_v7();
 
     // Serialize PropertyValue to JSONB (or NULL if None)
@@ -68,16 +25,24 @@ pub async fn upsert_entity_property(
 
     tracing::debug!(value_json = ?value_json, "upserting entity property");
 
-    // Single UPSERT operation - handles both INSERT and UPDATE cases
-    // When value is None, JSONB will be NULL, effectively clearing the value while keeping the property attached
-    sqlx::query!(
+    // Single UPSERT operation - handles both INSERT and UPDATE cases.
+    // RETURNING yields the canonical assignment for both branches without a second query.
+    let property = sqlx::query_as!(
+        EntityProperty,
         r#"
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (entity_id, entity_type, property_definition_id) 
-        DO UPDATE SET 
+        ON CONFLICT (entity_id, entity_type, property_definition_id)
+        DO UPDATE SET
             values = EXCLUDED.values,
             updated_at = NOW()
+        RETURNING
+            id,
+            entity_id,
+            entity_type as "entity_type: EntityType",
+            property_definition_id,
+            created_at,
+            updated_at
         "#,
         id,
         entity_id,
@@ -85,12 +50,12 @@ pub async fn upsert_entity_property(
         property_definition_id,
         value_json
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
     tracing::debug!("successfully upserted entity property");
 
-    Ok(())
+    Ok(property)
 }
 
 /// Atomically add one option to a multi-select entity property value, creating

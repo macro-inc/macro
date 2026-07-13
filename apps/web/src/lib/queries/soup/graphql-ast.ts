@@ -15,6 +15,7 @@ import type {
   GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
   SoupInput as GraphqlSoupInput,
 } from '@service-storage/graphql/generated/graphql';
+import { match } from 'ts-pattern';
 
 type GraphqlExprInput<TLiteral> =
   | {
@@ -324,27 +325,57 @@ function mapChannelLiteral(literal: unknown): GraphqlChannelLiteralInput {
   }
 }
 
+type ChannelThreadLiteralField =
+  | 'ThreadId'
+  | 'ChannelId'
+  | 'RootSender'
+  | 'Sender'
+  | 'Participant'
+  | 'NotificationDone'
+  | 'NotificationSeen';
+
+const CHANNEL_THREAD_LITERAL_FIELDS = [
+  'ThreadId',
+  'ChannelId',
+  'RootSender',
+  'Sender',
+  'Participant',
+  'NotificationDone',
+  'NotificationSeen',
+] as const satisfies readonly ChannelThreadLiteralField[];
+
+function isChannelThreadLiteralField(
+  field: string
+): field is ChannelThreadLiteralField {
+  return CHANNEL_THREAD_LITERAL_FIELDS.includes(
+    field as ChannelThreadLiteralField
+  );
+}
+
 function mapChannelThreadLiteral(
   literal: unknown
 ): GraphqlChannelThreadLiteralInput {
   const [field, value] = singleLiteralField(literal);
-  switch (field) {
-    case 'ThreadId':
-      return { threadId: mapString(value, 'threadId') };
-    case 'ChannelId':
-      return { channelId: mapString(value, 'channelId') };
-    case 'RootSender':
-    case 'Sender':
-      return { rootSender: mapString(value, 'rootSender') };
-    case 'Participant':
-      return { participant: mapString(value, 'participant') };
-    case 'NotificationDone':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
-    case 'NotificationSeen':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
-    default:
-      unsupported(`channel thread literal ${field}`);
+  if (!isChannelThreadLiteralField(field)) {
+    unsupported(`channel thread literal ${field}`);
   }
+
+  return match(field)
+    .with('ThreadId', () => ({ threadId: mapString(value, 'threadId') }))
+    .with('ChannelId', () => ({ channelId: mapString(value, 'channelId') }))
+    .with('RootSender', 'Sender', () => ({
+      rootSender: mapString(value, 'rootSender'),
+    }))
+    .with('Participant', () => ({
+      participant: mapString(value, 'participant'),
+    }))
+    .with('NotificationDone', () => ({
+      notificationDone: mapBoolean(value, 'notificationDone'),
+    }))
+    .with('NotificationSeen', () => ({
+      notificationSeen: mapBoolean(value, 'notificationSeen'),
+    }))
+    .exhaustive();
 }
 
 function mapCallLiteral(literal: unknown): GraphqlCallLiteralInput {

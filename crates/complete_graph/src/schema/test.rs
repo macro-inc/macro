@@ -262,8 +262,15 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
 }
 
 struct TestHarness {
-    schema:
-        SoupSchema<NoOpSoupService, CountingEmailService, CountingEntityAccessService, TestState>,
+    schema: SoupSchema<
+        NoOpSoupService,
+        CountingEmailService,
+        CountingEntityAccessService,
+        TestState,
+        NoOpEntityPropertyWriter,
+        NoOpSoupNotificationEdgeReader,
+        NoOpEntityPropertyReader,
+    >,
     state: TestState,
     inbox_calls: Arc<AtomicUsize>,
     team_calls: Arc<AtomicUsize>,
