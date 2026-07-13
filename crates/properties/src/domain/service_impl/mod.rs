@@ -47,6 +47,7 @@ fn is_search_indexed(entity_type: EntityType) -> bool {
             | EntityType::Thread
             | EntityType::Chat
             | EntityType::Project
+            | EntityType::CallRecord
     )
 }
 

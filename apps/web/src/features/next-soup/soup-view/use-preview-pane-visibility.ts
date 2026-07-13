@@ -32,7 +32,7 @@ export function useIsNewInboxEnabled() {
 
 export function usePreviewPaneVisiblity() {
   const panel = useSplitPanelOrThrow();
-  const { soup, previewOpen } = useSoupView();
+  const { soup, rows, previewOpen } = useSoupView();
 
   const isWideSplitPanel = createMemo(
     () => (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT
@@ -47,7 +47,8 @@ export function usePreviewPaneVisiblity() {
   });
 
   const paneVisible = createMemo(
-    () => !isMobile() && isWideSplitPanel() && previewOpen()
+    () =>
+      rows().length > 0 && !isMobile() && isWideSplitPanel() && previewOpen()
   );
   const previewVisible = createMemo(() => paneVisible() && !!selectedEntity());
 

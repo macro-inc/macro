@@ -54,7 +54,7 @@ export async function supervisor(
 
   const dispatch = createDispatchTool({
     session,
-    childModel: models.coding,
+    makeChildModel: models.coding,
     tracker,
     request: intent ? `${request}\n\n<intent>\n${intent}\n</intent>` : request,
     params: opts.params,

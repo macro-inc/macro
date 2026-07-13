@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, slug, owner_id\n            FROM team\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id,\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            JOIN team_user tu ON t.id = tu.team_id\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE tu.user_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -22,19 +22,25 @@
         "ordinal": 3,
         "name": "owner_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "crm_enabled!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "322b3420ee6b76c4b85d1953e2bfb47c8b8ba0618e2833475801815dff29d42b"
+  "hash": "4c49a19453f820f3daa2f654a67db0bc895b15a7cd5f282133e292f97e42ec19"
 }

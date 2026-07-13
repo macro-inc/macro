@@ -4,6 +4,8 @@ use item_filters::CallStatus;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::SoupProperty;
+
 /// A participant in a call record, as displayed in Soup.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -52,6 +54,8 @@ pub struct SoupCallRecord {
     pub attended: bool,
     /// Participants in the call.
     pub participants: Vec<SoupCallRecordParticipant>,
+    /// Entity properties (e.g. tags). Populated after fetch by the soup repo.
+    pub properties: Vec<SoupProperty>,
 }
 
 fn participant_derived_status(participants: &[CallRecordParticipant], user_id: &str) -> CallStatus {
@@ -93,6 +97,7 @@ impl SoupCallRecord {
                     left_at: p.left_at,
                 })
                 .collect(),
+            properties: Vec::new(),
         }
     }
 }

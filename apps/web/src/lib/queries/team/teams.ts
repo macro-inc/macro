@@ -235,6 +235,7 @@ export function useCreateTeamWithInvitesMutation(
               name,
               slug: 'MACRO', // optimisitc slug
               owner_id: userInfo.userId,
+              crm_enabled: false,
             };
 
             queryClient.setQueryData<Team[]>(

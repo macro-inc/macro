@@ -2246,9 +2246,11 @@ export const patchTeam = async (
 };
 
 /**
- * @summary Enables or disables CRM for the team. On enable, kicks off a
-best-effort backfill that enqueues a `PopulateCrmForUser` message
-per team member (no-op if CRM is already enabled). On disable,
+ * @summary Enables or disables CRM for the team. On enable with `backfill`
+(the default), kicks off a best-effort backfill that enqueues a
+`PopulateCrmForUser` message per team member (no-op if CRM is
+already enabled); without `backfill` the CRM starts empty and fills
+from new activity only. On disable,
 flips the flag and purges the team's CRM data (cascading through
 `crm_companies` → `crm_domains` / `crm_contacts` /
 `crm_contact_sources`). Requires the caller to be an Admin or

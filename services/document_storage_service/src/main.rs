@@ -717,11 +717,16 @@ async fn main() -> anyhow::Result<()> {
     .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
 
-    let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
-        channels_repo,
-        SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
-        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
-    ));
+    let channels_service = Arc::new(
+        ChannelServiceImpl::with_dependencies(
+            channels_repo,
+            SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
+            PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+        )
+        .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
+            lexical_client.clone(),
+        )),
+    );
 
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
@@ -736,6 +741,7 @@ async fn main() -> anyhow::Result<()> {
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            lexical_client.clone(),
         );
     let macro_agent_tools = ai_tools::all_tools();
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(

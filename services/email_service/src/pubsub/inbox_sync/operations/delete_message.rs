@@ -1,7 +1,9 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{
     cg_refresh_email, complete_transaction_with_processing_error, enqueue_depopulate_crm_contacts,
+    publish_email_event,
 };
+use email::domain::events::{EmailMacroEvent, MessageDeletedMetadata};
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
@@ -113,6 +115,18 @@ pub async fn delete_message(
     .await;
 
     complete_transaction_with_processing_error(tx, result).await?;
+
+    publish_email_event(
+        &ctx.macro_event_broker,
+        &EmailMacroEvent::message_deleted(MessageDeletedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            message_id: message.db_id,
+            provider_message_id: payload.provider_message_id.clone(),
+            thread_id: message.thread_db_id,
+        }),
+    )
+    .await;
 
     // tell FE to refresh user's inbox
     cg_refresh_email(

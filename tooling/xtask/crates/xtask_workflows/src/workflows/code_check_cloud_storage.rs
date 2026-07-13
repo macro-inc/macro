@@ -211,9 +211,7 @@ fn cargo_fmt() -> Step<Run> {
 fn cargo_clippy() -> Step<Run> {
     Step::new("clippy").run(indoc::indoc! {r#"
         cargo clippy --workspace --all-features \
-          --exclude sync_service \
-          --exclude test_build_full_pdf_modification_data \
-          --exclude test_pdf_modification_data_deserialize
+          --exclude sync_service
         # sync-service has mutually exclusive storage features, so lint its
         # supported default feature set separately. These two existing lints
         # predate its inclusion in the root workspace.

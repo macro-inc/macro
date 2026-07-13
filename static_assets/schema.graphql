@@ -469,6 +469,10 @@ An entity type supported by the properties domain.
 """
 enum GraphqlPropertyEntityType {
 	"""
+	Call record entity.
+	"""
+	CALL_RECORD
+	"""
 	Channel entity.
 	"""
 	CHANNEL

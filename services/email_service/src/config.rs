@@ -6,6 +6,7 @@ use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
     pub struct EmailServiceCloudfrontSignerPrivateKey;
+    pub struct KafkaBrokers;
     pub struct MacroDbUrl;
     pub struct RedisUri;
     pub struct GmailGcpQueue;
@@ -31,6 +32,9 @@ pub struct Config {
 
     /// The Redis URI for the Redis this application should use.
     pub redis_uri: RedisUri,
+
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub kafka_brokers: KafkaBrokers,
 
     /// The GCP queue name that has the subscription that hits our webhook endpoint
     pub gmail_gcp_queue: GmailGcpQueue,

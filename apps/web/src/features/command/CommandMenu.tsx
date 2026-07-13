@@ -15,7 +15,7 @@ import {
   setActiveScope,
   setPressedKeys,
 } from '@core/hotkey/state';
-import type { RegisterHotkeyReturn } from '@core/hotkey/types';
+import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { openExternalUrl } from '@core/util/url';
@@ -31,6 +31,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -169,6 +170,23 @@ export function CommandMenuInner(props: {
     const index = CommandState.selectedIndex();
     return items[index];
   };
+
+  // Fire command highlight hooks (e.g. live theme preview) as the selection
+  // moves via hover or arrow keys. The outgoing command's onHighlightEnd runs
+  // before the incoming command's onHighlight; unmount (menu close) ends any
+  // active highlight.
+  let highlightedCommand: HotkeyCommand | undefined;
+  const setHighlightedCommand = (command: HotkeyCommand | undefined) => {
+    if (command === highlightedCommand) return;
+    highlightedCommand?.onHighlightEnd?.();
+    highlightedCommand = command;
+    command?.onHighlight?.();
+  };
+  createEffect(() => {
+    const item = selectedItem();
+    setHighlightedCommand(item && isCommandItem(item) ? item.data : undefined);
+  });
+  onCleanup(() => setHighlightedCommand(undefined));
 
   const selectedIsCommand = () => {
     const item = selectedItem();

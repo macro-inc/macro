@@ -228,7 +228,13 @@ export function SplitPanel(props: SplitPanelProps) {
                   ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
                   : undefined
               }
-              class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
+              class={cn(
+                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!',
+                {
+                  'shadow-sm shadow-drop-shadow/50': !hasFocusedSplitBorder(),
+                  'shadow-lg shadow-drop-shadow/70': hasFocusedSplitBorder(),
+                }
+              )}
               depth={isMobile() ? 0 : 1}
             >
               <Panel.Header

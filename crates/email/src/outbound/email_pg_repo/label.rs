@@ -339,21 +339,22 @@ pub(crate) async fn delete_scheduled_messages_batch(
     pool: &PgPool,
     message_ids: &[Uuid],
     link_id: Uuid,
-) -> Result<(), sqlx::Error> {
+) -> Result<Vec<Uuid>, sqlx::Error> {
     if message_ids.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
-    sqlx::query!(
+    let deleted = sqlx::query_scalar!(
         r#"
         DELETE FROM email_scheduled_messages
         WHERE message_id = ANY($1) AND link_id = $2 AND sent = false
+        RETURNING message_id
         "#,
         message_ids,
         link_id
     )
-    .execute(pool)
+    .fetch_all(pool)
     .await?;
 
-    Ok(())
+    Ok(deleted)
 }

@@ -249,6 +249,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         properties_service.clone(),
         entity_access_service.clone(),
     );
+
+    // Producer creation is lazy: nothing connects to Kafka unless an event
+    // is published, so a dummy broker address is safe for tests.
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new("localhost:9092")
+            .expect("kafka producer config is valid"),
+    );
+
     let document_service = documents::domain::service::DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -260,12 +268,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
-        // Producer creation is lazy: nothing connects to Kafka unless an event
-        // is published, so a dummy broker address is safe for tests.
-        macro_event_broker::MacroEventBrokerService::new(
-            macro_event_broker::KafkaEventPublisher::new("localhost:9092")
-                .expect("kafka producer config is valid"),
-        ),
+        macro_event_broker.clone(),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
     let test_editing_client =
@@ -275,7 +278,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
-        test_lexical_client,
+        test_lexical_client.clone(),
         sync_service_client.as_ref().clone(),
         test_editing_client,
         "test-jwt-secret".to_string(),
@@ -288,18 +291,21 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(pool.clone()),
-            frecency::domain::services::FrecencyQueryServiceImpl::new(
-                frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
-            ),
-            sqs_client.clone(),
-            crm_service.clone(),
-            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                entity_access_management::outbound::PgRepository::new(pool.clone()),
-            ),
-            0,
-        )),
+        Arc::new(
+            email::domain::service::EmailServiceImpl::new(
+                email::outbound::EmailPgRepo::new(pool.clone()),
+                frecency::domain::services::FrecencyQueryServiceImpl::new(
+                    frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
+                ),
+                sqs_client.clone(),
+                crm_service.clone(),
+                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                    entity_access_management::outbound::PgRepository::new(pool.clone()),
+                ),
+                0,
+            )
+            .with_macro_event_broker(macro_event_broker),
+        ),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
     );
@@ -345,7 +351,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         call_tool_context: call_tool_context.clone(),
         notification_tool_context: notification_tool_context.clone(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        channel_tool_context: ai_tools::build_channel_tool_context(
+            pool.clone(),
+            std::sync::Arc::new(test_lexical_client),
+        ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),

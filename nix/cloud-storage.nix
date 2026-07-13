@@ -221,8 +221,7 @@
 
       cloudStorageCargoToml = builtins.fromTOML (builtins.readFile ../Cargo.toml);
       cloudStorageWorkspaceMembers =
-        cloudStorageCargoToml.workspace.members
-          or (throw "Cargo.toml is missing workspace.members");
+        cloudStorageCargoToml.workspace.members or (throw "Cargo.toml is missing workspace.members");
 
       dopplerConfigBinNames =
         let
@@ -736,7 +735,7 @@
           commonArgs
           // {
             cargoArtifacts = workspaceArtifacts;
-            cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize -- -D warnings";
+            cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service -- -D warnings";
             RUSTDOCFLAGS = "-Dwarnings";
           }
         );

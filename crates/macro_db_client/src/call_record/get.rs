@@ -38,6 +38,9 @@ pub struct CallRecordSearchPayload {
     pub channel_id: Uuid,
     pub created_by: String,
     pub channel_name: Option<String>,
+    /// Caller-assigned name for the call, if renamed. Indexed as the call's
+    /// searchable name, falling back to `channel_name`.
+    pub custom_name: Option<String>,
     pub participant_ids: Vec<String>,
     pub segments: Vec<CallRecordTranscriptSegment>,
 }
@@ -166,6 +169,7 @@ pub async fn get_call_record_search_payload(
             cr.id AS "call_id!",
             cr.channel_id AS "channel_id!",
             cr.created_by AS "created_by!",
+            cr.custom_name AS "custom_name?",
             cc.name AS "channel_name?"
         FROM call_records cr
         LEFT JOIN comms_channels cc ON cc.id = cr.channel_id
@@ -215,6 +219,7 @@ pub async fn get_call_record_search_payload(
         channel_id: header.channel_id,
         created_by: header.created_by,
         channel_name: header.channel_name,
+        custom_name: header.custom_name,
         participant_ids,
         segments,
     }))

@@ -12,8 +12,8 @@ use crate::domain::{
         Sender, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
-        ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
-        TopLevelMessagesQueryResult,
+        ChannelEventDispatcher, ChannelMentionExtractor, ChannelReferenceSharePermissions,
+        ChannelRepo, MockChannelRepo, TopLevelMessagesQueryResult,
     },
 };
 use channel_sender::ChannelSender;
@@ -291,6 +291,8 @@ struct FakeMutationRepoState {
     patched_content: Option<String>,
     activity_upserts: usize,
     removed_participants: Vec<String>,
+    created_mentions: Vec<SimpleMention>,
+    synced_mentions: Vec<SimpleMention>,
 }
 
 impl FakeMutationRepo {
@@ -336,6 +338,8 @@ impl FakeMutationRepo {
                 patched_content: None,
                 activity_upserts: 0,
                 removed_participants: vec![],
+                created_mentions: vec![],
+                synced_mentions: vec![],
             })),
         }
     }
@@ -572,16 +576,18 @@ impl ChannelRepo for FakeMutationRepo {
     async fn create_message_mentions(
         &self,
         _message_id: Uuid,
-        _mentions: Vec<SimpleMention>,
+        mentions: Vec<SimpleMention>,
     ) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().created_mentions.extend(mentions);
         Ok(())
     }
 
     async fn sync_message_mentions(
         &self,
         _message_id: Uuid,
-        _mentions: Vec<SimpleMention>,
+        mentions: Vec<SimpleMention>,
     ) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().synced_mentions.extend(mentions);
         Ok(())
     }
 
@@ -805,6 +811,30 @@ impl ChannelReferenceSharePermissions for FakeReferenceSharing {
     }
 }
 
+#[derive(Clone, Default)]
+struct FakeMentionExtractor {
+    mentions: Vec<SimpleMention>,
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+impl FakeMentionExtractor {
+    fn new(mentions: Vec<SimpleMention>) -> Self {
+        Self {
+            mentions,
+            calls: Arc::default(),
+        }
+    }
+}
+
+impl ChannelMentionExtractor for FakeMentionExtractor {
+    type Err = anyhow::Error;
+
+    async fn extract_mentions(&self, content: &str) -> Result<Vec<SimpleMention>, Self::Err> {
+        self.calls.lock().unwrap().push(content.to_string());
+        Ok(self.mentions.clone())
+    }
+}
+
 fn mutation_service(
     repo: FakeMutationRepo,
     events: FakeEvents,
@@ -937,6 +967,174 @@ async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
         message.sender_id.as_ref(),
         bot_id.into_storage_id().as_ref()
     );
+}
+
+#[tokio::test]
+async fn bot_post_message_derives_mentions_from_content() {
+    let channel_id = Uuid::new_v4();
+    let actor = Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4()));
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let expected = vec![SimpleMention {
+        entity_type: "document".to_string(),
+        entity_id: "doc-1".to_string(),
+    }];
+    let extractor = FakeMentionExtractor::new(expected.clone());
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    )
+    .with_mention_extractor(extractor.clone());
+
+    svc.post_message(
+        actor,
+        channel_id,
+        PostMessageRequest {
+            content: "see the doc".to_string(),
+            mentions: vec![],
+            thread_id: None,
+            attachments: vec![],
+            nonce: None,
+            notification_policy: Default::default(),
+            triggered_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        extractor.calls.lock().unwrap().clone(),
+        vec!["see the doc".to_string()]
+    );
+    assert_eq!(repo.state.lock().unwrap().created_mentions, expected);
+
+    let emitted = events.events.lock().unwrap();
+    let ChannelEvent::MessagePosted { mentions, .. } = &emitted[0] else {
+        panic!("expected MessagePosted event, got {:?}", emitted[0]);
+    };
+    assert_eq!(*mentions, expected);
+}
+
+#[tokio::test]
+async fn bot_post_message_with_explicit_mentions_skips_extraction() {
+    let channel_id = Uuid::new_v4();
+    let actor = Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4()));
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let extractor = FakeMentionExtractor::new(vec![SimpleMention {
+        entity_type: "document".to_string(),
+        entity_id: "derived".to_string(),
+    }]);
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    )
+    .with_mention_extractor(extractor.clone());
+
+    let explicit = vec![SimpleMention {
+        entity_type: "document".to_string(),
+        entity_id: "explicit".to_string(),
+    }];
+    svc.post_message(
+        actor,
+        channel_id,
+        PostMessageRequest {
+            content: "bot update".to_string(),
+            mentions: explicit.clone(),
+            thread_id: None,
+            attachments: vec![],
+            nonce: None,
+            notification_policy: Default::default(),
+            triggered_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(extractor.calls.lock().unwrap().is_empty());
+    assert_eq!(repo.state.lock().unwrap().created_mentions, explicit);
+}
+
+#[tokio::test]
+async fn user_post_message_does_not_derive_mentions_from_content() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let extractor = FakeMentionExtractor::new(vec![SimpleMention {
+        entity_type: "document".to_string(),
+        entity_id: "doc-1".to_string(),
+    }]);
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    )
+    .with_mention_extractor(extractor.clone());
+
+    svc.post_message(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PostMessageRequest {
+            content: "see the doc".to_string(),
+            mentions: vec![],
+            thread_id: None,
+            attachments: vec![],
+            nonce: None,
+            notification_policy: Default::default(),
+            triggered_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(extractor.calls.lock().unwrap().is_empty());
+    assert!(repo.state.lock().unwrap().created_mentions.is_empty());
+}
+
+#[tokio::test]
+async fn bot_patch_message_derives_replacement_mentions_from_content() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_sender = bot_id.into_storage_id().to_string();
+    let repo = FakeMutationRepo::new(channel_id, &bot_sender);
+    repo.state.lock().unwrap().message.sender_id = Sender::new_from_bot(bot_id);
+    let message_id = repo.state.lock().unwrap().message.id;
+    let events = FakeEvents::default();
+    let expected = vec![SimpleMention {
+        entity_type: "chat".to_string(),
+        entity_id: "doc-2".to_string(),
+    }];
+    let extractor = FakeMentionExtractor::new(expected.clone());
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    )
+    .with_mention_extractor(extractor.clone());
+
+    svc.patch_message(
+        Sender::new_from_bot(bot_id),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            content: Some("final answer".to_string()),
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: None,
+            nonce: None,
+            notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        extractor.calls.lock().unwrap().clone(),
+        vec!["final answer".to_string()]
+    );
+    assert_eq!(repo.state.lock().unwrap().synced_mentions, expected);
 }
 
 #[tokio::test]

@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallRecordSearchResponseItemWithMetadataAllOfMetadata } from './callRecordSearchResponseItemWithMetadataAllOfMetadata';
+import type { CallRecordSearchResponseItemWithMetadataAllOfProperties } from './callRecordSearchResponseItemWithMetadataAllOfProperties';
 
 export type CallRecordSearchResponseItemWithMetadataAllOf = {
   metadata?: CallRecordSearchResponseItemWithMetadataAllOfMetadata;
+  /** Entity properties (e.g. tags) on the call. */
+  properties?: CallRecordSearchResponseItemWithMetadataAllOfProperties;
 };

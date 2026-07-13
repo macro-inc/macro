@@ -102,6 +102,7 @@ describe('toGraphqlPropertyEntityType', () => {
     expect(toGraphqlPropertyEntityType('DOCUMENT')).toBe('DOCUMENT');
     expect(toGraphqlPropertyEntityType('TASK')).toBe('TASK');
     expect(toGraphqlPropertyEntityType('COMPANY')).toBe('COMPANY');
+    expect(toGraphqlPropertyEntityType('CALL_RECORD')).toBe('CALL_RECORD');
   });
 });
 

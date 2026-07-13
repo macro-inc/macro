@@ -300,7 +300,7 @@ impl EmailRepo for EmailPgRepo {
         &self,
         message_ids: &[Uuid],
         link_id: Uuid,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<Uuid>, Self::Err> {
         label::delete_scheduled_messages_batch(&self.pool, message_ids, link_id).await
     }
 

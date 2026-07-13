@@ -9,6 +9,7 @@ import {
 import {
   config,
   DopplerEcsEnvironment,
+  getKafkaClusterPolicy,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -293,6 +294,7 @@ const emailServiceRole = new aws.iam.Role('email-service-role-2', {
     emailServiceSecretsPolicy.arn,
     emailServiceSqsPolicy.arn,
     emailServiceFrecencyPolicy.arn,
+    getKafkaClusterPolicy(),
   ],
 });
 

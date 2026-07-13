@@ -26,6 +26,7 @@ use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
+use lexical_mention_extractor::LexicalMentionExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
@@ -70,13 +71,16 @@ pub type ToolEmailService = EmailServiceImpl<
     ToolEamService,
 >;
 
-/// Type alias for the send-capable email service implementation used by user tools.
+/// Type alias for the send-capable email service implementation used by user
+/// tools. Carries the real event broker: these tools mutate email state, and
+/// the Gmail-echo suppression means events skipped here are never recovered.
 pub type ToolUserEmailService = EmailServiceImpl<
     EmailPgRepo,
     ToolFrecencyService,
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the channel list service implementation.
@@ -93,8 +97,12 @@ pub type ToolCommsService = ChannelListServiceImpl<
 pub type ToolChannelEventDispatcher = std::sync::Arc<dyn ChannelEventDispatcher>;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService =
-    ChannelServiceImpl<PgChannelsRepo, ToolChannelEventDispatcher>;
+pub type ToolChannelMessagesService = ChannelServiceImpl<
+    PgChannelsRepo,
+    ToolChannelEventDispatcher,
+    NoopChannelReferenceSharePermissions,
+    LexicalMentionExtractor,
+>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =
@@ -102,10 +110,16 @@ pub type ToolChannelToolContext =
 
 /// Build the channel AI tool context from a Postgres pool, with no side
 /// effects (no notifications/realtime) for hosts that lack those clients.
-pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
+/// `lexical_client` derives the mention list for messages the agent sends,
+/// since bot-authored content arrives without the editor-tracked mentions.
+pub fn build_channel_tool_context(
+    pool: sqlx::PgPool,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+) -> ToolChannelToolContext {
     build_channel_tool_context_with_dispatcher(
         pool,
         std::sync::Arc::new(NoopChannelEventDispatcher),
+        lexical_client,
     )
 }
 
@@ -115,13 +129,15 @@ pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext 
 pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,
+    lexical_client: Arc<lexical_client::LexicalClient>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
         ChannelServiceImpl::with_dependencies(
             PgChannelsRepo::new(pool.clone()),
             dispatcher,
             NoopChannelReferenceSharePermissions,
-        ),
+        )
+        .with_mention_extractor(LexicalMentionExtractor::new(lexical_client)),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),

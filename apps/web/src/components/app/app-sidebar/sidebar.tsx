@@ -54,7 +54,7 @@ import {
   getSettingsTabItem,
   useSettingsTabAvailable,
 } from '@core/constant/settingsTabsConfig';
-import { useAuthor, useEmail, useUserId } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -81,6 +81,7 @@ import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { authServiceClient } from '@service-auth/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
@@ -91,6 +92,7 @@ import {
   type ComponentProps,
   createEffect,
   createMemo,
+  createResource,
   createSignal,
   For,
   type JSX,
@@ -230,18 +232,6 @@ const SIDEBAR_LINKS = [
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
-  ...(ENABLE_CRM
-    ? ([
-        {
-          id: 'companies',
-          label: 'Companies',
-          href: LIST_VIEW_PATHS.companies,
-          icon: AnimatedCompanyIcon,
-          hotkey: 'o',
-          hotkeyToken: TOKENS.sidebar.goTo.companies,
-        },
-      ] satisfies SidebarItem[])
-    : []),
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
@@ -787,9 +777,22 @@ type SidebarSettingsWidgetProps = {
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
-  const author = useAuthor();
   const email = useEmail();
   const logout = useLogout();
+
+  const [userName] = createResource(async () => {
+    const response = await authServiceClient.getUserName();
+    return response.isOk() ? response.value : null;
+  });
+
+  // Prefer the user's real name (first/last); fall back to their email.
+  const displayName = createMemo(() => {
+    const name = userName();
+    const parts = [name?.first_name, name?.last_name]
+      .map((part) => part?.trim())
+      .filter((part): part is string => Boolean(part) && part !== 'N/A');
+    return parts.length > 0 ? parts.join(' ') : (email() ?? 'Macro User');
+  });
 
   return (
     <Dropdown
@@ -801,9 +804,9 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         variant="ghost"
         class={cn(
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
-          'justify-start gap-2 px-1.5 py-1'
+          'justify-start gap-3 px-1.5 py-1'
         )}
-        label="Settings"
+        label={displayName()}
         fullWidth
         tooltipDisabled={!props.isSlim()}
         tooltipPlacement="right"
@@ -828,7 +831,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           )}
         </Show>
         <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
-          Settings
+          {displayName()}
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
@@ -852,7 +855,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             </Show>
             <div class="min-w-0">
               <div class="truncate text-sm font-semibold text-ink">
-                {author()}
+                {displayName()}
               </div>
               <div class="truncate text-sm text-ink-muted">{email()}</div>
             </div>
@@ -910,6 +913,15 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const COMPANIES_LINK: SidebarItem = {
+  id: 'companies',
+  label: 'Customers',
+  href: LIST_VIEW_PATHS.companies,
+  icon: AnimatedCompanyIcon,
+  hotkey: 'o',
+  hotkeyToken: TOKENS.sidebar.goTo.companies,
+};
+
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
   label: 'Home',
@@ -921,12 +933,12 @@ const DASHBOARD_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Calls entry in their correct positions. Shared by the rendered
- * sidebar (`AppSidebar.visibleLinks`) and the always-mounted `GoToHotkeys`
- * registrar so their link sets can't drift. Call from a reactive context — it
- * reads `ENABLE_CALLS()`. Rendered sections additionally drop
- * `hiddenFromSidebar`
- * entries, which have hotkeys but no sidebar row.
+ * flag-gated Calls and CRM entries in their correct positions. Shared by the
+ * rendered sidebar (`AppSidebar.visibleLinks`) and the always-mounted
+ * `GoToHotkeys` registrar so their link sets can't drift. Call from a reactive
+ * context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`. Rendered sections
+ * additionally drop `hiddenFromSidebar` entries, which have hotkeys but no
+ * sidebar row.
  */
 const buildSidebarLinks = (): SidebarItem[] => {
   let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
@@ -934,6 +946,17 @@ const buildSidebarLinks = (): SidebarItem[] => {
   if (ENABLE_CALLS()) {
     const idx = links.findIndex((l) => l.id === 'channels');
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+  }
+
+  if (ENABLE_CRM()) {
+    // Customers sits just after Channels (and Calls when present).
+    const anchorId = ENABLE_CALLS() ? 'calls' : 'channels';
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [
+      ...links.slice(0, idx + 1),
+      COMPANIES_LINK,
+      ...links.slice(idx + 1),
+    ];
   }
 
   return links;

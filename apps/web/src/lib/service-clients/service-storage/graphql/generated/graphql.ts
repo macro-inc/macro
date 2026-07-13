@@ -306,6 +306,8 @@ export type GraphqlPropertyDataType =
 
 /** An entity type supported by the properties domain. */
 export type GraphqlPropertyEntityType =
+  /** Call record entity. */
+  | 'CALL_RECORD'
   /** Channel entity. */
   | 'CHANNEL'
   /** Chat entity. */

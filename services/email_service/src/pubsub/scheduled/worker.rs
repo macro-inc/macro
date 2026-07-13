@@ -3,9 +3,11 @@ use crate::pubsub::scheduled::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use futures::StreamExt;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use sqlx::PgPool;
 
 /// method that ingests sqs messages and calls the process function for each
+#[expect(clippy::too_many_arguments, reason = "matches the other workers")]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
@@ -14,6 +16,7 @@ pub async fn run_worker(
     redis_client: RedisClient,
     s3_client: s3_client::S3,
     attachment_bucket: String,
+    macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
 ) {
     let ctx = ScheduledContext {
         db,
@@ -23,6 +26,7 @@ pub async fn run_worker(
         redis_client,
         s3_client,
         attachment_bucket,
+        macro_event_broker,
     };
     loop {
         let worker_result = tokio::spawn({

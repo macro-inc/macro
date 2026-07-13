@@ -35,7 +35,9 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<PropertiesLiteral>> {
         Ok(Expr::val(PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
-            entity_type: self.entity_type.map(Into::into),
+            entity_type: self
+                .entity_type
+                .and_then(|et| PropertyEntityType::try_from(et).ok()),
             value: self.value.into_ast()?,
         }))
     }
@@ -68,6 +70,8 @@ impl GraphqlPropertyMatchValue {
 /// An entity type supported by the properties domain.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlPropertyEntityType {
+    /// Call record entity.
+    CallRecord,
     /// Channel entity.
     Channel,
     /// Chat entity.
@@ -89,6 +93,7 @@ pub enum GraphqlPropertyEntityType {
 impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
     fn from(value: GraphqlPropertyEntityType) -> Self {
         match value {
+            GraphqlPropertyEntityType::CallRecord => Self::CallRecord,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -104,6 +109,7 @@ impl From<GraphqlPropertyEntityType> for models_properties::EntityType {
 impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
     fn from(value: models_properties::EntityType) -> Self {
         match value {
+            models_properties::EntityType::CallRecord => Self::CallRecord,
             models_properties::EntityType::Channel => Self::Channel,
             models_properties::EntityType::Chat => Self::Chat,
             models_properties::EntityType::Company => Self::Company,
@@ -116,9 +122,11 @@ impl From<models_properties::EntityType> for GraphqlPropertyEntityType {
     }
 }
 
-impl From<GraphqlPropertyEntityType> for PropertyEntityType {
-    fn from(value: GraphqlPropertyEntityType) -> Self {
-        match value {
+impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
+    type Error = GraphqlPropertyEntityType;
+
+    fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
+        Ok(match value {
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -127,6 +135,9 @@ impl From<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
-        }
+            // Call records are not part of the generic property-filter AST.
+            // They are filtered through a dedicated call query instead.
+            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+        })
     }
 }

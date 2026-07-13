@@ -12,7 +12,7 @@ migrate_db $DATABASE_URL:
 
 [no-cd]
 prepare_db $DATABASE_URL *FLAGS:
-    cargo sqlx prepare --workspace -- {{ FLAGS }} --all-features
+    cargo sqlx prepare --workspace -- {{ FLAGS }} --workspace --exclude sync_service --all-features
 
 [no-cd]
 drop_db $DATABASE_URL *FLAGS:

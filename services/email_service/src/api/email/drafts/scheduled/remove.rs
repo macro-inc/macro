@@ -3,6 +3,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email::domain::events::{EmailMacroEvent, MessageSendCancelledMetadata, SendCancelReason};
+use email_service::pubsub::publish_email_event;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -92,6 +94,34 @@ pub async fn handler(
     .await?;
 
     tx.commit().await?;
+
+    // Best-effort event: resolve the draft's thread for the payload.
+    let thread_db_id = email_db_client::messages::get_simple_messages::get_simple_message(
+        &ctx.db,
+        &message_id,
+        &link.fusionauth_user_id,
+    )
+    .await
+    .inspect_err(
+        |e| tracing::warn!(error=?e, %message_id, "skipping message_send_cancelled event: draft lookup failed"),
+    )
+    .ok()
+    .flatten()
+    .map(|m| m.thread_db_id);
+    if let Some(thread_id) = thread_db_id {
+        publish_email_event(
+            ctx.macro_event_broker.as_ref(),
+            &EmailMacroEvent::message_send_cancelled(MessageSendCancelledMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                actor: Some(link.macro_id.clone()),
+                message_id,
+                thread_id,
+                reason: SendCancelReason::Undo,
+            }),
+        )
+        .await;
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
