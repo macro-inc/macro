@@ -494,23 +494,35 @@ where
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let user_id = req.user_id.as_ref().to_string();
+        let user_id = req.user_id.clone();
+        let user_id_str = user_id.as_ref().to_string();
 
-        Ok(Either::Right(
-            self.call_record_service
-                .get_user_call_records(req)
+        let mut items: Vec<SoupItem> = self
+            .call_record_service
+            .get_user_call_records(req)
+            .await
+            .map_err(|_| SoupErr::CallErr)?
+            .into_iter()
+            .map(|record| {
+                SoupItem::Call(SoupCallRecord::from_record_for_user(record, &user_id_str))
+            })
+            .collect();
+
+        // Calls are fetched outside the main soup queries (which hydrate their
+        // own items), so attach entity properties (tags) here, like CRM.
+        if !items.is_empty() {
+            self.soup_storage
+                .populate_properties(user_id, &mut items)
                 .await
-                .map_err(|_| SoupErr::CallErr)
-                .map(|records| {
-                    records.into_iter().map(move |record| {
-                        let soup_record = SoupCallRecord::from_record_for_user(record, &user_id);
-                        FrecencySoupItem {
-                            item: SoupItem::Call(soup_record),
-                            frecency_score: None,
-                        }
-                    })
-                })?,
-        ))
+                .map_err(anyhow::Error::from)?;
+        }
+
+        Ok(Either::Right(items.into_iter().map(|item| {
+            FrecencySoupItem {
+                item,
+                frecency_score: None,
+            }
+        })))
     }
 
     #[tracing::instrument(err, skip(self, source_ids, query))]
