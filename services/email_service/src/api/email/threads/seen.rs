@@ -6,7 +6,6 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadReadMetadata};
 use email_service::pubsub::publish_email_event;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::service::label::system_labels;
@@ -168,7 +167,7 @@ pub async fn seen_handler(
         &EmailMacroEvent::thread_read(ThreadReadMetadata {
             link_id: link.id,
             owner: link.macro_id.clone(),
-            actor: MacroUserIdStr::try_from(user_context.user_id.clone()).ok(),
+            actor: Some(link.macro_id.clone()),
             thread_id,
             is_read: true,
             origin: EmailEventOrigin::UserAction,

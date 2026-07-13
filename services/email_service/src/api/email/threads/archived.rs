@@ -7,7 +7,6 @@ use axum::{Extension, Json};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadArchivedMetadata};
 use email_db_client::threads::update::update_inbox_visible_status;
 use email_service::pubsub::publish_email_event;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::service::label::system_labels;
@@ -179,7 +178,7 @@ pub async fn archived_handler(
         &EmailMacroEvent::thread_archived(ThreadArchivedMetadata {
             link_id: link.id,
             owner: link.macro_id.clone(),
-            actor: MacroUserIdStr::try_from(user_context.user_id.clone()).ok(),
+            actor: Some(link.macro_id.clone()),
             thread_id,
             archived: is_archiving,
             origin: EmailEventOrigin::UserAction,

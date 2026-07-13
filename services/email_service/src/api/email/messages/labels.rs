@@ -7,7 +7,6 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use email_service::pubsub::publish_email_event;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::service;
@@ -238,7 +237,7 @@ pub async fn handler(
 
     // Publish semantic macro.email events, rolled up to one per affected
     // thread (the batch may span several threads in the same inbox).
-    let actor = MacroUserIdStr::try_from(user_context.user_id.clone()).ok();
+    let actor = Some(link.macro_id.clone());
     let mut event_thread_ids: Vec<Uuid> = db_messages.iter().map(|m| m.thread_db_id).collect();
     event_thread_ids.sort_unstable();
     event_thread_ids.dedup();

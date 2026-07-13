@@ -5,9 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email::domain::events::{EmailMacroEvent, MessageSendQueuedMetadata};
 use email_service::pubsub::publish_email_event;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::service::link::Link;
 use models_email::service::message::ScheduledMessage;
 use sqlx_core::types::chrono::{DateTime, Utc};
@@ -76,11 +74,10 @@ pub struct UpsertScheduledResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), err)]
+#[tracing::instrument(skip(ctx), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
-    user_context: Extension<UserContext>,
     Path(draft_id): Path<Uuid>,
     Json(request): Json<UpsertScheduledRequest>,
 ) -> Result<Json<UpsertScheduledResponse>, UpsertScheduledError> {
@@ -129,7 +126,7 @@ pub async fn handler(
             &EmailMacroEvent::message_send_queued(MessageSendQueuedMetadata {
                 link_id: link.id,
                 owner: link.macro_id.clone(),
-                actor: MacroUserIdStr::try_from(user_context.user_id.clone()).ok(),
+                actor: Some(link.macro_id.clone()),
                 message_id: draft_id,
                 thread_id,
                 scheduled_send_at: request.send_time,
