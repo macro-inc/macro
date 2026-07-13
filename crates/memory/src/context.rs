@@ -1,0 +1,247 @@
+use ai_tools::{
+    NoOpConnectionService, NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
+};
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
+use documents::domain::models::CloudFrontConfig;
+use documents::inbound::toolset::DocumentToolContext;
+use documents::outbound::pg_document_repo::PgDocumentRepo;
+use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
+use email::domain::ports::ReadonlyEmailPreviewAdapter;
+use email::domain::service::EmailServiceImpl;
+use email::outbound::EmailPgRepo;
+use email_service_client::EmailServiceClientExternal;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access::outbound::PgAccessRepository;
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
+use frecency::domain::services::FrecencyQueryServiceImpl;
+use frecency::outbound::postgres::FrecencyPgStorage;
+use lexical_client::LexicalClient;
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::repository::DbNotificationRepository;
+use search_service_client::SearchServiceClient;
+use soup::domain::service::SoupImpl;
+use soup::outbound::pg_soup_repo::PgSoupRepo;
+use std::sync::Arc;
+use sync_service_client::SyncServiceClient;
+
+use crate::config::Config;
+
+/// Builds a [`ToolServiceContext`] from a database pool and caller-provided config.
+///
+/// This function does not resolve service URLs. The caller must provide a [`Config`]
+/// whose service URL fields have already been resolved, for example with
+/// `macro_service_urls`: `document_storage_service_url`, `sync_service_url`,
+/// `email_service_url`, and `lexical_service_url`.
+///
+/// The provided [`Config`] must also contain values sourced from the required
+/// environment variables: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_BUCKET`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, and
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
+///
+/// This function reads the provided [`Config`] and initializes the clients needed to
+/// build the [`ToolServiceContext`].
+#[tracing::instrument(skip(pool, config), err)]
+pub async fn build_tool_service_context(
+    pool: sqlx::PgPool,
+    config: &Config,
+) -> anyhow::Result<ToolServiceContext> {
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .email_scheduled_queue(&config.email_scheduled_queue);
+
+    // Service clients
+    let search_client = Arc::new(SearchServiceClient::new(
+        config.internal_api_secret_key.clone(),
+        config.document_storage_service_url.clone(),
+    ));
+    let sync_client = Arc::new(SyncServiceClient::new(
+        config.internal_api_secret_key.clone(),
+        config.sync_service_url.clone(),
+    ));
+    let email_ext_client = Arc::new(EmailServiceClientExternal::new(
+        config.email_service_url.clone(),
+    ));
+    let lexical_client = LexicalClient::new(
+        config.internal_api_secret_key.clone(),
+        config.lexical_service_url.clone(),
+    );
+
+    // Soup service
+    let frecency_storage = FrecencyPgStorage::new(pool.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(pool.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
+        0,
+    );
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
+        frecency_storage,
+    );
+    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
+        frecency_service,
+        ReadonlyEmailPreviewAdapter(email_service),
+        channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
+        crm::domain::service::NoOpCrmService,
+        foreign_entity_service,
+    ));
+
+    // Document tool context
+    let s3_client = macro_aws_config::s3_client().await;
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        s3_client,
+        &config.document_storage_bucket,
+        &config.docx_document_upload_bucket,
+    );
+    let document_repo = PgDocumentRepo::new(pool.clone());
+    let cloudfront_config = CloudFrontConfig {
+        distribution_url: config
+            .document_storage_service_cloudfront_distribution_url
+            .clone(),
+        signer_public_key_id: config
+            .document_storage_service_cloudfront_signer_public_key_id
+            .clone(),
+        signer_private_key: config
+            .document_storage_service_cloudfront_signer_private_key_secret_name
+            .clone(),
+        presigned_url_expiry_seconds: 3600,
+        browser_cache_expiry_seconds: 86400,
+    };
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let properties_service =
+        ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
+    let task_properties_service =
+        ai_tools::build_task_properties_adapter(
+            pool.clone(),
+            properties_service.clone(),
+            entity_access_service.clone(),
+        );
+    let document_service = documents::domain::service::DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_client.as_ref().clone(),
+        s3_upload_adapter,
+        task_properties_service,
+        NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+    );
+    let document_tool_context = DocumentToolContext::new(
+        document_service,
+        (*entity_access_service).clone(),
+        lexical_client,
+        sync_client.as_ref().clone(),
+    );
+
+    // Properties tool context
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+
+    // Email tool context
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        Arc::new(EmailServiceImpl::new(
+            EmailPgRepo::new(pool.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+            sqs_client,
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+            0,
+        )),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pool.clone(),
+        ))),
+    );
+
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ai_tools::NoOpCallRtcClient,
+        ai_tools::NoOpConnectionService,
+        (*entity_access_service).clone(),
+        ai_tools::NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(pool.clone()),
+        queue: ToolNotificationQueue::NoOp,
+        sns_endpoint: NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+            apns_voip_platform_arn: String::new(),
+        },
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            Arc::new(ai_toolset::AsyncToolCollection::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+        ),
+        (*entity_access_service).clone(),
+    );
+
+
+    Ok(ToolServiceContext {
+        search_service_client: search_client,
+        email_service_client: email_ext_client,
+        soup_service,
+        email_service: email_service_for_tools,
+        document_tool_context,
+        properties_tool_context,
+        email_tool_context,
+        call_tool_context,
+        notification_tool_context,
+        chat_tool_context,
+        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
+        crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
+        schedule_tool_context: ai_tools::NoOpScheduleContext,
+        anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        recorder: ai_usage::pg_recorder(pool.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
+    })
+}

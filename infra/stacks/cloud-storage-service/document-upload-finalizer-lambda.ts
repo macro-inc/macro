@@ -4,9 +4,10 @@ import { Lambda } from '../../packages/lambda';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const BASE_NAME = 'document-upload-finalizer-lambda';
-const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
 const ZIP_FOLDER_NAME = 'document_upload_finalizer_handler';
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${ZIP_FOLDER_NAME}/bootstrap.zip`;
+const REPO_ROOT = '../../..';
+const HANDLER_BASE = `${REPO_ROOT}/services/${ZIP_FOLDER_NAME}`;
+const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${ZIP_FOLDER_NAME}/bootstrap.zip`;
 
 export type DocumentUploadFinalizerLambdaEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
@@ -93,7 +94,7 @@ export class DocumentUploadFinalizerLambda extends pulumi.ComponentResource {
       `${BASE_NAME}-lambda`,
       {
         baseName: BASE_NAME,
-        handlerBase: CLOUD_STORAGE_BASE,
+        handlerBase: HANDLER_BASE,
         zipLocation: ZIP_LOCATION,
         vpc,
         envVars,

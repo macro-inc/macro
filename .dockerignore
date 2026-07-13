@@ -1,0 +1,47 @@
+# Version-control and local-agent state
+.git
+.jj
+.agents
+.claude/.local
+.pi/outputs
+
+# Legacy layout directories may still contain ignored local build artifacts.
+/agents
+/js
+/rust
+
+# User-facing applications and shared JavaScript packages are not part of most
+# backend service build contexts. The lexical service has a Dockerfile-specific
+# ignore file because it installs the root JavaScript workspace.
+/apps
+/packages
+
+# Secrets and local configuration
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.env
+**/*.env.*
+**/.dev.vars*
+
+# Dependency and generated output
+**/node_modules
+**/target
+**/dist
+**/build
+**/.wrangler
+**/test-results
+**/playwright-report
+**/coverage
+**/.cache
+**/.vite
+**/*.tsbuildinfo
+**/*.log
+
+# Editor and operating-system noise
+**/.DS_Store
+**/.idea
+**/.vscode
+**/*.swp
+**/*.swo

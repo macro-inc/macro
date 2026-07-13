@@ -1,0 +1,262 @@
+{
+  "include": [
+    "./src/**/*",
+    "./src/lib/core/component/Emoji/cldr-tags.json"
+  ],
+  "exclude": [
+    "./tests/**/*",
+    "./src/lib/core/**/*.spec.ts",
+    "./src/features/block-code/scripts/**/*"
+  ],
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "moduleResolution": "bundler",
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true,
+    "target": "ESNext",
+    "module": "esnext",
+    "noEmit": true,
+    "lib": [
+      "dom",
+      "esnext",
+      "webworker",
+      "DOM.Iterable"
+    ],
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "preserveWatchOutput": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "types": [
+      "vite-plugin-solid-svg/types-component-solid",
+      "vite/client",
+      "vite-plugin-solid-svg/types",
+      "wicg-file-system-access",
+      "@types/gtag.js",
+      "@types/facebook-pixel"
+    ],
+    "paths": {
+      "loro-crdt": [
+        "../../node_modules/loro-crdt"
+      ],
+      "loro-crdt/*": [
+        "../../node_modules/loro-crdt/*"
+      ],
+      "@graphql-cache/*": [
+        "./src/lib/graphql-cache/*"
+      ],
+      "@filesystem": [
+        "./src/lib/filesystem/main.ts"
+      ],
+      "@filesystem/*": [
+        "./src/lib/filesystem/*"
+      ],
+      "@coparse/document-processing-types": [
+        "./src/lib/document-processing-types/index.ts"
+      ],
+      "@core/*": [
+        "./src/lib/core/*"
+      ],
+      "@macro/tauri": [
+        "./src/lib/tauri"
+      ],
+      "@macro/tauri/*": [
+        "./src/lib/tauri/*"
+      ],
+      "@phosphor/*": [
+        "../../node_modules/@phosphor-icons/core/assets/regular/*"
+      ],
+      "@block-canvas/*": [
+        "./src/features/block-canvas/*"
+      ],
+      "@block-pdf/*": [
+        "./src/features/block-pdf/*"
+      ],
+      "@block-project/*": [
+        "./src/features/block-project/*"
+      ],
+      "@service-auth/*": [
+        "./src/lib/service-clients/service-auth/*"
+      ],
+      "@service-stripe/*": [
+        "./src/lib/service-clients/service-stripe/*"
+      ],
+      "@service-storage/*": [
+        "./src/lib/service-clients/service-storage/*"
+      ],
+      "@service-search/*": [
+        "./src/lib/service-clients/service-search/*"
+      ],
+      "@service-static-files/*": [
+        "./src/lib/service-clients/service-static-files/*"
+      ],
+      "@service-call/*": [
+        "./src/lib/service-clients/service-call/*"
+      ],
+      "@service-cognition/*": [
+        "./src/lib/service-clients/service-cognition/*"
+      ],
+      "@service-connection/*": [
+        "./src/lib/service-clients/service-connection/*"
+      ],
+      "@service-notification/*": [
+        "./src/lib/service-clients/service-notification/*"
+      ],
+      "@service-unfurl/*": [
+        "./src/lib/service-clients/service-unfurl/*"
+      ],
+      "@service-scheduled-action/*": [
+        "./src/lib/service-clients/service-scheduled-action/*"
+      ],
+      "@service-email/*": [
+        "./src/lib/service-clients/service-email/*"
+      ],
+      "@service-properties/*": [
+        "./src/lib/service-clients/service-properties/*"
+      ],
+      "@block-chat/*": [
+        "./src/features/block-chat/*"
+      ],
+      "@block-code/*": [
+        "./src/features/block-code/*"
+      ],
+      "@block-call/*": [
+        "./src/features/block-call/*"
+      ],
+      "@block-channel/*": [
+        "./src/features/block-channel/*"
+      ],
+      "@block-automation/*": [
+        "./src/features/block-automation/*"
+      ],
+      "@channel/*": [
+        "./src/features/channel/*"
+      ],
+      "@companies/*": [
+        "./src/features/companies/*"
+      ],
+      "@block-company/*": [
+        "./src/features/block-company/*"
+      ],
+      "@contacts/*": [
+        "./src/features/contacts/*"
+      ],
+      "@block-contact/*": [
+        "./src/features/block-contact/*"
+      ],
+      "@block-email/*": [
+        "./src/features/block-email/*"
+      ],
+      "@block-pr/*": [
+        "./src/features/block-pr/*"
+      ],
+      "@block-md/*": [
+        "./src/features/block-md/*"
+      ],
+      "@block-image/*": [
+        "./src/features/block-image/*"
+      ],
+      "@block-unknown/*": [
+        "./src/features/block-unknown/*"
+      ],
+      "@block-video/*": [
+        "./src/features/block-video/*"
+      ],
+      "@icon/*": [
+        "./src/components/icon/*"
+      ],
+      "@design/*": [
+        "./src/lib/design/*"
+      ],
+      "@observability": [
+        "./src/lib/observability/"
+      ],
+      "@observability/*": [
+        "./src/lib/observability/*"
+      ],
+      "@service-sync": [
+        "./src/lib/service-clients/service-sync"
+      ],
+      "@service-sync/*": [
+        "./src/lib/service-clients/service-sync/*"
+      ],
+      "@service-contacts/*": [
+        "./src/lib/service-clients/service-contacts/*"
+      ],
+      "@baby-gl": [
+        "./src/lib/baby-gl/"
+      ],
+      "@baby-gl/*": [
+        "./src/lib/baby-gl/*"
+      ],
+      "@notifications": [
+        "./src/features/notifications/"
+      ],
+      "@notifications/*": [
+        "./src/features/notifications/*"
+      ],
+      "@animate": [
+        "./src/lib/animate/index.ts"
+      ],
+      "@animate/*": [
+        "./src/lib/animate/*"
+      ],
+      "@components/app/*": [
+        "./src/components/app/*"
+      ],
+      "@app/constants/*": [
+        "./src/lib/constants/*"
+      ],
+      "@app/lib/*": [
+        "./src/lib/*"
+      ],
+      "@app/preferences/*": [
+        "./src/lib/preferences/*"
+      ],
+      "@app/signal/*": [
+        "./src/lib/signals/*"
+      ],
+      "@app/util/*": [
+        "./src/lib/utils/*"
+      ],
+      "@app/*": [
+        "./src/*"
+      ],
+      "@queries/*": [
+        "./src/lib/queries/*"
+      ],
+      "@ui": [
+        "./src/components/ui/index.ts"
+      ],
+      "@ui/*": [
+        "./src/components/ui/*"
+      ],
+      "@theme/*": [
+        "./src/features/theme/*"
+      ],
+      "@entity": [
+        "./src/features/entity/index.ts"
+      ],
+      "@entity/mocks/*": [
+        "./src/features/entity/mocks/*"
+      ],
+      "@entity/*": [
+        "./src/features/entity/*"
+      ],
+      "@property": [
+        "./src/features/property/index.ts"
+      ],
+      "@property/*": [
+        "./src/features/property/*"
+      ]
+    }
+  }
+}

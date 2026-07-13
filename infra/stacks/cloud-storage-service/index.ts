@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucket } from '../../packages/resources';
+import { createBucket, Queue } from '../../packages/resources';
 import {
   config,
   getMacroApiToken,
@@ -29,6 +29,16 @@ const tags = {
   tech_lead: 'hutch',
   project: 'cloud-storage-service',
 };
+
+const webhookEventQueue = new Queue('webhook-event', {
+  fifoQueue: true,
+  maxReceiveCount: 20,
+  tags,
+  visibilityTimeoutSeconds: 30,
+});
+
+export const webhookEventQueueArn = webhookEventQueue.queue.arn;
+export const webhookEventQueueName = webhookEventQueue.queue.name;
 
 const MACRO_CACHE = aws.secretsmanager
   .getSecretVersionOutput({
@@ -246,6 +256,7 @@ const cloudStorageService = new CloudStorageService(
     cloudStorageClusterName: cloudStorageClusterName,
     queueArns: [
       searchEventQueueArn,
+      webhookEventQueue.queue.arn,
       deleteDocumentHandler.queue.arn,
       notificationIngressQueueArn,
       contactsQueueArn,

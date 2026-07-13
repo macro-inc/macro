@@ -25,7 +25,6 @@ runs:
         sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Setup bunfig.toml
-      working-directory: js
       shell: bash
       run: |
         echo "[run]" >> bunfig.toml
@@ -33,13 +32,12 @@ runs:
 
     - name: Install Dependencies
       shell: bash
-      working-directory: js
       run: bun install --frozen-lockfile
 
     - name: Get Playwright version (for caching)
       if: inputs.playwright == 'true'
       shell: bash
-      working-directory: js/app
+      working-directory: apps/web
       run: echo "PW_VERSION=$(bunx playwright --version | cut -d' ' -f2)" >> $GITHUB_ENV
     - name: Restore Playwright browsers
       if: inputs.playwright == 'true'
@@ -51,7 +49,7 @@ runs:
     - name: Install Playwright Browsers
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
       shell: bash
-      working-directory: js/app
+      working-directory: apps/web
       run: bunx playwright install --with-deps chromium
     - name: Save Playwright browsers to cache
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')

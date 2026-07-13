@@ -90,7 +90,7 @@ runs:
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
         name: ${{ inputs.prebuilt-binaries-artifact }}
-        path: rust/cloud-storage/prebuilt-artifact
+        path: prebuilt-artifact
 
     - name: Extract prebuilt service binaries
       if: ${{ inputs.prebuilt-binaries-artifact != '' || inputs.prebuilt-binaries-tar != '' }}
@@ -99,23 +99,23 @@ runs:
         TAR_PATH: ${{ inputs.prebuilt-binaries-tar }}
       run: |
         set -euo pipefail
-        mkdir -p rust/cloud-storage/prebuilt
+        mkdir -p prebuilt
         # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
-        src="${TAR_PATH:-rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz}"
+        src="${TAR_PATH:-prebuilt-artifact/prebuilt-binaries.tar.gz}"
         if [[ ! -f "$src" ]]; then
           echo "::error::prebuilt binaries tar missing at $src — the handoff download/extract chain broke upstream; check this job's download step and the build job's upload receipt."
           echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
           exit 1
         fi
         echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
-        tar -xzf "$src" -C rust/cloud-storage/prebuilt
+        tar -xzf "$src" -C prebuilt
 
     - name: Download Lambda artifacts
       if: ${{ inputs.lambda-artifacts != '' }}
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
         name: ${{ inputs.lambda-artifacts }}
-        path: rust/cloud-storage/lambda-artifact
+        path: lambda-artifact
 
     - name: Extract Lambda artifacts
       if: ${{ inputs.lambda-artifacts != '' || inputs.lambda-artifacts-tar != '' }}
@@ -125,14 +125,14 @@ runs:
       run: |
         set -euo pipefail
         # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
-        src="${TAR_PATH:-rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz}"
+        src="${TAR_PATH:-lambda-artifact/lambda-artifacts.tar.gz}"
         if [[ ! -f "$src" ]]; then
           echo "::error::lambda artifacts tar missing at $src — the handoff download/extract chain broke upstream; check this job's download step and the build job's upload receipt."
           echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
           exit 1
         fi
         echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
-        tar -xzf "$src" -C rust/cloud-storage
+        tar -xzf "$src" -C .
 
     - name: Check Lambda config for inline build
       if: ${{ inputs.lambda-artifacts == '' && inputs.lambda-artifacts-tar == '' && inputs.cloud-storage-service-name != '' }}
@@ -158,8 +158,8 @@ runs:
         SERVICE: ${{ inputs.cloud-storage-service-name }}
       run: |
         .github/scripts/build-cloud-storage-lambdas-nix.sh
-        rm -rf rust/cloud-storage/target/lambda
-        tar -xzf lambda-artifacts.tar.gz -C rust/cloud-storage
+        rm -rf target/lambda
+        tar -xzf lambda-artifacts.tar.gz -C .
 
     # setup docker -- a Namespace remote builder keeps a persistent buildkit
     # layer cache (so heavy bases like LibreOffice/Collabora stay warm across

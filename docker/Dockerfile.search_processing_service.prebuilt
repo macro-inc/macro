@@ -1,0 +1,20 @@
+FROM debian:trixie-slim AS runner
+ARG SERVICE_NAME=search_processing_service
+WORKDIR /app
+
+RUN : \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  dumb-init \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY ./prebuilt/nix-store/ /nix/store/
+COPY --chmod=755 ./prebuilt/${SERVICE_NAME} /app/svc
+RUN mkdir -p /app/pdfium-lib/linux
+COPY ./services/search_processing_service/pdfium-lib/linux/libpdfium.so /app/pdfium-lib/linux/libpdfium.so
+
+ENV PORT=8080
+EXPOSE ${PORT}
+ENTRYPOINT ["dumb-init", "./svc"]

@@ -1,0 +1,483 @@
+# Services
+# Freeze the Docker Compose project name so every checkout/worktree uses the
+# same local containers, networks, and anonymous Compose-managed resources.
+# Local setup is single-instance by design.
+name: macro
+
+include:
+  - docker/docker-compose-databases.yml
+  - infra/stacks/fusionauth-instance/docker-compose.yml
+
+x-common-env: &common-env
+  # The xtask orchestrator points this at a per-instance generated env file via
+  # MACRO_ENV_FILE (run-local/run-dev). Defaults to .env for any legacy/manual
+  # `docker compose` invocation, and is optional so a missing file is not fatal.
+  env_file:
+    - path: ${MACRO_ENV_FILE:-.env}
+      required: false
+
+x-rust-services-image: &rust-services-image
+  image: macro-local-rust-services:dev
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.dev
+    target: services_bundle
+
+services:
+  rust_services_image:
+    profiles:
+      - build-helper
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+      target: services_bundle
+    image: macro-local-rust-services:dev
+
+  # ============================================================================
+  # authentication-service (Port 8080)
+  # Primary auth service - depends on FusionAuth, Redis, MacroDB
+  # ============================================================================
+  authentication-service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/authentication_service"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - fusionauth
+      - redis
+    networks:
+      - auth
+      - databases
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # connection_gateway (Port 8082)
+  # WebSocket gateway - Redis only
+  # ============================================================================
+  connection_gateway:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/connection_gateway_service"]
+    ports:
+      - "8082:8080"
+    depends_on:
+      - redis
+    networks:
+      databases:
+      services:
+        aliases:
+          - connection-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # contacts_service (Port 8083)
+  # Contact management - ContactsDB
+  # ============================================================================
+  contacts_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/contacts_service"]
+    ports:
+      - "8083:8080"
+    networks:
+      databases:
+      services:
+        aliases:
+          - contacts-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # document_cognition_service (Port 8085)
+  # Document analysis and processing
+  # ============================================================================
+  document_cognition_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_cognition_service"]
+    ports:
+      - "8085:8080"
+    depends_on:
+      - document_storage_service
+      - email_service
+      - static_file_service
+      - sync_service
+      - lexical_service
+      - ai_editing_worker
+    environment:
+      - OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL=http://document-storage-service:8080
+      - OVERRIDE_AI_EDITING_WORKER_URL=http://ai-editing-worker:8933
+    networks:
+      databases:
+      services:
+        aliases:
+          - document-cognition-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # document_storage_service (Port 8086)
+  # Main document storage API
+  # ============================================================================
+  document_storage_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_storage_service"]
+    ports:
+      - "8086:8080"
+    environment:
+      # - OVERRIDE_SYNC_SERVICE_URL=https://sync-service-playground.macroverse.workers.dev
+      # uncomment above, and comment out below, for when you want to use the playground sync service. also use
+      # VITE_SYNC_SERVICE_HOST=sync-service-playground.macroverse.workers.dev VITE_LOCAL_SERVERS=ALL bun run dev
+      # if you do so
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
+    depends_on:
+      - redis
+      - connection_gateway
+      - authentication-service
+      - sync_service
+      - lexical_service
+    networks:
+      databases:
+      services:
+        aliases:
+          - document-storage-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # document_upload_finalizer (local worker)
+  # LocalStack S3 ObjectCreated -> SQS consumer for document upload finalization.
+  # Production uses the document_upload_finalizer_handler Lambda.
+  # ============================================================================
+  document_upload_finalizer:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/document_upload_finalizer_local_worker"]
+    environment:
+      LOCAL_AWS_URL: ${LOCAL_AWS_URL:-http://localstack:4566}
+      DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL: ${DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL:-http://localstack:4566/000000000000/document-upload-finalizer-queue}
+    depends_on:
+      - postgres
+      - sync_service
+      - lexical_service
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
+  # email_service (Port 8087)
+  # Email processing and management
+  # ============================================================================
+  email_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/email_service"]
+    ports:
+      - "8087:8080"
+    depends_on:
+      - authentication-service
+      - document_storage_service
+      - connection_gateway
+      - static_file_service
+      - redis
+    networks:
+      databases:
+      services:
+        aliases:
+          - email-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # email_pubsub_workers (local worker)
+  # Consumes the email SQS queues (backfill, scheduled, gmail sync/ops, sfs,
+  # link manager). Runs as its own deployment in prod; locally it's its own
+  # container alongside email_service. No HTTP port — pure SQS consumer.
+  # ============================================================================
+  email_pubsub_workers:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/pubsub_workers"]
+    depends_on:
+      - postgres
+      - redis
+      - authentication-service
+      - document_storage_service
+      - connection_gateway
+      - static_file_service
+      - email_service
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
+  # notification_service (Port 8089)
+  # User notifications - NotificationDB
+  # ============================================================================
+  notification_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/notification_service"]
+    ports:
+      - "8089:8080"
+    environment:
+      LAST_ONLINE_REDIS_URI: ${LAST_ONLINE_REDIS_URI:-${REDIS_URI:-redis://redis:6379}}
+    depends_on:
+      - redis
+      - document_cognition_service
+      - authentication-service
+      - connection_gateway
+      - document_storage_service
+    networks:
+      databases:
+      services:
+        aliases:
+          - notification-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # search_processing_service (Port 8092)
+  # Search indexing worker
+  # ============================================================================
+  search_processing_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/search_processing_service"]
+    ports:
+      - "8092:8080"
+    environment:
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
+    depends_on:
+      - email_service
+      - lexical_service
+    networks:
+      databases:
+      services:
+        aliases:
+          - search-processing-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # static_file_service (Port 8094)
+  # Static file serving - DynamoDB
+  # ============================================================================
+  static_file_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/static_file_service"]
+    ports:
+      - "8094:8080"
+    networks:
+      databases:
+      services:
+        aliases:
+          - static-file-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # static_file_cdn (Port 8100)
+  # Local CloudFront emulation - routes to S3 and static_file_service
+  # ============================================================================
+  static_file_cdn:
+    image: nginx:alpine
+    ports:
+      - "8100:80"
+    volumes:
+      - ./infra/local/nginx/static-file-cdn.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - static_file_service
+    networks:
+      databases:
+      services:
+        aliases:
+          - static-file-cdn
+
+  # ============================================================================
+  # unfurl_service (Port 8095)
+  # URL unfurling - no dependencies
+  # ============================================================================
+  unfurl_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/unfurl_service"]
+    ports:
+      - "8095:8080"
+    networks:
+      services:
+        aliases:
+          - unfurl-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # image_proxy_service (Port 8097)
+  # Proxies external images to avoid CORS issues and IP leakage
+  # ============================================================================
+  image_proxy_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/image_proxy_service"]
+    ports:
+      - "8097:8080"
+    networks:
+      services:
+        aliases:
+          - image-proxy-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # websocket_service (Port 6969)
+  # Simple WebSocket service - responds with "ping" to all messages
+  # ============================================================================
+  websocket_service:
+    build:
+      context: .
+      dockerfile: docker/websocket-service.Dockerfile
+    ports:
+      - "6969:6969"
+    networks:
+      services:
+        aliases:
+          - websocket-service
+
+  # ============================================================================
+  # sync_service (Port 8787)
+  # Document sync service using Cloudflare Workers/Durable Objects (via miniflare)
+  # ============================================================================
+  sync_service:
+    <<: *common-env
+    build:
+      context: .
+      dockerfile: docker/sync-service.Dockerfile
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./services/sync-service/src:/app/src
+    environment:
+      - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
+      - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
+    networks:
+      services:
+        aliases:
+          - sync-service
+      databases:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # ai_editing_worker (Port 8933)
+  # AI-powered document editing Cloudflare Worker (local wrangler dev)
+  # ============================================================================
+  ai_editing_worker:
+    <<: *common-env
+    build:
+      context: .
+      dockerfile: docker/ai-editing-worker.Dockerfile
+    ports:
+      - "8933:8933"
+    volumes:
+      - .:/app
+      # .wrangler (incl. the local D1 trace shard) persists to the host via the
+      # repository mount above, so `bun run traces --env local --local` works from the
+      # host without docker exec. An anonymous volume used to shadow this path.
+    depends_on:
+      - sync_service
+    networks:
+      services:
+        aliases:
+          - ai-editing-worker
+
+  # ============================================================================
+  # lexical_service (Port 8096)
+  # Lexical document conversion service - converts Lexical JSON to various formats
+  # ============================================================================
+  lexical_service:
+    <<: *common-env
+    build:
+      context: .
+      dockerfile: docker/lexical-service.Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
+    ports:
+      - "8096:8096"
+    depends_on:
+      - sync_service
+    # Bundle the entry before running. Executing the unbundled TS directly under
+    # Bun evaluates the circular @lexical/* ESM imports in an order that triggers
+    # a TDZ ("Cannot access 'HeadingNode'/'ElementNode' before initialization");
+    # bundling hoists/orders the declarations and resolves it (matching how the
+    # worker is run normally — wrangler/esbuild bundles it first). loro-crdt
+    # stays external: bundling it emits its .wasm as a second output file
+    # (breaking --outfile) and mis-wires the wasm instantiation at runtime.
+    # The bundle must live under /app: bun resolves the external loro-crdt
+    # import relative to the bundle's path, so it needs /app/node_modules.
+    command: ["sh", "-c", "bun build src/server.ts --target=bun --external loro-crdt --outfile=/app/server.bundle.js && exec bun /app/server.bundle.js"]
+    environment:
+      - PORT=8096
+      - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_URL=http://sync-service:8787
+    networks:
+      services:
+        aliases:
+          - lexical-service
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  services:
+    driver: bridge
+  databases:
+    external: true
+  auth:
+    external: true

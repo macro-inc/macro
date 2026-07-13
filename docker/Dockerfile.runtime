@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+#
+# Minimal runtime image for locally-built service binaries.
+#
+# Built by `cargo x runtime-image` (xtask) and tagged `macro-local-runtime:dev`.
+# Service binaries are NOT baked in — they are bind-mounted read-only at
+# /app/out by the generated compose override, so this image never needs
+# rebuilding when Rust code changes. This is the `base` stage of docker/Dockerfile.dev
+# with the in-Docker `cargo build` and binary COPY removed.
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates dumb-init curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV PORT=8080
+EXPOSE 8080
+# No CMD: the generated compose override supplies `command: ["/app/out/<bin>"]`
+# per service, exactly as the old services_bundle image did.
+ENTRYPOINT ["dumb-init", "--"]

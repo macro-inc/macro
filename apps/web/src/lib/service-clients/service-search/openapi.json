@@ -1,0 +1,3928 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "search_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/search": {
+      "post": {
+        "tags": ["search::unified"],
+        "summary": "Perform a search through all items",
+        "operationId": "unified_search",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "The page size. Defaults to 10.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnifiedSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnifiedSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/simple": {
+      "post": {
+        "tags": ["search::simple::simple_unified"],
+        "summary": "Perform a search through all items.\nThis is a simple search where we do not group your results by entity id.",
+        "operationId": "simple_unified_search",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "The page size. Defaults to 10.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor for pagination.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnifiedSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleUnifiedSearchBaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CallFilters": {
+        "type": "object",
+        "description": "Filters for call records.",
+        "properties": {
+          "attended": {
+            "type": ["boolean", "null"],
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+          },
+          "call_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Call record IDs to filter by. Empty to include all calls."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs to filter calls by. Empty to include all calls."
+          },
+          "speaker_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
+          }
+        }
+      },
+      "CallRecordMetadata": {
+        "type": "object",
+        "required": [
+          "created_by",
+          "started_at",
+          "ended_at",
+          "duration_ms",
+          "updated_at",
+          "status",
+          "attended"
+        ],
+        "properties": {
+          "attended": {
+            "type": "boolean"
+          },
+          "channel_name": {
+            "type": ["string", "null"]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ended_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CallRecordSearchResponseItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "owner_id",
+          "call_id",
+          "channel_id",
+          "participant_ids",
+          "call_search_results"
+        ],
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "call_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordSearchResult"
+            }
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CallRecordSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CallRecordSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CallRecordMetadata",
+                    "description": "`None` if the call has been deleted."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CallRecordSearchResult": {
+        "type": "object",
+        "required": ["highlight"],
+        "properties": {
+          "ended_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double"
+          },
+          "sequence_num": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "speaker_id": {
+            "type": ["string", "null"]
+          },
+          "started_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "transcript_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
+      },
+      "ChannelFilters": {
+        "type": "object",
+        "description": "The channel message filters used to filter down what channel messages you search over.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
+          },
+          "channel_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by channel notification state."
+          },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Channel organization ID to search within. Empty to ignore organization filtering."
+          },
+          "sender_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "description": "Channel team ID to search within. Empty to ignore team filtering."
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
+          }
+        }
+      },
+      "ChannelMetadata": {
+        "type": "object",
+        "description": "Metadata for a channel fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "interacted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "ChannelSearchRequest": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelFilters",
+                "description": "Search filters for channels"
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["match_type"],
+            "properties": {
+              "collapse": {
+                "type": ["boolean", "null"],
+                "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "match_type": {
+                "$ref": "#/components/schemas/MatchType",
+                "description": "The match type to use when searching"
+              },
+              "query": {
+                "type": ["string", "null"],
+                "description": "The query to search for"
+              },
+              "search_on": {
+                "$ref": "#/components/schemas/SearchOn",
+                "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+              },
+              "sort": {
+                "$ref": "#/components/schemas/ChannelSortTimestamp",
+                "description": "Sort key for results. Defaults to `message`."
+              },
+              "terms": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Multiple terms to search over"
+              }
+            }
+          }
+        ]
+      },
+      "ChannelSearchResponse": {
+        "type": "object",
+        "description": "The document search response object",
+        "required": ["results", "total_count"],
+        "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Base64-encoded cursor for the next page; `None` when exhausted."
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSearchResponseItemWithMetadata"
+            },
+            "description": "List containing results from email threads"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of matching channel messages across all pages."
+          }
+        }
+      },
+      "ChannelSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the ChannelSearchResponse object",
+        "required": [
+          "id",
+          "channel_type",
+          "channel_id",
+          "channel_message_search_results"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the channel"
+          },
+          "channel_message_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelSearchResult"
+            },
+            "description": "The search results for the channel\nThis may be empty if the search result match was not on content"
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The type of channel"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "owner_id": {
+            "type": ["string", "null"],
+            "description": "we don't store this for channels atm but keeping it here for consistency"
+          }
+        }
+      },
+      "ChannelSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChannelSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ChannelMetadata",
+                    "description": "Metadata from the database. None if the channel doesn't exist in the database."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at and interacted_at)"
+      },
+      "ChannelSearchResult": {
+        "type": "object",
+        "description": "A channel message match for a given channel id",
+        "required": ["highlight"],
+        "properties": {
+          "created_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was deleted, if it has been"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the channel message"
+          },
+          "message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel message id\nThis is only prsent if the search result is on the message content"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
+          "sender_id": {
+            "type": ["string", "null"],
+            "description": "The sender id\nThis is only prsent if the search result is on the message content"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel message thread id"
+          },
+          "updated_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
+          }
+        }
+      },
+      "ChannelSortTimestamp": {
+        "type": "string",
+        "description": "Sort key for channel content search results.",
+        "enum": ["message", "thread"]
+      },
+      "ChannelThreadFilters": {
+        "type": "object",
+        "description": "The channel thread filters used to filter down channel-thread entities.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
+          },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread (group mentions\nlike @here count through their per-user expansion at send time). Empty to\ninclude threads regardless of participants."
+          },
+          "root_sender_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sender IDs for the root thread message. Empty to include all root senders."
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel thread parent message IDs to include. Empty to include all accessible threads."
+          }
+        }
+      },
+      "ChatFilters": {
+        "type": "object",
+        "description": "The chat filters used to filter down what chats you search over.",
+        "properties": {
+          "chat_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by chat notification state."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
+          },
+          "role": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
+          }
+        }
+      },
+      "ChatMessageSearchResult": {
+        "type": "object",
+        "description": "A chat match for a given message id",
+        "required": ["highlight"],
+        "properties": {
+          "chat_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The chat message id for the chat\nThis is only present if the search match was on the chat message content"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the chat message"
+          },
+          "role": {
+            "type": ["string", "null"],
+            "description": "The role of the chat message\nThis is only present if the search match was on the chat message content"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
+        }
+      },
+      "ChatMetadata": {
+        "type": "object",
+        "description": "Metadata for a chat fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "project_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatSearchRequest": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatFilters",
+                "description": "Search filters for chat"
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["match_type"],
+            "properties": {
+              "collapse": {
+                "type": ["boolean", "null"],
+                "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "match_type": {
+                "$ref": "#/components/schemas/MatchType",
+                "description": "The match type to use when searching"
+              },
+              "query": {
+                "type": ["string", "null"],
+                "description": "The query to search for"
+              },
+              "search_on": {
+                "$ref": "#/components/schemas/SearchOn",
+                "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+              },
+              "terms": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Multiple terms to search over"
+              }
+            }
+          }
+        ]
+      },
+      "ChatSearchResponse": {
+        "type": "object",
+        "description": "The chat search response object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatSearchResponseItemWithMetadata"
+            },
+            "description": "List containing results from chats"
+          }
+        }
+      },
+      "ChatSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the ChatSearchResponse object",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "chat_id",
+          "user_id",
+          "chat_search_results"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the chat"
+          },
+          "chat_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageSearchResult"
+            },
+            "description": "The search results for the chat\nThis may be empty if the search result match was on the chat title only"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The id of the creator of the chat"
+          }
+        }
+      },
+      "ChatSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChatSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ChatMetadata",
+                    "description": "Metadata from the database. None if the chat doesn't exist in the database."
+                  }
+                ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the chat."
+              }
+            }
+          }
+        ],
+        "description": "ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at)"
+      },
+      "CrmCompanyFilters": {
+        "type": "object",
+        "description": "The crm company filters used to narrow which CRM companies appear in soup.",
+        "properties": {
+          "company_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          },
+          "hidden": {
+            "type": ["boolean", "null"],
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced by the CRM service from the\ncaller's team receipt."
+          }
+        }
+      },
+      "CrmCompanySearchDomain": {
+        "type": "object",
+        "description": "A CRM domain attached to a company in search results.",
+        "required": ["id", "companyId", "domain", "createdAt"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the domain belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the domain record was created."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The domain (lowercased, e.g. \"acme.com\")."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the domain record."
+          }
+        }
+      },
+      "CrmCompanySearchResponseItem": {
+        "type": "object",
+        "description": "A CRM company match in unified search results. Carries the display\nmetadata resolved from the primary domain plus the highlighted name.",
+        "required": [
+          "id",
+          "teamId",
+          "hidden",
+          "createdAt",
+          "updatedAt",
+          "domains"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the company was created."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Display description from the primary domain's directory entry."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmCompanySearchDomain"
+            },
+            "description": "Domains associated with this company, primary first."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden from CRM listings."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name from the primary domain's directory entry."
+          },
+          "nameHighlighted": {
+            "type": ["string", "null"],
+            "description": "`name` with matched spans wrapped in `<macro_em>…</macro_em>`."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team that owns this company record."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the company was last updated (the sort key)."
+          }
+        }
+      },
+      "DataType": {
+        "type": "string",
+        "description": "Data type for property values, determining storage and validation.",
+        "enum": [
+          "BOOLEAN",
+          "DATE",
+          "NUMBER",
+          "STRING",
+          "SELECT_NUMBER",
+          "SELECT_STRING",
+          "TAG",
+          "ENTITY",
+          "LINK"
+        ]
+      },
+      "DocumentFilters": {
+        "type": "object",
+        "description": "The document filters used to filter down what documents you search over.",
+        "properties": {
+          "document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
+          },
+          "file_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "is_email_attachment": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by document notification state."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          },
+          "sub_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
+          },
+          "task_filters": {
+            "$ref": "#/components/schemas/TaskFilters",
+            "description": "Task-specific filters that only apply to task subtype documents."
+          }
+        }
+      },
+      "DocumentMetadata": {
+        "type": "object",
+        "description": "Metadata for a document fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "project_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentSearchRequest": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentFilters",
+                "description": "Search filters for documents"
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["match_type"],
+            "properties": {
+              "collapse": {
+                "type": ["boolean", "null"],
+                "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "match_type": {
+                "$ref": "#/components/schemas/MatchType",
+                "description": "The match type to use when searching"
+              },
+              "query": {
+                "type": ["string", "null"],
+                "description": "The query to search for"
+              },
+              "search_on": {
+                "$ref": "#/components/schemas/SearchOn",
+                "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+              },
+              "terms": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Multiple terms to search over"
+              }
+            }
+          }
+        ]
+      },
+      "DocumentSearchResponse": {
+        "type": "object",
+        "description": "The document search response object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentSearchResponseItemWithMetadata"
+            },
+            "description": "List containing results from documents"
+          }
+        }
+      },
+      "DocumentSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the DocumentSearchResponse object",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "document_id",
+          "document_name",
+          "document_search_results"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the document"
+          },
+          "document_name": {
+            "type": "string",
+            "description": "The name of the document"
+          },
+          "document_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentSearchResult"
+            },
+            "description": "The search results for the document\nThis may be empty if the search result match was on the document name only"
+          },
+          "file_type": {
+            "type": ["string", "null"],
+            "description": "The file type of the document"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "sub_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DocumentSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DocumentMetadata",
+                    "description": "Metadata from the database. None if the document doesn't exist in the database."
+                  }
+                ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (assignees, status, priority, etc.) for markdown documents."
+              }
+            }
+          }
+        ],
+        "description": "DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update document page record\nevery time the document updates (specifically for updated_at and viewed_at)"
+      },
+      "DocumentSearchResult": {
+        "type": "object",
+        "description": "A document match for a given node",
+        "required": ["highlight"],
+        "properties": {
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the document"
+          },
+          "node_id": {
+            "type": ["string", "null"],
+            "description": "The node id for the document.\nThis is only useful for markdown at the moment\nThis will only be provided if the match was on content"
+          },
+          "raw_content": {
+            "type": ["string", "null"],
+            "description": "The raw content of the document.\nThis is only included for markdown files and will be the raw json node of the match"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
+        }
+      },
+      "DocumentSubType": {
+        "type": "string",
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
+        "enum": ["task", "snippet"]
+      },
+      "EmailFilters": {
+        "type": "object",
+        "description": "The email filters used to filter down what emails you search over.",
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
+          },
+          "calendar_only": {
+            "type": ["boolean", "null"],
+            "description": "When `Some(true)`, only include threads that have at least one message\nwith an iCalendar attachment (`.ics` filename or `application/ics` mime\ntype). `Some(false)` and `None` apply no constraint."
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+          },
+          "crm_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+          },
+          "crm_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender/cc/bcc/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+          },
+          "email_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          },
+          "exclude_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
+          },
+          "include_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "link_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge)."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by email notification state."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of project ids to search within. Empty to ignore project filtering."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
+          },
+          "senders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedEmailFilter",
+            "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
+          }
+        }
+      },
+      "EmailSearchParticipant": {
+        "type": "object",
+        "description": "A participant (sender) in an email thread",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "EmailSearchRequest": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailFilters",
+                "description": "Search filters for email"
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["match_type"],
+            "properties": {
+              "collapse": {
+                "type": ["boolean", "null"],
+                "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "match_type": {
+                "$ref": "#/components/schemas/MatchType",
+                "description": "The match type to use when searching"
+              },
+              "query": {
+                "type": ["string", "null"],
+                "description": "The query to search for"
+              },
+              "search_on": {
+                "$ref": "#/components/schemas/SearchOn",
+                "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+              },
+              "terms": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Multiple terms to search over"
+              }
+            }
+          }
+        ]
+      },
+      "EmailSearchResponse": {
+        "type": "object",
+        "description": "The document search response object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchResponseItemWithMetadata"
+            },
+            "description": "List containing results from email threads"
+          }
+        }
+      },
+      "EmailSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the EmailSearchResponse object",
+        "required": [
+          "id",
+          "owner_id",
+          "thread_id",
+          "user_id",
+          "link_id",
+          "email_message_search_results",
+          "participants"
+        ],
+        "properties": {
+          "email_message_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchResult"
+            },
+            "description": "The search results for the document\nThis may be empty if the search result match was on the email subject only"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox that owns the thread. Drives the multi-inbox indicator\nwhen the caller has more than one inbox."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Subject of the email thread"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchParticipant"
+            },
+            "description": "The participants (senders) in this email thread"
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "The subject of the email\nThis is only present if the search result is on the message content"
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the email thread"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The id of the owner of the email thread"
+          }
+        }
+      },
+      "EmailSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EmailSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "required": [
+              "created_at",
+              "updated_at",
+              "is_read",
+              "inbox_visible",
+              "is_draft",
+              "is_important"
+            ],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "inbox_visible": {
+                "type": "boolean"
+              },
+              "is_draft": {
+                "type": "boolean"
+              },
+              "is_important": {
+                "type": "boolean"
+              },
+              "is_read": {
+                "type": "boolean"
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the thread."
+              },
+              "snippet": {
+                "type": ["string", "null"]
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            }
+          }
+        ],
+        "description": "EmailSearchResponseItem object with email metadata we fetch from email service. we don't store these\ntimestamps in opensearch as they would require us to update each email message record for the thread\nevery time the thread updates (specifically for updated_at and viewed_at)"
+      },
+      "EmailSearchResult": {
+        "type": "object",
+        "description": "A email message match for a given thread id",
+        "required": [
+          "sender",
+          "pretty_sender",
+          "recipients",
+          "cc",
+          "bcc",
+          "labels",
+          "highlight"
+        ],
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "This is only present if the search result is on the message content"
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "This is only present if the search result is on the message content"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the email message"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "This is only present if the search result is on the message content"
+          },
+          "message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The email message id.\nThis is only present if the search result is on the message content"
+          },
+          "pretty_sender": {
+            "type": "string",
+            "description": "The pretty sender.\nIf the match is on the subject, the pretty sender is the latest sender on the thread.\nThis could be the sender's email if there is no contact name for the sender."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "This is only present if the search result is on the message content"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
+          "sender": {
+            "type": "string",
+            "description": "The sender.\nIf the match is on the subject, the sender is the latest sender on the thread."
+          },
+          "sent_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the email message was sent\nThis is only present if the search result is on the message content"
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EntityFilters": {
+        "type": "object",
+        "description": "a bundle of all of the filters for each entity type",
+        "properties": {
+          "call_filters": {
+            "$ref": "#/components/schemas/CallFilters",
+            "description": "the bundled [CallFilters]"
+          },
+          "channel_filters": {
+            "$ref": "#/components/schemas/ChannelFilters",
+            "description": "the bundled [ChannelFilters]"
+          },
+          "channel_thread_filters": {
+            "$ref": "#/components/schemas/ChannelThreadFilters",
+            "description": "the bundled [ChannelThreadFilters]"
+          },
+          "chat_filters": {
+            "$ref": "#/components/schemas/ChatFilters",
+            "description": "the bundled [ChatFilters]"
+          },
+          "crm_company_filters": {
+            "$ref": "#/components/schemas/CrmCompanyFilters",
+            "description": "the bundled [CrmCompanyFilters]"
+          },
+          "document_filters": {
+            "$ref": "#/components/schemas/DocumentFilters",
+            "description": "the bundled [DocumentFilters]"
+          },
+          "email_filters": {
+            "$ref": "#/components/schemas/EmailFilters",
+            "description": "the bundled [EmailFilters]"
+          },
+          "foreign_entity_filters": {
+            "$ref": "#/components/schemas/ForeignEntityFilters",
+            "description": "the bundled [ForeignEntityFilters]"
+          },
+          "project_filters": {
+            "$ref": "#/components/schemas/ProjectFilters",
+            "description": "the bundled [ProjectFilters]"
+          },
+          "property_filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyFilter"
+            },
+            "description": "property-based filters applied across entity types"
+          },
+          "tag_filter_mode": {
+            "$ref": "#/components/schemas/TagFilterMode",
+            "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
+          },
+          "tag_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "tag option ids matched against `properties.values`, OR'd together across\nall tag definitions. Option ids are globally unique, so the match ignores\nthe owning definition id (personal and team tags combine into one OR)."
+          }
+        }
+      },
+      "EntityReference": {
+        "type": "object",
+        "description": "Entity reference for entity-type property values.",
+        "required": ["entity_id", "entity_type"],
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType"
+          },
+          "specific_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
+          }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "Type of entity that can be referenced by entity properties.",
+        "enum": [
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "TASK",
+          "THREAD",
+          "USER"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "FileType": {
+        "type": "string",
+        "description": "Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n",
+        "enum": [
+          "docx",
+          "pdf",
+          "md",
+          "canvas",
+          "coffee",
+          "cson",
+          "iced",
+          "c",
+          "i",
+          "cpp",
+          "cppm",
+          "cc",
+          "ccm",
+          "cxx",
+          "cxxm",
+          "cplusplus",
+          "cplusplusm",
+          "hpp",
+          "hh",
+          "hxx",
+          "hplusplus",
+          "h",
+          "ii",
+          "ino",
+          "inl",
+          "ipp",
+          "ixx",
+          "tpp",
+          "txx",
+          "hppin",
+          "hin",
+          "cu",
+          "cuh",
+          "cs",
+          "csx",
+          "cake",
+          "css",
+          "dart",
+          "diff",
+          "patch",
+          "rej",
+          "dockerfile",
+          "containerfile",
+          "go",
+          "handlebars",
+          "hbs",
+          "hjs",
+          "hlsl",
+          "hlsli",
+          "fx",
+          "fxh",
+          "vsh",
+          "psh",
+          "cginc",
+          "compute",
+          "html",
+          "htm",
+          "shtml",
+          "xhtml",
+          "xht",
+          "mdoc",
+          "jsp",
+          "asp",
+          "aspx",
+          "jshtm",
+          "volt",
+          "ejs",
+          "rhtml",
+          "ini",
+          "conf",
+          "properties",
+          "cfg",
+          "directory",
+          "gitattributes",
+          "gitconfig",
+          "gitmodules",
+          "editorconfig",
+          "repo",
+          "java",
+          "jav",
+          "jsx",
+          "js",
+          "es6",
+          "mjs",
+          "cjs",
+          "pac",
+          "json",
+          "bowerrc",
+          "jscsrc",
+          "webmanifest",
+          "jsmap",
+          "cssmap",
+          "tsmap",
+          "har",
+          "jslintrc",
+          "jsonld",
+          "geojson",
+          "ipynb",
+          "vuerc",
+          "jsonc",
+          "eslintrc",
+          "eslintrcjson",
+          "jsfmtrc",
+          "jshintrc",
+          "swcrc",
+          "hintrc",
+          "babelrc",
+          "jsonl",
+          "ndjson",
+          "codesnippets",
+          "jl",
+          "jmd",
+          "sty",
+          "cls",
+          "bbx",
+          "cbx",
+          "tex",
+          "ltx",
+          "ctx",
+          "bib",
+          "less",
+          "log",
+          "lua",
+          "mak",
+          "mk",
+          "mkd",
+          "mdwn",
+          "mdown",
+          "markdown",
+          "markdn",
+          "mdtxt",
+          "mdtext",
+          "workbook",
+          "m",
+          "mm",
+          "pl",
+          "pm",
+          "pod",
+          "t",
+          "psgi",
+          "raku",
+          "rakumod",
+          "rakutest",
+          "rakudoc",
+          "nqp",
+          "p6",
+          "pl6",
+          "pm6",
+          "php",
+          "php4",
+          "php5",
+          "phtml",
+          "ctp",
+          "ps1",
+          "psm1",
+          "psd1",
+          "pssc",
+          "psrc",
+          "py",
+          "rpy",
+          "pyw",
+          "cpy",
+          "gyp",
+          "gypi",
+          "pyi",
+          "ipy",
+          "pyt",
+          "r",
+          "rhistory",
+          "rprofile",
+          "rt",
+          "cshtml",
+          "razor",
+          "rb",
+          "rbx",
+          "rjs",
+          "gemspec",
+          "rake",
+          "ru",
+          "erb",
+          "podspec",
+          "rbi",
+          "rs",
+          "scss",
+          "sass",
+          "shader",
+          "sh",
+          "bash",
+          "bashrc",
+          "bashaliases",
+          "bashprofile",
+          "bashlogin",
+          "ebuild",
+          "eclass",
+          "profile",
+          "bashlogout",
+          "xprofile",
+          "xsession",
+          "xsessionrc",
+          "zsh",
+          "zshrc",
+          "zprofile",
+          "zlogin",
+          "zlogout",
+          "zshenv",
+          "zshtheme",
+          "fish",
+          "ksh",
+          "csh",
+          "cshrc",
+          "tcshrc",
+          "yashrc",
+          "yashprofile",
+          "sql",
+          "dsql",
+          "swift",
+          "ts",
+          "cts",
+          "mts",
+          "tsx",
+          "tsbuildinfo",
+          "xml",
+          "xsd",
+          "ascx",
+          "atom",
+          "axml",
+          "axaml",
+          "bpmn",
+          "cpt",
+          "csl",
+          "csproj",
+          "csprojuser",
+          "dita",
+          "ditamap",
+          "dtd",
+          "ent",
+          "mod",
+          "dtml",
+          "fsproj",
+          "fxml",
+          "iml",
+          "isml",
+          "jmx",
+          "launch",
+          "menu",
+          "mxml",
+          "nuspec",
+          "opml",
+          "owl",
+          "proj",
+          "props",
+          "pt",
+          "publishsettings",
+          "pubxml",
+          "pubxmluser",
+          "rbxlx",
+          "rbxmx",
+          "rdf",
+          "rng",
+          "rss",
+          "shproj",
+          "storyboard",
+          "targets",
+          "tld",
+          "tmx",
+          "vbproj",
+          "vbprojuser",
+          "vcxproj",
+          "vcxprojfilters",
+          "wsdl",
+          "wxi",
+          "wxl",
+          "wxs",
+          "xaml",
+          "xbl",
+          "xib",
+          "xlf",
+          "xliff",
+          "xpdl",
+          "xul",
+          "xoml",
+          "xsl",
+          "xslt",
+          "yaml",
+          "yml",
+          "eyaml",
+          "eyml",
+          "cff",
+          "yamltmlanguage",
+          "yamltmpreferences",
+          "yamltmtheme",
+          "winget",
+          "txt",
+          "csv",
+          "tsv",
+          "jpeg",
+          "jpg",
+          "png",
+          "gif",
+          "svg",
+          "webp",
+          "avif",
+          "bmp",
+          "ico",
+          "tiff",
+          "tif",
+          "heic",
+          "heif",
+          "tar",
+          "targz",
+          "tgz",
+          "gz",
+          "bz2",
+          "tarbz2",
+          "tbz2",
+          "z",
+          "tarz",
+          "lz",
+          "tarlz",
+          "xz",
+          "tarxz",
+          "txz",
+          "lzma",
+          "tarlzma",
+          "rar",
+          "sevenz",
+          "zst",
+          "tarzst",
+          "tzst",
+          "zip",
+          "exe",
+          "msi",
+          "dll",
+          "bat",
+          "cmd",
+          "com",
+          "appimage",
+          "app",
+          "bin",
+          "deb",
+          "rpm",
+          "apk",
+          "dmg",
+          "pkg",
+          "crx",
+          "xpi",
+          "mp3",
+          "wav",
+          "ogg",
+          "flac",
+          "aac",
+          "m4a",
+          "wma",
+          "mid",
+          "midi",
+          "mp4",
+          "mkv",
+          "webm",
+          "avi",
+          "mov",
+          "wmv",
+          "mpg",
+          "mpeg",
+          "m4v",
+          "flv",
+          "f4v",
+          "threegp",
+          "ttf",
+          "otf",
+          "woff",
+          "woff2",
+          "eot",
+          "rtf",
+          "odt",
+          "ods",
+          "odp",
+          "odg",
+          "odf",
+          "epub",
+          "mobi",
+          "azw",
+          "azw3",
+          "djvu",
+          "xls",
+          "ppt",
+          "pptx",
+          "xlsx",
+          "db",
+          "sqlite",
+          "sqlite3",
+          "mdb",
+          "accdb",
+          "dbf",
+          "plist",
+          "toml",
+          "env",
+          "dot",
+          "gv",
+          "torrent",
+          "ics",
+          "vcf",
+          "ai",
+          "eps",
+          "ps",
+          "dxf",
+          "dwg",
+          "stl",
+          "obj",
+          "fbx",
+          "blend",
+          "dae",
+          "threeds",
+          "gltf",
+          "glb",
+          "vhd",
+          "vhdx",
+          "vmdk",
+          "ova",
+          "ovf",
+          "iso",
+          "img",
+          "swf"
+        ]
+      },
+      "ForeignEntityFilters": {
+        "type": "object",
+        "description": "Filters for foreign entity records.",
+        "properties": {
+          "foreign_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External entity identifiers to filter by. Empty to include all external IDs."
+          },
+          "foreign_entity_sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "External source names to filter by. Empty to include all sources."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          },
+          "includes_me": {
+            "type": "boolean",
+            "description": "When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by the notification state of the foreign entity (e.g. whether the requesting user's\nGitHub PR notification is done/seen)."
+          }
+        }
+      },
+      "MatchType": {
+        "type": "string",
+        "enum": ["exact", "partial", "regexp", "query"]
+      },
+      "NotificationFilters": {
+        "type": "object",
+        "description": "Notification-level filters that apply to an entity type.",
+        "properties": {
+          "done": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+          },
+          "seen": {
+            "type": ["boolean", "null"],
+            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+          }
+        }
+      },
+      "ProjectFilters": {
+        "type": "object",
+        "description": "The project filters used to filter down what projects you search over.",
+        "properties": {
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
+          "include_root": {
+            "type": "boolean",
+            "description": "When true, `project_ids` also matches the projects themselves in addition to their children."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by project notification state."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.\nBy default matches children of these projects; set `include_root` to also match the projects themselves."
+          }
+        }
+      },
+      "ProjectMetadata": {
+        "type": "object",
+        "description": "Metadata for a project fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "parent_project_id": {
+            "type": ["string", "null"]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "ProjectSearchMetadata": {
+        "type": "object",
+        "description": "Metadata associated with Project Search, to be used with SearchResponseItem",
+        "required": [
+          "project_id",
+          "owner_id",
+          "updated_at",
+          "created_at",
+          "project_name"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProjectSearchRequest": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectFilters",
+                "description": "Search filters for chat"
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["match_type"],
+            "properties": {
+              "collapse": {
+                "type": ["boolean", "null"],
+                "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "match_type": {
+                "$ref": "#/components/schemas/MatchType",
+                "description": "The match type to use when searching"
+              },
+              "query": {
+                "type": ["string", "null"],
+                "description": "The query to search for"
+              },
+              "search_on": {
+                "$ref": "#/components/schemas/SearchOn",
+                "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+              },
+              "terms": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Multiple terms to search over"
+              }
+            }
+          }
+        ]
+      },
+      "ProjectSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the ProjectSearchResponse object",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "updated_at",
+          "created_at",
+          "project_search_results"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "project_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectSearchResult"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProjectSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ProjectSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProjectMetadata",
+                    "description": "Metadata from the database. None if the project doesn't exist in the database."
+                  }
+                ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the project."
+              }
+            }
+          }
+        ],
+        "description": "ProjectSearchResponseItem object with project metadata we fetch from macrodb.\nThe index carries created_at/updated_at for ranking, but viewed_at is\nper-user and deleted_at changes without a reindex, so metadata stays\ndatabase-sourced."
+      },
+      "ProjectSearchResult": {
+        "type": "object",
+        "required": ["highlight"],
+        "properties": {
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
+        }
+      },
+      "PropertyDefinition": {
+        "type": "object",
+        "description": "Property definition model (service representation).",
+        "required": [
+          "id",
+          "owner",
+          "display_name",
+          "data_type",
+          "is_multi_select",
+          "created_at",
+          "updated_at",
+          "is_system",
+          "is_metadata"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data_type": {
+            "$ref": "#/components/schemas/DataType"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_metadata": {
+            "type": "boolean",
+            "description": "Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer."
+          },
+          "is_multi_select": {
+            "type": "boolean"
+          },
+          "is_system": {
+            "type": "boolean",
+            "description": "Flag to indicate if this is a system property (stored in DB)."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/PropertyOwner"
+          },
+          "specific_entity_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityType"
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PropertyFilter": {
+        "type": "object",
+        "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
+        "required": ["property_definition_id"],
+        "properties": {
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Entity reference IDs to match. Multiple values are OR'd together."
+          },
+          "entity_type": {
+            "type": ["string", "null"],
+            "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Select option UUIDs to match. Multiple values are OR'd together."
+          },
+          "property_definition_id": {
+            "type": "string",
+            "description": "The UUID of the property definition to filter on."
+          }
+        }
+      },
+      "PropertyOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-scoped property.",
+            "required": ["user_id", "scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team-scoped property.",
+            "required": ["team_id", "scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["team"]
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user or team owner).",
+            "required": ["scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["system"]
+              }
+            }
+          }
+        ],
+        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+      },
+      "PropertyValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Boolean"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["String"]
+              },
+              "value": {
+                "type": "string",
+                "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Date"]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["SelectOption"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["EntityReference"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityReference"
+                },
+                "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["Link"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)"
+              }
+            }
+          }
+        ],
+        "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
+      },
+      "SearchHighlight": {
+        "type": "object",
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The highlight match on the bcc (email only)"
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The highlight match on the cc (email only)"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The highlight match on the content field"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The highlight match on the name field"
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The highlight match on the recipients (email only)"
+          },
+          "sender": {
+            "type": ["string", "null"],
+            "description": "The highlight match on the sender (email only)"
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "The highlight match on the user (owner) of the entity"
+          }
+        }
+      },
+      "SearchOn": {
+        "type": "string",
+        "enum": ["name", "content", "name_content"]
+      },
+      "SearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectSearchResponseItemWithMetadata"
+            },
+            "description": "List containing results from a request"
+          }
+        }
+      },
+      "SharedEmailFilter": {
+        "type": "string",
+        "description": "Controls whether shared email threads are included in results.",
+        "enum": ["exclude", "include", "only"]
+      },
+      "SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "call_id",
+          "channel_id",
+          "user_id",
+          "participant_ids",
+          "started_at",
+          "ended_at",
+          "duration_ms",
+          "highlight"
+        ],
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "channel_id": {
+            "type": "string"
+          },
+          "channel_name": {
+            "type": ["string", "null"]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ended_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
+      "SimpleChannelSearchReponseBaseItem": {
+        "type": "object",
+        "required": [
+          "channel_id",
+          "channel_type",
+          "message_id",
+          "sender_id",
+          "mentions",
+          "created_at",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The channel type"
+          },
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the channel message was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the channel message"
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The mentions"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The org id"
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "The sender id"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "description": "The thread id"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the channel message was last updated"
+          }
+        }
+      },
+      "SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "channel_id",
+          "channel_type",
+          "message_id",
+          "sender_id",
+          "mentions",
+          "created_at",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "description": "The channel id"
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The channel type"
+          },
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the channel message was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the channel message"
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The mentions"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The org id"
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "The sender id"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "description": "The thread id"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the channel message was last updated"
+          }
+        }
+      },
+      "SimpleChannelSearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem"
+            },
+            "description": "List containing results from channels.\nEach item in the list is for a specific message in a channel."
+          }
+        }
+      },
+      "SimpleChatSearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem"
+            },
+            "description": "List containing results from chats.\nEach item in the list is for a specific message in a chat."
+          }
+        }
+      },
+      "SimpleChatSearchResponseBaseItem": {
+        "type": "object",
+        "required": [
+          "chat_id",
+          "chat_message_id",
+          "user_id",
+          "role",
+          "updated_at",
+          "title",
+          "highlight"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The chat id"
+          },
+          "chat_message_id": {
+            "type": "string",
+            "description": "The chat message id"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the chat"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the chat was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
+        }
+      },
+      "SimpleChatSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "chat_id",
+          "chat_message_id",
+          "user_id",
+          "role",
+          "updated_at",
+          "title",
+          "highlight"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The chat id"
+          },
+          "chat_message_id": {
+            "type": "string",
+            "description": "The chat message id"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the chat"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the chat was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
+        }
+      },
+      "SimpleDocumentSearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem"
+            },
+            "description": "List containing results from documents.\nEach item in the list is for a specific page/node of a document."
+          }
+        }
+      },
+      "SimpleDocumentSearchResponseBaseItem": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_name",
+          "node_id",
+          "owner_id",
+          "file_type",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The document id"
+          },
+          "document_name": {
+            "type": "string",
+            "description": "The document name"
+          },
+          "file_type": {
+            "type": "string",
+            "description": "The file type"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the document"
+          },
+          "node_id": {
+            "type": "string",
+            "description": "The node id"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "The owner id"
+          },
+          "raw_content": {
+            "type": ["string", "null"],
+            "description": "The raw content of the document"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the document was last updated"
+          }
+        }
+      },
+      "SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_name",
+          "node_id",
+          "owner_id",
+          "file_type",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The document id"
+          },
+          "document_name": {
+            "type": "string",
+            "description": "The document name"
+          },
+          "file_type": {
+            "type": "string",
+            "description": "The file type"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the document"
+          },
+          "node_id": {
+            "type": "string",
+            "description": "The node id"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "The owner id"
+          },
+          "raw_content": {
+            "type": ["string", "null"],
+            "description": "The raw content of the document"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the document was last updated"
+          }
+        }
+      },
+      "SimpleEmailSearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem"
+            },
+            "description": "List containing results from emails.\nEach item in the list is for a specific message in an email thread."
+          }
+        }
+      },
+      "SimpleEmailSearchResponseBaseItem": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "message_id",
+          "sender",
+          "recipients",
+          "cc",
+          "bcc",
+          "labels",
+          "link_id",
+          "user_id",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The bcc"
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The cc"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the email"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The labels"
+          },
+          "link_id": {
+            "type": "string",
+            "description": "The link id"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The recipients"
+          },
+          "sender": {
+            "type": "string",
+            "description": "The sender"
+          },
+          "sent_at": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the email was sent"
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "The subject"
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "The thread id"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the email was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
+        }
+      },
+      "SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "message_id",
+          "sender",
+          "recipients",
+          "cc",
+          "bcc",
+          "labels",
+          "link_id",
+          "user_id",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The bcc"
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The cc"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the email"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The labels"
+          },
+          "link_id": {
+            "type": "string",
+            "description": "The link id"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message id"
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The recipients"
+          },
+          "sender": {
+            "type": "string",
+            "description": "The sender"
+          },
+          "sent_at": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the email was sent"
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "The subject"
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "The thread id"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the email was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id"
+          }
+        }
+      },
+      "SimpleProjectSearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem"
+            },
+            "description": "List containing results from projects.\nEach item in the list is for a specific project."
+          }
+        }
+      },
+      "SimpleProjectSearchResponseBaseItem": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "updated_at",
+          "created_at",
+          "project_name",
+          "user_id",
+          "highlight"
+        ],
+        "properties": {
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the project was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the project"
+          },
+          "project_id": {
+            "type": "string",
+            "description": "The project id"
+          },
+          "project_name": {
+            "type": "string",
+            "description": "The project name"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the project was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The id of the user who created the project"
+          }
+        }
+      },
+      "SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "updated_at",
+          "created_at",
+          "project_name",
+          "user_id",
+          "highlight"
+        ],
+        "properties": {
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the project was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the project"
+          },
+          "project_id": {
+            "type": "string",
+            "description": "The project id"
+          },
+          "project_name": {
+            "type": "string",
+            "description": "The project name"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the project was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The id of the user who created the project"
+          }
+        }
+      },
+      "SimpleUnifiedSearchBaseResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleUnifiedSearchResponseBaseItem_HumanReadableTimestamp"
+            }
+          }
+        }
+      },
+      "SimpleUnifiedSearchResponseBaseItem": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["document"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["chat"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["project"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["call"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "SimpleUnifiedSearchResponseBaseItem_HumanReadableTimestamp": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["document"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["chat"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["project"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["call"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "SoupProperty": {
+        "type": "object",
+        "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
+        "required": ["id", "definition"],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinition",
+            "description": "The property definition"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Globally unique id of the assignment attaching this property to an entity."
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyValue",
+                "description": "The property value, if set"
+              }
+            ]
+          }
+        }
+      },
+      "TagFilterMode": {
+        "type": "string",
+        "description": "How multiple `tag_option_ids` combine when filtering.",
+        "enum": ["any", "all"]
+      },
+      "TaskFilters": {
+        "type": "object",
+        "description": "Task-only filters nested under document filters.",
+        "properties": {
+          "include_cbm_atm_nc": {
+            "type": ["boolean", "null"],
+            "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
+          }
+        }
+      },
+      "UnifiedSearchRequest": {
+        "type": "object",
+        "required": ["query", "match_type"],
+        "properties": {
+          "collapse": {
+            "type": ["boolean", "null"]
+          },
+          "filters": {
+            "$ref": "#/components/schemas/EntityFilters",
+            "description": "Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search."
+          },
+          "include_crm": {
+            "type": "boolean",
+            "description": "Opt in to searching the caller's team CRM companies (name/domain).\nOff by default: CRM results are only included when this is true and\nthe caller has a qualifying team membership. CRM has no content\nindex, so it is searched only under Name / NameContent."
+          },
+          "match_type": {
+            "$ref": "#/components/schemas/MatchType",
+            "description": "How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field."
+          },
+          "query": {
+            "type": "string",
+            "description": "The search query string. Must be at least 3 characters."
+          },
+          "search_on": {
+            "$ref": "#/components/schemas/SearchOn",
+            "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+          }
+        }
+      },
+      "UnifiedSearchResponse": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "The next cursor to use for paginating results"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnifiedSearchResponseItem"
+            },
+            "description": "The search results"
+          }
+        }
+      },
+      "UnifiedSearchResponseItem": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["document"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChatSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["chat"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EmailSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["email"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChannelSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["project"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallRecordSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["call"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CrmCompanySearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["company"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "search service",
+      "description": "Macro Search Service"
+    }
+  ]
+}

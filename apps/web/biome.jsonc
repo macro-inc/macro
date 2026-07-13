@@ -1,0 +1,62 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "root": true,
+  "extends": ["../../biome.base.jsonc"],
+  "vcs": {
+    "root": "../.."
+  },
+  "files": {
+    "includes": [
+      "**/*.{ts,tsx,js,jsx}",
+      "**/openapi.json",
+      "!**/*.d.ts",
+      "!chrome-extension-vite",
+      "!infra/web-app/output",
+      "!scripts",
+      "src/lib/service-clients/**/generated/**",
+      // graphql-codegen output; regenerated wholesale by `bun gen-graphql`
+      "!src/lib/service-clients/service-storage/graphql/generated",
+      "!src/lib/filesystem",
+      "!packages/_app-mobile",
+      "**/generated/tools",
+      "!wireframe",
+      "!dist",
+      "!build",
+      "!**/node_modules"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": ["scripts/**", "src/features/block-code/scripts/**"],
+      "javascript": {
+        "globals": ["Bun"]
+      }
+    },
+    {
+      "includes": ["src/lib/animate/**", "src/features/theme/**"],
+      "formatter": {
+        "enabled": false
+      },
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/lib/service-clients/**/generated/**"],
+      "linter": {
+        "enabled": false
+      },
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "on"
+          }
+        }
+      }
+    }
+  ]
+}

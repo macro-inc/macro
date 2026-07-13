@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT team_id::text AS \"team_id!\"\n            FROM team_user\n            WHERE user_id = ANY($1)\n            ORDER BY team_id::text\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f3219580edf757829eb259ed116238fa1f567fab31febb2c7f7400dfcbdb6608"
+}

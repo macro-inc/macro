@@ -1,0 +1,92 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_conventions.rs
+name: conventions code check
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    branches:
+    - main
+permissions:
+  contents: read
+jobs:
+  path-check:
+    runs-on: namespace-profile-linux-small
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'crates/**'
+            - 'services/**'
+            - 'tooling/xtask/**'
+            - 'apps/web/**'
+            - 'packages/**'
+            - 'rules/**'
+            - 'sgconfig.yml'
+            - '.github/workflows/code_check_conventions.yml'
+  ast-grep:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: ast-grep Conventions
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Run ast-grep
+      run: bunx --yes @ast-grep/cli@0.44.1 scan
+  status-check:
+    needs:
+    - path-check
+    - ast-grep
+    if: always()
+    name: Conventions Status Check
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Check job results
+      run: |
+        echo "path-check: ${{ needs.path-check.result }}"
+        echo "ast-grep: ${{ needs.ast-grep.result }}"
+
+        # Fail if any job failed, or ast-grep was cancelled (skipped and
+        # success are both OK; cancelled means it started and didn't finish)
+        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.ast-grep.result }}" == "failure" ]] || \
+           [[ "${{ needs.ast-grep.result }}" == "cancelled" ]]; then
+          echo "❌ One or more jobs failed"
+          exit 1
+        fi
+
+        echo "✅ All jobs passed or were skipped"
+concurrency:
+  group: code-check-conventions-${{ github.ref }}
+  cancel-in-progress: true

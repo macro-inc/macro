@@ -76,17 +76,18 @@ export class EcrImage extends pulumi.ComponentResource {
     const usePrebuiltServiceBinaries =
       process.env.USE_PREBUILT_SERVICE_BINARIES === 'true';
     const prebuiltDockerfiles: { [key: string]: string } = {
-      Dockerfile: 'Dockerfile.prebuilt',
-      'Dockerfile.convert_service': 'Dockerfile.convert_service.prebuilt',
-      'Dockerfile.search_processing_service':
-        'Dockerfile.search_processing_service.prebuilt',
+      'docker/Dockerfile': 'docker/Dockerfile.prebuilt',
+      'docker/Dockerfile.convert_service':
+        'docker/Dockerfile.convert_service.prebuilt',
+      'docker/Dockerfile.search_processing_service':
+        'docker/Dockerfile.search_processing_service.prebuilt',
     };
     const effectiveDockerfile = (() => {
       if (!usePrebuiltServiceBinaries) {
         return dockerfile;
       }
 
-      const dockerfileKey = dockerfile ?? 'Dockerfile';
+      const dockerfileKey = dockerfile ?? 'docker/Dockerfile';
       const prebuiltDockerfile = prebuiltDockerfiles[dockerfileKey];
       if (!prebuiltDockerfile) {
         throw new Error(

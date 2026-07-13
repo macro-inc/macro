@@ -1,0 +1,8 @@
+[build]
+default-target = "x86_64-unknown-linux-gnu" # use this target if none is explicitly provided
+
+[build.env]
+passthrough = ["SQLX_OFFLINE=true"]
+
+[target.x86_64-unknown-linux-gnu]
+dockerfile = "./docker/Dockerfile.cross-x86_64-unknown-linux-gnu"

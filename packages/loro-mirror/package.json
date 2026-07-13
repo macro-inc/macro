@@ -1,0 +1,56 @@
+{
+    "name": "@loro-mirror/core",
+    "version": "0.1.0",
+    "description": "Core functionality for Loro Mirror - a state management library with Loro CRDT synchronization",
+    "main": "dist/index.cjs",
+    "module": "dist/index.mjs",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "bun": "./src/index.ts",
+            "workerd": "./src/index.ts",
+            "worker": "./src/index.ts",
+            "browser": "./src/index.ts",
+            "development": "./src/index.ts",
+            "production": "./src/index.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.cjs",
+            "default": "./dist/index.mjs"
+        }
+    },
+    "files": [
+        "src",
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc --emitDeclarationOnly && bun build src/index.ts --target node --format esm --packages external --outfile dist/index.mjs && bun build src/index.ts --target node --format cjs --packages external --outfile dist/index.cjs",
+        "prepack": "bun run build",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "biome lint src",
+        "typecheck": "tsc --noEmit"
+    },
+    "keywords": [
+        "loro",
+        "crdt",
+        "state",
+        "management",
+        "sync",
+        "mirror"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "immer": "^10.0.3"
+    },
+    "peerDependencies": {
+        "loro-crdt": "^1.4.4"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.4.12",
+        "loro-crdt": "1.13.3",
+        "typescript": "^5.9.3",
+        "vitest": "^3.2.4"
+    }
+}

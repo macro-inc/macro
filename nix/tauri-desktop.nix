@@ -18,16 +18,16 @@
       isX86_64Linux = system == "x86_64-linux";
       isAarch64Darwin = system == "aarch64-darwin";
 
-      appVersion = (builtins.fromJSON (builtins.readFile ../js/app/packages/app/package.json)).version;
+      appVersion = (builtins.fromJSON (builtins.readFile ../apps/web/package.json)).version;
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
 
       rustToolchain = fenix.packages.${system}.fromToolchainFile {
-        file = ../rust/rust-toolchain.toml;
+        file = ../rust-toolchain.toml;
         sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
       };
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-      jsRoot = ../js;
+      jsRoot = ../.;
       jsSrc = lib.cleanSourceWith {
         src = jsRoot;
         filter =
@@ -36,19 +36,53 @@
             rel = lib.removePrefix ((toString jsRoot) + "/") (toString path);
           in
           !(lib.hasPrefix "node_modules/" rel)
-          && !(lib.hasPrefix "app/node_modules/" rel)
-          && !(lib.hasPrefix "app/packages/app/dist/" rel)
-          && !(lib.hasPrefix "app/tauri/target/" rel)
-          && !(lib.hasPrefix "lexical-core/node_modules/" rel)
-          && !(lib.hasPrefix "lexical-service/node_modules/" rel)
-          && !(lib.hasPrefix "loro-mirror/node_modules/" rel)
+          && !(lib.hasPrefix "apps/web/node_modules/" rel)
+          && !(lib.hasPrefix "apps/web/dist/" rel)
+          && !(lib.hasPrefix "apps/web/tauri/target/" rel)
+          && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
+          && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
+          && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
+          && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
           && !(lib.hasInfix "/node_modules/" rel)
           && !(lib.hasInfix "/target/" rel)
           && !(lib.hasInfix "/dist/" rel)
           && rel != "node_modules"
-          && rel != "app/node_modules"
-          && rel != "app/packages/app/dist"
-          && rel != "app/tauri/target";
+          && rel != "apps/web/node_modules"
+          && rel != "apps/web/dist"
+          && rel != "apps/web/tauri/target"
+          && rel != "apps/web/src/lib/graphql-cache/wasm";
+      };
+
+      rootCargoVendorDir = craneLib.vendorCargoDeps {
+        src = ../.;
+        cargoLock = ../Cargo.lock;
+        outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
+      };
+
+      cacheWasmPackage = craneLib.mkCargoDerivation {
+        pname = "macro-cache-wasm";
+        version = appVersion;
+        src = jsSrc;
+        cargoArtifacts = null;
+        cargoVendorDir = rootCargoVendorDir;
+        nativeBuildInputs = [
+          pkgs.binaryen
+          pkgs.wasm-bindgen-cli
+          pkgs.wasm-pack
+        ];
+        doCheck = false;
+        buildPhaseCargoCommand = ''
+          wasm-pack build crates/client/cache-wasm \
+            --target web \
+            --release \
+            --mode no-install \
+            --out-dir "$PWD/apps/web/src/lib/graphql-cache/wasm"
+        '';
+        installPhaseCommand = ''
+          mkdir -p $out
+          cp -a apps/web/src/lib/graphql-cache/wasm/. $out/
+        '';
+        doInstallCargoArtifacts = false;
       };
 
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
@@ -72,17 +106,22 @@
 
             cp -a ${nodeModules}/. .
 
-            vite_resolve_replacement='      resolve: {
-          alias: [
-            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
-          ],'
-            substituteInPlace app/packages/app/vite.base.ts \
-              --replace-fail "      resolve: {" "$vite_resolve_replacement"
+            # Vite bundles TypeScript config files to a temporary sibling before
+            # loading them. The application config now lives at the app root,
+            # so make that directory writable inside the Nix build sandbox.
+            chmod u+w apps/web
 
-            printf production > app/tauri/src-tauri/.macro-tauri-env
+            substituteInPlace apps/web/vite.base.ts \
+              --replace-fail \
+                "          // NIX_TAURI_ALIAS" \
+                '          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },'
+
+            printf production > apps/web/tauri/src-tauri/.macro-tauri-env
+            mkdir -p apps/web/src/lib/graphql-cache/wasm
+            cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
             (
-              cd app/packages/app
-              MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+              cd apps/web
+              MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
               printf '${appVersion}+${gitRev}\n' > dist/semver.txt
               BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
             )
@@ -92,14 +131,14 @@
 
         installPhase = ''
           runHook preInstall
-          cp -r app/packages/app/dist "$out"
+          cp -r apps/web/dist "$out"
           runHook postInstall
         '';
       };
 
       tauriCargoVendorDir = craneLib.vendorCargoDeps {
-        src = ../js/app/tauri;
-        cargoLock = ../js/app/tauri/Cargo.lock;
+        src = ../apps/web/tauri;
+        cargoLock = ../apps/web/tauri/Cargo.lock;
         outputHashes = {
           "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" =
             "sha256-v0Pn8kiRXaczNrFNjXct7yZUQ50qP68l8ivQDumu7Hw=";
@@ -116,9 +155,9 @@
         pname = "macro-tauri-desktop";
         version = appVersion;
         binaryName = "app";
-        src = ../js/app/tauri;
-        cargoRoot = ../js/app/tauri;
-        cargoLock = ../js/app/tauri/Cargo.lock;
+        src = ../apps/web/tauri;
+        cargoRoot = ../apps/web/tauri;
+        cargoLock = ../apps/web/tauri/Cargo.lock;
         inherit frontend;
 
         craneArgs.cargoVendorDir = tauriCargoVendorDir;
@@ -131,10 +170,9 @@
             --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
         '';
         craneArgs.preBuild = ''
-          mkdir -p ../packages/app
-          cp ${../js/app/packages/app/package.json} ../packages/app/package.json
-          rm -rf ../packages/app/dist
-          cp -r ${frontend} ../packages/app/dist
+          cp ${../apps/web/package.json} ../package.json
+          rm -rf ../dist
+          cp -r ${frontend} ../dist
         '';
       };
 
@@ -180,10 +218,10 @@
               ]
             }"
 
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
           install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<EOF
           [Desktop Entry]
           Type=Application

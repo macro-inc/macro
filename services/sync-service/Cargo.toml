@@ -1,0 +1,47 @@
+[package]
+name = "sync_service"
+version = "0.1.0"
+edition = "2024"
+authors = ["synoet <teonys@nyu.edu>"]
+build = "build.rs"
+publish = false
+
+[features]
+default = ["bebop-owned-all", "do-sqlite-snapshot-storage", "search-service"]
+no-network-deps = []
+do-sqlite-snapshot-storage = []
+kv-snapshot-storage = []
+r2-snapshot-storage = []
+search-service = []
+bebop-owned-all = ["sync_service_bebop_schema/bebop-owned-all"]
+create-default-state = []
+alarm-keep-alive = []
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.release]
+release = false
+
+[package.metadata.wasm-pack.profile.release]
+# https://github.com/rustwasm/wasm-pack/issues/1247
+wasm-opt = true
+
+[dependencies]
+worker = { version = "0.8.1", features = ['d1'] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = [
+  'time',
+] }
+tracing-web = "0.1"
+web-time =  "1.1.0"
+time = { workspace = true, features = ['wasm-bindgen'] }
+bebop.workspace = true
+sync_service_bebop_schema = { path = "bebop-schema" }
+serde_json.workspace = true
+serde.workspace = true
+wasm-bindgen.workspace = true
+uuid = { workspace = true, features = ["js"] }
+loro = "1.13"
+macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
+matchit =  "0.8.4"

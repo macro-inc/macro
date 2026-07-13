@@ -63,7 +63,7 @@ Only allow direct SQLx query functions when the SQL must be dynamically assemble
 
 ## Refresh SQLx Offline Cache
 
-When SQLx queries were changed, run this from `rust/cloud-storage`:
+When SQLx queries were changed, run this from the repository root:
 
 ```bash
 just prepare_db

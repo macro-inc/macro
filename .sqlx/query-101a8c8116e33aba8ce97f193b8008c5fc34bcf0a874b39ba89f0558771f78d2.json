@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE webhook_delivery\n            SET\n                status = $2,\n                next_attempt_at = NULL,\n                updated_at = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "101a8c8116e33aba8ce97f193b8008c5fc34bcf0a874b39ba89f0558771f78d2"
+}

@@ -6,9 +6,10 @@ import { Lambda } from '../../packages/lambda';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const LAMBDA_BASE_NAME = 'call_recording_preview_handler';
-const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
-const FFMPEG_LAYER_ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/ffmpeg-layer.zip`;
+const REPO_ROOT = '../../..';
+const HANDLER_BASE = `${REPO_ROOT}/services/${LAMBDA_BASE_NAME}`;
+const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
+const FFMPEG_LAYER_ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${LAMBDA_BASE_NAME}/ffmpeg-layer.zip`;
 const FFMPEG_LAYER_ARTIFACT_BUCKET_NAME = `macro-call-recording-preview-layer-artifacts-${stack}`;
 
 export type CallRecordingPreviewLambdaEnvVars = {
@@ -36,7 +37,7 @@ type CallRecordingPreviewLambdaArgs = {
 function fileBase64Sha256(filePath: string): string {
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `FFmpeg Lambda layer zip not found at ${filePath}. Run \`just call_recording_preview_handler/build\` from rust/cloud-storage before deploying.`
+      `FFmpeg Lambda layer zip not found at ${filePath}. Run \`just services/call_recording_preview_handler/build\` from the repository root before deploying.`
     );
   }
 
@@ -175,7 +176,7 @@ export class CallRecordingPreviewLambda extends pulumi.ComponentResource {
       `${LAMBDA_BASE_NAME}-lambda`,
       {
         baseName: LAMBDA_BASE_NAME,
-        handlerBase: CLOUD_STORAGE_BASE,
+        handlerBase: HANDLER_BASE,
         zipLocation: ZIP_LOCATION,
         envVars,
         role: this.role,

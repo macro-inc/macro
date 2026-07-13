@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "deleted_item_poller"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+aws-smithy-types = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+chrono = { workspace = true }
+futures = { workspace = true }
+lambda_runtime = { workspace = true }
+macro_db_client = { path = "../../crates/macro_db_client" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+model = { path = "../../crates/model" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
+  "chat",
+  "document",
+  "search",
+] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

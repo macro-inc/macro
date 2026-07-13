@@ -1,0 +1,15 @@
+id: tsx-no-raw-tailwind-palette
+language: tsx
+severity: error
+message: Raw Tailwind palette classes are disabled in @theme and render NOTHING. Use semantic color tokens.
+note: |-
+  Rule FE-25 in docs/STYLE_GUIDE.md. The default palette is reset via
+  `--color-*: initial` in apps/web/src/index.css, so classes like
+  `text-red-500` silently produce no CSS. Use semantic tokens instead:
+  failure/failure-bg/failure-ink, success-*, alert-*, accent, ink-muted, etc.
+files:
+  - apps/web/**
+  - packages/lexical-core/**
+rule:
+  kind: string_fragment
+  regex: (^|[^-\w])(bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|caret|accent|shadow)-((red|blue|green|gray|grey|zinc|slate|neutral|stone|amber|yellow|lime|emerald|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose)-[0-9]{2,3}|black|white)([^-\w]|$)
