@@ -1,8 +1,8 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
+import BotIcon from '@icon/wide-bot.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import { useBotChannelsQuery } from '@queries/bots/bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';
@@ -87,7 +87,7 @@ export function BotSettingsList(props: {
               fallback={
                 <div class="flex min-h-52 flex-col items-center justify-center px-8 text-center">
                   <div class="flex size-11 items-center justify-center rounded-xl bg-accent-bg text-accent">
-                    <RobotIcon class="size-6" />
+                    <BotIcon class="size-6" />
                   </div>
                   <div class="mt-3 text-sm font-medium text-ink">
                     Create your first bot
