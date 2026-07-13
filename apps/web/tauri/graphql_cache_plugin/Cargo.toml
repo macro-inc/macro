@@ -1,0 +1,17 @@
+[package]
+name = "graphql_cache_plugin"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+cache-core = { path = "../../../../crates/client/cache-core" }
+cache-sqlite = { path = "../../../../crates/client/cache-sqlite" }
+pollster = "0.4"
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1"
+tauri = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

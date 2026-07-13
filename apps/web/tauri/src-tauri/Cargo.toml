@@ -61,6 +61,7 @@ uuid = { version = "1.18.1", features = ["v4"] }
 # system notifications for when the app is open
 tauri-plugin-notification = "2"
 # push notifications for mobile (when app is closed)
+graphql_cache_plugin = { path = "../graphql_cache_plugin" }
 macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
 navigation_plugin = { path = "../navigation_plugin" }
 tauri-plugin-device-info = "1.0.1"

@@ -224,7 +224,17 @@ pub fn run() {
             }
         })
         .manage(PendingShareFilesState::default())
+        .manage(graphql_cache_plugin::CacheState::default())
         .invoke_handler(tauri::generate_handler![
+            graphql_cache_plugin::commands::graphql_cache_init,
+            graphql_cache_plugin::commands::graphql_cache_read,
+            graphql_cache_plugin::commands::graphql_cache_write,
+            graphql_cache_plugin::commands::graphql_cache_begin_optimistic_write,
+            graphql_cache_plugin::commands::graphql_cache_commit_optimistic_write,
+            graphql_cache_plugin::commands::graphql_cache_rollback_optimistic_write,
+            graphql_cache_plugin::commands::graphql_cache_invalidate,
+            graphql_cache_plugin::commands::graphql_cache_teardown,
+            graphql_cache_plugin::commands::graphql_cache_clear,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,

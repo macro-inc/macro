@@ -7,7 +7,10 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
-import { createWorkerCacheHost } from '@graphql-cache/index';
+import {
+  createTauriCacheHost,
+  createWorkerCacheHost,
+} from '@graphql-cache/index';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { type Client, createClient, fetchExchange } from '@urql/core';
@@ -65,11 +68,12 @@ const graphqlSoupClient = createClient({
 });
 
 /**
- * Whether the normalized wasm cache is active for soup GraphQL queries.
- * Browser only for now — Tauri will use a native host (see design doc).
+ * Whether the normalized cache is active for soup GraphQL queries.
+ * Browser: wasm engine in a worker. Tauri: native engine in the host
+ * process (graphql_cache_plugin).
  */
 function graphqlCacheEnabled(): boolean {
-  return ENABLE_GRAPHQL_SOUP() && !isTauri();
+  return ENABLE_GRAPHQL_SOUP();
 }
 
 let cachedClient: Client | undefined;
@@ -86,7 +90,10 @@ export function getGraphqlSoupClient(): Client {
   if (!graphqlCacheEnabled()) return graphqlSoupClient;
   cachedClient ??= (() => {
     try {
-      const host = createWorkerCacheHost({ scope: getOrCreateCacheScope() });
+      const scope = getOrCreateCacheScope();
+      const host = isTauri()
+        ? createTauriCacheHost({ scope })
+        : createWorkerCacheHost({ scope });
       return createClient({
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
