@@ -8399,6 +8399,11 @@ export const getItemsSoupResponse = zod
                             .describe(
                               'Property definition model (service representation).'
                             ),
+                          id: zod
+                            .uuid()
+                            .describe(
+                              'Globally unique id of the assignment attaching this property to an entity.'
+                            ),
                           value: zod
                             .union([
                               zod.null(),
@@ -11217,6 +11222,11 @@ export const postItemsSoupResponse = zod
                             .describe(
                               'Property definition model (service representation).'
                             ),
+                          id: zod
+                            .uuid()
+                            .describe(
+                              'Globally unique id of the assignment attaching this property to an entity.'
+                            ),
                           value: zod
                             .union([
                               zod.null(),
@@ -13562,6 +13572,11 @@ export const postItemsSoupAstResponse = zod
                             })
                             .describe(
                               'Property definition model (service representation).'
+                            ),
+                          id: zod
+                            .uuid()
+                            .describe(
+                              'Globally unique id of the assignment attaching this property to an entity.'
                             ),
                           value: zod
                             .union([
@@ -16229,6 +16244,11 @@ export const postItemsSoupAstGroupedResponse = zod
                                   .describe(
                                     'Property definition model (service representation).'
                                   ),
+                                id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Globally unique id of the assignment attaching this property to an entity.'
+                                  ),
                                 value: zod
                                   .union([
                                     zod.null(),
@@ -18576,6 +18596,11 @@ export const postItemsSoupAstGroupedResponse = zod
                                   })
                                   .describe(
                                     'Property definition model (service representation).'
+                                  ),
+                                id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Globally unique id of the assignment attaching this property to an entity.'
                                   ),
                                 value: zod
                                   .union([
