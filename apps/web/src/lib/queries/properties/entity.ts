@@ -154,6 +154,7 @@ function buildSoupProperty(
   const now = new Date().toISOString();
   const instantiated = isInstantiatedProperty(property);
   return {
+    id: instantiated ? property.propertyId : property.id,
     definition: {
       id: getPropertyDefinitionId(property),
       display_name: property.displayName,

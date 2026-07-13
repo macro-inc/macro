@@ -1,4 +1,10 @@
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  entityMatchesTagFilter,
+  isListViewID,
+  type ListView,
+  soupItemMatchesListView,
+  soupItemMatchesTagFilter,
+} from '@app/constants/list-views';
 import {
   createSoupState,
   type GroupMeta,
@@ -29,17 +35,11 @@ import {
   deduplicateEntities,
   scopeChannelNotificationsForEntity,
 } from '@app/features/next-soup/utils';
-import { useEntryState } from '@components/app/split-layout/entry-state';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import {
-  entityMatchesTagFilter,
-  isListViewID,
-  type ListView,
-  soupItemMatchesListView,
-  soupItemMatchesTagFilter,
-} from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useDealStages } from '@companies/crm/deal-stages';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useEntryState } from '@components/app/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   ENABLE_GRAPHQL_SOUP_FLAG,
