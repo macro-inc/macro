@@ -38,7 +38,15 @@ export const I_HTML_RENDER: TextMatchTransformer = {
       if (typeof data.html !== 'string') {
         throw new Error('Missing html field');
       }
-      node.replace($createHtmlRenderNode({ html: data.html }));
+      node.replace(
+        $createHtmlRenderNode({
+          html: data.html,
+          adaptColors:
+            typeof data.adaptColors === 'boolean'
+              ? data.adaptColors
+              : undefined,
+        })
+      );
     } catch (e) {
       console.error('Failed to parse m-html-render:', e);
       replaceTextWithUnknownMention(node, 'Unknown Content');

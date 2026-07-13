@@ -23,6 +23,7 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
+import { isPersonalMessage } from '../util/isPersonalMessage';
 import {
   fetchImagesViaPlatform,
   resolveCidImages,
@@ -122,15 +123,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   };
 
   // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
-  const isPersonal = createMemo(() => {
-    const senderEmail = props.message.from?.email?.toLowerCase();
-    return (
-      (senderEmail !== undefined &&
-        senderEmail === userEmail()?.toLowerCase()) ||
-      props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL') ||
-      (senderEmail !== undefined && props.personalSenders().has(senderEmail))
-    );
-  });
+  const isPersonal = createMemo(() =>
+    isPersonalMessage(props.message, userEmail(), props.personalSenders())
+  );
 
   const isMacroSender = createMemo(() => {
     const senderEmail = props.message.from?.email?.toLowerCase();
