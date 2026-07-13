@@ -12,7 +12,7 @@ use entity_access::{
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
 };
 use graphql_common::extract_part;
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use models_pagination::TypeEraseCursor;
 use soup::domain::ports::SoupService;
 
@@ -36,10 +36,11 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    SharedMacroAuthorizationService: FromRef<St>,
     Edges: SoupEntityEdges,
 {
-    let Cached(MacroUserExtractor { macro_user_id, .. }) =
-        extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
+    let SharedMacroAuthorizationExtractor { macro_user_id, .. } =
+        extract_part::<SharedMacroAuthorizationExtractor, St>(ctx).await?;
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E>>, St>(ctx).await?;
     let link_ids = links.into_iter().map(|link| link.id).collect();
