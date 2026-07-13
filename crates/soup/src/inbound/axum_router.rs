@@ -12,7 +12,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_extra::{either::Either, extract::Cached};
+use axum_extra::either::Either;
 use cowlike::CowLike;
 use email::{
     domain::{
@@ -44,10 +44,10 @@ use item_filters::{
         properties::{PropertiesLiteral, PropertyEntityType},
     },
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
@@ -413,22 +413,43 @@ impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for Arc<EAS> {
     }
 }
 
+impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for SharedMacroAuthorizationService {
+    fn from_ref(input: &SoupRouterState<T, U, EAS>) -> Self {
+        input.email.authorization.clone()
+    }
+}
+
 impl<T, U, EAS> SoupRouterState<T, U, EAS>
 where
     T: SoupService,
     U: EmailService,
     EAS: entity_access::domain::ports::EntityAccessService,
 {
-    /// Creates router state from the soup service, email service, and entity access service.
-    pub fn new(service: T, email: U, entity_access_service: Arc<EAS>) -> Self {
-        Self::from_arc(Arc::new(service), email, entity_access_service)
+    /// Creates router state from the soup, email, entity access, and authorization services.
+    pub fn new(
+        service: T,
+        email: U,
+        entity_access_service: Arc<EAS>,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
+        Self::from_arc(
+            Arc::new(service),
+            email,
+            entity_access_service,
+            authorization,
+        )
     }
 
-    /// Creates router state from a shared soup service, email service, and entity access service.
-    pub fn from_arc(service: Arc<T>, email: U, entity_access_service: Arc<EAS>) -> Self {
+    /// Creates router state from shared soup, email, entity access, and authorization services.
+    pub fn from_arc(
+        service: Arc<T>,
+        email: U,
+        entity_access_service: Arc<EAS>,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
         SoupRouterState {
             service,
-            email: EmailRouterState::new(email),
+            email: EmailRouterState::new(email, authorization),
             entity_access_service,
             favorites: Arc::new(NoFavoritesReader),
         }
@@ -742,7 +763,7 @@ where
 )]
 pub async fn get_soup_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
-    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     Query(params): Query<Params>,
     cursor: SoupCursor<EntityFilters>,
@@ -813,7 +834,7 @@ type SoupCursor<R> = axum_extra::either::Either<
 #[tracing::instrument(err, skip_all)]
 pub async fn post_soup_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
-    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<EntityFilters>,
     Json(PostSoupRequest {
@@ -878,7 +899,7 @@ pub struct PostSoupAstRequest {
 #[tracing::instrument(err, skip_all)]
 pub async fn post_soup_ast_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
-    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<ApiEntityFilterAst>,
     Json(PostSoupAstRequest {
@@ -968,7 +989,7 @@ enum GroupedSoupRequestMode {
 #[tracing::instrument(err, skip_all)]
 pub async fn post_grouped_soup_ast_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
-    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>>,
     Json(request): Json<PostGroupedSoupAstRequest>,
 ) -> Result<Json<GroupedSoupPage>, SoupHandlerErr>

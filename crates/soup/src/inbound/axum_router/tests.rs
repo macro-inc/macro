@@ -1,5 +1,5 @@
 use axum::{
-    Extension, Router,
+    Router,
     http::{Method, Request, StatusCode},
 };
 use chrono::{Duration, Utc};
@@ -10,8 +10,11 @@ use email::domain::{
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use model_user::UserContext;
 use models_pagination::{
     CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, PaginateOn, Query,
     SimpleSortMethod, SortOn, TypeEraseCursor,
@@ -37,6 +40,14 @@ use crate::{
 };
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
+const TEST_TOKEN: &str = "soup-test-token";
+const TEST_USER_ID: &str = "macro|test@example.com";
+
+fn authorization() -> SharedMacroAuthorizationService {
+    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+        TEST_USER_ID,
+    )))
+}
 
 #[derive(Debug)]
 enum MockCursorKind {
@@ -407,20 +418,15 @@ fn mock_router() -> Router {
         MockSoup::new(),
         MockEmail,
         Arc::new(MockEntityAccess),
+        authorization(),
     ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }))
 }
 
 #[tokio::test]
 async fn it_should_deserialize_empty_filter() {
     let router = mock_router();
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={CURSOR}"))
         .body(axum::body::Body::empty())
         .unwrap();
@@ -589,15 +595,10 @@ async fn it_calls_soup_with_missing_link() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={CURSOR}"))
         .body(axum::body::Body::empty())
         .unwrap();
@@ -622,15 +623,10 @@ async fn it_does_not_call_soup_with_db_err() {
             }),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={CURSOR}"))
         .body(axum::body::Body::empty())
         .unwrap();
@@ -652,15 +648,10 @@ async fn it_loads_email_all_view() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={CURSOR}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -693,15 +684,10 @@ async fn it_loads_email_sent_view() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={CURSOR}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -734,15 +720,10 @@ async fn it_parses_file_assoc_filters() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -774,15 +755,10 @@ async fn cursor_with_assoc_works() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -834,7 +810,7 @@ async fn cursor_with_assoc_works() {
 
     let cursor = res.type_erase().next_cursor.unwrap();
 
-    let request2 = Request::builder()
+    let request2 = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={cursor}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -849,13 +825,8 @@ async fn cursor_with_assoc_works() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
     let _res = router.oneshot(request2).await.unwrap();
     let guard2 = inner_counter.lock().unwrap();
@@ -873,15 +844,10 @@ async fn cursor_with_all_works() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -933,7 +899,7 @@ async fn cursor_with_all_works() {
 
     let cursor = res.type_erase().next_cursor.unwrap();
 
-    let request2 = Request::builder()
+    let request2 = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup?cursor={cursor}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -948,13 +914,8 @@ async fn cursor_with_all_works() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
     let _res = router.oneshot(request2).await.unwrap();
     let guard2 = inner_counter.lock().unwrap();
@@ -972,17 +933,12 @@ async fn it_parses_channel_filters() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
     let uuid1 = Uuid::new_v4();
     let uuid2 = Uuid::new_v4();
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1017,15 +973,10 @@ async fn it_parses_notification_and_task_filters() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1130,15 +1081,10 @@ async fn it_can_filter_chat_owners() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1169,15 +1115,10 @@ async fn ast_endpoint_expands_file_assoc_pdf() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1216,16 +1157,11 @@ async fn ast_endpoint_passes_through_plain_document_literal() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
     let doc_id = Uuid::new_v4();
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1264,15 +1200,10 @@ async fn ast_endpoint_passes_through_foreign_entity_filter() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1334,15 +1265,10 @@ async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1472,15 +1398,10 @@ async fn it_can_expand_assoc_ast() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
-    let request = Request::builder()
+    let request = bearer(Request::builder(), TEST_TOKEN)
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1529,7 +1450,7 @@ async fn it_can_expand_assoc_ast() {
 
     let cursor = res.type_erase().next_cursor.unwrap();
 
-    let request2 = Request::builder()
+    let request2 = bearer(Request::builder(), TEST_TOKEN)
         .uri(format!("/soup/ast?cursor={cursor}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1544,13 +1465,8 @@ async fn it_can_expand_assoc_ast() {
             get_link_result: Arc::new(|| Ok(None)),
         },
         Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+        authorization(),
+    ));
 
     let _res = router.oneshot(request2).await.unwrap();
 
