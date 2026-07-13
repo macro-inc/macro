@@ -270,6 +270,10 @@ export function mapChannelSearchResultItem(
         channelType,
         messageId: msg.message_id!,
         threadId: msg.thread_id ?? undefined,
+        target: {
+          messageId: msg.message_id!,
+          threadId: msg.thread_id ?? undefined,
+        },
         senderId: msg.sender_id!,
         content,
         name: channelName,

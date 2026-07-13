@@ -13,7 +13,7 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionWebsocketEffect: vi.fn(),
 }));
 
-import type { EntityData } from '@entity';
+import type { ChannelEntityTarget, EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import { getChannelEntityTarget } from './utils';
 
@@ -45,53 +45,79 @@ const replyNotification = (
     },
   }) as unknown as UnifiedNotification;
 
-const channelMessageHit = (notifications?: UnifiedNotification[]): EntityData =>
+const channelMessageRow = (opts?: {
+  target?: ChannelEntityTarget;
+  notifications?: UnifiedNotification[];
+}): EntityData =>
   ({
     type: 'channel_message',
     id: 'channel-1:hit-msg',
     channelId: 'channel-1',
     messageId: 'hit-msg',
     threadId: 'hit-thread',
-    ...(notifications ? { notifications: () => notifications } : {}),
+    ...(opts?.target ? { target: opts.target } : {}),
+    ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
 
-const channelRow = (notifications?: UnifiedNotification[]): EntityData =>
+const channelRow = (opts?: {
+  target?: ChannelEntityTarget;
+  notifications?: UnifiedNotification[];
+}): EntityData =>
   ({
     type: 'channel',
     id: 'channel-1',
-    ...(notifications ? { notifications: () => notifications } : {}),
+    ...(opts?.target ? { target: opts.target } : {}),
+    ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
 
-const channelThreadRow = (notifications?: UnifiedNotification[]): EntityData =>
+const channelThreadRow = (opts?: {
+  target?: ChannelEntityTarget;
+  notifications?: UnifiedNotification[];
+}): EntityData =>
   ({
     type: 'channel_thread',
     id: 'root-msg',
     channelId: 'channel-1',
     messageId: 'root-msg',
     threadId: 'root-msg',
-    ...(notifications ? { notifications: () => notifications } : {}),
+    ...(opts?.target ? { target: opts.target } : {}),
+    ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
 
 describe('getChannelEntityTarget', () => {
-  it('targets the hit itself for a channel_message row, ignoring attached channel notifications', () => {
-    const entity = channelMessageHit([
-      sendNotification('n1', 'recent-unread-msg'),
-    ]);
+  it('activates a stamped target over attached channel notifications (search message hit)', () => {
+    const entity = channelMessageRow({
+      target: { messageId: 'hit-msg', threadId: 'hit-thread' },
+      notifications: [sendNotification('n1', 'recent-unread-msg')],
+    });
     expect(getChannelEntityTarget(entity)).toEqual({
       messageId: 'hit-msg',
       threadId: 'hit-thread',
     });
   });
 
-  it('targets the hit for a channel_message row without notifications', () => {
-    expect(getChannelEntityTarget(channelMessageHit())).toEqual({
+  it('activates a stamped target on a channel_thread row over notifications (future thread hit)', () => {
+    const entity = channelThreadRow({
+      target: { messageId: 'hit-reply', threadId: 'root-msg' },
+      notifications: [replyNotification('n1', 'newest-reply', 'root-msg')],
+    });
+    expect(getChannelEntityTarget(entity)).toEqual({
+      messageId: 'hit-reply',
+      threadId: 'root-msg',
+    });
+  });
+
+  it('falls back to own ids for an unstamped channel_message row without notifications', () => {
+    expect(getChannelEntityTarget(channelMessageRow())).toEqual({
       messageId: 'hit-msg',
       threadId: 'hit-thread',
     });
   });
 
   it('targets the driving notification for a channel row', () => {
-    const entity = channelRow([sendNotification('n1', 'notif-msg')]);
+    const entity = channelRow({
+      notifications: [sendNotification('n1', 'notif-msg')],
+    });
     expect(getChannelEntityTarget(entity)).toEqual({
       messageId: 'notif-msg',
       threadId: undefined,
@@ -103,17 +129,19 @@ describe('getChannelEntityTarget', () => {
   });
 
   it('skips thread-reply notifications for a channel row', () => {
-    const entity = channelRow([
-      replyNotification('n1', 'reply-msg', 'other-thread'),
-    ]);
+    const entity = channelRow({
+      notifications: [replyNotification('n1', 'reply-msg', 'other-thread')],
+    });
     expect(getChannelEntityTarget(entity)).toBeUndefined();
   });
 
   it('targets the reply notification scoped to a channel_thread row', () => {
-    const entity = channelThreadRow([
-      replyNotification('n1', 'reply-in-other-thread', 'other-thread'),
-      replyNotification('n2', 'reply-msg', 'root-msg'),
-    ]);
+    const entity = channelThreadRow({
+      notifications: [
+        replyNotification('n1', 'reply-in-other-thread', 'other-thread'),
+        replyNotification('n2', 'reply-msg', 'root-msg'),
+      ],
+    });
     expect(getChannelEntityTarget(entity)).toEqual({
       messageId: 'reply-msg',
       threadId: 'root-msg',
@@ -121,9 +149,9 @@ describe('getChannelEntityTarget', () => {
   });
 
   it('falls back to the thread root when no notification matches the thread', () => {
-    const entity = channelThreadRow([
-      replyNotification('n1', 'reply-msg', 'other-thread'),
-    ]);
+    const entity = channelThreadRow({
+      notifications: [replyNotification('n1', 'reply-msg', 'other-thread')],
+    });
     expect(getChannelEntityTarget(entity)).toEqual({
       messageId: 'root-msg',
       threadId: 'root-msg',

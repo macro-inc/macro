@@ -25,6 +25,7 @@ import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
+  type ChannelEntityTarget,
   type EntityData,
   getSnippetHit,
   isGithubPrEntity,
@@ -330,34 +331,35 @@ interface OpenEntityOptions {
 /**
  * Resolve which channel message to activate when a channel row is opened.
  *
- * The row's type decides where its target lives:
+ * A row with an explicit `target` (stamped at construction, e.g. a search hit
+ * standing for one matched message) always activates it. Notifications must
+ * never override a stamped target: the unified list attaches a channel-wide
+ * notifications() accessor to every row (search results included), so their
+ * presence says nothing about why a row exists.
  *
- * A `channel_message` row only ever comes from a search hit, so its
- * messageId/threadId ARE the matched message — always target them.
- * Notifications must never override a hit: the unified list attaches a
- * channel-wide notifications() accessor to every row (search results
- * included), so their presence says nothing about why this row exists.
- *
- * Inbox rows are keyed by the channel or thread, not by the message that was
- * actually sent — a `channel` row is the whole channel and a `channel_thread`
- * row is keyed by its root, so neither carries the id of the new message/reply.
- * That id lives only on the driving notification (the same data the card
- * renders), so read the target from there, exactly like the old inbox did via
- * getChannelNotificationParams. Notifications are scoped to the row first
- * (top-level sends for a channel, this thread's replies for a thread) and the
- * most recent one wins. A `channel_thread` row with no notification falls back
- * to its root; a `channel` row has no message to target — open latest.
+ * Rows without a target are containers — a `channel` row is the whole channel
+ * and a `channel_thread` row is keyed by its root, so neither carries the id
+ * of the message/reply that put it in the inbox. That id lives only on the
+ * driving notification (the same data the card renders), so read the target
+ * from there, exactly like the old inbox did via getChannelNotificationParams.
+ * Notifications are scoped to the row first (top-level sends for a channel,
+ * this thread's replies for a thread) and the most recent one wins. With no
+ * notification either, fall back to the row's own ids — a `channel_thread`
+ * row opens at its root and a `channel` row has no message to target (open
+ * latest).
  */
 export function getChannelEntityTarget(
   entity: EntityData
-): { messageId: string; threadId?: string } | undefined {
-  if (entity.type === 'channel_message') {
-    return { messageId: entity.messageId, threadId: entity.threadId };
-  }
-
-  if (entity.type !== 'channel' && entity.type !== 'channel_thread') {
+): ChannelEntityTarget | undefined {
+  if (
+    entity.type !== 'channel' &&
+    entity.type !== 'channel_message' &&
+    entity.type !== 'channel_thread'
+  ) {
     return undefined;
   }
+
+  if (entity.target) return entity.target;
 
   const fallback =
     entity.type === 'channel'
