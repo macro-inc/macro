@@ -135,34 +135,22 @@ function mapGraphqlPropertyValue(
   if (!value) return value;
 
   return match(value)
-    .with(
-      { __typename: 'GraphqlBooleanPropertyValue' },
-      ({ boolValue }) => ({
-        type: 'Boolean' as const,
-        value: boolValue,
-      })
-    )
-    .with(
-      { __typename: 'GraphqlNumberPropertyValue' },
-      ({ numberValue }) => ({
-        type: 'Number' as const,
-        value: numberValue,
-      })
-    )
-    .with(
-      { __typename: 'GraphqlStringPropertyValue' },
-      ({ stringValue }) => ({
-        type: 'String' as const,
-        value: stringValue,
-      })
-    )
-    .with(
-      { __typename: 'GraphqlDatePropertyValue' },
-      ({ dateValue }) => ({
-        type: 'Date' as const,
-        value: dateValue,
-      })
-    )
+    .with({ __typename: 'GraphqlBooleanPropertyValue' }, ({ boolValue }) => ({
+      type: 'Boolean' as const,
+      value: boolValue,
+    }))
+    .with({ __typename: 'GraphqlNumberPropertyValue' }, ({ numberValue }) => ({
+      type: 'Number' as const,
+      value: numberValue,
+    }))
+    .with({ __typename: 'GraphqlStringPropertyValue' }, ({ stringValue }) => ({
+      type: 'String' as const,
+      value: stringValue,
+    }))
+    .with({ __typename: 'GraphqlDatePropertyValue' }, ({ dateValue }) => ({
+      type: 'Date' as const,
+      value: dateValue,
+    }))
     .with(
       { __typename: 'GraphqlSelectOptionPropertyValue' },
       ({ optionIds }) => ({
