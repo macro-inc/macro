@@ -68,7 +68,7 @@ const graphqlSoupClient = createClient({
  * Whether the normalized wasm cache is active for soup GraphQL queries.
  * Browser only for now — Tauri will use a native host (see design doc).
  */
-function graphqlCacheEnabled(): boolean {
+export function graphqlCacheEnabled(): boolean {
   return ENABLE_GRAPHQL_SOUP() && !isTauri();
 }
 
@@ -542,8 +542,15 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
     .exhaustive();
 }
 
+export type FetchGraphqlSoupOptions = {
+  signal?: AbortSignal;
+  /** Defaults to true for normal foreground Soup reads. */
+  allowOfflineFallback?: boolean;
+};
+
 export async function fetchGraphqlSoup(
-  input: GraphqlSoupInput
+  input: GraphqlSoupInput,
+  options: FetchGraphqlSoupOptions = {}
 ): Promise<SoupPage> {
   const client = getGraphqlSoupClient();
   const useCache = graphqlCacheEnabled();
@@ -556,13 +563,20 @@ export async function fetchGraphqlSoup(
     .query<SoupQuery, SoupQueryVariables>(
       SoupQueryDocument,
       { input },
-      useCache ? { requestPolicy: 'cache-and-network' } : {}
+      {
+        ...(useCache ? { requestPolicy: 'cache-and-network' as const } : {}),
+        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+      }
     )
     .toPromise();
 
   if (result.error) {
     // Offline replay: a network failure falls back to the last cached page.
-    if (useCache && result.error.networkError) {
+    if (
+      options.allowOfflineFallback !== false &&
+      useCache &&
+      result.error.networkError
+    ) {
       const cached = await client
         .query<SoupQuery, SoupQueryVariables>(
           SoupQueryDocument,
