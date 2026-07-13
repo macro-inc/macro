@@ -816,7 +816,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         variant="ghost"
         class={cn(
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
-          'justify-start gap-2 px-1.5 py-1'
+          'justify-start gap-3 px-1.5 py-1'
         )}
         label={displayName()}
         fullWidth
