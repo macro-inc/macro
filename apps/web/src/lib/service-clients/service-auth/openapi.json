@@ -4317,9 +4317,13 @@
       },
       "TeamWithMembers": {
         "type": "object",
-        "description": "A team with its members",
-        "required": ["team", "members"],
+        "description": "Response for `GET /team`: a team with its members plus team-level\nCRM state. Assembled by `TeamService::get_team` from the team and\nCRM settings ports.",
+        "required": ["team", "members", "crm_enabled"],
         "properties": {
+          "crm_enabled": {
+            "type": "boolean",
+            "description": "Whether the CRM is enabled for this team (from `team_crm_settings`)."
+          },
           "members": {
             "type": "array",
             "items": {

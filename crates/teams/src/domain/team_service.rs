@@ -28,8 +28,8 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        RevokePermissionsForTeamMembersError, Team, TeamAndMembers, TeamError, TeamInvite,
+        TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -1078,7 +1078,15 @@ where
     ) -> Result<TeamWithMembers, TeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-        self.team_repository.get_team_by_id(&team_id).await
+        let (TeamAndMembers { team, members }, crm_enabled) = tokio::try_join!(
+            self.team_repository.get_team_by_id(&team_id),
+            self.team_crm_settings_repository.get_crm_enabled(&team_id),
+        )?;
+        Ok(TeamWithMembers {
+            team,
+            members,
+            crm_enabled,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]

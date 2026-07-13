@@ -2,9 +2,9 @@
 use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamAndMembers, TeamError,
+        TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan,
+        TeamRole,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
@@ -1046,7 +1046,7 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
+    async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamAndMembers, TeamError> {
         let team = sqlx::query!(
             r#"
             SELECT id, name, slug, owner_id
@@ -1093,7 +1093,7 @@ impl TeamRepository for TeamRepositoryImpl {
             })
             .collect();
 
-        Ok(TeamWithMembers { team, members })
+        Ok(TeamAndMembers { team, members })
     }
 
     #[tracing::instrument(skip(self), err)]

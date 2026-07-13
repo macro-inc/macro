@@ -232,20 +232,19 @@ const DISABLE_CRM_PHRASE = 'Disable CRM';
 
 function CrmEnablementSection() {
   const isTeamAdmin = useIsTeamAdmin();
+  const teamQuery = useCurrentTeamQuery();
   const patchCrmMutation = usePatchTeamCrmSettingsMutation();
 
-  // The team API doesn't report `crm_enabled`, so the toggle is optimistic:
-  // it starts from "enabled" and tracks the results of changes made here.
-  const [crmEnabled, setCrmEnabled] = createSignal(true);
+  // The mutation invalidates the team query on success, which refetches
+  // the authoritative flag.
+  const crmEnabled = () => teamQuery.data?.crm_enabled ?? false;
   const [showDisableModal, setShowDisableModal] = createSignal(false);
   const [disableConfirmation, setDisableConfirmation] = createSignal('');
 
   const handleToggle = (next: boolean) => {
     if (!isTeamAdmin() || patchCrmMutation.isPending) return;
     if (next) {
-      patchCrmMutation.mutate(true, {
-        onSuccess: (data) => setCrmEnabled(data.enabled),
-      });
+      patchCrmMutation.mutate(true);
     } else {
       // Disabling purges the team's CRM data — force a typed confirmation.
       setDisableConfirmation('');
@@ -255,10 +254,7 @@ function CrmEnablementSection() {
 
   const handleDisable = () => {
     patchCrmMutation.mutate(false, {
-      onSuccess: (data) => {
-        setCrmEnabled(data.enabled);
-        setShowDisableModal(false);
-      },
+      onSuccess: () => setShowDisableModal(false),
     });
   };
 

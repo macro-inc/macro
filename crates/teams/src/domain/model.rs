@@ -102,7 +102,19 @@ pub struct TeamMember<'a> {
     pub role: TeamRole,
 }
 
-/// A team with its members
+/// A team and its members as stored, without any CRM settings state.
+/// Repo-level aggregate returned by `TeamRepository::get_team_by_id`.
+#[derive(Debug, Clone)]
+pub struct TeamAndMembers {
+    /// The team
+    pub team: Team,
+    /// The members of the team
+    pub members: Vec<TeamMember<'static>>,
+}
+
+/// Response for `GET /team`: a team with its members plus team-level
+/// CRM state. Assembled by `TeamService::get_team` from the team and
+/// CRM settings ports.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct TeamWithMembers {
@@ -110,6 +122,8 @@ pub struct TeamWithMembers {
     pub team: Team,
     /// The members of the team
     pub members: Vec<TeamMember<'static>>,
+    /// Whether the CRM is enabled for this team (from `team_crm_settings`).
+    pub crm_enabled: bool,
 }
 
 /// Current and invited members for a team.

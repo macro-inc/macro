@@ -8,7 +8,7 @@ use std::{
 };
 
 use entity_access::domain::models::{
-    AdminTeamRole, EntityAccessReceipt, EntityType, RequiredPermission,
+    AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, RequiredPermission,
 };
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use notification::domain::{
@@ -23,7 +23,7 @@ use roles_and_permissions::domain::{
 use crate::domain::{
     crm_enqueuer::NoOpCrmEnqueuer,
     team_analytics::{TeamAnalytics, TeamAnalyticsEvent},
-    team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
+    team_crm_settings_repo::{NoOpTeamCrmSettingsRepository, TeamCrmSettingsRepository},
 };
 
 fn test_team_receipt<T: RequiredPermission>(
@@ -42,8 +42,8 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamAndMembers, TeamError,
+        TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole,
     },
     team_repo::{TeamChannelsRepository, TeamRepository},
 };
@@ -373,11 +373,11 @@ impl TeamRepository for MockTeamRepository {
     fn get_team_by_id(
         &self,
         _: &uuid::Uuid,
-    ) -> impl Future<Output = Result<TeamWithMembers, TeamError>> + Send {
+    ) -> impl Future<Output = Result<TeamAndMembers, TeamError>> + Send {
         let team = self.team_for_get_by_id.clone();
         async move {
             let team = team.ok_or(TeamError::TeamDoesNotExist)?;
-            Ok(TeamWithMembers {
+            Ok(TeamAndMembers {
                 team,
                 members: Vec::new(),
             })
@@ -1460,6 +1460,59 @@ async fn team_analytics_invite_users_does_not_emit_when_invite_creation_fails() 
 
     assert!(matches!(err, InviteUsersToTeamError::StorageLayerError(_)));
     assert!(events.lock().unwrap().is_empty());
+}
+
+/// TeamCrmSettingsRepository stub reporting a fixed `crm_enabled` value.
+#[derive(Clone)]
+struct StaticCrmSettingsRepository {
+    enabled: bool,
+}
+
+impl TeamCrmSettingsRepository for StaticCrmSettingsRepository {
+    async fn get_crm_enabled(&self, _: &uuid::Uuid) -> Result<bool, TeamError> {
+        Ok(self.enabled)
+    }
+
+    async fn enable_crm(&self, _: &uuid::Uuid) -> Result<bool, TeamError> {
+        unimplemented!()
+    }
+
+    async fn disable_crm_and_purge_data(&self, _: &uuid::Uuid) -> Result<(), TeamError> {
+        unimplemented!()
+    }
+}
+
+/// get_team overlays `crm_enabled` from the CRM settings port.
+#[tokio::test]
+async fn test_get_team_reports_crm_enabled() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let team = Team::new(
+        team_id,
+        "Test Team".to_string(),
+        "TEST_TEAM".to_string(),
+        owner_id.clone(),
+    );
+
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo =
+        MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls).with_team(team);
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress,
+        NoOpCrmEnqueuer,
+        StaticCrmSettingsRepository { enabled: true },
+    );
+
+    let receipt = test_team_receipt::<MemberTeamRole>(team_id, &owner_id);
+    let team = service.get_team(receipt).await.unwrap();
+    assert!(team.crm_enabled);
 }
 
 fn build_service_with_team(
