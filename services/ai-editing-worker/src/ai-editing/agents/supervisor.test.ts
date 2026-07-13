@@ -136,9 +136,7 @@ describe('supervisor — streamed dispatch', () => {
     const models = {
       supervisor: supervisorModel,
       interpret: codingModel,
-      coding: codingModel,
-      snippet: codingModel,
-      snippetHigh: codingModel,
+      coding: () => codingModel,
     } as unknown as ResolvedModels;
 
     const session = createEditingSession();

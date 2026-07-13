@@ -30,7 +30,7 @@ export type Models = {
 export type ResolvedModels = {
   supervisor: LanguageModel;
   interpret: LanguageModel;
-  coding: LanguageModel;
+  coding: () => LanguageModel;
 };
 
 export type RunEditArgs = {
