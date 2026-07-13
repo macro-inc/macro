@@ -330,6 +330,14 @@ interface OpenEntityOptions {
 /**
  * Resolve which channel message to activate when a channel row is opened.
  *
+ * The row's type decides where its target lives:
+ *
+ * A `channel_message` row only ever comes from a search hit, so its
+ * messageId/threadId ARE the matched message — always target them.
+ * Notifications must never override a hit: the unified list attaches a
+ * channel-wide notifications() accessor to every row (search results
+ * included), so their presence says nothing about why this row exists.
+ *
  * Inbox rows are keyed by the channel or thread, not by the message that was
  * actually sent — a `channel` row is the whole channel and a `channel_thread`
  * row is keyed by its root, so neither carries the id of the new message/reply.
@@ -337,20 +345,17 @@ interface OpenEntityOptions {
  * renders), so read the target from there, exactly like the old inbox did via
  * getChannelNotificationParams. Notifications are scoped to the row first
  * (top-level sends for a channel, this thread's replies for a thread) and the
- * most recent one wins.
- *
- * Search hits are the other caller: a `channel_message` hit carries a real,
- * distinct messageId and has no notification, so fall back to the entity's ids.
- * A `channel` row with no notification has no message to target — open latest.
+ * most recent one wins. A `channel_thread` row with no notification falls back
+ * to its root; a `channel` row has no message to target — open latest.
  */
 export function getChannelEntityTarget(
   entity: EntityData
 ): { messageId: string; threadId?: string } | undefined {
-  if (
-    entity.type !== 'channel' &&
-    entity.type !== 'channel_message' &&
-    entity.type !== 'channel_thread'
-  ) {
+  if (entity.type === 'channel_message') {
+    return { messageId: entity.messageId, threadId: entity.threadId };
+  }
+
+  if (entity.type !== 'channel' && entity.type !== 'channel_thread') {
     return undefined;
   }
 
