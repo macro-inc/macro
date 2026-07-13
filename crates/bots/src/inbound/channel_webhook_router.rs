@@ -29,6 +29,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
+use macro_authorization::SharedMacroAuthorizationService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use std::{future::Future, sync::Arc};
@@ -67,6 +68,7 @@ pub struct ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc> {
     bot_service: Arc<BotSvc>,
     channel_poster: Arc<ChannelPoster>,
     access_service: Arc<AccessSvc>,
+    auth: SharedMacroAuthorizationService,
 }
 
 impl<BotSvc, ChannelPoster, AccessSvc> Clone
@@ -77,6 +79,7 @@ impl<BotSvc, ChannelPoster, AccessSvc> Clone
             bot_service: self.bot_service.clone(),
             channel_poster: self.channel_poster.clone(),
             access_service: self.access_service.clone(),
+            auth: self.auth.clone(),
         }
     }
 }
@@ -93,11 +96,13 @@ where
         bot_service: BotSvc,
         channel_poster: ChannelPoster,
         access_service: AccessSvc,
+        auth: SharedMacroAuthorizationService,
     ) -> Self {
         Self {
             bot_service: Arc::new(bot_service),
             channel_poster: Arc::new(channel_poster),
             access_service: Arc::new(access_service),
+            auth,
         }
     }
 }
@@ -107,6 +112,15 @@ impl<BotSvc, ChannelPoster, AccessSvc>
 {
     fn from_ref(state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<BotSvc, ChannelPoster, AccessSvc>
+    FromRef<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>>
+    for SharedMacroAuthorizationService
+{
+    fn from_ref(state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>) -> Self {
+        state.auth.clone()
     }
 }
 

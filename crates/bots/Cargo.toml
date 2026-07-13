@@ -10,6 +10,7 @@ inbound = [
   "dep:axum",
   "dep:channels",
   "dep:entity_access",
+  "dep:macro_authorization",
   "entity_access/inbound",
   "entity_access/ports",
   "dep:model-error-response",
@@ -29,10 +30,11 @@ channels = { path = "../channels", optional = true, default-features = false, fe
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 hex = { workspace = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
+model_user = { path = "../model_user", optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
@@ -49,6 +51,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "outbound",
   "ports",
 ] }
+macro_authorization = { path = "../macro_authorization", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

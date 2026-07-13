@@ -24,9 +24,9 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -34,6 +34,7 @@ use uuid::Uuid;
 pub struct BotsRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
+    auth: SharedMacroAuthorizationService,
 }
 
 impl<S, Svc> Clone for BotsRouterState<S, Svc> {
@@ -41,16 +42,18 @@ impl<S, Svc> Clone for BotsRouterState<S, Svc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            auth: self.auth.clone(),
         }
     }
 }
 
 impl<S: BotService, Svc: EntityAccessService> BotsRouterState<S, Svc> {
     /// Create a router state.
-    pub fn new(service: S, access_service: Svc) -> Self {
+    pub fn new(service: S, access_service: Svc, auth: SharedMacroAuthorizationService) -> Self {
         Self {
             service: Arc::new(service),
             access_service: Arc::new(access_service),
+            auth,
         }
     }
 }
@@ -58,6 +61,12 @@ impl<S: BotService, Svc: EntityAccessService> BotsRouterState<S, Svc> {
 impl<S, Svc> FromRef<BotsRouterState<S, Svc>> for Arc<Svc> {
     fn from_ref(state: &BotsRouterState<S, Svc>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<S, Svc> FromRef<BotsRouterState<S, Svc>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &BotsRouterState<S, Svc>) -> Self {
+        state.auth.clone()
     }
 }
 
@@ -147,7 +156,7 @@ where
         .with_state(state)
 }
 
-fn caller_from_user(user: MacroUserExtractor) -> MacroUserIdStr<'static> {
+fn caller_from_user(user: SharedMacroAuthorizationExtractor) -> MacroUserIdStr<'static> {
     user.macro_user_id
 }
 
@@ -162,7 +171,7 @@ fn caller_from_receipt(
 
 async fn create_bot_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<CreateBotRequest>,
 ) -> Result<(StatusCode, Json<Bot>), BotsHandlerErr> {
     let bot = state
@@ -174,14 +183,14 @@ async fn create_bot_handler<S: BotService, Svc: EntityAccessService>(
 
 async fn list_bots_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<Vec<Bot>>, BotsHandlerErr> {
     Ok(Json(state.service.list_bots(caller_from_user(user)).await?))
 }
 
 async fn get_bot_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotPath>,
 ) -> Result<Json<Bot>, BotsHandlerErr> {
     Ok(Json(
@@ -194,7 +203,7 @@ async fn get_bot_handler<S: BotService, Svc: EntityAccessService>(
 
 async fn patch_bot_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotPath>,
     Json(req): Json<PatchBotRequest>,
 ) -> Result<Json<Bot>, BotsHandlerErr> {
@@ -208,7 +217,7 @@ async fn patch_bot_handler<S: BotService, Svc: EntityAccessService>(
 
 async fn delete_bot_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotPath>,
 ) -> Result<StatusCode, BotsHandlerErr> {
     state
@@ -220,7 +229,7 @@ async fn delete_bot_handler<S: BotService, Svc: EntityAccessService>(
 
 async fn create_token_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotPath>,
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
@@ -233,7 +242,7 @@ async fn create_token_handler<S: BotService, Svc: EntityAccessService>(
 
 async fn list_tokens_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotPath>,
 ) -> Result<Json<Vec<BotToken>>, BotsHandlerErr> {
     Ok(Json(
@@ -246,7 +255,7 @@ async fn list_tokens_handler<S: BotService, Svc: EntityAccessService>(
 
 async fn revoke_token_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotTokenPath>,
 ) -> Result<StatusCode, BotsHandlerErr> {
     state
@@ -274,7 +283,7 @@ async fn revoke_token_handler<S: BotService, Svc: EntityAccessService>(
 )]
 pub async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotPath>,
 ) -> Result<Json<Vec<BotChannel>>, BotsHandlerErr> {
     Ok(Json(
@@ -304,7 +313,7 @@ pub async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
 )]
 pub async fn remove_bot_channel_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<BotChannelPath>,
 ) -> Result<StatusCode, BotsHandlerErr> {
     state

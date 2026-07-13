@@ -5,9 +5,8 @@ use crate::domain::models::{
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
-    Extension,
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, request},
 };
 use entity_access::domain::{
     models::{
@@ -17,9 +16,12 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model_user::UserContext;
 use sqlx::{PgPool, Row};
 use std::sync::{
     Arc,
@@ -284,32 +286,35 @@ impl EntityAccessService for TestAccessService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|bot-admin@example.com".to_string(),
-        fusion_user_id: "fusion-user".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+const TEST_TOKEN: &str = "bot-test-token";
+const TEST_USER_ID: &str = "macro|bot-admin@example.com";
+
+fn authorization(user_id: &str) -> SharedMacroAuthorizationService {
+    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+        user_id,
+    )))
+}
+
+fn authenticated_request() -> request::Builder {
+    bearer(Request::builder(), TEST_TOKEN)
 }
 
 fn router(service: TestBotService, role: EntityParticipantRole) -> Router {
-    bots_router(BotsRouterState::new(service, TestAccessService::new(role))).layer(user_extension())
-}
-
-fn user_context(user_id: &str) -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: user_id.to_string(),
-        fusion_user_id: "fusion-user".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+    bots_router(BotsRouterState::new(
+        service,
+        TestAccessService::new(role),
+        authorization(TEST_USER_ID),
+    ))
 }
 
 fn real_router(pool: PgPool, user_id: &str) -> Router {
     let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()));
     let access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool));
-    bots_router(BotsRouterState::new(bot_service, access_service)).layer(user_context(user_id))
+    bots_router(BotsRouterState::new(
+        bot_service,
+        access_service,
+        authorization(user_id),
+    ))
 }
 
 async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
@@ -403,7 +408,7 @@ async fn bot_owner_can_list_bot_channels_via_http() {
     let channel_id = Uuid::new_v4();
     let service = TestBotService::with_bot_channels(TestBotMode::Ok, vec![bot_channel(channel_id)]);
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("GET")
         .uri(format!("/bots/{bot_id}/channels"))
         .body(Body::empty())
@@ -427,7 +432,7 @@ async fn bot_owner_can_list_bot_channels_via_http() {
 async fn bot_listing_requires_bot_usability() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("GET")
         .uri(format!("/bots/{bot_id}/channels"))
         .body(Body::empty())
@@ -447,7 +452,7 @@ async fn bot_owner_can_remove_bot_from_channel_via_bot_route_without_channel_adm
     let service = TestBotService::new(TestBotMode::Ok);
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("DELETE")
         .uri(format!("/bots/{bot_id}/channels/{channel_id}"))
         .body(Body::empty())
@@ -467,7 +472,7 @@ async fn bot_remove_channel_requires_bot_usability() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("DELETE")
         .uri(format!("/bots/{bot_id}/channels/{channel_id}"))
         .body(Body::empty())
@@ -487,7 +492,7 @@ async fn channel_member_cannot_add_bot_to_channel() {
     let service = TestBotService::new(TestBotMode::Ok);
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots"))
         .header("content-type", "application/json")
@@ -510,7 +515,7 @@ async fn channel_admin_still_needs_bot_usability_to_add_bot() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots"))
         .header("content-type", "application/json")
@@ -533,7 +538,7 @@ async fn channel_member_cannot_remove_bot_from_channel() {
     let service = TestBotService::new(TestBotMode::Ok);
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("DELETE")
         .uri(format!("/channels/{channel_id}/bots/{bot_id}"))
         .body(Body::empty())
@@ -553,7 +558,7 @@ async fn channel_admin_still_needs_bot_usability_to_remove_bot() {
     let service = TestBotService::new(TestBotMode::Unauthorized);
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("DELETE")
         .uri(format!("/channels/{channel_id}/bots/{bot_id}"))
         .body(Body::empty())
@@ -600,7 +605,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
 
     let bot_principal_id = bot.id.into_storage_id().to_string();
     let router = real_router(pool.clone(), BOT_OWNER_ID);
-    let list_request = Request::builder()
+    let list_request = authenticated_request()
         .method("GET")
         .uri(format!("/bots/{}/channels", bot.id))
         .body(Body::empty())
@@ -614,7 +619,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     assert_eq!(channels[0].name.as_deref(), Some("alarms"));
     assert_eq!(channels[0].channel_type, BotChannelType::Private);
 
-    let remove_request = Request::builder()
+    let remove_request = authenticated_request()
         .method("DELETE")
         .uri(format!("/bots/{}/channels/{channel_id}", bot.id))
         .body(Body::empty())
@@ -636,7 +641,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     .await?;
     assert!(left_at.is_some());
 
-    let list_request = Request::builder()
+    let list_request = authenticated_request()
         .method("GET")
         .uri(format!("/bots/{}/channels", bot.id))
         .body(Body::empty())
@@ -646,7 +651,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     assert_eq!(list_response.status(), StatusCode::OK);
     assert!(read_bot_channels(list_response).await.is_empty());
 
-    let missing_remove_request = Request::builder()
+    let missing_remove_request = authenticated_request()
         .method("DELETE")
         .uri(format!("/bots/{}/channels/{channel_id}", bot.id))
         .body(Body::empty())
@@ -682,7 +687,7 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
 
     let bot_principal_id = bot.id.into_storage_id().to_string();
     let router = real_router(pool.clone(), ADMIN_USER_ID);
-    let add_request = Request::builder()
+    let add_request = authenticated_request()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots"))
         .header("content-type", "application/json")
@@ -711,7 +716,7 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
     assert_eq!(role, "member");
     assert!(left_at.is_none());
 
-    let remove_request = Request::builder()
+    let remove_request = authenticated_request()
         .method("DELETE")
         .uri(format!("/channels/{channel_id}/bots/{}", bot.id))
         .body(Body::empty())
