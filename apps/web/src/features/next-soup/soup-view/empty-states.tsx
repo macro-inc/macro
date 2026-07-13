@@ -2,7 +2,6 @@ import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import { runCreateAction } from '@app/features/command/Launcher';
 import type { BlockAlias, BlockName } from '@core/block';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
 import EmptyStateAutomationsGraphic from '@design/empty-state-automations.svg';
@@ -18,9 +17,8 @@ import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
-import { type Component, type JSXElement, Match, Show, Switch } from 'solid-js';
+import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
@@ -73,13 +71,6 @@ export function EmptyState(props: {
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();
-  const teamQuery = useCurrentTeamQuery();
-  const isTeamAdmin = useIsTeamAdmin();
-  const { openSettings } = useSettingsState();
-
-  // CRM is disabled by default per team; the companies list has a dedicated
-  // empty state that points admins to the toggle in Settings › CRM.
-  const crmEnabled = () => teamQuery.data?.crm_enabled ?? false;
 
   const onConnectEmail = () => {
     void startAddInbox();
@@ -238,34 +229,11 @@ export function EmptyState(props: {
       </Match>
 
       <Match when={props.listView === 'companies'}>
-        <Show
-          when={crmEnabled()}
-          fallback={
-            <EmptyStatePanel
-              graphic={EmptyStateCompaniesGraphic}
-              title="CRM is disabled"
-              description={
-                isTeamAdmin()
-                  ? 'Enable CRM in Settings > CRM to start tracking your customers.'
-                  : 'Team owners and admins can enable CRM in Settings > CRM.'
-              }
-              primaryAction={
-                isTeamAdmin()
-                  ? {
-                      label: 'Open CRM settings',
-                      onClick: () => openSettings('CRM'),
-                    }
-                  : undefined
-              }
-            />
-          }
-        >
-          <EmptyStatePanel
-            graphic={EmptyStateCompaniesGraphic}
-            title="No customers"
-            description="Customers you add or sync into your CRM will appear here."
-          />
-        </Show>
+        <EmptyStatePanel
+          graphic={EmptyStateCompaniesGraphic}
+          title="No customers"
+          description="Customers you add or sync into your CRM will appear here."
+        />
       </Match>
 
       <Match
