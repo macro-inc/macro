@@ -59,13 +59,6 @@ POST /properties/definitions
 SQLX_OFFLINE=true cargo build
 ```
 
-```bash
-cargo run --features local_auth 
-```
-
-The `local_auth` feature will automatically inject a valid JWT token into the request header.
-To set the user_id you can set the `LOCAL_USER_ID` environment variable.
-
 ## API Documentation
 
 Once running, you can access the Swagger UI documentation at:
