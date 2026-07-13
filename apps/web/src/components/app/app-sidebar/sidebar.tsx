@@ -803,7 +803,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
           'justify-start gap-2 px-1.5 py-1'
         )}
-        label="Settings"
+        label={author()}
         fullWidth
         tooltipDisabled={!props.isSlim()}
         tooltipPlacement="right"
@@ -828,7 +828,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           )}
         </Show>
         <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
-          Settings
+          {author()}
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
