@@ -14,7 +14,8 @@ axum = [
   "dep:tracing",
 ]
 default = ["axum", "outbound"]
-outbound = ["dep:macro_auth", "dep:tracing"]
+internal-identity = ["axum"]
+outbound = ["dep:macro_auth"]
 
 [dependencies]
 axum = { workspace = true, optional = true }

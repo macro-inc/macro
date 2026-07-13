@@ -16,11 +16,17 @@ pub use domain::{
     models::{MacroAuthorizationError, ValidatedIdentity},
     ports::{JwtValidator, MacroAuthorizationService},
     service::MacroAuthorizationServiceImpl,
+    shared::SharedMacroAuthorizationService,
 };
+/// Marker for a user context authorized before extractor execution.
+#[cfg(all(feature = "axum", feature = "internal-identity"))]
+pub use inbound::PreauthorizedContext;
 /// Service-backed Axum authorization extractors and their rejection type.
 #[cfg(feature = "axum")]
 pub use inbound::{
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, OptionalMacroAuthorizationExtractor,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationRejectionKind,
+    OptionalMacroAuthorizationExtractor, OptionalSharedMacroAuthorizationExtractor,
+    SharedMacroAuthorizationExtractor,
 };
 /// JWT validator backed by the shared `macro_auth` implementation.
 #[cfg(feature = "outbound")]
