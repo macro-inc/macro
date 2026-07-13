@@ -12,5 +12,6 @@
  * Version 1.4 - Jun 2, 2026. Added persisted await placeholders for pending agent messages.
  * Version 2.0 - Jun 19, 2026. Added PullRequestMentionNode.
  * Version 2.1 - Jun 23, 2026. Added PasteNode
+ * Version 2.2 - Jul 13, 2026. Added optional adaptColors display hint to HtmlRenderNode.
  */
-export const MARKDOWN_VERSION_COUNTER = 2.1;
+export const MARKDOWN_VERSION_COUNTER = 2.2;
