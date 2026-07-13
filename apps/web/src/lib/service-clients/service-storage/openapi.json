@@ -19169,11 +19169,16 @@
       "SoupProperty": {
         "type": "object",
         "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
-        "required": ["definition"],
+        "required": ["id", "definition"],
         "properties": {
           "definition": {
             "$ref": "#/components/schemas/PropertyDefinition",
             "description": "The property definition"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Globally unique id of the assignment attaching this property to an entity."
           },
           "value": {
             "oneOf": [
