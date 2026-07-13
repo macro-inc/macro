@@ -7,8 +7,8 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 const BACKFILL_VERSION = 1;
-const PAGE_LIMIT = 100;
-const PAGE_DELAY_MS = 5_000;
+const PAGE_LIMIT = 250;
+const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
@@ -31,6 +31,7 @@ export const ALL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
     emailView: 'ALL',
     filters: {
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
     },
   },
 };
@@ -65,7 +66,24 @@ export type SoupBackfillCheckpoint = {
   pagesFetched: number;
   itemsFetched: number;
   completed: boolean;
+  /** Start of the pass currently being fetched. */
+  scanStartedAt: string | null;
+  /** Safe lower bound applied to updatedAt filters on the next pass. */
+  updatedSince: string | null;
+  /** Wall-clock time when the most recent pass reached its final page. */
+  completedAt: string | null;
 };
+
+type StoredSoupBackfillCheckpoint = Omit<
+  SoupBackfillCheckpoint,
+  'scanStartedAt' | 'updatedSince' | 'completedAt'
+> &
+  Partial<
+    Pick<
+      SoupBackfillCheckpoint,
+      'scanStartedAt' | 'updatedSince' | 'completedAt'
+    >
+  >;
 
 function checkpointKey(userId: string, checkpointId: string): string {
   const baseKey = `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}`;
@@ -82,13 +100,20 @@ function initialCheckpoint(userId: string): SoupBackfillCheckpoint {
     pagesFetched: 0,
     itemsFetched: 0,
     completed: false,
+    scanStartedAt: null,
+    updatedSince: null,
+    completedAt: null,
   };
+}
+
+function isOptionalTimestamp(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string';
 }
 
 function isCheckpoint(
   value: unknown,
   userId: string
-): value is SoupBackfillCheckpoint {
+): value is StoredSoupBackfillCheckpoint {
   if (!value || typeof value !== 'object') return false;
 
   const checkpoint = value as Partial<SoupBackfillCheckpoint>;
@@ -98,7 +123,10 @@ function isCheckpoint(
       checkpoint.nextCursor === null) &&
     typeof checkpoint.pagesFetched === 'number' &&
     typeof checkpoint.itemsFetched === 'number' &&
-    typeof checkpoint.completed === 'boolean'
+    typeof checkpoint.completed === 'boolean' &&
+    isOptionalTimestamp(checkpoint.scanStartedAt) &&
+    isOptionalTimestamp(checkpoint.updatedSince) &&
+    isOptionalTimestamp(checkpoint.completedAt)
   );
 }
 
@@ -111,7 +139,14 @@ export function loadSoupBackfillCheckpoint(
     if (!saved) return initialCheckpoint(userId);
 
     const parsed: unknown = JSON.parse(saved);
-    return isCheckpoint(parsed, userId) ? parsed : initialCheckpoint(userId);
+    if (!isCheckpoint(parsed, userId)) return initialCheckpoint(userId);
+
+    return {
+      ...parsed,
+      scanStartedAt: parsed.scanStartedAt ?? null,
+      updatedSince: parsed.updatedSince ?? null,
+      completedAt: parsed.completedAt ?? null,
+    };
   } catch {
     // Restarting from the beginning is safe when storage is unavailable or
     // the saved checkpoint is malformed.
@@ -171,6 +206,52 @@ function backfillRetryDelay(attempt: number): number {
   return Math.min(exponentialDelay, MAX_RETRY_DELAY_MS);
 }
 
+function and<T>(left: T | null | undefined, right: T): T {
+  return left ? ({ and: { left, right } } as T) : right;
+}
+
+/**
+ * Restricts entity types that expose an updatedAt filter while preserving any
+ * caller-provided filters. Other entity types continue to be fetched normally.
+ */
+export function withUpdatedSince(
+  input: Omit<GraphqlSoupInput, 'cursor'>,
+  updatedSince: string | null
+): Omit<GraphqlSoupInput, 'cursor'> {
+  if (!updatedSince) return input;
+
+  const filters = input.filters ?? {};
+  const documentUpdatedAt = {
+    literal: { updatedAt: { gte: updatedSince } },
+  };
+
+  const projectUpdatedAt = {
+    literal: { updatedAt: { gte: updatedSince } },
+  };
+
+  const chatUpdatedAt = {
+    literal: { updatedAt: { gte: updatedSince } },
+  };
+
+  const emailUpdatedAt = {
+    literal: { updatedAt: { gte: updatedSince } },
+  };
+
+  return {
+    ...input,
+    filters: {
+      ...filters,
+      documentFilter: and(filters.documentFilter, documentUpdatedAt),
+      projectFilter: and(filters.projectFilter, projectUpdatedAt),
+      chatFilter: and(filters.chatFilter, chatUpdatedAt),
+      emailFilter: {
+        ...(filters.emailFilter ?? {}),
+        tree: and(filters.emailFilter?.tree, emailUpdatedAt),
+      },
+    },
+  };
+}
+
 export async function runSoupBackfill(
   userId: string,
   params: SoupBackfillParams,
@@ -178,12 +259,22 @@ export async function runSoupBackfill(
 ): Promise<SoupBackfillCheckpoint> {
   let checkpoint = loadSoupBackfillCheckpoint(userId, params.checkpointId);
 
-  if (checkpoint.completed) return checkpoint;
+  if (checkpoint.completed || checkpoint.scanStartedAt === null) {
+    checkpoint = {
+      ...checkpoint,
+      nextCursor: checkpoint.completed ? null : checkpoint.nextCursor,
+      completed: false,
+      scanStartedAt: new Date().toISOString(),
+    };
+    saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+  }
+
+  const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
 
   while (!signal.aborted) {
     const page = await fetchGraphqlSoup(
       {
-        ...params.input,
+        ...passInput,
         cursor: checkpoint.nextCursor ?? undefined,
       },
       {
@@ -194,12 +285,22 @@ export async function runSoupBackfill(
       }
     );
 
+    const completed = page.next_cursor == null;
     checkpoint = {
       ...checkpoint,
       nextCursor: page.next_cursor ?? null,
       pagesFetched: checkpoint.pagesFetched + 1,
       itemsFetched: checkpoint.itemsFetched + page.items.length,
-      completed: page.next_cursor == null,
+      completed,
+      ...(completed
+        ? {
+            // Use the pass start rather than its completion time so updates
+            // made while this pass was running are included next time.
+            updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
+            completedAt: new Date().toISOString(),
+            scanStartedAt: null,
+          }
+        : {}),
     };
     saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
 
@@ -233,13 +334,14 @@ export function useSoupBackfill(
       ] as const,
       enabled: currentUserId !== undefined && graphqlCacheEnabled(),
       queryFn: ({ signal }: { signal: AbortSignal }) => {
-        console.log(currentUserId);
         return runSoupBackfill(currentUserId!, currentParams, signal);
       },
       networkMode: 'online' as const,
       retry: 5,
       retryDelay: backfillRetryDelay,
-      staleTime: Infinity,
+      // A later mount starts another pass using the persisted updatedSince.
+      staleTime: 0,
+      refetchOnWindowFocus: false,
     };
   });
 }
