@@ -15,7 +15,6 @@
 //! `groq/llama-3.3-70b`); routing picks the provider from the segment, never by
 //! sniffing the id. Unroutable ids fall back to the default model.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -362,13 +361,16 @@ impl ModelRouter {
         self.route(model).unwrap_or_else(|_| self.default_model())
     }
 
-    /// The default model: native Anthropic serving [`AgentModel::default`].
+    /// The fallback model: native Anthropic serving [`PredefinedModel::Smart`].
+    ///
+    /// Built via `From<PredefinedModel>` so the bound [`Model`] carries the
+    /// bare api id — `PredefinedModel`'s `Display` is the provider-qualified
+    /// routing id, which the Anthropic API rejects as a model name.
     fn default_model(&self) -> RoutedModel<'static> {
-        let model = Model {
-            provider: Cow::Borrowed(ANTHROPIC_PROVIDER),
-            name: Cow::Owned(PredefinedModel::default().to_string()),
-        };
-        RoutedModel::Anthropic(AnthropicModel::new(model, self.anthropic.clone()))
+        RoutedModel::Anthropic(AnthropicModel::new(
+            PredefinedModel::Smart.into(),
+            self.anthropic.clone(),
+        ))
     }
 }
 
