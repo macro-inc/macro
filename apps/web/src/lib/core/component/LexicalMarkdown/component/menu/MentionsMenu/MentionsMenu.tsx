@@ -126,7 +126,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     : undefined;
 
   const customCompanies =
-    ENABLE_CRM && props.entities
+    ENABLE_CRM() && props.entities
       ? useEntityMentionFromList({
           items: props.entities,
           buckets: ['crm_company'],
@@ -150,7 +150,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   // CRM companies only surface in mentions when the feature is enabled —
   // the mention hook isn't even wired up otherwise.
-  const companyMention = ENABLE_CRM
+  const companyMention = ENABLE_CRM()
     ? (customCompanies ??
       useEntityMention({
         buckets: ['crm_company'],
