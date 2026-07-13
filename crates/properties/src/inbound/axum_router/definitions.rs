@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use models_properties::EntityType;
 use models_properties::api::CreatePropertyDefinitionRequest;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -101,10 +101,10 @@ pub enum PropertyDefinitionResponse {
 pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     Query(query): Query<ListPropertiesQuery>,
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    SharedMacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: SharedMacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
     let callers_team = team.entity_access_receipt.as_ref();
@@ -199,10 +199,10 @@ impl IntoResponse for CreatePropertyDefinitionErr {
 #[tracing::instrument(skip(state, user, team), err)]
 pub async fn create_property_definition<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    SharedMacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: SharedMacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
@@ -262,10 +262,10 @@ impl IntoResponse for DeletePropertyDefinitionError {
 pub async fn delete_property_definition<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    SharedMacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: SharedMacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
     tracing::info!("deleting property definition");
