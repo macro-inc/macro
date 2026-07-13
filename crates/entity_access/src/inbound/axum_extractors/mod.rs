@@ -15,6 +15,9 @@ mod project;
 mod team;
 mod thread;
 
+#[cfg(test)]
+mod test;
+
 pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
@@ -30,6 +33,7 @@ pub use thread::ThreadAccessLevelExtractor;
 use crate::domain::models::{AccessError, AccessLevel};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use macro_authorization::MacroAuthorizationRejection;
 use model_error_response::ErrorResponse;
 
 pub use crate::domain::models::RequiredPermission;
@@ -46,6 +50,10 @@ pub struct InternalUser {
 /// Error type for access extractors that can be returned as HTTP responses.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractorError {
+    /// Request credentials could not authorize a user.
+    #[error(transparent)]
+    Credential(#[from] MacroAuthorizationRejection),
+
     /// User does not have access to the requested resource.
     #[error("User does not have access to the requested resource")]
     Unauthorized,
@@ -88,16 +96,22 @@ impl From<AccessError> for ExtractorError {
 
 impl IntoResponse for ExtractorError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            ExtractorError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
+        let error = match self {
+            ExtractorError::Credential(error) => return error.into_response(),
+            error => error,
+        };
+
+        let (status, message) = match &error {
+            ExtractorError::Unauthorized => (StatusCode::UNAUTHORIZED, error.to_string()),
             ExtractorError::UnauthorizedWithMessage(_) => {
-                (StatusCode::UNAUTHORIZED, self.to_string())
+                (StatusCode::UNAUTHORIZED, error.to_string())
             }
-            ExtractorError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ExtractorError::NotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
+            ExtractorError::BadRequest(_) => (StatusCode::BAD_REQUEST, error.to_string()),
+            ExtractorError::NotFound(_) => (StatusCode::NOT_FOUND, error.to_string()),
             ExtractorError::Internal | ExtractorError::Database => {
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+                (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
             }
+            ExtractorError::Credential(_) => unreachable!("credential errors return above"),
         };
 
         let error_response = ErrorResponse {

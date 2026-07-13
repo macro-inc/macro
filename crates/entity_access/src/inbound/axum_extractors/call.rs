@@ -11,6 +11,9 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{
+    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+};
 use uuid::Uuid;
 
 use super::{ExtractorError, InternalUser};
@@ -21,7 +24,6 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 #[derive(Debug, serde::Deserialize)]
 struct CallAccessParams {
@@ -56,6 +58,7 @@ impl<T, S, Svc> FromRequestParts<S> for CallAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -65,10 +68,9 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Internal)?;
+        let OptionalSharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let Path(CallAccessParams { call_id }) = parts
             .extract::<Path<CallAccessParams>>()
@@ -165,6 +167,7 @@ impl<T, S, Svc> FromRequestParts<S> for CallWithChannelIdAccessLevelExtractor<T,
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -174,14 +177,13 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor {
+        let OptionalSharedMacroAuthorizationExtractor {
             macro_user_id,
             user_context,
             ..
         } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let Path(CallWithChannelIdAccessParams { channel_id }) = parts
             .extract::<Path<CallWithChannelIdAccessParams>>()
