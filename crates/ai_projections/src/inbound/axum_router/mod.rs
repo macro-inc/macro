@@ -10,10 +10,12 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
+    extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };
+use macro_authorization::SharedMacroAuthorizationService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -21,10 +23,12 @@ use crate::domain::{
     model::{AiProjectionError, UpsertProjectionError},
 };
 
-/// Router state containing the ai projection service.
+/// Router state containing the ai projection and authorization services.
 pub struct AiProjectionRouterState<T> {
     /// The ai projection service implementation.
     pub service: Arc<T>,
+    /// The authorization service.
+    pub auth: SharedMacroAuthorizationService,
 }
 
 // Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
@@ -32,7 +36,14 @@ impl<T> Clone for AiProjectionRouterState<T> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            auth: self.auth.clone(),
         }
+    }
+}
+
+impl<T> FromRef<AiProjectionRouterState<T>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &AiProjectionRouterState<T>) -> Self {
+        state.auth.clone()
     }
 }
 
