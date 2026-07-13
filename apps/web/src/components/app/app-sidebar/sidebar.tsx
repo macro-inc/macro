@@ -54,7 +54,7 @@ import {
   getSettingsTabItem,
   useSettingsTabAvailable,
 } from '@core/constant/settingsTabsConfig';
-import { useAuthor, useEmail, useUserId } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -81,6 +81,7 @@ import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { authServiceClient } from '@service-auth/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
@@ -91,6 +92,7 @@ import {
   type ComponentProps,
   createEffect,
   createMemo,
+  createResource,
   createSignal,
   For,
   type JSX,
@@ -787,9 +789,22 @@ type SidebarSettingsWidgetProps = {
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
-  const author = useAuthor();
   const email = useEmail();
   const logout = useLogout();
+
+  const [userName] = createResource(async () => {
+    const response = await authServiceClient.getUserName();
+    return response.isOk() ? response.value : null;
+  });
+
+  // Prefer the user's real name (first/last); fall back to their email.
+  const displayName = createMemo(() => {
+    const name = userName();
+    const parts = [name?.first_name, name?.last_name]
+      .map((part) => part?.trim())
+      .filter((part): part is string => Boolean(part) && part !== 'N/A');
+    return parts.length > 0 ? parts.join(' ') : (email() ?? 'Macro User');
+  });
 
   return (
     <Dropdown
@@ -803,7 +818,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
           'justify-start gap-2 px-1.5 py-1'
         )}
-        label={author()}
+        label={displayName()}
         fullWidth
         tooltipDisabled={!props.isSlim()}
         tooltipPlacement="right"
@@ -828,7 +843,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           )}
         </Show>
         <span class="flex-1 min-w-0 text-left whitespace-nowrap text-sm truncate group-data-[slim=true]/sidebar:hidden">
-          {author()}
+          {displayName()}
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
@@ -852,7 +867,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             </Show>
             <div class="min-w-0">
               <div class="truncate text-sm font-semibold text-ink">
-                {author()}
+                {displayName()}
               </div>
               <div class="truncate text-sm text-ink-muted">{email()}</div>
             </div>
