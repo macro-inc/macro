@@ -1,4 +1,3 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
 import {
   type PropertyFilter,
   type Query,
@@ -42,9 +41,10 @@ export function buildTaggedItemsSplitContent(
 ): SplitContent {
   return {
     type: 'component',
-    id: LIST_VIEW_ID.search,
+    id: 'tag',
+    preserveParams: true,
     params: {
-      initialFilters: buildTaggedItemsQuery(tag),
+      tagOptionId: tag.optionId,
     },
   };
 }
@@ -57,6 +57,6 @@ export function buildTaggedItemsSplitOptions(
     activate: true,
     allowDuplicate: true,
     preferNewSplit: true,
-    referredFrom: LIST_VIEW_ID.search,
+    referredFrom: null,
   };
 }

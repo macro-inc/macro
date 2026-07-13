@@ -6,6 +6,7 @@ import {
   type SplitContent,
   SplitEvent,
 } from '../layoutManager';
+import { decodePairs } from '../layoutUtils';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -48,6 +49,50 @@ function createMockOrchestrator(): BlockOrchestrator {
 }
 
 describe('layoutManager', () => {
+  describe('url routing', () => {
+    it('decodes tag urls into a tag component with preserved params', () => {
+      expect(decodePairs(['tag', 'tag-option-1'])).toEqual([
+        {
+          type: 'component',
+          id: 'tag',
+          preserveParams: true,
+          params: { tagOptionId: 'tag-option-1' },
+        },
+      ]);
+    });
+
+    it('encodes tag component params into tag urls', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          {
+            type: 'component',
+            id: 'tag',
+            preserveParams: true,
+            params: { tagOptionId: 'tag-option-1' },
+          },
+        ]);
+
+        expect(manager.getUrlSegments()).toEqual(['tag', 'tag-option-1']);
+        expect(manager.getUrl()).toBe('tag/tag-option-1');
+
+        dispose();
+      });
+    });
+
+    it('falls back to component urls when a tag split has no selected tag', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'tag' },
+        ]);
+
+        expect(manager.getUrlSegments()).toEqual(['component', 'tag']);
+        expect(manager.getUrl()).toBe('component/tag');
+
+        dispose();
+      });
+    });
+  });
+
   describe('reconciler', () => {
     it('should reconcile between current state and url changes', () => {
       createRoot((dispose) => {
