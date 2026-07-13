@@ -1,18 +1,23 @@
 use crate::domain::{
-    models::{EmailErr, Link, UpdateThreadLabelsResult, label::system_labels},
+    events::{
+        EmailEventOrigin, EmailMacroEvent, LabelRef, MessageSendCancelledMetadata, SendCancelReason,
+    },
+    models::{EmailErr, Link, LinkLabel, UpdateThreadLabelsResult, label::system_labels},
     ports::{EmailMessageEnqueuer, EmailRepo},
 };
 use frecency::domain::ports::FrecencyQueryService;
+use macro_event_broker::MacroEventBroker;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
+impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
     CS: crm::domain::service::CrmService,
+    B: MacroEventBroker,
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
@@ -88,6 +93,7 @@ where
         }
 
         // When trashing a thread, cancel any pending scheduled sends for drafts
+        let mut cancelled_send_ids: Vec<Uuid> = Vec::new();
         if add && provider_label_id == system_labels::TRASH {
             let draft_message_ids: Vec<_> = messages
                 .iter()
@@ -95,16 +101,26 @@ where
                 .map(|m| m.db_id)
                 .collect();
 
-            if !draft_message_ids.is_empty()
-                && let Err(e) = self
+            if !draft_message_ids.is_empty() {
+                match self
                     .email_repo
                     .delete_scheduled_messages_batch(&draft_message_ids, link.id)
                     .await
-            {
-                let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
+                {
+                    Ok(deleted) => cancelled_send_ids = deleted,
+                    Err(e) => {
+                        let err = anyhow::Error::from(e);
+                        tracing::error!(error=?err, "failed to cancel scheduled sends for trashed drafts");
+                    }
+                }
             }
         }
+
+        // Publish semantic macro.email events now that the optimistic DB
+        // writes are committed. The provider echo of this change finds no
+        // label diff during inbox sync, so each change publishes only once.
+        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids)
+            .await;
 
         // Enqueue Gmail API calls via the gmail_ops worker (provider messages only)
         let provider_messages: Vec<(Uuid, String)> = messages
@@ -139,5 +155,51 @@ where
             successful_ids: all_ids,
             failed_ids: vec![],
         })
+    }
+
+    /// Map a user-initiated thread label change onto the semantic
+    /// macro.email event for that label (see
+    /// [`EmailMacroEvent::thread_label_change`]). Scheduled sends cancelled
+    /// by trashing publish `message_send_cancelled`. Actor is not tracked on
+    /// this path — the inbox owner is on `link`.
+    async fn publish_thread_label_events(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        label: &LinkLabel,
+        add: bool,
+        cancelled_send_ids: &[Uuid],
+    ) {
+        let event = EmailMacroEvent::thread_label_change(
+            link.id,
+            link.macro_id.clone(),
+            None,
+            thread_id,
+            LabelRef {
+                label_id: Some(label.id),
+                provider_label_id: label.provider_label_id.clone(),
+                name: Some(label.name.clone()),
+            },
+            add,
+            EmailEventOrigin::UserAction,
+        );
+
+        if let Some(event) = event {
+            self.publish_email_event(&event).await;
+        }
+
+        for message_id in cancelled_send_ids {
+            self.publish_email_event(&EmailMacroEvent::message_send_cancelled(
+                MessageSendCancelledMetadata {
+                    link_id: link.id,
+                    owner: link.macro_id.clone(),
+                    actor: None,
+                    message_id: *message_id,
+                    thread_id,
+                    reason: SendCancelReason::ThreadTrashed,
+                },
+            ))
+            .await;
+        }
     }
 }

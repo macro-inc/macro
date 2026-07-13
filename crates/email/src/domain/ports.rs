@@ -261,11 +261,12 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<LinkLabel>, Self::Err>> + Send;
 
     /// Delete unsent scheduled messages for a batch of draft message IDs.
+    /// Returns the message ids that actually had a pending scheduled send.
     fn delete_scheduled_messages_batch(
         &self,
         message_ids: &[Uuid],
         link_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Update the project assignment for a thread. Pass `None` to remove from project.
     /// Returns `false` if the thread was not found.

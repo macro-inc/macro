@@ -4,7 +4,10 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadArchivedMetadata};
 use email_db_client::threads::update::update_inbox_visible_status;
+use email_service::pubsub::publish_email_event;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::service::label::system_labels;
@@ -170,6 +173,19 @@ pub async fn archived_handler(
             return Err(ArchiveThreadError::DatabaseError(e));
         }
     }
+
+    publish_email_event(
+        ctx.macro_event_broker.as_ref(),
+        &EmailMacroEvent::thread_archived(ThreadArchivedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: MacroUserIdStr::try_from(user_context.user_id.clone()).ok(),
+            thread_id,
+            archived: is_archiving,
+            origin: EmailEventOrigin::UserAction,
+        }),
+    )
+    .await;
 
     // Enqueue one gmail_ops message per provider message
     let (labels_to_add, labels_to_remove) = if is_archiving {

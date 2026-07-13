@@ -293,7 +293,7 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-        macro_event_broker,
+        macro_event_broker.clone(),
     );
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -351,16 +351,19 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized properties tool context");
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
-            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-            sqs_client.clone(),
-            crm_service.clone(),
-            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                entity_access_management::outbound::PgRepository::new(db.clone()),
-            ),
-            0,
-        )),
+        Arc::new(
+            EmailServiceImpl::new(
+                EmailPgRepo::new(db.clone()),
+                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+                sqs_client.clone(),
+                crm_service.clone(),
+                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                    entity_access_management::outbound::PgRepository::new(db.clone()),
+                ),
+                0,
+            )
+            .with_macro_event_broker(macro_event_broker.clone()),
+        ),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),

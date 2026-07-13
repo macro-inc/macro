@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_scheduled_messages\n        WHERE message_id = ANY($1) AND link_id = $2 AND sent = false\n        RETURNING message_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c68f45e8a939d63144008a9254f03bf5198710a57c1a8bad4901f61c27cb5f6f"
+}

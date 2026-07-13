@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
+impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
     U: FrecencyQueryService,

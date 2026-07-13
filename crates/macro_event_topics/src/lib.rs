@@ -53,4 +53,6 @@ topics! {
     MacroDocumentsTopic => "macro.documents",
     /// Channel lifecycle, message, participant, and attachment events.
     MacroChannelsTopic => "macro.channels",
+    /// Email lifecycle events (links, messages, threads, labels).
+    MacroEmailTopic => "macro.email",
 }

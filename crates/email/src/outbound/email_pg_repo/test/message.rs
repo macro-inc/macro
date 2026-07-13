@@ -709,3 +709,55 @@ async fn test_upsert_recipients_empty_deletes_all(pool: Pool<Postgres>) -> anyho
 
     Ok(())
 }
+
+// ── delete_scheduled_messages_batch ─────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn test_delete_scheduled_messages_batch_returns_only_pending(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    // msg3 has a pending scheduled send; msg2's scheduled send already went
+    // out; msg1 was never scheduled.
+    let pending = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let already_sent = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let unscheduled = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+
+    let deleted = repo
+        .delete_scheduled_messages_batch(&[pending, already_sent, unscheduled], link_id)
+        .await?;
+    assert_eq!(
+        deleted,
+        vec![pending],
+        "only the message with a pending scheduled send is reported"
+    );
+
+    let deleted = repo
+        .delete_scheduled_messages_batch(&[pending, already_sent, unscheduled], link_id)
+        .await?;
+    assert!(deleted.is_empty(), "second delete finds nothing pending");
+
+    let sent_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM email_scheduled_messages WHERE sent = true")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(sent_rows, 1, "already-sent scheduled rows are untouched");
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delete_scheduled_messages_batch_empty_input(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let deleted = repo
+        .delete_scheduled_messages_batch(&[], Uuid::new_v4())
+        .await?;
+    assert!(deleted.is_empty());
+    Ok(())
+}

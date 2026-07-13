@@ -7,6 +7,7 @@ use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -27,6 +28,7 @@ pub async fn run_worker(
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     crm_service: CrmServiceType,
+    macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
     notifications_enabled: bool,
 ) {
     let ctx = PubSubContext {
@@ -43,6 +45,7 @@ pub async fn run_worker(
         dss_client,
         system_properties_service,
         crm_service,
+        macro_event_broker,
         notifications_enabled,
         retry_worker: false,
     };

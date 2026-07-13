@@ -7,9 +7,11 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::events::{EmailMacroEvent, LinkConnectedMetadata};
 use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
+use email_service::pubsub::publish_email_event;
 use email_utils::token_cache_key::TokenCacheKey;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -658,6 +660,21 @@ async fn init_user(
         tracing::error!(error=?e, link_id=?link.id, "Failed to insert email link history");
     })
     .ok();
+
+    // Same gate as the history row above: only a genuinely new connection
+    // reaches here, so re-inits and concurrent duplicates don't re-publish.
+    publish_email_event(
+        ctx.macro_event_broker.as_ref(),
+        &EmailMacroEvent::link_connected(LinkConnectedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            email_address: link.email_address.0.as_ref().to_string(),
+            provider: link.provider.as_str().to_string(),
+            is_primary: link.is_primary,
+            connected_at: link.created_at,
+        }),
+    )
+    .await;
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {

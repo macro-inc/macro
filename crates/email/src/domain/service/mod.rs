@@ -6,6 +6,7 @@ mod thread;
 mod thread_labels;
 
 use crate::domain::{
+    events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
         GetEmailsRequest, Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
@@ -19,17 +20,19 @@ use entity_access::domain::models::{
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use frecency::domain::ports::FrecencyQueryService;
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use model_entity::EntityType;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct EmailServiceImpl<T, U, E, CS, Eam> {
+pub struct EmailServiceImpl<T, U, E, CS, Eam, B = NoopMacroEventBroker> {
     pub(crate) email_repo: T,
     pub(crate) frecency_service: U,
     pub(crate) enqueuer: E,
     pub(crate) crm_service: CS,
     pub(crate) entity_access_management_service: Eam,
+    pub(crate) macro_event_broker: B,
     pub(crate) sent_undo_delay_secs: u32,
 }
 
@@ -55,12 +58,45 @@ where
             enqueuer,
             crm_service,
             entity_access_management_service,
+            macro_event_broker: NoopMacroEventBroker,
             sent_undo_delay_secs,
         }
     }
 }
 
-impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam> {
+impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
+    /// Replace the event broker used to publish `macro.email` events.
+    /// [`new`](Self::new) starts with a [`NoopMacroEventBroker`].
+    pub fn with_macro_event_broker<B2: MacroEventBroker>(
+        self,
+        macro_event_broker: B2,
+    ) -> EmailServiceImpl<T, U, E, CS, Eam, B2> {
+        EmailServiceImpl {
+            email_repo: self.email_repo,
+            frecency_service: self.frecency_service,
+            enqueuer: self.enqueuer,
+            crm_service: self.crm_service,
+            entity_access_management_service: self.entity_access_management_service,
+            macro_event_broker,
+            sent_undo_delay_secs: self.sent_undo_delay_secs,
+        }
+    }
+
+    /// Publish an email event to the `macro.email` topic, logging and
+    /// dropping failures — event emission must never fail the operation.
+    pub(crate) async fn publish_email_event(&self, event: &EmailMacroEvent)
+    where
+        B: MacroEventBroker,
+    {
+        let _ = self
+            .macro_event_broker
+            .send_event(event)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+    }
+}
+
+impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
     /// Validate and normalize email filter input.
     fn validate_email_filter_input(
         input: UpsertEmailFilterInput,
@@ -120,13 +156,14 @@ impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam> {
     }
 }
 
-impl<T, U, E, CS, Eam> EmailService for EmailServiceImpl<T, U, E, CS, Eam>
+impl<T, U, E, CS, Eam, B> EmailService for EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
     CS: CrmService,
     Eam: EntityAccessManagementService,
+    B: MacroEventBroker,
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
@@ -298,6 +335,46 @@ where
                     .inspect_err(
                         |e| tracing::error!(error=?e, project_id=%new, "unable to add thread project access"),
                     );
+            }
+
+            // Best-effort: emit only when the acting user and the thread's
+            // link both resolve (the receipt is authenticated on this route).
+            match thread_receipt.get_authenticated_user() {
+                Ok(actor) => match self
+                    .email_repo
+                    .owned_link_for_thread(thread_id, actor.clone())
+                    .await
+                {
+                    Ok(Some(link)) => {
+                        self.publish_email_event(&EmailMacroEvent::thread_project_changed(
+                            ThreadProjectChangedMetadata {
+                                link_id: link.id,
+                                owner: link.macro_id.clone(),
+                                actor: actor.clone(),
+                                thread_id,
+                                previous_project_id: old_project_id.clone(),
+                                project_id: project_id.map(|p| p.to_string()),
+                            },
+                        ))
+                        .await;
+                    }
+                    Ok(None) => tracing::warn!(
+                        %thread_id,
+                        "skipping thread_project_changed event: no owned link resolved for actor"
+                    ),
+                    Err(e) => {
+                        let e = anyhow::Error::from(e);
+                        tracing::warn!(
+                            error=?e,
+                            %thread_id,
+                            "skipping thread_project_changed event: link lookup failed"
+                        );
+                    }
+                },
+                Err(_) => tracing::debug!(
+                    %thread_id,
+                    "skipping thread_project_changed event: receipt has no authenticated user"
+                ),
             }
         }
 

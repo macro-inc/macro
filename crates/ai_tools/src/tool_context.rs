@@ -70,13 +70,16 @@ pub type ToolEmailService = EmailServiceImpl<
     ToolEamService,
 >;
 
-/// Type alias for the send-capable email service implementation used by user tools.
+/// Type alias for the send-capable email service implementation used by user
+/// tools. Carries the real event broker: these tools mutate email state, and
+/// the Gmail-echo suppression means events skipped here are never recovered.
 pub type ToolUserEmailService = EmailServiceImpl<
     EmailPgRepo,
     ToolFrecencyService,
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the channel list service implementation.

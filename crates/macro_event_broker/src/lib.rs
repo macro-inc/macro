@@ -14,7 +14,9 @@
 pub mod domain;
 
 pub use domain::models::{Event, EventBrokerError, MacroEvent, TopicEvent};
-pub use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroExampleTopic, Topic};
+pub use macro_event_topics::{
+    MacroChannelsTopic, MacroDocumentsTopic, MacroEmailTopic, MacroExampleTopic, Topic,
+};
 
 #[cfg(feature = "ports")]
 pub use domain::ports::{EventPublisher, MacroEventBroker};

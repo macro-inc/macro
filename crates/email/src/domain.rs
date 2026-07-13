@@ -1,3 +1,4 @@
+pub mod events;
 pub mod models;
 
 #[cfg(feature = "ports")]

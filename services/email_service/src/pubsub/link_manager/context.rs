@@ -3,6 +3,7 @@ use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use gmail_client::GmailClient;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use sqlx::PgPool;
 use sqs_client::SQS;
 use std::sync::Arc;
@@ -18,4 +19,5 @@ pub struct LinkManagerContext {
     pub crm_service: CrmServiceType,
     pub connection_gateway_client: ConnectionGatewayClient,
     pub notification_ingress_service: Arc<NotificationIngressType>,
+    pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
 }

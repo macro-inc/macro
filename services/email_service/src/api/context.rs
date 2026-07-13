@@ -15,6 +15,7 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_middleware::auth::internal_access::InternalApiKey;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ pub(crate) type EmailSvc = EmailServiceImpl<
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     >,
     EmailEntityAccessManagementService,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
 #[derive(Clone, FromRef)]
@@ -52,4 +54,5 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EmailEntityAccessService>,
     pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
+    pub macro_event_broker: Arc<MacroEventBrokerService<KafkaEventPublisher>>,
 }

@@ -38,7 +38,7 @@ gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "dep:email_db_client", "ports"]
-ports = ["crm/ports", "dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency/ports", "macro_event_broker/ports"]
 
 [dependencies]
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -64,6 +64,8 @@ item_filters = { path = "../item_filters" }
 lol_html = { workspace = true }
 scraper = { workspace = true }
 email_db_client = { path = "../email_db_client", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
@@ -91,6 +93,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, features = [
+  "ports",
+] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

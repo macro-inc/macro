@@ -2,7 +2,13 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
-use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing_error};
+use crate::pubsub::util::{
+    cg_refresh_email, complete_transaction_with_processing_error, publish_email_event,
+};
+use email::domain::events::{
+    EmailEventOrigin, EmailMacroEvent, LabelRef, ThreadArchivedMetadata,
+    ThreadLabelsUpdatedMetadata, ThreadReadMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
+};
 use email_db_client::labels::delete::delete_db_message_labels;
 use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
@@ -153,6 +159,19 @@ pub async fn update_labels(
     }
 
     if has_label_changes {
+        // Publish semantic macro.email events before the fallible search
+        // notify: a notify failure retries the whole op, and on retry the
+        // label diff is empty so the events would be lost.
+        publish_label_diff_events(
+            ctx,
+            link,
+            db_message.thread_db_id,
+            &labels_to_add,
+            &labels_to_delete,
+            &db_message_labels,
+        )
+        .await;
+
         let is_spam_or_trash = gmail_message_labels.iter().any(|label| {
             label == service::label::system_labels::SPAM
                 || label == service::label::system_labels::TRASH
@@ -170,6 +189,161 @@ pub async fn update_labels(
     }
 
     Ok(())
+}
+
+/// System labels that never appear in a `thread_labels_updated` event:
+/// INBOX/TRASH/UNREAD/STARRED map to dedicated thread-state events, and
+/// SPAM/IMPORTANT/SENT/DRAFT changes are not published at all.
+const NON_USER_LABELS: [&str; 8] = [
+    service::label::system_labels::INBOX,
+    service::label::system_labels::SPAM,
+    service::label::system_labels::TRASH,
+    service::label::system_labels::UNREAD,
+    service::label::system_labels::STARRED,
+    service::label::system_labels::IMPORTANT,
+    service::label::system_labels::SENT,
+    service::label::system_labels::DRAFT,
+];
+
+/// Publish semantic macro.email events for a provider-side label diff, all
+/// with `origin = provider_sync`. Changes made through Macro update the DB
+/// optimistically, so by the time they echo back through Gmail history sync
+/// there is no diff and nothing is published here — user-initiated changes
+/// are published from their handlers, with `origin = user_action`.
+///
+/// The diff is per message, so a thread-wide provider change (e.g. Gmail
+/// marking a whole thread read) produces one event per affected message.
+/// For the read/archived states the payload carries the *thread row* state
+/// (recomputed by `update_thread_metadata` inside the label ops), so the
+/// repeated events are accurate and idempotent rather than message-inferred.
+async fn publish_label_diff_events(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    thread_db_id: Uuid,
+    labels_to_add: &[String],
+    labels_to_delete: &[String],
+    db_message_labels: &[models_email::db::label::Label],
+) {
+    let added = |label: &str| labels_to_add.iter().any(|l| l == label);
+    let removed = |label: &str| labels_to_delete.iter().any(|l| l == label);
+
+    let needs_thread_state = added(service::label::system_labels::INBOX)
+        || removed(service::label::system_labels::INBOX)
+        || added(service::label::system_labels::UNREAD)
+        || removed(service::label::system_labels::UNREAD);
+    let thread_row = if needs_thread_state {
+        email_db_client::threads::get::get_thread_by_id_and_link_id(&ctx.db, thread_db_id, link.id)
+            .await
+            .inspect_err(
+                |e| tracing::warn!(error=?e, thread_id=%thread_db_id, "failed to fetch thread row for macro.email event state"),
+            )
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
+
+    let mut events: Vec<EmailMacroEvent> = Vec::new();
+
+    if added(service::label::system_labels::INBOX) || removed(service::label::system_labels::INBOX)
+    {
+        events.push(EmailMacroEvent::thread_archived(ThreadArchivedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            archived: thread_row
+                .as_ref()
+                .map(|t| !t.inbox_visible)
+                .unwrap_or_else(|| removed(service::label::system_labels::INBOX)),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    if added(service::label::system_labels::TRASH) || removed(service::label::system_labels::TRASH)
+    {
+        events.push(EmailMacroEvent::thread_trashed(ThreadTrashedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            trashed: added(service::label::system_labels::TRASH),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    if added(service::label::system_labels::UNREAD)
+        || removed(service::label::system_labels::UNREAD)
+    {
+        events.push(EmailMacroEvent::thread_read(ThreadReadMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            is_read: thread_row
+                .as_ref()
+                .map(|t| t.is_read)
+                .unwrap_or_else(|| removed(service::label::system_labels::UNREAD)),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    if added(service::label::system_labels::STARRED)
+        || removed(service::label::system_labels::STARRED)
+    {
+        events.push(EmailMacroEvent::thread_starred(ThreadStarredMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            starred: added(service::label::system_labels::STARRED),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    // Gmail category tabs (CATEGORY_PERSONAL/SOCIAL/...) are provider system
+    // labels, not user labels.
+    let is_user_label = |l: &str| !NON_USER_LABELS.contains(&l) && !l.starts_with("CATEGORY_");
+
+    let added_user: Vec<LabelRef> = labels_to_add
+        .iter()
+        .filter(|l| is_user_label(l.as_str()))
+        .map(|l| LabelRef {
+            label_id: None,
+            provider_label_id: l.clone(),
+            name: None,
+        })
+        .collect();
+    let removed_user: Vec<LabelRef> = db_message_labels
+        .iter()
+        .filter(|l| {
+            labels_to_delete.contains(&l.provider_label_id)
+                && is_user_label(l.provider_label_id.as_str())
+        })
+        .map(|l| LabelRef {
+            label_id: Some(l.id),
+            provider_label_id: l.provider_label_id.clone(),
+            name: Some(l.name.clone()),
+        })
+        .collect();
+
+    if !added_user.is_empty() || !removed_user.is_empty() {
+        events.push(EmailMacroEvent::thread_labels_updated(
+            ThreadLabelsUpdatedMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                actor: None,
+                thread_id: thread_db_id,
+                added: added_user,
+                removed: removed_user,
+                origin: EmailEventOrigin::ProviderSync,
+            },
+        ));
+    }
+
+    for event in &events {
+        publish_email_event(&ctx.macro_event_broker, event).await;
+    }
 }
 
 #[tracing::instrument(skip(db, link))]
