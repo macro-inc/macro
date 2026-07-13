@@ -8,7 +8,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { useUserContext } from '@core/context/user';
+import { useEmail, useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -35,6 +35,7 @@ import {
 } from 'solid-js';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
+import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
@@ -82,6 +83,7 @@ function EmailContent(props: EmailViewProps) {
   const context = useEmailContext();
   const splitPanel = useSplitPanel();
   const { isLoading: isUserLoading } = useUserContext();
+  const userEmail = useEmail();
 
   const [isScrolled, setIsScrolled] = createSignal(false);
 
@@ -684,6 +686,12 @@ function EmailContent(props: EmailViewProps) {
                   context.messages.unfiltered().find((m) => m.db_id === id),
                 getDraftForMessageReply: context.drafts.getDraftForMessage,
                 onRecipientsChange: context.onRecipientsChange,
+                isPersonalMessage: (message) =>
+                  isPersonalMessage(
+                    message,
+                    userEmail(),
+                    context.messages.personalSenders()
+                  ),
               }}
             >
               {/* Edge-to-edge on mobile: the message list carries its own

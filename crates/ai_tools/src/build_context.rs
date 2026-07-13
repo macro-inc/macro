@@ -244,6 +244,7 @@ pub async fn build_tool_service_context_from_env(
     let task_properties_service = crate::tool_context::build_task_properties_adapter(
         pool.clone(),
         properties_service.clone(),
+        entity_access_service.clone(),
     );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
@@ -263,7 +264,7 @@ pub async fn build_tool_service_context_from_env(
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
             pool.clone(),
         )),
-        macro_event_broker,
+        macro_event_broker: macro_event_broker.clone(),
     };
 
     let document_tool_context = DocumentToolContext::new(
@@ -275,20 +276,25 @@ pub async fn build_tool_service_context_from_env(
         env.document_permission_jwt.to_string(),
     );
 
-    let properties_tool_context =
-        crate::tool_context::build_properties_tool_context(properties_service);
+    let properties_tool_context = crate::tool_context::build_properties_tool_context(
+        properties_service,
+        entity_access_service.clone(),
+    );
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(EmailServiceImpl::new(
-            EmailPgRepo::new(pool.clone()),
-            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
-            sqs_client,
-            crm_service.clone(),
-            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                entity_access_management::outbound::PgRepository::new(pool.clone()),
-            ),
-            0,
-        )),
+        Arc::new(
+            EmailServiceImpl::new(
+                EmailPgRepo::new(pool.clone()),
+                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+                sqs_client,
+                crm_service.clone(),
+                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                    entity_access_management::outbound::PgRepository::new(pool.clone()),
+                ),
+                0,
+            )
+            .with_macro_event_broker(macro_event_broker.clone()),
+        ),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),

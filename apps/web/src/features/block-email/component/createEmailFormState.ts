@@ -47,6 +47,9 @@ export interface EmailFormStateOptions {
   getMessageByID: (id: string) => ApiMessage | undefined;
   getDraftForMessageReply: (id: string) => ApiMessage | undefined;
   onRecipientsChange?: (next: EmailRecipient[]) => void;
+  /** Whether a message is personal (see isPersonalMessage); drives
+   * theme-adapted rendering of quoted html in the composer */
+  isPersonalMessage?: (message: ApiMessage) => boolean;
 }
 
 type EmailFormState = {
@@ -268,6 +271,7 @@ export function createEmailFormState(
             replyingTo: replyingTo,
             replyType: rt,
             visible: true,
+            isPersonal: options?.isPersonalMessage?.(msg),
           });
         } else {
           pendingForwardAppend = true;
@@ -386,6 +390,9 @@ export function createEmailFormState(
             replyingTo,
             replyType: 'forward',
             visible: true,
+            isPersonal: replyingTo
+              ? options?.isPersonalMessage?.(replyingTo)
+              : undefined,
           });
         }, 0);
       }

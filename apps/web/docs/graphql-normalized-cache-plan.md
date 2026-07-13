@@ -42,8 +42,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
    async reads fine; imperative consumers get a Promise-based API.
 8. **Schema awareness** — `GraphqlSoupEntity` is a 9-variant union; the cache
    needs possible-types metadata and per-type key config (e.g.
-   `GraphqlSoupChannelMessage.messageId`, embedded non-keyable types like
-   `GraphqlSoupPropertyValue`). Schema lives in-repo
+   `GraphqlSoupChannelMessage.messageId`, embedded non-keyable types like the variants of
+   `GraphqlPropertyValue`). Schema lives in-repo
    (`static_assets/schema.graphql`) → embed metadata at build time, no
    runtime introspection.
 9. **External write API** — no GraphQL subscriptions exist; updates arrive
@@ -74,7 +74,7 @@ entire cache in browser memory. With 10s of thousands of cached objects
     An output object type with `id: ID!` is keyed by `__typename:id`; no
     `id` field → embedded. The SDL is the policy (schema authors must only
     name a field `id` when it is a global identity — hence
-    `GraphqlSoupProperty.propertyDefinitionId` and
+    `GraphqlProperty.propertyDefinitionId` and
     `GraphqlSoupChannelMessage.id`); the build fails on malformed shapes.
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.

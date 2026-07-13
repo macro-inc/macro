@@ -117,7 +117,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       models: {
         supervisor: resolveModel(models.supervisor),
         interpret: resolveModel(models.interpret),
-        coding: resolveModel(models.coding),
+        // Fresh fallback per coder — see ResolvedModels.coding.
+        coding: () => resolveModel(models.coding),
       },
       typingAnimations,
       sleep,

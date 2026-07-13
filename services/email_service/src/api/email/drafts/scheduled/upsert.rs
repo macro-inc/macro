@@ -3,6 +3,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email::domain::events::{EmailMacroEvent, MessageSendQueuedMetadata};
+use email_service::pubsub::publish_email_event;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::service::message::ScheduledMessage;
@@ -104,6 +106,35 @@ pub async fn handler(
     )
     .await?;
     tx.commit().await?;
+
+    // Best-effort event: resolve the draft's thread for the payload.
+    let thread_db_id = email_db_client::messages::get_simple_messages::get_simple_message(
+        &ctx.db,
+        &draft_id,
+        &link.fusionauth_user_id,
+    )
+    .await
+    .inspect_err(
+        |e| tracing::warn!(error=?e, %draft_id, "skipping message_send_queued event: draft lookup failed"),
+    )
+    .ok()
+    .flatten()
+    .map(|m| m.thread_db_id);
+    if let Some(thread_id) = thread_db_id {
+        publish_email_event(
+            ctx.macro_event_broker.as_ref(),
+            &EmailMacroEvent::message_send_queued(MessageSendQueuedMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                actor: Some(link.macro_id.clone()),
+                message_id: draft_id,
+                thread_id,
+                scheduled_send_at: request.send_time,
+                is_scheduled: true,
+            }),
+        )
+        .await;
+    }
 
     Ok(Json(UpsertScheduledResponse {
         message_id: draft_id,

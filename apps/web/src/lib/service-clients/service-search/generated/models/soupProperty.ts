@@ -16,5 +16,7 @@ omitting the entity property assignment metadata and options.
 export interface SoupProperty {
   /** The property definition */
   definition: PropertyDefinition;
+  /** Globally unique id of the assignment attaching this property to an entity. */
+  id: string;
   value?: SoupPropertyValue;
 }

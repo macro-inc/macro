@@ -116,6 +116,7 @@ macro_config = { path = "../../crates/macro_config" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
 mailparse = "0.16.1"
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }

@@ -13,6 +13,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::api::SetPropertyValue;
@@ -24,6 +25,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
+use super::extract::{mint_authenticated_receipt, mint_view_receipt};
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
@@ -253,10 +255,13 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
     // permission to view.
     let mut receipts = Vec::with_capacity(request.entities.len());
     for entity_ref in &request.entities {
-        match state
-            .properties_service
-            .mint_view_receipt(Some(&user), &entity_ref.entity_id, entity_ref.entity_type)
-            .await
+        match mint_view_receipt(
+            state.entity_access_service.as_ref(),
+            Some(&user),
+            &entity_ref.entity_id,
+            entity_ref.entity_type,
+        )
+        .await
         {
             Ok(receipt) => receipts.push(receipt),
             Err(e) => {
@@ -533,73 +538,18 @@ pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService
         .await?
         .ok_or(PropertiesErr::EntityPropertyNotFound)?;
 
-    let access = state
-        .properties_service
-        .mint_edit_receipt(&user, &property_info.entity_id, property_info.entity_type)
-        .await?;
+    let access = mint_authenticated_receipt::<EditAccessLevel, A>(
+        state.entity_access_service.as_ref(),
+        &user,
+        &property_info.entity_id,
+        property_info.entity_type,
+    )
+    .await?;
 
     state
         .properties_service
         .delete_entity_property(&access, entity_property_uuid)
         .await?;
 
-    Ok(StatusCode::NO_CONTENT)
-}
-
-#[derive(Debug, Error)]
-pub enum SetPropertyStatusCompleteErr {
-    #[error(transparent)]
-    Properties(#[from] PropertiesErr),
-}
-
-impl IntoResponse for SetPropertyStatusCompleteErr {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
-            SetPropertyStatusCompleteErr::Properties(e) => properties_err_status(e),
-        };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                error = ?self,
-                error_type = "SetPropertyStatusCompleteErr",
-                "Internal server error"
-            );
-        }
-
-        (status_code, self.to_string()).into_response()
-    }
-}
-
-/// Set an entity's status property to "Completed".
-///
-/// If the entity has a status property attached, it will be set to "Completed".
-/// If the entity does not have a status property, this is a no-op and returns success.
-#[utoipa::path(
-    patch,
-    path = "/properties/entities/{entity_type}/{entity_id}/status/complete",
-    params(
-        ("entity_type" = EntityType, Path, description = "Entity type (document, channel, project, thread, chat)"),
-        ("entity_id" = String, Path, description = "Entity ID")
-    ),
-    responses(
-        (status = 204, description = "Status set to complete"),
-        (status = 403, description = "Access denied"),
-        (status = 500, description = "Internal server error")
-    ),
-    tags = ["Properties"]
-)]
-#[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type()), err)]
-pub async fn set_property_status_complete<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    access: EditReceiptExtractor,
-) -> Result<StatusCode, SetPropertyStatusCompleteErr> {
-    tracing::info!("setting entity status to complete");
-
-    state
-        .properties_service
-        .set_system_property_status_complete(&access.0)
-        .await?;
-
-    tracing::debug!("status complete handled");
     Ok(StatusCode::NO_CONTENT)
 }

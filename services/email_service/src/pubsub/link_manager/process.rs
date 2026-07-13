@@ -1,5 +1,5 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
-use crate::pubsub::util::{build_notification_recipients, cg_refresh_email};
+use crate::pubsub::util::{build_notification_recipients, cg_refresh_email, publish_email_event};
 use crate::util::gmail::auth::{
     fetch_gmail_access_token_from_link, fetch_token_or_mark_reauth,
     fetch_token_or_mark_reauth_no_cache, is_forbidden_error, is_reauth_required_error,
@@ -7,6 +7,9 @@ use crate::util::gmail::auth::{
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
 use crm::domain::service::CrmService;
+use email::domain::events::{
+    EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata, LinkReauthRequiredMetadata,
+};
 use model_entity::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
 use models_email::api::refresh::RefreshEmailEvent;
@@ -234,6 +237,19 @@ async fn handle_notify_reauth_required(
         .await
         .map_err(|e| anyhow!("failed to send reauth notification: {e}"))?;
 
+    // This message is enqueued only on the false->true needs_reauth
+    // transition, so the event stays edge-triggered.
+    publish_email_event(
+        &ctx.macro_event_broker,
+        &EmailMacroEvent::link_reauth_required(LinkReauthRequiredMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            email_address: link.email_address.0.as_ref().to_string(),
+            observed_at: link.last_sync_error_at.unwrap_or_else(chrono::Utc::now),
+        }),
+    )
+    .await;
+
     Ok(())
 }
 
@@ -385,6 +401,23 @@ async fn handle_delete(
         &ctx.connection_gateway_client,
         link.macro_id.as_ref(),
         RefreshEmailEvent::LinkRemoved { link_id: link.id },
+    )
+    .await;
+
+    publish_email_event(
+        &ctx.macro_event_broker,
+        &EmailMacroEvent::link_disconnected(LinkDisconnectedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            email_address: link.email_address.0.as_ref().to_string(),
+            reason: match deletion_reason {
+                DeletionReason::Unused => LinkDisconnectReason::Unused,
+                DeletionReason::Inactive => LinkDisconnectReason::Inactive,
+                DeletionReason::ManuallyDisabled => LinkDisconnectReason::ManuallyDisabled,
+                DeletionReason::UserDeleted => LinkDisconnectReason::UserDeleted,
+                DeletionReason::AccessRevoked => LinkDisconnectReason::AccessRevoked,
+            },
+        }),
     )
     .await;
 

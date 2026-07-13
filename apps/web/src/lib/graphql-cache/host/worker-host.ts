@@ -9,6 +9,7 @@ import {
   type CacheNotice,
   type CacheRequest,
   isCachePush,
+  type OptimisticWriteResult,
   type ReadResult,
   type WorkerMessage,
   type WriteResult,
@@ -158,6 +159,43 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         variables: args.variables,
         data: args.data,
         identity: args.identity,
+      })) as WriteResult;
+    },
+
+    async beginOptimisticWrite(
+      args: CacheWriteArgs
+    ): Promise<OptimisticWriteResult> {
+      await ready;
+      return (await request({
+        kind: 'begin-optimistic-write',
+        originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+      })) as OptimisticWriteResult;
+    },
+
+    async commitOptimisticWrite(
+      transactionId: string,
+      args: CacheWriteArgs
+    ): Promise<WriteResult> {
+      await ready;
+      return (await request({
+        kind: 'commit-optimistic-write',
+        transactionId,
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+      })) as WriteResult;
+    },
+
+    async rollbackOptimisticWrite(transactionId: string): Promise<WriteResult> {
+      await ready;
+      return (await request({
+        kind: 'rollback-optimistic-write',
+        transactionId,
       })) as WriteResult;
     },
 

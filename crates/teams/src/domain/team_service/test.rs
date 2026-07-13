@@ -8,7 +8,7 @@ use std::{
 };
 
 use entity_access::domain::models::{
-    AdminTeamRole, EntityAccessReceipt, EntityType, RequiredPermission,
+    AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, RequiredPermission,
 };
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use notification::domain::{
@@ -108,6 +108,7 @@ impl MockTeamRepository {
                 MacroUserIdStr::parse_from_str("macro|owner@example.com")
                     .unwrap()
                     .into_owned(),
+                false,
             ),
             github_installation_move_calls: Arc::new(Mutex::new(Vec::new())),
             subscription_update_calls: Arc::new(Mutex::new(Vec::new())),
@@ -1014,6 +1015,7 @@ async fn test_create_team_moves_github_installation_to_created_team() {
         "New Team".to_string(),
         "NEW_TEAM".to_string(),
         user_id.clone().into_owned(),
+        false,
     );
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
@@ -1050,6 +1052,7 @@ async fn test_create_team_propagates_github_installation_move_failure() {
         "New Team".to_string(),
         "NEW_TEAM".to_string(),
         user_id.clone().into_owned(),
+        false,
     );
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
@@ -1089,6 +1092,7 @@ async fn team_analytics_create_team_emits_created_event_with_team_id() {
         "Analytics Team".to_string(),
         "ANALYTICS_TEAM".to_string(),
         user_id.clone().into_owned(),
+        false,
     );
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
@@ -1133,6 +1137,7 @@ async fn team_analytics_failure_is_swallowed_by_create_team() {
         "Analytics Team".to_string(),
         "ANALYTICS_TEAM".to_string(),
         user_id.clone().into_owned(),
+        false,
     );
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
@@ -1163,6 +1168,7 @@ async fn team_analytics_create_team_does_not_emit_when_side_effect_fails() {
         "Analytics Team".to_string(),
         "ANALYTICS_TEAM".to_string(),
         user_id.clone().into_owned(),
+        false,
     );
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
@@ -1462,6 +1468,40 @@ async fn team_analytics_invite_users_does_not_emit_when_invite_creation_fails() 
     assert!(events.lock().unwrap().is_empty());
 }
 
+/// get_team reports the `crm_enabled` flag stored on the team row.
+#[tokio::test]
+async fn test_get_team_reports_crm_enabled() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let team = Team::new(
+        team_id,
+        "Test Team".to_string(),
+        "TEST_TEAM".to_string(),
+        owner_id.clone(),
+        true,
+    );
+
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo =
+        MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls).with_team(team);
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress,
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let receipt = test_team_receipt::<MemberTeamRole>(team_id, &owner_id);
+    let team = service.get_team(receipt).await.unwrap();
+    assert!(team.team.crm_enabled());
+}
+
 fn build_service_with_team(
     team: Team,
 ) -> (
@@ -1499,6 +1539,7 @@ async fn test_patch_team_rejects_owner_role_assignment() {
         "Test Team".to_string(),
         "TEST_TEAM".to_string(),
         owner_id,
+        false,
     );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
@@ -1536,6 +1577,7 @@ async fn test_patch_team_rejects_owner_downgrade() {
         "Test Team".to_string(),
         "TEST_TEAM".to_string(),
         owner_id.clone(),
+        false,
     );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
@@ -1574,6 +1616,7 @@ async fn test_patch_team_applies_role_updates_and_name() {
         "Old Name".to_string(),
         "OLD_NAME".to_string(),
         owner_id.clone(),
+        false,
     );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
@@ -1631,6 +1674,7 @@ async fn test_patch_team_empty_role_updates() {
         "Old Name".to_string(),
         "OLD_NAME".to_string(),
         owner_id.clone(),
+        false,
     );
 
     let (service, role_calls, name_calls) = build_service_with_team(team);
@@ -1668,6 +1712,7 @@ async fn test_invite_users_to_team_backfills_legacy_team_subscription() {
         "Legacy Team".to_string(),
         "legacy-team".to_string(),
         owner_id.clone().into_owned(),
+        false,
     ));
     team_repo.team_payment_status = false;
     team_repo.team_subscription_id = None;
@@ -1735,6 +1780,7 @@ async fn test_join_team_backfills_legacy_team_subscription() {
             "Legacy Team".to_string(),
             "legacy-team".to_string(),
             owner_id.clone().into_owned(),
+            false,
         ));
     team_repo.team_payment_status = false;
     team_repo.team_subscription_id = None;
@@ -1792,6 +1838,7 @@ async fn test_join_team_rolls_back_accept_when_backfill_fails() {
             "Legacy Team".to_string(),
             "legacy-team".to_string(),
             owner_id.into_owned(),
+            false,
         ));
     team_repo.team_payment_status = false;
     team_repo.team_subscription_id = None;

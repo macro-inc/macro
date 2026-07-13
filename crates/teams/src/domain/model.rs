@@ -238,6 +238,9 @@ pub struct Team {
     pub(crate) slug: String,
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub(crate) owner_id: MacroUserIdStr<'static>,
+    /// Whether the CRM is enabled for this team (from `team_crm_settings`;
+    /// `false` when no row exists).
+    pub(crate) crm_enabled: bool,
 }
 
 impl Team {
@@ -247,12 +250,14 @@ impl Team {
         name: String,
         slug: String,
         owner_id: MacroUserIdStr<'static>,
+        crm_enabled: bool,
     ) -> Self {
         Self {
             id,
             name,
             slug,
             owner_id,
+            crm_enabled,
         }
     }
 }
@@ -276,6 +281,11 @@ impl Team {
     /// The owner id of the team
     pub fn owner_id(&self) -> &str {
         self.owner_id.as_ref()
+    }
+
+    /// Whether the CRM is enabled for this team
+    pub fn crm_enabled(&self) -> bool {
+        self.crm_enabled
     }
 }
 

@@ -22,7 +22,7 @@ use axum::{
     extract::{FromRef, Request},
     http::StatusCode,
     response::IntoResponse,
-    routing::{Route, delete, get, patch, post, put},
+    routing::{Route, delete, get, post, put},
 };
 use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
@@ -159,11 +159,6 @@ where
         )
         .route(
             "/entity_properties/{entity_property_id}",
-            delete(entities::delete_entity_property::<S, A>).layer(ensure_user_exists.clone()),
-        )
-        // Status shortcut - requires authentication
-        .route(
-            "/entities/{entity_type}/{entity_id}/status/complete",
-            patch(entities::set_property_status_complete::<S, A>).layer(ensure_user_exists),
+            delete(entities::delete_entity_property::<S, A>).layer(ensure_user_exists),
         )
 }

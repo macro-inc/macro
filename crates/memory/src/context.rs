@@ -135,7 +135,11 @@ pub async fn build_tool_service_context(
     let properties_service =
         ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
     let task_properties_service =
-        ai_tools::build_task_properties_adapter(pool.clone(), properties_service.clone());
+        ai_tools::build_task_properties_adapter(
+            pool.clone(),
+            properties_service.clone(),
+            entity_access_service.clone(),
+        );
     let document_service = documents::domain::service::DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -156,7 +160,7 @@ pub async fn build_tool_service_context(
     );
 
     // Properties tool context
-    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
 
     // Email tool context
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(

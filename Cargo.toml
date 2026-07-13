@@ -26,6 +26,7 @@ members = [
   "crates/integration_tests/test_build_full_pdf_modification_data",
   "crates/integration_tests/test_pdf_modification_data_deserialize",
   "crates/loops_client",
+  "crates/macro_authorization",
   "crates/macro_config",
   "crates/macro_event_broker",
   "crates/macro_event_topics",

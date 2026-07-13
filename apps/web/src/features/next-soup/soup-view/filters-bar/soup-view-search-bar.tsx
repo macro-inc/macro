@@ -11,6 +11,7 @@ import XIcon from '@phosphor/x.svg?component-solid';
 import { cn, Hotkey } from '@ui';
 import {
   $getRoot,
+  $selectAll,
   COMMAND_PRIORITY_HIGH,
   KEY_ARROW_DOWN_COMMAND,
 } from 'lexical';
@@ -119,8 +120,10 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     scopeId: panel.splitHotkeyScope,
     registrationType: 'add',
     description: 'Search',
+    runWithInputFocused: true,
     keyDownHandler: () => {
       editor.controls.focus();
+      editor.controls.getLexical().update(() => $selectAll());
       return true;
     },
   });

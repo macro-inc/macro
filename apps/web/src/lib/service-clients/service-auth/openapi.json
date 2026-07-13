@@ -4207,8 +4207,12 @@
       "Team": {
         "type": "object",
         "description": "The Team struct",
-        "required": ["id", "name", "slug", "owner_id"],
+        "required": ["id", "name", "slug", "owner_id", "crm_enabled"],
         "properties": {
+          "crm_enabled": {
+            "type": "boolean",
+            "description": "Whether the CRM is enabled for this team (from `team_crm_settings`;\n`false` when no row exists)."
+          },
           "id": {
             "type": "string",
             "format": "uuid"

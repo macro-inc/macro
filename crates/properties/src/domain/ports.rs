@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::document_metadata::DocumentMetadata;
+use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -158,26 +159,16 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         option_ids: &[Uuid],
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
 
-    /// Atomically update a property value if the property is attached to the entity.
-    /// No-op if the property is not attached.
-    fn update_entity_property_value_if_exists(
-        &self,
-        entity_id: &str,
-        entity_type: EntityType,
-        property_definition_id: Uuid,
-        value: Option<PropertyValue>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
     /// Upsert an entity property value (insert or update).
     /// If the property doesn't exist, it will be created and attached to the entity.
-    /// If it exists, the value will be updated.
+    /// If it exists, the value will be updated. Returns the persisted assignment.
     fn upsert_entity_property(
         &self,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityProperty, Self::Err>> + Send;
 
     /// Atomically add one option to a multi-select entity property value,
     /// attaching the property if needed. Re-adding a present option is a no-op.
@@ -214,7 +205,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         task_id: Uuid,
         parent_task_id: Option<Uuid>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<EntityProperty>, Self::Err>> + Send;
 
     /// Atomically set a task's subtasks (for Subtasks property).
     ///
@@ -225,7 +216,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         task_id: Uuid,
         subtask_ids: Vec<Uuid>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<EntityProperty>, Self::Err>> + Send;
 
     /// Get a property value for a specific entity and property definition.
     /// Returns `None` if the property is not attached to the entity.

@@ -214,8 +214,11 @@ async fn build_tool_context(
     )));
     let properties_service =
         ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
-    let task_properties_service =
-        ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        db.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -232,7 +235,7 @@ async fn build_tool_context(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
             ),
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-        macro_event_broker,
+        macro_event_broker: macro_event_broker.clone(),
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -244,19 +247,23 @@ async fn build_tool_context(
         config.document_permission_jwt.to_string(),
     );
 
-    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
+    let properties_tool_context =
+        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
-            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-            sqs_client,
-            crm_service.clone(),
-            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                entity_access_management::outbound::PgRepository::new(db.clone()),
-            ),
-            0,
-        )),
+        Arc::new(
+            EmailServiceImpl::new(
+                EmailPgRepo::new(db.clone()),
+                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+                sqs_client,
+                crm_service.clone(),
+                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                    entity_access_management::outbound::PgRepository::new(db.clone()),
+                ),
+                0,
+            )
+            .with_macro_event_broker(macro_event_broker.clone()),
+        ),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),

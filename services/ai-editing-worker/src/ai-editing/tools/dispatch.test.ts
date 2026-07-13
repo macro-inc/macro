@@ -140,7 +140,7 @@ function setup() {
   const requests: Array<string | undefined> = [];
   const dispatch = createDispatchTool({
     session,
-    childModel,
+    makeChildModel: () => childModel,
     tracker,
     request: 'make it formal',
     runner: () => [],

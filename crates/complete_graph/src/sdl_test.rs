@@ -18,7 +18,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "participants: [GraphqlSoupEmailParticipant!]!",
         "attachments: [GraphqlSoupEmailAttachment!]!",
         "labels: [GraphqlSoupEmailLabel!]!",
-        "properties: [GraphqlSoupProperty!]!",
+        "properties: [GraphqlProperty!]!",
         "type GraphqlSoupCall {",
         "channelName: String",
         "customName: String",
@@ -31,6 +31,18 @@ fn soup_response_schema_exposes_frontend_fields() {
     ] {
         assert_sdl_line(&sdl, expected);
     }
+}
+
+#[test]
+fn property_values_are_a_typed_union_without_soup_names() {
+    let sdl = crate::build_schema().sdl();
+
+    assert_sdl_line(
+        &sdl,
+        "union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue",
+    );
+    assert!(!sdl.contains("GraphqlSoupProperty"));
+    assert!(!sdl.contains("GraphqlSoupDataType"));
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client
