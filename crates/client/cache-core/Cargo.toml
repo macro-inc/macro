@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 apollo-parser = { workspace = true }
 lru = { workspace = true }
+maybe_send = { path = "../../maybe_send" }
 postcard = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

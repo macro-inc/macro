@@ -2246,6 +2246,7 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "lru",
+ "maybe_send",
  "pollster",
  "postcard",
  "serde",

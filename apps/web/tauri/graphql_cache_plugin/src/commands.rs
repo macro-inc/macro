@@ -59,7 +59,7 @@ pub async fn graphql_cache_init<R: Runtime>(
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let storage =
         SqliteStorage::open(dir.join("cache.sqlite"), &scope).map_err(|e| e.to_string())?;
-    let handle = EngineHandle::spawn(storage, hot_capacity).map_err(|e| e.to_string())?;
+    let handle = EngineHandle::new(storage, hot_capacity);
     *guard = Some(InitializedCache { scope, handle });
     Ok(())
 }

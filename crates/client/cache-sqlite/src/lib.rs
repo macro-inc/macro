@@ -6,8 +6,10 @@
 //! and rebuilt — the cache is disposable by design, never migrated.
 //!
 //! rusqlite is synchronous; the async [`Storage`] methods complete
-//! immediately. That's fine for the Tauri host, which runs the engine on a
-//! dedicated thread (blocking IO is the point of the native host).
+//! immediately (blocking IO is the point of the native host). The
+//! connection sits behind a `Mutex` so `&self` futures are `Send`
+//! (`Storage` futures are `MaybeSend`), letting the Tauri host drive the
+//! engine directly from its multi-threaded runtime.
 
 #![deny(missing_docs)]
 
@@ -16,6 +18,7 @@ use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
 
 /// Errors produced by the SQLite storage backend.
@@ -31,7 +34,10 @@ pub enum SqliteStorageError {
 
 /// [`Storage`] backend over a SQLite database (Tauri native host).
 pub struct SqliteStorage {
-    conn: Connection,
+    /// `Connection` is `Send` but not `Sync`; the mutex makes the storage
+    /// `Sync` so borrowing futures are `Send`. Never contended in practice —
+    /// the engine serializes storage access.
+    conn: Mutex<Connection>,
 }
 
 impl SqliteStorage {
@@ -70,13 +76,21 @@ impl SqliteStorage {
                 params![expected],
             )?;
         }
-        Ok(SqliteStorage { conn })
+        Ok(SqliteStorage {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    /// A poisoned mutex means a panic mid-statement; SQLite rolls back
+    /// interrupted transactions on drop, so the connection stays usable.
+    fn conn(&self) -> MutexGuard<'_, Connection> {
+        self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Total number of stored records (diagnostics/GC).
     pub fn record_count(&self) -> Result<u64, SqliteStorageError> {
         Ok(self
-            .conn
+            .conn()
             .query_row("SELECT COUNT(*) FROM records", [], |row| row.get(0))?)
     }
 }
@@ -85,9 +99,8 @@ impl Storage for SqliteStorage {
     type Error = SqliteStorageError;
 
     async fn get_batch(&self, keys: &[EntityKey]) -> Result<Vec<Option<Record>>, Self::Error> {
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT value FROM records WHERE key = ?1")?;
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached("SELECT value FROM records WHERE key = ?1")?;
         let mut out = Vec::with_capacity(keys.len());
         for key in keys {
             let bytes: Option<Vec<u8>> = stmt
@@ -102,7 +115,8 @@ impl Storage for SqliteStorage {
     }
 
     async fn put_batch(&mut self, entries: Vec<(EntityKey, Record)>) -> Result<(), Self::Error> {
-        let tx = self.conn.transaction()?;
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
         {
             let mut stmt = tx.prepare_cached(
                 "INSERT INTO records (key, value) VALUES (?1, ?2)
@@ -117,7 +131,8 @@ impl Storage for SqliteStorage {
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey]) -> Result<(), Self::Error> {
-        let tx = self.conn.transaction()?;
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
         {
             let mut stmt = tx.prepare_cached("DELETE FROM records WHERE key = ?1")?;
             for key in keys {
@@ -129,7 +144,7 @@ impl Storage for SqliteStorage {
     }
 
     async fn clear(&mut self) -> Result<(), Self::Error> {
-        self.conn.execute("DELETE FROM records", [])?;
+        self.conn().execute("DELETE FROM records", [])?;
         Ok(())
     }
 }

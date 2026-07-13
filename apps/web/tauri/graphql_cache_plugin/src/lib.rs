@@ -2,8 +2,9 @@
 //!
 //! The webview counterpart of the browser worker glue in
 //! `apps/web/src/lib/graphql-cache/`: the engine (`cache-core` over
-//! `cache-sqlite`) lives in the Tauri host process on a dedicated thread —
-//! one shared instance across all webviews/windows, never webview storage.
+//! `cache-sqlite`) lives in the Tauri host process behind an async mutex
+//! (`Storage` futures are `MaybeSend`, so `Send` on native) — one shared
+//! instance across all webviews/windows, never webview storage.
 //! Webviews talk to it through the commands in [`commands`] (registered
 //! app-level in `src-tauri`, like the bundle updater plugin) and receive
 //! change notifications via the [`OPS_AFFECTED_EVENT`] broadcast event,

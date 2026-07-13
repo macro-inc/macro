@@ -27,7 +27,7 @@ fn soup_data(has_more: bool) -> serde_json::Value {
 
 fn spawn_handle() -> EngineHandle {
     let storage = SqliteStorage::open_in_memory("scope-1").unwrap();
-    EngineHandle::spawn(storage, None).unwrap()
+    EngineHandle::new(storage, None)
 }
 
 fn write(

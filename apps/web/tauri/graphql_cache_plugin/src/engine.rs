@@ -1,12 +1,10 @@
-//! Dedicated engine thread owning the cache engine + SQLite storage.
+//! Engine host: the cache engine + SQLite storage behind an async mutex.
 //!
-//! `cache-core` futures are deliberately `?Send` (the `Storage` trait must
-//! be implementable by wasm backends), so the engine cannot be shared behind
-//! an async mutex on the tokio runtime. Instead one OS thread owns it and
-//! executes each command with `pollster::block_on` — the SQLite storage
-//! completes immediately; blocking IO is the point of the native host (see
-//! `cache-sqlite`). The channel serializes commands the same way the browser
-//! worker's queue + async mutex do.
+//! `cache-core`'s `Storage` futures are `MaybeSend` — `Send` on native
+//! targets — so the engine is driven directly from the tauri/tokio runtime;
+//! the async mutex serializes commands the same way the browser worker's
+//! queue does. SQLite work completes immediately (blocking IO is the point
+//! of the native host), so holding a runtime thread through it is fine.
 //!
 //! Operation ids cross the IPC boundary as strings (`"{clientId}:{urqlKey}"`)
 //! so multiple webviews can register operations against the one shared
@@ -19,8 +17,8 @@ use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::mpsc;
-use tokio::sync::oneshot;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Mirrors `ReadResult` in `apps/web/src/lib/graphql-cache/protocol.ts`.
 #[derive(Debug, Serialize)]
@@ -95,201 +93,19 @@ impl OpInterner {
 }
 
 type Variables = serde_json::Map<String, serde_json::Value>;
-type Reply<T> = oneshot::Sender<Result<T, String>>;
 
-enum Command {
-    Read {
-        op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        reply: Reply<ReadResultWire>,
-    },
-    Write {
-        origin_op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-        identity: Option<String>,
-        reply: Reply<WriteResultWire>,
-    },
-    BeginOptimisticWrite {
-        origin_op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-        reply: Reply<OptimisticWriteResultWire>,
-    },
-    CommitOptimisticWrite {
-        transaction_id: String,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-        reply: Reply<WriteResultWire>,
-    },
-    RollbackOptimisticWrite {
-        transaction_id: String,
-        reply: Reply<WriteResultWire>,
-    },
-    Invalidate {
-        keys: Vec<String>,
-        reply: Reply<Vec<String>>,
-    },
-    Teardown {
-        op_id: String,
-        reply: Reply<()>,
-    },
-    Clear {
-        reply: Reply<()>,
-    },
+struct EngineState {
+    engine: Engine<SqliteStorage>,
+    ops: OpInterner,
 }
 
-/// Cheaply-clonable handle to the engine thread. All methods serialize onto
-/// that thread; errors are stringified for the IPC boundary (the JS host
-/// rejects the pending call, and the exchange degrades to the network).
+/// Cheaply-clonable handle to the shared engine. All methods serialize
+/// through the async mutex; errors are stringified for the IPC boundary
+/// (the JS host rejects the pending call, and the exchange degrades to the
+/// network).
 #[derive(Clone)]
 pub struct EngineHandle {
-    tx: mpsc::Sender<Command>,
-}
-
-impl EngineHandle {
-    /// Spawns the engine thread over an opened storage backend.
-    /// A `hot_capacity` of 0 is treated as unset (engine default).
-    pub fn spawn(
-        storage: SqliteStorage,
-        hot_capacity: Option<u32>,
-    ) -> Result<Self, std::io::Error> {
-        let engine = match hot_capacity.filter(|c| *c > 0) {
-            Some(cap) => Engine::with_capacity(storage, cap as usize),
-            None => Engine::new(storage),
-        };
-        let (tx, rx) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("graphql-cache-engine".into())
-            .spawn(move || run(engine, rx))?;
-        Ok(EngineHandle { tx })
-    }
-
-    async fn request<T>(&self, build: impl FnOnce(Reply<T>) -> Command) -> Result<T, String> {
-        let (reply, rx) = oneshot::channel();
-        self.tx
-            .send(build(reply))
-            .map_err(|_| "graphql cache engine thread is gone".to_string())?;
-        rx.await
-            .map_err(|_| "graphql cache engine thread dropped the request".to_string())?
-    }
-
-    /// Cache read; registers `op_id` as active when given.
-    pub async fn read(
-        &self,
-        op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-    ) -> Result<ReadResultWire, String> {
-        self.request(|reply| Command::Read {
-            op_id,
-            query,
-            operation_name,
-            variables,
-            reply,
-        })
-        .await
-    }
-
-    /// Normalizes and stores a network response.
-    pub async fn write(
-        &self,
-        origin_op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-        identity: Option<String>,
-    ) -> Result<WriteResultWire, String> {
-        self.request(|reply| Command::Write {
-            origin_op_id,
-            query,
-            operation_name,
-            variables,
-            data,
-            identity,
-            reply,
-        })
-        .await
-    }
-
-    /// Installs an in-memory optimistic layer (persists nothing).
-    pub async fn begin_optimistic_write(
-        &self,
-        origin_op_id: Option<String>,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-    ) -> Result<OptimisticWriteResultWire, String> {
-        self.request(|reply| Command::BeginOptimisticWrite {
-            origin_op_id,
-            query,
-            operation_name,
-            variables,
-            data,
-            reply,
-        })
-        .await
-    }
-
-    /// Replaces a pending optimistic layer with the real network response.
-    pub async fn commit_optimistic_write(
-        &self,
-        transaction_id: String,
-        query: String,
-        operation_name: Option<String>,
-        variables: Variables,
-        data: serde_json::Value,
-    ) -> Result<WriteResultWire, String> {
-        self.request(|reply| Command::CommitOptimisticWrite {
-            transaction_id,
-            query,
-            operation_name,
-            variables,
-            data,
-            reply,
-        })
-        .await
-    }
-
-    /// Drops a pending optimistic layer's contribution (mutation failed).
-    pub async fn rollback_optimistic_write(
-        &self,
-        transaction_id: String,
-    ) -> Result<WriteResultWire, String> {
-        self.request(|reply| Command::RollbackOptimisticWrite {
-            transaction_id,
-            reply,
-        })
-        .await
-    }
-
-    /// Evicts records by entity key; returns the affected registered op ids.
-    pub async fn invalidate(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        self.request(|reply| Command::Invalidate { keys, reply })
-            .await
-    }
-
-    /// Unregisters an operation (urql teardown).
-    pub async fn teardown(&self, op_id: String) -> Result<(), String> {
-        self.request(|reply| Command::Teardown { op_id, reply })
-            .await
-    }
-
-    /// Drops all cached state (logout).
-    pub async fn clear(&self) -> Result<(), String> {
-        self.request(|reply| Command::Clear { reply }).await
-    }
+    inner: Arc<Mutex<EngineState>>,
 }
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
@@ -305,130 +121,155 @@ fn parse_transaction_id(id: &str) -> Result<u64, String> {
         .map_err(|_| format!("invalid optimistic transaction id `{id}`"))
 }
 
-fn run(mut engine: Engine<SqliteStorage>, rx: mpsc::Receiver<Command>) {
-    let mut ops = OpInterner::default();
-    // Ends when the last handle drops (app shutdown).
-    while let Ok(command) = rx.recv() {
-        handle_command(&mut engine, &mut ops, command);
+impl EngineHandle {
+    /// Wraps an opened storage backend. A `hot_capacity` of 0 is treated as
+    /// unset (engine default).
+    pub fn new(storage: SqliteStorage, hot_capacity: Option<u32>) -> Self {
+        let engine = match hot_capacity.filter(|c| *c > 0) {
+            Some(cap) => Engine::with_capacity(storage, cap as usize),
+            None => Engine::new(storage),
+        };
+        EngineHandle {
+            inner: Arc::new(Mutex::new(EngineState {
+                engine,
+                ops: OpInterner::default(),
+            })),
+        }
     }
-}
 
-fn handle_command(engine: &mut Engine<SqliteStorage>, ops: &mut OpInterner, command: Command) {
-    // Replies to dropped receivers (e.g. a closed webview) are discarded.
-    match command {
-        Command::Read {
-            op_id,
-            query,
-            operation_name,
-            variables,
-            reply,
-        } => {
-            let op = op_id.map(|name| ops.intern(&name));
-            let result = pollster::block_on(engine.read_query(
-                op,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-            ))
+    /// Cache read; registers `op_id` as active when given.
+    pub async fn read(
+        &self,
+        op_id: Option<String>,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+    ) -> Result<ReadResultWire, String> {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        let op = op_id.map(|name| ops.intern(&name));
+        engine
+            .read_query(op, &query, operation_name.as_deref(), &variables)
+            .await
             .map(|result| match result {
                 ReadResult::Hit { data } => ReadResultWire::Hit { data },
                 ReadResult::Miss => ReadResultWire::Miss,
             })
-            .map_err(|e| e.to_string());
-            let _ = reply.send(result);
-        }
-        Command::Write {
-            origin_op_id,
-            query,
-            operation_name,
-            variables,
-            data,
-            identity,
-            reply,
-        } => {
-            let origin = origin_op_id.map(|name| ops.intern(&name));
-            let result = pollster::block_on(engine.write_query(
+            .map_err(|e| e.to_string())
+    }
+
+    /// Normalizes and stores a network response.
+    pub async fn write(
+        &self,
+        origin_op_id: Option<String>,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        data: serde_json::Value,
+        identity: Option<String>,
+    ) -> Result<WriteResultWire, String> {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        let origin = origin_op_id.map(|name| ops.intern(&name));
+        engine
+            .write_query(
                 origin,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
                 identity.as_deref(),
-            ))
+            )
+            .await
             .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string());
-            let _ = reply.send(result);
-        }
-        Command::BeginOptimisticWrite {
-            origin_op_id,
-            query,
-            operation_name,
-            variables,
-            data,
-            reply,
-        } => {
-            let origin = origin_op_id.map(|name| ops.intern(&name));
-            let result = pollster::block_on(engine.begin_optimistic_write(
-                origin,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-            ))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Installs an in-memory optimistic layer (persists nothing).
+    pub async fn begin_optimistic_write(
+        &self,
+        origin_op_id: Option<String>,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        data: serde_json::Value,
+    ) -> Result<OptimisticWriteResultWire, String> {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        let origin = origin_op_id.map(|name| ops.intern(&name));
+        engine
+            .begin_optimistic_write(origin, &query, operation_name.as_deref(), &variables, &data)
+            .await
             .map(|(transaction, result)| OptimisticWriteResultWire {
                 transaction_id: transaction.to_string(),
                 result: wire_write_result(ops, result),
             })
-            .map_err(|e| e.to_string());
-            let _ = reply.send(result);
+            .map_err(|e| e.to_string())
+    }
+
+    /// Replaces a pending optimistic layer with the real network response.
+    pub async fn commit_optimistic_write(
+        &self,
+        transaction_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        data: serde_json::Value,
+    ) -> Result<WriteResultWire, String> {
+        let transaction = parse_transaction_id(&transaction_id)?;
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        engine
+            .commit_optimistic_write(
+                transaction,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+            )
+            .await
+            .map(|result| wire_write_result(ops, result))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Drops a pending optimistic layer's contribution (mutation failed).
+    pub async fn rollback_optimistic_write(
+        &self,
+        transaction_id: String,
+    ) -> Result<WriteResultWire, String> {
+        let transaction = parse_transaction_id(&transaction_id)?;
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        engine
+            .rollback_optimistic_write(transaction)
+            .await
+            .map(|result| wire_write_result(ops, result))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Evicts records by entity key; returns the affected registered op ids.
+    pub async fn invalidate(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
+        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        let affected = engine.invalidate_keys(keys.iter());
+        Ok(ops.names(affected))
+    }
+
+    /// Unregisters an operation (urql teardown).
+    pub async fn teardown(&self, op_id: String) -> Result<(), String> {
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        if let Some(id) = ops.remove(&op_id) {
+            engine.teardown_operation(id);
         }
-        Command::CommitOptimisticWrite {
-            transaction_id,
-            query,
-            operation_name,
-            variables,
-            data,
-            reply,
-        } => {
-            let result = parse_transaction_id(&transaction_id).and_then(|transaction| {
-                pollster::block_on(engine.commit_optimistic_write(
-                    transaction,
-                    &query,
-                    operation_name.as_deref(),
-                    &variables,
-                    &data,
-                ))
-                .map(|result| wire_write_result(ops, result))
-                .map_err(|e| e.to_string())
-            });
-            let _ = reply.send(result);
-        }
-        Command::RollbackOptimisticWrite {
-            transaction_id,
-            reply,
-        } => {
-            let result = parse_transaction_id(&transaction_id).and_then(|transaction| {
-                pollster::block_on(engine.rollback_optimistic_write(transaction))
-                    .map(|result| wire_write_result(ops, result))
-                    .map_err(|e| e.to_string())
-            });
-            let _ = reply.send(result);
-        }
-        Command::Invalidate { keys, reply } => {
-            let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
-            let affected = engine.invalidate_keys(keys.iter());
-            let _ = reply.send(Ok(ops.names(affected)));
-        }
-        Command::Teardown { op_id, reply } => {
-            if let Some(id) = ops.remove(&op_id) {
-                engine.teardown_operation(id);
-            }
-            let _ = reply.send(Ok(()));
-        }
-        Command::Clear { reply } => {
-            let result = pollster::block_on(engine.clear()).map_err(|e| e.to_string());
-            let _ = reply.send(result);
-        }
+        Ok(())
+    }
+
+    /// Drops all cached state (logout).
+    pub async fn clear(&self) -> Result<(), String> {
+        let mut state = self.inner.lock().await;
+        state.engine.clear().await.map_err(|e| e.to_string())
     }
 }
 

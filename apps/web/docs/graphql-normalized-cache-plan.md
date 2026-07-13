@@ -197,8 +197,9 @@ Topology:
 `Storage` trait (async): `get_batch`, `put_batch`, `delete_batch`,
 `scan_prefix`, `approx_size`. Records serialized with `postcard` (stored as
 `Uint8Array` values in IDB / blobs in SQLite). Note: wasm futures are not
-`Send`, so the trait must be `?Send` (e.g. `async_trait(?Send)` or a
-maybe-send abstraction) to be implementable by both `idb` and native SQLite.
+`Send`, so the trait's futures are bound by `MaybeSend` (`crates/maybe_send`):
+`Send` on native targets — the Tauri host drives the engine directly from its
+multi-threaded runtime — and unbounded on wasm, implementable by `idb`.
 
 ### 4.4 Data model
 
@@ -298,12 +299,12 @@ apps/web/src/lib/graphql-cache/ # JS glue
   happens with the Phase 4 exchange integration.
 - ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
   workspace — it needs the patched tauri fork pinned there; path-deps on
-  `crates/client/{cache-core,cache-sqlite}`): engine on a dedicated OS
-  thread (`?Send` futures; `pollster` executes them — SQLite completes
-  immediately), commands mirroring the worker protocol registered app-level
-  in `src-tauri` (bundle-updater pattern, no capability plumbing), changed
-  ops broadcast to every webview via the `graphql-cache://ops-affected`
-  event. One native engine per app process = SharedWorker topology: no Web
+  `crates/client/{cache-core,cache-sqlite}`): engine behind an async mutex
+  on the tauri runtime (`Storage` futures are `MaybeSend` → `Send` native;
+  SQLite completes immediately), commands mirroring the worker protocol
+  registered app-level in `src-tauri` (bundle-updater pattern, no
+  capability plumbing), changed ops broadcast to every webview via the
+  `graphql-cache://ops-affected` event. One native engine per app process = SharedWorker topology: no Web
   Locks / BroadcastChannel machinery. DB at
   `{app_data_dir}/graphql-cache/cache.sqlite`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
