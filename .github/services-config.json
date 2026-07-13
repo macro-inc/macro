@@ -2,7 +2,7 @@
   "services": {
     "agent-schedule-service": {
       "source_paths": [
-        "rust/cloud-storage/scheduled_action/**"
+        "services/scheduled_action/**"
       ],
       "stack_path": "infra/stacks/agent-schedule-service/**",
       "deploy_binaries": [
@@ -11,10 +11,10 @@
     },
     "authentication-service": {
       "source_paths": [
-        "rust/cloud-storage/authentication_service/**",
-        "rust/cloud-storage/referral/**",
-        "rust/cloud-storage/teams/**",
-        "rust/cloud-storage/user_link_cleanup_handler/**"
+        "services/authentication_service/**",
+        "crates/referral/**",
+        "crates/teams/**",
+        "services/user_link_cleanup_handler/**"
       ],
       "stack_path": "infra/stacks/authentication-service/**",
       "deploy_binaries": [
@@ -26,8 +26,8 @@
     },
     "bulk-upload": {
       "source_paths": [
-        "rust/cloud-storage/upload_extractor_lambda_handler/**",
-        "rust/cloud-storage/upload_extractor_lambda_trigger/**"
+        "services/upload_extractor_lambda_handler/**",
+        "services/upload_extractor_lambda_trigger/**"
       ],
       "stack_path": "infra/stacks/bulk-upload/**",
       "deploy_lambdas": [
@@ -37,7 +37,7 @@
     },
     "call-recording": {
       "source_paths": [
-        "rust/cloud-storage/call_recording_preview_handler/**"
+        "services/call_recording_preview_handler/**"
       ],
       "stack_path": "infra/stacks/call-recording/**",
       "deploy_lambdas": [
@@ -46,7 +46,7 @@
     },
     "connection-gateway": {
       "source_paths": [
-        "rust/cloud-storage/connection_gateway/**"
+        "services/connection_gateway/**"
       ],
       "stack_path": "infra/stacks/connection-gateway/**",
       "deploy_binaries": [
@@ -55,7 +55,7 @@
     },
     "contacts-service": {
       "source_paths": [
-        "rust/cloud-storage/contacts_service/**"
+        "services/contacts_service/**"
       ],
       "stack_path": "infra/stacks/contacts-service/**",
       "deploy_binaries": [
@@ -64,7 +64,7 @@
     },
     "convert-service": {
       "source_paths": [
-        "rust/cloud-storage/convert_service/**"
+        "services/convert_service/**"
       ],
       "stack_path": "infra/stacks/convert-service/**",
       "deploy_binaries": [
@@ -73,7 +73,7 @@
     },
     "deleted-item-poller": {
       "source_paths": [
-        "rust/cloud-storage/deleted_item_poller/**"
+        "services/deleted_item_poller/**"
       ],
       "stack_path": "infra/stacks/deleted-item-poller/**",
       "deploy_lambdas": [
@@ -82,8 +82,8 @@
     },
     "document-cognition-service": {
       "source_paths": [
-        "rust/cloud-storage/document_cognition_service/**",
-        "rust/cloud-storage/ai_projections_refresh_handler/**"
+        "services/document_cognition_service/**",
+        "services/ai_projections_refresh_handler/**"
       ],
       "stack_path": "infra/stacks/document-cognition-service/**",
       "deploy_binaries": [
@@ -95,12 +95,12 @@
     },
     "document-storage-service": {
       "source_paths": [
-        "rust/cloud-storage/document_storage_service/**",
-        "rust/cloud-storage/call/**",
-        "rust/cloud-storage/github/**",
-        "rust/cloud-storage/delete_chat_handler/**",
-        "rust/cloud-storage/docx_unzip_handler/**",
-        "rust/cloud-storage/document_upload_finalizer_handler/**"
+        "services/document_storage_service/**",
+        "crates/call/**",
+        "crates/github/**",
+        "services/delete_chat_handler/**",
+        "services/docx_unzip_handler/**",
+        "services/document_upload_finalizer_handler/**"
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**",
       "deploy_binaries": [
@@ -114,13 +114,13 @@
     },
     "document-storage": {
       "source_paths": [
-        "rust/cloud-storage/document_storage_service/**"
+        "services/document_storage_service/**"
       ],
       "stack_path": "infra/stacks/document-storage/**"
     },
     "document-text-extractor": {
       "source_paths": [
-        "rust/cloud-storage/document_text_extractor/**"
+        "services/document_text_extractor/**"
       ],
       "stack_path": "infra/stacks/document-text-extractor/**",
       "deploy_lambdas": [
@@ -129,9 +129,9 @@
     },
     "email-service": {
       "source_paths": [
-        "rust/cloud-storage/email_service/**",
-        "rust/cloud-storage/email_refresh_handler/**",
-        "rust/cloud-storage/email_scheduled_handler/**"
+        "services/email_service/**",
+        "services/email_refresh_handler/**",
+        "services/email_scheduled_handler/**"
       ],
       "stack_path": "infra/stacks/email-service/**",
       "deploy_binaries": [
@@ -145,7 +145,7 @@
     },
     "notification-service": {
       "source_paths": [
-        "rust/cloud-storage/notification_service/**"
+        "services/notification_service/**"
       ],
       "stack_path": "infra/stacks/notification-service/**",
       "deploy_binaries": [
@@ -154,9 +154,8 @@
     },
     "organization-retention": {
       "source_paths": [
-        "rust/cloud-storage/organization_retention/**",
-        "rust/cloud-storage/organization_retention_handler/**",
-        "rust/cloud-storage/organization_retention_trigger/**"
+        "services/organization_retention_handler/**",
+        "services/organization_retention_trigger/**"
       ],
       "stack_path": "infra/stacks/organization-retention/**",
       "deploy_lambdas": [
@@ -166,7 +165,7 @@
     },
     "search-processing-service": {
       "source_paths": [
-        "rust/cloud-storage/search_processing_service/**"
+        "services/search_processing_service/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**",
       "deploy_binaries": [
@@ -175,7 +174,7 @@
     },
     "search-upload": {
       "source_paths": [
-        "rust/cloud-storage/search_upload_handler/**"
+        "services/search_upload_handler/**"
       ],
       "stack_path": "infra/stacks/search-upload/**",
       "deploy_lambdas": [
@@ -184,7 +183,7 @@
     },
     "email-sfs-delete-handler": {
       "source_paths": [
-        "rust/cloud-storage/email_sfs_delete_handler/**"
+        "services/email_sfs_delete_handler/**"
       ],
       "stack_path": "infra/stacks/email-sfs-delete-handler/**",
       "deploy_lambdas": [
@@ -193,8 +192,8 @@
     },
     "static-file-service": {
       "source_paths": [
-        "rust/cloud-storage/static_file_service/**",
-        "rust/cloud-storage/image_optimizer/**"
+        "services/static_file_service/**",
+        "services/image_optimizer/**"
       ],
       "stack_path": "infra/stacks/static-file-service/**",
       "deploy_binaries": [
@@ -206,7 +205,7 @@
     },
     "unfurl-service": {
       "source_paths": [
-        "rust/cloud-storage/unfurl_service/**"
+        "services/unfurl_service/**"
       ],
       "stack_path": "infra/stacks/unfurl-service/**",
       "deploy_binaries": [
@@ -230,7 +229,7 @@
     },
     "email-suppression": {
       "source_paths": [
-        "rust/cloud-storage/email_suppression_handler/**"
+        "services/email_suppression_handler/**"
       ],
       "stack_path": "infra/stacks/email-suppression/**",
       "deploy_lambdas": [
@@ -239,7 +238,7 @@
     },
     "dlp-handler": {
       "source_paths": [
-        "rust/cloud-storage/dataloss_prevention_handler/**"
+        "services/dataloss_prevention_handler/**"
       ],
       "stack_path": "infra/stacks/dlp-handler/**",
       "deploy_lambdas": [
@@ -248,7 +247,7 @@
     },
     "image-proxy-service": {
       "source_paths": [
-        "rust/cloud-storage/image_proxy_service/**"
+        "services/image_proxy_service/**"
       ],
       "stack_path": "infra/stacks/image-proxy-service/**",
       "deploy_binaries": [
@@ -257,8 +256,8 @@
     },
     "mcp-server": {
       "source_paths": [
-        "rust/cloud-storage/mcp_service/**",
-        "rust/cloud-storage/ai_tools/**"
+        "services/mcp_service/**",
+        "crates/ai_tools/**"
       ],
       "stack_path": "infra/stacks/mcp-server/**",
       "deploy_binaries": [
@@ -267,7 +266,7 @@
     },
     "kafka-cluster": {
       "source_paths": [
-        "rust/cloud-storage/macro_event_topics/**"
+        "crates/macro_event_topics/**"
       ],
       "stack_path": "infra/stacks/kafka-cluster/**"
     }

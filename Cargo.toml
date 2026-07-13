@@ -1,0 +1,279 @@
+[workspace]
+resolver = "2"
+
+members = [
+  "crates/agent",
+  "crates/ai_projections",
+  "crates/ai_usage",
+  "crates/bot_id",
+  "crates/bots",
+  "crates/channel_bots",
+  "crates/client/cache-core",
+  "crates/client/cache-idb",
+  "crates/client/cache-sqlite",
+  "crates/client/cache-wasm",
+  "crates/complete_graph",
+  "crates/cowlike",
+  "crates/crm",
+  "crates/embedding",
+  "crates/favorites",
+  "crates/foreign_entity",
+  "crates/graphql_common",
+  "crates/graphql_email",
+  "crates/graphql_notification",
+  "crates/graphql_properties",
+  "crates/graphql_soup",
+  "crates/integration_tests/local_e2e",
+  "crates/integration_tests/test_build_full_pdf_modification_data",
+  "crates/integration_tests/test_pdf_modification_data_deserialize",
+  "crates/loops_client",
+  "crates/macro_config",
+  "crates/macro_event_broker",
+  "crates/macro_event_topics",
+  "crates/macro_queues",
+  "crates/macro_sync_service_jwt",
+  "crates/memory",
+  "crates/prompt",
+  "crates/properties_service",
+  "crates/search_service",
+  "crates/task_dedup",
+  "crates/unfurl",
+  "crates/workspace-hack",
+  "services/authentication_service",
+  "services/connection_gateway",
+  "services/contacts_service",
+  "services/convert_service",
+  "services/document_cognition_service",
+  "services/document_cognition_service/load-test",
+  "services/document_storage_service",
+  "services/email_service",
+  "services/image_proxy_service",
+  "services/ai_projections_refresh_handler",
+  "services/call_recording_preview_handler",
+  "services/dataloss_prevention_handler",
+  "services/delete_chat_handler",
+  "services/deleted_item_poller",
+  "services/document_text_extractor",
+  "services/document_upload_finalizer_handler",
+  "services/docx_unzip_handler",
+  "services/email_refresh_handler",
+  "services/email_scheduled_handler",
+  "services/email_sfs_delete_handler",
+  "services/email_suppression_handler",
+  "services/image_optimizer",
+  "services/organization_retention_handler",
+  "services/organization_retention_trigger",
+  "services/search_upload_handler",
+  "services/sha_cleanup_worker",
+  "services/upload_extractor_lambda_handler",
+  "services/upload_extractor_lambda_trigger",
+  "services/user_link_cleanup_handler",
+  "services/worker_trigger",
+  "services/mcp_auth_proxy",
+  "services/mcp_service",
+  "services/notification_service",
+  "services/scheduled_action",
+  "services/search_processing_service",
+  "services/static_file_service",
+  "services/sync-service",
+  "services/sync-service/bebop-schema",
+  "services/unfurl_service",
+  "tooling/native_app_server",
+  "tooling/notification_sandbox",
+  "tooling/seed_cli",
+  "tooling/xtask",
+  "tooling/xtask/crates/*",
+]
+
+[workspace.dependencies]
+anyhow = "1.0.100"
+apollo-compiler = "1"
+apollo-parser = "0.8"
+askama = "0.14"
+async-graphql = "7.2.1"
+async-lock = "3"
+async-openai = { version = "0.36.1", features = [
+  "byot",
+  "chat-completion",
+  "completions",
+  "embedding",
+] }
+async-stream = "0.3.6"
+async-trait = "0.1.86"
+automod = "1"
+aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-msk-iam-sasl-signer = "1.0.1"
+aws-sdk-dynamodb = "1.111.0"
+aws-sdk-lambda = "1.122.0"
+aws-sdk-s3 = "1.132.0"
+aws-sdk-secretsmanager = "1.104.0"
+aws-sdk-sesv2 = "1.118.0"
+aws-sdk-sns = "1.99.0"
+aws-sdk-sqs = "1.98.0"
+aws-smithy-types = "1.4.7"
+aws-types = "1"
+aws_lambda_events = { version = "0.16.0", default-features = false }
+axum = { version = "0.8", features = ["tower-log"] }
+axum-extra = { version = "0.10" }
+base64 = "0.22.1"
+bebop = "3.1.3"
+cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
+chrono = { version = "0.4.39", features = ["serde"] }
+clap = { version = "4.5.20", features = ["derive"] }
+cloudfront_sign = "0.3.0"
+cookie = "0.18.1"
+csv = "1"
+dashmap = "6.1.0"
+dateparser = "0.2.1"
+dotenvy = "0.15.7"
+ego-tree = "0.6.2"
+either = "1"
+futures = "0.3.31"
+glob = "0.3.3"
+# Pinned engine for the generated dependency artifacts (used by the xtask
+# graph/deps commands). This version lives in Cargo.lock, so dev machines and
+# CI always run the identical generator; guppy is pinned to the version the
+# hakari release is built against.
+guppy = "0.17.24"
+hex = "0.4.3"
+hmac = "0.12.1"
+http = "1"
+http-body-util = "0.1.2"
+image = "0.25"
+indexmap = "2"
+inquire = "0.7"
+itertools = "0.14"
+jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
+  "rust_crypto",
+] }
+lambda_runtime = "0.13.0"
+lazy_static = "1.5.0"
+livekit-api = { version = "0.4.16", default-features = false, features = [
+  "access-token",
+  "rustls-tls-webpki-roots",
+  "services-tokio",
+  "webhooks",
+] }
+livekit-protocol = "0.7.2"
+log = "0.4.26"
+lol_html = "2.4.0"
+lru = "0.16"
+mockall = "0.13"
+nom = "8"
+opentelemetry = "0.31.0"
+opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
+  "grpc-tonic",
+  "internal-logs",
+  "logs",
+  "metrics",
+  "trace",
+] }
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+ordered-float = "5"
+paste = "1"
+pdfium-render = { version = "0.8.37", default-features = false, features = [
+  "pdfium_7543",
+  "thread_safe",
+] }
+pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
+postcard = { version = "1", features = ["use-std"] }
+quote = "1"
+rand = "0.9.0"
+# uses vendored to fix lambda builds failing.
+rdkafka = { version = "0.37", default-features = false, features = [
+  "cmake-build",
+  "libz-static",
+  "ssl-vendored",
+  "tokio",
+] }
+recursion = "0.5.4"
+redis = "1.0.3"
+regex = "1.11.1"
+reqwest = { version = "0.13", default-features = false, features = [
+  "form",
+  "hickory-dns",
+  "json",
+  "rustls",
+] }
+rmcp = "1.6.0"
+rootcause = { version = "0.12" }
+schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
+semver = { version = "1", features = ["serde"] }
+serde = { version = "1.0.214", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
+serde_json = { version = "1.0.132" }
+serde_repr = "0.1"
+serde_with = { version = "3.12.0", features = ["base64"] }
+serde_yaml = "0.9"
+sha2 = "0.10.8"
+sqlx = { version = "0.8.6", features = [
+  "chrono",
+  "postgres",
+  "runtime-tokio-rustls",
+  "uuid",
+] }
+sqlx-core = { version = "0.8.6" }
+strum = { version = "0.27.1", features = ["derive"] }
+thiserror = "2.0.0"
+time = "0.3.37"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.17" }
+tokio-tungstenite = { version = "0.28", default-features = false, features = [
+  "connect",
+  "rustls-tls-webpki-roots",
+] }
+tokio-util = "0.7.13"
+tower = { version = "0.5.1", features = ["util"] }
+tower-http = { version = "0.6.1", features = [
+  "compression-gzip",
+  "cors",
+  "trace",
+] }
+tracing = "0.1.44"
+tracing-opentelemetry = "0.32.1"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
+tracing-tree = "0.4.0"
+tungstenite = { version = "0.28", features = ["url"] }
+unsynn = "0.3"
+urlencoding = "2.1.3"
+utoipa = { version = "5.4.0", features = [
+  "axum_extras",
+  "chrono",
+  "repr",
+  "uuid",
+] }
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
+uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+# this is pinned to match axum 0.7.9 dependency requirements
+async-stripe = { version = "0.41", default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper-rustls-webpki",
+] }
+axum-macros = "0.5"
+bytes = "1.11.1"
+bzip2 = { version = "0.5.1", default-features = false, features = [
+  "libbz2-rs-sys",
+] }
+derive_builder = "0.20.2"
+doppleganger = "0.5"
+doppler-config = "0.1.2"
+js-sys = "0.3"
+once_cell = "1.21.3"
+scraper = "0.18"
+serde_urlencoded = "0.7.1"
+strum_macros = "0.27.1"
+unicode-segmentation = "1.9.0"
+url = "2.5.0"
+zip = "=2.4.2"
+
+# The Cloudflare sync worker is size-sensitive. Package manifests cannot own
+# profiles once they are workspace members, so keep its former release profile
+# here without changing release optimization for the backend services.
+[profile.sync-service-release]
+inherits = "release"
+lto = true
+opt-level = "s"

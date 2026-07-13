@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs
 name: cloud storage code check
 env:
   CARGO_INCREMENTAL: '0'
@@ -42,8 +42,19 @@ jobs:
       with:
         filters: |
           should_run:
-            - 'rust/cloud-storage/**'
-            - 'rust/rust-toolchain.toml'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'Cross.toml'
+            - 'clippy.toml'
+            - 'deny.toml'
+            - 'rust-toolchain.toml'
+            - '.cargo/**'
+            - '.config/**'
+            - '.sqlx/**'
+            - 'crates/**'
+            - 'services/**'
+            - 'tooling/xtask/**'
+            - 'static_assets/**'
             - 'flake.nix'
             - 'flake.lock'
             - '.github/actions/setup-cachix/**'
@@ -76,7 +87,7 @@ jobs:
       run: |
         set -euo pipefail
 
-        doppler_config_bins="$(cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
+        doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
         {
           echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
           if [ -n "$doppler_config_bins" ]; then
@@ -92,13 +103,13 @@ jobs:
         set -euo pipefail
 
         # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-        if grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
+        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|\.sqlx/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
           echo "Workspace-level change detected; running all tests"
           echo "nextest_filter=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        filterset="$(cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
+        filterset="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
 
         if [ -z "$filterset" ]; then
           echo "No package-specific Rust changes detected; running all tests"
@@ -175,20 +186,27 @@ jobs:
         echo "Building affected Doppler config binaries with RUSTC_WRAPPER=$RUSTC_WRAPPER"
         printf '  %s\n' "${bins[@]}"
 
-        (
-          cd rust/cloud-storage
-          cargo "${cargo_args[@]}"
-          for bin in "${bins[@]}"; do
-            "./target/debug/$bin"
-          done
-        )
+        cargo "${cargo_args[@]}"
+        for bin in "${bins[@]}"; do
+          "./target/debug/$bin"
+        done
       env:
         DOPPLER_CONFIG_BINS: ${{ needs.path-check.outputs.doppler_config_bins }}
         DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
     - name: fmt
-      run: cd rust/cloud-storage && cargo fmt --check
+      run: cargo fmt --check
     - name: clippy
-      run: cd rust/cloud-storage && cargo clippy --workspace --all-features
+      run: |
+        cargo clippy --workspace --all-features \
+          --exclude sync_service \
+          --exclude test_build_full_pdf_modification_data \
+          --exclude test_pdf_modification_data_deserialize
+        # sync-service has mutually exclusive storage features, so lint its
+        # supported default feature set separately. These two existing lints
+        # predate its inclusion in the root workspace.
+        cargo clippy -p sync_service -- \
+          -A clippy::unnecessary_map_or \
+          -A clippy::collapsible_if
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -264,14 +282,14 @@ jobs:
         done
         docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
     - name: prepare tests
-      run: just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs
+      run: just setup_test_envs && just initialize_dbs
     - name: run tests
       run: |
-        cd rust/cloud-storage
-
         # --no-tests=pass: a package filter (e.g. an xtask/tooling-only PR -> rdeps(=xtask))
         # can legitimately select zero tests; treat that as success, not nextest's default error.
-        args=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+        # sync-service was not part of this suite before it joined the root workspace,
+        # and its storage backends are mutually exclusive under --all-features.
+        args=(--workspace --exclude sync_service --all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
         if [ -n "$NEXTEST_FILTER" ]; then
           args+=(-E "$NEXTEST_FILTER")
         fi

@@ -3,12 +3,14 @@ language: rust
 severity: warning
 message: Axum handlers should take shared services via State, not Extension.
 note: |-
-  Rule CS-30 in STYLE_GUIDE.md. Recent reviews enforce
+  Rule CS-30 in docs/STYLE_GUIDE.md. Recent reviews enforce
   State for shared services (PR #4556); attach cross-cutting services to the
   owning domain service rather than wiring them at the router layer (CS-31,
   PR #4572). ~200 legacy uses exist — don't add new ones.
 files:
-  - rust/**
+  - crates/**
+  - services/**
+  - tooling/**
 rule:
   kind: parameter
   has:

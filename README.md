@@ -75,6 +75,16 @@ claude mcp add --transport http macro https://mcp-server.macro.com/mcp
  
 See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
 
+## Repository layout
+
+- `apps/` contains the web/desktop application and product documentation site.
+- `services/` contains deployable services, workers, and Lambda handlers.
+- `crates/` contains reusable Rust libraries, models, and clients.
+- `packages/` contains shared JavaScript and TypeScript packages.
+- `docker/`, `tooling/`, `docs/`, and `static_assets/` contain repository support files.
+
+The Cargo and Bun workspaces are rooted at the repository top level. See [Running locally](docs/RUNNING_LOCALLY.md) for setup and development commands.
+
  
 # Security
 

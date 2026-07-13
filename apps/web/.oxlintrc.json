@@ -1,0 +1,25 @@
+{
+  // oxlint runs ALONGSIDE Biome, scoped to rules Biome cannot express.
+  // Enforces FE-12 (and eventually FE-13) from docs/STYLE_GUIDE.md.
+  //
+  // Run: bun run lint:oxlint (from the repository root), or `bunx oxlint` from apps/web.
+  //
+  // typescript/no-floating-promises additionally needs type information:
+  // install `bun add -d oxlint oxlint-tsgolint` and run `oxlint --type-aware`
+  // (requires access to the repo's private git dependencies to update the
+  // lockfile, so it is not wired up yet).
+  "plugins": ["promise"],
+  "categories": {
+    "correctness": "off"
+  },
+  "rules": {
+    "promise/prefer-await-to-then": "warn"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/generated/**",
+    "**/*.gen.ts",
+    "**/patches/**"
+  ]
+}

@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs
 name: infra code check
 'on':
   pull_request:

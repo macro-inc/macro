@@ -1,0 +1,71 @@
+[package]
+name = "scheduled_action"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "service"
+path = "src/bins/service.rs"
+
+[[bin]]
+name = "scheduled_action_openapi"
+path = "src/bins/openapi.rs"
+
+[[bin]]
+name = "scheduled_action_doppler_config"
+path = "src/doppler_config.rs"
+
+[features]
+default = []
+local_auth = ["macro_middleware/local_auth"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_config = { path = "../../crates/macro_config" }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+sqlx = { workspace = true }
+macro_user_id = { path = "../../crates/macro_user_id"}
+cron = { version = "0.16.0" }
+anyhow = { workspace = true }
+macro_uuid = { path = "../../crates/macro_uuid"}
+chrono = { workspace = true}
+chrono-tz = { version = "0.10.4", features = ["serde"] }
+agent = { path = "../../crates/agent" }
+ai_usage = { path = "../../crates/ai_usage" }
+tokio = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+model_user = { path = "../../crates/model_user", features = ["axum"] }
+ai_tools = { path = "../../crates/ai_tools" }
+ai_toolset = { path = "../../crates/ai_toolset" }
+aws-sdk-sqs = { workspace = true }
+chat = { path = "../../crates/chat" }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+macro_db_client = { path = "../../crates/macro_db_client" }
+memory = { path = "../../crates/memory" }
+model = { path = "../../crates/model" }
+model-entity = { path = "../../crates/model-entity" }
+model_notifications = { path = "../../crates/model_notifications" }
+notification = { path = "../../crates/notification" }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { workspace = true }
+
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
+  "auth",
+] }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+aws-sdk-secretsmanager = { workspace = true }
+
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

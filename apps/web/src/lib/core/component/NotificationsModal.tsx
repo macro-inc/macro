@@ -1,0 +1,99 @@
+import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import clickOutside from '@core/directive/clickOutside';
+import type { Entity } from '@core/types';
+import {
+  type NotificationSource,
+  useNotificationsForEntity,
+} from '@notifications';
+import Bell from '@phosphor/bell.svg';
+import { Button, cn } from '@ui';
+import { createMemo, Show, Suspense } from 'solid-js';
+import { Notifications } from './Notifications';
+
+false && clickOutside;
+const NOTIFICATIONS_DRAWER_ID = 'notifications';
+
+function _NotificationsButton(props: {
+  entity: Entity;
+  notificationSource: NotificationSource;
+  buttonSize?: 'sm';
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const drawerControl = useDrawerControl(NOTIFICATIONS_DRAWER_ID);
+  const notifications = useNotificationsForEntity(
+    props.notificationSource,
+    props.entity
+  );
+  const unreadCount = createMemo(
+    () => notifications().filter((n) => !n.viewed_at).length
+  );
+  return (
+    <div class="relative p-0 flex" tabIndex={-1}>
+      <Button
+        class={cn(
+          'px-1',
+          drawerControl.isOpen() &&
+            'bg-accent/20 hover:bg-accent/30 text-accent'
+        )}
+        tooltip="View notifications"
+        onClick={() => {
+          props.onOpenChange?.(!drawerControl.isOpen());
+          drawerControl.toggle();
+        }}
+        size="icon-sm"
+      >
+        <Bell />
+      </Button>
+      <Suspense fallback={null}>
+        <Show when={unreadCount() > 0}>
+          <div class="text-[6pt] bg-accent text-surface font-semibold rounded-full absolute top-0 right-0 px-1 pointer-events-none">
+            {unreadCount()}
+          </div>
+        </Show>
+      </Suspense>
+    </div>
+  );
+}
+
+export function NotificationsDrawer(props: {
+  entity: Entity;
+  notificationSource: NotificationSource;
+}) {
+  const notifications = useNotificationsForEntity(
+    props.notificationSource,
+    props.entity
+  );
+  const unreadCount = createMemo(
+    () => notifications().filter((n) => !n.viewed_at).length
+  );
+  const title = () => (
+    <>
+      Notifications
+      <span class="text-ink-extra-muted">
+        {unreadCount() > 0 ? ` - ${unreadCount()} unread` : ''}
+      </span>
+    </>
+  );
+  return (
+    <SplitDrawer
+      id={NOTIFICATIONS_DRAWER_ID}
+      side="right"
+      size={768}
+      title={title()}
+    >
+      <Suspense
+        fallback={
+          <div class="flex justify-center py-8">
+            <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted"></div>
+          </div>
+        }
+      >
+        <Notifications
+          entity={props.entity}
+          notificationSource={props.notificationSource}
+        />
+      </Suspense>
+    </SplitDrawer>
+  );
+}

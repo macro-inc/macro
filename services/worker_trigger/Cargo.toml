@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "worker_trigger"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-ecs = "1.124.0"
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+mockall = { workspace = true }

@@ -4,11 +4,11 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/deploy-lexical-service.yml"
-      - "js/bun.lock"
-      - "js/package.json"
-      - "js/lexical-core/**"
-      - "js/lexical-service/**"
-      - "js/loro-mirror/**"
+      - "bun.lock"
+      - "package.json"
+      - "packages/lexical-core/**"
+      - "services/lexical-service/**"
+      - "packages/loro-mirror/**"
   workflow_dispatch:
     inputs:
       environment:
@@ -35,10 +35,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
-        working-directory: js
         run: bun install --frozen-lockfile
       - name: Deploy to Cloudflare (${{ matrix.environment }})
-        working-directory: js/lexical-service
+        working-directory: services/lexical-service
         run: bun run deploy-${{ matrix.environment }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

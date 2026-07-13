@@ -9,7 +9,7 @@
         "name": "repository",
         "type": "repo",
         "provider": "Github",
-        "url": "https://github.com/macro-inc/app-monorepo"
+        "url": "https://github.com/macro-inc/macro"
       },
       {
         "name": "runbook",
@@ -46,9 +46,9 @@
   "datadog": {
     "codeLocations": [
       {
-        "repositoryURL": "https://github.com/macro-inc/app-monorepo.git",
+        "repositoryURL": "https://github.com/macro-inc/macro.git",
         "paths": [
-          "packages/**/*"
+          "apps/web/**/*"
         ]
       }
     ]

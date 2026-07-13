@@ -1,0 +1,46 @@
+[package]
+edition = "2024"
+exclude = ["fixtures/", "migrations/", "tests/"]
+name = "docx_unzip_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-lambda = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+aws-smithy-types = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["s3"] }
+bzip2 = { workspace = true, default-features = false, features = [
+  "libbz2-rs-sys",
+] }
+futures = { workspace = true }
+lambda_client = { path = "../../crates/lambda_client" }
+lambda_runtime = { workspace = true }
+macro_db_client = { path = "../../crates/macro_db_client" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_sha_count_client = { path = "../../crates/macro_sha_count_client" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+model = { path = "../../crates/model" }
+s3_key = { path = "../../crates/s3_key" }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-rustls-comp",
+] }
+s3_client = { path = "../../crates/s3_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+zip = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+

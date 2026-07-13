@@ -19,7 +19,7 @@ import {
 
 // NOTE: the BASE_NAME for sps does not match the pulumi project name so do not change
 const BASE_NAME = 'search-processing';
-const BASE_PATH = '../../../rust/cloud-storage';
+const REPO_ROOT = '../../..';
 
 export const SERVICE_DOMAIN_NAME = `search-processing${
   stack === 'prod' ? '' : `-${stack}`
@@ -159,8 +159,8 @@ export class SearchProcessingService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: BASE_PATH,
-        dockerfile: 'Dockerfile.search_processing_service',
+        imagePath: REPO_ROOT,
+        dockerfile: 'docker/Dockerfile.search_processing_service',
         platform,
         buildArgs: {
           SERVICE_NAME: 'search_processing_service',

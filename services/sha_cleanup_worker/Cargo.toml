@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "sha_cleanup_worker"
+publish = false
+version = "0.1.0"
+
+[features]
+local = []
+redis_client_test = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+futures = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+mockall = { workspace = true }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-rustls-comp",
+] }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

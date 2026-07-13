@@ -20,8 +20,8 @@ runs:
       run: |
         set -euo pipefail
 
-        if [[ -f rust/rust-toolchain.toml ]]; then
-          toolchain="$(grep -E '^[[:space:]]*channel[[:space:]]*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+        if [[ -f rust-toolchain.toml ]]; then
+          toolchain="$(grep -E '^[[:space:]]*channel[[:space:]]*=' rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
         else
           toolchain="stable"
         fi
@@ -49,4 +49,4 @@ runs:
       with:
         shared-key: cloud-storage
         cache-all-crates: true
-        workspaces: "rust/cloud-storage"
+        workspaces: "."
