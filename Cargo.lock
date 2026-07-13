@@ -8117,6 +8117,7 @@ dependencies = [
  "macro_user_id",
  "model-error-response",
  "model_user",
+ "roles_and_permissions",
  "rootcause",
  "serde",
  "serde_json",

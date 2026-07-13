@@ -1,9 +1,21 @@
 //! Contains the service logic for roles and permissions
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use std::collections::HashSet;
+
+use macro_user_id::{
+    email::Email,
+    lowercased::Lowercase,
+    user_id::{BorrowedUserIdStr, MacroUserIdStr},
+};
 
 use crate::domain::{
-    model::{ProductTier, RoleId, SubscriptionStatus, UserRolesAndPermissionsError},
-    port::{UserRepository, UserRolesAndPermissionsRepository, UserRolesAndPermissionsService},
+    model::{
+        Permission, PermissionId, ProductTier, RoleId, SubscriptionStatus,
+        UserRolesAndPermissionsError,
+    },
+    port::{
+        UserPermissionsService, UserRepository, UserRolesAndPermissionsRepository,
+        UserRolesAndPermissionsService,
+    },
 };
 
 #[cfg(test)]
@@ -33,6 +45,23 @@ where
             user_roles_and_permissions_repository,
             user_repository,
         }
+    }
+}
+
+impl<URPR, UR> UserPermissionsService for UserRolesAndPermissionsServiceImpl<URPR, UR>
+where
+    URPR: UserRolesAndPermissionsRepository,
+    UR: UserRepository,
+{
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_permissions_for_user_id(
+        &self,
+        user_id: &BorrowedUserIdStr<'_>,
+    ) -> Result<HashSet<PermissionId>, UserRolesAndPermissionsError> {
+        self.user_roles_and_permissions_repository
+            .get_user_permissions_for_user_id(user_id)
+            .await
+            .map(permission_ids)
     }
 }
 
@@ -102,24 +131,27 @@ where
     async fn get_user_permissions(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<std::collections::HashSet<super::model::PermissionId>, UserRolesAndPermissionsError>
-    {
-        Ok(self
-            .user_roles_and_permissions_repository
+    ) -> Result<HashSet<PermissionId>, UserRolesAndPermissionsError> {
+        self.user_roles_and_permissions_repository
             .get_user_permissions(user_id)
-            .await?
-            .into_iter()
-            .map(|p| p.id)
-            .collect())
+            .await
+            .map(permission_ids)
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn get_user_roles(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<std::collections::HashSet<RoleId>, UserRolesAndPermissionsError> {
+    ) -> Result<HashSet<RoleId>, UserRolesAndPermissionsError> {
         self.user_roles_and_permissions_repository
             .get_user_roles(user_id)
             .await
     }
+}
+
+fn permission_ids(permissions: HashSet<Permission>) -> HashSet<PermissionId> {
+    permissions
+        .into_iter()
+        .map(|permission| permission.id)
+        .collect()
 }

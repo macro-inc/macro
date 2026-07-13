@@ -9,7 +9,7 @@ use macro_user_id::{
     cowlike::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
-    user_id::MacroUserIdStr,
+    user_id::{BorrowedUserIdStr, MacroUserIdStr},
 };
 use sqlx::PgPool;
 
@@ -94,10 +94,10 @@ impl MacroDB {
         Ok(())
     }
 
-    /// Get the current permissions for a user
-    async fn get_user_permissions(
+    /// Query the current permissions using the user ID's exact stored casing.
+    async fn query_user_permissions(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        user_id: &str,
     ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
         let user_permissions: Vec<Permission> = sqlx::query!(
             r#"
@@ -115,7 +115,7 @@ impl MacroDB {
         WHERE
           u.id = $1
         "#,
-            user_id.as_ref(),
+            user_id,
         )
         .fetch_all(&self.pool)
         .await?
@@ -134,6 +134,14 @@ impl MacroDB {
         let user_permissions = user_permissions.into_iter().collect::<HashSet<_>>();
 
         Ok(user_permissions)
+    }
+
+    /// Get the current permissions for a normalized Macro user ID.
+    async fn get_user_permissions(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
+        self.query_user_permissions(user_id.as_ref()).await
     }
 }
 
@@ -180,6 +188,13 @@ impl UserRolesAndPermissionsRepository for MacroDB {
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
         self.get_user_permissions(user_id).await
+    }
+
+    async fn get_user_permissions_for_user_id(
+        &self,
+        user_id: &BorrowedUserIdStr<'_>,
+    ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
+        self.query_user_permissions(user_id.0.as_ref()).await
     }
 
     async fn add_roles_to_user(

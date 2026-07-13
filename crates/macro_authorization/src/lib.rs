@@ -31,6 +31,12 @@ pub use inbound::{
     OptionalMacroAuthorizationExtractor, OptionalSharedMacroAuthorizationExtractor,
     SharedMacroAuthorizationExtractor,
 };
+/// Permission-aware authorization extraction and shared service handle.
+#[cfg(feature = "permissions")]
+pub use inbound::{
+    PermissionedMacroAuthorizationExtractor, PermissionedMacroAuthorizationRejection,
+    SharedUserPermissionsService,
+};
 /// JWT validator backed by the shared `macro_auth` implementation.
 #[cfg(feature = "outbound")]
 pub use outbound::MacroAuthJwtValidator;

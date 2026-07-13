@@ -27,6 +27,7 @@ impl UserRepository for MockUserRepository {
 #[derive(Debug, Clone, Default)]
 struct MockUserRolesAndPermissionsRepository {
     add_roles_to_user_calls: Arc<Mutex<usize>>,
+    permission_user_id_calls: Arc<Mutex<Vec<String>>>,
     removed_roles_from_user_calls: Arc<Mutex<Vec<Vec<RoleId>>>>,
 }
 
@@ -37,6 +38,10 @@ impl MockUserRolesAndPermissionsRepository {
 
     pub fn get_remove_roles_from_user_calls(&self) -> usize {
         self.removed_roles_from_user_calls.lock().unwrap().len()
+    }
+
+    pub fn get_permission_user_id_calls(&self) -> Vec<String> {
+        self.permission_user_id_calls.lock().unwrap().clone()
     }
 
     pub fn get_removed_roles_from_user_calls(&self) -> Vec<Vec<RoleId>> {
@@ -60,6 +65,20 @@ impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository
         _user_id: &MacroUserIdStr<'_>,
     ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
         Ok(HashSet::new())
+    }
+
+    async fn get_user_permissions_for_user_id(
+        &self,
+        user_id: &BorrowedUserIdStr<'_>,
+    ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
+        self.permission_user_id_calls
+            .lock()
+            .unwrap()
+            .push(user_id.0.as_ref().to_string());
+        Ok(HashSet::from([Permission::new(
+            PermissionId::WriteProAi,
+            "professional AI".to_string(),
+        )]))
     }
 
     async fn add_roles_to_user(
@@ -159,6 +178,24 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
         mock_user_roles_and_permissions_repository.get_remove_roles_from_user_calls(),
         1
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_user_permissions_for_user_id_preserves_casing() -> anyhow::Result<()> {
+    let mock_user_repository = MockUserRepository::default();
+    let repository = MockUserRolesAndPermissionsRepository::default();
+    let service = UserRolesAndPermissionsServiceImpl::new(repository.clone(), mock_user_repository);
+    let user_id = BorrowedUserIdStr::try_from("macro|MixedCase@user.com")?;
+
+    let permissions = service.get_user_permissions_for_user_id(&user_id).await?;
+
+    assert_eq!(permissions, HashSet::from([PermissionId::WriteProAi]));
+    assert_eq!(
+        repository.get_permission_user_id_calls(),
+        ["macro|MixedCase@user.com"]
+    );
+
     Ok(())
 }
 
