@@ -198,6 +198,7 @@ dependencies = [
  "item_filters",
  "lazy_static",
  "lexical_client",
+ "lexical_mention_extractor",
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
@@ -4222,6 +4223,7 @@ dependencies = [
  "last_online_tracker",
  "lazy_static",
  "lexical_client",
+ "lexical_mention_extractor",
  "macro_auth",
  "macro_aws_config",
  "macro_axum_utils",
@@ -7607,6 +7609,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "lexical_mention_extractor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "channels",
+ "lexical_client",
  "workspace-hack",
 ]
 

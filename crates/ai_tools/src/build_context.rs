@@ -203,7 +203,10 @@ pub async fn build_tool_service_context_from_env(
         PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
-    let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());
+    let channel_tool_context = crate::tool_context::build_channel_tool_context(
+        pool.clone(),
+        Arc::new(lexical_client.clone()),
+    );
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
     let foreign_entity_service =

@@ -1014,6 +1014,22 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// Extractor of the mentions embedded in message content.
+///
+/// The web editor tracks mentions while a user composes a message and sends
+/// them alongside it; bot-authored content arrives as raw macro markdown, so
+/// the service uses this port to derive the equivalent mention list.
+pub trait ChannelMentionExtractor: Send + Sync + 'static {
+    /// Error type for mention extraction.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Extract the entity mentions embedded in `content`.
+    fn extract_mentions(
+        &self,
+        content: &str,
+    ) -> impl Future<Output = Result<Vec<SimpleMention>, Self::Err>> + Send;
+}
+
 /// Errors that can occur while mutating channels.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelMutationErr {
