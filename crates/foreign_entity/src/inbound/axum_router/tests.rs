@@ -18,6 +18,10 @@ use entity_access::{
     inbound::axum_extractors::InternalUser,
 };
 use http_body_util::BodyExt;
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
@@ -33,6 +37,9 @@ use crate::domain::{
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
+
+const TEST_TOKEN: &str = "foreign-entity-token";
+const TEST_USER_ID: &str = "macro|foreign-entity@example.com";
 
 #[derive(Clone)]
 struct StubForeignEntityService {
@@ -139,10 +146,29 @@ impl ForeignEntityService for StubForeignEntityService {
     }
 }
 
-#[derive(Clone)]
-struct NoopEntityAccessService;
+#[derive(Clone, Default)]
+struct StubEntityAccessService {
+    allow_permission_lookup: bool,
+    authorized_user_ids: Arc<Mutex<Vec<String>>>,
+}
 
-impl EntityAccessService for NoopEntityAccessService {
+impl StubEntityAccessService {
+    fn authenticated() -> Self {
+        Self {
+            allow_permission_lookup: true,
+            authorized_user_ids: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn authorized_user_ids(&self) -> Vec<String> {
+        self.authorized_user_ids
+            .lock()
+            .expect("authorized user IDs lock poisoned")
+            .clone()
+    }
+}
+
+impl EntityAccessService for StubEntityAccessService {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
@@ -183,12 +209,26 @@ impl EntityAccessService for NoopEntityAccessService {
 
     async fn get_entity_permission(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
-        _entity_type: EntityType,
+        entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        unreachable!("InternalUser extension should bypass real access checks")
+        assert!(
+            self.allow_permission_lookup,
+            "InternalUser extension should bypass real access checks"
+        );
+        assert_eq!(entity_type, EntityType::ForeignEntity);
+
+        let user_id = user_id.expect("authenticated access should include a user ID");
+        self.authorized_user_ids
+            .lock()
+            .expect("authorized user IDs lock poisoned")
+            .push(user_id.as_ref().to_string());
+
+        Ok(EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        })
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -230,11 +270,24 @@ impl EntityAccessService for NoopEntityAccessService {
     }
 }
 
-fn test_router(service: Arc<StubForeignEntityService>) -> Router {
+fn test_router(
+    service: Arc<StubForeignEntityService>,
+    access_service: StubEntityAccessService,
+    authorization: FakeMacroAuthorizationService,
+) -> Router {
     foreign_entity_router(ForeignEntityRouterState::new(
         service,
-        Arc::new(NoopEntityAccessService),
+        Arc::new(access_service),
+        SharedMacroAuthorizationService::new(authorization),
     ))
+}
+
+fn internal_test_router(service: Arc<StubForeignEntityService>) -> Router {
+    test_router(
+        service,
+        StubEntityAccessService::default(),
+        FakeMacroAuthorizationService::default(),
+    )
 }
 
 fn internal_get(uri: impl Into<String>) -> Request<Body> {
@@ -249,6 +302,15 @@ fn internal_get(uri: impl Into<String>) -> Request<Body> {
     });
 
     request
+}
+
+fn authenticated_get(uri: impl Into<String>, token: &str) -> Request<Body> {
+    bearer(
+        Request::builder().method(Method::GET).uri(uri.into()),
+        token,
+    )
+    .body(Body::empty())
+    .expect("test request should be built")
 }
 
 async fn response_json(response: Response) -> Value {
@@ -299,7 +361,7 @@ async fn get_foreign_entity_returns_camel_case_json_and_forwards_receipt_id() {
     let id = Uuid::new_v4();
     let entity = foreign_entity(id);
     let service = Arc::new(StubForeignEntityService::entity(entity.clone()));
-    let response = test_router(service.clone())
+    let response = internal_test_router(service.clone())
         .oneshot(internal_get(format!("/{id}")))
         .await
         .expect("router should respond");
@@ -313,11 +375,35 @@ async fn get_foreign_entity_returns_camel_case_json_and_forwards_receipt_id() {
 }
 
 #[tokio::test]
+async fn get_foreign_entity_authenticates_non_internal_requests() {
+    let id = Uuid::new_v4();
+    let entity = foreign_entity(id);
+    let service = Arc::new(StubForeignEntityService::entity(entity.clone()));
+    let access_service = StubEntityAccessService::authenticated();
+    let authorization = FakeMacroAuthorizationService::always(test_user_context(TEST_USER_ID));
+    let authorization_calls = authorization.clone();
+
+    let response = test_router(service.clone(), access_service.clone(), authorization)
+        .oneshot(authenticated_get(format!("/{id}"), TEST_TOKEN))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await,
+        expected_foreign_entity_json(&entity)
+    );
+    assert_eq!(authorization_calls.calls(), [TEST_TOKEN]);
+    assert_eq!(access_service.authorized_user_ids(), [TEST_USER_ID]);
+    assert_eq!(service.receipt_entity_ids(), [id.to_string()]);
+}
+
+#[tokio::test]
 async fn get_foreign_entity_rejects_invalid_uuid() {
     let service = Arc::new(StubForeignEntityService::entity(foreign_entity(
         Uuid::new_v4(),
     )));
-    let response = test_router(service.clone())
+    let response = internal_test_router(service.clone())
         .oneshot(internal_get("/not-a-uuid"))
         .await
         .expect("router should respond");
@@ -330,7 +416,7 @@ async fn get_foreign_entity_rejects_invalid_uuid() {
 async fn get_foreign_entity_maps_not_found_to_404() {
     let id = Uuid::new_v4();
     let service = Arc::new(StubForeignEntityService::not_found(id));
-    let response = test_router(service.clone())
+    let response = internal_test_router(service.clone())
         .oneshot(internal_get(format!("/{id}")))
         .await
         .expect("router should respond");

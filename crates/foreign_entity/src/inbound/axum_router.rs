@@ -16,6 +16,7 @@ use entity_access::{
     domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::ForeignEntityAccessLevelExtractor,
 };
+use macro_authorization::SharedMacroAuthorizationService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -27,6 +28,7 @@ use crate::domain::{
 pub struct ForeignEntityRouterState<S, AccessSvc> {
     service: Arc<S>,
     access_service: Arc<AccessSvc>,
+    authorization: SharedMacroAuthorizationService,
 }
 
 impl<S, AccessSvc> Clone for ForeignEntityRouterState<S, AccessSvc> {
@@ -34,6 +36,7 @@ impl<S, AccessSvc> Clone for ForeignEntityRouterState<S, AccessSvc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization: self.authorization.clone(),
         }
     }
 }
@@ -44,10 +47,15 @@ where
     AccessSvc: EntityAccessService,
 {
     /// Create router state from shared service references.
-    pub fn new(service: Arc<S>, access_service: Arc<AccessSvc>) -> Self {
+    pub fn new(
+        service: Arc<S>,
+        access_service: Arc<AccessSvc>,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             service,
             access_service,
+            authorization,
         }
     }
 }
@@ -55,6 +63,14 @@ where
 impl<S, AccessSvc> FromRef<ForeignEntityRouterState<S, AccessSvc>> for Arc<AccessSvc> {
     fn from_ref(state: &ForeignEntityRouterState<S, AccessSvc>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<S, AccessSvc> FromRef<ForeignEntityRouterState<S, AccessSvc>>
+    for SharedMacroAuthorizationService
+{
+    fn from_ref(state: &ForeignEntityRouterState<S, AccessSvc>) -> Self {
+        state.authorization.clone()
     }
 }
 
