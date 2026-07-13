@@ -33,6 +33,7 @@ use axum::{
     routing::{get, patch, put},
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::SharedMacroAuthorizationService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{model::CrmError, service::CrmService};
@@ -43,11 +44,19 @@ pub struct CrmRouterState<C, Eas> {
     pub service: Arc<C>,
     /// Entity access service used by the team-scoped extractors.
     pub entity_access_service: Arc<Eas>,
+    /// Authorization service used to authenticate callers.
+    pub authorization: SharedMacroAuthorizationService,
 }
 
 impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for Arc<Eas> {
     fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
         state.entity_access_service.clone()
+    }
+}
+
+impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
+        state.authorization.clone()
     }
 }
 
@@ -78,6 +87,7 @@ impl<C, Eas> Clone for CrmRouterState<C, Eas> {
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            authorization: self.authorization.clone(),
         }
     }
 }
