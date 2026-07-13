@@ -45,7 +45,6 @@ export type MobileTouchMenuTriggerProps = {
 
 type MobileTouchMenuButtonProps = {
   icon: MobileTouchIconComponent;
-  ariaLabel: string;
   ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
   onPointerDown: () => void;
   onTouchMove?: (e: TouchEvent) => void;
@@ -61,9 +60,9 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
     <button
       type="button"
       ref={props.ref}
-      aria-label={props.ariaLabel}
       use:pressPulse
-      onPointerDown={() => {
+      onPointerDown={(e) => {
+        e.preventDefault();
         hapticImpact('light');
         if (props.animateIcon !== false) {
           setAnimating(true);
@@ -90,8 +89,7 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
 }
 
 export function MobileTouchMenu(props: {
-  triggerIcon?: MobileTouchIconComponent;
-  triggerAriaLabel: string;
+  triggerIcon: MobileTouchIconComponent;
   position?: 'bottom-row' | 'trigger-bottom';
   footerLabel: string;
   footerCaretClass?: string;
@@ -182,8 +180,7 @@ export function MobileTouchMenu(props: {
     <>
       <MobileTouchMenuButton
         ref={setTriggerRef}
-        icon={props.triggerIcon!}
-        ariaLabel={props.triggerAriaLabel}
+        icon={props.triggerIcon}
         animateIcon={false}
         onPointerDown={toggleMenu}
         onTouchMove={handleTouchMove}
