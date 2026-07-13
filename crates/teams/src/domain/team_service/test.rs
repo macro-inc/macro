@@ -21,7 +21,7 @@ use roles_and_permissions::domain::{
 };
 
 use crate::domain::{
-    crm_enqueuer::NoOpCrmEnqueuer,
+    crm_enqueuer::{CrmEnqueuer, NoOpCrmEnqueuer},
     team_analytics::{TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
 };
@@ -1500,6 +1500,118 @@ async fn test_get_team_reports_crm_enabled() {
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &owner_id);
     let team = service.get_team(receipt).await.unwrap();
     assert!(team.team.crm_enabled());
+}
+
+/// CrmEnqueuer that records which users had a populate enqueued.
+#[derive(Clone, Default)]
+struct RecordingCrmEnqueuer {
+    populated: Arc<Mutex<Vec<String>>>,
+}
+
+impl CrmEnqueuer for RecordingCrmEnqueuer {
+    type Err = std::convert::Infallible;
+
+    async fn enqueue_populate_crm_for_user(
+        &self,
+        macro_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        self.populated
+            .lock()
+            .unwrap()
+            .push(macro_id.as_ref().to_string());
+        Ok(())
+    }
+
+    async fn enqueue_depopulate_crm_for_user(
+        &self,
+        _: &uuid::Uuid,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+}
+
+fn build_crm_enable_service(
+    team_id: uuid::Uuid,
+    member_ids: &[&str],
+) -> (impl TeamService, Arc<Mutex<Vec<String>>>) {
+    let members = member_ids
+        .iter()
+        .map(|id| TeamMember {
+            team_id,
+            user_id: MacroUserIdStr::parse_from_str(id).unwrap().into_owned(),
+            role: TeamRole::Member,
+        })
+        .collect();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
+        .with_team_members(members);
+    let enqueuer = RecordingCrmEnqueuer::default();
+    let populated = enqueuer.populated.clone();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress,
+        enqueuer,
+        // NoOp reports every enable_crm call as a fresh false → true flip.
+        NoOpTeamCrmSettingsRepository,
+    );
+    (service, populated)
+}
+
+/// Enabling with backfill enqueues a populate per team member.
+#[tokio::test]
+async fn test_enable_crm_with_backfill_enqueues_members() {
+    let team_id = uuid::Uuid::from_u128(7);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let (service, populated) = build_crm_enable_service(
+        team_id,
+        &["macro|owner@example.com", "macro|member@example.com"],
+    );
+
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+    let response = service
+        .set_team_crm_enabled(receipt, true, true)
+        .await
+        .unwrap();
+
+    assert!(response.enabled);
+    assert!(response.changed);
+    assert_eq!(response.backfill_enqueued, 2);
+    assert_eq!(response.backfill_failed, 0);
+    assert_eq!(
+        *populated.lock().unwrap(),
+        vec![
+            "macro|owner@example.com".to_string(),
+            "macro|member@example.com".to_string()
+        ]
+    );
+}
+
+/// Enabling without backfill flips the flag but enqueues nothing.
+#[tokio::test]
+async fn test_enable_crm_without_backfill_skips_enqueue() {
+    let team_id = uuid::Uuid::from_u128(7);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let (service, populated) = build_crm_enable_service(
+        team_id,
+        &["macro|owner@example.com", "macro|member@example.com"],
+    );
+
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+    let response = service
+        .set_team_crm_enabled(receipt, true, false)
+        .await
+        .unwrap();
+
+    assert!(response.enabled);
+    assert!(response.changed);
+    assert_eq!(response.backfill_enqueued, 0);
+    assert_eq!(response.backfill_failed, 0);
+    assert!(populated.lock().unwrap().is_empty());
 }
 
 fn build_service_with_team(

@@ -262,8 +262,8 @@ export function EmptyState(props: {
         >
           <EmptyStatePanel
             graphic={EmptyStateCompaniesGraphic}
-            title="No customers"
-            description="Customers you add or sync into your CRM will appear here."
+            title="No customers yet"
+            description="Customers your team emails will appear here."
           />
         </Show>
       </Match>

@@ -1159,6 +1159,7 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         enabled: bool,
+        backfill: bool,
     ) -> Result<PatchTeamCrmSettingsResponse, TeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
@@ -1167,7 +1168,11 @@ where
             // Fetch the members *before* flipping the flag so a member-list
             // failure leaves the flag untouched — a retry will then re-run
             // the full backfill instead of hitting the early-return below.
-            let members = self.team_repository.get_team_members(&team_id).await?;
+            let members = if backfill {
+                self.team_repository.get_team_members(&team_id).await?
+            } else {
+                Vec::new()
+            };
 
             let changed = self
                 .team_crm_settings_repository

@@ -1886,7 +1886,7 @@
     "/team/crm": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],
-        "summary": "Enables or disables CRM for the team. On enable, kicks off a\nbest-effort backfill that enqueues a `PopulateCrmForUser` message\nper team member (no-op if CRM is already enabled). On disable,\nflips the flag and purges the team's CRM data (cascading through\n`crm_companies` → `crm_domains` / `crm_contacts` /\n`crm_contact_sources`). Requires the caller to be an Admin or\nOwner of the team.",
+        "summary": "Enables or disables CRM for the team. On enable with `backfill`\n(the default), kicks off a best-effort backfill that enqueues a\n`PopulateCrmForUser` message per team member (no-op if CRM is\nalready enabled); without `backfill` the CRM starts empty and fills\nfrom new activity only. On disable,\nflips the flag and purges the team's CRM data (cascading through\n`crm_companies` → `crm_domains` / `crm_contacts` /\n`crm_contact_sources`). Requires the caller to be an Admin or\nOwner of the team.",
         "operationId": "patch_team_crm_settings",
         "requestBody": {
           "content": {
@@ -3968,6 +3968,11 @@
         "description": "Request body for `PATCH /team/crm`.",
         "required": ["enabled"],
         "properties": {
+          "backfill": {
+            "type": "boolean",
+            "description": "On a disabled → enabled transition, whether to backfill the CRM\nfrom members' existing email history. Ignored when disabling.",
+            "default": true
+          },
           "enabled": {
             "type": "boolean",
             "description": "The desired CRM state for the team."
