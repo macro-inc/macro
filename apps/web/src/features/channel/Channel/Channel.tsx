@@ -691,7 +691,9 @@ export function Channel(props: ChannelProps) {
                     </Show>
                   </div>
                 </Show>
-                <ActiveCallMessage channelId={props.channelId} />
+                <DebugSuspense name="Channel.active-call">
+                  <ActiveCallMessage channelId={props.channelId} />
+                </DebugSuspense>
               </div>
               <DebugSuspense name="Channel.input">
                 <FloatRegionOrInline region="accessory">

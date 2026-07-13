@@ -12,6 +12,7 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
     queryKey: callKeys.active(channelId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.checkActiveCall(channelId())),
+    placeholderData: null,
     refetchInterval: 15_000,
   }));
 }
