@@ -2995,6 +2995,18 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "macro_authorization": [
+      "crates/cowlike",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
+    ],
     "macro_aws_config": [
       "crates/macro_aws_config",
       "crates/macro_env_var",
