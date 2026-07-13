@@ -8556,6 +8556,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "maybe_send"
+version = "0.1.0"
+
+[[package]]
 name = "mcp_auth_proxy"
 version = "0.1.0"
 dependencies = [
