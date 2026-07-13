@@ -4,13 +4,13 @@ use crate::domain::{
 };
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
@@ -19,6 +19,7 @@ use utoipa::{IntoParams, ToSchema};
 pub struct McpRouterState<S, O> {
     store: Arc<S>,
     oauth: Arc<O>,
+    authorization: SharedMacroAuthorizationService,
 }
 
 impl<S, O> Clone for McpRouterState<S, O> {
@@ -26,7 +27,14 @@ impl<S, O> Clone for McpRouterState<S, O> {
         Self {
             store: self.store.clone(),
             oauth: self.oauth.clone(),
+            authorization: self.authorization.clone(),
         }
+    }
+}
+
+impl<S, O> FromRef<McpRouterState<S, O>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &McpRouterState<S, O>) -> Self {
+        state.authorization.clone()
     }
 }
 
@@ -35,11 +43,12 @@ where
     S: McpServerStore,
     O: OAuthClient,
 {
-    /// Create a new router state from a server store and OAuth client.
-    pub fn new(store: S, oauth: O) -> Self {
+    /// Create a new router state from a server store, OAuth client, and authorization service.
+    pub fn new(store: S, oauth: O, authorization: SharedMacroAuthorizationService) -> Self {
         Self {
             store: Arc::new(store),
             oauth: Arc::new(oauth),
+            authorization,
         }
     }
 
@@ -199,7 +208,7 @@ impl IntoResponse for McpHandlerErr {
     operation_id = "list_mcp_servers",
     responses(
         (status = 200, body = Vec<ServerResponse>),
-        (status = 401, body = String),
+        (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -207,7 +216,7 @@ impl IntoResponse for McpHandlerErr {
 #[tracing::instrument(skip_all, err)]
 pub async fn list_servers<S, O>(
     State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<Vec<ServerResponse>>, McpHandlerErr>
 where
     S: McpServerStore,
@@ -233,7 +242,7 @@ where
     request_body = AddServerRequest,
     responses(
         (status = 201, body = ServerResponse),
-        (status = 401, body = String),
+        (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -241,7 +250,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O>(
     State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     Json(body): Json<AddServerRequest>,
 ) -> Result<(StatusCode, Json<ServerResponse>), McpHandlerErr>
 where
@@ -277,7 +286,7 @@ where
     request_body = UpdateServerRequest,
     responses(
         (status = 200, body = ServerResponse),
-        (status = 401, body = String),
+        (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -286,7 +295,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn update_server<S, O>(
     State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     Json(body): Json<UpdateServerRequest>,
 ) -> Result<Json<ServerResponse>, McpHandlerErr>
 where
@@ -325,7 +334,7 @@ where
     params(DeleteServerParams),
     responses(
         (status = 204),
-        (status = 401, body = String),
+        (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -333,7 +342,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn delete_server<S, O>(
     State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     Query(params): Query<DeleteServerParams>,
 ) -> Result<StatusCode, McpHandlerErr>
 where
@@ -358,7 +367,7 @@ where
     request_body = StartAuthRequest,
     responses(
         (status = 200, body = StartAuthResponse),
-        (status = 401, body = String),
+        (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -366,7 +375,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O>(
     State(state): State<McpRouterState<S, O>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
     Json(body): Json<StartAuthRequest>,
 ) -> Result<Json<StartAuthResponse>, McpHandlerErr>
 where
