@@ -1,11 +1,11 @@
 use axum::{
     Json, Router,
-    extract::{self, State},
+    extract::{self, FromRef, State},
     routing::get,
 };
 use axum_extra::extract::Cached;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
     CursorOptionExt, CursorWithValAndFilter, SimpleSortMethod, TypeEraseCursor,
 };
@@ -25,13 +25,21 @@ use crate::{
 
 pub struct EmailRouterState<T> {
     pub(crate) inner: Arc<T>,
+    pub authorization: SharedMacroAuthorizationService,
 }
 
 impl<T> Clone for EmailRouterState<T> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            authorization: self.authorization.clone(),
         }
+    }
+}
+
+impl<T> FromRef<EmailRouterState<T>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &EmailRouterState<T>) -> Self {
+        state.authorization.clone()
     }
 }
 
@@ -39,9 +47,10 @@ impl<T> EmailRouterState<T>
 where
     T: EmailService,
 {
-    pub fn new(state: T) -> Self {
+    pub fn new(state: T, authorization: SharedMacroAuthorizationService) -> Self {
         Self {
             inner: Arc::new(state),
+            authorization,
         }
     }
 
@@ -79,10 +88,10 @@ where
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(links, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(links, authorization, service), fields(user_id=authorization.macro_user_id.as_ref(), fusionauth_user_id=authorization.user_context.fusion_user_id))]
 async fn cursor_handler<T: EmailService>(
     State(service): State<EmailRouterState<T>>,
-    Cached(macro_user): Cached<MacroUserExtractor>,
+    authorization: SharedMacroAuthorizationExtractor,
     Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
@@ -94,7 +103,7 @@ async fn cursor_handler<T: EmailService>(
             .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
                 link_ids: links.iter().map(|link| link.id).collect(),
-                macro_id: macro_user.macro_user_id,
+                macro_id: authorization.macro_user_id,
                 limit: params.limit,
                 query: cursor
                     .into_query(

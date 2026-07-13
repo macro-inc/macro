@@ -1,6 +1,23 @@
-use super::{EmailLinkErr, resolve_target_link};
-use crate::domain::models::{Link, UserProvider};
+use super::{EmailLinkErr, EmailLinkExtractor, resolve_target_link};
+use crate::{
+    domain::{
+        models::{Link, UserProvider},
+        ports::NoOpEmailService,
+    },
+    inbound::axum::previews_router::EmailRouterState,
+};
+use axum::{
+    body::to_bytes,
+    extract::FromRequestParts,
+    http::{Request, StatusCode, header},
+    response::IntoResponse,
+};
+use axum_extra::extract::Cached;
 use chrono::Utc;
+use macro_authorization::{
+    MacroAuthorizationError, SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer},
+};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
@@ -96,4 +113,35 @@ fn no_header_and_no_primary_is_rejected() {
 fn no_links_at_all_is_rejected() {
     let result = resolve_target_link(vec![], None, &caller());
     assert!(matches!(result, Err(EmailLinkErr::NoInboxSelected)));
+}
+
+#[tokio::test]
+async fn expired_credentials_propagate_through_cached_email_link_extractor() {
+    let authorization =
+        FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired);
+    let state = EmailRouterState::new(
+        NoOpEmailService,
+        SharedMacroAuthorizationService::new(authorization.clone()),
+    );
+    let request = bearer(Request::get("/"), "expired").body(()).unwrap();
+    let (mut parts, _) = request.into_parts();
+
+    let rejection = match Cached::<EmailLinkExtractor<NoOpEmailService>>::from_request_parts(
+        &mut parts, &state,
+    )
+    .await
+    {
+        Ok(_) => panic!("expired credentials should be rejected"),
+        Err(rejection) => rejection,
+    };
+    let response = rejection.into_response();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers().get(header::WWW_AUTHENTICATE).unwrap(),
+        "Bearer error=\"invalid_token\", error_description=\"jwt expired\""
+    );
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(body.as_ref(), br#"{"message":"jwt expired"}"#);
+    assert_eq!(authorization.calls(), ["expired"]);
 }

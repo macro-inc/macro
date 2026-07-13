@@ -5,9 +5,8 @@ use axum::{
     response::IntoResponse,
     routing::patch,
 };
-use axum_extra::extract::Cached;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -88,6 +87,7 @@ where
     G: GmailTokenProvider,
     EmailRouterState<T>: axum::extract::FromRef<S>,
     GmailTokenState<G>: axum::extract::FromRef<S>,
+    SharedMacroAuthorizationService: axum::extract::FromRef<S>,
 {
     Router::new().route("/{id}/labels", patch(update_thread_labels_handler::<T, G>))
 }
@@ -110,11 +110,11 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, token_state, macro_user, body))]
+#[tracing::instrument(err, skip(state, token_state, authorization, body))]
 pub async fn update_thread_labels_handler<T: EmailService, G: GmailTokenProvider>(
     State(state): State<EmailRouterState<T>>,
     State(token_state): State<GmailTokenState<G>>,
-    Cached(macro_user): Cached<MacroUserExtractor>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(thread_id): Path<Uuid>,
     Json(body): Json<UpdateThreadLabelRequest>,
 ) -> Result<Json<UpdateThreadLabelsResponse>, UpdateThreadLabelError> {
@@ -122,7 +122,7 @@ pub async fn update_thread_labels_handler<T: EmailService, G: GmailTokenProvider
     // inboxes), then use that inbox's own Gmail token.
     let link = state
         .inner
-        .get_owned_link_for_thread(macro_user.macro_user_id, thread_id)
+        .get_owned_link_for_thread(authorization.macro_user_id, thread_id)
         .await?
         .ok_or_else(|| UpdateThreadLabelError::NotFound("Thread not found".to_string()))?;
 
