@@ -67,7 +67,6 @@ build_lambdas compiler="":
 setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/contacts/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/delete_chat_handler/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/integration_tests/test_pdf_modification_data_deserialize/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notification_db_client/.env
