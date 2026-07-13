@@ -7,12 +7,10 @@ use graphql_notification::{
 use graphql_properties::{GraphqlSoupProperty, SoupPropertyEdgeReader, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
 
-/// Notification fields attached to each top-level Soup entity.
+/// Notification and property fields attached to property-bearing Soup entities.
 ///
 /// This concrete edge shape lives in the composition crate so `graphql_soup`
 /// does not know which cross-domain fields are attached to its objects.
-
-/// Notification and property fields attached to property-bearing Soup entities.
 pub struct SoupEdges<NR, PR> {
     entity: model_entity::Entity<'static>,
     _readers: PhantomData<fn() -> (NR, PR)>,

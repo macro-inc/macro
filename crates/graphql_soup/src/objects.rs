@@ -199,8 +199,7 @@ where
             }
             SoupItem::ForeignEntity(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::ForeignEntity
-                        .with_entity_string(item.foreign_entity_id.clone()),
+                    model_entity::EntityType::ForeignEntity.with_entity_string(item.id.to_string()),
                 );
                 Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges))
             }

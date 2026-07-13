@@ -425,6 +425,7 @@ type GraphqlSoupCall {
 	participantCount: Int!
 	participantIds: [String!]!
 	participants: [GraphqlSoupCallParticipant!]!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -450,6 +451,7 @@ type GraphqlSoupChannel {
 	participants: [GraphqlSoupChannelParticipant!]!
 	latestMessage: GraphqlSoupChannelMessage
 	latestNonThreadMessage: GraphqlSoupChannelMessage
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -481,6 +483,7 @@ type GraphqlSoupChannelThread {
 	updatedAt: String!
 	effectiveUpdatedAt: String!
 	replyCount: Int!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -705,6 +708,7 @@ type GraphqlSoupForeignEntity {
 	metadata: JSON!
 	createdAt: String!
 	updatedAt: String!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
