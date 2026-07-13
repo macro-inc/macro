@@ -15,11 +15,14 @@ axum = [
 ]
 default = ["axum", "outbound"]
 internal-identity = ["axum"]
+local_auth = []
 outbound = ["dep:macro_auth"]
+testing = []
 
 [dependencies]
 axum = { workspace = true, optional = true }
 macro_auth = { path = "../macro_auth", optional = true }
+macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }

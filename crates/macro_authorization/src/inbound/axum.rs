@@ -19,6 +19,13 @@ use thiserror::Error;
 
 use crate::{MacroAuthorizationError, MacroAuthorizationService, SharedMacroAuthorizationService};
 
+#[cfg(feature = "local_auth")]
+macro_env_var::maybe_env_vars! {
+    struct LocalUserId;
+    struct LocalFusionUserId;
+    struct LocalOrgId;
+}
+
 /// The reason request authorization was rejected.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum MacroAuthorizationRejectionKind {
@@ -252,6 +259,13 @@ where
         return Ok(outcome);
     }
 
+    #[cfg(feature = "local_auth")]
+    if let Some(authorized_user) = local_authorized_user()? {
+        let outcome = Some(authorized_user);
+        cache_authorization(parts, &outcome);
+        return Ok(outcome);
+    }
+
     let Some(token) = extract_token(parts, state).await? else {
         cache_authorization(parts, &None);
         return Ok(None);
@@ -280,6 +294,33 @@ fn preauthorized_user(
     if user_context.user_id.is_empty() {
         return Ok(None);
     }
+
+    authorized_user(user_context).map(Some)
+}
+
+#[cfg(feature = "local_auth")]
+fn local_authorized_user() -> Result<Option<AuthorizedUser>, MacroAuthorizationRejection> {
+    let Some(user_id) = LocalUserId::new().map(|user_id| user_id.to_string()) else {
+        return Ok(None);
+    };
+
+    let organization_id = LocalOrgId::new()
+        .map(|organization_id| {
+            organization_id.parse::<i32>().map_err(|error| {
+                tracing::error!(error=?error, "LOCAL_ORG_ID is not a valid i32");
+                rejection(MacroAuthorizationRejectionKind::InvalidUserId)
+            })
+        })
+        .transpose()?
+        .unwrap_or(1);
+    let user_context = UserContext {
+        user_id,
+        fusion_user_id: LocalFusionUserId::new()
+            .map(|fusion_user_id| fusion_user_id.to_string())
+            .unwrap_or_else(|| "set me!".to_string()),
+        organization_id: Some(organization_id),
+        permissions: None,
+    };
 
     authorized_user(user_context).map(Some)
 }

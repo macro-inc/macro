@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+#[cfg(feature = "local_auth")]
+use std::process::Command;
 
 use ::axum::{
     Json, Router,
@@ -9,11 +10,16 @@ use ::axum::{
     routing::get,
 };
 use http_body_util::BodyExt;
-use rootcause::Report;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use super::*;
+use crate::testing::{FakeMacroAuthorizationService, bearer, bearer_request, test_user_context};
+
+#[cfg(feature = "local_auth")]
+macro_env_var::maybe_env_var! {
+    struct MacroAuthorizationLocalAuthTestChild;
+}
 
 const VALID_USER_ID: &str = "macro|valid@example.com";
 const COOKIE_USER_ID: &str = "macro|cookie@example.com";
@@ -22,80 +28,54 @@ const BEARER_USER_ID: &str = "macro|bearer@example.com";
 const OPTIONAL_USER_ID: &str = "macro|optional@example.com";
 const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 
-#[derive(Clone, Default)]
-struct FakeAuthorizationService {
-    calls: Arc<Mutex<Vec<String>>>,
-}
-
-impl FakeAuthorizationService {
-    fn calls(&self) -> Vec<String> {
-        self.calls.lock().expect("calls lock poisoned").clone()
-    }
-}
-
-impl MacroAuthorizationService for FakeAuthorizationService {
-    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
-        self.calls
-            .lock()
-            .expect("calls lock poisoned")
-            .push(jwt.to_string());
-
-        match jwt {
-            "valid" => Ok(user_context(VALID_USER_ID, None)),
-            "cookie" => Ok(user_context(COOKIE_USER_ID, None)),
-            "query" => Ok(user_context(QUERY_USER_ID, None)),
-            "bearer" => Ok(user_context(BEARER_USER_ID, None)),
-            "optional" => Ok(user_context(OPTIONAL_USER_ID, None)),
-            "organization" => Ok(user_context(VALID_USER_ID, Some(42))),
-            "malformed-user" => Ok(user_context("not-a-macro-user-id", None)),
-            "empty-user" => Ok(user_context("", None)),
-            "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
-            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
-        }
-    }
+fn fake_authorization_service() -> FakeMacroAuthorizationService {
+    FakeMacroAuthorizationService::never(MacroAuthorizationError::InvalidCredentials)
+        .with_token("valid", user_context(VALID_USER_ID, None))
+        .with_token("cookie", user_context(COOKIE_USER_ID, None))
+        .with_token("query", user_context(QUERY_USER_ID, None))
+        .with_token("bearer", user_context(BEARER_USER_ID, None))
+        .with_token("optional", user_context(OPTIONAL_USER_ID, None))
+        .with_token("organization", user_context(VALID_USER_ID, Some(42)))
+        .with_token("malformed-user", user_context("not-a-macro-user-id", None))
+        .with_token("empty-user", user_context("", None))
+        .with_token_error("expired", MacroAuthorizationError::CredentialsExpired)
 }
 
 fn user_context(user_id: &str, organization_id: Option<i32>) -> UserContext {
-    UserContext {
-        user_id: user_id.to_string(),
-        fusion_user_id: "fusion-user-id".to_string(),
-        permissions: None,
-        organization_id,
-    }
+    let mut user_context = test_user_context(user_id);
+    user_context.fusion_user_id = "fusion-user-id".to_string();
+    user_context.organization_id = organization_id;
+    user_context
 }
 
 #[derive(Clone)]
 struct TestState {
-    authorization: FakeAuthorizationService,
+    authorization: SharedMacroAuthorizationService,
     _unrelated_state: &'static str,
 }
 
-impl FromRef<TestState> for FakeAuthorizationService {
+impl FromRef<TestState> for SharedMacroAuthorizationService {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
 }
 
-async fn required_handler(
-    extractor: MacroAuthorizationExtractor<FakeAuthorizationService>,
-) -> Json<Value> {
+async fn required_handler(extractor: SharedMacroAuthorizationExtractor) -> Json<Value> {
     Json(json!({
         "macro_user_id": extractor.macro_user_id.to_string(),
         "user_context": extractor.user_context,
     }))
 }
 
-async fn optional_handler(
-    extractor: OptionalMacroAuthorizationExtractor<FakeAuthorizationService>,
-) -> Json<Value> {
+async fn optional_handler(extractor: OptionalSharedMacroAuthorizationExtractor) -> Json<Value> {
     Json(json!({
         "macro_user_id": extractor.macro_user_id.map(|id| id.to_string()),
         "user_context": extractor.user_context,
     }))
 }
 
-fn test_router() -> (Router, FakeAuthorizationService) {
-    let service = FakeAuthorizationService::default();
+fn test_router() -> (Router, FakeMacroAuthorizationService) {
+    let service = fake_authorization_service();
     let state = test_state(service.clone());
     let router = Router::new()
         .route("/required", get(required_handler))
@@ -105,9 +85,9 @@ fn test_router() -> (Router, FakeAuthorizationService) {
     (router, service)
 }
 
-fn test_state(authorization: FakeAuthorizationService) -> TestState {
+fn test_state(authorization: FakeMacroAuthorizationService) -> TestState {
     TestState {
-        authorization,
+        authorization: SharedMacroAuthorizationService::new(authorization),
         _unrelated_state: "composite state",
     }
 }
@@ -372,7 +352,7 @@ fn rejection_kinds_have_stable_messages() {
 
 #[tokio::test]
 async fn shared_service_erases_the_concrete_service_type() {
-    let service = FakeAuthorizationService::default();
+    let service = fake_authorization_service();
     let shared = SharedMacroAuthorizationService::new(service.clone());
 
     let context = shared.authorize("valid").await.unwrap();
@@ -391,44 +371,38 @@ fn shared_service_can_be_created_from_jwt_validation_args() {
 
 #[tokio::test]
 async fn authenticated_outcome_is_cached_across_extractions() {
-    let service = FakeAuthorizationService::default();
+    let service = fake_authorization_service();
     let state = test_state(service.clone());
-    let request = empty_body(request("/required").header("authorization", "Bearer valid"));
+    let request = empty_body(bearer(request("/required"), "valid"));
     let (mut parts, _) = request.into_parts();
 
-    MacroAuthorizationExtractor::<FakeAuthorizationService>::from_request_parts(&mut parts, &state)
+    SharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
         .await
         .unwrap();
-    OptionalMacroAuthorizationExtractor::<FakeAuthorizationService>::from_request_parts(
-        &mut parts, &state,
-    )
-    .await
-    .unwrap();
+    OptionalSharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+        .await
+        .unwrap();
 
     assert_eq!(service.calls(), ["valid"]);
 }
 
 #[tokio::test]
 async fn required_extraction_rejects_cached_anonymous_outcome() {
-    let service = FakeAuthorizationService::default();
+    let service = fake_authorization_service();
     let state = test_state(service.clone());
     let (mut parts, _) = empty_body(request("/optional")).into_parts();
 
-    OptionalMacroAuthorizationExtractor::<FakeAuthorizationService>::from_request_parts(
-        &mut parts, &state,
-    )
-    .await
-    .unwrap();
+    OptionalSharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+        .await
+        .unwrap();
     parts.headers.insert(
         header::AUTHORIZATION,
         "Bearer valid".parse().expect("valid header value"),
     );
-    let rejection = MacroAuthorizationExtractor::<FakeAuthorizationService>::from_request_parts(
-        &mut parts, &state,
-    )
-    .await
-    .err()
-    .expect("required extraction should reject cached anonymity");
+    let rejection = SharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+        .await
+        .err()
+        .expect("required extraction should reject cached anonymity");
 
     assert_eq!(
         rejection.kind(),
@@ -439,12 +413,12 @@ async fn required_extraction_rejects_cached_anonymous_outcome() {
 
 #[tokio::test]
 async fn extractor_gate_propagates_the_cached_outcome() {
-    let service = FakeAuthorizationService::default();
+    let service = fake_authorization_service();
     let state = test_state(service.clone());
     let router = Router::new()
         .route("/gated", get(required_handler))
         .route_layer(middleware::from_extractor_with_state::<
-            MacroAuthorizationExtractor<FakeAuthorizationService>,
+            SharedMacroAuthorizationExtractor,
             _,
         >(state.clone()))
         .with_state(state);
@@ -541,5 +515,191 @@ async fn raw_user_context_extension_is_not_an_identity_channel() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["macro_user_id"], Value::Null);
     assert_eq!(body["user_context"]["user_id"], "");
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn shared_fake_defaults_to_a_test_user_and_records_calls() {
+    let service = FakeMacroAuthorizationService::default();
+
+    let user_context = service.authorize("any-token").await.unwrap();
+
+    assert_eq!(user_context.user_id, "macro|test@example.com");
+    assert_eq!(service.calls(), ["any-token"]);
+}
+
+#[test]
+fn bearer_helpers_add_and_replace_authorization_headers() {
+    let request = empty_body(bearer(request("/required"), "builder-token"));
+    assert_eq!(
+        request.headers().get(header::AUTHORIZATION).unwrap(),
+        "Bearer builder-token"
+    );
+
+    let request = bearer_request(request, "request-token");
+    assert_eq!(
+        request.headers().get(header::AUTHORIZATION).unwrap(),
+        "Bearer request-token"
+    );
+}
+
+#[cfg(feature = "local_auth")]
+fn is_local_auth_test_child(case: &str) -> bool {
+    MacroAuthorizationLocalAuthTestChild::new()
+        .is_some_and(|child_case| child_case.as_ref() == case)
+}
+
+#[cfg(feature = "local_auth")]
+fn run_local_auth_test_child(
+    test_name: &str,
+    case: &str,
+    local_user_id: Option<&str>,
+    local_fusion_user_id: Option<&str>,
+    local_org_id: Option<&str>,
+) {
+    let mut command = Command::new(std::env::current_exe().expect("test executable should exist"));
+    command
+        .arg(test_name)
+        .arg("--exact")
+        .arg("--nocapture")
+        .env_remove("APP_SECRETS_JSON")
+        .env_remove("LOCAL_USER_ID")
+        .env_remove("LOCAL_FUSION_USER_ID")
+        .env_remove("LOCAL_ORG_ID")
+        .env("MACRO_AUTHORIZATION_LOCAL_AUTH_TEST_CHILD", case);
+
+    if let Some(local_user_id) = local_user_id {
+        command.env("LOCAL_USER_ID", local_user_id);
+    }
+    if let Some(local_fusion_user_id) = local_fusion_user_id {
+        command.env("LOCAL_FUSION_USER_ID", local_fusion_user_id);
+    }
+    if let Some(local_org_id) = local_org_id {
+        command.env("LOCAL_ORG_ID", local_org_id);
+    }
+
+    let output = command.output().expect("local-auth child should run");
+    assert!(
+        output.status.success(),
+        "local-auth child failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+        "local-auth child did not run the requested test:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+    );
+}
+
+#[cfg(feature = "local_auth")]
+#[tokio::test]
+async fn local_auth_feature_is_inactive_without_local_user_id() {
+    const CASE: &str = "unset";
+    if !is_local_auth_test_child(CASE) {
+        run_local_auth_test_child(
+            "inbound::axum::test::local_auth_feature_is_inactive_without_local_user_id",
+            CASE,
+            None,
+            None,
+            None,
+        );
+        return;
+    }
+
+    let (router, service) = test_router();
+    let request = empty_body(bearer(request("/required"), "valid"));
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], VALID_USER_ID);
+    assert_eq!(service.calls(), ["valid"]);
+}
+
+#[cfg(feature = "local_auth")]
+#[tokio::test]
+async fn local_auth_wins_over_credentials_and_primes_the_request_cache() {
+    const CASE: &str = "valid";
+    const LOCAL_USER_ID: &str = "macro|Local@Example.com";
+    if !is_local_auth_test_child(CASE) {
+        run_local_auth_test_child(
+            "inbound::axum::test::local_auth_wins_over_credentials_and_primes_the_request_cache",
+            CASE,
+            Some(LOCAL_USER_ID),
+            Some("local-fusion-user"),
+            Some("73"),
+        );
+        return;
+    }
+
+    let service = fake_authorization_service();
+    let state = test_state(service.clone());
+    let router = Router::new()
+        .route("/gated", get(required_handler))
+        .route_layer(middleware::from_extractor_with_state::<
+            SharedMacroAuthorizationExtractor,
+            _,
+        >(state.clone()))
+        .with_state(state);
+    let request = empty_body(bearer(request("/gated"), "valid"));
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], LOCAL_USER_ID.to_lowercase());
+    assert_eq!(body["user_context"]["user_id"], LOCAL_USER_ID);
+    assert_eq!(body["user_context"]["fusion_user_id"], "local-fusion-user");
+    assert_eq!(body["user_context"]["organization_id"], 73);
+    assert!(service.calls().is_empty());
+}
+
+#[cfg(feature = "local_auth")]
+#[tokio::test]
+async fn local_auth_rejects_a_malformed_user_id_before_credentials() {
+    const CASE: &str = "malformed-user";
+    if !is_local_auth_test_child(CASE) {
+        run_local_auth_test_child(
+            "inbound::axum::test::local_auth_rejects_a_malformed_user_id_before_credentials",
+            CASE,
+            Some("not-a-macro-user-id"),
+            None,
+            Some("1"),
+        );
+        return;
+    }
+
+    let (router, service) = test_router();
+    let request = empty_body(bearer(request("/required"), "valid"));
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "invalid user id" }));
+    assert!(service.calls().is_empty());
+}
+
+#[cfg(feature = "local_auth")]
+#[tokio::test]
+async fn local_auth_rejects_a_malformed_organization_before_credentials() {
+    const CASE: &str = "malformed-organization";
+    if !is_local_auth_test_child(CASE) {
+        run_local_auth_test_child(
+            "inbound::axum::test::local_auth_rejects_a_malformed_organization_before_credentials",
+            CASE,
+            Some("macro|local@example.com"),
+            None,
+            Some("not-an-i32"),
+        );
+        return;
+    }
+
+    let (router, service) = test_router();
+    let request = empty_body(bearer(request("/required"), "valid"));
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "invalid user id" }));
     assert!(service.calls().is_empty());
 }

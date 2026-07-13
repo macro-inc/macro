@@ -8113,6 +8113,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "macro_auth",
+ "macro_env_var",
  "macro_user_id",
  "model-error-response",
  "model_user",

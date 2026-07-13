@@ -11,6 +11,9 @@ pub mod inbound;
 /// Adapters for validating credentials with external authentication systems.
 #[cfg(feature = "outbound")]
 pub mod outbound;
+/// Shared authorization fakes and HTTP credential helpers for tests.
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 
 pub use domain::{
     models::{MacroAuthorizationError, ValidatedIdentity},
