@@ -9,6 +9,9 @@
  * The Team struct
  */
 export interface Team {
+  /** Whether the CRM is enabled for this team (from `team_crm_settings`;
+`false` when no row exists). */
+  crm_enabled: boolean;
   id: string;
   name: string;
   owner_id: string;

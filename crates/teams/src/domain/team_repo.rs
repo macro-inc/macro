@@ -10,9 +10,8 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
     PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team,
-    TeamAndMembers, TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan,
-    TeamRole, TeamWithMembers,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
 };
 
 /// The TeamChannelsRepository defines a set of actions related to team channels
@@ -191,7 +190,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     fn get_team_by_id(
         &self,
         team_id: &uuid::Uuid,
-    ) -> impl Future<Output = Result<TeamAndMembers, TeamError>> + Send;
+    ) -> impl Future<Output = Result<TeamWithMembers, TeamError>> + Send;
 
     /// Gets all teams for a user
     fn get_user_teams(

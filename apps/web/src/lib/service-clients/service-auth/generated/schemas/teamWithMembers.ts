@@ -9,13 +9,9 @@ import type { Team } from './team';
 import type { TeamMember } from './teamMember';
 
 /**
- * Response for `GET /team`: a team with its members plus team-level
-CRM state. Assembled by `TeamService::get_team` from the team and
-CRM settings ports.
+ * A team with its members
  */
 export interface TeamWithMembers {
-  /** Whether the CRM is enabled for this team (from `team_crm_settings`). */
-  crm_enabled: boolean;
   /** The members of the team */
   members: TeamMember[];
   /** The team */

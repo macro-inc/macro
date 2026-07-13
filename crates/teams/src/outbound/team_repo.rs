@@ -2,9 +2,9 @@
 use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamAndMembers, TeamError,
-        TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan,
-        TeamRole,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
+        TeamWithMembers,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
@@ -160,6 +160,8 @@ impl TeamRepositoryImpl {
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
+                // New teams have no team_crm_settings row yet.
+                crm_enabled: false,
             })
         })
         .fetch_one(&mut *transaction)
@@ -1046,12 +1048,14 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamAndMembers, TeamError> {
+    async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT id, name, slug, owner_id
-            FROM team
-            WHERE id = $1
+            SELECT t.id, t.name, t.slug, t.owner_id,
+                COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
+            FROM team t
+            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
+            WHERE t.id = $1
             "#,
             team_id,
         )
@@ -1063,6 +1067,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
+                crm_enabled: row.crm_enabled,
             })
         })
         .fetch_one(&self.pool)
@@ -1093,16 +1098,18 @@ impl TeamRepository for TeamRepositoryImpl {
             })
             .collect();
 
-        Ok(TeamAndMembers { team, members })
+        Ok(TeamWithMembers { team, members })
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id
+            SELECT t.id, t.name, t.slug, t.owner_id,
+                COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
+            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
             WHERE tu.user_id = $1
             "#,
             user_id.as_ref(),
@@ -1115,6 +1122,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
                     .map_err(type_err)?
                     .into_owned(),
+                crm_enabled: row.crm_enabled,
             })
         })
         .fetch_all(&self.pool)
