@@ -178,6 +178,26 @@ describe('createTauriCacheHost', () => {
     }
   });
 
+  it('tolerates a failed listener setup (no unhandled rejection)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      listenMock.mockRejectedValue(new Error('listen exploded'));
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      // Flush the rejection through the catch handler.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(warn).toHaveBeenCalledWith(
+        'graphql cache ops-affected listener failed',
+        expect.any(Error)
+      );
+      // dispose must not throw or re-reject.
+      host.dispose();
+      await Promise.resolve();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('unsubscribes the event listener on dispose', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await Promise.resolve();

@@ -66,7 +66,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     });
   }
 
-  const unlisten: Promise<UnlistenFn> = listen<OpsAffectedPayload>(
+  // Failure tolerated: reads/writes still work, only push-driven
+  // re-execution is lost — same degradation as a broken worker port.
+  const unlisten: Promise<UnlistenFn | undefined> = listen<OpsAffectedPayload>(
     OPS_AFFECTED_EVENT,
     (event) => {
       const prefix = `${clientId}:`;
@@ -78,7 +80,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         for (const cb of affectedSubscribers) cb(opKeys);
       }
     }
-  );
+  ).catch((error) => {
+    console.warn('graphql cache ops-affected listener failed', error);
+    return undefined;
+  });
 
   const ready = request('graphql_cache_init', {
     scope: options.scope,
@@ -175,7 +180,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     dispose() {
       affectedSubscribers.clear();
-      void unlisten.then((fn) => fn());
+      void unlisten.then((fn) => fn?.());
     },
   };
 }
