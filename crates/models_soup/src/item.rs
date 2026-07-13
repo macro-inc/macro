@@ -199,7 +199,7 @@ impl SoupItem {
     /// Converts this item to an [`EntityReference`] for property lookups.
     ///
     /// Returns `None` for item types that don't support properties
-    /// (e.g., channels, calls, foreign entities).
+    /// (e.g., channels, channel threads, foreign entities).
     pub fn to_entity_reference(&self) -> Option<EntityReference> {
         match self {
             SoupItem::Document(doc) => {
