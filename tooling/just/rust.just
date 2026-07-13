@@ -3,7 +3,8 @@ import './database.just'
 mod sqlx './sqlx.just'
 
 rust-check:
-    RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check
+    RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check --workspace --all-features --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize --exclude sync_service
+    RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check -p sync_service
 
 clippy:
     RUSTFLAGS="-Dwarnings -Dclippy::disallowed_methods" RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo clippy --workspace --all-features --exclude sync_service --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize
