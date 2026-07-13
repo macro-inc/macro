@@ -16197,7 +16197,9 @@ dependencies = [
  "anyhow",
  "guppy",
  "hakari",
+ "serde",
  "serde_json",
+ "toml",
  "xtask_graph",
 ]
 

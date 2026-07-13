@@ -1,6 +1,7 @@
 [package]
-name = "maybe_send"
-version = "0.1.0"
 edition = "2024"
+name = "maybe_send"
+publish = false
+version = "0.1.0"
 
 [dependencies]
