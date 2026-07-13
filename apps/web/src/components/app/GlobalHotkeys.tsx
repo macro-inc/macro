@@ -53,7 +53,11 @@ import {
   themes,
 } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
-import { applyTheme } from '@theme/utils/themeUtils';
+import {
+  applyTheme,
+  clearThemePreview,
+  previewTheme,
+} from '@theme/utils/themeUtils';
 import { type Component, onCleanup } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -373,6 +377,8 @@ export default function GlobalShortcuts() {
       },
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
+      onHighlight: () => previewTheme(theme.id),
+      onHighlightEnd: clearThemePreview,
     });
   });
 
@@ -397,6 +403,8 @@ export default function GlobalShortcuts() {
       },
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
+      onHighlight: () => previewTheme(theme.id),
+      onHighlightEnd: clearThemePreview,
     });
   });
 
@@ -421,6 +429,8 @@ export default function GlobalShortcuts() {
       },
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
+      onHighlight: () => previewTheme(theme.id),
+      onHighlightEnd: clearThemePreview,
     });
   });
 
