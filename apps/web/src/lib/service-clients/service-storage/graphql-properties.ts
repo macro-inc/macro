@@ -30,17 +30,12 @@ import {
 import { getGraphqlSoupClient } from './graphql-soup';
 
 /**
- * REST entity type → GraphQL enum. Call records are absent from the GraphQL
- * property enum. They are foreign to the generic property path and are served
- * by a dedicated call query, so they map to null and fall back to the REST
- * write. The explicit table keeps any other divergence a compile error instead
- * of a silent bad request.
+ * REST entity type → GraphQL enum. The unions are currently identical, but
+ * the explicit table keeps divergence a compile error instead of a silent
+ * bad request.
  */
-const ENTITY_TYPE_TO_GRAPHQL: Record<
-  EntityType,
-  GraphqlPropertyEntityType | null
-> = {
-  CALL_RECORD: null,
+const ENTITY_TYPE_TO_GRAPHQL: Record<EntityType, GraphqlPropertyEntityType> = {
+  CALL_RECORD: 'CALL_RECORD',
   CHANNEL: 'CHANNEL',
   CHAT: 'CHAT',
   COMPANY: 'COMPANY',
@@ -53,22 +48,16 @@ const ENTITY_TYPE_TO_GRAPHQL: Record<
 
 export function toGraphqlPropertyEntityType(
   entityType: EntityType
-): GraphqlPropertyEntityType | null {
+): GraphqlPropertyEntityType {
   return ENTITY_TYPE_TO_GRAPHQL[entityType];
 }
 
 function toGraphqlEntityReference(
   reference: EntityReference
 ): GraphqlEntityReferenceInput {
-  const entityType = toGraphqlPropertyEntityType(reference.entity_type);
-  if (entityType === null) {
-    throw new Error(
-      `Entity references to ${reference.entity_type} are not supported over the GraphQL property path`
-    );
-  }
   return {
     entityId: reference.entity_id,
-    entityType,
+    entityType: toGraphqlPropertyEntityType(reference.entity_type),
     specificMessageId: reference.specific_message_id ?? null,
   };
 }
@@ -155,10 +144,7 @@ export type SetEntityPropertyArgs = {
 export async function setEntityProperty(
   args: SetEntityPropertyArgs
 ): Promise<SoupPropertyFieldsFragment | void> {
-  const graphqlEntityType = toGraphqlPropertyEntityType(args.entityType);
-  // Call records have no GraphQL property enum member, so they always take the
-  // REST path, as does everything when the GraphQL soup flag is off.
-  if (!ENABLE_GRAPHQL_SOUP() || graphqlEntityType === null) {
+  if (!ENABLE_GRAPHQL_SOUP()) {
     await throwOnErr(
       async () =>
         await propertiesServiceClient.setEntityProperty({
@@ -174,7 +160,7 @@ export async function setEntityProperty(
   const client = getGraphqlSoupClient();
   const variables: SetEntityPropertyMutationVariables = {
     input: {
-      entityType: graphqlEntityType,
+      entityType: toGraphqlPropertyEntityType(args.entityType),
       entityId: args.entityId,
       propertyDefinitionId: args.propertyDefinitionId,
       value: toGraphqlSetPropertyValue(args.value),

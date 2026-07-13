@@ -102,10 +102,7 @@ describe('toGraphqlPropertyEntityType', () => {
     expect(toGraphqlPropertyEntityType('DOCUMENT')).toBe('DOCUMENT');
     expect(toGraphqlPropertyEntityType('TASK')).toBe('TASK');
     expect(toGraphqlPropertyEntityType('COMPANY')).toBe('COMPANY');
-  });
-
-  it('returns null for call records, which have no GraphQL enum member', () => {
-    expect(toGraphqlPropertyEntityType('CALL_RECORD')).toBeNull();
+    expect(toGraphqlPropertyEntityType('CALL_RECORD')).toBe('CALL_RECORD');
   });
 });
 
@@ -172,22 +169,6 @@ describe('setEntityProperty', () => {
     });
     expect(context).toBeUndefined();
     expect(result).toBe(property);
-  });
-
-  it('uses the REST PUT for call records even when the flag is enabled', async () => {
-    flag.mockReturnValue(true);
-    restSetEntityProperty.mockResolvedValue(okRestResult);
-    const mutation = mockGraphqlClient({ data: undefined });
-
-    await setEntityProperty({ ...args, entityType: 'CALL_RECORD' });
-
-    expect(restSetEntityProperty).toHaveBeenCalledWith({
-      entity_type: 'CALL_RECORD',
-      entity_id: 'doc-1',
-      property_id: 'def-1',
-      body: { value: { type: 'string', value: 'hi' } },
-    });
-    expect(mutation).not.toHaveBeenCalled();
   });
 
   it('attaches the optimistic response to the mutation context', async () => {
