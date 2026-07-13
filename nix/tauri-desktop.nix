@@ -63,6 +63,7 @@
         pname = "macro-cache-wasm";
         version = appVersion;
         src = jsSrc;
+        cargoArtifacts = null;
         cargoVendorDir = rootCargoVendorDir;
         nativeBuildInputs = [
           pkgs.binaryen
