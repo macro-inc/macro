@@ -259,6 +259,10 @@ export async function runSoupBackfill(
 ): Promise<SoupBackfillCheckpoint> {
   let checkpoint = loadSoupBackfillCheckpoint(userId, params.checkpointId);
 
+  // `completed` only marks the end of one pass. A later invocation resets
+  // pagination so it can run another pass narrowed by the stored updatedSince.
+  // An unfinished checkpoint without scanStartedAt keeps its cursor and only
+  // initializes the timestamp needed for the next watermark.
   if (checkpoint.completed || checkpoint.scanStartedAt === null) {
     checkpoint = {
       ...checkpoint,
