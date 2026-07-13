@@ -263,7 +263,7 @@ function CrmEnablementSection() {
       <SettingsCard>
         <SettingsRow
           label="Enable CRM"
-          description="Turns the CRM on for everyone on your team. This setting isn't reported by the server, so the toggle reflects your latest change here."
+          description="Turns the CRM on for everyone on your team."
           hideDescriptionOnMobile
         >
           <Show
