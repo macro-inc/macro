@@ -476,6 +476,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               joinedAt: participant.joinedAt,
               leftAt: participant.leftAt ?? undefined,
             })),
+            properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
