@@ -47,7 +47,8 @@ export function usePreviewPaneVisiblity() {
   });
 
   const paneVisible = createMemo(
-    () => rows().length && !isMobile() && isWideSplitPanel() && previewOpen()
+    () =>
+      rows().length > 0 && !isMobile() && isWideSplitPanel() && previewOpen()
   );
   const previewVisible = createMemo(() => paneVisible() && !!selectedEntity());
 
