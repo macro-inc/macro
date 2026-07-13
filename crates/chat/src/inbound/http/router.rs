@@ -12,8 +12,11 @@ use axum::{
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
+use macro_authorization::{
+    SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+    SharedUserPermissionsService,
+};
 use model::response::StringIDResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -22,11 +25,12 @@ use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Resu
 use crate::domain::ports::ChatService;
 use crate::inbound::http::extractors::ChatModelAccess;
 
-/// Shared state for the chat router, wrapping a [`ChatService`] implementation
-/// and an [`EntityAccessService`] for authorization.
+/// Shared state for the chat router.
 pub struct ChatRouterState<S, Svc> {
     inner: Arc<S>,
     access_service: Arc<Svc>,
+    authorization: SharedMacroAuthorizationService,
+    permissions: SharedUserPermissionsService,
 }
 
 impl<S, Svc> Clone for ChatRouterState<S, Svc> {
@@ -34,6 +38,8 @@ impl<S, Svc> Clone for ChatRouterState<S, Svc> {
         Self {
             inner: Arc::clone(&self.inner),
             access_service: Arc::clone(&self.access_service),
+            authorization: self.authorization.clone(),
+            permissions: self.permissions.clone(),
         }
     }
 }
@@ -44,20 +50,39 @@ impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
+        state.authorization.clone()
+    }
+}
+
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for SharedUserPermissionsService {
+    fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
+        state.permissions.clone()
+    }
+}
+
 impl<S: ChatService, Svc: EntityAccessService> ChatRouterState<S, Svc> {
-    /// Create a new [`ChatRouterState`] from a service and access service.
-    pub fn new(service: S, access_service: Svc) -> Self {
+    /// Create chat router state from its domain and authorization services.
+    pub fn new(
+        service: S,
+        access_service: Svc,
+        authorization: SharedMacroAuthorizationService,
+        permissions: SharedUserPermissionsService,
+    ) -> Self {
         Self {
             inner: Arc::new(service),
             access_service: Arc::new(access_service),
+            authorization,
+            permissions,
         }
     }
 }
 
 /// Build the router for the `POST /` create-chat route.
 ///
-/// This is separated so that DCS can apply different middleware
-/// (e.g. `ensure_user_exists` + quota checks) without `ensure_chat_exists`.
+/// This is separated so that DCS can apply create-specific middleware
+/// (for example, quota checks) without `ensure_chat_exists`.
 pub fn chat_create_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync + 'static>(
     state: ChatRouterState<S, Svc>,
 ) -> Router<T> {
@@ -134,8 +159,7 @@ pub struct CreateChatRequest {
 #[tracing::instrument(skip(state, user, req), fields(user_id = %user.macro_user_id), err(Debug))]
 pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
-    user: MacroUserExtractor,
-    // 402 on no perms
+    user: SharedMacroAuthorizationExtractor,
     _model_access: ChatModelAccess,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>> {

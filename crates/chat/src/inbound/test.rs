@@ -1,19 +1,27 @@
-use axum::Extension;
-use axum::Router;
+use std::collections::HashSet;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use axum::{Extension, Router};
 use http_body_util::BodyExt;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_authorization::{
+    SharedMacroAuthorizationService, SharedUserPermissionsService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
+use macro_user_id::user_id::{BorrowedUserIdStr, MacroUserIdStr};
 use model::chat::ChatBasic;
 use model::response::StringIDResponse;
-use model_user::UserContext;
+use roles_and_permissions::domain::{
+    model::{PermissionId, UserRolesAndPermissionsError},
+    port::UserPermissionsService,
+};
 use tower::util::ServiceExt;
 
 use crate::domain::models::{
     ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
 };
 use crate::domain::ports::ChatService;
-use crate::inbound::http::router::{ChatRouterState, chat_id_router};
+use crate::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
     AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
@@ -441,13 +449,33 @@ impl EntityAccessService for MockAccessService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+const TEST_TOKEN: &str = "chat-test-token";
+const TEST_USER_ID: &str = "macro|test@example.com";
+
+#[derive(Clone, Copy)]
+struct EmptyUserPermissionsService;
+
+impl UserPermissionsService for EmptyUserPermissionsService {
+    async fn get_user_permissions_for_user_id(
+        &self,
+        _user_id: &BorrowedUserIdStr<'_>,
+    ) -> std::result::Result<HashSet<PermissionId>, UserRolesAndPermissionsError> {
+        Ok(HashSet::new())
+    }
+}
+
+fn authorization() -> SharedMacroAuthorizationService {
+    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+        TEST_USER_ID,
+    )))
+}
+
+fn permissions() -> SharedUserPermissionsService {
+    SharedUserPermissionsService::new(EmptyUserPermissionsService)
+}
+
+fn chat_state<S: ChatService>(service: S) -> ChatRouterState<S, MockAccessService> {
+    ChatRouterState::new(service, MockAccessService, authorization(), permissions())
 }
 
 fn chat_basic_extension() -> Extension<ChatBasic> {
@@ -464,28 +492,45 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 }
 
 fn mock_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(MockService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(chat_state(MockService)).layer(chat_basic_extension())
 }
 
 fn error_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(ErrorService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(chat_state(ErrorService)).layer(chat_basic_extension())
 }
 
 fn not_found_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(NotFoundService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(chat_state(NotFoundService)).layer(chat_basic_extension())
+}
+
+#[tokio::test]
+async fn create_chat_uses_shared_authorization_for_both_extractors() {
+    let authorization = FakeMacroAuthorizationService::always(test_user_context(TEST_USER_ID));
+    let state = ChatRouterState::new(
+        MockService,
+        MockAccessService,
+        SharedMacroAuthorizationService::new(authorization.clone()),
+        permissions(),
+    );
+    let request = bearer(Request::post("/"), TEST_TOKEN)
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{}"#))
+        .unwrap();
+
+    let response = chat_create_router(state).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let response: StringIDResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(response.id, "test-chat-id");
+    assert_eq!(authorization.calls(), [TEST_TOKEN]);
 }
 
 // -- get_chat tests --
 
 #[tokio::test]
 async fn get_chat_returns_chat() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .uri("/some-chat-id")
         .body(Body::empty())
         .unwrap();
@@ -502,7 +547,7 @@ async fn get_chat_returns_chat() {
 
 #[tokio::test]
 async fn get_chat_not_found_returns_404() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .uri("/nonexistent")
         .body(Body::empty())
         .unwrap();
@@ -513,7 +558,7 @@ async fn get_chat_not_found_returns_404() {
 
 #[tokio::test]
 async fn get_chat_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .uri("/some-chat-id")
         .body(Body::empty())
         .unwrap();
@@ -526,7 +571,7 @@ async fn get_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn delete_chat_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("DELETE")
         .uri("/some-chat-id")
         .body(Body::empty())
@@ -538,7 +583,7 @@ async fn delete_chat_returns_ok() {
 
 #[tokio::test]
 async fn delete_chat_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("DELETE")
         .uri("/some-chat-id")
         .body(Body::empty())
@@ -552,7 +597,7 @@ async fn delete_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn permanently_delete_chat_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("DELETE")
         .uri("/some-chat-id/permanent")
         .body(Body::empty())
@@ -564,7 +609,7 @@ async fn permanently_delete_chat_returns_ok() {
 
 #[tokio::test]
 async fn permanently_delete_chat_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("DELETE")
         .uri("/some-chat-id/permanent")
         .body(Body::empty())
@@ -578,7 +623,7 @@ async fn permanently_delete_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn patch_chat_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("PATCH")
         .uri("/some-chat-id")
         .header("content-type", "application/json")
@@ -591,7 +636,7 @@ async fn patch_chat_returns_ok() {
 
 #[tokio::test]
 async fn patch_chat_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("PATCH")
         .uri("/some-chat-id")
         .header("content-type", "application/json")
@@ -606,7 +651,7 @@ async fn patch_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn copy_chat_returns_id() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/copy")
         .body(Body::empty())
@@ -622,7 +667,7 @@ async fn copy_chat_returns_id() {
 
 #[tokio::test]
 async fn copy_chat_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/copy")
         .body(Body::empty())
@@ -636,7 +681,7 @@ async fn copy_chat_repo_error_returns_500() {
 
 #[tokio::test]
 async fn revert_delete_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("PUT")
         .uri("/some-chat-id/revert_delete")
         .body(Body::empty())
@@ -648,7 +693,7 @@ async fn revert_delete_returns_ok() {
 
 #[tokio::test]
 async fn revert_delete_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("PUT")
         .uri("/some-chat-id/revert_delete")
         .body(Body::empty())
@@ -662,7 +707,7 @@ async fn revert_delete_repo_error_returns_500() {
 
 #[tokio::test]
 async fn get_permissions_repo_error_returns_500() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .uri("/some-chat-id/permissions")
         .body(Body::empty())
         .unwrap();
@@ -675,7 +720,7 @@ async fn get_permissions_repo_error_returns_500() {
 
 #[tokio::test]
 async fn update_tool_call_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/tool/update")
         .header("content-type", "application/json")
@@ -690,7 +735,7 @@ async fn update_tool_call_returns_ok() {
 
 #[tokio::test]
 async fn update_tool_response_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/tool/response/update")
         .header("content-type", "application/json")
@@ -705,7 +750,7 @@ async fn update_tool_response_returns_ok() {
 
 #[tokio::test]
 async fn call_tool_returns_result() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/tool/call")
         .header("content-type", "application/json")
@@ -732,7 +777,7 @@ async fn call_tool_returns_result() {
 
 #[tokio::test]
 async fn call_tool_forwards_missing_args() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/tool/call")
         .header("content-type", "application/json")
@@ -759,7 +804,7 @@ async fn call_tool_forwards_missing_args() {
 
 #[tokio::test]
 async fn reject_tool_call_returns_ok() {
-    let req = Request::builder()
+    let req = bearer(Request::builder(), TEST_TOKEN)
         .method("POST")
         .uri("/some-chat-id/tool/reject")
         .header("content-type", "application/json")
