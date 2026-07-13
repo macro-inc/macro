@@ -13,6 +13,7 @@ import {
   CALL_PANEL_VERY_NARROW_PX,
 } from './call-panel-breakpoints';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { TrackView } from './TrackView';
 import { useToggleShareWithTeam } from './use-toggle-share-with-team';
 
@@ -104,6 +105,7 @@ function ParticipantAvatar(props: {
 function LocalParticipantTile(props: {
   isSpeaking: boolean;
   isConnecting: boolean;
+  isAudioMuted: boolean;
   isVideoMuted: boolean;
   track: Track | undefined;
   userId: string | undefined;
@@ -130,6 +132,8 @@ function LocalParticipantTile(props: {
         <TrackView track={props.track} mirror />
       </Show>
 
+      <MutedMicrophoneBadge muted={props.isAudioMuted} label="You are muted" />
+
       <Show when={props.isConnecting} fallback={<VideoTag>You</VideoTag>}>
         <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
           Connecting...
@@ -149,6 +153,14 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
     callCtx.trackVersion();
     const pub = props.participant.getTrackPublication(LK_TRACK_SOURCE.Camera);
     return pub?.isSubscribed && !pub.isMuted ? pub.track : undefined;
+  };
+
+  const isAudioMuted = () => {
+    callCtx.trackVersion();
+    const publication = props.participant.getTrackPublication(
+      LK_TRACK_SOURCE.Microphone
+    );
+    return publication?.isMuted ?? true;
   };
 
   const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
@@ -177,6 +189,11 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       >
         <TrackView track={cameraTrack()} />
       </Show>
+
+      <MutedMicrophoneBadge
+        muted={isAudioMuted()}
+        label={`${displayName()} is muted`}
+      />
 
       <VideoTag variant="truncated">{displayName()}</VideoTag>
     </ParticipantTileWrapper>
@@ -294,6 +311,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
               class="size-full"
               isSpeaking={isLocalSpeaking()}
               isConnecting={isConnecting()}
+              isAudioMuted={callCtx.isAudioMuted()}
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
               userId={localUserId()}
@@ -316,6 +334,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
               class="size-full min-h-0"
               isSpeaking={isLocalSpeaking()}
               isConnecting={isConnecting()}
+              isAudioMuted={callCtx.isAudioMuted()}
               isVideoMuted={callCtx.isVideoMuted()}
               track={localVideoTrack()}
               userId={localUserId()}
