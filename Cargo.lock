@@ -8089,6 +8089,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_authorization"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "cookie",
+ "http-body-util",
+ "jsonwebtoken 10.3.0",
+ "macro_auth",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "urlencoding",
+ "workspace-hack",
+]
+
+[[package]]
 name = "macro_aws_config"
 version = "0.1.0"
 dependencies = [
