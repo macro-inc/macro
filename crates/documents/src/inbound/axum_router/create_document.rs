@@ -5,9 +5,9 @@ use std::str::FromStr;
 use axum::{Extension, Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{InternalUser, ProjectBodyAccessLevelExtractor};
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::document::response::CreateDocumentRequest;
 use model::document::{FileType, FileTypeExt};
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
@@ -38,7 +38,7 @@ use crate::domain::response::CreateDocumentResponse;
 pub async fn create_document_handler<T: DocumentService, Svc: EntityAccessService>(
     State(state): State<DocumentRouterState<T, Svc>>,
     internal_user: Option<Extension<InternalUser>>,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateDocumentRequest, Svc>,
 ) -> Result<Json<CreateDocumentResponse>, DocumentError> {
     let req = project.into_inner();

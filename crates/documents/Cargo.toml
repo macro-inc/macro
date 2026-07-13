@@ -34,8 +34,8 @@ axum = [
   "dep:axum-extra",
   "dep:jsonwebtoken",
   "dep:lexical_client",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
@@ -102,6 +102,7 @@ entity_access_management = { path = "../entity_access_management", default-featu
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_env_var = { path = "../macro_env_var" }
@@ -125,7 +126,6 @@ axum = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies

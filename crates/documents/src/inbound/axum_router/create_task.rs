@@ -6,7 +6,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     OptionalMacroUserTeamExtractor, ProjectBodyAccessLevelExtractor,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
 
 use super::DocumentRouterState;
@@ -39,7 +39,7 @@ pub async fn create_task_handler<
     Svc: EntityAccessService,
 >(
     State(state): State<DocumentRouterState<T, Svc>>,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
     optional_team: OptionalMacroUserTeamExtractor<MemberTeamRole, Svc>,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateTaskRequest, Svc>,
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
