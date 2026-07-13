@@ -39,6 +39,7 @@ import {
   type JSX,
   Match,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 
@@ -71,6 +72,13 @@ export interface EntityPropertiesSectionProps {
   hidePropertyDefinitionIds?: string[];
 }
 
+export interface EntityTagsSectionProps {
+  entityId: string;
+  entityType: EntityType;
+  canEdit: boolean;
+  order?: number;
+}
+
 const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'DOCUMENT',
   'TASK',
@@ -78,6 +86,36 @@ const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'PROJECT',
   'CHAT',
 ]);
+
+export function EntityTagsSection(props: EntityTagsSectionProps) {
+  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
+    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
+  });
+
+  return (
+    <Show
+      when={tagsFlag().enabled && TAGGABLE_ENTITY_TYPES.has(props.entityType)}
+    >
+      <SidePanel.Section
+        id="tags"
+        title="Tags"
+        defaultOpen
+        order={props.order}
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
+          <div class="text-xs">
+            <TagsRow
+              entityId={props.entityId}
+              entityType={props.entityType}
+              canEdit={props.canEdit}
+              triggerVariant="pill"
+            />
+          </div>
+        </Suspense>
+      </SidePanel.Section>
+    </Show>
+  );
+}
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(

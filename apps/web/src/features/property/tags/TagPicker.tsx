@@ -23,7 +23,7 @@ import {
 } from 'solid-js';
 import { TagDot } from './TagDot';
 import { DEFAULT_TAG_COLOR, TAG_COLORS } from './tagColors';
-import type { useDocTags } from './useDocTags';
+import type { ResolvedTag, useDocTags } from './useDocTags';
 
 type DocTags = ReturnType<typeof useDocTags>;
 
@@ -55,6 +55,7 @@ const SCOPE_LABEL: Record<TagScope, string> = {
 
 export function TagPicker(props: {
   docTags: DocTags;
+  replaceTag?: ResolvedTag;
   triggerClass?: string;
   triggerLabel: string;
   children: JSX.Element;
@@ -83,6 +84,7 @@ export function TagPicker(props: {
       </Popover.Trigger>
       <TagPickerBody
         docTags={props.docTags}
+        replaceTag={props.replaceTag}
         onClose={() => handleOpenChange(false)}
       />
     </Popover>
@@ -122,6 +124,7 @@ export function TagPickerPopover(props: {
 
 function TagPickerBody(props: {
   docTags: DocTags;
+  replaceTag?: ResolvedTag;
   onClose: () => void;
   dismissOnFocusOutside?: boolean;
 }) {
@@ -179,8 +182,13 @@ function TagPickerBody(props: {
       },
     });
     invalidateTags();
-    await props.docTags.applyTag(scope, created.id);
-    setSearch('');
+    if (props.replaceTag) {
+      await props.docTags.replaceTag(props.replaceTag, scope, created.id);
+      closePicker();
+    } else {
+      await props.docTags.applyTag(scope, created.id);
+      setSearch('');
+    }
   };
 
   const closePicker = () => {
@@ -232,6 +240,8 @@ function TagPickerBody(props: {
                           scope={scope}
                           option={option}
                           docTags={props.docTags}
+                          replaceTag={props.replaceTag}
+                          onClose={closePicker}
                           editing={editingId() === option.id}
                           onEdit={() => setEditingId(option.id)}
                           onEditClose={() => setEditingId(null)}
@@ -279,6 +289,8 @@ function TagPickerRow(props: {
   scope: TagScope;
   option: PropertyOptionResponse;
   docTags: DocTags;
+  replaceTag?: ResolvedTag;
+  onClose: () => void;
   editing: boolean;
   onEdit: () => void;
   onEditClose: () => void;
@@ -317,6 +329,20 @@ function TagPickerRow(props: {
     });
     setConfirmDelete(false);
     props.onEditClose();
+  };
+
+  const handleSelect = async () => {
+    if (props.replaceTag) {
+      await props.docTags.replaceTag(
+        props.replaceTag,
+        props.scope,
+        props.option.id
+      );
+      props.onClose();
+      return;
+    }
+
+    await props.docTags.toggleTag(props.scope, props.option.id);
   };
 
   return (
@@ -382,9 +408,7 @@ function TagPickerRow(props: {
           <button
             type="button"
             class="flex min-w-0 flex-1 items-center gap-2 text-left"
-            onClick={() =>
-              props.docTags.toggleTag(props.scope, props.option.id)
-            }
+            onClick={handleSelect}
           >
             <TagDot color={props.option.color ?? undefined} />
             <span class="min-w-0 flex-1 truncate">
