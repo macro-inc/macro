@@ -184,7 +184,7 @@ function UnreadHoverCard(
         </KobalteTooltip.Trigger>
         <KobalteTooltip.Portal>
           <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)] menu-open-animation">
-            <Surface depth={3}>
+            <Surface depth={3} class="shadow-menu">
               <GroupHoverPreview group={props.group} />
             </Surface>
           </KobalteTooltip.Content>
