@@ -1064,6 +1064,14 @@ export const getCallRecordResponse = zod
           .describe('A transcript segment as returned in a [`CallRecord`].')
       )
       .describe('Transcript segments ordered by `sequence_num`.'),
+    userAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
   })
   .describe(
     'Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.'

@@ -11196,6 +11196,17 @@
               "$ref": "#/components/schemas/CallRecordTranscriptSegment"
             },
             "description": "Transcript segments ordered by `sequence_num`."
+          },
+          "userAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The caller's effective access level on this call. Set only on the\nsingle-record read; `None` in list contexts."
+              }
+            ]
           }
         }
       },
