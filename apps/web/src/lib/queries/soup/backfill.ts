@@ -316,6 +316,43 @@ export async function runSoupBackfill(
   throw abortReason(signal);
 }
 
+function backfillLockName(userId: string, params: SoupBackfillParams): string {
+  return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${params.checkpointId}`;
+}
+
+/**
+ * Runs one shared backfill pass across all tabs. Tabs wait for the same Web
+ * Lock; after acquiring it they skip the pass if another tab completed it
+ * while they were waiting. If the running tab exits early, the next waiter
+ * resumes from the persisted cursor.
+ */
+export async function runSoupBackfillAcrossTabs(
+  userId: string,
+  params: SoupBackfillParams,
+  signal: AbortSignal
+): Promise<SoupBackfillCheckpoint> {
+  const observed = loadSoupBackfillCheckpoint(userId, params.checkpointId);
+  if (typeof navigator === 'undefined' || !navigator.locks) {
+    return runSoupBackfill(userId, params, signal);
+  }
+
+  return navigator.locks.request(
+    backfillLockName(userId, params),
+    { mode: 'exclusive', signal },
+    async () => {
+      const current = loadSoupBackfillCheckpoint(userId, params.checkpointId);
+      const completedWhileWaiting =
+        current.completed &&
+        (current.completedAt !== observed.completedAt ||
+          current.pagesFetched !== observed.pagesFetched);
+
+      return completedWhileWaiting
+        ? current
+        : runSoupBackfill(userId, params, signal);
+    }
+  );
+}
+
 /**
  * Slowly fills the browser GraphQL cache with every expanded Soup page.
  * The next cursor is persisted after each successful page so retries and
@@ -338,13 +375,14 @@ export function useSoupBackfill(
       ] as const,
       enabled: currentUserId !== undefined && graphqlCacheEnabled(),
       queryFn: ({ signal }: { signal: AbortSignal }) => {
-        return runSoupBackfill(currentUserId!, currentParams, signal);
+        return runSoupBackfillAcrossTabs(currentUserId!, currentParams, signal);
       },
       networkMode: 'online' as const,
       retry: 5,
       retryDelay: backfillRetryDelay,
-      // A later mount starts another pass using the persisted updatedSince.
-      staleTime: 0,
+      // Keep the successful result fresh in this tab. Other tabs may mount the
+      // same query, but the shared Web Lock ensures only one performs the pass.
+      staleTime: Infinity,
       refetchOnWindowFocus: false,
     };
   });
