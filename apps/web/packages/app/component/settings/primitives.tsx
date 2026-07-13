@@ -135,7 +135,7 @@ export function SettingsRow(props: {
         <Show when={props.description}>
           <div
             class={cn(
-              'text-xs text-ink-muted',
+              'text-xs text-ink-extra-muted mobile:text-[11px]',
               props.hideDescriptionOnMobile && 'mobile:hidden'
             )}
           >

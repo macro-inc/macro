@@ -60,7 +60,7 @@ function CopyThemeButton(props: { themeId: string; name: string }) {
     <button
       type="button"
       aria-label={`Copy ${props.name}`}
-      class="rounded p-0.5 hover:text-ink"
+      class="rounded p-0.5 hover:text-ink mobile:p-1.5"
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       onClick={(e) => {
@@ -70,8 +70,44 @@ function CopyThemeButton(props: { themeId: string; name: string }) {
         toast.success('Theme copied to clipboard');
       }}
     >
-      <ClipboardIcon class="size-3.5" />
+      <ClipboardIcon class="size-3.5 mobile:size-5" />
     </button>
+  );
+}
+
+/** Edits a theme in the inline editor (custom → in place, default → forked). */
+function EditThemeButton(props: { name: string; onEdit: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Edit ${props.name}`}
+      class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onEdit();
+      }}
+    >
+      <PencilIcon class="size-3.5 mobile:size-5" />
+    </button>
+  );
+}
+
+/**
+ * The copy + edit affordances surfaced beside a theme pill, so the common theme
+ * actions aren't buried inside the picker dropdown. Always visible (unlike the
+ * hover-gated per-row actions inside the dropdown).
+ */
+function ThemePillActions(props: {
+  themeId: string;
+  name: string;
+  onEdit: () => void;
+}) {
+  return (
+    <span class="flex shrink-0 items-center gap-0.5 text-ink-extra-muted">
+      <CopyThemeButton themeId={props.themeId} name={props.name} />
+      <EditThemeButton name={props.name} onEdit={props.onEdit} />
+    </span>
   );
 }
 
@@ -99,40 +135,50 @@ function ThemePreferenceRow(props: {
       aria-disabled={props.disabled?.()}
     >
       <div class="text-sm">{props.label}</div>
-      <Dropdown>
-        <KobalteDropdownMenu.Trigger
-          as={ThemeChipPill}
-          class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-2 hover:bg-ink/4"
-          disabled={props.disabled?.()}
-          theme={selectedTheme()}
-          name={selectedTheme()?.name ?? props.value()}
-        />
-        <Dropdown.Content
-          as="div"
-          class="overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
-        >
-          <Layer depth={3}>
-            <Dropdown.Group>
-              <For each={props.options()}>
-                {(theme) => (
-                  <Dropdown.Item
-                    class="group touch:min-h-10"
-                    onSelect={() => props.onSelect(theme.id)}
-                  >
-                    <span class="flex min-w-0 flex-1 items-center gap-2">
-                      <ThemeChips theme={theme} size="sm" />
-                      <span class="truncate">{theme.name}</span>
-                    </span>
-                    <span class="ml-2 shrink-0 text-ink-extra-muted opacity-0 group-hover:opacity-100 touch:opacity-100">
-                      <CopyThemeButton themeId={theme.id} name={theme.name} />
-                    </span>
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
-          </Layer>
-        </Dropdown.Content>
-      </Dropdown>
+      <div class="flex items-center gap-1">
+        <Dropdown>
+          <KobalteDropdownMenu.Trigger
+            as={ThemeChipPill}
+            class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-2 hover:bg-ink/4"
+            disabled={props.disabled?.()}
+            theme={selectedTheme()}
+            name={selectedTheme()?.name ?? props.value()}
+          />
+          <Dropdown.Content
+            as="div"
+            class="overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
+          >
+            <Layer depth={3}>
+              <Dropdown.Group>
+                <For each={props.options()}>
+                  {(theme) => (
+                    <Dropdown.Item
+                      class="group touch:min-h-10"
+                      onSelect={() => props.onSelect(theme.id)}
+                    >
+                      <span class="flex min-w-0 flex-1 items-center gap-2">
+                        <ThemeChips theme={theme} size="sm" />
+                        <span class="truncate">{theme.name}</span>
+                      </span>
+                      <span class="ml-2 shrink-0 text-ink-extra-muted opacity-0 group-hover:opacity-100 touch:opacity-100">
+                        <CopyThemeButton themeId={theme.id} name={theme.name} />
+                      </span>
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
+            </Layer>
+          </Dropdown.Content>
+        </Dropdown>
+        {/* Default rows expose copy only — editing a per-mode default happens
+            from the main Interface theme picker. */}
+        <span class="flex shrink-0 items-center text-ink-extra-muted">
+          <CopyThemeButton
+            themeId={props.value()}
+            name={selectedTheme()?.name ?? props.value()}
+          />
+        </span>
+      </div>
     </div>
   );
 }
@@ -208,76 +254,87 @@ function InterfaceThemeSelect(props: {
   );
 
   return (
-    <Dropdown open={open()} onOpenChange={setOpen}>
-      <KobalteDropdownMenu.Trigger
-        as={ThemeChipPill}
-        class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-2 hover:bg-ink/4"
-        // With no stored theme selected (e.g. the active theme was just
-        // deleted), fall back to the live tokens so the swatch still reflects
-        // the current colors and the label reads "Unsaved Theme".
-        theme={current() ?? getLiveTheme()}
-        name={current()?.name ?? 'Unsaved Theme'}
-      />
-      <Dropdown.Content
-        // Render as a plain div (not Surface) so the edge is a faint ink
-        // hairline like the settings cards, rather than the heavier b4 border.
-        as="div"
-        class="w-60 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
-        onOpenAutoFocus={(e: Event) => {
-          // Focus the filter input instead of the first item.
-          e.preventDefault();
-          inputRef?.focus();
-        }}
-        onCloseAutoFocus={() => setFilter('')}
-      >
-        {/* Elevate the menu's fill a level so it reads distinct from the
+    <div class="flex items-center gap-1">
+      <Dropdown open={open()} onOpenChange={setOpen}>
+        <KobalteDropdownMenu.Trigger
+          as={ThemeChipPill}
+          class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-2 hover:bg-ink/4"
+          // With no stored theme selected (e.g. the active theme was just
+          // deleted), fall back to the live tokens so the swatch still reflects
+          // the current colors and the label reads "Unsaved Theme".
+          theme={current() ?? getLiveTheme()}
+          name={current()?.name ?? 'Unsaved Theme'}
+        />
+        <Dropdown.Content
+          // Render as a plain div (not Surface) so the edge is a faint ink
+          // hairline like the settings cards, rather than the heavier b4 border.
+          as="div"
+          class="w-60 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
+          onOpenAutoFocus={(e: Event) => {
+            // Focus the filter input instead of the first item.
+            e.preventDefault();
+            inputRef?.focus();
+          }}
+          onCloseAutoFocus={() => setFilter('')}
+        >
+          {/* Elevate the menu's fill a level so it reads distinct from the
             settings cards, while the outer Surface keeps its subtle edges. */}
-        <Layer depth={3}>
-          <div class="bg-surface p-1.5">
-            <input
-              ref={inputRef}
-              type="text"
-              value={filter()}
-              onInput={(e) => setFilter(e.currentTarget.value)}
-              // Keep typing in the box rather than triggering the menu's typeahead.
-              onKeyDown={(e) => e.stopPropagation()}
-              placeholder="Filter themes…"
-              spellcheck={false}
-              class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
-            />
-          </div>
+          <Layer depth={3}>
+            <div class="bg-surface p-1.5">
+              <input
+                ref={inputRef}
+                type="text"
+                value={filter()}
+                onInput={(e) => setFilter(e.currentTarget.value)}
+                // Keep typing in the box rather than triggering the menu's typeahead.
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="Filter themes…"
+                spellcheck={false}
+                class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
+              />
+            </div>
 
-          <div class="max-h-64 overflow-y-auto bg-surface">
-            <Show when={defaults().length > 0}>
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Default</Dropdown.GroupLabel>
-                <For each={defaults()}>{(theme) => themeItem(theme)}</For>
-              </Dropdown.Group>
-            </Show>
-            <Show when={customs().length > 0}>
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Custom</Dropdown.GroupLabel>
-                <For each={customs()}>{(theme) => themeItem(theme, true)}</For>
-              </Dropdown.Group>
-            </Show>
-            <Show when={defaults().length === 0 && customs().length === 0}>
-              <div class="px-3 py-4 text-center text-xs text-ink-muted">
-                No themes match “{filter()}”
-              </div>
-            </Show>
-          </div>
+            <div class="max-h-64 overflow-y-auto bg-surface">
+              <Show when={defaults().length > 0}>
+                <Dropdown.Group>
+                  <Dropdown.GroupLabel>Default</Dropdown.GroupLabel>
+                  <For each={defaults()}>{(theme) => themeItem(theme)}</For>
+                </Dropdown.Group>
+              </Show>
+              <Show when={customs().length > 0}>
+                <Dropdown.Group>
+                  <Dropdown.GroupLabel>Custom</Dropdown.GroupLabel>
+                  <For each={customs()}>
+                    {(theme) => themeItem(theme, true)}
+                  </For>
+                </Dropdown.Group>
+              </Show>
+              <Show when={defaults().length === 0 && customs().length === 0}>
+                <div class="px-3 py-4 text-center text-xs text-ink-muted">
+                  No themes match “{filter()}”
+                </div>
+              </Show>
+            </div>
 
-          <Dropdown.Group>
-            <Dropdown.Item class="touch:min-h-10" onSelect={props.onNewTheme}>
-              <span class="flex items-center gap-2 text-ink-muted">
-                <PlusIcon class="size-4" />
-                New theme
-              </span>
-            </Dropdown.Item>
-          </Dropdown.Group>
-        </Layer>
-      </Dropdown.Content>
-    </Dropdown>
+            <Dropdown.Group>
+              <Dropdown.Item class="touch:min-h-10" onSelect={props.onNewTheme}>
+                <span class="flex items-center gap-2 text-ink-muted">
+                  <PlusIcon class="size-4" />
+                  New theme
+                </span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Layer>
+        </Dropdown.Content>
+      </Dropdown>
+      <Show when={current()}>
+        <ThemePillActions
+          themeId={currentThemeId()}
+          name={current()?.name ?? 'Theme'}
+          onEdit={() => props.onEdit(currentThemeId())}
+        />
+      </Show>
+    </div>
   );
 }
 
@@ -314,12 +371,22 @@ export function Appearance() {
     setEditorOpen(true);
   };
 
-  // Edit an existing custom theme: apply it, then open the editor bound to its
-  // id so saving updates it in place.
+  // Edit a theme: apply it, then open the inline editor. Custom themes bind to
+  // their id so saving updates them in place; default themes can't be edited in
+  // place, so the editor opens as a new (forked) theme seeded from the default's
+  // now-live tokens.
   const editTheme = (id: string) => {
     applyTheme(id);
-    setEditingThemeId(id);
-    setThemeName(themes().find((t) => t.id === id)?.name ?? 'Theme');
+    const source = themes().find((t) => t.id === id);
+    const isCustom = userThemes().some((t) => t.id === id);
+    if (isCustom) {
+      setEditingThemeId(id);
+      setThemeName(source?.name ?? 'Theme');
+    } else {
+      setEditingThemeId(undefined);
+      setIsThemeSaved(false);
+      setThemeName(`${source?.name ?? 'Theme'} copy`);
+    }
     setEditorTab('basic');
     setEditorOpen(true);
   };
