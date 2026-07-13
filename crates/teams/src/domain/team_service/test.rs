@@ -42,8 +42,8 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamAndMembers, TeamError,
-        TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole,
+        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
     },
     team_repo::{TeamChannelsRepository, TeamRepository},
 };

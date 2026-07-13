@@ -237,7 +237,7 @@ function CrmEnablementSection() {
 
   // The mutation invalidates the team query on success, which refetches
   // the authoritative flag.
-  const crmEnabled = () => teamQuery.data?.crm_enabled ?? false;
+  const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
   const [showDisableModal, setShowDisableModal] = createSignal(false);
   const [disableConfirmation, setDisableConfirmation] = createSignal('');
 
