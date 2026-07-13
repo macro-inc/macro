@@ -60,7 +60,7 @@ function localE2EWebServerCommand(): string {
 function ciPreviewWebServerCommand(): string {
   return [
     `PORT=${shellQuote(localE2EPort)}`,
-    'bunx vite preview -c packages/app/vite.config.ts --outDir packages/app/dist',
+    'bunx vite preview -c vite.config.ts --outDir dist',
   ].join(' ');
 }
 

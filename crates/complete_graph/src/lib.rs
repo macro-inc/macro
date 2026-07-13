@@ -3,17 +3,20 @@
 //! served by `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
 
+mod edges;
 mod schema;
 #[cfg(test)]
 mod sdl_test;
 
+pub use edges::SoupEdges;
 pub use graphql_common::GraphqlSoupRequestParts;
 pub use graphql_notification::{
-    EntityNotificationsKey, EntityNotificationsLoader, SoupNotificationEdgeReader,
-    entity_notifications_loader,
+    EntityNotificationsLoader, SoupNotificationEdgeReader, entity_notifications_loader,
 };
 pub use graphql_properties::{
-    EntityPropertiesKey, EntityPropertiesLoader, SoupPropertyEdgeReader, entity_properties_loader,
+    EntityPropertiesLoader, EntityPropertyWriter, NoOpSoupPropertyEdgeReader,
+    PropertiesEntityPropertyWriter, PropertiesMutationRoot, PropertiesSoupPropertyEdgeReader,
+    SoupPropertyEdgeReader, entity_properties_loader,
 };
 pub use graphql_soup::SharedSoupService;
 pub use schema::{

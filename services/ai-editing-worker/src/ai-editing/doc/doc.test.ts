@@ -1,5 +1,5 @@
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
-import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import {
   $getRoot,
   $isElementNode,

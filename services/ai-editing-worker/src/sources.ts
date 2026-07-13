@@ -5,9 +5,9 @@
  * shared with the browser — nothing is reimplemented here.
  */
 
-import type { Awareness } from '@core/collab/awareness';
-import { createSyncSocket } from '@service-sync/source/socket';
-import { SyncServiceSource } from '@service-sync/source/source';
+import type { Awareness } from '@macro-inc/collaboration/collab/awareness';
+import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
+import { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
 import { EphemeralStore, type PeerID } from 'loro-crdt';
 
 /**

@@ -2,7 +2,8 @@
 
 use crate::domain::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookId,
+        CreateWebhookRequest, CreateWebhookResponse, PatchWebhookRequest, ValidateWebhookResponse,
+        Webhook, WebhookId,
     },
     ports::{WebhookError, WebhookService},
 };
@@ -143,7 +144,7 @@ where
     path = "/webhook/webhooks",
     request_body = CreateWebhookRequest,
     responses(
-        (status = 201, description = "Webhook created", body = Webhook),
+        (status = 201, description = "Webhook created", body = CreateWebhookResponse),
         (status = 400, description = "Bad request", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
@@ -154,9 +155,9 @@ pub async fn create_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
     user: MacroUserExtractor,
     Json(request): Json<CreateWebhookRequest>,
-) -> Result<(StatusCode, Json<Webhook>), WebhookHandlerError> {
+) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
     let webhook = service.create_webhook(user.macro_user_id, request).await?;
-    Ok((StatusCode::CREATED, Json(webhook)))
+    Ok((StatusCode::CREATED, Json(webhook.into())))
 }
 
 /// Patch a webhook.

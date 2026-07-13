@@ -102,6 +102,15 @@ mod tests {
     }
 
     #[test]
+    fn mutation_root_is_present() {
+        let name = MUTATION_ROOT_TYPE.expect("schema has a mutation root");
+        let root = type_meta(name).expect("mutation root type");
+        assert_eq!(root.kind, TypeKind::Object);
+        assert!(root.key_fields.is_none());
+        assert!(root.fields.iter().any(|f| f.name == "setEntityProperty"));
+    }
+
+    #[test]
     fn union_possible_types() {
         let entity = type_meta("GraphqlSoupEntity").expect("entity union");
         assert_eq!(entity.kind, TypeKind::Union);
@@ -123,9 +132,12 @@ mod tests {
             type_meta("GraphqlSoupChannelMessage").unwrap().key_fields,
             Some(&["id"][..])
         );
-        // Property values are per-entity; the schema exposes the definition
-        // id as `propertyDefinitionId` (not `id`) so properties embed.
-        assert_eq!(type_meta("GraphqlSoupProperty").unwrap().key_fields, None);
+        // Property assignments have globally unique database ids and are
+        // normalized independently from their shared definitions.
+        assert_eq!(
+            type_meta("GraphqlSoupProperty").unwrap().key_fields,
+            Some(&["id"][..])
+        );
         assert!(field_meta("GraphqlSoupProperty", "propertyDefinitionId").is_some());
         // No id field → embedded.
         assert_eq!(type_meta("SoupPage").unwrap().key_fields, None);

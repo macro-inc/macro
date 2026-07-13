@@ -10,20 +10,16 @@ A TypeScript state management library that syncs application state with [loro-cr
 - 🔍 **Selective Updates**: Subscribe to specific parts of your state
 - 🛠️ **Developer Friendly**: Familiar API inspired by popular state management libraries
 
-## Packages
+## Package
 
-- [`@loro-mirror/core`](./packages/core): Core state management functionality
+This directory is the `@loro-mirror/core` package.
 
 ## Installation
 
 ### Core Package
 
 ```bash
-npm install @loro-mirror/core loro-crdt
-# or
-yarn add @loro-mirror/core loro-crdt
-# or
-pnpm add @loro-mirror/core loro-crdt
+bun add @loro-mirror/core loro-crdt
 ```
 
 ## Quick Start
@@ -73,9 +69,9 @@ store.subscribe((state) => {
 
 ## Documentation
 
-For detailed documentation, see the core package README:
+For detailed documentation, see the package reference:
 
-- [Core Documentation](./packages/core/README.md)
+- [Core Documentation](./REFERENCE.md)
 
 ## License
 

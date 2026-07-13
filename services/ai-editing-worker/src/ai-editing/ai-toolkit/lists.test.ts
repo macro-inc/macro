@@ -4,7 +4,7 @@ import {
   type ListItemNode,
   type ListNode,
 } from '@lexical/list';
-import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { serializeWithXml } from '../utils';

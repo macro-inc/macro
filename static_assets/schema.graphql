@@ -235,6 +235,12 @@ input GraphqlEntityFilterAst {
 	propertiesFilter: GraphqlPropertiesExpr
 }
 
+input GraphqlEntityReferenceInput {
+	entityType: GraphqlPropertyEntityType!
+	entityId: String!
+	specificMessageId: ID
+}
+
 input GraphqlForeignEntityBinaryExpr {
 	left: GraphqlForeignEntityExpr!
 	right: GraphqlForeignEntityExpr!
@@ -361,6 +367,19 @@ input GraphqlPropertyMatchValue @oneOf {
 	entityRef: String
 }
 
+input GraphqlSetPropertyValue @oneOf {
+	boolean: Boolean
+	date: String
+	number: Float
+	string: String
+	selectOption: ID
+	multiSelectOption: [ID!]
+	entityReference: GraphqlEntityReferenceInput
+	multiEntityReference: [GraphqlEntityReferenceInput!]
+	link: String
+	multiLink: [String!]
+}
+
 enum GraphqlSharedEmailFilter {
 	EXCLUDE
 	INCLUDE
@@ -406,6 +425,7 @@ type GraphqlSoupCall {
 	participantCount: Int!
 	participantIds: [String!]!
 	participants: [GraphqlSoupCallParticipant!]!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -431,6 +451,7 @@ type GraphqlSoupChannel {
 	participants: [GraphqlSoupChannelParticipant!]!
 	latestMessage: GraphqlSoupChannelMessage
 	latestNonThreadMessage: GraphqlSoupChannelMessage
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -462,6 +483,7 @@ type GraphqlSoupChannelThread {
 	updatedAt: String!
 	effectiveUpdatedAt: String!
 	replyCount: Int!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -686,6 +708,7 @@ type GraphqlSoupForeignEntity {
 	metadata: JSON!
 	createdAt: String!
 	updatedAt: String!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -726,10 +749,11 @@ type GraphqlSoupProject {
 
 type GraphqlSoupProperty {
 	"""
-	Id of the shared property *definition* — deliberately not named `id`:
-	a property instance has no global identity (its `value` is
-	per-entity), so it must never be treated as a cacheable entity.
-	Normalized caches key objects by the presence of an `id` field.
+	Globally unique id of this property assignment.
+	"""
+	id: ID!
+	"""
+	Id of the shared property definition.
 	"""
 	propertyDefinitionId: ID!
 	displayName: String!
@@ -818,6 +842,23 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
+type PropertiesMutationRoot {
+	"""
+	Set or attach one property on an entity.
+	"""
+	setEntityProperty(input: SetEntityPropertyInput!): GraphqlSoupProperty!
+}
+
+input SetEntityPropertyInput {
+	entityType: GraphqlPropertyEntityType!
+	entityId: String!
+	propertyDefinitionId: ID!
+	"""
+	Omit or pass null to attach the property without a value.
+	"""
+	value: GraphqlSetPropertyValue
+}
+
 """
 Input for `Query.soup`.
 """
@@ -888,5 +929,6 @@ Directs the executor to skip this field or fragment when the `if` argument is tr
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: SoupQueryRoot
+	mutation: PropertiesMutationRoot
 }
 

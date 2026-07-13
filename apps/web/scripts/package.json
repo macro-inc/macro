@@ -1,6 +1,0 @@
-{
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "^1.2.19"
-  }
-}

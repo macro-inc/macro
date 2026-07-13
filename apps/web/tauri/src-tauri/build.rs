@@ -1,6 +1,6 @@
 fn main() {
     println!("cargo:rerun-if-changed=.macro-tauri-env");
-    println!("cargo:rerun-if-changed=../../packages/app/dist/bundle-manifest.json");
+    println!("cargo:rerun-if-changed=../../dist/bundle-manifest.json");
     println!("cargo:rerun-if-env-changed=MACRO_BUNDLE_UPDATE_BASE_URL");
 
     let contents = std::fs::read_to_string(".macro-tauri-env").unwrap_or_default();
@@ -44,7 +44,7 @@ fn main() {
 }
 
 fn read_embedded_bundle_build() -> Result<u64, String> {
-    let path = "../../packages/app/dist/bundle-manifest.json";
+    let path = "../../dist/bundle-manifest.json";
     let contents =
         std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
     let manifest = serde_json::from_str::<serde_json::Value>(&contents)

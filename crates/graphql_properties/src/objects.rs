@@ -1,6 +1,8 @@
-use async_graphql::{Enum, ID, Object, SimpleObject};
+use async_graphql::{Context, Enum, ID, Object, SimpleObject, dataloader::DataLoader};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::SoupProperty;
+
+use crate::loaders::{EntityPropertiesLoader, SoupPropertyEdgeReader};
 
 /// GraphQL representation of supported Soup property data types.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +43,27 @@ impl From<models_properties::DataType> for GraphqlSoupDataType {
     }
 }
 
-/// GraphQL property attached to a Soup entity.
+/// Load properties attached to an entity through the request-scoped loader.
+pub async fn load_entity_properties<R>(
+    ctx: &Context<'_>,
+    entity: model_entity::Entity<'static>,
+) -> async_graphql::Result<Vec<GraphqlSoupProperty>>
+where
+    R: SoupPropertyEdgeReader,
+{
+    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let properties = loader
+        .load_one(model_entity::OwnedEntity::from(entity))
+        .await
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?
+        .unwrap_or_default();
+    Ok(properties
+        .into_iter()
+        .map(GraphqlSoupProperty::from)
+        .collect())
+}
+
+/// GraphQL property assignment attached to a Soup entity.
 pub struct GraphqlSoupProperty(SoupProperty);
 
 impl From<SoupProperty> for GraphqlSoupProperty {
@@ -52,10 +74,12 @@ impl From<SoupProperty> for GraphqlSoupProperty {
 
 #[Object]
 impl GraphqlSoupProperty {
-    /// Id of the shared property *definition* — deliberately not named `id`:
-    /// a property instance has no global identity (its `value` is
-    /// per-entity), so it must never be treated as a cacheable entity.
-    /// Normalized caches key objects by the presence of an `id` field.
+    /// Globally unique id of this property assignment.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Id of the shared property definition.
     async fn property_definition_id(&self) -> ID {
         ID(self.0.definition.id.to_string())
     }

@@ -1,7 +1,7 @@
 //! `cargo x cache-wasm [--force]`
 //!
 //! Ensures the browser cache wasm package (`crates/client/cache-wasm`, built by
-//! wasm-pack into the gitignored `apps/web/packages/graphql-cache/wasm/`) is
+//! wasm-pack into the gitignored `apps/web/src/lib/graphql-cache/wasm/`) is
 //! present and version-matched before the vite dev server starts. Without
 //! it the cache worker's dynamic import 404s at runtime and the normalized
 //! cache silently degrades to network-only.
@@ -18,7 +18,7 @@ use std::{path::Path, process::Command};
 use anyhow::{Context, Result, bail};
 
 const CRATE_REL: &str = "crates/client/cache-wasm";
-const PKG_REL: &str = "apps/web/packages/graphql-cache/wasm";
+const PKG_REL: &str = "apps/web/src/lib/graphql-cache/wasm";
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

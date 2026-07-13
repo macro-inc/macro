@@ -4,7 +4,7 @@ severity: error
 message: Raw Tailwind palette classes are disabled in @theme and render NOTHING. Use semantic color tokens.
 note: |-
   Rule FE-25 in docs/STYLE_GUIDE.md. The default palette is reset via
-  `--color-*: initial` in apps/web/packages/app/index.css, so classes like
+  `--color-*: initial` in apps/web/src/index.css, so classes like
   `text-red-500` silently produce no CSS. Use semantic tokens instead:
   failure/failure-bg/failure-ink, success-*, alert-*, accent, ink-muted, etc.
 files:

@@ -8,7 +8,7 @@ the command that fixes it. `just check full` adds tsc + clippy.
 The id prefix is the domain:
 
 - `CS-##` — Rust backend (`crates/`, `services/`, `tooling/`)
-- `FE-##` — frontend (`apps/web`, `packages/lexical-core`)
+- `FE-##` — frontend and shared TypeScript (`apps/web`, `packages/`)
 
 IDs are stable — cite them in review comments ("see CS-30", "FE-12"), never renumber or
 reuse them; deletions leave gaps and new rules append with the next free number. Scope
@@ -143,7 +143,7 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-50** `[test]` Update tests and run `just prepare_db` with any db-crate change.
   (also: CLAUDE.md)
 
-## Frontend (`apps/web`, `packages/lexical-core`)
+## Frontend and shared TypeScript (`apps/web`, `packages/`)
 
 - **FE-01** `[data]` Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query already
@@ -204,7 +204,7 @@ TypeScript · `[ui]` UI / UX conventions
 - **FE-24** `[ui]` Truncated/collapsed controls get a tooltip (matching the app's
   tooltip pattern) so the lost label stays discoverable. (#4492)
 - **FE-25** `[ui]` Semantic color tokens, not raw Tailwind palette classes — the default
-  palette is disabled via `--color-*: initial` in `apps/web/packages/app/index.css`, so
+  palette is disabled via `--color-*: initial` in `apps/web/src/index.css`, so
   classes like `text-red-500` silently render nothing. (enforced: ast-grep
   `tsx-no-raw-tailwind-palette`, CI error · also: AGENTS.md)
 - **FE-26** `[ui]` Prefer composition over configurability; keep reusable components

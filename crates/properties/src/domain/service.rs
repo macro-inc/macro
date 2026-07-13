@@ -3,9 +3,8 @@
 //! Access control is represented in the method types: every entity-scoped
 //! method takes a [`ViewReceipt`] or [`EditReceipt`] proving the caller's
 //! access, and owner-scoped methods take the caller's identity plus their
-//! team-membership receipt. Receipts are minted at the inbound edges via
-//! [`PropertiesService::mint_view_receipt`] /
-//! [`PropertiesService::mint_edit_receipt`]; internal (machine) callers mint
+//! team-membership receipt. User-facing callers mint receipts through the
+//! entity access service at the inbound edge; internal (machine) callers mint
 //! via [`PropertiesAccessReceipt::dangerously_assert_internal`](super::model::PropertiesAccessReceipt::dangerously_assert_internal),
 //! which makes unchecked paths explicit and greppable.
 
@@ -42,31 +41,6 @@ pub fn team_id_from_receipt(team: Option<&TeamReceipt>) -> Option<Uuid> {
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
-    /// Mint a proof that the user (or the public, for `None`) has view access
-    /// to the entity. Fails with [`PropertiesErr::PermissionDenied`] otherwise.
-    fn mint_view_receipt(
-        &self,
-        user_id: Option<&MacroUserIdStr<'_>>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> impl Future<Output = Result<ViewReceipt, PropertiesErr>> + Send;
-
-    /// Mint a proof that the user has edit (or owner) access to the entity.
-    /// Fails with [`PropertiesErr::PermissionDenied`] otherwise.
-    fn mint_edit_receipt(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> impl Future<Output = Result<EditReceipt, PropertiesErr>> + Send;
-
-    /// Set an entity's status system property to "Completed".
-    /// No-op if the entity doesn't have a status property.
-    fn set_system_property_status_complete(
-        &self,
-        access: &EditReceipt,
-    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
-
     /// Get all properties attached to an entity, with definitions, values, and
     /// options. Tag properties are restricted to the viewer's own and their
     /// teams' definitions (the viewer being the receipt's authenticated user).
@@ -99,6 +73,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<PropertyValue>, PropertiesErr>> + Send;
 
     /// Set or update a property value for an entity, or attach a property without a value.
+    /// Returns the canonical property assignment, definition, and persisted value.
     /// Validates property options if the value contains select options.
     /// Linking Parent Task / Subtasks additionally requires edit access to the
     /// referenced tasks.
@@ -107,7 +82,7 @@ pub trait PropertiesService: Send + Sync + 'static {
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+    ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
 
     /// Add one option to a multi-select entity property value atomically.
     /// Attaches the property if needed and dedupes. Validates the option belongs

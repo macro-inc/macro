@@ -3,12 +3,12 @@ import type { LexicalSession } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
-import { buildPrompt } from './coder-prompt';
 import {
   createImBlockedTool,
   createReadDocumentTool,
   createRunCodeTool,
 } from '../tools';
+import { buildPrompt } from './coder-prompt';
 import { EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunTaskDeps } from './types';
 

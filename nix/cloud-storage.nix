@@ -175,14 +175,7 @@
         cargoVendorDir = craneLib.vendorCargoDeps {
           src = ../.;
           cargoLock = ../Cargo.lock;
-          outputHashes = {
-            "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16" =
-              "sha256-jllT52SAIiNpTPg7Vm3wmT79w/CIz9NnVKM81oQq8dM=";
-            "git+https://github.com/macro-inc/rig?branch=feat/responses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7" =
-              "sha256-EcmlwqAVXGtbuvozzCOrygoSVipU99mBZK/MrQAIoYg=";
-            "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc" =
-              "sha256-lx/AuxPpCarxdDzogkGudCbE4B2OEt5un4s4gIFt1ek=";
-          };
+          outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
         };
         RUSTFLAGS = pkgs.lib.optionalString isLinux "-C link-arg=-fuse-ld=mold";
         # Build deps + workspace + bins in dev profile so the test job (which runs
@@ -211,6 +204,8 @@
       # hash is per-source so cachix only hits when the SHA matches across CI
       # workflows — but since code-check-cloud-storage and web-app-check-main both
       # run on the same SHA, whichever finishes first pushes for the other.
+      # sync_service is checked separately with its supported default feature
+      # set because its KV and R2 storage features are mutually exclusive.
       workspaceArtifacts = craneLib.cargoBuild (
         commonArgs
         // {
@@ -218,7 +213,7 @@
           pname = "cloud-storage-workspace";
           doCheck = false;
           doInstallCargoArtifacts = true;
-          cargoExtraArgs = "--locked --all-features --workspace --lib";
+          cargoExtraArgs = "--locked --all-features --workspace --lib --exclude sync_service";
           RUSTFLAGS = "-Dwarnings" + pkgs.lib.optionalString isLinux " -C link-arg=-fuse-ld=mold";
           RUSTDOCFLAGS = "-Dwarnings";
         }
@@ -331,6 +326,7 @@
               --cargo-profile dev \
               --locked --all-features \
               --workspace --lib --bins --tests \
+              --exclude sync_service \
               --archive-file nextest-archive.tar.zst
           '';
           installPhaseCommand = ''
@@ -702,6 +698,8 @@
           cargo-deny
           cargo-nextest
           cargo-expand
+          binaryen
+          wasm-bindgen-cli
           wasm-pack
           pkg-config
           bacon
@@ -738,7 +736,15 @@
           commonArgs
           // {
             cargoArtifacts = workspaceArtifacts;
-            cargoClippyExtraArgs = "--all-features -- -D warnings";
+            cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service --exclude test_build_full_pdf_modification_data --exclude test_pdf_modification_data_deserialize -- -D warnings";
+            RUSTDOCFLAGS = "-Dwarnings";
+          }
+        );
+        clippy-sync-service = craneLib.cargoClippy (
+          commonArgs
+          // {
+            cargoArtifacts = workspaceArtifacts;
+            cargoClippyExtraArgs = "-p sync_service -- -D warnings -A clippy::unnecessary_map_or -A clippy::collapsible_if";
             RUSTDOCFLAGS = "-Dwarnings";
           }
         );
@@ -746,7 +752,7 @@
         gen-api =
           let
             openApiFiles = pkgs.lib.cleanSourceWith {
-              src = ../apps/web/packages/service-clients;
+              src = ../apps/web/src/lib/service-clients;
               filter = path: type: type == "directory" || pkgs.lib.hasSuffix "openapi.json" (baseNameOf path);
             };
             crateToDir = {

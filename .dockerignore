@@ -22,16 +22,22 @@
 **/.env
 **/.env.*
 **/*.env
-**/.dev.vars
+**/*.env.*
+**/.dev.vars*
 
 # Dependency and generated output
 **/node_modules
 **/target
 **/dist
+**/build
 **/.wrangler
 **/test-results
+**/playwright-report
 **/coverage
 **/.cache
+**/.vite
+**/*.tsbuildinfo
+**/*.log
 
 # Editor and operating-system noise
 **/.DS_Store

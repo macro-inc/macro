@@ -1,23 +1,5 @@
 {
-	"name": "@coparse/js",
-	"dependencies": {
-		"@lexical/code": "0.45.0",
-		"@lexical/headless": "0.45.0",
-		"@lexical/history": "0.45.0",
-		"@lexical/html": "0.45.0",
-		"@lexical/link": "0.45.0",
-		"@lexical/list": "0.45.0",
-		"@lexical/mark": "0.45.0",
-		"@lexical/markdown": "0.45.0",
-		"@lexical/plain-text": "0.45.0",
-		"@lexical/rich-text": "0.45.0",
-		"@lexical/selection": "0.45.0",
-		"@lexical/table": "0.45.0",
-		"@lexical/utils": "0.45.0",
-		"bebop-tools": "3.1.3",
-		"idb": "^8.0.3",
-		"lexical": "0.45.0"
-	},
+	"name": "@macro-inc/macro",
 	"overrides": {
 		"@lexical/clipboard": "0.45.0",
 		"@lexical/code": "0.45.0",
@@ -63,7 +45,7 @@
 	"scripts": {
 		"fix": "cd apps/web && bunx --bun @biomejs/biome check --write",
 		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
+		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project tsconfig.json",
 		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
 		"lint:oxlint": "cd apps/web && bunx --yes oxlint@1.73.0",
 		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
@@ -79,12 +61,10 @@
 	],
 	"workspaces": [
 		"apps/web",
-		"apps/web/packages/*",
+		"packages/collaboration",
 		"packages/loro-mirror",
 		"packages/lexical-core",
+		"services/ai-editing-worker",
 		"services/lexical-service"
-	],
-	"devDependencies": {
-		"@apidevtools/json-schema-ref-parser": "^15.3.5"
-	}
+	]
 }

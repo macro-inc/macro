@@ -31,25 +31,31 @@ import {
   TableCellHeaderStates,
   type TableNode,
 } from '@lexical/table';
-import { $createContactMentionNode } from '@lexical-core/nodes/ContactMentionNode';
+import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createDateMentionNode,
   $isDateMentionNode,
-} from '@lexical-core/nodes/DateMentionNode';
-import { $createDocumentCardNode } from '@lexical-core/nodes/DocumentCardNode';
-import { $createDocumentMentionNode } from '@lexical-core/nodes/DocumentMentionNode';
-import { $createEquationNode } from '@lexical-core/nodes/EquationNode';
-import { $createGroupMentionNode } from '@lexical-core/nodes/GroupMentionNode';
-import { $createHorizontalRuleNode } from '@lexical-core/nodes/HorizontalRuleNode';
-import { $createHtmlRenderNode } from '@lexical-core/nodes/HtmlRenderNode';
-import { $createImageNode, ImageNode } from '@lexical-core/nodes/ImageNode';
-import { $createUserMentionNode } from '@lexical-core/nodes/UserMentionNode';
-import { $createVideoNode, VideoNode } from '@lexical-core/nodes/VideoNode';
+} from '@macro-inc/lexical-core/nodes/DateMentionNode';
+import { $createDocumentCardNode } from '@macro-inc/lexical-core/nodes/DocumentCardNode';
+import { $createDocumentMentionNode } from '@macro-inc/lexical-core/nodes/DocumentMentionNode';
+import { $createEquationNode } from '@macro-inc/lexical-core/nodes/EquationNode';
+import { $createGroupMentionNode } from '@macro-inc/lexical-core/nodes/GroupMentionNode';
+import { $createHorizontalRuleNode } from '@macro-inc/lexical-core/nodes/HorizontalRuleNode';
+import { $createHtmlRenderNode } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
+import {
+  $createImageNode,
+  ImageNode,
+} from '@macro-inc/lexical-core/nodes/ImageNode';
+import { $createUserMentionNode } from '@macro-inc/lexical-core/nodes/UserMentionNode';
+import {
+  $createVideoNode,
+  VideoNode,
+} from '@macro-inc/lexical-core/nodes/VideoNode';
 import {
   $getId,
   $setId,
   $updateAllNodeIds,
-} from '@lexical-core/plugins/nodeIdPlugin';
+} from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import {
   $createLineBreakNode,
   $createParagraphNode,

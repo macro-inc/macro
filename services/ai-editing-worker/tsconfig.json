@@ -25,25 +25,10 @@
 		],
 		"baseUrl": ".",
 		"paths": {
-			"@loro-mirror/*": [
-				"../../packages/loro-mirror/*"
-			],
-			"@core/*": [
-				"../../apps/web/packages/core/*"
-			],
-			"@service-sync/*": [
-				"../../apps/web/packages/service-clients/service-sync/*"
-			],
-			"@websocket": [
-				"../../apps/web/packages/websocket"
-			],
-			"@websocket/*": [
-				"../../apps/web/packages/websocket/*"
-			],
-			"@lexical-core": [
+			"@macro-inc/lexical-core": [
 				"../../packages/lexical-core"
 			],
-			"@lexical-core/*": [
+			"@macro-inc/lexical-core/*": [
 				"../../packages/lexical-core/*"
 			]
 		}
@@ -51,8 +36,7 @@
 	"exclude": [
 		"node_modules",
 		"../../packages/lexical-core/nodes",
-		"../../packages/lexical-core/transformers",
-		"../../packages/loro-mirror"
+		"../../packages/lexical-core/transformers"
 	],
 	"include": [
 		"src",

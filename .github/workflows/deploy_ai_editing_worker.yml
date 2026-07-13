@@ -10,8 +10,8 @@ name: Deploy AI Editing Worker
     - bun.lock
     - package.json
     - services/ai-editing-worker/**
-    - apps/web/packages/core/**
-    - apps/web/packages/websocket/**
+    - packages/collaboration/**
+    - packages/lexical-core/**
     - packages/loro-mirror/**
   workflow_dispatch:
     inputs:
@@ -37,9 +37,6 @@ jobs:
         node-version: '22'
     - name: Install dependencies
       run: bun install --frozen-lockfile
-    - name: Install worker dependencies
-      run: bun install --frozen-lockfile
-      working-directory: services/ai-editing-worker
     - name: Deploy with wrangler
       run: bun run deploy-${{ inputs.environment || 'dev' }}
       env:

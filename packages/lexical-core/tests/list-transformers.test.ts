@@ -81,9 +81,10 @@ describe('custom ordered-list transformer', () => {
 
       expect(list.getListType()).toBe('number');
       expect(list.getStart()).toBe(1);
-      expect(
-        list.getChildren().map((item) => item.getTextContent())
-      ).toEqual(['Incoming', 'Existing']);
+      expect(list.getChildren().map((item) => item.getTextContent())).toEqual([
+        'Incoming',
+        'Existing',
+      ]);
     });
   });
 });

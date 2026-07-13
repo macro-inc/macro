@@ -18,7 +18,7 @@
       isX86_64Linux = system == "x86_64-linux";
       isAarch64Darwin = system == "aarch64-darwin";
 
-      appVersion = (builtins.fromJSON (builtins.readFile ../apps/web/packages/app/package.json)).version;
+      appVersion = (builtins.fromJSON (builtins.readFile ../apps/web/package.json)).version;
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
 
       rustToolchain = fenix.packages.${system}.fromToolchainFile {
@@ -37,8 +37,9 @@
           in
           !(lib.hasPrefix "node_modules/" rel)
           && !(lib.hasPrefix "apps/web/node_modules/" rel)
-          && !(lib.hasPrefix "apps/web/packages/app/dist/" rel)
+          && !(lib.hasPrefix "apps/web/dist/" rel)
           && !(lib.hasPrefix "apps/web/tauri/target/" rel)
+          && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
           && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
@@ -47,8 +48,41 @@
           && !(lib.hasInfix "/dist/" rel)
           && rel != "node_modules"
           && rel != "apps/web/node_modules"
-          && rel != "apps/web/packages/app/dist"
-          && rel != "apps/web/tauri/target";
+          && rel != "apps/web/dist"
+          && rel != "apps/web/tauri/target"
+          && rel != "apps/web/src/lib/graphql-cache/wasm";
+      };
+
+      rootCargoVendorDir = craneLib.vendorCargoDeps {
+        src = ../.;
+        cargoLock = ../Cargo.lock;
+        outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
+      };
+
+      cacheWasmPackage = craneLib.mkCargoDerivation {
+        pname = "macro-cache-wasm";
+        version = appVersion;
+        src = jsSrc;
+        cargoArtifacts = null;
+        cargoVendorDir = rootCargoVendorDir;
+        nativeBuildInputs = [
+          pkgs.binaryen
+          pkgs.wasm-bindgen-cli
+          pkgs.wasm-pack
+        ];
+        doCheck = false;
+        buildPhaseCargoCommand = ''
+          wasm-pack build crates/client/cache-wasm \
+            --target web \
+            --release \
+            --mode no-install \
+            --out-dir "$PWD/apps/web/src/lib/graphql-cache/wasm"
+        '';
+        installPhaseCommand = ''
+          mkdir -p $out
+          cp -a apps/web/src/lib/graphql-cache/wasm/. $out/
+        '';
+        doInstallCargoArtifacts = false;
       };
 
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
@@ -72,17 +106,22 @@
 
             cp -a ${nodeModules}/. .
 
-            vite_resolve_replacement='      resolve: {
-          alias: [
-            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../../node_modules/@tauri-apps/api") },
-          ],'
-            substituteInPlace apps/web/packages/app/vite.base.ts \
-              --replace-fail "      resolve: {" "$vite_resolve_replacement"
+            # Vite bundles TypeScript config files to a temporary sibling before
+            # loading them. The application config now lives at the app root,
+            # so make that directory writable inside the Nix build sandbox.
+            chmod u+w apps/web
+
+            substituteInPlace apps/web/vite.base.ts \
+              --replace-fail \
+                "          // NIX_TAURI_ALIAS" \
+                '          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },'
 
             printf production > apps/web/tauri/src-tauri/.macro-tauri-env
+            mkdir -p apps/web/src/lib/graphql-cache/wasm
+            cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
             (
-              cd apps/web/packages/app
-              MODE=production NODE_ENV=production bun ../../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+              cd apps/web
+              MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
               printf '${appVersion}+${gitRev}\n' > dist/semver.txt
               BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
             )
@@ -92,7 +131,7 @@
 
         installPhase = ''
           runHook preInstall
-          cp -r apps/web/packages/app/dist "$out"
+          cp -r apps/web/dist "$out"
           runHook postInstall
         '';
       };
@@ -131,10 +170,9 @@
             --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
         '';
         craneArgs.preBuild = ''
-          mkdir -p ../packages/app
-          cp ${../apps/web/packages/app/package.json} ../packages/app/package.json
-          rm -rf ../packages/app/dist
-          cp -r ${frontend} ../packages/app/dist
+          cp ${../apps/web/package.json} ../package.json
+          rm -rf ../dist
+          cp -r ${frontend} ../dist
         '';
       };
 

@@ -3,6 +3,7 @@
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use entity_access::domain::ports::EntityAccessService;
 use models_properties::PropertyOwner;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::tag_sets::TagScope;
@@ -59,16 +60,17 @@ pub struct ListTagsResponse {
 pub struct ListTags {}
 
 #[async_trait]
-impl<T> AsyncTool<PropertiesToolContext<T>> for ListTags
+impl<T, A> AsyncTool<PropertiesToolContext<T, A>> for ListTags
 where
     T: PropertiesService,
+    A: EntityAccessService,
 {
     type Output = ListTagsResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<PropertiesToolContext<T>>,
+        service_context: ServiceContext<PropertiesToolContext<T, A>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!("List tags");

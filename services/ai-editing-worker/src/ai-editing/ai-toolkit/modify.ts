@@ -1,5 +1,5 @@
 import { $isListItemNode } from '@lexical/list';
-import { $isEquationNode } from '@lexical-core/nodes/EquationNode';
+import { $isEquationNode } from '@macro-inc/lexical-core/nodes/EquationNode';
 import {
   $findMatchingParent,
   $isElementNode,

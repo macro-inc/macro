@@ -7,15 +7,16 @@
  * this 1000-wide window is basically zero.
  */
 
-/** How many distinct AI identities the block holds (the 3-digit suffix). */
-export const AI_PEER_COUNT = 1000;
+import {
+  AI_PEER_BASE,
+  AI_PEER_COUNT,
+} from '@macro-inc/collaboration/collab/ai-peer';
 
-/** Start of the reserved block, `[BASE, BASE + AI_PEER_COUNT)`. */
-export const AI_PEER_BASE = 999_999_999_999_999_000n;
-
-/** Whether a peer id was minted by an AI editor (lives in the reserved block). */
-export const isAiPeer = (peer: bigint): boolean =>
-  peer >= AI_PEER_BASE && peer < AI_PEER_BASE + BigInt(AI_PEER_COUNT);
+export {
+  AI_PEER_BASE,
+  AI_PEER_COUNT,
+  isAiPeer,
+} from '@macro-inc/collaboration/collab/ai-peer';
 
 // the worker's lifecycle is naturally short-lived enough that this should be fine
 let nextOffset = 0;

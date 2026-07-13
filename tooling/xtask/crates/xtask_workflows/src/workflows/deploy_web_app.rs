@@ -168,7 +168,7 @@ fn pulumi_up() -> Step<Use> {
 fn upload_sourcemaps() -> Step<Run> {
     Step::new("Upload sourcemaps to Datadog")
         .run("bun run ddupload:${{ inputs.environment }}")
-        .working_directory(xtask_paths::repo_dir!("apps/web/packages/app"))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(Env::new("DATADOG_API_KEY", vars::DD_API_KEY))
         .add_env(Env::new("DATADOG_SITE", "us5.datadoghq.com"))
         .add_env(Env::new("DATADOG_API_HOST", "api.us5.datadoghq.com"))
@@ -183,9 +183,6 @@ fn upload_production_build() -> Step<Use> {
         ) // v4
         .if_condition(Expression::new("${{ inputs.environment == 'prod' }}"))
         .add_with(("name", "web-app-build"))
-        .add_with((
-            "path",
-            xtask_paths::runtime_path!("apps/web/packages/app/dist").as_str(),
-        ))
+        .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
         .add_with(("overwrite", true))
 }

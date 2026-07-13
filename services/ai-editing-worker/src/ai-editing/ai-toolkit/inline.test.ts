@@ -1,6 +1,6 @@
 import { $createLinkNode } from '@lexical/link';
 import { $createMarkNode } from '@lexical/mark';
-import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { $getRoot, $isTextNode, type ElementNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { serializeWithXml } from '../utils';

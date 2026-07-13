@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Mirror } from '@loro-mirror/core';
 import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it } from 'vitest';
-import { Mirror } from '../../loro-mirror/packages/core/src';
 import { MARKDOWN_LORO_SCHEMA } from '../markdown-loro-schema';
 
 describe('markdown-golden.bin', () => {

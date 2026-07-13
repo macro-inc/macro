@@ -6,7 +6,7 @@
 use anyhow::Result;
 use gh_workflow::{Concurrency, Event, Expression, Job, Push, Step, Use, Workflow};
 
-use crate::workflows::runners;
+use crate::workflows::{runners, web_artifact_paths};
 
 /// Build the workflow. The caller job's `with:`/`secrets:` are filled in by
 /// [`patch`].
@@ -77,6 +77,8 @@ fn checkout() -> Step<Use> {
 }
 
 fn diff_checker() -> Step<Use> {
+    let web_app_paths = web_artifact_paths::diff_checker_list();
+
     Step::new("Check changed paths")
         .uses(
             "whutchinson98",
@@ -87,8 +89,6 @@ fn diff_checker() -> Step<Use> {
         .add_with(("token", "${{ github.token }}"))
         .add_with((
             "diff",
-            indoc::indoc! {r#"
-                web-app: ./infra/stacks/web-app/** ./apps/web/** ./packages/** ./package.json ./bun.lock
-            "#},
+            format!("web-app: ./infra/stacks/web-app/** {web_app_paths}"),
         ))
 }

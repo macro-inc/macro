@@ -15,7 +15,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const PREVIEW_BUCKET = 'macro-preview-assets-dev';
-const DIST_PATH = resolve(import.meta.dir, '../../packages/app/dist');
+const DIST_PATH = resolve(import.meta.dir, '../../dist');
 
 function parseArgs(): { previewId: string; skipBuild: boolean } {
   const args = process.argv.slice(2);

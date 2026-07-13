@@ -53,8 +53,20 @@ export class PeerPool {
   /** A never-before-issued identity: next unused base name, else a suffixed one. */
   private mint(): Peer {
     const used = new Set([...this.out, ...this.free].map((p) => p.name));
-    const name = this.names.find((n) => !used.has(n));
-    if (!name) throw new Error('PeerPool: exhausted all available names');
+    const unusedBaseName = this.names.find((name) => !used.has(name));
+    let name = unusedBaseName;
+
+    if (!name) {
+      const baseNames = this.names.length > 0 ? this.names : ['AI'];
+      let generation = Math.floor(this.issued() / baseNames.length) + 1;
+      let candidate = `${baseNames[this.issued() % baseNames.length]} ${generation}`;
+
+      while (used.has(candidate)) {
+        generation += 1;
+        candidate = `${baseNames[this.issued() % baseNames.length]} ${generation}`;
+      }
+      name = candidate;
+    }
 
     const color = this.colors[this.issued() % this.colors.length] ?? '';
     return { name, color, peerId: nextAiPeerId() };

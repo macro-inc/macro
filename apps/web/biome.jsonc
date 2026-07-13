@@ -1,10 +1,9 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "root": true,
+  "extends": ["../../biome.base.jsonc"],
   "vcs": {
-    "clientKind": "git",
-    "enabled": true,
-    "useIgnoreFile": true,
-    "defaultBranch": "origin/main"
+    "root": "../.."
   },
   "files": {
     "includes": [
@@ -14,135 +13,27 @@
       "!chrome-extension-vite",
       "!infra/web-app/output",
       "!scripts",
-      "packages/service-clients/**/generated/**",
+      "src/lib/service-clients/**/generated/**",
       // graphql-codegen output; regenerated wholesale by `bun gen-graphql`
-      "!packages/service-clients/service-storage/graphql/generated",
-      "!packages/filesystem",
+      "!src/lib/service-clients/service-storage/graphql/generated",
+      "!src/lib/filesystem",
       "!packages/_app-mobile",
-      "!../../packages/loro-mirror/packages",
       "**/generated/tools",
       "!wireframe",
-      "!packages/app/dist",
-      "!packages/app/build",
+      "!dist",
+      "!build",
       "!**/node_modules"
     ]
   },
-  "formatter": {
-    "enabled": true,
-    "formatWithErrors": false,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineEnding": "lf",
-    "lineWidth": 80,
-    "attributePosition": "auto"
-  },
-  "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
-  },
-  "linter": {
-    "enabled": true,
-    "domains": {
-      "solid": "all",
-      "react": "none"
-    },
-    "rules": {
-      "a11y": "off",
-      "complexity": {
-        "useArrowFunction": "off",
-        "noBannedTypes": "off",
-        "useOptionalChain": "off",
-        "useLiteralKeys": "off",
-        "noStaticOnlyClass": "off",
-        "noThisInStatic": "off",
-        "noUselessEscapeInRegex": "off",
-        "noUselessEmptyExport": "off"
-      },
-      "correctness": {
-        "noUnusedImports": "error",
-        "noSwitchDeclarations": "off",
-        "useParseIntRadix": "off",
-        "noChildrenProp": "off",
-        "noPrivateImports": "error"
-      },
-      "style": {
-        "noRestrictedImports": {
-          "level": "error",
-          "options": {
-            "paths": {
-              "@loro-mirror/core": "Use @loro-mirror/packages/core/src so app and loro-mirror share the app's loro-crdt instance.",
-              "loro-mirror-monorepo": "Use @loro-mirror/packages/* source imports; do not consume loro-mirror as an installed package."
-            },
-            "patterns": [
-              {
-                "group": ["@loro-mirror/core/*"],
-                "message": "Use @loro-mirror/packages/* source imports; do not consume loro-mirror as an installed package."
-              }
-            ]
-          }
-        },
-        "useBlockStatements": "off",
-        "useConst": "off",
-        "noNonNullAssertion": "off",
-        "useTemplate": "off",
-        "useLiteralEnumMembers": "off",
-        "useExponentiationOperator": "off"
-        // "noParameterAssign": "error",
-        // "useAsConstAssertion": "error",
-        // "useDefaultParameterLast": "error",
-        // "useEnumInitializers": "error",
-        // "useSelfClosingElements": "error",
-        // "useSingleVarDeclarator": "error",
-        // "noUnusedTemplateLiteral": "error",
-        // "useNumberNamespace": "error",
-        // "noInferrableTypes": "error",
-        // "noUselessElse": "error"
-      },
-      "suspicious": {
-        "noExplicitAny": "off",
-        "noDocumentCookie": "off",
-        "noImplicitAnyLet": "off",
-        "noGlobalIsNan": "off",
-        "noConfusingVoidType": "off",
-        "useIterableCallbackReturn": "off",
-        "noTsIgnore": "off",
-        "noUselessEscapeInString": "off",
-        "noPrototypeBuiltins": "off"
-      },
-      "performance": {
-        "noAccumulatingSpread": "off"
-      },
-      "nursery": {
-        // "noImportCycles": "warn"
-      }
-    }
-  },
-  "javascript": {
-    "formatter": {
-      "jsxQuoteStyle": "double",
-      "quoteProperties": "asNeeded",
-      "trailingCommas": "es5",
-      "semicolons": "always",
-      "arrowParentheses": "always",
-      "bracketSpacing": true,
-      "bracketSameLine": false,
-      "quoteStyle": "single",
-      "attributePosition": "auto"
-    }
-  },
   "overrides": [
     {
-      "includes": ["scripts/**", "packages/block-code/scripts/**"],
+      "includes": ["scripts/**", "src/features/block-code/scripts/**"],
       "javascript": {
         "globals": ["Bun"]
       }
     },
     {
-      "includes": ["packages/animate/**", "packages/theme/**"],
+      "includes": ["src/lib/animate/**", "src/features/theme/**"],
       "formatter": {
         "enabled": false
       },
@@ -155,7 +46,7 @@
       }
     },
     {
-      "includes": ["packages/service-clients/**/generated/**"],
+      "includes": ["src/lib/service-clients/**/generated/**"],
       "linter": {
         "enabled": false
       },

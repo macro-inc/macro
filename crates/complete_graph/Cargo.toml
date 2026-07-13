@@ -21,6 +21,7 @@ graphql_common = { path = "../graphql_common" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_soup = { path = "../graphql_soup" }
+model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", features = ["axum"] }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

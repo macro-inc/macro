@@ -19,7 +19,7 @@ pub mod outbound;
 pub use domain::error::PropertiesErr;
 pub use domain::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertiesAccessReceipt,
-    PropertyOptionInfo, ViewReceipt,
+    PropertyOptionInfo, ViewReceipt, access_entity_type,
 };
 pub use domain::ports::{
     NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer,

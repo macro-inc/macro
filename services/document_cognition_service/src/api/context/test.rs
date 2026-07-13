@@ -244,8 +244,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
     let properties_service =
         ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service =
-        ai_tools::build_task_properties_adapter(pool.clone(), properties_service.clone());
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
     let document_service = documents::domain::service::DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -281,7 +284,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let search_service_client = Arc::new(search_service_client);
 
     // Build properties tool context
-    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
+    let properties_tool_context =
+        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(email::domain::service::EmailServiceImpl::new(

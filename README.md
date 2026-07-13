@@ -15,7 +15,7 @@
     ·
     <a href="mailto:contact@macro.com">Feature requests</a>
     ·
-    <a href="mailto:contribute@macro.com">Contribute</a>
+    <a href="CONTRIBUTING.md">Contribute</a>
     ·
     <a href="mailto:teo@macro.com">Hiring</a>
   </p>
@@ -103,7 +103,7 @@ You can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.ma
 Have an idea, want to contribute, or want to work on Macro?
 
 - Feature requests: [contact@macro.com](mailto:contact@macro.com)
-- Contributions: open a PR, or email [contribute@macro.com](mailto:contribute@macro.com) if you're not sure where to start
+- Contributions: see our [contribution guidelines](CONTRIBUTING.md)
 - Hiring: [teo@macro.com](mailto:teo@macro.com)
 
 <div align="center">

@@ -19,7 +19,7 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityPropertyReference, EntityReference, EntityType};
-use system_properties::{StatusOption, SystemPropertyKey};
+use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use std::sync::Arc;
@@ -223,57 +223,6 @@ where
     N: NotificationService,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
-    #[tracing::instrument(skip(self), fields(user_id = ?user_id, entity_id = %entity_id, entity_type = ?entity_type))]
-    async fn mint_view_receipt(
-        &self,
-        user_id: Option<&MacroUserIdStr<'_>>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> Result<ViewReceipt, PropertiesErr> {
-        self.permission_service()?
-            .mint_view_receipt(user_id, entity_id, entity_type)
-            .await
-            .map_err(|_| PropertiesErr::PermissionDenied)
-    }
-
-    #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type))]
-    async fn mint_edit_receipt(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> Result<EditReceipt, PropertiesErr> {
-        self.permission_service()?
-            .mint_edit_receipt(user_id, entity_id, entity_type)
-            .await
-            .map_err(|_| PropertiesErr::PermissionDenied)
-    }
-
-    #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()))]
-    async fn set_system_property_status_complete(
-        &self,
-        access: &EditReceipt,
-    ) -> Result<(), PropertiesErr> {
-        let status_property_id = SystemPropertyKey::STATUS_UUID;
-        let completed_value = PropertyValue::SelectOption(vec![StatusOption::COMPLETED_UUID]);
-
-        // Atomically update status to "Completed" if the property is attached
-        self.repository
-            .update_entity_property_value_if_exists(
-                access.entity_id(),
-                access.entity_type(),
-                status_property_id,
-                Some(completed_value),
-            )
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        self.enqueue_property_upsert(access.entity_id(), access.entity_type())
-            .await;
-
-        Ok(())
-    }
-
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn get_entity_properties(
         &self,
@@ -345,7 +294,7 @@ where
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
-    ) -> Result<(), PropertiesErr> {
+    ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
         let entity_id = access.entity_id();
         let entity_type = access.entity_type();
 
@@ -401,39 +350,50 @@ where
             ));
         }
 
-        // Handle special property types that require custom logic
-        match property_definition_id {
+        // Relationship writes update both sides transactionally and return the
+        // primary entity's canonical assignment from that transaction.
+        if matches!(
+            property_definition_id,
             SystemPropertyKey::PARENT_TASK_UUID | SystemPropertyKey::SUBTASKS_UUID
-                if entity_type == EntityType::Task =>
-            {
-                return self
-                    .handle_task_relationship_property(access, property_definition_id, value)
-                    .await;
-            }
-            SystemPropertyKey::ASSIGNEES_UUID if entity_type == EntityType::Task => {
-                self.handle_task_assignees_property(entity_id, value, access.authenticated_user())
-                    .await?;
-            }
-            _ => {
-                // No special handling needed
-            }
+        ) && entity_type == EntityType::Task
+        {
+            let property = self
+                .handle_task_relationship_property(access, property_definition_id, value)
+                .await?;
+            return Ok(EntityPropertyWithDefinition {
+                property,
+                definition: property_definition,
+                value: property_value,
+                options: None,
+            });
         }
 
-        // For all properties (including those with special handling that don't return early),
-        // upsert the already-converted PropertyValue
-        self.repository
+        if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
+            && entity_type == EntityType::Task
+        {
+            self.handle_task_assignees_property(entity_id, value, access.authenticated_user())
+                .await?;
+        }
+
+        let property = self
+            .repository
             .upsert_entity_property(
                 entity_id,
                 entity_type,
                 property_definition_id,
-                property_value,
+                property_value.clone(),
             )
             .await
             .map_err(anyhow::Error::from)?;
 
         self.enqueue_property_upsert(entity_id, entity_type).await;
 
-        Ok(())
+        Ok(EntityPropertyWithDefinition {
+            property,
+            definition: property_definition,
+            value: property_value,
+            options: None,
+        })
     }
 
     #[tracing::instrument(

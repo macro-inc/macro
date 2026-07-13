@@ -9,29 +9,26 @@
         "forceConsistentCasingInFileNames": true,
         "declaration": true,
         "declarationMap": true,
-        "sourceMap": true,
         "outDir": "./dist",
-        "rootDir": ".",
-        "composite": true,
+        "rootDir": "./src",
         "lib": [
             "DOM",
             "DOM.Iterable",
             "ESNext"
         ],
+        "types": [],
         "allowSyntheticDefaultImports": true,
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": false
     },
+    "include": [
+        "src/**/*"
+    ],
     "exclude": [
         "node_modules",
         "dist",
-        "**/dist",
+        "tests",
         "**/*.test.ts"
-    ],
-    "references": [
-        {
-            "path": "./packages/core"
-        }
     ]
 }

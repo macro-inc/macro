@@ -1,6 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
-  "extends": ["../../apps/web/biome.jsonc"],
+  "root": true,
+  "extends": ["../../biome.base.jsonc"],
   "vcs": {
     "root": "../.."
   },

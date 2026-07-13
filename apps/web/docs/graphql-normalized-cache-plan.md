@@ -92,14 +92,14 @@ entire cache in browser memory. With 10s of thousands of cached objects
 ## 3. Current state (as of writing)
 
 - urql usage is imperative-only: `@urql/core` + `fetchExchange`, called via
-  `fetchGraphqlSoup()` (`packages/service-clients/service-storage/graphql-soup.ts`),
+  `fetchGraphqlSoup()` (`src/lib/service-clients/service-storage/graphql-soup.ts`),
   results mapped to REST `SoupApiItem` shapes and fed into TanStack
-  solid-query infinite queries (`packages/queries/soup/items.ts`), gated by
+  solid-query infinite queries (`src/lib/queries/soup/items.ts`), gated by
   `ENABLE_GRAPHQL_SOUP` with REST fallback.
 - A separate normalization layer exists at the tanstack level:
-  `@normy/query-core` (`packages/queries/soup/normalized-cache/`).
+  `@normy/query-core` (`src/lib/queries/soup/normalized-cache/`).
 - WASM precedent: loro-crdt via `vite-plugin-wasm`; note the documented
-  dual-instantiation pitfall in `packages/app/vite.base.ts` — the cache wasm
+  dual-instantiation pitfall in `vite.base.ts` — the cache wasm
   module must be instantiated exactly once per JS context.
 - IndexedDB (`idb`) and OPFS utilities are already used elsewhere
   (loro WAL/snapshot stores, `service-storage/util/opfs.ts`).
@@ -237,7 +237,7 @@ crates/client/            # new cargo workspace (or members of an existing one)
   cache-schema-codegen/        # schema.graphql → type metadata (build.rs or CLI)
   cache-wasm/                  # wasm-bindgen shell (web)
   cache-tauri/                 # tauri plugin/commands wrapping cache-core
-apps/web/packages/graphql-cache/ # JS glue
+apps/web/src/lib/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
   worker/                      # SharedWorker/dedicated-worker entries
@@ -252,7 +252,7 @@ apps/web/packages/graphql-cache/ # JS glue
   the Tauri IPC benchmark were deliberately skipped — the IDB + worker
   approach is the lowest common denominator and doesn't depend on their
   results.
-- Wire protocol delivered in Phase 3 (`packages/graphql-cache/protocol.ts`).
+- Wire protocol delivered in Phase 3 (`src/lib/graphql-cache/protocol.ts`).
 - The probe harness (`spikes/graphql-cache-probe/`) and the soup payload
   measurement script (`scripts/measure-soup-payloads.ts`) were removed
   after the decisions landed — recover them from history (`jj`/git) if
@@ -284,8 +284,8 @@ apps/web/packages/graphql-cache/ # JS glue
 - ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id
   interning `"{clientId}:{urqlKey}"`), browser-verified via
   wasm-bindgen-test. Build: `just build-cache-wasm` →
-  `packages/graphql-cache/wasm/` (gitignored), ~460 KiB pre-gzip.
-- ~~JS glue~~ (`apps/web/packages/graphql-cache/`, alias `@graphql-cache/*`):
+  `src/lib/graphql-cache/wasm/` (gitignored), ~460 KiB pre-gzip.
+- ~~JS glue~~ (`apps/web/src/lib/graphql-cache/`, alias `@graphql-cache/*`):
   wire protocol (`protocol.ts`), `CacheWorkerCore` +
   SharedWorker/dedicated-worker entries (Web Locks write serialization +
   BroadcastChannel fanout in the fallback topology), `createWorkerCacheHost`
@@ -296,7 +296,7 @@ apps/web/packages/graphql-cache/ # JS glue
 
 **Phase 4 — urql exchange, behind flag** *(done — needs manual smoke test)*
 - `normalizedCacheExchange`
-  (`packages/graphql-cache/exchange/`): async cache reads with a
+  (`src/lib/graphql-cache/exchange/`): async cache reads with a
   forward-queue re-injection (cache is off-thread, unlike graphcache's sync
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to

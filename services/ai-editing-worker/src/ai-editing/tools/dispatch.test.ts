@@ -175,10 +175,7 @@ describe('dispatch -- writer inputs', () => {
 
   it('records runCode timing in the trace', async () => {
     const { tool, editTraces } = setup();
-    await tool.execute?.(
-      { editing_instruction: 'one edit' },
-      callOptions
-    );
+    await tool.execute?.({ editing_instruction: 'one edit' }, callOptions);
     const trace = editTraces[0]!;
     expect(trace.runCodeAt).toHaveLength(1);
     expect(trace.runCodeAt[0]).toBeGreaterThanOrEqual(trace.coderStartedAt);

@@ -85,3 +85,122 @@ async fn write_then_read_through_js_boundary() {
     JsFuture::from(engine.close()).await.unwrap();
     destroy_cache("wasm-shell-test".into()).await.unwrap();
 }
+
+const PROPERTY_QUERY: &str = r#"query Soup($input: SoupInput!) {
+    user { id soup(input: $input) { hasMore items { id entity {
+        __typename
+        ... on GraphqlSoupDocument { id properties { id displayName } }
+    } } } }
+}"#;
+
+const PROPERTY_MUTATION: &str = r#"mutation SetEntityProperty($input: SetEntityPropertyInput!) {
+    setEntityProperty(input: $input) { id displayName }
+}"#;
+
+#[wasm_bindgen_test]
+async fn optimistic_write_round_trip() {
+    destroy_cache("wasm-shell-optimistic".into()).await.unwrap();
+    let engine = open_cache("wasm-shell-optimistic".into(), None)
+        .await
+        .unwrap();
+
+    let vars = serde_json::json!({"input": {"limit": 1}});
+    let base = serde_json::json!({
+        "user": { "id": "user-1", "soup": { "hasMore": false, "items": [{
+            "id": "item-1",
+            "entity": {
+                "__typename": "GraphqlSoupDocument",
+                "id": "doc-1",
+                "properties": [{ "id": "prop-1", "displayName": "Status" }]
+            }
+        }] } }
+    });
+    JsFuture::from(engine.write_query(
+        None,
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(vars.clone()),
+        js(base),
+        None,
+    ))
+    .await
+    .unwrap();
+    // Register op 1 against the property record.
+    let read = JsFuture::from(engine.read_query(
+        Some("tab1:1".into()),
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(vars.clone()),
+    ))
+    .await
+    .unwrap();
+    let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
+    assert_eq!(read["kind"], "hit");
+
+    let mutation_vars = serde_json::json!({"input": {
+        "entityType": "DOCUMENT",
+        "entityId": "doc-1",
+        "propertyDefinitionId": "def-1",
+        "value": { "string": "x" }
+    }});
+
+    // Begin: op 1 is affected, a string transaction id comes back.
+    let begin = JsFuture::from(engine.begin_optimistic_write(
+        None,
+        PROPERTY_MUTATION.into(),
+        Some("SetEntityProperty".into()),
+        js(mutation_vars.clone()),
+        js(serde_json::json!({ "setEntityProperty": { "id": "prop-1", "displayName": "Stage" } })),
+    ))
+    .await
+    .unwrap();
+    let begin: serde_json::Value = serde_wasm_bindgen::from_value(begin).unwrap();
+    let txn = begin["transactionId"].as_str().unwrap().to_string();
+    assert_eq!(begin["affectedOps"], serde_json::json!(["tab1:1"]));
+    assert_eq!(
+        begin["changed"],
+        serde_json::json!(["GraphqlSoupProperty:prop-1"])
+    );
+
+    // The optimistic layer is visible through reads.
+    let read = JsFuture::from(engine.read_query(
+        Some("tab1:1".into()),
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(vars.clone()),
+    ))
+    .await
+    .unwrap();
+    let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
+    assert_eq!(
+        read["data"]["user"]["soup"]["items"][0]["entity"]["properties"][0]["displayName"],
+        serde_json::json!("Stage")
+    );
+
+    // Commit with the real response; the layer flushes durably.
+    let commit = JsFuture::from(engine.commit_optimistic_write(
+        txn.clone(),
+        PROPERTY_MUTATION.into(),
+        Some("SetEntityProperty".into()),
+        js(mutation_vars.clone()),
+        js(serde_json::json!({ "setEntityProperty": { "id": "prop-1", "displayName": "Stage!" } })),
+    ))
+    .await
+    .unwrap();
+    let commit: serde_json::Value = serde_wasm_bindgen::from_value(commit).unwrap();
+    assert_eq!(
+        commit["changed"],
+        serde_json::json!(["GraphqlSoupProperty:prop-1"])
+    );
+    assert_eq!(commit["affectedOps"], serde_json::json!(["tab1:1"]));
+
+    // Settled transactions reject further commits/rollbacks.
+    let err = JsFuture::from(engine.rollback_optimistic_write(txn)).await;
+    assert!(err.is_err());
+    // Malformed ids reject too.
+    let err = JsFuture::from(engine.rollback_optimistic_write("not-a-number".into())).await;
+    assert!(err.is_err());
+
+    JsFuture::from(engine.close()).await.unwrap();
+    destroy_cache("wasm-shell-optimistic".into()).await.unwrap();
+}

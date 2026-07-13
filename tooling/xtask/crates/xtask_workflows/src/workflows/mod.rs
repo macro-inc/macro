@@ -34,6 +34,7 @@ mod runners;
 mod steps;
 mod vars;
 mod web_app_check_main;
+mod web_artifact_paths;
 
 use std::fs;
 use std::path::PathBuf;

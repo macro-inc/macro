@@ -1,4 +1,4 @@
-import { $getId } from '@lexical-core/plugins/nodeIdPlugin';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { $getRoot } from 'lexical';
 import {
   createEditingSession,

@@ -1,6 +1,6 @@
 # Tauri / Mobile Frontend
 
-This crate wraps the shared web client that lives in `packages/app`. There is a
+This crate wraps the shared web client that lives in `src`. There is a
 single Vite build that runs identically for web, desktop, iOS, and Android — the
 platform is detected at runtime via `getPlatform()` rather than baked into the
 bundle.
@@ -36,7 +36,7 @@ cargo tauri android build
 ```
 
 The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
-emits the frontend into `packages/app/dist`. Tauri then packages that output
+emits the frontend into `dist`. Tauri then packages that output
 according to `tauri.conf.json`.
 
 ## Platform aware UI
@@ -45,5 +45,5 @@ Use the helpers in `@core/util/platform` (`isTauri()`, `getPlatform()`,
 `isMobilePlatform()`, etc.) anywhere you need to branch behaviour, register
 extra routes, or mount native-only UI. Pair those checks with the
 `MaybeTauriProvider` from `@macro/tauri` to keep native-specific wiring
-localized while rendering everything through the shared `packages/app` entry
+localized while rendering everything through the shared `src` entry
 point.

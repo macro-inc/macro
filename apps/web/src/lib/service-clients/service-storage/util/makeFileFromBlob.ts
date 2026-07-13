@@ -1,0 +1,32 @@
+import type { DocumentMetadata } from '@coparse/document-processing-types';
+import { createDocumentStorageServiceHandle, makeFile } from '@filesystem';
+import type { DocumentKeyParts, FileSystemFile } from '@filesystem/file';
+
+export async function makeFileFromBlob({
+  blob,
+  documentKeyParts,
+  fileName,
+  mimeType,
+  metadata,
+}: {
+  blob: BlobPart;
+  documentKeyParts: DocumentKeyParts;
+  fileName: string;
+  // TODO- @sam Generic types
+  mimeType: string;
+  metadata: DocumentMetadata;
+}): Promise<FileSystemFile> {
+  const handle = createDocumentStorageServiceHandle(documentKeyParts);
+  const file = await makeFile({
+    fileBits: [blob],
+    fileName,
+    handle,
+    options: {
+      type: mimeType,
+      lastModified: Date.now(),
+    },
+    metadata,
+  });
+
+  return file;
+}

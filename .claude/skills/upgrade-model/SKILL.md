@@ -108,9 +108,9 @@ cd apps/web && bun check
 
 This will report TypeScript errors everywhere the old model string is used. Fix each one. Common locations:
 
-- `packages/core/component/AI/constant/model.ts` — `MODEL_PRETTYNAME`, `MODEL_PROVIDER_ICON`, `SMART_MODE_MODEL` / `DEFAULT_MODEL`
-- `packages/core/component/AI/component/input/useChatInput.tsx` — hardcoded model references
-- `packages/core/component/AI/signal/pendingSend.test.ts` — test data
+- `apps/web/src/lib/core/component/AI/constant/model.ts` — `MODEL_PRETTYNAME`, `MODEL_PROVIDER_ICON`, `SMART_MODE_MODEL` / `DEFAULT_MODEL`
+- `apps/web/src/lib/core/component/AI/component/input/useChatInput.tsx` — hardcoded model references
+- `apps/web/src/lib/core/component/AI/signal/pendingSend.test.ts` — test data
 
 Replace old model strings and update display names.
 

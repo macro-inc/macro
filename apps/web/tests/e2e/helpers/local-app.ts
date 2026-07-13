@@ -3,7 +3,7 @@ import {
   entityIdSelector,
   soupListContainerSelector,
   splitContainerSelector,
-} from '../../../packages/core/dom-selectors';
+} from '../../../src/lib/core/dom-selectors';
 
 export const LOCAL_E2E = process.env.LOCAL_E2E === 'true';
 

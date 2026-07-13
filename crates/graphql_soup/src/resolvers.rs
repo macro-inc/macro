@@ -19,9 +19,12 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::SoupRequest, ports::SoupService};
 
-use crate::{inputs::SoupInput, objects::SoupPage};
+use crate::{
+    inputs::SoupInput,
+    objects::{SoupEntityEdges, SoupPage},
+};
 
-/// Object-safe-ish wrapper for sharing a concrete Soup service with GraphQL.
+/// Shared wrapper for a concrete Soup service.
 pub struct SharedSoupService<S>(Arc<S>);
 
 impl<S> Clone for SharedSoupService<S> {
@@ -74,11 +77,11 @@ where
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
 /// into a Soup request, and executes it against the Soup service.
-pub async fn resolve_soup<S, E, EAS, St>(
+pub async fn resolve_soup<S, E, EAS, St, Edges>(
     service: &S,
     ctx: &Context<'_>,
     input: SoupInput,
-) -> async_graphql::Result<SoupPage>
+) -> async_graphql::Result<SoupPage<Edges>>
 where
     S: SoupService,
     E: EmailService,
@@ -86,6 +89,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    Edges: SoupEntityEdges,
 {
     let Cached(MacroUserExtractor { macro_user_id, .. }) =
         extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;

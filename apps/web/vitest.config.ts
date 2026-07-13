@@ -1,40 +1,65 @@
+import { fileURLToPath } from 'node:url';
 import solidPlugin from 'vite-plugin-solid';
+import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [tsconfigPaths(), solidPlugin()],
+  plugins: [
+    tsconfigPaths(),
+    solidPlugin(),
+    solidSvg({ defaultAsComponent: true }),
+  ],
+  resolve: {
+    dedupe: ['solid-js'],
+    alias: {
+      '@solid-primitives/refs': fileURLToPath(
+        new URL(
+          '../../node_modules/@solid-primitives/refs/dist/index.js',
+          import.meta.url
+        )
+      ),
+      '@solid-primitives/transition-group': fileURLToPath(
+        new URL(
+          '../../node_modules/@solid-primitives/transition-group/dist/index.js',
+          import.meta.url
+        )
+      ),
+    },
+  },
   test: {
     exclude: [...configDefaults.exclude],
     projects: [
-      {
-        // WebSocket tests with Node.js environment
-        extends: './packages/websocket/vitest.config.ts',
-        test: {
-          include: ['packages/websocket/**/*.test.{ts,tsx}'],
-          name: 'websocket',
-        },
-      },
+      '../../packages/collaboration/vitest.collab.config.ts',
+      '../../packages/collaboration/vitest.transport.config.ts',
       {
         // Core package tests
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/core/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/lib/core/**/*.{test,spec}.{ts,tsx}'],
           name: 'core',
         },
       },
       {
         // Queries package tests
-        extends: './packages/queries/vitest.config.ts',
+        extends: './src/lib/queries/vitest.config.ts',
         test: {
-          include: ['packages/queries/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/lib/queries/**/*.{test,spec}.{ts,tsx}'],
           name: 'queries',
         },
       },
       {
-        plugins: [tsconfigPaths()],
+        // Resolve solid-js to its reactive browser build (the default
+        // server-side build is inert), needed by the solid/ bindings.
+        plugins: [tsconfigPaths(), solidPlugin()],
+        ssr: {
+          resolve: {
+            conditions: ['browser', 'development'],
+          },
+        },
         test: {
-          include: ['packages/graphql-cache/**/*.{test,spec}.{ts,tsx}'],
+          environment: 'jsdom',
+          include: ['src/lib/graphql-cache/**/*.{test,spec}.{ts,tsx}'],
           name: 'graphql-cache',
         },
       },
@@ -57,63 +82,80 @@ export default defineConfig({
         test: {
           environment: 'jsdom',
           globals: true,
-          include: ['packages/theme/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/theme/**/*.{test,spec}.{ts,tsx}'],
           name: 'theme',
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/block-channel/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/block-channel/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-channel',
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/block-call/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/block-call/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-call',
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/block-pr/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/block-pr/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-pr',
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/block-md/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/block-md/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-md',
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/channel/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/channel/**/*.{test,spec}.{ts,tsx}'],
           name: 'channel',
         },
       },
       {
-        extends: './packages/notifications/vitest.config.ts',
+        extends: './src/features/notifications/vitest.config.ts',
         test: {
-          include: ['packages/notifications/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/notifications/**/*.{test,spec}.{ts,tsx}'],
           name: 'notifications',
         },
       },
       {
         test: {
-          include: ['packages/block-email/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/features/block-email/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-email',
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['packages/service-clients/**/*.{test,spec}.{ts,tsx}'],
+          include: ['src/lib/service-clients/**/*.{test,spec}.{ts,tsx}'],
           name: 'service-clients',
+        },
+      },
+      {
+        // App-shell and feature tests without a specialized environment.
+        extends: './src/lib/core/vitest.config.ts',
+        test: {
+          environment: 'jsdom',
+          exclude: [
+            ...configDefaults.exclude,
+            'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email}/**/*',
+          ],
+          include: [
+            'src/components/**/*.{test,spec}.{ts,tsx}',
+            'src/features/**/*.{test,spec}.{ts,tsx}',
+            'src/routes/**/*.{test,spec}.{ts,tsx}',
+          ],
+          name: 'app',
         },
       },
     ],

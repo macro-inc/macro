@@ -49,15 +49,25 @@ pub type ViewReceipt = PropertiesAccessReceipt<ViewAccessLevel>;
 pub type EditReceipt = PropertiesAccessReceipt<EditAccessLevel>;
 
 impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
-    /// Wrap a minted access receipt, keeping the original properties entity
-    /// type. Only the permission adapter constructs these.
-    pub(crate) fn new(receipt: EntityAccessReceipt<T>, entity_type: EntityType) -> Self {
+    /// Wrap a receipt minted by the entity access service while preserving the
+    /// original properties entity type (notably, tasks map to documents in the
+    /// access service).
+    pub fn try_from_entity_access_receipt(
+        receipt: EntityAccessReceipt<T>,
+        entity_type: EntityType,
+    ) -> Result<Self, entity_access::domain::models::AccessError> {
+        if receipt.entity().entity_type != access_entity_type(entity_type) {
+            return Err(entity_access::domain::models::AccessError::BadRequest(
+                "entity access receipt type does not match properties entity type",
+            ));
+        }
+
         let entity_id = receipt.entity().entity_id.clone();
-        Self {
+        Ok(Self {
             receipt,
             entity_id,
             entity_type,
-        }
+        })
     }
 
     /// The entity this receipt grants access to.
@@ -136,7 +146,7 @@ impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
             },
             EntityPermission::AccessLevel { access_level },
         )?;
-        Ok(Self::new(receipt, entity_type))
+        Self::try_from_entity_access_receipt(receipt, entity_type)
     }
 }
 

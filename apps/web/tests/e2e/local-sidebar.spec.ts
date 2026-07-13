@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { soupListContainerSelector } from '../../packages/core/dom-selectors';
+import { soupListContainerSelector } from '../../src/lib/core/dom-selectors';
 
 import { localE2ESeed } from './fixtures/local-e2e-seed';
 import {

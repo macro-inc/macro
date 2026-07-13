@@ -32,7 +32,7 @@ const serviceToCrate: Record<string, string> = {
 const getRustWorkspaceDir = () =>
 	path.resolve(import.meta.dirname, "../../..");
 const getServiceClientsDir = () =>
-	path.resolve(import.meta.dirname, "../packages/service-clients");
+	path.resolve(import.meta.dirname, "../src/lib/service-clients");
 // Parse arguments
 const getTargetServices = () =>
 	process.argv.slice(2).filter((arg) => arg !== "--check");
@@ -245,9 +245,9 @@ async function main() {
 	if (isNixOS) {
 		const systemBiomePath =
 			await $`bash -c 'PATH=$(echo "$PATH" | tr ":" "\n" | grep -v node_modules | tr "\n" ":") which biome'`.text();
-		await $`${systemBiomePath.trim()} check --write --unsafe packages/service-clients/`;
+		await $`${systemBiomePath.trim()} check --write --unsafe src/lib/service-clients/`;
 	} else {
-		await $`biome check --write --unsafe packages/service-clients/`;
+		await $`biome check --write --unsafe src/lib/service-clients/`;
 	}
 	console.log(`Biome check finished (${elapsed(biomeStart)})`);
 

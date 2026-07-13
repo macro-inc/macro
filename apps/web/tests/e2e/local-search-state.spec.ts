@@ -4,7 +4,7 @@ import {
   entityIdSelector,
   soupListContainerSelector,
   splitContainerSelector,
-} from '../../packages/core/dom-selectors';
+} from '../../src/lib/core/dom-selectors';
 import { localE2ESeed } from './fixtures/local-e2e-seed';
 import { gotoApp, LOCAL_E2E } from './helpers/local-app';
 
