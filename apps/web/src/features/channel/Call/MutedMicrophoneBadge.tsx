@@ -16,7 +16,7 @@ export function MutedMicrophoneBadge(
         aria-label={props.label}
         class="pointer-events-none absolute top-2 right-2 z-10 flex size-7 items-center justify-center rounded-full border border-edge bg-surface/90 text-failure"
       >
-        <MicrophoneSlash aria-hidden="true" class="size-4" />
+        <MicrophoneSlash aria-hidden="true" class="size-5" />
       </div>
     </Show>
   );
