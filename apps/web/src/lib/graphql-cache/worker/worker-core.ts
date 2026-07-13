@@ -13,6 +13,7 @@ import {
   type CachePush,
   type CacheRequest,
   type CacheResponse,
+  type OptimisticWriteResult,
   type ReadResult,
   type WriteResult,
   writeLockName,
@@ -89,19 +90,58 @@ export class CacheWorkerCore {
       }
       case 'write': {
         const engine = this.requireEngine();
-        const write = async (): Promise<WriteResult> =>
-          await engine.writeQuery(
-            request.originOpId,
-            request.query,
-            request.operationName,
-            request.variables,
-            request.data,
-            request.identity
-          );
-        const result =
-          this.options.multiEngine && this.scope
-            ? await navigator.locks.request(writeLockName(this.scope), write)
-            : await write();
+        const result = await this.durableWrite(
+          async () =>
+            await engine.writeQuery(
+              request.originOpId,
+              request.query,
+              request.operationName,
+              request.variables,
+              request.data,
+              request.identity
+            )
+        );
+        this.fanOut(result);
+        return result;
+      }
+      case 'begin-optimistic-write': {
+        const engine = this.requireEngine();
+        // Memory-only: no write lock needed, and never broadcast — the
+        // layer is local to this engine (per tab in the fallback topology;
+        // shared by all attached clients under a SharedWorker).
+        const result: OptimisticWriteResult = await engine.beginOptimisticWrite(
+          request.originOpId,
+          request.query,
+          request.operationName,
+          request.variables,
+          request.data
+        );
+        this.fanOut(result, { broadcast: false });
+        return result;
+      }
+      case 'commit-optimistic-write': {
+        const engine = this.requireEngine();
+        // Committing can flush settled layers into durable storage.
+        const result = await this.durableWrite(
+          async () =>
+            await engine.commitOptimisticWrite(
+              request.transactionId,
+              request.query,
+              request.operationName,
+              request.variables,
+              request.data
+            )
+        );
+        this.fanOut(result);
+        return result;
+      }
+      case 'rollback-optimistic-write': {
+        const engine = this.requireEngine();
+        // Rolling back can unblock a settled suffix and flush it durably.
+        const result = await this.durableWrite(
+          async () =>
+            await engine.rollbackOptimisticWrite(request.transactionId)
+        );
         this.fanOut(result);
         return result;
       }
@@ -169,9 +209,22 @@ export class CacheWorkerCore {
     this.push({ kind: 'ops-affected', opIds: affectedOps, keys: msg.keys });
   }
 
-  /** After a local change: notify connected clients + other tabs. */
-  private fanOut(result: WriteResult): void {
-    if (result.changed.length === 0 && !result.reset) return;
+  /**
+   * Runs a durable engine write, serialized via Web Locks in the
+   * multi-engine (dedicated worker per tab) topology.
+   */
+  private async durableWrite<T>(write: () => Promise<T>): Promise<T> {
+    return this.options.multiEngine && this.scope
+      ? await navigator.locks.request(writeLockName(this.scope), write)
+      : await write();
+  }
+
+  /**
+   * After a local change: notify connected clients + other tabs. Optimistic
+   * begins pass `broadcast: false` — their changes are visible only through
+   * this engine, so other instances must not be told to invalidate.
+   */
+  private fanOut(result: WriteResult, opts?: { broadcast?: boolean }): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -179,7 +232,12 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
-    if (this.options.multiEngine && this.broadcast) {
+    if (
+      opts?.broadcast !== false &&
+      this.options.multiEngine &&
+      this.broadcast &&
+      (result.changed.length > 0 || result.reset)
+    ) {
       const msg: CacheBroadcast = result.reset
         ? { kind: 'reset', source: this.workerId }
         : { kind: 'changed', keys: result.changed, source: this.workerId };

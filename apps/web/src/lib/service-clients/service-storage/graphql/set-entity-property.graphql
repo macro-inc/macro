@@ -1,0 +1,5 @@
+mutation SetEntityProperty($input: SetEntityPropertyInput!) {
+  setEntityProperty(input: $input) {
+    ...SoupPropertyFields
+  }
+}

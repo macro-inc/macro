@@ -32,7 +32,7 @@ export function useQuickAccessCrmCompaniesQuery() {
         crm_company_filters: undefined,
       },
     }),
-    () => ({ staleTime: STALE_TIME, enabled: ENABLE_CRM })
+    () => ({ staleTime: STALE_TIME, enabled: ENABLE_CRM() })
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(

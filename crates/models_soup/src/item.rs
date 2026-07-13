@@ -199,7 +199,7 @@ impl SoupItem {
     /// Converts this item to an [`EntityReference`] for property lookups.
     ///
     /// Returns `None` for item types that don't support properties
-    /// (e.g., channels, calls, foreign entities).
+    /// (e.g., channels, channel threads, foreign entities).
     pub fn to_entity_reference(&self) -> Option<EntityReference> {
         match self {
             SoupItem::Document(doc) => {
@@ -219,7 +219,10 @@ impl SoupItem {
             )),
             SoupItem::Channel(_) => None,
             SoupItem::ChannelThread(_) => None,
-            SoupItem::Call(_) => None,
+            SoupItem::Call(c) => Some(EntityReference::new(
+                c.call_id.to_string(),
+                PropertiesEntityType::CallRecord,
+            )),
             SoupItem::CrmCompany(c) => Some(EntityReference::new(
                 c.id.to_string(),
                 PropertiesEntityType::Company,

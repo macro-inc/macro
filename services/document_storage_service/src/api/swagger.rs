@@ -524,6 +524,7 @@ use utoipa::OpenApi;
 
             // Webhooks
             webhook::domain::models::CreateWebhookRequest,
+            webhook::domain::models::CreateWebhookResponse,
             webhook::domain::models::PatchWebhookRequest,
             webhook::domain::models::ValidateWebhookResponse,
             webhook::domain::models::Webhook,

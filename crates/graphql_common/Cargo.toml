@@ -8,8 +8,10 @@ publish = false
 async-graphql = { workspace = true }
 axum = { workspace = true }
 filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+models_properties = { path = "../models_properties" }
 tokio = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

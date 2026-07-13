@@ -199,7 +199,11 @@ async fn create_passes_authenticated_user_and_body_to_service() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(body["signing_secret"], "whsec_test");
     match &service.calls()[0] {
         ServiceCall::Create(user, request) => {
             assert_eq!(user.as_ref(), user_id());
@@ -221,7 +225,11 @@ async fn patch_passes_authenticated_user_path_and_body_to_service() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.get("signing_secret").is_none());
     match &service.calls()[0] {
         ServiceCall::Patch(user, webhook_id, request) => {
             assert_eq!(user.as_ref(), user_id());
@@ -418,6 +426,7 @@ fn webhook() -> Webhook {
         "workspace_id": "workspace_1",
         "name": "Events",
         "endpoint_url": "https://example.com/webhook",
+        "signing_secret": "whsec_test",
         "headers": {},
         "status": "active",
         "is_valid": false,

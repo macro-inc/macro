@@ -677,6 +677,7 @@ export const GetEntityProperties = z.object({
     'chat',
     'thread',
     'channel',
+    'call',
     'user',
     'company',
   ]),
@@ -1107,6 +1108,32 @@ export const ListEntitiesResponse = z.object({
         z.object({
           createdBy: z.string(),
           id: z.string().uuid(),
+          tags: z
+            .array(
+              z.object({
+                label: z.string(),
+                scope: z.any().superRefine((x, ctx) => {
+                  const schemas = [z.literal('personal'), z.literal('team')];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+              })
+            )
+            .optional(),
           type: z.literal('call'),
         }),
         z.object({
@@ -2584,6 +2611,7 @@ export const SetEntityProperty = z.object({
           'chat',
           'thread',
           'channel',
+          'call',
           'user',
           'company',
         ]),
@@ -2603,6 +2631,7 @@ export const SetEntityProperty = z.object({
             'chat',
             'thread',
             'channel',
+            'call',
             'user',
             'company',
           ]),
@@ -2618,6 +2647,7 @@ export const SetEntityProperty = z.object({
     'chat',
     'thread',
     'channel',
+    'call',
     'user',
     'company',
   ]),

@@ -6,60 +6,53 @@ use notification::domain::models::{
     UserNotificationRow,
     request::{NotificationEntityRef, NotificationItemType},
 };
+use rootcause::markers::{Cloneable, Dynamic};
 
-/// Key for loading notifications attached to an entity.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct EntityNotificationsKey {
-    /// Entity type key used by the notification service.
-    pub entity_type: String,
-    /// Entity ID used by the notification service.
-    pub entity_id: String,
-}
-
-impl EntityNotificationsKey {
-    fn notification_item_type(&self) -> Result<NotificationItemType, rootcause::Report> {
-        match self.entity_type.as_str() {
-            "email" | "email_thread" => Ok(NotificationItemType::Email),
-            "message" | "channel_message" => Ok(NotificationItemType::Message),
-            "channel" => Ok(NotificationItemType::Channel),
-            "document" => Ok(NotificationItemType::Document),
-            "project" => Ok(NotificationItemType::Project),
-            "chat" => Ok(NotificationItemType::Chat),
-            "call" => Ok(NotificationItemType::Call),
-            "task" => Ok(NotificationItemType::Task),
-            "github" | "foreign_entity" => Ok(NotificationItemType::Github),
-            other => Err(rootcause::report!(
-                "unsupported notification entity type {other}"
-            )),
-        }
+fn notification_item_type(
+    entity_type: model_entity::EntityType,
+) -> Result<NotificationItemType, rootcause::Report> {
+    use model_entity::EntityType;
+    match entity_type {
+        EntityType::EmailThread => Ok(NotificationItemType::Email),
+        EntityType::ChannelMessage => Ok(NotificationItemType::Message),
+        EntityType::Channel => Ok(NotificationItemType::Channel),
+        EntityType::Document => Ok(NotificationItemType::Document),
+        EntityType::Project => Ok(NotificationItemType::Project),
+        EntityType::Chat => Ok(NotificationItemType::Chat),
+        EntityType::Call => Ok(NotificationItemType::Call),
+        EntityType::ForeignEntity => Ok(NotificationItemType::Github),
+        other => Err(rootcause::report!(
+            "unsupported notification entity type {other}"
+        )),
     }
 }
 
-/// Object-safe reader used by GraphQL notification edges.
-#[async_trait::async_trait]
+/// Reader used by GraphQL notification edges.
 pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
     /// Load notifications for the requested entity keys.
-    async fn get_notifications(
-        &self,
+    fn get_notifications<'a>(
+        &'a self,
         user_id: MacroUserIdStr<'static>,
-        keys: Vec<EntityNotificationsKey>,
-    ) -> Result<
-        HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
-        rootcause::Report,
-    >;
+        keys: Vec<model_entity::Entity<'static>>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+            rootcause::Report,
+        >,
+    > + Send
+    + 'a;
 }
 
-#[async_trait::async_trait]
-impl<T> SoupNotificationEdgeReader for T
+impl<T> SoupNotificationEdgeReader for Arc<T>
 where
     T: notification::domain::service::NotificationReader,
 {
     async fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
-        keys: Vec<EntityNotificationsKey>,
+        keys: Vec<model_entity::Entity<'static>>,
     ) -> Result<
-        HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
+        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
         rootcause::Report,
     > {
         let mut result = keys
@@ -74,8 +67,8 @@ where
                 Ok((
                     key.clone(),
                     NotificationEntityRef {
-                        entity_type: key.notification_item_type()?,
-                        id: key.entity_id.clone(),
+                        entity_type: notification_item_type(key.entity_type)?,
+                        id: key.entity_id.to_string(),
                     },
                 ))
             })
@@ -101,42 +94,76 @@ where
     }
 }
 
-/// DataLoader for entity notification edges.
-pub struct EntityNotificationsLoader {
-    user_id: MacroUserIdStr<'static>,
-    reader: Arc<dyn SoupNotificationEdgeReader>,
+/// Notification reader used by schema-only GraphQL construction.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpSoupNotificationEdgeReader;
+
+impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
+    async fn get_notifications(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        keys: Vec<model_entity::Entity<'static>>,
+    ) -> Result<
+        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+        rootcause::Report,
+    > {
+        Ok(keys.iter().map(|key| (key.clone(), Vec::new())).collect())
+    }
 }
 
-impl EntityNotificationsLoader {
+/// DataLoader for entity notification edges.
+pub struct EntityNotificationsLoader<R> {
+    user_id: MacroUserIdStr<'static>,
+    reader: R,
+}
+
+impl<R> EntityNotificationsLoader<R> {
     /// Create a new entity notifications DataLoader.
-    pub fn new(
-        user_id: MacroUserIdStr<'static>,
-        reader: Arc<dyn SoupNotificationEdgeReader>,
-    ) -> Self {
+    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
         Self { user_id, reader }
     }
 }
 
-impl Loader<EntityNotificationsKey> for EntityNotificationsLoader {
+impl<R> Loader<model_entity::OwnedEntity> for EntityNotificationsLoader<R>
+where
+    R: SoupNotificationEdgeReader,
+{
     type Value = Vec<UserNotificationRow<serde_json::Value>>;
-    type Error = Arc<rootcause::Report>;
+    type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(
         &self,
-        keys: &[EntityNotificationsKey],
-    ) -> Result<HashMap<EntityNotificationsKey, Self::Value>, Self::Error> {
-        self.reader
-            .get_notifications(self.user_id.clone(), keys.to_vec())
+        keys: &[model_entity::OwnedEntity],
+    ) -> Result<HashMap<model_entity::OwnedEntity, Self::Value>, Self::Error> {
+        let entities = keys
+            .iter()
+            .map(|key| key.as_entity().clone())
+            .collect::<Vec<_>>();
+        let loaded = self
+            .reader
+            .get_notifications(self.user_id.clone(), entities)
             .await
-            .map_err(Arc::new)
+            .map_err(|error| error.into_cloneable())?;
+
+        Ok(keys
+            .iter()
+            .cloned()
+            .map(|key| {
+                let notifications = loaded.get(key.as_entity()).cloned().unwrap_or_default();
+                (key, notifications)
+            })
+            .collect())
     }
 }
 
 /// Build a DataLoader for entity notification edges.
-pub fn entity_notifications_loader(
+pub fn entity_notifications_loader<R>(
     user_id: MacroUserIdStr<'static>,
-    reader: Arc<dyn SoupNotificationEdgeReader>,
-) -> DataLoader<EntityNotificationsLoader> {
+    reader: R,
+) -> DataLoader<EntityNotificationsLoader<R>>
+where
+    R: SoupNotificationEdgeReader,
+{
     DataLoader::new(
         EntityNotificationsLoader::new(user_id, reader),
         tokio::spawn,

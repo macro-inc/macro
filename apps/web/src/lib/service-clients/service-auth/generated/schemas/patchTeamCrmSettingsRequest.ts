@@ -9,6 +9,9 @@
  * Request body for `PATCH /team/crm`.
  */
 export interface PatchTeamCrmSettingsRequest {
+  /** On a disabled → enabled transition, whether to backfill the CRM
+from members' existing email history. Ignored when disabling. */
+  backfill?: boolean;
   /** The desired CRM state for the team. */
   enabled: boolean;
 }

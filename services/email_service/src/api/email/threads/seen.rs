@@ -4,6 +4,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadReadMetadata};
+use email_service::pubsub::publish_email_event;
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::service::label::system_labels;
@@ -159,6 +161,19 @@ pub async fn seen_handler(
             return Err(SeenThreadError::QueryError(e));
         }
     }
+
+    publish_email_event(
+        ctx.macro_event_broker.as_ref(),
+        &EmailMacroEvent::thread_read(ThreadReadMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: Some(link.macro_id.clone()),
+            thread_id,
+            is_read: true,
+            origin: EmailEventOrigin::UserAction,
+        }),
+    )
+    .await;
 
     // Enqueue gmail ops messages in batch
     let gmail_ops_messages: Vec<_> = unread_messages

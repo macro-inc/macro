@@ -7,6 +7,7 @@ use crate::{
         model::{
             Highlight, SearchGotoCallRecord, SearchGotoContent, SearchHit, parse_highlight_hit,
         },
+        properties::build_tag_filter,
         query::Keys,
     },
 };
@@ -42,6 +43,8 @@ pub(crate) struct CallRecordIndex {
     pub participant_ids: Vec<String>,
     #[serde(default)]
     pub channel_name: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
     pub started_at_seconds: i64,
     #[serde(default)]
     pub ended_at_seconds: Option<i64>,
@@ -50,14 +53,31 @@ pub(crate) struct CallRecordIndex {
 pub(crate) struct CallRecordSearchConfig;
 
 impl SearchQueryConfig for CallRecordSearchConfig {
-    const TITLE_KEY: &'static str = "channel_name";
+    const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::CallRecords;
+}
+
+/// Which fields a call search matches on. `Content` (the default) preserves
+/// the segment-only `has_child` behavior. `Name` matches the parent `name`.
+/// `NameContent` matches either. Mirrors `DocumentSearchMode`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CallRecordSearchMode {
+    /// Match terms against the parent `name` only.
+    Name,
+    /// Match terms against segment `content` only.
+    #[default]
+    Content,
+    /// Match terms against either the parent `name` or segment `content`.
+    NameContent,
 }
 
 pub(crate) struct CallRecordQueryBuilder {
     inner: SearchQueryBuilder<CallRecordSearchConfig>,
     channel_ids: Vec<String>,
     speaker_ids: Vec<String>,
+    tag_option_ids: Vec<String>,
+    match_all_tags: bool,
+    mode: CallRecordSearchMode,
 }
 
 impl CallRecordQueryBuilder {
@@ -66,6 +86,9 @@ impl CallRecordQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             channel_ids: Vec::new(),
             speaker_ids: Vec::new(),
+            tag_option_ids: Vec::new(),
+            match_all_tags: false,
+            mode: CallRecordSearchMode::default(),
         }
     }
 
@@ -89,11 +112,26 @@ impl CallRecordQueryBuilder {
         self
     }
 
-    /// Parent/child join query: one `has_child` clause per term, ANDed
-    /// inside `bool.must` so every search term must match some segment
-    /// in the same call. channel_id lives on the parent so it sits on
-    /// `bool.filter` directly; speaker_id is child-side so it's a
-    /// has_child filter clause.
+    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
+        self.tag_option_ids = tag_option_ids;
+        self
+    }
+
+    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
+        self.match_all_tags = match_all_tags;
+        self
+    }
+
+    pub fn mode(mut self, mode: CallRecordSearchMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Parent/child join query. channel_id lives on the parent so it sits on
+    /// `bool.filter` directly; speaker_id is child-side so it's a has_child
+    /// filter clause. The match clause depends on [`CallRecordSearchMode`]:
+    /// the parent `name` (Name), segment `content` via has_child (Content),
+    /// or either (NameContent) — mirroring documents.
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.inner.ids_only && self.inner.ids.is_empty() {
             return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
@@ -131,38 +169,81 @@ impl CallRecordQueryBuilder {
             bool_query.filter(QueryType::terms("channel_id", self.channel_ids.clone()));
         }
 
-        // One has_child clause per term, ANDed via bool.must. Each
-        // carries its own inner_hits; the shared highlight_query tags
-        // every search term on a returned segment regardless of which
-        // clause produced it.
-        //
-        // speaker_id is a child-side field — it lives inside each
-        // has_child clause alongside the term query so the same segment
-        // that matches the term must also be from one of the requested
-        // speakers. Filtering speaker_id at the bool level instead
-        // would only require *some* segment in the call to have the
-        // speaker, not necessarily the segment matching the term.
-        let highlight_query =
-            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
-        for (idx, term) in self.inner.terms.iter().enumerate() {
-            let term_query = build_child_content_query(term, &self.inner.match_type);
-            let inner_query = if self.speaker_ids.is_empty() {
-                term_query
-            } else {
-                let mut combined = BoolQueryBuilder::new();
-                combined.must(term_query);
-                combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
-                combined.build().into()
-            };
-            let inner_hits = InnerHits::new()
-                .name(format!("term_{idx}"))
-                .size(INNER_HITS_PER_TERM)
-                .highlight(inner_hits_content_highlight(&highlight_query));
-            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query).inner_hits(inner_hits);
-            bool_query.must(has_child.into());
+        // Tag filter: a single nested clause matching any of the option ids in
+        // the parent's `properties.values`, with no definition_id constraint.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+            bool_query.filter(nested);
+        }
+
+        // Match clause(s) per mode.
+        let include_name = matches!(
+            self.mode,
+            CallRecordSearchMode::Name | CallRecordSearchMode::NameContent
+        );
+        let include_content = matches!(
+            self.mode,
+            CallRecordSearchMode::Content | CallRecordSearchMode::NameContent
+        );
+
+        if include_name && include_content {
+            // A call matches when its name matches every term, or every term
+            // matches some segment's content.
+            let mut content_bool = BoolQueryBuilder::new();
+            for clause in self.build_content_has_child_clauses() {
+                content_bool.must(clause);
+            }
+            let mut matched = BoolQueryBuilder::new();
+            matched.minimum_should_match(1);
+            matched.should(content_bool.build().into());
+            matched.should(self.inner.build_title_term_query()?);
+            bool_query.must(matched.build().into());
+        } else if include_name {
+            bool_query.must(self.inner.build_title_term_query()?);
+        } else {
+            for clause in self.build_content_has_child_clauses() {
+                bool_query.must(clause);
+            }
         }
 
         Ok(bool_query)
+    }
+
+    /// One `has_child` clause per term, each carrying its own `inner_hits` so
+    /// segment-level highlights come back alongside the parent. The shared
+    /// highlight_query tags every search term on a returned segment regardless
+    /// of which clause produced it.
+    ///
+    /// speaker_id is a child-side field — it lives inside each has_child clause
+    /// alongside the term query so the same segment that matches the term must
+    /// also be from one of the requested speakers. Filtering speaker_id at the
+    /// bool level instead would only require *some* segment in the call to have
+    /// the speaker, not necessarily the segment matching the term.
+    fn build_content_has_child_clauses<'a>(&'a self) -> Vec<QueryType<'a>> {
+        let highlight_query =
+            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
+        self.inner
+            .terms
+            .iter()
+            .enumerate()
+            .map(|(idx, term)| {
+                let term_query = build_child_content_query(term, &self.inner.match_type);
+                let inner_query = if self.speaker_ids.is_empty() {
+                    term_query
+                } else {
+                    let mut combined = BoolQueryBuilder::new();
+                    combined.must(term_query);
+                    combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
+                    combined.build().into()
+                };
+                let inner_hits = InnerHits::new()
+                    .name(format!("term_{idx}"))
+                    .size(INNER_HITS_PER_TERM)
+                    .highlight(inner_hits_content_highlight(&highlight_query));
+                HasChildQuery::new(CHILD_RELATION, inner_query)
+                    .inner_hits(inner_hits)
+                    .into()
+            })
+            .collect()
     }
 }
 
@@ -228,6 +309,9 @@ pub struct CallRecordSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+    pub mode: CallRecordSearchMode,
 }
 
 impl From<CallRecordSearchArgs> for CallRecordQueryBuilder {
@@ -242,6 +326,9 @@ impl From<CallRecordSearchArgs> for CallRecordQueryBuilder {
             .speaker_ids(args.speaker_ids)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
+            .tag_option_ids(args.tag_option_ids)
+            .match_all_tags(args.match_all_tags)
+            .mode(args.mode)
     }
 }
 

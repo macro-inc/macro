@@ -43,6 +43,9 @@ export const TOGGLE_APPEND_EMAIL_THREAD_COMMAND = createCommand<{
   replyingTo: ApiMessage | undefined;
   replyType?: ReplyType;
   visible: boolean;
+  /** Whether the quoted message is personal (drives theme-adapted rendering
+   * of the quoted html, matching the message view) */
+  isPersonal?: boolean;
 }>('TOGGLE_APPEND_EMAIL_THREAD_COMMAND');
 
 type HeaderDescriptor =
@@ -147,7 +150,8 @@ const REPLYING_TO_ID_ATTRIBUTE = 'data-replying-to-id';
 const $appendPreviousEmail = (
   editor: LexicalEditor,
   replyingTo: ApiMessage | undefined,
-  replyType: ReplyType | undefined
+  replyType: ReplyType | undefined,
+  isPersonal?: boolean
 ) => {
   if (!replyingTo) return true;
   const wrapper = $createClassedBlockNode({
@@ -178,7 +182,12 @@ const $appendPreviousEmail = (
     // good indicator of content we can't convert into editable nodes correctly.
     const hasTable = Boolean(dom.querySelector('table'));
     if (replyType === 'forward' || hasTable) {
-      const htmlNode = $createHtmlRenderNode({ html: replyingToBodyHTML });
+      const htmlNode = $createHtmlRenderNode({
+        html: replyingToBodyHTML,
+        // Same branch the message view takes: personal or table-less emails
+        // get theme-adapted colors, table-layout emails get a white panel
+        adaptColors: Boolean(isPersonal) || !hasTable,
+      });
       quoteNode.append(htmlNode);
     } else {
       const nodes = $generateNodesFromDOM(editor, dom);
@@ -237,7 +246,7 @@ function removeAppendedThread(
 export function registerToggleAppendedThread(editor: LexicalEditor) {
   return editor.registerCommand(
     TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
-    ({ replyingTo, visible, replyType }) => {
+    ({ replyingTo, visible, replyType, isPersonal }) => {
       // Programmatic content change: don't let selection reconciliation
       // move DOM focus into the editor
       $addUpdateTag('skip-dom-selection');
@@ -248,7 +257,7 @@ export function registerToggleAppendedThread(editor: LexicalEditor) {
         return true;
       }
 
-      $appendPreviousEmail(editor, replyingTo, replyType);
+      $appendPreviousEmail(editor, replyingTo, replyType, isPersonal);
       // Appending leaves a dirty selection inside the quote; any later
       // update would flush it to the DOM and steal focus into the editor
       $setSelection(null);

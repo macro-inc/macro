@@ -6,7 +6,6 @@ export enum PaywallKey {
   PROJECT_LIMIT = 'PROJECT_LIMIT',
   FILE_LIMIT = 'FILE_LIMIT',
   IMAGE_LIMIT = 'IMAGE_LIMIT',
-  MODEL_LIMIT = 'MODEL_LIMIT',
   CHAT_LIMIT = 'CHAT_LIMIT',
   O1_LIMIT = 'O1_LIMIT',
   CANVAS_CLIKED = 'CANVAS_CLIKED',
@@ -44,12 +43,6 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
   [PaywallKey.IMAGE_LIMIT]: {
     title: 'Image processing limit reached',
     description: `You’ve used ${DAILY_LIMIT} AI image processing requests today. Upgrade for higher limits.`,
-    learnMoreUrl: 'https://docs.macro.com/product/agents',
-    learnMoreSubject: 'agents',
-  },
-  [PaywallKey.MODEL_LIMIT]: {
-    title: 'Smart model limit reached',
-    description: `You’ve used ${DAILY_LIMIT} smart model requests today. Upgrade for access to all models.`,
     learnMoreUrl: 'https://docs.macro.com/product/agents',
     learnMoreSubject: 'agents',
   },

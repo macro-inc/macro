@@ -3,13 +3,16 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
-use crate::pubsub::util::cg_refresh_email;
 use crate::pubsub::util::{
     CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
 };
+use crate::pubsub::util::{cg_refresh_email, publish_email_event};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use contacts::domain::ports::ContactsIngress;
+use email::domain::events::{
+    EmailEventOrigin, EmailMacroEvent, MessageReceivedMetadata, MessageSentMetadata,
+};
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
@@ -144,6 +147,16 @@ pub async fn upsert_message(
             .collect()
     };
 
+    // Snapshot header-level fields for the macro.email event before
+    // `message` is moved into the insert path. Bodies, snippets, and bcc
+    // addresses are never published.
+    let event_subject = message.subject.clone();
+    let event_from = message.from.clone();
+    let event_to_emails: Vec<String> = message.to.iter().map(|c| c.email.clone()).collect();
+    let event_cc_emails: Vec<String> = message.cc.iter().map(|c| c.email.clone()).collect();
+    let event_sent_at = message.sent_at.or(message.internal_date_ts);
+    let event_received_at = message.internal_date_ts;
+
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
         &ctx.db,
@@ -172,6 +185,8 @@ pub async fn upsert_message(
                 .context("Failed to check whether provider_message_id already exists".to_string()),
         })
     })?;
+
+    let is_new_thread = !thread_provider_to_db_map.contains_key(&provider_thread_id);
 
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
     // if it does exist in the database, we just need to insert the already fetched message.
@@ -214,6 +229,51 @@ pub async fn upsert_message(
                 source: e.context("Failed to get new message db id".to_string()),
             })
         })?;
+
+    // Publish to the macro.email topic immediately after the committed
+    // insert, BEFORE the fallible side-effect steps below: if any of them
+    // fails, the SQS retry finds the message already existing and would
+    // never emit. Drafts are skipped — a draft synced from the provider is
+    // not a received or sent message.
+    if !message_already_exists && !is_draft {
+        let event = if is_sent {
+            // Sent from another client and first observed via sync; sends
+            // performed through Macro are published by the scheduled-send
+            // worker and already exist here.
+            EmailMacroEvent::message_sent(MessageSentMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                actor: None,
+                message_id: message_db_id,
+                provider_message_id: payload.provider_message_id.clone(),
+                thread_id: thread_db_id,
+                provider_thread_id: provider_thread_id.clone(),
+                subject: event_subject,
+                to_emails: event_to_emails,
+                cc_emails: event_cc_emails,
+                origin: EmailEventOrigin::ProviderSync,
+                sent_at: event_sent_at.unwrap_or_else(chrono::Utc::now),
+            })
+        } else {
+            EmailMacroEvent::message_received(MessageReceivedMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                message_id: message_db_id,
+                provider_message_id: payload.provider_message_id.clone(),
+                thread_id: thread_db_id,
+                provider_thread_id: provider_thread_id.clone(),
+                is_new_thread,
+                subject: event_subject,
+                from_email: event_from.as_ref().map(|c| c.email.clone()),
+                from_name: event_from.as_ref().and_then(|c| c.name.clone()),
+                to_emails: event_to_emails,
+                attachment_count: message_attachment_count as u32,
+                is_spam_or_trash,
+                received_at: event_received_at,
+            })
+        };
+        publish_email_event(&ctx.macro_event_broker, &event).await;
+    }
 
     handle_attachment_upload(
         ctx,

@@ -20,10 +20,13 @@ use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToo
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
+use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::ports::EntityAccessService as _;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
+use lexical_mention_extractor::LexicalMentionExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::inbound::ai_tool::NotificationToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
@@ -68,13 +71,16 @@ pub type ToolEmailService = EmailServiceImpl<
     ToolEamService,
 >;
 
-/// Type alias for the send-capable email service implementation used by user tools.
+/// Type alias for the send-capable email service implementation used by user
+/// tools. Carries the real event broker: these tools mutate email state, and
+/// the Gmail-echo suppression means events skipped here are never recovered.
 pub type ToolUserEmailService = EmailServiceImpl<
     EmailPgRepo,
     ToolFrecencyService,
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the channel list service implementation.
@@ -91,8 +97,12 @@ pub type ToolCommsService = ChannelListServiceImpl<
 pub type ToolChannelEventDispatcher = std::sync::Arc<dyn ChannelEventDispatcher>;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService =
-    ChannelServiceImpl<PgChannelsRepo, ToolChannelEventDispatcher>;
+pub type ToolChannelMessagesService = ChannelServiceImpl<
+    PgChannelsRepo,
+    ToolChannelEventDispatcher,
+    NoopChannelReferenceSharePermissions,
+    LexicalMentionExtractor,
+>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =
@@ -100,10 +110,16 @@ pub type ToolChannelToolContext =
 
 /// Build the channel AI tool context from a Postgres pool, with no side
 /// effects (no notifications/realtime) for hosts that lack those clients.
-pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext {
+/// `lexical_client` derives the mention list for messages the agent sends,
+/// since bot-authored content arrives without the editor-tracked mentions.
+pub fn build_channel_tool_context(
+    pool: sqlx::PgPool,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+) -> ToolChannelToolContext {
     build_channel_tool_context_with_dispatcher(
         pool,
         std::sync::Arc::new(NoopChannelEventDispatcher),
+        lexical_client,
     )
 }
 
@@ -113,13 +129,15 @@ pub fn build_channel_tool_context(pool: sqlx::PgPool) -> ToolChannelToolContext 
 pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,
+    lexical_client: Arc<lexical_client::LexicalClient>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
         ChannelServiceImpl::with_dependencies(
             PgChannelsRepo::new(pool.clone()),
             dispatcher,
             NoopChannelReferenceSharePermissions,
-        ),
+        )
+        .with_mention_extractor(LexicalMentionExtractor::new(lexical_client)),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
@@ -200,6 +218,8 @@ pub struct TaskPropertiesAdapter {
     pub system_properties: Arc<ToolSystemPropertiesService>,
     /// Properties service used to assign concrete task property values.
     pub properties: Arc<ToolPropertiesService>,
+    /// Canonical entity access service used to authorize task property writes.
+    pub entity_access_service: Arc<ToolEntityAccessService>,
 }
 
 impl TaskPropertiesPort for TaskPropertiesAdapter {
@@ -230,15 +250,24 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         use properties::PropertiesService as _;
 
         let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-
-        let access = self
-            .properties
-            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+        let entity_access_receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &user_id,
+                None,
+                entity_id,
+                properties::access_entity_type(models_properties::EntityType::Task),
+            )
             .await?;
+        let access = properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
+            entity_access_receipt,
+            models_properties::EntityType::Task,
+        )?;
 
         self.properties
             .set_entity_property(&access, property_definition_id, value)
             .await
+            .map(|_| ())
             .map_err(Into::into)
     }
 
@@ -547,7 +576,8 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
 >;
 
 /// Type alias for the properties tool context
-pub type ToolPropertiesToolContext = PropertiesToolContext<ToolPropertiesService>;
+pub type ToolPropertiesToolContext =
+    PropertiesToolContext<ToolPropertiesService, ToolEntityAccessService>;
 
 /// Build the properties service shared by the properties tools and task adapter.
 pub fn build_properties_service(
@@ -568,21 +598,25 @@ pub fn build_properties_service(
 pub fn build_task_properties_adapter(
     pool: sqlx::PgPool,
     properties: Arc<ToolPropertiesService>,
+    entity_access_service: Arc<ToolEntityAccessService>,
 ) -> TaskPropertiesAdapter {
     TaskPropertiesAdapter {
         system_properties: Arc::new(SystemPropertiesServiceImpl::new(
             PgSystemPropertiesRepository::new(pool),
         )),
         properties,
+        entity_access_service,
     }
 }
 
-/// Build a properties tool context from a shared properties service.
+/// Build a properties tool context from shared domain and access services.
 pub fn build_properties_tool_context(
     properties: Arc<ToolPropertiesService>,
+    entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolPropertiesToolContext {
     PropertiesToolContext {
         service: properties,
+        entity_access_service,
     }
 }
 

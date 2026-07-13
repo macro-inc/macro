@@ -29,6 +29,16 @@ export type WriteResult = {
   reset: boolean;
 };
 
+/**
+ * Result of installing an optimistic layer. `changed`/`affectedOps` reflect
+ * *visible* (composed-view) changes — nothing is durable until the
+ * transaction commits.
+ */
+export type OptimisticWriteResult = WriteResult & {
+  /** Engine-assigned id; settle with commit/rollback-optimistic-write. */
+  transactionId: string;
+};
+
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | {
@@ -52,6 +62,32 @@ export type CacheRequest = { id: number } & (
        */
       identity?: string;
     }
+  /**
+   * Install an in-memory optimistic layer from a mutation's optimistic
+   * response. Persists nothing; settle with commit/rollback.
+   */
+  | {
+      kind: 'begin-optimistic-write';
+      originOpId?: string;
+      query: string;
+      operationName?: string;
+      variables?: Record<string, unknown>;
+      data: unknown;
+    }
+  /**
+   * Atomically replace a pending layer with the real network response and
+   * flush contiguous settled layers durably.
+   */
+  | {
+      kind: 'commit-optimistic-write';
+      transactionId: string;
+      query: string;
+      operationName?: string;
+      variables?: Record<string, unknown>;
+      data: unknown;
+    }
+  /** Drop a pending layer's contribution (mutation failed). */
+  | { kind: 'rollback-optimistic-write'; transactionId: string }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
   | { kind: 'invalidate'; keys: string[] }

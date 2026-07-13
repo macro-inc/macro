@@ -48,6 +48,10 @@ export interface HotkeyCommand {
   commandPaletteIcon?: Component<{ class?: string }>;
   // Optional component to display in the command palette
   displayComponent?: Component<any>;
+  // Called when the command becomes the highlighted item in the command palette (hover or keyboard selection). Use for side effects like live previews.
+  onHighlight?: () => void;
+  // Called when the command stops being the highlighted item in the command palette (selection moved, menu closed). Pair with onHighlight to undo its side effects.
+  onHighlightEnd?: () => void;
   // Optional tags for categorizing in the command palette.
   tags?: string[];
   // Optional related search terms for the command palette.
@@ -174,6 +178,18 @@ export interface HotkeyRegistrationOptions {
    * Optional component to display in command palette rather than description.
    */
   displayComponent?: Component<any>;
+  /**
+   * Called when the command becomes the highlighted item in the command
+   * palette (hover or keyboard selection). Use for side effects like live
+   * previews.
+   */
+  onHighlight?: () => void;
+  /**
+   * Called when the command stops being the highlighted item in the command
+   * palette (selection moved, menu closed). Pair with onHighlight to undo its
+   * side effects.
+   */
+  onHighlightEnd?: () => void;
   /**
    * Optional tags for categorizing in the command palette.
    */

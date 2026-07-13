@@ -1,6 +1,8 @@
 //! Write path: response JSON → normalized records.
 
-use crate::document::{FieldNode, MissingVariable, Operation, Selection, resolve_args_key};
+use crate::document::{
+    FieldNode, MissingVariable, Operation, OperationKind, Selection, resolve_args_key,
+};
 use crate::meta::{self, FieldKind, TypeKind};
 use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
@@ -36,16 +38,26 @@ pub enum NormalizeError {
 /// records.
 pub type RecordUpdates = BTreeMap<EntityKey, Record>;
 
-/// Normalizes a response's `data` object into record updates rooted at
-/// [`ROOT_QUERY`](crate::value::ROOT_QUERY).
+/// Normalizes a response's `data` object into record updates.
+///
+/// Query responses are rooted at [`ROOT_QUERY`](crate::value::ROOT_QUERY).
+/// Mutation responses traverse from the schema's mutation root: entities in
+/// the payload are normalized as usual, but the root mutation fields
+/// themselves are discarded — mutation roots are transient cache entry
+/// points, never read back.
 pub fn normalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     data: &Json,
 ) -> Result<RecordUpdates, NormalizeError> {
+    let root_type = match op.kind {
+        OperationKind::Query => meta::QUERY_ROOT_TYPE,
+        OperationKind::Mutation => meta::MUTATION_ROOT_TYPE
+            .ok_or_else(|| NormalizeError::UnknownType("(mutation root)".to_string()))?,
+    };
     let Json::Object(data) = data else {
         return Err(NormalizeError::Shape {
-            type_name: meta::QUERY_ROOT_TYPE.to_string(),
+            type_name: root_type.to_string(),
             field: "(data)".to_string(),
             detail: "response data is not an object",
         });
@@ -54,13 +66,15 @@ pub fn normalize(
     let mut root = Record::default();
     write_object_fields(
         &op.selection_set,
-        meta::QUERY_ROOT_TYPE,
+        root_type,
         data,
         variables,
         &mut root.fields,
         &mut records,
     )?;
-    merge_into(&mut records, EntityKey::root(), root);
+    if op.kind == OperationKind::Query {
+        merge_into(&mut records, EntityKey::root(), root);
+    }
     Ok(records)
 }
 

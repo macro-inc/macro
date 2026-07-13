@@ -83,4 +83,14 @@ pub mod system_labels {
     pub const STARRED: &str = "STARRED";
     /// The TRASH label.
     pub const TRASH: &str = "TRASH";
+    /// The INBOX label.
+    pub const INBOX: &str = "INBOX";
+    /// The SPAM label.
+    pub const SPAM: &str = "SPAM";
+    /// The IMPORTANT label.
+    pub const IMPORTANT: &str = "IMPORTANT";
+    /// The SENT label.
+    pub const SENT: &str = "SENT";
+    /// The DRAFT label.
+    pub const DRAFT: &str = "DRAFT";
 }

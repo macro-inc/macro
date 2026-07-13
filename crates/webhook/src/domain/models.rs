@@ -394,7 +394,8 @@ pub struct Webhook {
     pub name: String,
     /// Endpoint URL. HTTPS is required outside local environments.
     pub endpoint_url: String,
-    /// Signing secret used by outbound adapters. This is never serialized by APIs.
+    /// Signing secret used by outbound adapters. Generic webhook API responses omit it;
+    /// creation exposes it separately through [`CreateWebhookResponse`].
     #[serde(default, skip_serializing)]
     pub signing_secret: String,
     /// Custom delivery headers, after decryption by the repository.
@@ -413,6 +414,58 @@ pub struct Webhook {
     pub deleted_at: Option<DateTime<Utc>>,
     /// Typed filters used to match events and optional entity ids.
     pub filters: WebhookFilters,
+}
+
+/// Webhook returned after creation, including its signing secret.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateWebhookResponse {
+    /// Webhook id.
+    pub id: WebhookId,
+    /// Owning workspace id.
+    pub workspace_id: String,
+    /// Display name.
+    pub name: String,
+    /// Endpoint URL. HTTPS is required outside local environments.
+    pub endpoint_url: String,
+    /// Signing secret used to verify webhook delivery signatures.
+    pub signing_secret: String,
+    /// Custom delivery headers, after decryption by the repository.
+    pub headers: WebhookHeaders,
+    /// Webhook lifecycle status.
+    pub status: WebhookStatus,
+    /// Whether the current endpoint configuration has passed validation.
+    pub is_valid: bool,
+    /// User that created the webhook.
+    pub created_by_user_id: String,
+    /// Creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Soft-delete timestamp.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Typed filters used to match events and optional entity ids.
+    pub filters: WebhookFilters,
+}
+
+impl From<Webhook> for CreateWebhookResponse {
+    fn from(webhook: Webhook) -> Self {
+        Self {
+            id: webhook.id,
+            workspace_id: webhook.workspace_id,
+            name: webhook.name,
+            endpoint_url: webhook.endpoint_url,
+            signing_secret: webhook.signing_secret,
+            headers: webhook.headers,
+            status: webhook.status,
+            is_valid: webhook.is_valid,
+            created_by_user_id: webhook.created_by_user_id,
+            created_at: webhook.created_at,
+            updated_at: webhook.updated_at,
+            deleted_at: webhook.deleted_at,
+            filters: webhook.filters,
+        }
+    }
 }
 
 /// Sanitized result of validating a webhook endpoint.

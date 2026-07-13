@@ -30,6 +30,58 @@ fn status_filter(status: CallStatus) -> LiteralTree<CallLiteral> {
     Some(Arc::new(Expr::Literal(CallLiteral::Status(status))))
 }
 
+fn tag_property_literal(option_id: Uuid) -> CallLiteral {
+    use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
+    CallLiteral::Property(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(0xdef),
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(option_id),
+    })
+}
+
+#[test]
+fn extract_tag_option_ids_collects_select_options_across_or() {
+    let opt1 = Uuid::from_u128(1);
+    let opt2 = Uuid::from_u128(2);
+    let filter: LiteralTree<CallLiteral> = Some(Arc::new(Expr::or(
+        Expr::Literal(tag_property_literal(opt1)),
+        Expr::Literal(tag_property_literal(opt2)),
+    )));
+
+    let mut ids = super::extract_tag_option_ids(&filter);
+    ids.sort();
+    let mut expected = vec![opt1.to_string(), opt2.to_string()];
+    expected.sort();
+    assert_eq!(ids, expected);
+}
+
+#[test]
+fn extract_tag_option_ids_empty_for_non_property_filter() {
+    assert!(super::extract_tag_option_ids(&status_filter(CallStatus::Attended)).is_empty());
+    assert!(super::extract_tag_option_ids(&None).is_empty());
+}
+
+#[test]
+fn tag_filter_requires_all_distinguishes_and_from_or() {
+    let a = Expr::Literal(tag_property_literal(Uuid::from_u128(1)));
+    let b = Expr::Literal(tag_property_literal(Uuid::from_u128(2)));
+    // ANY: options ORed together.
+    let any: LiteralTree<CallLiteral> = Some(Arc::new(Expr::or(a.clone(), b.clone())));
+    assert!(!super::tag_filter_requires_all(&any));
+    // ALL: options ANDed together, even when combined with a channel filter.
+    let all: LiteralTree<CallLiteral> = Some(Arc::new(Expr::and(
+        Expr::Literal(CallLiteral::ChannelId(Uuid::from_u128(9))),
+        Expr::and(a, b),
+    )));
+    assert!(super::tag_filter_requires_all(&all));
+    // A single option (or no filter) reads as ANY.
+    let single: LiteralTree<CallLiteral> = Some(Arc::new(Expr::Literal(tag_property_literal(
+        Uuid::from_u128(1),
+    ))));
+    assert!(!super::tag_filter_requires_all(&single));
+    assert!(!super::tag_filter_requires_all(&None));
+}
+
 fn not_status_filter(status: CallStatus) -> LiteralTree<CallLiteral> {
     let expr = Expr::Literal(CallLiteral::Status(status));
     Some(Arc::new(Expr::is_not(expr)))

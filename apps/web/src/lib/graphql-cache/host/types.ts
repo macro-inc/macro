@@ -5,7 +5,11 @@
  * - tauri-host.ts (Phase 3b): Tauri IPC to the native engine
  */
 
-import type { ReadResult, WriteResult } from '../protocol';
+import type {
+  OptimisticWriteResult,
+  ReadResult,
+  WriteResult,
+} from '../protocol';
 
 export interface CacheReadArgs {
   /** urql operation key; registers the op for re-execution when set. */
@@ -27,6 +31,23 @@ export interface CacheHost {
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
+  /**
+   * Installs an in-memory optimistic layer from a mutation's optimistic
+   * response (`args.data`). Persists nothing; the returned transaction id
+   * must be settled with `commitOptimisticWrite` or
+   * `rollbackOptimisticWrite`.
+   */
+  beginOptimisticWrite(args: CacheWriteArgs): Promise<OptimisticWriteResult>;
+  /**
+   * Replaces a pending optimistic layer with the real network response
+   * (`args.data`) atomically and flushes settled layers durably.
+   */
+  commitOptimisticWrite(
+    transactionId: string,
+    args: CacheWriteArgs
+  ): Promise<WriteResult>;
+  /** Drops a pending optimistic layer's contribution (mutation failed). */
+  rollbackOptimisticWrite(transactionId: string): Promise<WriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<string[]>;
   /** urql teardown for an operation key. */

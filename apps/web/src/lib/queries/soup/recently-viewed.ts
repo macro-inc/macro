@@ -18,65 +18,75 @@ const RECENTLY_VIEWED_LIMIT = 50;
 const RECENTLY_VIEWED_STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
-const recentlyViewedArgs: SoupItemsQueryArgs = {
-  params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
-  body: {
-    ...QUERY_FILTERS_BASE,
-    channel_filters: undefined,
-    chat_filters: undefined,
-    document_filters: undefined,
-    email_filters: undefined,
-    project_filters: undefined,
-    // CRM companies only surface in recently-viewed when the feature is enabled.
-    ...(ENABLE_CRM ? { crm_company_filters: undefined } : {}),
-  },
-};
+// Built at call time (not module load) so the CRM flag is read after PostHog
+// has hydrated. The flag is stable within a session, so the derived query key
+// is stable too — the hook and `updateRecentlyViewedItem` agree on it.
+function buildRecentlyViewedArgs(): SoupItemsQueryArgs {
+  return {
+    params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
+    body: {
+      ...QUERY_FILTERS_BASE,
+      channel_filters: undefined,
+      chat_filters: undefined,
+      document_filters: undefined,
+      email_filters: undefined,
+      project_filters: undefined,
+      // CRM companies only surface in recently-viewed when the feature is enabled.
+      ...(ENABLE_CRM() ? { crm_company_filters: undefined } : {}),
+    },
+  };
+}
 
-const recentlyViewedQueryKey = soupKeys.items(recentlyViewedArgs).queryKey;
+function recentlyViewedQueryKey() {
+  return soupKeys.items(buildRecentlyViewedArgs()).queryKey;
+}
 
 export function useRecentlyViewedSoupQuery() {
-  return useQuery(() => ({
-    queryKey: recentlyViewedQueryKey,
-    queryFn: async (): Promise<RecentlyViewedItem[]> => {
-      const page = await throwOnErr(
-        async () =>
-          await storageServiceClient.getSoupItems({
-            params: {},
-            body: {
-              ...recentlyViewedArgs.body,
-              ...recentlyViewedArgs.params,
-            },
-          })
-      );
-      return page.items.flatMap((item): RecentlyViewedItem[] => {
-        if (
-          item.tag === 'call' ||
-          item.tag === 'foreignEntity' ||
-          item.tag === 'channelThread'
-        ) {
-          return [];
-        }
+  return useQuery(() => {
+    const args = buildRecentlyViewedArgs();
+    return {
+      queryKey: soupKeys.items(args).queryKey,
+      queryFn: async (): Promise<RecentlyViewedItem[]> => {
+        const page = await throwOnErr(
+          async () =>
+            await storageServiceClient.getSoupItems({
+              params: {},
+              body: {
+                ...args.body,
+                ...args.params,
+              },
+            })
+        );
+        return page.items.flatMap((item): RecentlyViewedItem[] => {
+          if (
+            item.tag === 'call' ||
+            item.tag === 'foreignEntity' ||
+            item.tag === 'channelThread'
+          ) {
+            return [];
+          }
 
-        return [
-          {
-            id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
-            viewedAt:
-              (item.tag === 'channel'
-                ? item.data.viewed_at
-                : item.data.viewedAt) ?? undefined,
-          },
-        ];
-      });
-    },
-    staleTime: RECENTLY_VIEWED_STALE_TIME,
-    gcTime: RECENTLY_VIEWED_GC_TIME,
-    placeholderData: (prev) => prev,
-  }));
+          return [
+            {
+              id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
+              viewedAt:
+                (item.tag === 'channel'
+                  ? item.data.viewed_at
+                  : item.data.viewedAt) ?? undefined,
+            },
+          ];
+        });
+      },
+      staleTime: RECENTLY_VIEWED_STALE_TIME,
+      gcTime: RECENTLY_VIEWED_GC_TIME,
+      placeholderData: (prev) => prev,
+    };
+  });
 }
 
 export function updateRecentlyViewedItem(itemId: string, viewedAt?: string) {
   queryClient.setQueryData<RecentlyViewedItem[]>(
-    recentlyViewedQueryKey,
+    recentlyViewedQueryKey(),
     (prev) => {
       const filtered = prev?.filter((item) => item.id !== itemId) ?? [];
       const updatedItem = {

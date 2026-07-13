@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@components/app/split-layout/layout';
+import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -22,7 +22,6 @@ export function NewCallButton() {
   >([]);
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
-  const { replaceSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const getOrCreatePrivateChannelMutation =
     useGetOrCreatePrivateChannelMutation();
@@ -69,13 +68,7 @@ export function NewCallButton() {
       setIsOpen(false);
       reset();
 
-      replaceSplit({
-        content: {
-          type: 'channel',
-          id: channelId,
-          params: { join_call: 'true' },
-        },
-      });
+      await joinChannelCall(channelId);
     } catch (err) {
       console.error('Failed to start call', err);
       toast.failure('Failed to start call');

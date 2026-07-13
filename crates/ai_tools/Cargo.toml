@@ -38,6 +38,7 @@ futures.workspace = true
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
 lexical_client = { path = "../lexical_client" }
+lexical_mention_extractor = { path = "../lexical_mention_extractor" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_env_var = { path = "../macro_env_var" }

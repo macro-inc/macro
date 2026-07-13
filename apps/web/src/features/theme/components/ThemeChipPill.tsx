@@ -36,7 +36,15 @@ export function ThemeChipPill(props: ThemeChipPillProps) {
           </span>
         )}
       </Show>
-      <span class="flex items-center cursor-default">{local.name}</span>
+      {/* Shrink the truncation width as the split pane narrows so the pill
+          doesn't crowd its row; `/split` variants no-op where there's no split
+          container ancestor, falling back to the base width. */}
+      <span
+        class="max-w-26 min-w-0 truncate cursor-default @max-[600px]/split:max-w-20 @max-[480px]/split:max-w-14"
+        title={local.name}
+      >
+        {local.name}
+      </span>
     </Dynamic>
   );
 }

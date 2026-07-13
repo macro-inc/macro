@@ -12,13 +12,18 @@ use axum::{
     http::request::Parts,
     response::{IntoResponse, Response},
 };
+use entity_access::domain::models::{
+    AccessLevel, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    RequiredPermission, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::user::axum_extractor::{MacroUserExtractor, OptionalMacroUserExtractor};
 use models_properties::EntityType;
 
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, ViewReceipt};
+use crate::domain::model::{EditReceipt, PropertiesAccessReceipt, ViewReceipt, access_entity_type};
 use crate::domain::service::PropertiesService;
 
 /// Path parameters for entity-scoped properties routes.
@@ -62,6 +67,68 @@ impl IntoResponse for ReceiptRejection {
     }
 }
 
+pub(crate) async fn mint_authenticated_receipt<T, A>(
+    entity_access_service: &A,
+    user_id: &MacroUserIdStr<'_>,
+    entity_id: &str,
+    entity_type: EntityType,
+) -> Result<PropertiesAccessReceipt<T>, PropertiesErr>
+where
+    T: RequiredPermission,
+    A: EntityAccessService,
+{
+    let receipt = entity_access_service
+        .generate_entity_access_receipt::<T>(
+            user_id,
+            None,
+            entity_id,
+            access_entity_type(entity_type),
+        )
+        .await
+        .map_err(|_| PropertiesErr::PermissionDenied)?;
+
+    PropertiesAccessReceipt::try_from_entity_access_receipt(receipt, entity_type)
+        .map_err(|_| PropertiesErr::PermissionDenied)
+}
+
+pub(crate) async fn mint_view_receipt<A>(
+    entity_access_service: &A,
+    user_id: Option<&MacroUserIdStr<'_>>,
+    entity_id: &str,
+    entity_type: EntityType,
+) -> Result<ViewReceipt, PropertiesErr>
+where
+    A: EntityAccessService,
+{
+    if let Some(user_id) = user_id {
+        return mint_authenticated_receipt::<ViewAccessLevel, A>(
+            entity_access_service,
+            user_id,
+            entity_id,
+            entity_type,
+        )
+        .await;
+    }
+
+    let access_entity_type = access_entity_type(entity_type);
+    let access_level = entity_access_service
+        .check_public_access(entity_id, access_entity_type, AccessLevel::View)
+        .await
+        .map_err(|_| PropertiesErr::PermissionDenied)?;
+    let receipt = EntityAccessReceipt::try_new(
+        EntityAccessAuth::Unauthenticated,
+        Entity {
+            entity_id: entity_id.to_string(),
+            entity_type: access_entity_type,
+        },
+        EntityPermission::AccessLevel { access_level },
+    )
+    .map_err(|_| PropertiesErr::PermissionDenied)?;
+
+    PropertiesAccessReceipt::try_from_entity_access_receipt(receipt, entity_type)
+        .map_err(|_| PropertiesErr::PermissionDenied)
+}
+
 async fn entity_path_params(parts: &mut Parts) -> Result<EntityPathParams, ReceiptRejection> {
     let Path(params): Path<EntityPathParams> = parts.extract().await.map_err(|_| {
         ReceiptRejection::BadRequest("Missing or invalid entity_type / entity_id in path")
@@ -95,10 +162,13 @@ where
             .await
             .map_err(|_| ReceiptRejection::Unauthorized)?;
 
-        let receipt = state
-            .properties_service
-            .mint_view_receipt(user.as_ref(), &params.entity_id, params.entity_type)
-            .await?;
+        let receipt = mint_view_receipt(
+            state.entity_access_service.as_ref(),
+            user.as_ref(),
+            &params.entity_id,
+            params.entity_type,
+        )
+        .await?;
 
         Ok(Self(receipt))
     }
@@ -130,10 +200,13 @@ where
             .await
             .map_err(|_| ReceiptRejection::Unauthorized)?;
 
-        let receipt = state
-            .properties_service
-            .mint_edit_receipt(&user, &params.entity_id, params.entity_type)
-            .await?;
+        let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
+            state.entity_access_service.as_ref(),
+            &user,
+            &params.entity_id,
+            params.entity_type,
+        )
+        .await?;
 
         Ok(Self(receipt))
     }

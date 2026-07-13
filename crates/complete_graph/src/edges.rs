@@ -1,0 +1,88 @@
+use std::marker::PhantomData;
+
+use async_graphql::{Context, Object};
+use graphql_email::{EmailContentKey, GraphqlSoupEmailMessage, load_latest_email_message};
+use graphql_notification::{
+    GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
+};
+use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
+use graphql_soup::SoupEntityEdges;
+
+/// Notification and property fields attached to property-bearing Soup entities.
+///
+/// This concrete edge shape lives in the composition crate so `graphql_soup`
+/// does not know which cross-domain fields are attached to its objects.
+pub struct SoupEdges<NR, PR> {
+    entity: model_entity::Entity<'static>,
+    _readers: PhantomData<fn() -> (NR, PR)>,
+}
+
+impl<NR, PR> Clone for SoupEdges<NR, PR> {
+    fn clone(&self) -> Self {
+        Self {
+            entity: self.entity.clone(),
+            _readers: PhantomData,
+        }
+    }
+}
+
+impl<NR, PR> SoupEntityEdges for SoupEdges<NR, PR>
+where
+    NR: SoupNotificationEdgeReader,
+    PR: EntityPropertyReader,
+{
+    type EmailThreadEdges = SoupEmailThreadEdges;
+
+    fn from_entity(entity: model_entity::Entity<'static>) -> Self {
+        Self {
+            entity,
+            _readers: PhantomData,
+        }
+    }
+
+    fn email_thread_edges(&self) -> Self::EmailThreadEdges {
+        SoupEmailThreadEdges {
+            thread_id: self.entity.entity_id.to_string(),
+        }
+    }
+}
+
+#[Object(name = "SoupEdges")]
+impl<NR, PR> SoupEdges<NR, PR>
+where
+    NR: SoupNotificationEdgeReader,
+    PR: EntityPropertyReader,
+{
+    async fn properties(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlProperty>> {
+        load_entity_properties::<PR>(ctx, self.entity.clone()).await
+    }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications::<NR>(ctx, self.entity.clone()).await
+    }
+}
+
+/// Email-content fields attached only to Soup email-thread entities.
+#[derive(Clone)]
+pub struct SoupEmailThreadEdges {
+    thread_id: String,
+}
+
+#[Object]
+impl SoupEmailThreadEdges {
+    async fn latest_content_message(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
+        load_latest_email_message(
+            ctx,
+            EmailContentKey {
+                thread_id: self.thread_id.clone(),
+            },
+        )
+        .await
+    }
+}

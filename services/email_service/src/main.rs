@@ -15,6 +15,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{AuthServiceUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -133,16 +134,23 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
-    let email_service = EmailRouterState::new(EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
-        FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-        (*sqs_client).clone(),
-        crm_service,
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(db.clone()),
-        ),
-        config.sent_undo_delay_secs,
-    ));
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
+    let email_service = EmailRouterState::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            (*sqs_client).clone(),
+            crm_service,
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+            config.sent_undo_delay_secs,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
@@ -178,6 +186,7 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service,
         email_thread_state,
         gmail_token_state,
+        macro_event_broker: Arc::new(macro_event_broker),
     })
     .await?;
     Ok(())

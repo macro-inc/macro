@@ -280,7 +280,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the CRM feature is off so direct navigation /
     // restored splits redirect instead of throwing in resolveComponent.
-    if (!ENABLE_CRM) {
+    if (!ENABLE_CRM()) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');

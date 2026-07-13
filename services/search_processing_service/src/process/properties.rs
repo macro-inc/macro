@@ -43,6 +43,10 @@ pub async fn process_entity_property_update(
             .update_project_properties(entity_id, &properties)
             .await
             .context("failed to update project properties in search index"),
+        EntityType::CallRecord => opensearch_client
+            .update_call_record_properties(entity_id, &properties)
+            .await
+            .context("failed to update call record properties in search index"),
         other => {
             tracing::warn!(
                 entity_type = %other,

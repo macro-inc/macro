@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::domain::models::{
     AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
     SimpleSortRequest, SoupErr, SoupRequest,
@@ -72,6 +74,9 @@ pub type SoupOutput<T> = Either<
     PaginatedCursor<FrecencySoupItem, String, Frecency, T>,
 >;
 
+#[cfg(test)]
+mod test;
+
 /// Service abstraction for executing user-facing soup queries.
 pub trait SoupService: Send + Sync + 'static {
     /// Run a soup query for the authenticated user.
@@ -101,6 +106,37 @@ pub trait SoupService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, SoupErr>> + Send;
+}
+
+impl<S> SoupService for Arc<S>
+where
+    S: SoupService,
+{
+    async fn get_user_soup<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self).get_user_soup(req, team_receipt).await
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        req: GroupedSortRequest<'_>,
+    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+        (**self).get_user_soup_grouped(req).await
+    }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, SoupErr> {
+        (**self).caller_tag_sets(user_id).await
+    }
 }
 
 /// No-op [`SoupService`] for binaries that need to satisfy the bound but

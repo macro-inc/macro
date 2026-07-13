@@ -58,6 +58,22 @@ struct JsWriteResult {
     reset: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsOptimisticWriteResult {
+    transaction_id: String,
+    changed: Vec<String>,
+    affected_ops: Vec<String>,
+    reset: bool,
+}
+
+/// Transaction ids cross the boundary as strings (JS numbers lose precision
+/// past 2^53; ids are opaque to the host anyway).
+fn parse_transaction_id(id: &str) -> Result<u64, JsValue> {
+    id.parse::<u64>()
+        .map_err(|_| err_js(format!("invalid optimistic transaction id `{id}`")))
+}
+
 #[wasm_bindgen]
 pub struct CacheEngine {
     engine: Rc<Mutex<Engine<IdbStorage>>>,
@@ -180,6 +196,100 @@ impl CacheEngine {
                     &data,
                     identity.as_deref(),
                 )
+                .await
+                .map_err(err_js)?;
+            to_js(&JsWriteResult {
+                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                affected_ops: ops.borrow().names(result.affected_ops),
+                reset: result.reset,
+            })
+        })
+    }
+
+    /// Installs an in-memory optimistic layer from a mutation's optimistic
+    /// response; persists nothing. Resolves to `{transactionId: string,
+    /// changed: string[], affectedOps: string[], reset: false}` where
+    /// `changed`/`affectedOps` reflect *visible* (composed-view) changes.
+    #[wasm_bindgen(js_name = beginOptimisticWrite)]
+    pub fn begin_optimistic_write(
+        &self,
+        origin_op_id: Option<String>,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        data: JsValue,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let vars = parse_variables(variables)?;
+            let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
+            let mut engine = engine.lock().await;
+            let (transaction, result) = engine
+                .begin_optimistic_write(origin, &query, operation_name.as_deref(), &vars, &data)
+                .await
+                .map_err(err_js)?;
+            to_js(&JsOptimisticWriteResult {
+                transaction_id: transaction.to_string(),
+                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                affected_ops: ops.borrow().names(result.affected_ops),
+                reset: result.reset,
+            })
+        })
+    }
+
+    /// Atomically replaces a pending optimistic layer with the real network
+    /// response and flushes any contiguous settled layers durably. Resolves
+    /// to a write result whose `changed` keys are the *durably* changed
+    /// records (cross-instance broadcast) and whose `affectedOps` reflect
+    /// visible changes. Rejects on unknown/settled transaction ids.
+    #[wasm_bindgen(js_name = commitOptimisticWrite)]
+    pub fn commit_optimistic_write(
+        &self,
+        transaction_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        data: JsValue,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let transaction = parse_transaction_id(&transaction_id)?;
+            let vars = parse_variables(variables)?;
+            let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let mut engine = engine.lock().await;
+            let result = engine
+                .commit_optimistic_write(
+                    transaction,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?;
+            to_js(&JsWriteResult {
+                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                affected_ops: ops.borrow().names(result.affected_ops),
+                reset: result.reset,
+            })
+        })
+    }
+
+    /// Removes a pending optimistic layer's contribution (mutation failed)
+    /// and flushes any now-contiguous settled layers. Result semantics match
+    /// [`commitOptimisticWrite`](Self::commit_optimistic_write).
+    #[wasm_bindgen(js_name = rollbackOptimisticWrite)]
+    pub fn rollback_optimistic_write(&self, transaction_id: String) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let transaction = parse_transaction_id(&transaction_id)?;
+            let mut engine = engine.lock().await;
+            let result = engine
+                .rollback_optimistic_write(transaction)
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {

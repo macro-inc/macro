@@ -43,7 +43,7 @@ is embedded inline in its parent record. The schema itself is the policy —
 there is no client-side key config. The build fails on malformed shapes
 (nullable/non-ID `id`, `id` on the query root). Consequence for schema
 authors: **only expose a field named `id` when it is the object's global
-identity** (e.g. `GraphqlSoupProperty` exposes `propertyDefinitionId`
+identity** (e.g. `GraphqlProperty` exposes `propertyDefinitionId`
 because a property instance's value is per-entity).
 
 Identity is not the cache's concern: the engine accepts an opaque session

@@ -47,9 +47,6 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "documentToken": document_token.as_str(),
             "documentId": document_id,
             "prompt": instructions,
-            // Each role lists models tried in order: Cerebras primary, with an
-            // Anthropic fallback so edits keep working if Cerebras is rate-limited
-            // or down.
             "models": {
                 "supervisor": [
                     { "provider": "anthropic", "model": "claude-opus-4-8" },
@@ -61,19 +58,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                     { "provider": "anthropic", "model": "claude-sonnet-4-6" },
                 ],
                 "coding": [
-                    { "provider": "anthropic", "model": "claude-haiku-4-5" },
-                    { "provider": "cerebras", "model": "gpt-oss-120b" },
-                ],
-                // Snippet composition: fast/cheap by default, escalating to a
-                // strong prose model when the supervisor marks a spec
-                // `effort: "high"`.
-                "snippet": [
                     { "provider": "cerebras", "model": "gpt-oss-120b" },
                     { "provider": "anthropic", "model": "claude-haiku-4-5" },
-                ],
-                "snippetHigh": [
-                    { "provider": "anthropic", "model": "claude-sonnet-4-6" },
-                    { "provider": "cerebras", "model": "gpt-oss-120b" },
                 ],
             },
             "interpret": false,

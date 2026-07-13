@@ -9264,7 +9264,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/CreateWebhookResponse"
                 }
               }
             }
@@ -12654,6 +12654,81 @@
           }
         }
       },
+      "CreateWebhookResponse": {
+        "type": "object",
+        "description": "Webhook returned after creation, including its signing secret.",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "endpoint_url",
+          "signing_secret",
+          "headers",
+          "status",
+          "is_valid",
+          "created_by_user_id",
+          "created_at",
+          "updated_at",
+          "filters"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "description": "User that created the webhook."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "endpoint_url": {
+            "type": "string",
+            "description": "Endpoint URL. HTTPS is required outside local environments."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/Vec",
+            "description": "Typed filters used to match events and optional entity ids."
+          },
+          "headers": {
+            "$ref": "#/components/schemas/BTreeMap",
+            "description": "Custom delivery headers, after decryption by the repository."
+          },
+          "id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id."
+          },
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the current endpoint configuration has passed validation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "signing_secret": {
+            "type": "string",
+            "description": "Signing secret used to verify webhook delivery signatures."
+          },
+          "status": {
+            "$ref": "#/components/schemas/WebhookStatus",
+            "description": "Webhook lifecycle status."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Owning workspace id."
+          }
+        }
+      },
       "CrmComment": {
         "type": "object",
         "description": "A single comment within a [`CrmThread`].",
@@ -14279,6 +14354,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALL_RECORD",
           "CHANNEL",
           "CHAT",
           "COMPANY",
@@ -18109,7 +18185,8 @@
           "isActive",
           "status",
           "attended",
-          "participants"
+          "participants",
+          "properties"
         ],
         "properties": {
           "attended": {
@@ -18158,6 +18235,13 @@
               "$ref": "#/components/schemas/SoupCallRecordParticipant"
             },
             "description": "Participants in the call."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Entity properties (e.g. tags). Populated after fetch by the soup repo."
           },
           "startedAt": {
             "type": "string",
@@ -19169,11 +19253,16 @@
       "SoupProperty": {
         "type": "object",
         "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
-        "required": ["definition"],
+        "required": ["id", "definition"],
         "properties": {
           "definition": {
             "$ref": "#/components/schemas/PropertyDefinition",
             "description": "The property definition"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Globally unique id of the assignment attaching this property to an entity."
           },
           "value": {
             "oneOf": [

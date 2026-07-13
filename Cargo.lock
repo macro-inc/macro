@@ -198,6 +198,7 @@ dependencies = [
  "item_filters",
  "lazy_static",
  "lexical_client",
+ "lexical_mention_extractor",
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
@@ -2857,6 +2858,7 @@ dependencies = [
  "graphql_properties",
  "graphql_soup",
  "macro_user_id",
+ "model-entity",
  "model_user",
  "models_pagination",
  "soup",
@@ -4223,6 +4225,7 @@ dependencies = [
  "last_online_tracker",
  "lazy_static",
  "lexical_client",
+ "lexical_mention_extractor",
  "macro_auth",
  "macro_aws_config",
  "macro_axum_utils",
@@ -4699,6 +4702,8 @@ dependencies = [
  "item_filters",
  "lol_html",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "model-entity",
@@ -4877,6 +4882,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -5939,8 +5945,10 @@ dependencies = [
  "async-graphql",
  "axum",
  "filter_ast",
+ "item_filters",
  "macro_user_id",
  "model-entity",
+ "models_properties",
  "tokio",
  "uuid",
  "workspace-hack",
@@ -5967,9 +5975,9 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
  "graphql_common",
  "macro_user_id",
+ "model-entity",
  "notification",
  "rootcause",
  "serde_json",
@@ -5982,17 +5990,17 @@ name = "graphql_properties"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "async-trait",
- "filter_ast",
+ "chrono",
+ "entity_access",
  "graphql_common",
- "item_filters",
  "macro_user_id",
+ "model-entity",
  "models_properties",
- "models_soup",
  "properties",
  "rootcause",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -6009,16 +6017,12 @@ dependencies = [
  "entity_access",
  "filter_ast",
  "graphql_common",
- "graphql_email",
- "graphql_notification",
- "graphql_properties",
  "item_filters",
  "macro_user_id",
  "model-entity",
  "model_file_type",
  "model_user",
  "models_pagination",
- "models_properties",
  "models_soup",
  "serde",
  "serde_json",
@@ -7630,6 +7634,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_mention_extractor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "channels",
+ "lexical_client",
+ "workspace-hack",
+]
+
+[[package]]
 name = "libbz2-rs-sys"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8104,6 +8118,30 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_authorization"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "cookie",
+ "http-body-util",
+ "jsonwebtoken 10.3.0",
+ "macro_auth",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "urlencoding",
  "workspace-hack",
 ]
 
@@ -14016,36 +14054,6 @@ name = "termtree"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
-
-[[package]]
-name = "test_build_full_pdf_modification_data"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "macro_db_client",
- "macro_entrypoint",
- "model",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "workspace-hack",
-]
-
-[[package]]
-name = "test_pdf_modification_data_deserialize"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "model",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "workspace-hack",
-]
 
 [[package]]
 name = "text-size"

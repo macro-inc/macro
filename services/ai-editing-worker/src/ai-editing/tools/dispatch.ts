@@ -208,7 +208,9 @@ export type CoderRunCode = { code: string; snippets?: Record<string, string> };
 
 export type DispatchToolOptions = {
   session: LexicalSession;
-  childModel: LanguageModel;
+  /** Called once per dispatched coder so each gets its own model with private
+   *  fallback state, instead of racing a shared instance. */
+  makeChildModel: () => LanguageModel;
   tracker: TokenTracker;
   /** The user's original edit request, shown to every writer for tone/intent. */
   request?: string;
@@ -240,7 +242,7 @@ export type DispatchEdit = z.infer<typeof DispatchEditSchema>;
 export function createDispatchTool(opts: DispatchToolOptions) {
   const {
     session,
-    childModel,
+    makeChildModel,
     tracker,
     request,
     params,
@@ -257,13 +259,19 @@ export function createDispatchTool(opts: DispatchToolOptions) {
   const serialize = opts.serialize ?? serializeWithXml;
 
   type CoderRun = Awaited<ReturnType<typeof runTask>>;
-  type EditRun = { run: Promise<CoderRun>; trace: DispatchEditTrace };
+  type EditRun = {
+    run: Promise<CoderRun>;
+    trace: DispatchEditTrace;
+    /** This coder's own model, kept for usage attribution after it finishes. */
+    model: LanguageModel;
+  };
   // Coders already started from onInputAvailable, keyed by tool call id.
   const calls = new Map<string, EditRun>();
 
   async function runEdit(
     edit: DispatchEdit,
-    trace: DispatchEditTrace
+    trace: DispatchEditTrace,
+    childModel: LanguageModel
   ): Promise<CoderRun> {
     // Serialized at launch time so an edit launched early sees whatever earlier
     // coders have already applied.
@@ -308,7 +316,8 @@ export function createDispatchTool(opts: DispatchToolOptions) {
       coderFinishedAt: 0,
       runCodeAt: [],
     };
-    const entry: EditRun = { run: runEdit(edit, trace), trace };
+    const model = makeChildModel();
+    const entry: EditRun = { run: runEdit(edit, trace, model), trace, model };
     // A streamed run can reject before `execute` awaits it; keep that rejection
     // for the join instead of letting it escape as an unhandled rejection.
     entry.run.catch(() => {});
@@ -329,7 +338,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         calls.delete(toolCallId);
         const result = await entry.run;
         onEditTrace?.(entry.trace);
-        tracker.add(childModel as { modelId: string }, result.totalUsage);
+        tracker.add(entry.model as { modelId: string }, result.totalUsage);
         const blocked = findBlocked(result);
         const summary = blocked
           ? `⚠ BLOCKED -- ${blocked.message}.`

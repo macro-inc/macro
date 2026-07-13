@@ -28,6 +28,27 @@ struct MarkdownResponse {
     data: String,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct MentionsRequest<'a> {
+    markdown: &'a str,
+}
+
+/// An entity mention extracted from markdown by the lexical service
+/// `/mentions` endpoint, in the shape channel messages track them.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedMention {
+    /// Mentioned entity type (e.g. `document`, `channel`, `user`).
+    pub entity_type: String,
+    /// Mentioned entity id.
+    pub entity_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct MentionsResponse {
+    mentions: Vec<ExtractedMention>,
+}
+
 /// Rendering target supported by the lexical service `/markdown` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkdownTarget {
@@ -194,6 +215,23 @@ impl LexicalClient {
 
         let bytes = response.bytes().await?;
         Ok(bytes.to_vec())
+    }
+
+    /// Parses `markdown` via the lexical service and returns the entity
+    /// mentions it contains.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn extract_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
+        let url = format!("{}/mentions", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&MentionsRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: MentionsResponse = response.json().await.context("unexpected response")?;
+        Ok(data.mentions)
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {

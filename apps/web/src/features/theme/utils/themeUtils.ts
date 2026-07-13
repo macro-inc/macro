@@ -49,15 +49,9 @@ function isThemeV2(value: unknown): value is ThemeV2 {
   });
 }
 
-export function applyTheme(id: string): void{
-  let theme = themes().find((t) => t.id === id);
-  if(!theme){
-    console.error(`theme not found: ${id}`);
-    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
-  }
-  setCurrentThemeId(theme.id);
-
-  // Set theme overrides
+/** Writes a theme's semantic-token overrides to the document root, clearing
+ *  tokens the theme doesn't override. */
+function setThemeOverrides(theme: ThemeV2): void{
   for (const token of semanticTokens) {
     const themeOverride = theme.overrides?.find((o) => o.token === token)
     if (themeOverride) {
@@ -66,20 +60,83 @@ export function applyTheme(id: string): void{
       document.documentElement.style.removeProperty(`--theme-${token}`)
     }
   }
+}
 
+/** Writes a token set + depth to the live theme signals (the CSS variables). */
+function setLiveTokens(tokens: ThemeV2Tokens, depth: number): void{
   batch(() => {
-    (Object.keys(theme!.tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {
-      (Object.keys(theme!.tokens[tokenKey]) as Array<'l' | 'c' | 'h'>).forEach((prop) => {
-          themeReactive[tokenKey][prop][1](theme!.tokens[tokenKey][prop]);
+    (Object.keys(tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {
+      (Object.keys(tokens[tokenKey]) as Array<'l' | 'c' | 'h'>).forEach((prop) => {
+          themeReactive[tokenKey][prop][1](tokens[tokenKey][prop]);
         });
       }
     );
-    setThemeDepth(theme!.depth ?? 0.15);
-    queueMicrotask(() => {/* scuffed af */
-      setIsThemeSaved(true);
-      syncHtmlColor();
-    });
+    setThemeDepth(depth);
   });
+}
+
+/** The live tokens/overrides as they were when a preview started; restored
+ *  when the preview ends. Null while no preview is active. */
+let previewSnapshot: {
+  tokens: ThemeV2Tokens;
+  depth: number;
+  overrides: Record<string, string>;
+} | null = null;
+
+export function applyTheme(id: string): void{
+  let theme = themes().find((t) => t.id === id);
+  if(!theme){
+    console.error(`theme not found: ${id}`);
+    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
+  }
+  setCurrentThemeId(theme.id);
+  // Committing a theme supersedes any in-flight preview; drop the snapshot so
+  // clearThemePreview doesn't revert the commit.
+  previewSnapshot = null;
+
+  setThemeOverrides(theme);
+  setLiveTokens(theme.tokens, theme.depth ?? 0.15);
+  queueMicrotask(() => {/* scuffed af */
+    setIsThemeSaved(true);
+    syncHtmlColor();
+  });
+}
+
+/** Temporarily shows a theme (e.g. while it's hovered/highlighted in a picker)
+ *  without selecting it: only the live token signals and override CSS vars
+ *  change — currentThemeId, saved-state, and the persisted first-paint color
+ *  are untouched. Revert with clearThemePreview; committing via applyTheme
+ *  makes the preview permanent. */
+export function previewTheme(id: string): void{
+  const theme = themes().find((t) => t.id === id);
+  if(!theme){return}
+  if(!previewSnapshot){
+    const overrides: Record<string, string> = {};
+    for(const token of semanticTokens){
+      overrides[token] = document.documentElement.style.getPropertyValue(`--theme-${token}`);
+    }
+    // Snapshot the live tokens (not the selected theme id) so ending the
+    // preview restores unsaved in-editor edits too.
+    previewSnapshot = { tokens: getCurrentTokens(), depth: themeDepth(), overrides };
+  }
+  setThemeOverrides(theme);
+  setLiveTokens(theme.tokens, theme.depth ?? 0.15);
+}
+
+/** Ends an active theme preview, restoring the pre-preview tokens. No-op when
+ *  nothing is being previewed. */
+export function clearThemePreview(): void{
+  if(!previewSnapshot){return}
+  for(const token of semanticTokens){
+    const value = previewSnapshot.overrides[token];
+    if(value){
+      document.documentElement.style.setProperty(`--theme-${token}`, value);
+    } else {
+      document.documentElement.style.removeProperty(`--theme-${token}`);
+    }
+  }
+  setLiveTokens(previewSnapshot.tokens, previewSnapshot.depth);
+  previewSnapshot = null;
 }
 
 /** When auto-detect is on, keeps the active theme in sync with the OS color

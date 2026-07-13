@@ -320,6 +320,8 @@ export * from './createUnthreadedPdfAnchorRequestOneOfAllOfAnchorType';
 export * from './createViewRequest';
 export * from './createWebhookRequest';
 export * from './createWebhookRequestHeaders';
+export * from './createWebhookResponse';
+export * from './createWebhookResponseDeletedAt';
 export * from './crmComment';
 export * from './crmCommentDeletedAt';
 export * from './crmCommentEntityType';
