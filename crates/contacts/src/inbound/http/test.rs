@@ -1,8 +1,11 @@
 #[allow(unused_imports)]
 use super::*;
-use axum::{Extension, body::Body, http::Request};
+use axum::{body::Body, http::Request};
 use http_body_util::BodyExt;
-use model_user::UserContext;
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use rate_limit::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult, RateLimitServiceImpl,
     domain::models::RateLimitOk,
@@ -100,32 +103,33 @@ fn mock_service() -> Arc<MockService> {
     Arc::new(MockService)
 }
 
-fn test_user_context(user_id: &str) -> UserContext {
-    UserContext {
-        user_id: user_id.to_string(),
-        permissions: None,
-        organization_id: None,
-        fusion_user_id: "".to_string(),
-    }
-}
+const TEST_TOKEN: &str = "test-token";
 
 fn build_test_router(
     rate_limiter: RateLimitServiceImpl<MockRateLimitPort>,
     user_id: &str,
-) -> Router {
-    contacts_router(rate_limiter)
-        .with_state(mock_service())
-        .layer(Extension(test_user_context(user_id)))
+) -> (Router, FakeMacroAuthorizationService) {
+    let authorization = FakeMacroAuthorizationService::always(test_user_context(user_id));
+    let router = contacts_router(ContactsRouterState {
+        service: mock_service(),
+        rate_limiter,
+        authorization: SharedMacroAuthorizationService::new(authorization.clone()),
+    });
+    (router, authorization)
+}
+
+fn authenticated_request() -> axum::http::request::Builder {
+    bearer(Request::builder(), TEST_TOKEN)
 }
 
 #[tokio::test]
 async fn test_get_contact() {
     let user_id = "macro|found@test.com";
-    let api = build_test_router(allowing_rate_limiter(), user_id);
+    let (api, _) = build_test_router(allowing_rate_limiter(), user_id);
 
     let response = api
         .oneshot(
-            Request::builder()
+            authenticated_request()
                 .uri("/contacts")
                 .body(Body::empty())
                 .unwrap(),
@@ -157,11 +161,11 @@ async fn test_get_contact() {
 #[tokio::test]
 async fn test_get_contact_not_found() {
     let user_id = "macro|notfound@test.com";
-    let api = build_test_router(allowing_rate_limiter(), user_id);
+    let (api, _) = build_test_router(allowing_rate_limiter(), user_id);
 
     let response = api
         .oneshot(
-            Request::builder()
+            authenticated_request()
                 .uri("/contacts")
                 .body(Body::empty())
                 .unwrap(),
@@ -172,13 +176,13 @@ async fn test_get_contact_not_found() {
 }
 
 #[tokio::test]
-async fn test_add_contact() {
+async fn test_add_contact_rate_limit_primes_handler_authorization() {
     let user_id = "macro|sender@test.com";
-    let api = build_test_router(allowing_rate_limiter(), user_id);
+    let (api, authorization) = build_test_router(allowing_rate_limiter(), user_id);
 
     let response = api
         .oneshot(
-            Request::builder()
+            authenticated_request()
                 .method("POST")
                 .uri("/contacts")
                 .header("content-type", "application/json")
@@ -190,16 +194,17 @@ async fn test_add_contact() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(authorization.calls(), [TEST_TOKEN]);
 }
 
 #[tokio::test]
 async fn test_add_contact_rate_limited() {
     let user_id = "macro|sender@test.com";
-    let api = build_test_router(exceeding_rate_limiter(), user_id);
+    let (api, _) = build_test_router(exceeding_rate_limiter(), user_id);
 
     let response = api
         .oneshot(
-            Request::builder()
+            authenticated_request()
                 .method("POST")
                 .uri("/contacts")
                 .header("content-type", "application/json")
@@ -216,11 +221,11 @@ async fn test_add_contact_rate_limited() {
 #[tokio::test]
 async fn test_get_not_affected_by_rate_limit() {
     let user_id = "macro|found@test.com";
-    let api = build_test_router(exceeding_rate_limiter(), user_id);
+    let (api, _) = build_test_router(exceeding_rate_limiter(), user_id);
 
     let response = api
         .oneshot(
-            Request::builder()
+            authenticated_request()
                 .uri("/contacts")
                 .body(Body::empty())
                 .unwrap(),
