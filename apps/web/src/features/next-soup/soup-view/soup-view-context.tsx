@@ -531,6 +531,10 @@ export const SoupViewContextProvider: FlowComponent<
     resolveCompanyStage,
   });
 
+  // This is temporary while we are experimenting/handling
+  // the migration to graphql. We should not need this since
+  // the items themselves have the notifications on them. Remove
+  // when completely migrated
   const attachNotifications = (entity: EntityData) => {
     const rawNotifications = rawEntityNotifications(entity);
     if (rawNotifications) {
