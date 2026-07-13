@@ -40,8 +40,8 @@ use crate::domain::models::{
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentMacroEvent,
-    DocumentUpdatedMetadata,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentEditedMetadata,
+    DocumentMacroEvent, DocumentUpdatedMetadata,
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -1513,7 +1513,15 @@ impl<
     async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
         self.upload_url_service
             .upload_snapshot(document_id, bytes)
-            .await
+            .await?;
+        self.publish_document_event(&DocumentMacroEvent::edited(
+            document_id,
+            DocumentEditedMetadata {
+                document_id: document_id.to_owned(),
+            },
+        ))
+        .await;
+        Ok(())
     }
 
     /// Assigns the task properties to a document

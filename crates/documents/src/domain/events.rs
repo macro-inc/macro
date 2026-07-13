@@ -68,6 +68,13 @@ pub struct DocumentDeletedMetadata {
     pub project_id: Option<String>,
 }
 
+/// Metadata for [`DocumentTopicEvent::Edited`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentEditedMetadata {
+    /// The id of the edited document.
+    pub document_id: String,
+}
+
 /// Metadata for [`DocumentTopicEvent::Copied`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentCopiedMetadata {
@@ -105,6 +112,9 @@ pub enum DocumentTopicEvent {
     /// A document was copied.
     #[serde(rename = "document.copied")]
     Copied(DocumentCopiedMetadata),
+    /// A document's content was edited (new snapshot persisted).
+    #[serde(rename = "document.edited")]
+    Edited(DocumentEditedMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
@@ -140,6 +150,11 @@ impl DocumentMacroEvent {
     /// Build a copied event keyed by the new document id.
     pub fn copied(key: impl Into<String>, metadata: DocumentCopiedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Copied(metadata))
+    }
+
+    /// Build an edited event keyed by the document id.
+    pub fn edited(key: impl Into<String>, metadata: DocumentEditedMetadata) -> Self {
+        Self::new(key, DocumentTopicEvent::Edited(metadata))
     }
 
     /// Build an event from a topic-specific event variant.
