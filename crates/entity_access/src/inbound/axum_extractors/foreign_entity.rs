@@ -9,6 +9,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use uuid::Uuid;
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
@@ -18,7 +19,6 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
 
 /// Validates that the user satisfies the required permission for a foreign entity.
 ///
@@ -35,6 +35,7 @@ impl<T, S, Svc> FromRequestParts<S> for ForeignEntityAccessLevelExtractor<T, Svc
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -63,10 +64,9 @@ where
             );
         }
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let permission = service
             .get_entity_permission(

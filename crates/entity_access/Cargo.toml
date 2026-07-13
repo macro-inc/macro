@@ -10,7 +10,6 @@ axum = [
   "dep:macro_authorization",
   "dep:model",
   "dep:model-error-response",
-  "dep:model_user",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
@@ -40,7 +39,6 @@ axum = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 model = { path = "../model", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 
 # OpenAPI schema (optional)
 utoipa = { workspace = true, optional = true }

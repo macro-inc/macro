@@ -5,7 +5,8 @@ use axum::{
     body::{Body, to_bytes},
     extract::FromRef,
     http::{Request, StatusCode, header},
-    routing::get,
+    response::Response,
+    routing::{get, post},
 };
 use macro_authorization::{
     MacroAuthorizationError, SharedMacroAuthorizationService,
@@ -20,11 +21,14 @@ use model::document::DocumentBasic;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::DocumentAccessExtractor;
+use super::{
+    DocumentAccessExtractor, ForeignEntityAccessLevelExtractor, InternalUser,
+    MacroUserTeamExtractor, OptionalMacroUserTeamExtractor, PinAccessLevelExtractor,
+};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, CallChannelInfo, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
+        EntityType, MemberTeamRole, RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -147,6 +151,30 @@ async fn document_access_handler(
     StatusCode::NO_CONTENT
 }
 
+async fn foreign_entity_access_handler(
+    _access: ForeignEntityAccessLevelExtractor<ViewAccessLevel, PublicEntityAccessService>,
+) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn optional_team_access_handler(
+    _access: OptionalMacroUserTeamExtractor<MemberTeamRole, PublicEntityAccessService>,
+) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn team_access_handler(
+    _access: MacroUserTeamExtractor<MemberTeamRole, PublicEntityAccessService>,
+) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn pin_access_handler(
+    _access: PinAccessLevelExtractor<ViewAccessLevel, PublicEntityAccessService, serde_json::Value>,
+) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
 fn public_document() -> DocumentBasic {
     DocumentBasic {
         document_id: "public-document".to_string(),
@@ -167,6 +195,13 @@ fn public_document() -> DocumentBasic {
 fn test_router(authorization: FakeMacroAuthorizationService) -> Router {
     Router::new()
         .route("/document", get(document_access_handler))
+        .route(
+            "/foreign/{foreign_entity_id}",
+            get(foreign_entity_access_handler),
+        )
+        .route("/optional-team", get(optional_team_access_handler))
+        .route("/team", get(team_access_handler))
+        .route("/pin/{pinned_item_id}", post(pin_access_handler))
         .layer(Extension(public_document()))
         .with_state(TestState {
             access: Arc::new(PublicEntityAccessService),
@@ -199,6 +234,63 @@ async fn expired_credentials_preserve_authorization_rejection() {
         .await
         .unwrap();
 
+    assert_expired_rejection(response).await;
+    assert_eq!(authorization.calls(), ["expired"]);
+}
+
+#[tokio::test]
+async fn required_extractors_preserve_authorization_rejection() {
+    let authorization =
+        FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired);
+    let router = test_router(authorization.clone());
+    let requests = [
+        bearer(
+            Request::get("/foreign/00000000-0000-0000-0000-000000000001"),
+            "expired",
+        )
+        .body(Body::empty())
+        .unwrap(),
+        bearer(Request::get("/optional-team"), "expired")
+            .body(Body::empty())
+            .unwrap(),
+        bearer(Request::get("/team"), "expired")
+            .body(Body::empty())
+            .unwrap(),
+        bearer(Request::post("/pin/document-id"), "expired")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"pinType":"document"}"#))
+            .unwrap(),
+    ];
+
+    for request in requests {
+        let response = router.clone().oneshot(request).await.unwrap();
+        assert_expired_rejection(response).await;
+    }
+
+    assert_eq!(authorization.calls(), ["expired"; 4]);
+}
+
+#[tokio::test]
+async fn internal_foreign_entity_access_bypasses_authorization() {
+    let authorization =
+        FakeMacroAuthorizationService::never(MacroAuthorizationError::InvalidCredentials);
+    let mut request = Request::get("/foreign/00000000-0000-0000-0000-000000000001")
+        .body(Body::empty())
+        .unwrap();
+    request.extensions_mut().insert(InternalUser {
+        access_level: AccessLevel::View,
+    });
+
+    let response = test_router(authorization.clone())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert!(authorization.calls().is_empty());
+}
+
+async fn assert_expired_rejection(response: Response) {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
         response.headers().get(header::WWW_AUTHENTICATE).unwrap(),
@@ -206,5 +298,4 @@ async fn expired_credentials_preserve_authorization_rejection() {
     );
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(body.as_ref(), br#"{"message":"jwt expired"}"#);
-    assert_eq!(authorization.calls(), ["expired"]);
 }

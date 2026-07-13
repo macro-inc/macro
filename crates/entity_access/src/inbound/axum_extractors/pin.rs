@@ -8,13 +8,13 @@ use axum::{
     Json, RequestExt,
     extract::{FromRef, FromRequest, Path, Request},
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
     models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
 
 /// Path parameters for pin routes.
 #[derive(serde::Deserialize)]
@@ -47,6 +47,7 @@ impl<T, S, Svc, V> FromRequest<S> for PinAccessLevelExtractor<T, Svc, V>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     V: DeserializeOwned + std::fmt::Debug,
     S: Send + Sync + 'static,
@@ -57,12 +58,9 @@ where
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        // NOTE: for pinned items, the user must exist so we explicitly do not
-        // use the OptionalMacroUserExtractor
-        let MacroUserExtractor { macro_user_id, .. } = req
-            .extract_parts()
-            .await
-            .map_err(|_| ExtractorError::Internal)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = req
+            .extract_parts_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let Path(PinParams { pinned_item_id }) = req
             .extract_parts_with_state(state)

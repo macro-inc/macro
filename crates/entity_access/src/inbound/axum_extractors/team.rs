@@ -12,13 +12,13 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
     models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
 
 /// Resolves the authenticated user's **OPTIONAL** team membership and exposes the receipt
 /// when the user satisfies the required permission `T`.
@@ -52,6 +52,7 @@ impl<T, S, Svc> FromRequestParts<S> for OptionalMacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -61,10 +62,9 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let team_info = service
             .get_user_team(&macro_user_id)
@@ -118,6 +118,7 @@ impl<T, S, Svc> FromRequestParts<S> for MacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -127,10 +128,9 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let team_info = service
             .get_user_team(&macro_user_id)
