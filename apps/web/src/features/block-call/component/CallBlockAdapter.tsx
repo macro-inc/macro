@@ -57,8 +57,8 @@ export function CallBlockAdapter(props: CallBlockProps) {
   // whenever the container renders this content.
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div class="h-full flex flex-col @container">
+      <div class="h-full flex flex-col @container">
+        <ModalsProvider>
           <Show when={callRecord.data}>
             {(data) => (
               <SidePanel.Layout>
@@ -72,8 +72,8 @@ export function CallBlockAdapter(props: CallBlockProps) {
               </SidePanel.Layout>
             )}
           </Show>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }
