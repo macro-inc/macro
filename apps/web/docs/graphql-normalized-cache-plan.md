@@ -78,9 +78,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `GraphqlSoupChannelMessage.id`); the build fails on malformed shapes.
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.
-13. **Future** — mutations don't exist in the schema yet; design leaves room
-    for optimistic updates, mutation-driven invalidation, and an offline
-    mutation queue, but none of that is in scope now.
+13. **Durable optimistic mutations** — optimistic GraphQL mutations are
+    persisted with their replay request, restored across restarts, and applied
+    strictly in enqueue order. Retryability is decided by an exchange callback;
+    retryable failures retain their optimistic layer.
 
 ### Open questions
 
@@ -191,8 +192,8 @@ Topology:
 
 | Backend    | Host         | Notes                                          |
 |------------|--------------|------------------------------------------------|
-| SQLite     | Tauri native | records + links + meta tables; WAL mode        |
-| IndexedDB  | browser      | via the `idb` crate inside the wasm module; one DB, object stores for records / operation roots / meta |
+| SQLite     | Tauri native | records, mutation queue, optimistic layers, and meta; WAL mode |
+| IndexedDB  | browser      | via the `idb` crate; stable per-scope DB with object stores for records, mutation queue, optimistic layers, and meta |
 
 `Storage` trait (async): `get_batch`, `put_batch`, `delete_batch`,
 `scan_prefix`, `approx_size`. Records serialized with `postcard` (stored as

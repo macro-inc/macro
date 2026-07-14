@@ -30,6 +30,11 @@ pub enum EngineError<S: std::error::Error + 'static> {
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
     StaleMutationClaim(OptimisticTransactionId),
+    #[error("invalid queued mutation {id}: {detail}")]
+    InvalidQueuedMutation {
+        id: OptimisticTransactionId,
+        detail: String,
+    },
     #[error("storage: {0}")]
     Storage(#[source] S),
 }
@@ -71,15 +76,6 @@ pub type OptimisticTransactionId = MutationId;
 struct OptimisticLayer {
     id: OptimisticTransactionId,
     updates: RecordUpdates,
-}
-
-impl OptimisticLayer {
-    fn from_queued(queued: &QueuedMutation) -> Self {
-        Self {
-            id: queued.id,
-            updates: queued.optimistic.normalized_updates.clone(),
-        }
-    }
 }
 
 /// Reserved storage key holding the identity bound to this cache. The
@@ -143,7 +139,7 @@ impl<S: Storage> Engine<S> {
             .load_mutation_queue()
             .await
             .map_err(EngineError::Storage)?;
-        self.optimistic = queued.iter().map(OptimisticLayer::from_queued).collect();
+        self.optimistic = Self::normalize_queued_layers(&mut self.docs, queued)?;
         self.optimistic_hydrated = true;
         Ok(())
     }
@@ -157,8 +153,7 @@ impl<S: Storage> Engine<S> {
             .load_mutation_queue()
             .await
             .map_err(EngineError::Storage)?;
-        let replacement: Vec<OptimisticLayer> =
-            queued.iter().map(OptimisticLayer::from_queued).collect();
+        let replacement = Self::normalize_queued_layers(&mut self.docs, queued)?;
         let candidates: BTreeSet<EntityKey> = self
             .optimistic
             .iter()
@@ -180,6 +175,40 @@ impl<S: Storage> Engine<S> {
             affected_ops,
             reset: false,
         })
+    }
+
+    fn normalize_queued_layers(
+        docs: &mut HashMap<String, Document>,
+        queued: Vec<QueuedMutation>,
+    ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
+        queued
+            .into_iter()
+            .map(|queued| {
+                let variables: Json = serde_json::from_str(&queued.mutation.request.variables_json)
+                    .map_err(|error| EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: format!("invalid variables: {error}"),
+                    })?;
+                let Json::Object(variables) = variables else {
+                    return Err(EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: "variables are not an object".to_string(),
+                    });
+                };
+                let data: Json = serde_json::from_str(&queued.optimistic.optimistic_data_json)
+                    .map_err(|error| EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: format!("invalid optimistic response: {error}"),
+                    })?;
+                let document = Self::document(docs, &queued.mutation.request.query)?;
+                let operation =
+                    document.operation(queued.mutation.request.operation_name.as_deref())?;
+                Ok(OptimisticLayer {
+                    id: queued.id,
+                    updates: normalize(operation, &variables, &data)?,
+                })
+            })
+            .collect()
     }
 
     /// The identity binding of this cache, hydrating it from storage on

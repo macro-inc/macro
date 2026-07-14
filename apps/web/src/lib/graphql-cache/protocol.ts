@@ -35,8 +35,26 @@ export type WriteResult = {
  * transaction commits.
  */
 export type OptimisticWriteResult = WriteResult & {
-  /** Engine-assigned id; settle with commit/rollback-optimistic-write. */
+  /** Engine-assigned id; settle after claiming the queue head. */
   transactionId: string;
+};
+
+/** Claimed strict queue head, ready to be forwarded through urql. */
+export type ClaimedMutation = {
+  transactionId: string;
+  leaseGeneration: string;
+  query: string;
+  operationName?: string;
+  variables: Record<string, unknown>;
+  /** Identity witness captured at enqueue time. */
+  identity?: string;
+  attemptCount: number;
+};
+
+/** Identifies the queue attempt allowed to settle a transaction. */
+export type MutationClaim = {
+  owner: string;
+  generation: string;
 };
 
 export type CacheRequest = { id: number } & (
@@ -62,10 +80,7 @@ export type CacheRequest = { id: number } & (
        */
       identity?: string;
     }
-  /**
-   * Install an in-memory optimistic layer from a mutation's optimistic
-   * response. Persists nothing; settle with commit/rollback.
-   */
+  /** Durably enqueue a mutation together with its optimistic response. */
   | {
       kind: 'begin-optimistic-write';
       originOpId?: string;
@@ -73,21 +88,40 @@ export type CacheRequest = { id: number } & (
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
+      createdAtMs: number;
     }
-  /**
-   * Atomically replace a pending layer with the real network response and
-   * flush contiguous settled layers durably.
-   */
+  | {
+      kind: 'claim-next-mutation';
+      owner: string;
+      nowMs: number;
+      leaseExpiresAtMs: number;
+    }
+  | {
+      kind: 'defer-optimistic-write';
+      transactionId: string;
+      leaseOwner: string;
+      leaseGeneration: string;
+      nextAttemptAtMs: number;
+      error: string;
+    }
+  /** Atomically replace a claimed layer with the real network response. */
   | {
       kind: 'commit-optimistic-write';
       transactionId: string;
+      leaseOwner: string;
+      leaseGeneration: string;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
     }
-  /** Drop a pending layer's contribution (mutation failed). */
-  | { kind: 'rollback-optimistic-write'; transactionId: string }
+  /** Drop a claimed layer's contribution (permanent mutation failure). */
+  | {
+      kind: 'rollback-optimistic-write';
+      transactionId: string;
+      leaseOwner: string;
+      leaseGeneration: string;
+    }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
   | { kind: 'invalidate'; keys: string[] }
@@ -132,6 +166,13 @@ export type CacheBroadcast =
       kind: 'changed';
       keys: string[];
       /** Random id of the emitting worker, to ignore own broadcasts. */
+      source: string;
+    }
+  | {
+      /** The durable optimistic queue changed in another engine. */
+      kind: 'queue-changed';
+      /** Durable record keys changed by successful settlement. */
+      keys: string[];
       source: string;
     }
   | {

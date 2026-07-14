@@ -107,9 +107,8 @@ pub async fn graphql_cache_write<R: Runtime>(
     Ok(result)
 }
 
-/// Installs an in-memory optimistic layer from a mutation's optimistic
-/// response. The one engine is shared by all webviews (SharedWorker
-/// semantics), so visible changes are broadcast too.
+/// Durably queues a mutation and its optimistic response. The one engine is
+/// shared by all webviews, so visible changes are broadcast too.
 #[tauri::command]
 pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
@@ -197,7 +196,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     Ok(result)
 }
 
-/// Drops a pending optimistic layer's contribution (mutation failed).
+/// Permanently fails a claimed mutation and drops its optimistic layer.
 #[tauri::command]
 pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     app: AppHandle<R>,

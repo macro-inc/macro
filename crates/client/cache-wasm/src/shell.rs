@@ -252,10 +252,9 @@ impl CacheEngine {
         })
     }
 
-    /// Installs an in-memory optimistic layer from a mutation's optimistic
-    /// response; persists nothing. Resolves to `{transactionId: string,
-    /// changed: string[], affectedOps: string[], reset: false}` where
-    /// `changed`/`affectedOps` reflect *visible* (composed-view) changes.
+    /// Durably queues a mutation and its optimistic response. Resolves to
+    /// `{transactionId: string, changed: string[], affectedOps: string[],
+    /// reset: false}` where changes reflect the composed view.
     #[wasm_bindgen(js_name = beginOptimisticWrite)]
     pub fn begin_optimistic_write(
         &self,
@@ -397,9 +396,8 @@ impl CacheEngine {
         })
     }
 
-    /// Removes a pending optimistic layer's contribution (mutation failed)
-    /// and flushes any now-contiguous settled layers. Result semantics match
-    /// [`commitOptimisticWrite`](Self::commit_optimistic_write).
+    /// Permanently fails a claimed mutation and removes its optimistic
+    /// contribution.
     #[wasm_bindgen(js_name = rollbackOptimisticWrite)]
     pub fn rollback_optimistic_write(
         &self,
@@ -440,6 +438,27 @@ impl CacheEngine {
             let mut engine = engine.lock().await;
             let affected = engine.invalidate_keys(keys.iter());
             to_js(&ops.borrow().names(affected))
+        })
+    }
+
+    /// Reloads optimistic layers after another engine changes the durable
+    /// queue and returns locally affected operations.
+    #[wasm_bindgen(js_name = refreshOptimisticQueue)]
+    pub fn refresh_optimistic_queue(&self) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let result = engine
+                .lock()
+                .await
+                .refresh_optimistic_queue()
+                .await
+                .map_err(err_js)?;
+            to_js(&JsWriteResult {
+                changed: result.changed.into_iter().map(|key| key.0).collect(),
+                affected_ops: ops.borrow().names(result.affected_ops),
+                reset: result.reset,
+            })
         })
     }
 

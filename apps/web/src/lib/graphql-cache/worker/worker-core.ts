@@ -106,18 +106,44 @@ export class CacheWorkerCore {
       }
       case 'begin-optimistic-write': {
         const engine = this.requireEngine();
-        // Memory-only: no write lock needed, and never broadcast — the
-        // layer is local to this engine (per tab in the fallback topology;
-        // shared by all attached clients under a SharedWorker).
-        const result: OptimisticWriteResult = await engine.beginOptimisticWrite(
-          request.originOpId,
-          request.query,
-          request.operationName,
-          request.variables,
-          request.data
+        const result: OptimisticWriteResult = await this.durableWrite(
+          async () =>
+            await engine.beginOptimisticWrite(
+              request.originOpId,
+              request.query,
+              request.operationName,
+              request.variables,
+              request.data,
+              request.createdAtMs
+            )
         );
-        this.fanOut(result, { broadcast: false });
+        this.fanOut(result, { queueChanged: true, durableKeys: [] });
         return result;
+      }
+      case 'claim-next-mutation': {
+        const engine = this.requireEngine();
+        return await this.durableWrite(
+          async () =>
+            await engine.claimNextMutation(
+              request.owner,
+              request.nowMs,
+              request.leaseExpiresAtMs
+            )
+        );
+      }
+      case 'defer-optimistic-write': {
+        const engine = this.requireEngine();
+        await this.durableWrite(
+          async () =>
+            await engine.deferOptimisticWrite(
+              request.transactionId,
+              request.leaseOwner,
+              request.leaseGeneration,
+              request.nextAttemptAtMs,
+              request.error
+            )
+        );
+        return null;
       }
       case 'commit-optimistic-write': {
         const engine = this.requireEngine();
@@ -126,23 +152,31 @@ export class CacheWorkerCore {
           async () =>
             await engine.commitOptimisticWrite(
               request.transactionId,
+              request.leaseOwner,
+              request.leaseGeneration,
               request.query,
               request.operationName,
               request.variables,
               request.data
             )
         );
-        this.fanOut(result);
+        this.fanOut(result, {
+          queueChanged: true,
+          durableKeys: result.changed,
+        });
         return result;
       }
       case 'rollback-optimistic-write': {
         const engine = this.requireEngine();
-        // Rolling back can unblock a settled suffix and flush it durably.
         const result = await this.durableWrite(
           async () =>
-            await engine.rollbackOptimisticWrite(request.transactionId)
+            await engine.rollbackOptimisticWrite(
+              request.transactionId,
+              request.leaseOwner,
+              request.leaseGeneration
+            )
         );
-        this.fanOut(result);
+        this.fanOut(result, { queueChanged: true, durableKeys: [] });
         return result;
       }
       case 'invalidate': {
@@ -156,7 +190,13 @@ export class CacheWorkerCore {
         return null;
       }
       case 'clear': {
-        await this.requireEngine().clear();
+        await this.durableWrite(async () => await this.requireEngine().clear());
+        if (this.options.multiEngine && this.broadcast) {
+          this.broadcast.postMessage({
+            kind: 'reset',
+            source: this.workerId,
+          } satisfies CacheBroadcast);
+        }
         return null;
       }
       default: {
@@ -203,6 +243,22 @@ export class CacheWorkerCore {
       this.push({ kind: 'ops-affected', opIds: affectedOps, keys: [] });
       return;
     }
+    if (msg.kind === 'queue-changed') {
+      const result = await this.enqueue(async () => {
+        const invalidated = await engine.invalidateKeys(msg.keys);
+        const refreshed = await engine.refreshOptimisticQueue();
+        return {
+          keys: [...new Set([...msg.keys, ...refreshed.changed])],
+          affectedOps: [...new Set([...invalidated, ...refreshed.affectedOps])],
+        };
+      });
+      this.push({
+        kind: 'ops-affected',
+        opIds: result.affectedOps,
+        keys: result.keys,
+      });
+      return;
+    }
     const affectedOps = await this.enqueue(() =>
       engine.invalidateKeys(msg.keys)
     );
@@ -219,12 +275,11 @@ export class CacheWorkerCore {
       : await write();
   }
 
-  /**
-   * After a local change: notify connected clients + other tabs. Optimistic
-   * begins pass `broadcast: false` — their changes are visible only through
-   * this engine, so other instances must not be told to invalidate.
-   */
-  private fanOut(result: WriteResult, opts?: { broadcast?: boolean }): void {
+  /** Notifies local clients and sibling engines after a cache/queue change. */
+  private fanOut(
+    result: WriteResult,
+    opts?: { queueChanged?: boolean; durableKeys?: string[] }
+  ): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -232,16 +287,24 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
-    if (
-      opts?.broadcast !== false &&
-      this.options.multiEngine &&
-      this.broadcast &&
-      (result.changed.length > 0 || result.reset)
-    ) {
-      const msg: CacheBroadcast = result.reset
-        ? { kind: 'reset', source: this.workerId }
-        : { kind: 'changed', keys: result.changed, source: this.workerId };
-      this.broadcast.postMessage(msg);
+    if (this.options.multiEngine && this.broadcast) {
+      let msg: CacheBroadcast | undefined;
+      if (result.reset) {
+        msg = { kind: 'reset', source: this.workerId };
+      } else if (opts?.queueChanged) {
+        msg = {
+          kind: 'queue-changed',
+          keys: opts.durableKeys ?? [],
+          source: this.workerId,
+        };
+      } else if (result.changed.length > 0) {
+        msg = {
+          kind: 'changed',
+          keys: result.changed,
+          source: this.workerId,
+        };
+      }
+      if (msg) this.broadcast.postMessage(msg);
     }
   }
 

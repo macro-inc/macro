@@ -228,7 +228,7 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Installs an in-memory optimistic layer (persists nothing).
+    /// Durably queues a mutation and its optimistic layer.
     pub async fn begin_optimistic_write(
         &self,
         origin_op_id: Option<String>,
@@ -334,7 +334,7 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Drops a pending optimistic layer's contribution (mutation failed).
+    /// Permanently fails a claimed mutation and drops its optimistic layer.
     pub async fn rollback_optimistic_write(
         &self,
         transaction_id: String,

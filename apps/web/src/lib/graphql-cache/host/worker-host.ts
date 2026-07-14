@@ -8,7 +8,9 @@
 import {
   type CacheNotice,
   type CacheRequest,
+  type ClaimedMutation,
   isCachePush,
+  type MutationClaim,
   type OptimisticWriteResult,
   type ReadResult,
   type WorkerMessage,
@@ -173,17 +175,52 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
+        createdAtMs: Date.now(),
       })) as OptimisticWriteResult;
+    },
+
+    async claimNextMutation(
+      owner: string,
+      nowMs: number,
+      leaseExpiresAtMs: number
+    ): Promise<ClaimedMutation | undefined> {
+      await ready;
+      return (await request({
+        kind: 'claim-next-mutation',
+        owner,
+        nowMs,
+        leaseExpiresAtMs,
+      })) as ClaimedMutation | undefined;
+    },
+
+    async deferOptimisticWrite(
+      transactionId: string,
+      claim: MutationClaim,
+      nextAttemptAtMs: number,
+      error: string
+    ): Promise<void> {
+      await ready;
+      await request({
+        kind: 'defer-optimistic-write',
+        transactionId,
+        leaseOwner: claim.owner,
+        leaseGeneration: claim.generation,
+        nextAttemptAtMs,
+        error,
+      });
     },
 
     async commitOptimisticWrite(
       transactionId: string,
+      claim: MutationClaim,
       args: CacheWriteArgs
     ): Promise<WriteResult> {
       await ready;
       return (await request({
         kind: 'commit-optimistic-write',
         transactionId,
+        leaseOwner: claim.owner,
+        leaseGeneration: claim.generation,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
@@ -191,11 +228,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as WriteResult;
     },
 
-    async rollbackOptimisticWrite(transactionId: string): Promise<WriteResult> {
+    async rollbackOptimisticWrite(
+      transactionId: string,
+      claim: MutationClaim
+    ): Promise<WriteResult> {
       await ready;
       return (await request({
         kind: 'rollback-optimistic-write',
         transactionId,
+        leaseOwner: claim.owner,
+        leaseGeneration: claim.generation,
       })) as WriteResult;
     },
 
