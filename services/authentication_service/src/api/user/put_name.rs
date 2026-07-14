@@ -1,5 +1,5 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -8,9 +8,10 @@ use macro_db_client::user::update_user_name::update_user_name;
 
 use crate::api::context::ApiContext;
 
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::EmptyResponse;
 use model::response::ErrorResponse;
-use model::user::{PutUserNameQueryParams, UserContext};
+use model::user::PutUserNameQueryParams;
 
 /// Sets the name of a particular user
 #[utoipa::path(
@@ -24,17 +25,17 @@ use model::user::{PutUserNameQueryParams, UserContext};
         ),
         params(PutUserNameQueryParams),
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id = user_context.user_id, macro_user_id = user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, auth), fields(user_id = %auth.macro_user_id, fusion_user_id = %auth.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     Query(params): Query<PutUserNameQueryParams>,
-    user_context: Extension<UserContext>,
+    auth: SharedMacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     tracing::info!("put_user_name");
 
     update_user_name(
         &ctx.db,
-        &user_context.fusion_user_id,
+        &auth.user_context.fusion_user_id,
         params.first_name,
         params.last_name,
     )

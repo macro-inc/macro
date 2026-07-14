@@ -2,7 +2,7 @@ use axum::{Json, extract::State};
 use entity_access::domain::models::OwnerTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractor;
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -54,7 +54,7 @@ pub struct CreateCheckoutSessionV2Request {
 #[tracing::instrument(skip(ctx, user, optional_team), err, fields(user_id = %user.macro_user_id))]
 pub async fn create_checkout_session<Eas: EntityAccessService>(
     State(ctx): State<ApiContext>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     optional_team: OptionalMacroUserTeamExtractor<OwnerTeamRole, Eas>,
     Json(req): Json<CreateCheckoutSessionV2Request>,
 ) -> Result<Json<StripeSessionResponse>, StripeOperationError> {

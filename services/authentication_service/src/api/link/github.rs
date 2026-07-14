@@ -5,8 +5,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_middleware::tracking::ClientIp;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
@@ -120,7 +120,7 @@ impl IntoResponse for GithubLinkStatusError {
 pub async fn check_github_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<GithubLinkStatusResponse>, GithubLinkStatusError> {
     ctx.github_link_service
         .check_user_link_token(&user_context.macro_user_id)
@@ -159,7 +159,7 @@ pub async fn init_github_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGithubLinkQueryParams>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     let Query(InitGithubLinkQueryParams { original_url }) = query;
     // TODO: this should probably be a middleware or extractor
@@ -256,7 +256,7 @@ impl IntoResponse for DeleteGithubLinkError {
 pub async fn delete_github_link_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<EmptyResponse>, DeleteGithubLinkError> {
     ctx.github_link_service
         .delete_user_link(&user_context.macro_user_id)

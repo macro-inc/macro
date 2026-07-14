@@ -1,12 +1,12 @@
 use crate::api::context::MacroApiTokenContext;
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use model::user::UserContext;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -40,11 +40,11 @@ pub struct MacroApiTokenQuery {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(db, macro_api_token_context, user_context))]
+#[tracing::instrument(skip(db, macro_api_token_context, auth), fields(user_id = %auth.macro_user_id))]
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    user_context: Extension<UserContext>,
+    auth: SharedMacroAuthorizationExtractor,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
     let email = if let Some(email) = query.email.clone() {
@@ -55,17 +55,14 @@ pub async fn handler(
         })?;
 
         email.to_string()
-    } else if user_context.user_id.is_empty() {
-        tracing::error!("user_id is empty");
-        return Err((StatusCode::UNAUTHORIZED, "unauthorized").into_response());
     } else {
-        user_context.user_id.replace("macro|", "")
+        auth.user_context.user_id.replace("macro|", "")
     };
 
     let user_profile =
         macro_db_client::user::get::get_user_profile_by_fusionauth_user_id_and_email(
             &db,
-            &user_context.fusion_user_id,
+            &auth.user_context.fusion_user_id,
             &email,
         )
         .await
@@ -89,7 +86,7 @@ pub async fn handler(
     let macro_api_token =
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
             macro_user_id,
-            fusionauth_id: user_context.fusion_user_id.clone(),
+            fusionauth_id: auth.user_context.fusion_user_id.clone(),
             organization_id, // TOOD: get from user profile
             issuer: macro_api_token_context.issuer.to_string(),
             private_key: macro_api_token_context

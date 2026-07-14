@@ -1,5 +1,5 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -7,9 +7,9 @@ use axum::{
 
 use crate::api::context::ApiContext;
 
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_db_client::user::update_profile_picture::update_profile_picture;
 use model::response::{EmptyResponse, ErrorResponse};
-use model::user::UserContext;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, utoipa::IntoParams)]
@@ -30,21 +30,21 @@ pub struct ProfilePictureQueryParams {
         ),
         params(ProfilePictureQueryParams),
     )]
-#[tracing::instrument(skip(ctx, user_context))]
+#[tracing::instrument(skip(ctx, auth), fields(user_id = %auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     Query(params): Query<ProfilePictureQueryParams>,
-    user_context: Extension<UserContext>,
+    auth: SharedMacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     update_profile_picture(
         &ctx.db,
-        &user_context.fusion_user_id,
+        &auth.user_context.fusion_user_id,
         &params.url,
         "000",
     )
     .await
     .map_err(|e| {
-        tracing::error!(error=?e, user_context.user_id, "failed to update user profile picture");
+        tracing::error!(error=?e, user_id=%auth.macro_user_id, "failed to update user profile picture");
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
     })?;
     Ok((StatusCode::OK, Json(EmptyResponse {})).into_response())
