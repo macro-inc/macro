@@ -21,7 +21,7 @@ use crate::{
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
-    dss_internal::{DssInternal, DssInternalClient},
+    dss_internal::{DssInternal, DssInternalClient, InteractionReason},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
@@ -287,6 +287,16 @@ async fn report_new_doc_state(document_id: &str, snapshot: &[u8], env: &Env) {
     }
 }
 
+/// Report an interaction (join/leave/periodic edit) to DSS.
+async fn report_interaction(document_id: &str, env: &Env, reason: InteractionReason) {
+    if let Err(err) = DssInternalClient::new(env)
+        .publish_interaction(document_id, reason)
+        .await
+    {
+        warn!(error=?err, "failed to push interaction to DSS");
+    }
+}
+
 /// Schedule an alarm 5 seconds from now.
 async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
@@ -468,6 +478,7 @@ impl DocumentSyncSession {
             let env = self.env.clone();
             self.state.wait_until(async move {
                 report_new_doc_state(&document_id_owned, &snapshot, &env).await;
+                report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin).await;
             });
         }
 
@@ -640,6 +651,10 @@ impl DocumentSyncSession {
             //  Below is websocket stuff only i.e connect
             let pair = WebSocketPair::new().context("failed to create websocket pair")?;
 
+            // Whether this peer is the first to join the session (used to
+            // decide whether to report a `FirstJoin` interaction below).
+            let is_first_join = self.state.get_websockets().is_empty();
+
             // create tag for ws and store it
             let ws_id = new_ws_id();
             trace!(ws_id = ws_id, "websocket connect");
@@ -674,6 +689,20 @@ impl DocumentSyncSession {
                     self.msg_buffer.clone(),
                 )
                 .context("failed to send initial sync message")?;
+
+                // Report the first peer joining an already-initialized
+                // document. Newly-created documents get their own
+                // `FirstJoin` interaction from `initialize_handler` instead;
+                // later peers joining a session that already has peers
+                // don't get an interaction of their own.
+                if is_first_join {
+                    let document_id_owned = document_id.to_string();
+                    let env = self.env.clone();
+                    self.state.wait_until(async move {
+                        report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin)
+                            .await;
+                    });
+                }
             } else {
                 debug!(
                     document_id = document_id,
@@ -999,6 +1028,7 @@ impl DurableObject for DocumentSyncSession {
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
                     report_new_doc_state(&document_id, &snapshot, &env).await;
+                    report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
             });
         }
@@ -1051,6 +1081,7 @@ impl DurableObject for DocumentSyncSession {
                 let env = self.env.clone();
                 self.state.wait_until(async move {
                     report_new_doc_state(&document_id, &snapshot, &env).await;
+                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
                 });
             }
         }

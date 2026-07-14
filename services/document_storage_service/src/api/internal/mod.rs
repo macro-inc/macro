@@ -139,6 +139,15 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 >,
             ),
         )
+        .route(
+            "/documents/{document_id}/interaction",
+            put(
+                documents_hex::inbound::axum_router::put_interaction::put_interaction_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                >,
+            ),
+        )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes
         .route(

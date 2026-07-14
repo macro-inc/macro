@@ -202,6 +202,9 @@ fn normalized_document_event(
         DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
         DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
         DocumentTopicEvent::Edited(metadata) => ("document.edited", &metadata.document_id),
+        DocumentTopicEvent::Interaction(metadata) => {
+            ("document.interaction", &metadata.document_id)
+        }
     };
 
     if Uuid::parse_str(entity_id).is_err() {

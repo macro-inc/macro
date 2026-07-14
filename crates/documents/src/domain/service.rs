@@ -41,8 +41,9 @@ use crate::domain::models::{
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
-    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentEditedMetadata,
-    DocumentMacroEvent, DocumentUpdatedMetadata,
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentEditedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
+    DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -1556,6 +1557,21 @@ impl<
         self.upload_url_service
             .upload_snapshot(document_id, bytes)
             .await?;
+        Ok(())
+    }
+
+    async fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
+    ) -> anyhow::Result<()> {
+        self.publish_document_event(&DocumentMacroEvent::interaction(
+            document_id,
+            DocumentInteractionMetadata {
+                document_id: document_id.to_owned(),
+                reason,
+            },
+        ));
         Ok(())
     }
 
