@@ -27,19 +27,20 @@ use model_user::axum_extractor::OptionalMacroUserExtractor;
 ///
 /// Type parameter `T` specifies the required access level (ViewAccessLevel, EditAccessLevel, etc.)
 /// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is reserved for an authorization service implementation.
 ///
 /// # Prerequisites
 ///
 /// - User must be authenticated (MacroUserExtractor in extensions)
 /// - Document context must be loaded (DocumentBasic in extensions)
 #[derive(Debug)]
-pub struct DocumentAccessExtractor<T: RequiredPermission, Svc> {
+pub struct DocumentAccessExtractor<T: RequiredPermission, Svc, Auth = ()> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for DocumentAccessExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for DocumentAccessExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,

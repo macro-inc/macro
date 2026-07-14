@@ -5077,6 +5077,7 @@ dependencies = [
  "cached",
  "cool_asserts",
  "futures",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
