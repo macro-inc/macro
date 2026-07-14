@@ -6,7 +6,9 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
+import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { getThreadHandler } from './GetThread';
@@ -73,6 +75,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  CreateTag: createTagHandler,
+  DeleteTag: deleteTagHandler,
   EditDocument: editDocumentHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,

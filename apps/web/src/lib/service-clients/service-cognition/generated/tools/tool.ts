@@ -20,6 +20,8 @@ type ToolParserMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -134,6 +136,8 @@ const toolParserMap = {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
   },
+  CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
   DisplayResults: {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
@@ -274,6 +278,8 @@ type ToolDataMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;

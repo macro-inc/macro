@@ -1,5 +1,7 @@
 //! Toolset inbound adapter for the Properties service.
 
+mod create_tag;
+mod delete_tag;
 mod get_entity_properties;
 mod list_tags;
 mod set_entity_property;
@@ -7,11 +9,16 @@ mod set_entity_property;
 #[cfg(test)]
 mod test;
 
-use crate::domain::service::PropertiesService;
-use ai_toolset::AsyncToolCollection;
+use crate::domain::service::{PropertiesService, TeamReceipt};
+use ai_toolset::{AsyncToolCollection, RequestContext, ServiceContext, ToolCallError};
+use entity_access::domain::models::{
+    AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+};
 use entity_access::domain::ports::EntityAccessService;
 use std::sync::Arc;
 
+pub use create_tag::{CreateTag, CreateTagResponse};
+pub use delete_tag::{DeleteTag, DeleteTagResponse};
 pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};
 pub use list_tags::{ListTags, ListTagsResponse};
 pub use set_entity_property::{SetEntityProperty, SetEntityPropertyResponse};
@@ -43,6 +50,48 @@ impl<T: PropertiesService, A: EntityAccessService> PropertiesToolContext<T, A> {
     }
 }
 
+/// Mint the caller's team-membership receipt, or `None` when they are not on a
+/// team. Owner-scoped tag operations forward this to the domain, which enforces
+/// ownership; passing it also lets team-owned tags satisfy the ownership check.
+pub(crate) async fn caller_team_receipt_opt<T, A>(
+    service_context: &ServiceContext<PropertiesToolContext<T, A>>,
+    request_context: &RequestContext,
+) -> Result<Option<TeamReceipt>, ToolCallError>
+where
+    T: PropertiesService,
+    A: EntityAccessService,
+{
+    let Some(team_info) = service_context
+        .entity_access_service
+        .get_user_team(&request_context.user_id)
+        .await
+        .map_err(team_access_error)?
+    else {
+        return Ok(None);
+    };
+
+    let receipt: TeamReceipt = EntityAccessReceipt::try_new_authenticated_user(
+        request_context.user_id.clone(),
+        Entity {
+            entity_id: team_info.team_id.to_string(),
+            entity_type: EntityType::Team,
+        },
+        EntityPermission::TeamRole {
+            role: team_info.role,
+        },
+    )
+    .map_err(team_access_error)?;
+
+    Ok(Some(receipt))
+}
+
+fn team_access_error(err: AccessError) -> ToolCallError {
+    ToolCallError {
+        description: "Failed to verify your team membership.".to_string(),
+        internal_error: err.into(),
+    }
+}
+
 /// Create a properties toolset.
 pub fn properties_toolset<T, A>() -> AsyncToolCollection<PropertiesToolContext<T, A>>
 where
@@ -53,4 +102,6 @@ where
         .add_tool::<GetEntityProperties, PropertiesToolContext<T, A>>()
         .add_tool::<SetEntityProperty, PropertiesToolContext<T, A>>()
         .add_tool::<ListTags, PropertiesToolContext<T, A>>()
+        .add_tool::<CreateTag, PropertiesToolContext<T, A>>()
+        .add_tool::<DeleteTag, PropertiesToolContext<T, A>>()
 }
