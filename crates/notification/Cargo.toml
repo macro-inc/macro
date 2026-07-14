@@ -10,7 +10,6 @@ ai_tool = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 axum = [
   "dep:axum",
   "dep:model-error-response",
-  "dep:model_user",
   "models_pagination/axum",
   "schema",
 ]
@@ -43,7 +42,6 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [

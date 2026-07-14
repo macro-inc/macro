@@ -32,7 +32,7 @@ use model::document::DocumentBasic;
 ///
 /// # Prerequisites
 ///
-/// - User must be authenticated (MacroUserExtractor in extensions)
+/// - Caller identity must be resolvable from shared authorization state
 /// - Document context must be loaded (DocumentBasic in extensions)
 #[derive(Debug)]
 pub struct DocumentAccessExtractor<T: RequiredPermission, Svc> {

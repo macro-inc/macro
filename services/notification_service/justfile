@@ -26,7 +26,7 @@ create_queues: purge_queues
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name push-delivery-queue
 
 run_local:
-    cargo run --bin notification_service --features local
+    cargo run --bin notification_service --features decode_jwt/local_auth
 
 run_notification_email_poller_worker:
     cargo run --bin notification_email_poller_worker

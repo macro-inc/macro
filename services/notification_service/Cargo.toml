@@ -53,7 +53,6 @@ model-entity = { path = "../../crates/model-entity" }
 model-error-response = { path = "../../crates/model-error-response" }
 model_file_type = { path = "../../crates/model_file_type" }
 model_notifications = { path = "../../crates/model_notifications" }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
 models_pagination = { path = "../../crates/models_pagination", features = ["axum"] }
 notification = { path = "../../crates/notification", features = ["axum"] }
 notification_db_client = { path = "../../crates/notification_db_client" }

@@ -88,7 +88,6 @@ pub(in crate::api) async fn handler(
         permissions: None,
         organization_id: None,
     };
-    req.extensions_mut().insert(user_context.clone());
     req.extensions_mut()
         .insert(PreauthorizedContext::new(user_context));
 

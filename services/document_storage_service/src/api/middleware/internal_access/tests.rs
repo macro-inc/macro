@@ -53,8 +53,12 @@ async fn identity_handler(identity: SharedMacroAuthorizationExtractor) -> String
     identity.user_context.user_id
 }
 
-async fn legacy_identity_handler(Extension(identity): Extension<UserContext>) -> String {
-    identity.user_id
+async fn legacy_identity_handler(req: Request) -> StatusCode {
+    if req.extensions().get::<UserContext>().is_some() {
+        StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::OK
+    }
 }
 
 async fn internal_user_handler(Extension(internal_user): Extension<InternalUser>) -> StatusCode {
@@ -173,31 +177,47 @@ async fn it_inserts_a_preauthorized_marker() {
 }
 
 #[tokio::test]
-async fn it_propagates_marker_identity_to_new_and_legacy_extractors() {
+async fn it_does_not_insert_a_bare_user_context() {
+    let app = make_authorized_app(FakeMacroAuthorizationService::default());
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/legacy-identity")
+                .header(
+                    MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
+                    TEST_AUTH_KEY,
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn it_propagates_marker_identity_to_authorization_extractors() {
     let authorization =
         FakeMacroAuthorizationService::never(MacroAuthorizationError::InvalidCredentials);
     let app = make_authorized_app(authorization.clone());
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/identity")
+                .header(
+                    MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
+                    TEST_AUTH_KEY,
+                )
+                .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, INTERNAL_USER_ID)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    for path in ["/identity", "/legacy-identity"] {
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(path)
-                    .header(
-                        MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
-                        TEST_AUTH_KEY,
-                    )
-                    .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, INTERNAL_USER_ID)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response_text(response).await, INTERNAL_USER_ID);
-    }
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response_text(response).await, INTERNAL_USER_ID);
     assert!(authorization.calls().is_empty());
 }
 
