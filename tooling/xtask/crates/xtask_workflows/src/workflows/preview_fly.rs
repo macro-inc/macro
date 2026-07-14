@@ -114,7 +114,7 @@ fn deploy() -> Job {
         // ONLY thing that builds them now: the infra-only bake never starts
         // the app layer, so the registry mirror ships exactly what's built here.
         .add_step(Step::new("Build compose service images (fail fast)").run(
-            "docker compose -p macro -f docker/docker-compose.yml build \
+            "docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
              search sync_service websocket_service lexical_service ai_editing_worker",
         ))
         .add_step(steps::setup_nix())
@@ -447,7 +447,7 @@ fn deploy_to_fly() -> Step<Run> {
             # image names don't interpolate env vars anyway.
             envfile=infra/local/generated/macro/local.generated.env
             [ -f "$envfile" ] || : > "$envfile"
-            images=$(docker compose -p macro \
+            images=$(docker compose --project-directory . -p macro \
               -f docker/docker-compose.yml \
               -f infra/local/generated/macro/docker-compose.override.yml \
               --env-file "$envfile" \

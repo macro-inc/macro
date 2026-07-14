@@ -39,7 +39,7 @@ jobs:
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
     - name: Build compose service images (fail fast)
-      run: docker compose -p macro -f docker/docker-compose.yml build search sync_service websocket_service lexical_service ai_editing_worker
+      run: docker compose --project-directory . -p macro -f docker/docker-compose.yml build search sync_service websocket_service lexical_service ai_editing_worker
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup dev shell + web deps
@@ -297,7 +297,7 @@ jobs:
         # image names don't interpolate env vars anyway.
         envfile=infra/local/generated/macro/local.generated.env
         [ -f "$envfile" ] || : > "$envfile"
-        images=$(docker compose -p macro \
+        images=$(docker compose --project-directory . -p macro \
           -f docker/docker-compose.yml \
           -f infra/local/generated/macro/docker-compose.override.yml \
           --env-file "$envfile" \
