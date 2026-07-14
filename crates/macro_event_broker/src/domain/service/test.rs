@@ -215,8 +215,12 @@ async fn dispatch_serializes_and_routes() {
     let event = example_event();
     let expected_payload = serde_json::to_vec(event.event()).unwrap();
 
-    service.send_event(&event).expect("dispatch should succeed");
-    tokio::task::yield_now().await;
+    service
+        .send_event(&event)
+        .expect("dispatch should succeed")
+        .await
+        .expect("publish task should complete")
+        .expect("publish should succeed");
 
     let calls = service.publisher.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
@@ -233,13 +237,15 @@ async fn dispatch_returns_before_publish_completes() {
         started: Arc::clone(&started),
     });
 
-    service
+    let handle = service
         .send_event(&example_event())
         .expect("dispatch should succeed");
 
     assert!(!started.load(Ordering::SeqCst));
+    assert!(!handle.is_finished());
     tokio::task::yield_now().await;
     assert!(started.load(Ordering::SeqCst));
+    handle.abort();
 }
 
 #[tokio::test(start_paused = true)]
@@ -251,7 +257,7 @@ async fn dispatch_cancels_publish_at_six_second_timeout() {
         dropped: Arc::clone(&dropped),
     });
 
-    service
+    let handle = service
         .send_event(&example_event())
         .expect("dispatch should succeed");
     tokio::task::yield_now().await;
@@ -262,22 +268,32 @@ async fn dispatch_cancels_publish_at_six_second_timeout() {
     assert!(!dropped.load(Ordering::SeqCst));
 
     tokio::time::advance(Duration::from_secs(1)).await;
-    tokio::task::yield_now().await;
+    let error = handle
+        .await
+        .expect("publish task should complete")
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        EventBrokerError::PublishTimeout { timeout } if timeout == PUBLISH_TIMEOUT
+    ));
     assert!(dropped.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
-async fn dispatch_does_not_return_publisher_failure() {
+async fn dispatch_returns_publisher_failure_from_task() {
     let attempted = Arc::new(AtomicBool::new(false));
     let service = MacroEventBrokerService::new(FailingPublisher {
         attempted: Arc::clone(&attempted),
     });
 
-    service
+    let error = service
         .send_event(&example_event())
-        .expect("dispatch should succeed before publishing");
-    tokio::task::yield_now().await;
+        .expect("dispatch should succeed before publishing")
+        .await
+        .expect("publish task should complete")
+        .unwrap_err();
 
+    assert!(matches!(error, EventBrokerError::Publish(message) if message == "test failure"));
     assert!(attempted.load(Ordering::SeqCst));
 }
 

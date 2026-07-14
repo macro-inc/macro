@@ -322,13 +322,16 @@ impl TestEventBroker {
 }
 
 impl MacroEventBroker for TestEventBroker {
-    fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
         self.published.lock().unwrap().push(PublishedEvent {
             topic: event.topic().as_str(),
             key: event.key().to_string(),
             payload: serde_json::to_value(event.event())?,
         });
-        Ok(())
+        Ok(tokio::spawn(async { Ok(()) }))
     }
 }
 

@@ -13,9 +13,14 @@ pub trait MacroEventBroker: Send + Sync + 'static {
     /// Serialize `event` to JSON and schedule it for publication to the topic declared by its
     /// typed payload, keyed by [`MacroEvent::key`].
     ///
-    /// Serialization errors are returned immediately. Publication runs in a detached task, so
-    /// publisher errors and timeouts are logged instead of returned.
-    fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError>;
+    /// Serialization errors are returned immediately. Publication runs in a spawned task, whose
+    /// [`tokio::task::JoinHandle`] can be awaited when the caller needs to wait for completion and
+    /// inspect publisher failures or timeouts. Task errors are also logged so callers may still
+    /// use this method for fire-and-forget publication.
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError>;
 }
 
 /// Outbound port: the boundary to the underlying message broker (e.g. Kafka).

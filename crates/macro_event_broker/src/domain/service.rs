@@ -38,41 +38,37 @@ impl<P: EventPublisher> MacroEventBrokerService<P> {
 
 impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
     #[tracing::instrument(err, skip(self, event), fields(topic = %event.topic().as_str(), key = %event.key()))]
-    fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
         let topic = event.topic();
         let key = event.key().to_owned();
         let payload = serde_json::to_vec(event.event())?;
         let publisher = Arc::clone(&self.publisher);
         let span = tracing::Span::current();
 
-        tokio::spawn(
+        let handle = tokio::spawn(
             async move {
-                tokio::select! {
-                    biased;
-                    _ = tokio::time::sleep(PUBLISH_TIMEOUT) => {
+                tokio::time::timeout(PUBLISH_TIMEOUT, publisher.publish(topic, &key, &payload))
+                    .await
+                    .map_err(|_| EventBrokerError::PublishTimeout {
+                        timeout: PUBLISH_TIMEOUT,
+                    })
+                    .and_then(std::convert::identity)
+                    .inspect_err(|error| {
                         tracing::error!(
+                            error = ?error,
                             topic = topic.as_str(),
                             key = %key,
-                            timeout_seconds = PUBLISH_TIMEOUT.as_secs(),
-                            "event publish timed out",
+                            "failed to publish event",
                         );
-                    }
-                    result = publisher.publish(topic, &key, &payload) => {
-                        if let Err(error) = result {
-                            tracing::error!(
-                                error = ?error,
-                                topic = topic.as_str(),
-                                key = %key,
-                                "failed to publish event",
-                            );
-                        }
-                    }
-                }
+                    })
             }
             .instrument(span),
         );
 
-        Ok(())
+        Ok(handle)
     }
 }
 
@@ -84,7 +80,10 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
 pub struct NoopMacroEventBroker;
 
 impl MacroEventBroker for NoopMacroEventBroker {
-    fn send_event<E: MacroEvent + ?Sized>(&self, _event: &E) -> Result<(), EventBrokerError> {
-        Ok(())
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        _event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        Ok(tokio::spawn(async { Ok(()) }))
     }
 }
