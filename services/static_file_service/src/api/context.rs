@@ -3,11 +3,13 @@ use crate::service::dynamodb::client::DynamodbClient;
 use crate::service::s3::client::S3Client;
 use aws_sdk_sqs::Client;
 use axum::extract::FromRef;
+use macro_authorization::SharedMacroAuthorizationService;
 use macro_middleware::auth::internal_access::InternalApiKey;
 use std::sync::Arc;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
+    pub authorization: SharedMacroAuthorizationService,
     pub metadata_client: DynamodbClient,
     pub storage_client: Arc<S3Client>,
     pub sqs_client: Client,

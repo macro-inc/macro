@@ -11,7 +11,7 @@ use crate::api::context::AppState;
 use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -23,7 +23,7 @@ static MAX_REQUEST_SIZE: usize = 4096;
 
 pub async fn setup_and_serve(
     config: Config,
-    jwt_validation_args: JwtValidationArgs,
+    authorization: SharedMacroAuthorizationService,
 ) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 
@@ -45,6 +45,7 @@ pub async fn setup_and_serve(
     );
 
     let state = AppState {
+        authorization,
         metadata_client,
         storage_client: Arc::new(storage_client),
         sqs_client,
@@ -66,10 +67,10 @@ pub async fn setup_and_serve(
                 .merge(
                     file::router().layer(
                         ServiceBuilder::new()
-                            .layer(axum::middleware::from_fn_with_state(
-                                jwt_validation_args.clone(),
-                                macro_middleware::auth::decode_jwt::handler,
-                            ))
+                            .layer(axum::middleware::from_extractor_with_state::<
+                                SharedMacroAuthorizationExtractor,
+                                _,
+                            >(state.clone()))
                             .layer(cors.clone()),
                     ),
                 )
@@ -79,16 +80,9 @@ pub async fn setup_and_serve(
             "/internal",
             // Create a copy of the file router, but use internal auth middleware
             // instead of jwt auth
-            file::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_extractor_with_state::<
-                        ValidInternalKey,
-                        _,
-                    >(state.clone()))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::initialize_user_context::handler,
-                    )),
-            ),
+            file::router().layer(ServiceBuilder::new().layer(
+                axum::middleware::from_extractor_with_state::<ValidInternalKey, _>(state.clone()),
+            )),
         )
         .with_state(state)
         .merge(

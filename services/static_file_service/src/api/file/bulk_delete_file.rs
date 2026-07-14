@@ -1,13 +1,14 @@
+use super::{authenticated_user_id, can_delete_file};
 use crate::model::api::{BulkDeleteRequest, BulkDeleteResponse, DeleteResult};
 use crate::service::dynamodb::client::DynamodbClient;
 use crate::service::s3::client::S3Client;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use std::sync::Arc;
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -52,11 +53,11 @@ impl IntoResponse for BulkDeleteError {
     )
   )
 ]
-#[tracing::instrument(skip(metadata_client, storage_client, usr, internal_key), fields(user_id = usr.user_id), err)]
+#[tracing::instrument(skip(metadata_client, storage_client, identity, internal_key), fields(user_id = ?identity.macro_user_id), err)]
 pub async fn handle_bulk_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    usr: Extension<UserContext>,
+    identity: OptionalSharedMacroAuthorizationExtractor,
     internal_key: Option<ValidInternalKey>,
     Json(req): Json<BulkDeleteRequest>,
 ) -> Result<Json<BulkDeleteResponse>, BulkDeleteError> {
@@ -88,8 +89,11 @@ pub async fn handle_bulk_delete_file(
     for file_id in &req.file_ids {
         match metadata_results.get(file_id) {
             Some(metadata) => {
-                // Skip owner check for internal requests
-                if internal_key.is_none() && metadata.owner_id != usr.user_id {
+                if !can_delete_file(
+                    &metadata.owner_id,
+                    authenticated_user_id(&identity),
+                    internal_key.is_some(),
+                ) {
                     tracing::warn!(file_id = file_id, "delete requested by non-owner");
                     results.push(DeleteResult {
                         file_id: file_id.clone(),

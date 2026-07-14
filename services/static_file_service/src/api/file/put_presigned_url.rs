@@ -1,15 +1,16 @@
 use std::str::FromStr;
 
+use super::{authenticated_user_id, owner_id_for_upload};
 use crate::api::context::AppState;
 use crate::model::api::*;
 use crate::service::dynamodb::model::MetadataObject;
 use axum::extract::{Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{Extension, response::Response};
+use axum::response::Response;
 use chrono::Utc;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use model::document::FileType;
-use model::user::UserContext;
 use uuid::Uuid;
 
 #[utoipa::path(
@@ -22,10 +23,10 @@ use uuid::Uuid;
     (status = 500, body=String),
   ),
 )]
-#[tracing::instrument(skip(ctx, user), fields(user_id=user.user_id))]
+#[tracing::instrument(skip(ctx, identity), fields(user_id=?identity.macro_user_id))]
 pub async fn put_presigned_url(
     State(ctx): State<AppState>,
-    user: Extension<UserContext>,
+    identity: OptionalSharedMacroAuthorizationExtractor,
     Json(request): Json<PutFileRequest>,
 ) -> Result<Response, Response> {
     let content_type = if let Some(content_type) = request.content_type {
@@ -52,11 +53,7 @@ pub async fn put_presigned_url(
     let s3_key = static_file_key.to_key();
     let permalink = format!("{}/{}", ctx.config.static_file_service_url, s3_key);
 
-    let owner_id = if !user.user_id.is_empty() {
-        user.user_id.clone()
-    } else {
-        "nobody".to_string()
-    };
+    let owner_id = owner_id_for_upload(authenticated_user_id(&identity)).to_string();
 
     let metadata = MetadataObject {
         file_id: id.clone(),

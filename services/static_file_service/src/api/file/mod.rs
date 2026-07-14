@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 pub mod bulk_delete_file;
 pub mod delete_file;
 pub mod get_file;
@@ -8,6 +11,28 @@ use axum::Router;
 use axum::routing::{delete, get, post, put};
 
 use crate::api::context::AppState;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+
+const ANONYMOUS_OWNER_ID: &str = "nobody";
+
+fn authenticated_user_id(identity: &OptionalSharedMacroAuthorizationExtractor) -> Option<&str> {
+    identity
+        .macro_user_id
+        .as_ref()
+        .map(|_| identity.user_context.user_id.as_str())
+}
+
+fn owner_id_for_upload(user_id: Option<&str>) -> &str {
+    user_id.unwrap_or(ANONYMOUS_OWNER_ID)
+}
+
+fn can_delete_file(owner_id: &str, user_id: Option<&str>, has_internal_key: bool) -> bool {
+    if has_internal_key {
+        return true;
+    }
+
+    user_id.is_some_and(|user_id| owner_id == user_id)
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
