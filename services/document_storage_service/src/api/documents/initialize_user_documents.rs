@@ -4,12 +4,13 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use futures::StreamExt;
+use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_db_client::user::onboarding_status::get_onboarding_status;
 use macro_user_id::cowlike::CowLike;
 use model::{
     document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
 use s3_key::build_cloud_storage_bucket_document_key;
@@ -36,9 +37,28 @@ const CANVAS_TEMPLATE: &str = include_str!("./template/canvas_template.canvas");
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     tracing::info!("initialize user documents");
+
+    let is_onboarded = get_onboarding_status(&state.db, user_context.user_context.user_id.as_str())
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get onboarding status: {e}"),
+            )
+                .into_response()
+        })?;
+
+    if is_onboarded {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "User is already onboarded".to_string(),
+        )
+            .into_response());
+    }
+
     let start_time = std::time::Instant::now();
     tracing::debug!("initializing user documents");
 

@@ -1,10 +1,8 @@
-use super::{context::ApiContext, middleware};
+use super::context::ApiContext;
 use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use tower::ServiceBuilder;
-
 // NOTE: copy_document is now served by the documents hex crate router
 pub(in crate::api) mod delete_document;
 pub(in crate::api) mod export_document;
@@ -46,33 +44,14 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/permissions_token",
             permissions_token::router(state.clone()),
         )
-        .route(
-            "/",
-            get(get_user_documents::get_user_documents_handler).layer(axum::middleware::from_fn(
-                macro_middleware::auth::ensure_user_exists::handler,
-            )),
-        )
+        .route("/", get(get_user_documents::get_user_documents_handler))
         // NOTE: POST / (create_document) is now served by the documents hex crate router
         // NOTE: POST /create_task is now served by the documents hex crate router
         .route(
             "/initialize_user_documents",
-            post(initialize_user_documents::handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        middleware::ensure_user_is_onboarded::handler,
-                    )),
-            ),
+            post(initialize_user_documents::handler),
         )
-        .route(
-            "/list",
-            get(get_document_list::get_document_list_handler).layer(axum::middleware::from_fn(
-                macro_middleware::auth::ensure_user_exists::handler,
-            )),
-        )
+        .route("/list", get(get_document_list::get_document_list_handler))
         .route(
             "/{document_id}/permissions",
             get(get_document_permissions::get_document_permissions_handler)

@@ -1,13 +1,12 @@
 use crate::api::context::EntityAccessService;
 use axum::{
-    Extension,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::response::GenericResponse;
-use model::{response::GenericErrorResponse, user::UserContext};
+use macro_authorization::SharedMacroAuthorizationExtractor;
+use model::response::{GenericErrorResponse, GenericResponse};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
 
@@ -34,11 +33,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user_context, _access), fields(user_id=?user_context.user_context.user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user_context: SharedMacroAuthorizationExtractor,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     let processing_result = match macro_db_client::document::get_document_process_content(

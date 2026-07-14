@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use macro_sync_service_jwt::ISSUER;
-use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
+use model::{document::DocumentPermissionsToken, response::ErrorResponse};
 use utoipa::ToSchema;
 
 use crate::config::Config;
@@ -32,10 +33,10 @@ pub struct DocumentPermissionsTokenRequest {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(config_context, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(config_context, user_context), fields(user_id=?user_context.user_context.user_id))]
 pub async fn handler(
     State(config_context): State<Arc<Config>>,
-    user_context: Extension<UserContext>,
+    user_context: OptionalSharedMacroAuthorizationExtractor,
     extract::Json(DocumentPermissionsTokenRequest { token }): extract::Json<
         DocumentPermissionsTokenRequest,
     >,
@@ -45,10 +46,10 @@ pub async fn handler(
 
     validation.set_issuer(&[ISSUER]);
 
-    let user_id = if user_context.user_id.is_empty() {
+    let user_id = if user_context.user_context.user_id.is_empty() {
         None
     } else {
-        Some(user_context.user_id.clone())
+        Some(user_context.user_context.user_id.clone())
     };
 
     // Attempt to decode the token.

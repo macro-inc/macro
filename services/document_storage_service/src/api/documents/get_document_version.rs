@@ -1,13 +1,13 @@
 use crate::api::context::EntityAccessService;
 use axum::extract::State;
-use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_db_client::document::get_document_version;
 use macro_db_client::user_document_view_location::get::get_user_document_view_location;
 use model::document::response::{GetDocumentResponse, GetDocumentResponseData};
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -35,11 +35,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user_context, access), fields(user_id=?user_context.user_context.user_id))]
 pub async fn handler(
     access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user_context: SharedMacroAuthorizationExtractor,
     Path(Params {
         document_id,
         document_version_id,
@@ -63,17 +63,22 @@ pub async fn handler(
         }
     };
 
-    let view_location =
-        match get_user_document_view_location(&db, &user_context.user_id, &document_id).await {
-            Ok(view_location) => view_location,
-            Err(e) => {
-                tracing::error!(error=?e, "error getting view location");
-                return GenericResponse::builder()
-                    .message("error getting view location")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+    let view_location = match get_user_document_view_location(
+        &db,
+        &user_context.user_context.user_id,
+        &document_id,
+    )
+    .await
+    {
+        Ok(view_location) => view_location,
+        Err(e) => {
+            tracing::error!(error=?e, "error getting view location");
+            return GenericResponse::builder()
+                .message("error getting view location")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     let user_access_level = match access.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,

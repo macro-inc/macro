@@ -13,10 +13,10 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use futures::StreamExt;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use model::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
-    user::UserContext,
 };
 use s3_key::build_temp_docx_key;
 
@@ -61,12 +61,12 @@ pub struct ExportDocumentResponse {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_context.user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { .. }): Path<Params>,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: OptionalSharedMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
 ) -> Result<Response, Response> {
     tracing::info!("export document");

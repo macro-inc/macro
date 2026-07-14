@@ -8,13 +8,13 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_db_client::document::build_pdf_modification_data::{
     get_complete_pdf_modification_data, get_pdf_modification_data_for_document,
 };
 use model::{
     document::{DocumentBasic, FileType},
     response::{GenericErrorResponse, GenericResponse},
-    user::UserContext,
 };
 use serde::Deserialize;
 
@@ -39,10 +39,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, document_context), fields(user_id=?user_context.user_id, file_type=?document_context.file_type))]
+#[tracing::instrument(skip(ctx, user_context, document_context), fields(user_id=?user_context.user_context.user_id, file_type=?document_context.file_type))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: SharedMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {

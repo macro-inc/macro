@@ -17,10 +17,10 @@ use axum::{
     response::IntoResponse,
 };
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
-    user::UserContext,
 };
 use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 
@@ -49,11 +49,11 @@ static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user_context, document_context, _access_level), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user_context, document_context, _access_level), fields(user_id=?user_context.user_context.user_id))]
 pub async fn get_location_handler(
     _access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: OptionalSharedMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     params: Query<LocationQueryParams>,

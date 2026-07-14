@@ -6,15 +6,15 @@ use crate::model::{
     response::documents::preview::GetBatchPreviewResponse,
 };
 use anyhow::Result;
+use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, extract::Json};
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use reqwest::StatusCode;
 
-#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=?user_context.user_context.user_id))]
 #[utoipa::path(
     tag = "document",
     post,
@@ -28,7 +28,7 @@ use reqwest::StatusCode;
 )]
 pub async fn get_batch_preview_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user_context: OptionalSharedMacroAuthorizationExtractor,
     Json(req): Json<GetBatchPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchPreviewResponse>), Response> {
     // Ensure the document ids are unique to prevent duplicate work
