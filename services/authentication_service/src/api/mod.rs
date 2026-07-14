@@ -15,11 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 
 // Routes
-#[allow(unused_imports)]
-mod email;
 mod link;
-#[allow(unused_imports)]
-mod merge;
 mod mobile_welcome_email;
 
 mod github_pull_requests;
@@ -79,30 +75,14 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             },
         ))
         .nest("/internal", internal::router())
-        .nest("/permissions", permissions::router(state.jwt_args.clone()))
+        .nest("/permissions", permissions::router())
         .nest("/login", login::router(state.clone()))
-        .nest("/logout", logout::router(state.jwt_args.clone()))
+        .nest("/logout", logout::router())
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
-        .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
-        .nest(
-            "/link",
-            link::router(state.clone()).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                ),
-            )),
-        )
-        .nest(
-            "/github_pull_requests",
-            github_pull_requests::router().layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                ),
-            )),
-        )
+        .nest("/user", user::router())
+        .nest("/link", link::router())
+        .nest("/github_pull_requests", github_pull_requests::router())
         .nest(
             "/team",
             teams::inbound::axum_router::teams_router(
@@ -111,12 +91,6 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                     entity_access_service: state.entity_access_service.clone(),
                     authorization_service: state.authorization_service.clone(),
                 },
-            )
-            .layer(
-                ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
             ),
         )
         .nest(
@@ -127,15 +101,9 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                     rate_limiter: state.rate_limit_service.clone(),
                     authorization: state.authorization_service.clone(),
                 },
-            )
-            .layer(
-                ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
             ),
         )
-        .nest("/jwt", jwt::router(state.jwt_args.clone()))
+        .nest("/jwt", jwt::router())
         .nest("/session", session::router())
         .merge(mobile_welcome_email::router(state.clone()))
         .nest(

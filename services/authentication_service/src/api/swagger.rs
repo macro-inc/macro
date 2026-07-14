@@ -16,13 +16,10 @@ use teams::inbound::axum_router::{
 use user_quota::UserQuota;
 use utoipa::OpenApi;
 
-use crate::api::email::generate_email_link::GenerateEmailLinkRequest;
-use crate::api::email::resend_fusionauth_verify_user_email::ResendFusionauthVerifyUserEmailRequest;
 use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
 use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse};
 use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
-use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
 use crate::api::user::get_user_link_exists::UserLinkResponse;
@@ -36,8 +33,8 @@ use crate::api::user::stripe::StripeSessionResponse;
 use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
 use crate::api::{
-    email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
-    oauth, oauth2, permissions, session, user,
+    github_pull_requests, health, jwt, link, login, logout, mobile_welcome_email, oauth, oauth2,
+    permissions, session, user,
 };
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
@@ -116,12 +113,6 @@ use model::user::{
                 session::session_login::handler,
                 session::session_creation::handler,
 
-                /// /email
-                email::verify_fusionauth_user_email::handler,
-                email::resend_fusionauth_verify_user_email::handler,
-                email::generate_email_link::handler,
-                email::verify_email_link::handler,
-
                 /// /team
                 teams::inbound::axum_router::create_team::handler::<crate::api::context::TeamsServiceType>,
                 teams::inbound::axum_router::delete_team::handler::<crate::api::context::TeamsServiceType>,
@@ -143,10 +134,6 @@ use model::user::{
 
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
-
-                /// /merge
-                merge::create_merge_request::handler,
-                merge::verify_merge_request::handler,
         ),
         components(
             schemas(
@@ -170,8 +157,6 @@ use model::user::{
                         UserLinkResponse,
                         MacroApiTokenResponse,
                         CreateUserRequest,
-                        ResendFusionauthVerifyUserEmailRequest,
-                        GenerateEmailLinkRequest,
                         CreateInProgressLinkResponse,
                         InitGithubLinkResponse,
                         GithubLinkStatusResponse,
@@ -220,9 +205,6 @@ use model::user::{
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,
                         mobile_welcome_email::SendMobileWelcomeEmailResponse,
-
-                        // Merge
-                        CreateAccountMergeRequest,
                 ),
         ),
         tags(

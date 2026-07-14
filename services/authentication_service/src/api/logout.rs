@@ -8,23 +8,14 @@ use axum::{
     routing::{get, post},
 };
 use decode_jwt::DecodedJwt;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use model::response::EmptyResponse;
-use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
 
-pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
+pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/", post(handler))
         .route("/", get(handler))
-        .layer(
-            ServiceBuilder::new()
-                .layer(CookieManagerLayer::new())
-                .layer(axum::middleware::from_fn_with_state(
-                    jwt_args,
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
-        )
+        .layer(CookieManagerLayer::new())
 }
 
 /// Initiates a passwordless login
