@@ -22,8 +22,15 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use std::collections::HashSet;
-use tokio::sync::mpsc::UnboundedSender;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tokio::{
+    sync::{Mutex as AsyncMutex, mpsc::UnboundedSender},
+    task::JoinSet,
+};
 use uuid::Uuid;
 
 /// Entity type used by message mentions that target a bot.
@@ -402,16 +409,64 @@ impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
     }
 }
 
-/// Channel event dispatcher that handles events on spawned tasks.
+/// Channel event dispatcher that handles events on tracked spawned tasks.
 #[derive(Clone)]
 pub struct SpawnedChannelEventDispatcher<H> {
     handler: H,
+    lifecycle: Arc<SpawnedDispatcherLifecycle>,
+}
+
+struct SpawnedDispatcherLifecycle {
+    state: Mutex<SpawnedDispatcherState>,
+    shutdown: AsyncMutex<()>,
+}
+
+#[derive(Default)]
+struct SpawnedDispatcherState {
+    closed: bool,
+    tasks: JoinSet<()>,
 }
 
 impl<H> SpawnedChannelEventDispatcher<H> {
     /// Create a spawned event dispatcher.
     pub fn new(handler: H) -> Self {
-        Self { handler }
+        Self {
+            handler,
+            lifecycle: Arc::new(SpawnedDispatcherLifecycle {
+                state: Mutex::new(SpawnedDispatcherState::default()),
+                shutdown: AsyncMutex::new(()),
+            }),
+        }
+    }
+
+    /// Stop accepting events and wait up to `timeout` for active handlers.
+    ///
+    /// All clones share the same lifecycle. Handlers still running after the
+    /// timeout are aborted before this method returns.
+    pub async fn shutdown(&self, timeout: Duration) {
+        let _shutdown_guard = self.lifecycle.shutdown.lock().await;
+        let mut tasks = {
+            let mut state = self
+                .lifecycle
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            state.closed = true;
+            std::mem::take(&mut state.tasks)
+        };
+
+        if tokio::time::timeout(timeout, async {
+            while let Some(result) = tasks.join_next().await {
+                log_channel_handler_result(result);
+            }
+        })
+        .await
+        .is_err()
+        {
+            let remaining_handlers = tasks.len();
+            tasks.shutdown().await;
+            tracing::warn!(remaining_handlers, "channel side-effect shutdown timed out");
+        }
     }
 }
 
@@ -420,10 +475,32 @@ where
     H: ChannelEventHandler,
 {
     fn dispatch(&self, event: ChannelEvent) {
+        let mut state = self
+            .lifecycle
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.closed {
+            tracing::debug!("channel side-effect dispatcher is closed; dropping event");
+            return;
+        }
+
+        while let Some(result) = state.tasks.try_join_next() {
+            log_channel_handler_result(result);
+        }
+
         let handler = self.handler.clone();
-        tokio::spawn(async move {
+        state.tasks.spawn(async move {
             handler.handle(event).await;
         });
+    }
+}
+
+fn log_channel_handler_result(result: Result<(), tokio::task::JoinError>) {
+    if let Err(error) = result
+        && error.is_panic()
+    {
+        tracing::error!(error=?error, "channel side-effect handler panicked");
     }
 }
 

@@ -3,12 +3,19 @@ use crate::domain::{
     events::MessageChangedNotificationContext,
     models::{BotId, ParticipantRole, Sender},
     ports::{
-        ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
-        ChannelSearchIndexer, ChannelSideEffectContext,
+        ChannelEventDispatcher, ChannelEventHandler, ChannelNotificationSender,
+        ChannelRealtimePublisher, ChannelSearchIndexer, ChannelSideEffectContext,
     },
 };
 use chrono::Utc;
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+use tokio::sync::Notify;
 
 type IndexedMessages = Arc<Mutex<Vec<(Uuid, Uuid)>>>;
 type RemovedMessages = Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>;
@@ -1364,4 +1371,95 @@ fn broker_events_skip_reaction_changes() {
     });
 
     assert!(events.is_empty());
+}
+
+#[derive(Clone, Default)]
+struct ControlledEventHandler {
+    started: Arc<Notify>,
+    release: Arc<Notify>,
+    started_count: Arc<AtomicUsize>,
+    completed_count: Arc<AtomicUsize>,
+    running_count: Arc<AtomicUsize>,
+}
+
+struct RunningHandlerGuard(Arc<AtomicUsize>);
+
+impl Drop for RunningHandlerGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl ChannelEventHandler for ControlledEventHandler {
+    async fn handle(&self, _event: ChannelEvent) {
+        self.started_count.fetch_add(1, Ordering::SeqCst);
+        self.running_count.fetch_add(1, Ordering::SeqCst);
+        let _running_guard = RunningHandlerGuard(self.running_count.clone());
+        self.started.notify_one();
+        self.release.notified().await;
+        self.completed_count.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+fn lifecycle_test_event() -> ChannelEvent {
+    ChannelEvent::ChannelDeleted {
+        channel_id: Uuid::new_v4(),
+        actor: Sender::new_from_user(user("alice@example.com")),
+    }
+}
+
+#[tokio::test]
+async fn spawned_dispatcher_waits_for_tracked_handlers_during_shutdown() {
+    let handler = ControlledEventHandler::default();
+    let dispatcher = SpawnedChannelEventDispatcher::new(handler.clone());
+    let started = handler.started.notified();
+
+    dispatcher.clone().dispatch(lifecycle_test_event());
+    started.await;
+
+    let shutdown_dispatcher = dispatcher.clone();
+    let shutdown = tokio::spawn(async move {
+        shutdown_dispatcher.shutdown(Duration::from_secs(1)).await;
+    });
+    tokio::task::yield_now().await;
+    assert!(!shutdown.is_finished());
+
+    handler.release.notify_one();
+    shutdown.await.unwrap();
+
+    assert_eq!(handler.completed_count.load(Ordering::SeqCst), 1);
+    assert_eq!(handler.running_count.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn spawned_dispatcher_aborts_blocked_handlers_at_shutdown_deadline() {
+    let handler = ControlledEventHandler::default();
+    let dispatcher = SpawnedChannelEventDispatcher::new(handler.clone());
+    let started = handler.started.notified();
+
+    dispatcher.dispatch(lifecycle_test_event());
+    started.await;
+
+    let shutdown_dispatcher = dispatcher.clone();
+    let shutdown = tokio::spawn(async move {
+        shutdown_dispatcher.shutdown(Duration::from_secs(30)).await;
+    });
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_secs(30)).await;
+    shutdown.await.unwrap();
+
+    assert_eq!(handler.completed_count.load(Ordering::SeqCst), 0);
+    assert_eq!(handler.running_count.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn spawned_dispatcher_rejects_events_after_shutdown_starts() {
+    let handler = ControlledEventHandler::default();
+    let dispatcher = SpawnedChannelEventDispatcher::new(handler.clone());
+
+    dispatcher.shutdown(Duration::from_secs(1)).await;
+    dispatcher.dispatch(lifecycle_test_event());
+    tokio::task::yield_now().await;
+
+    assert_eq!(handler.started_count.load(Ordering::SeqCst), 0);
 }

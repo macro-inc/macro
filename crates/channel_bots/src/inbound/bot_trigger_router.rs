@@ -1,10 +1,13 @@
 //! Routes channel bot triggers to the appropriate handler.
 
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use channels::domain::ports::ChannelService;
 use channels::domain::side_effects::ChannelBotTrigger;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::{
+    sync::mpsc::UnboundedReceiver,
+    task::{JoinHandle, JoinSet},
+};
 
 use crate::domain::{
     models::{BotEvent, BotTrigger},
@@ -14,8 +17,8 @@ use crate::domain::{
 
 /// Resolves the bots mentioned in a channel message and runs their handlers.
 ///
-/// Receives triggers derived by the channel side-effect service. Dispatch is
-/// fire-and-forget: each trigger is handled on a spawned task.
+/// Receives triggers derived by the channel side-effect service. Each trigger
+/// runs concurrently in a child task owned by the router task.
 ///
 /// System bots are defined in code and require no database row. Unknown bot ids
 /// are ignored for now; only Macro AI is handled by this branch.
@@ -44,18 +47,18 @@ where
     }
 
     /// Start consuming channel bot triggers.
-    pub fn spawn(self, mut triggers: UnboundedReceiver<ChannelBotTrigger>)
+    ///
+    /// Aborting the returned task also aborts all bot executions it started.
+    pub fn spawn(self, triggers: UnboundedReceiver<ChannelBotTrigger>) -> JoinHandle<()>
     where
         R: 'static,
     {
-        tokio::spawn(async move {
-            while let Some(trigger) = triggers.recv().await {
-                let router = self.clone();
-                tokio::spawn(async move {
-                    router.run(trigger).await;
-                });
+        spawn_router_task(triggers, move |trigger| {
+            let router = self.clone();
+            async move {
+                router.run(trigger).await;
             }
-        });
+        })
     }
 
     async fn run(&self, trigger: ChannelBotTrigger) {
@@ -85,3 +88,47 @@ where
         }
     }
 }
+
+fn spawn_router_task<F, Fut>(
+    mut triggers: UnboundedReceiver<ChannelBotTrigger>,
+    run: F,
+) -> JoinHandle<()>
+where
+    F: Fn(ChannelBotTrigger) -> Fut + Send + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut executions = JoinSet::new();
+
+        loop {
+            tokio::select! {
+                trigger = triggers.recv() => {
+                    let Some(trigger) = trigger else {
+                        break;
+                    };
+                    executions.spawn(run(trigger));
+                }
+                result = executions.join_next(), if !executions.is_empty() => {
+                    if let Some(result) = result {
+                        log_bot_execution_result(result);
+                    }
+                }
+            }
+        }
+
+        while let Some(result) = executions.join_next().await {
+            log_bot_execution_result(result);
+        }
+    })
+}
+
+fn log_bot_execution_result(result: Result<(), tokio::task::JoinError>) {
+    if let Err(error) = result
+        && error.is_panic()
+    {
+        tracing::error!(error=?error, "channel bot execution panicked");
+    }
+}
+
+#[cfg(test)]
+mod test;
