@@ -342,7 +342,7 @@ pub(super) fn wants_address_pushdown(ast: &Expr<EmailLiteral>) -> bool {
 
 /// Emits the `AND t.id IN (SELECT thread_id FROM matching_threads)` fragment
 /// pushed into the candidate-thread WHERE. The CTE itself is built by
-/// `build_matching_threads_cte_body` and pasted into the top-level `WITH …`
+/// `build_matching_threads_ctes` and pasted into the top-level `WITH …`
 /// chain. Returns empty when there are no pure-address conjuncts to push.
 pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragment {
     if !wants_address_pushdown(ast) {
@@ -426,66 +426,109 @@ fn flatten_or_tree_of_address_literals(
     }
 }
 
-/// Builds one `SELECT m.thread_id FROM …` UNION branch for a single
-/// positive address literal. Returns `None` for unresolved Complete emails
-/// — the branch can't match anything, so we drop it from the UNION rather
-/// than emitting a `WHERE FALSE` branch.
-fn build_union_branch(
-    kind: AddressKind,
-    email: &Email,
-    resolved: &ResolvedFilters,
-    link_scope: Option<&[Uuid]>,
-) -> Option<SqlFragment> {
-    let trash = build_trash_check(resolved);
-    match (resolved.contact_ids_for(email), email) {
-        (Some(contact_ids), _) => {
-            let mut f = match kind {
-                AddressKind::Sender => {
-                    let mut f = SqlFragment::raw(
-                        "SELECT m.thread_id FROM email_messages m WHERE m.from_contact_id = ANY(",
-                    );
-                    f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
-                    f.push_raw(")");
-                    f
-                }
-                _ => {
-                    let recipient_type = kind.recipient_type_sql().expect("non-sender kind");
-                    let mut f = SqlFragment::raw(
-                        "SELECT m.thread_id FROM email_message_recipients mr \
-                         JOIN email_messages m ON m.id = mr.message_id \
-                         WHERE mr.contact_id = ANY(",
-                    );
-                    f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
-                    f.push_raw(format!(") AND mr.recipient_type = '{recipient_type}'"));
-                    f
-                }
-            };
-            f.push_raw(" AND ");
-            f.extend(trash);
-            Some(f)
-        }
-        (None, Email::Complete(_)) => None,
-        (None, Email::Partial(s)) => {
-            let pattern = format!("%{}%", escape_like_pattern(s));
-            let mut f =
-                build_union_branch_text_match(kind, "c.email_address ILIKE ", pattern, link_scope);
-            f.push_raw(" AND ");
-            f.extend(trash);
-            Some(f)
-        }
-        (None, Email::Domain(s)) => {
-            let domain = s.to_ascii_lowercase();
-            let mut f = build_union_branch_text_match(
-                kind,
-                "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
-                domain,
-                link_scope,
-            );
-            f.push_raw(" AND ");
-            f.extend(trash);
-            Some(f)
+/// Which roles (sender / TO / CC / BCC) one address predicate was requested
+/// in across the OR-tree. Merging roles lets the CTE emit a single recipient
+/// branch per address instead of one per role.
+#[derive(Default)]
+struct AddressKinds {
+    sender: bool,
+    to: bool,
+    cc: bool,
+    bcc: bool,
+}
+
+impl AddressKinds {
+    fn add(&mut self, kind: AddressKind) {
+        match kind {
+            AddressKind::Sender => self.sender = true,
+            AddressKind::Recipient => self.to = true,
+            AddressKind::Cc => self.cc = true,
+            AddressKind::Bcc => self.bcc = true,
         }
     }
+
+    fn any_recipient(&self) -> bool {
+        self.to || self.cc || self.bcc
+    }
+
+    /// ` AND mr.recipient_type …` for the requested recipient roles. Empty
+    /// when all three are present — TO/CC/BCC is the whole enum, so the
+    /// filter would be a no-op. Only meaningful when `any_recipient()`.
+    fn recipient_type_sql(&self) -> String {
+        let mut types = Vec::new();
+        if self.to {
+            types.push("'TO'");
+        }
+        if self.cc {
+            types.push("'CC'");
+        }
+        if self.bcc {
+            types.push("'BCC'");
+        }
+        match types.len() {
+            3 => String::new(),
+            1 => format!(" AND mr.recipient_type = {}", types[0]),
+            _ => format!(" AND mr.recipient_type IN ({})", types.join(", ")),
+        }
+    }
+}
+
+/// Identity of an address predicate for grouping OR'd literals: two literals
+/// with equal keys match the same contact rows, so their branches can share
+/// contact-resolution work.
+#[derive(PartialEq)]
+enum AddressGroupKey<'a> {
+    /// Complete email resolved to contact ids.
+    Contacts(&'a [Uuid]),
+    /// Partial text match (source string of the ILIKE pattern).
+    Partial(&'a str),
+    /// Bare domain, lowercased.
+    Domain(String),
+}
+
+/// Returns `None` for unresolved Complete emails — they can't match
+/// anything, so the literal is dropped rather than emitting a `WHERE FALSE`
+/// branch.
+fn address_group_key<'a>(
+    email: &'a Email,
+    resolved: &'a ResolvedFilters,
+) -> Option<AddressGroupKey<'a>> {
+    match (resolved.contact_ids_for(email), email) {
+        (Some(ids), _) => Some(AddressGroupKey::Contacts(ids)),
+        (None, Email::Complete(_)) => None,
+        (None, Email::Partial(s)) => Some(AddressGroupKey::Partial(s)),
+        (None, Email::Domain(s)) => Some(AddressGroupKey::Domain(s.to_ascii_lowercase())),
+    }
+}
+
+/// Sender branch over resolved contact ids — probes
+/// `idx_email_messages_from_contact_id`.
+fn contacts_sender_branch(contact_ids: &[Uuid], resolved: &ResolvedFilters) -> SqlFragment {
+    let mut f =
+        SqlFragment::raw("SELECT m.thread_id FROM email_messages m WHERE m.from_contact_id = ANY(");
+    f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+    f.push_raw(") AND ");
+    f.extend(build_trash_check(resolved));
+    f
+}
+
+/// One recipient branch covering every requested recipient role — probes
+/// `idx_email_message_recipients_contact_id`.
+fn contacts_recipient_branch(
+    contact_ids: &[Uuid],
+    kinds: &AddressKinds,
+    resolved: &ResolvedFilters,
+) -> SqlFragment {
+    let mut f = SqlFragment::raw(
+        "SELECT m.thread_id FROM email_message_recipients mr \
+         JOIN email_messages m ON m.id = mr.message_id \
+         WHERE mr.contact_id = ANY(",
+    );
+    f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+    f.push_raw(format!("){}", kinds.recipient_type_sql()));
+    f.push_raw(" AND ");
+    f.extend(build_trash_check(resolved));
+    f
 }
 
 /// `AND <alias>.link_id = ANY($links)` when a link scope applies, empty otherwise.
@@ -501,60 +544,117 @@ fn link_scope_fragment(alias: &str, link_scope: Option<&[Uuid]>) -> SqlFragment 
     }
 }
 
-/// Shared shape for a union-branch SELECT that joins through
-/// `email_contacts` with a single bound predicate against `c.*`.
+/// Body of a hoisted `matching_contacts_N` CTE: the contact ids matching one
+/// text predicate (ILIKE / domain equality), computed once and shared by the
+/// sender/recipient branches that reference it. Materialized so Postgres
+/// can't inline it back into each branch as a separate `email_contacts` scan.
 ///
-/// Text matches (ILIKE / domain equality) are not contact-id-scoped like the
-/// Complete branches are, so without `link_scope` they scan matches across
-/// every mailbox in the table before the candidate stage intersects with the
-/// caller's threads. Scoping both `c` and `m` by the caller's links bounds
-/// the CTE to the caller's own mail.
-fn build_union_branch_text_match(
-    kind: AddressKind,
+/// Text matches are not contact-id-scoped like the Complete branches are, so
+/// without `link_scope` they match contacts across every mailbox in the
+/// table before the candidate stage intersects with the caller's threads.
+/// Scoping `c` here (and `m` in the branches) bounds the work to the
+/// caller's own mail.
+fn matching_contacts_cte_body(
     predicate_prefix: &str,
     bind_value: String,
     link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
-    match kind {
-        AddressKind::Sender => {
-            let mut f = SqlFragment::raw(format!(
-                "SELECT m.thread_id FROM email_contacts c \
-                 JOIN email_messages m ON m.from_contact_id = c.id \
-                 WHERE {predicate_prefix}"
-            ));
-            f.extend(SqlFragment::bind_string(bind_value));
-            f.extend(link_scope_fragment("c", link_scope));
-            f.extend(link_scope_fragment("m", link_scope));
-            f
-        }
-        _ => {
-            let recipient_type = kind.recipient_type_sql().expect("non-sender kind");
-            let mut f = SqlFragment::raw(format!(
-                "SELECT m.thread_id FROM email_contacts c \
-                 JOIN email_message_recipients mr ON mr.contact_id = c.id \
-                 JOIN email_messages m ON m.id = mr.message_id \
-                 WHERE {predicate_prefix}"
-            ));
-            f.extend(SqlFragment::bind_string(bind_value));
-            f.push_raw(format!(" AND mr.recipient_type = '{recipient_type}'"));
-            f.extend(link_scope_fragment("c", link_scope));
-            f.extend(link_scope_fragment("m", link_scope));
-            f
-        }
+    let mut f = SqlFragment::raw(format!(
+        "SELECT c.id FROM email_contacts c WHERE {predicate_prefix}"
+    ));
+    f.extend(SqlFragment::bind_string(bind_value));
+    f.extend(link_scope_fragment("c", link_scope));
+    f
+}
+
+/// Sender branch consuming a hoisted `matching_contacts_N` CTE.
+fn text_sender_branch(
+    cte_name: &str,
+    resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
+) -> SqlFragment {
+    let mut f = SqlFragment::raw(format!(
+        "SELECT m.thread_id FROM {cte_name} c \
+         JOIN email_messages m ON m.from_contact_id = c.id \
+         WHERE "
+    ));
+    f.extend(build_trash_check(resolved));
+    f.extend(link_scope_fragment("m", link_scope));
+    f
+}
+
+/// Merged recipient branch consuming a hoisted `matching_contacts_N` CTE.
+fn text_recipient_branch(
+    cte_name: &str,
+    kinds: &AddressKinds,
+    resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
+) -> SqlFragment {
+    let mut f = SqlFragment::raw(format!(
+        "SELECT m.thread_id FROM {cte_name} c \
+         JOIN email_message_recipients mr ON mr.contact_id = c.id \
+         JOIN email_messages m ON m.id = mr.message_id \
+         WHERE "
+    ));
+    f.extend(build_trash_check(resolved));
+    f.push_raw(kinds.recipient_type_sql());
+    f.extend(link_scope_fragment("m", link_scope));
+    f
+}
+
+/// Emits one text-matched group: a hoisted contacts CTE plus the branches
+/// that consume it.
+fn push_text_group(
+    predicate_prefix: &str,
+    bind_value: String,
+    kinds: &AddressKinds,
+    resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
+    contact_ctes: &mut Vec<(String, SqlFragment)>,
+    branches: &mut Vec<SqlFragment>,
+) {
+    let cte_name = format!("matching_contacts_{}", contact_ctes.len());
+    contact_ctes.push((
+        cte_name.clone(),
+        matching_contacts_cte_body(predicate_prefix, bind_value, link_scope),
+    ));
+    if kinds.sender {
+        branches.push(text_sender_branch(&cte_name, resolved, link_scope));
+    }
+    if kinds.any_recipient() {
+        branches.push(text_recipient_branch(
+            &cte_name, kinds, resolved, link_scope,
+        ));
     }
 }
 
-/// Builds the body of the `matching_threads` CTE — i.e., everything
-/// between `MATERIALIZED (` and `)`. Two shapes:
+/// The `matching_threads` CTE plus any hoisted contact-lookup CTEs it
+/// depends on. `build_query` emits `contact_ctes` (in order) before
+/// `matching_threads` in the `WITH` chain.
+pub(super) struct MatchingThreadsCtes {
+    /// Hoisted `matching_contacts_N` CTEs as `(name, body)` — one per
+    /// distinct text-matched (Partial/Domain) address predicate.
+    pub(super) contact_ctes: Vec<(String, SqlFragment)>,
+    /// Body of the `matching_threads` CTE itself.
+    pub(super) body: SqlFragment,
+}
+
+/// Builds the `matching_threads` CTE (and any hoisted contact CTEs it
+/// needs). Two shapes:
 ///
 /// 1. **UNION-of-branches** (preferred): when the candidate filter is a
 ///    single conjunct that's a flat OR-tree of positive single-address
-///    literals (e.g. `Sender(X) OR Cc(X) OR Bcc(X) OR Recipient(X)`), each
-///    literal becomes its own UNION branch. Each branch is index-driven
-///    via `idx_email_messages_from_contact_id` /
-///    `idx_email_message_recipients_contact_id`, so total work is
-///    proportional to the contact's actual mention count rather than
-///    mailbox size.
+///    literals (e.g. `Sender(X) OR Cc(X) OR Bcc(X) OR Recipient(X)`),
+///    literals are grouped by address predicate and each group becomes at
+///    most two UNION branches: a sender branch and one merged recipient
+///    branch covering every requested recipient role (with no
+///    `recipient_type` filter at all when all three roles are present).
+///    Complete-email branches are index-driven via
+///    `idx_email_messages_from_contact_id` /
+///    `idx_email_message_recipients_contact_id`; Partial/Domain predicates
+///    resolve contacts once in a hoisted `matching_contacts_N` CTE (riding
+///    the trigram / domain expression index) that both branches consume,
+///    instead of re-scanning `email_contacts` per branch.
 /// 2. **Combined predicate**: for everything else (multiple AND conjuncts,
 ///    NOT inside a conjunct, mixed nested operators) we emit a single
 ///    `SELECT DISTINCT m.thread_id FROM email_messages m WHERE …` whose
@@ -566,14 +666,15 @@ fn build_union_branch_text_match(
 ///
 /// `link_scope` restricts the CTE's contact/message scans to the given
 /// links. Only pass it when every candidate thread is known to belong to
-/// those links (owned-only, non-team queries) — shared and team candidate
-/// selects include threads from other users' links, which the scoped CTE
-/// would wrongly filter out.
-pub(super) fn build_matching_threads_cte_body(
+/// those links: the caller's own links (owned-only queries) or the team's
+/// primary links (team-scoped queries). Shared and project candidate
+/// selects include threads from arbitrary links, which a scoped CTE would
+/// wrongly filter out.
+pub(super) fn build_matching_threads_ctes(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
     link_scope: Option<&[Uuid]>,
-) -> Option<SqlFragment> {
+) -> Option<MatchingThreadsCtes> {
     let conjuncts = extract_address_only_conjuncts(ast);
     if conjuncts.is_empty() {
         return None;
@@ -582,10 +683,62 @@ pub(super) fn build_matching_threads_cte_body(
     if conjuncts.len() == 1
         && let Some(literals) = flatten_or_tree_of_address_literals(conjuncts[0])
     {
-        let branches: Vec<SqlFragment> = literals
-            .into_iter()
-            .filter_map(|(k, e)| build_union_branch(k, e, resolved, link_scope))
-            .collect();
+        // Group literals by address predicate so one address requested in
+        // several roles (the common "this address anywhere" case) shares
+        // branches and contact-resolution work.
+        let mut groups: Vec<(AddressGroupKey, AddressKinds)> = Vec::new();
+        for (kind, email) in literals {
+            let Some(key) = address_group_key(email, resolved) else {
+                continue;
+            };
+            match groups.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, kinds)) => kinds.add(kind),
+                None => {
+                    let mut kinds = AddressKinds::default();
+                    kinds.add(kind);
+                    groups.push((key, kinds));
+                }
+            }
+        }
+
+        let mut contact_ctes: Vec<(String, SqlFragment)> = Vec::new();
+        let mut branches: Vec<SqlFragment> = Vec::new();
+        for (key, kinds) in &groups {
+            match key {
+                AddressGroupKey::Contacts(ids) => {
+                    if kinds.sender {
+                        branches.push(contacts_sender_branch(ids, resolved));
+                    }
+                    if kinds.any_recipient() {
+                        branches.push(contacts_recipient_branch(ids, kinds, resolved));
+                    }
+                }
+                AddressGroupKey::Partial(s) => {
+                    let pattern = format!("%{}%", escape_like_pattern(s));
+                    push_text_group(
+                        "c.email_address ILIKE ",
+                        pattern,
+                        kinds,
+                        resolved,
+                        link_scope,
+                        &mut contact_ctes,
+                        &mut branches,
+                    );
+                }
+                AddressGroupKey::Domain(domain) => {
+                    push_text_group(
+                        "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
+                        domain.clone(),
+                        kinds,
+                        resolved,
+                        link_scope,
+                        &mut contact_ctes,
+                        &mut branches,
+                    );
+                }
+            }
+        }
+
         if !branches.is_empty() {
             let mut iter = branches.into_iter();
             let mut f = iter.next().expect("non-empty checked above");
@@ -593,13 +746,17 @@ pub(super) fn build_matching_threads_cte_body(
                 f.push_raw("\n            UNION\n            ");
                 f.extend(branch);
             }
-            return Some(f);
+            return Some(MatchingThreadsCtes {
+                contact_ctes,
+                body: f,
+            });
         }
-        // All branches were unresolved Complete emails — emit a no-rows
+        // All literals were unresolved Complete emails — emit a no-rows
         // form so the JOIN against matching_threads is empty.
-        return Some(SqlFragment::raw(
-            "SELECT NULL::uuid AS thread_id WHERE FALSE",
-        ));
+        return Some(MatchingThreadsCtes {
+            contact_ctes: Vec::new(),
+            body: SqlFragment::raw("SELECT NULL::uuid AS thread_id WHERE FALSE"),
+        });
     }
 
     // Combined-predicate fallback: AND all conjuncts and emit one subquery.
@@ -614,7 +771,48 @@ pub(super) fn build_matching_threads_cte_body(
     f.push_raw(" AND ");
     f.extend(predicate);
     f.extend(link_scope_fragment("m", link_scope));
-    Some(f)
+    Some(MatchingThreadsCtes {
+        contact_ctes: Vec::new(),
+        body: f,
+    })
+}
+
+#[cfg(test)]
+impl MatchingThreadsCtes {
+    /// Debug SQL over the hoisted CTEs plus the `matching_threads` body, in
+    /// emission order. Bind numbering restarts per fragment.
+    pub(super) fn to_debug_sql(&self) -> String {
+        let mut out = String::new();
+        for (name, body) in &self.contact_ctes {
+            out.push_str(name);
+            out.push_str(" AS MATERIALIZED (");
+            out.push_str(&body.to_debug_sql());
+            out.push_str(")\n");
+        }
+        out.push_str(&self.body.to_debug_sql());
+        out
+    }
+
+    pub(super) fn has_bind_string(&self, expected: &str) -> bool {
+        self.contact_ctes
+            .iter()
+            .any(|(_, b)| b.has_bind_string(expected))
+            || self.body.has_bind_string(expected)
+    }
+
+    pub(super) fn has_bind_uuid(&self, expected: &Uuid) -> bool {
+        self.contact_ctes
+            .iter()
+            .any(|(_, b)| b.has_bind_uuid(expected))
+            || self.body.has_bind_uuid(expected)
+    }
+
+    pub(super) fn has_no_raw_containing(&self, needle: &str) -> bool {
+        self.contact_ctes
+            .iter()
+            .all(|(_, b)| b.has_no_raw_containing(needle))
+            && self.body.has_no_raw_containing(needle)
+    }
 }
 
 /// Builds thread-level SQL WHERE conditions. Message-level literals map to TRUE.
