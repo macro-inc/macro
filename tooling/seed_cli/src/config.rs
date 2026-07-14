@@ -32,6 +32,8 @@ maybe_env_vars! {
     pub struct LexicalServiceUrl;
     /// internal auth key shared by sync/lexical locally
     pub struct InternalApiSecretKey;
+    /// frontend dev server port, for the per-persona URLs apply prints
+    pub struct FrontendPort;
 }
 
 /// Clients for initializing native markdown document content.

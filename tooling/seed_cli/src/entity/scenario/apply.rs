@@ -179,6 +179,9 @@ pub async fn apply(
     seed_emails(ctx, spec).await?;
     seed_messages(ctx, spec).await?;
 
+    let frontend_port = crate::config::FrontendPort::new()
+        .map(|port| port.to_string())
+        .unwrap_or_else(|| "3000".to_string());
     println!("\nScenario `{}` applied.", spec.scenario);
     for (key, user) in &spec.users {
         // Per-persona hostnames get separate cookie jars, so each of these
@@ -188,7 +191,7 @@ pub async fn apply(
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         {
             println!(
-                "  {key}: http://{key}.localhost:3000 (log in as {})",
+                "  {key}: http://{key}.localhost:{frontend_port} (log in as {})",
                 user.email
             );
         } else {
