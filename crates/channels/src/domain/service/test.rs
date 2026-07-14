@@ -562,17 +562,30 @@ impl ChannelRepo for FakeMutationRepo {
         channel_id: Uuid,
         user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<bool, Self::Err> {
         let mut state = self.state.lock().unwrap();
+        if let Some(participant) = state
+            .participants
+            .iter_mut()
+            .find(|participant| participant.user_id == user_id.as_ref())
+        {
+            if participant.left_at.is_none() {
+                return Ok(false);
+            }
+            participant.role = role;
+            participant.joined_at = Utc::now();
+            participant.left_at = None;
+        } else {
+            state.participants.push(ChannelParticipant {
+                channel_id,
+                user_id: user_id.as_ref().to_string(),
+                role,
+                joined_at: Utc::now(),
+                left_at: None,
+            });
+        }
         state.participant_additions += 1;
-        state.participants.push(ChannelParticipant {
-            channel_id,
-            user_id: user_id.as_ref().to_string(),
-            role,
-            joined_at: Utc::now(),
-            left_at: None,
-        });
-        Ok(())
+        Ok(true)
     }
 
     async fn remove_participant(

@@ -302,13 +302,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Add a participant.
+    /// Atomically add or reactivate a participant, returning whether membership changed.
     fn add_participant<'a>(
         &self,
         channel_id: Uuid,
         user_id: MacroUserIdStr<'a>,
         role: super::models::ParticipantRole,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Remove a participant.
     fn remove_participant(

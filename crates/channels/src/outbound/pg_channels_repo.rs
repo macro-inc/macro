@@ -2876,11 +2876,16 @@ impl ChannelRepo for PgChannelsRepo {
         channel_id: Uuid,
         user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
             r#"
             INSERT INTO comms_channel_participants (channel_id, user_id, role)
             VALUES ($1, $2, $3)
+            ON CONFLICT (channel_id, user_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                joined_at = now(),
+                left_at = NULL
+            WHERE comms_channel_participants.left_at IS NOT NULL
             "#,
             channel_id,
             user_id.as_ref(),
@@ -2889,7 +2894,7 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await
         .context("unable to add participant to channel")?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {

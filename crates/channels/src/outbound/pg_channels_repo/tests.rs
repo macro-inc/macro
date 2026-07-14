@@ -82,6 +82,37 @@ fn report_err(e: rootcause::Report) -> anyhow::Error {
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn add_participant_atomically_adds_or_reactivates(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    assert!(
+        !repo
+            .add_participant(CH1, macro_user_id(USER_A), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.add_participant(CH1, macro_user_id(LEFT_USER), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .add_participant(CH1, macro_user_id(LEFT_USER), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.add_participant(CH1, macro_user_id(NON_MEMBER), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn channel_join_code_is_generated_once_and_reused(pool: Pool<Postgres>) {
     let repo = repo(pool);
 

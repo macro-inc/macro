@@ -1115,17 +1115,15 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         let mut active_participant_user_ids = participant_ids(&before);
-        if active_participant_user_ids
-            .iter()
-            .any(|participant| participant == &actor_user)
-        {
-            return Ok(());
-        }
-
-        self.repo
+        let changed = self
+            .repo
             .add_participant(info.id, actor_user.copied(), ParticipantRole::Member)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if !changed {
+            return Ok(());
+        }
+
         active_participant_user_ids.push(actor_user.clone());
         self.events.dispatch(ChannelEvent::ParticipantJoined {
             channel_id: info.id,
