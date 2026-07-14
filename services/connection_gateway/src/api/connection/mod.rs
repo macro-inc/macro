@@ -9,41 +9,62 @@ use anyhow::Result;
 use axum::{
     Router,
     extract::{
-        Extension, State,
+        State,
         ws::{Message as AxumWebsocketMessage, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::get,
 };
-use cowlike::CowLike;
 use futures::{
     FutureExt,
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::handle_websocket_stream;
 use model::user::UserContext;
 use model_entity::EntityType;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 
 mod messages;
+
+#[cfg(test)]
+mod test;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/", get(ws_handler))
 }
 
 /// Handle upgrading the https connection to a websocket connection
-#[tracing::instrument(skip(ws, ctx, user_context, config), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ws, ctx, authorization, config), fields(user_id=?authorization.macro_user_id))]
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(ctx): State<ApiContext>,
     State(config): State<Arc<Config>>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
 ) -> impl IntoResponse {
+    authenticated_websocket_upgrade(ws, authorization, move |socket, user_id, user_context| {
+        handle_websocket_connection(socket, ctx, config, user_id, user_context)
+    })
+}
+
+fn authenticated_websocket_upgrade<C, Fut>(
+    ws: WebSocketUpgrade,
+    authorization: SharedMacroAuthorizationExtractor,
+    callback: C,
+) -> axum::response::Response
+where
+    C: FnOnce(WebSocket, MacroUserIdStr<'static>, UserContext) -> Fut + Send + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
+{
     ws.on_upgrade(move |socket| {
-        handle_websocket_connection(socket, ctx, config, user_context.clone())
+        callback(
+            socket,
+            authorization.macro_user_id,
+            authorization.user_context,
+        )
     })
 }
 
@@ -51,20 +72,17 @@ pub async fn ws_handler(
 /// Should create a new connection in the connection manager,
 /// and spawn tasks for both forwarding of messages, and reading incoming messages from the client.
 /// If any part of forwarding or reading fails, then the connection should be removed from the connection manager.
-#[tracing::instrument(skip(socket, ctx, user_context, config), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(socket, ctx, user_context, config), fields(user_id=?user_id))]
 async fn handle_websocket_connection(
     socket: WebSocket,
     ctx: ApiContext,
     config: Arc<Config>,
-    user_context: Extension<UserContext>,
+    user_id: MacroUserIdStr<'static>,
+    user_context: UserContext,
 ) {
     let (sink, stream) = socket.split();
     let (sender, receiver) = tokio::sync::mpsc::channel::<OutgoingMessage>(100);
     let connection_id = uuid::Uuid::new_v4().to_string();
-    let Ok(user_id) = MacroUserIdStr::parse_from_str(&user_context.user_id) else {
-        return;
-    };
-    let user_id = user_id.into_owned();
 
     // Create guard that records last online time when websocket connection closes
     let last_online_guard = ctx.last_online_worker.new_guard(user_id.clone());

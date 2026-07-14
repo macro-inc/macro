@@ -7,7 +7,7 @@ A service responsible for managing connections, and allowing services to send me
 
 ```bash
 cp .env.sample .env
-cargo run --features local_auth
+cargo run --bin connection_gateway_service --features macro_authorization/local_auth
 ```
 
 ## Utility Scripts

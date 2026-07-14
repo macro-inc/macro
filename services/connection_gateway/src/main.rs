@@ -29,6 +29,7 @@ use last_online_tracker::{
     outbound::{redis::RedisLastOnlineRepo, time::DefaultTime as LastOnlineDefaultTime},
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::SharedMacroAuthorizationService;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use service::dynamodb::create_dynamo_db_connection_manager;
@@ -56,6 +57,7 @@ async fn main() -> Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_service = SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args);
 
     // allow requests from any origin
     let cors = CorsLayer::new()
@@ -123,7 +125,7 @@ async fn main() -> Result<()> {
         context,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::clone(&config),
-        jwt_args,
+        authorization_service,
         frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
             PullAggregatorImpl::new(FrecencyPgProcessor::new(pgpool), DefaultTime),
             Duration::from_secs(60),
