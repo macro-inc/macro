@@ -12,6 +12,7 @@ use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{SharedMacroAuthorizationService, SharedUserPermissionsService};
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
@@ -89,6 +90,8 @@ pub(crate) struct ApiContext {
     pub loops_client: Arc<LoopsClient>,
     pub referral_service: Arc<ReferralServiceType>,
     pub rate_limit_service: RateLimiter,
+    pub authorization_service: SharedMacroAuthorizationService,
+    pub user_permissions_service: SharedUserPermissionsService,
     /// The stripe price id
     pub stripe_price_id: String,
 }
