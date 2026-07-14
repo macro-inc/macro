@@ -1,8 +1,6 @@
-use axum::{Extension, http::StatusCode, response::IntoResponse};
-use model::{
-    response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse},
-    user::UserContext,
-};
+use axum::{http::StatusCode, response::IntoResponse};
+use macro_authorization::SharedMacroAuthorizationExtractor;
+use model::response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse};
 
 /// Populates the users items
 #[utoipa::path(
@@ -19,8 +17,10 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(user_context), fields(user_id=?user_context.user_id))]
-pub async fn populate_items_handler(user_context: Extension<UserContext>) -> impl IntoResponse {
+#[tracing::instrument(skip(authorization), fields(user_id=?authorization.user_context.user_id))]
+pub async fn populate_items_handler(
+    authorization: SharedMacroAuthorizationExtractor,
+) -> impl IntoResponse {
     let response_data = GenericSuccessResponse { success: true };
 
     GenericResponse::builder()

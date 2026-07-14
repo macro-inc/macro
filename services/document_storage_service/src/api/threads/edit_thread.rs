@@ -7,12 +7,12 @@ use axum::{Extension, Json, extract};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use macro_db_client::share_permission::edit::edit_thread_permission;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
 };
 use model::thread::EmailThreadPermission;
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::{
     AccessLevel, EditAccessLevel, OwnerAccessLevel,
 };
@@ -48,11 +48,11 @@ pub struct PatchThreadRequestV2 {
             (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, project, thread_access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, project, thread_access), fields(user_id=?authorization.user_context.user_id))]
 pub async fn edit_thread_handler(
     thread_access: ThreadAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: OptionalSharedMacroAuthorizationExtractor,
     thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
     project: ProjectBodyAccessLevelExtractor<

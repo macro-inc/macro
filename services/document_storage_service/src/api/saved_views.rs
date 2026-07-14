@@ -4,7 +4,10 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
-use axum::{Extension, Router, routing::get};
+use axum::{Router, routing::get};
+use macro_authorization::{
+    MacroAuthorizationRejection, SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+};
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use saved_views::{ExcludedDefaultViewStorage, PgViewStorage, ViewStorage};
@@ -30,6 +33,8 @@ pub fn router() -> Router<ApiContext> {
 
 #[derive(Debug, Error)]
 pub enum SavedViewErr {
+    #[error(transparent)]
+    Credential(#[from] MacroAuthorizationRejection),
     #[error("An unknown error has occurred")]
     DbErr(#[from] sqlx::Error),
     #[error("You are not authorized to access this")]
@@ -43,6 +48,7 @@ pub enum SavedViewErr {
 impl IntoResponse for SavedViewErr {
     fn into_response(self) -> Response {
         match &self {
+            SavedViewErr::Credential(error) => (*error).into_response(),
             SavedViewErr::DbErr(error) => {
                 tracing::error!(error=?error);
                 (
@@ -118,21 +124,18 @@ struct SavedViewOwner(pub UserContext);
 
 impl<S> FromRequestParts<S> for SavedViewOwner
 where
-    S: Send + Sync,
+    S: Send + Sync + 'static,
     PgPool: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
 {
     type Rejection = SavedViewErr;
 
-    //HACK: to be replaced once @seanaye's extractor pr is merged
-    //until then, we are left with using these extension extractors
     #[tracing::instrument(skip(parts, state), err)]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-
-        let user_context = Extension::<UserContext>::from_request_parts(parts, state)
-            .await
-            .map(|Extension(ctx)| ctx)
-            .map_err(|_| SavedViewErr::BadRequest("Missing user context"))?;
+        let user_context = SharedMacroAuthorizationExtractor::from_request_parts(parts, state)
+            .await?
+            .user_context;
 
         let saved_view_id = Path::<SavedViewParams>::from_request_parts(parts, state)
             .await
@@ -160,12 +163,13 @@ where
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id), err)]
 async fn get_views_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
 ) -> Result<(StatusCode, Json<ViewsResponse>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
+    let user_context = authorization.user_context;
 
     let (views, excluded_default_views) = try_join!(
         async {
@@ -201,10 +205,11 @@ async fn get_views_handler(
 )]
 async fn create_view_handler(
     ctx: State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Json(create_view_request): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<View>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
+    let user_context = authorization.user_context;
 
     let new_view = View::new(
         user_context.user_id.clone(),
@@ -285,15 +290,16 @@ async fn patch_view_handler(
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), fields(user_id=?user_context.user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id), err)]
 pub async fn exclude_default_view_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Json(ExcludeDefaultViewRequest {
         default_view_id: id,
     }): Json<ExcludeDefaultViewRequest>,
 ) -> Result<StatusCode, SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
+    let user_context = authorization.user_context;
 
     pg_view_storage
         .create_excluded_default_view(ExcludedDefaultView::new(

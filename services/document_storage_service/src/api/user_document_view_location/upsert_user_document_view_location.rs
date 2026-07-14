@@ -3,13 +3,13 @@ use crate::api::context::EntityAccessService;
 use crate::model::request::documents::user_document_view_location::UpsertUserDocumentViewLocationRequest;
 use axum::extract::{Path, State};
 use axum::{
-    Extension, extract,
+    extract,
     http::StatusCode,
     response::{IntoResponse, Json},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::{EmptyResponse, GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 #[derive(serde::Deserialize)]
@@ -31,18 +31,18 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, req, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, req, _access), fields(user_id=?authorization.user_context.user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { document_id }): Path<Params>,
     extract::Json(req): extract::Json<UpsertUserDocumentViewLocationRequest>,
 ) -> impl IntoResponse {
     if let Err(e) =
         macro_db_client::user_document_view_location::upsert::upsert_user_document_view_location(
             &ctx.db,
-            &user_context.user_id,
+            &authorization.user_context.user_id,
             &document_id,
             &req.location,
         )

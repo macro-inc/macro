@@ -7,9 +7,8 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::get,
 };
-use axum_extra::extract::Cached;
 use complete_graph::GraphqlSoupRequestParts;
-use model_user::axum_extractor::OptionalMacroUserExtractor;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new().route("/soup/graphql", get(graphiql).post(handler))
@@ -23,15 +22,17 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
     let (mut parts, body) = req.into_parts();
 
     // Authentication stays eager: it gates execution for non-introspection
-    // queries and primes the `Cached` entry that resolvers extract lazily.
+    // queries and primes the request-local authorization cache for resolvers.
     let auth =
-        match Cached::<OptionalMacroUserExtractor>::from_request_parts(&mut parts, &state).await {
-            Ok(Cached(auth)) => auth,
+        match OptionalSharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+            .await
+        {
+            Ok(auth) => auth,
             Err(err) => return err.into_response(),
         };
 
     // `GraphQLRequest` consumes a whole request, but the original parts (with
-    // the middleware-populated extensions) must survive for the resolvers, so
+    // the request-local authorization cache) must survive for the resolvers, so
     // parse the body from a shallow copy of method/uri/headers.
     let mut synthetic = Request::new(body);
     *synthetic.method_mut() = parts.method.clone();

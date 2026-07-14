@@ -5,12 +5,12 @@ use axum::{Json, extract::State};
 use documents_hex::domain::create::{NewDocumentMetadata, NewMarkdownTextDocument};
 use documents_hex::domain::models::DocumentError;
 use documents_hex::domain::ports::create::DocumentCreationService as _;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_db_client::instructions::create::{
     CreateInstructionsError, insert_instructions_document,
 };
 use macro_db_client::instructions::get::get_instructions_document;
 use model::response::GenericErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 
 /// Creates an instructions document for the current user
@@ -27,7 +27,7 @@ use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=%user_context.macro_user_id))]
 pub async fn create_instructions_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<CreateInstructionsDocumentResponse>, DocumentError> {
     let user_id = user_context.macro_user_id;
 

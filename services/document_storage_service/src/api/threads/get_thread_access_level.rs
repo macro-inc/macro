@@ -1,13 +1,13 @@
 use crate::api::context::ApiContext;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{Extension, Json};
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::GenericResponse;
 use model::thread::response::GetThreadUserAccessLevelResponse;
-use model::user::UserContext;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 
@@ -15,13 +15,13 @@ use models_permissions::share_permission::access_level::AccessLevel;
 pub struct Params {
     pub thread_id: String,
 }
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { thread_id }): Path<Params>,
 ) -> impl IntoResponse {
-    let user_id = match MacroUserIdStr::parse_from_str(&user_context.user_id) {
+    let user_id = match MacroUserIdStr::parse_from_str(&authorization.user_context.user_id) {
         Ok(user_id) => user_id,
         Err(e) => {
             tracing::error!(error=?e, "failed to parse user id");

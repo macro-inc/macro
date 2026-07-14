@@ -2,14 +2,13 @@ use crate::api::context::ApiContext;
 use crate::api::context::EntityAccessService;
 use crate::model::response::documents::user_document_view_location::UserDocumentViewLocationResponse;
 use axum::{
-    Extension,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::Deserialize;
 
@@ -33,16 +32,16 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, _access), fields(user_id=?authorization.user_context.user_id))]
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     match macro_db_client::user_document_view_location::get::get_user_document_view_location(
         &ctx.db,
-        &user_context.user_id,
+        &authorization.user_context.user_id,
         &document_id,
     )
     .await
