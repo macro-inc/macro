@@ -14,6 +14,12 @@ type ThemeChipPillProps = {
   name: string;
   /** Shows a trailing caret, signalling the pill opens a dropdown. */
   caret?: boolean;
+  /**
+   * Max-width class(es) for the label, overriding the default responsive
+   * truncation — e.g. `max-w-none` to let a long label (like "System
+   * preference") show in full.
+   */
+  maxLabelWidth?: string;
 } & ComponentProps<'button'>;
 
 /**
@@ -28,6 +34,7 @@ export function ThemeChipPill(props: ThemeChipPillProps) {
     'name',
     'class',
     'caret',
+    'maxLabelWidth',
   ]);
   return (
     <Dynamic
@@ -47,9 +54,14 @@ export function ThemeChipPill(props: ThemeChipPillProps) {
       </Show>
       {/* Shrink the truncation width as the split pane narrows so the pill
           doesn't crowd its row; `/split` variants no-op where there's no split
-          container ancestor, falling back to the base width. */}
+          container ancestor, falling back to the base width. Callers can widen
+          it via `maxLabelWidth` (e.g. to show a long label in full). */}
       <span
-        class="max-w-26 min-w-0 truncate cursor-default @max-[600px]/split:max-w-20 @max-[480px]/split:max-w-14"
+        class={cn(
+          'min-w-0 truncate cursor-default',
+          local.maxLabelWidth ??
+            'max-w-26 @max-[600px]/split:max-w-20 @max-[480px]/split:max-w-14'
+        )}
         title={local.name}
       >
         {local.name}

@@ -1,6 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
@@ -36,7 +35,7 @@ import {
   saveTheme,
   updateTheme,
 } from '@theme/utils/themeUtils';
-import { Dropdown, Layer, ToggleSwitch } from '@ui';
+import { Dropdown, Layer, ToggleSwitch, Tooltip } from '@ui';
 import {
   monochromeIcons,
   setMonochromeIcons,
@@ -54,39 +53,43 @@ import {
 /** Copies a theme's JSON to the clipboard (for sharing / importing elsewhere). */
 function CopyThemeButton(props: { themeId: string; name: string }) {
   return (
-    <button
-      type="button"
-      aria-label={`Copy ${props.name}`}
-      class="rounded p-0.5 hover:text-ink mobile:p-1.5"
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        exportTheme(props.themeId);
-        toast.success('Theme copied to clipboard');
-      }}
-    >
-      <ClipboardIcon class="size-3.5 mobile:size-5" />
-    </button>
+    <Tooltip as="span" label={`Copy ${props.name}`}>
+      <button
+        type="button"
+        aria-label={`Copy ${props.name}`}
+        class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          exportTheme(props.themeId);
+          toast.success('Theme copied to clipboard');
+        }}
+      >
+        <ClipboardIcon class="size-3.5 mobile:size-5" />
+      </button>
+    </Tooltip>
   );
 }
 
 /** Edits a theme in the inline editor (custom → in place, default → forked). */
 function EditThemeButton(props: { name: string; onEdit: () => void }) {
   return (
-    <button
-      type="button"
-      aria-label={`Edit ${props.name}`}
-      class="rounded p-0.5 hover:text-ink mobile:p-1.5"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        props.onEdit();
-      }}
-    >
-      <PencilIcon class="size-3.5 mobile:size-5" />
-    </button>
+    <Tooltip as="span" label={`Edit ${props.name}`}>
+      <button
+        type="button"
+        aria-label={`Edit ${props.name}`}
+        class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          props.onEdit();
+        }}
+      >
+        <PencilIcon class="size-3.5 mobile:size-5" />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -515,13 +518,17 @@ function ActiveThemeSelect(props: {
         if (!isOpen) clearThemePreview();
       }}
     >
-      <KobalteDropdownMenu.Trigger class="flex h-auto items-center gap-1.5 rounded-lg border border-edge-muted py-1 pl-1 pr-1.5 text-xs text-ink hover:bg-ink/4">
-        <ThemeChips theme={activeTheme()} size="sm" />
-        <span class="truncate">
-          {themeMode() === 'system' ? 'System preference' : activeTheme().name}
-        </span>
-        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
-      </KobalteDropdownMenu.Trigger>
+      <KobalteDropdownMenu.Trigger
+        as={ThemeChipPill}
+        class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-1.5 hover:bg-ink/4"
+        caret
+        // Let "System preference" display in full rather than truncating.
+        maxLabelWidth="max-w-none"
+        theme={activeTheme()}
+        name={
+          themeMode() === 'system' ? 'System preference' : activeTheme().name
+        }
+      />
       <Dropdown.Content
         as="div"
         class="w-56 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
