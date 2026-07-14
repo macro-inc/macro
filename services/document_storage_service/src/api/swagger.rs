@@ -224,6 +224,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_typing_handler,
         channels::inbound::axum_router::add_participants_handler,
         channels::inbound::axum_router::remove_participants_handler,
+        channels::inbound::axum_router::get_channel_join_link_handler,
+        channels::inbound::axum_router::join_channel_by_code_handler,
         channels::inbound::axum_router::join_channel_handler,
         channels::inbound::axum_router::leave_channel_handler,
         channels::inbound::axum_router::get_channel_messages_handler,
