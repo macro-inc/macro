@@ -1,4 +1,4 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setUserThemes, systemMode, themeDepth, themeMode, themes, userThemes} from '../signals/themeSignals';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setThemeMode, setUserThemes, systemMode, themeDepth, themeMode, themes, userThemes} from '../signals/themeSignals';
 import { semanticTokens, type ThemeV2, type ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
@@ -295,6 +295,29 @@ export function getLiveTheme(): ThemeV2{
 /** Intrinsic darkness of a stored theme: dark when text is lighter than background. */
 export function isTokensDark(tokens: ThemeV2Tokens): boolean {
   return tokens.c0.l > tokens.b0.l;
+}
+
+/** Pins a theme as the "Active theme": makes it the stored theme for its
+ *  intrinsic light/dark mode and switches the mode to match, so
+ *  resolveActiveThemeId / systemThemeEffect apply it live. Shared by the settings
+ *  Active-theme picker and the command-palette "Change theme" action so choosing
+ *  a theme in either place is reflected in the other. */
+export function pinTheme(theme: ThemeV2): void {
+  if (isTokensDark(theme.tokens)) {
+    setDarkModeTheme(theme.id);
+    setThemeMode('dark');
+  } else {
+    setLightModeTheme(theme.id);
+    setThemeMode('light');
+  }
+}
+
+/** Follows the OS color scheme (the "System preference" option): switches the
+ *  mode to 'system' and applies whichever per-mode theme the OS currently
+ *  resolves to. Shared by the settings picker and the command palette. */
+export function applySystemTheme(): void {
+  setThemeMode('system');
+  applyTheme(resolveActiveThemeId());
 }
 
 /** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */

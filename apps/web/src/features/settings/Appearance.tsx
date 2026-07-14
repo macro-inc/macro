@@ -30,6 +30,7 @@ import {
   exportTheme,
   getLiveTheme,
   isTokensDark,
+  pinTheme,
   previewTheme,
   resolveActiveThemeId,
   saveTheme,
@@ -593,16 +594,6 @@ function ActiveThemeSelect(props: {
  * theme, so resolveActiveThemeId / systemThemeEffect apply it live.
  */
 function ActiveThemeRow() {
-  const pinTheme = (theme: ThemeV2) => {
-    if (isTokensDark(theme.tokens)) {
-      setDarkModeTheme(theme.id);
-      setThemeMode('dark');
-    } else {
-      setLightModeTheme(theme.id);
-      setThemeMode('light');
-    }
-  };
-
   // Saving a new theme from the editor pins it as the active theme.
   const editor = createThemeEditorController((id) => {
     const theme = themes().find((t) => t.id === id);
