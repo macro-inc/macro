@@ -2530,14 +2530,16 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn get_or_create_channel_join_code(&self, channel_id: Uuid) -> Result<Uuid, Self::Err> {
+        let candidate_join_code = macro_uuid::generate_uuid_v7();
         let join_code = sqlx::query_scalar!(
             r#"
             UPDATE comms_channels
-            SET join_code = COALESCE(join_code, gen_random_uuid())
+            SET join_code = COALESCE(join_code, $2)
             WHERE id = $1
             RETURNING join_code AS "join_code!"
             "#,
             channel_id,
+            candidate_join_code,
         )
         .fetch_one(&self.pool)
         .await
