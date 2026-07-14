@@ -13,7 +13,7 @@ import { createMemo, createSignal, Show } from 'solid-js';
 
 export const SoupViewContextGroup = () => {
   const panel = useSplitPanelOrThrow();
-  const { soup } = useSoupView();
+  const { soup, viewMode } = useSoupView();
   const groupByEnabled = useFeatureFlag('enable-soup-group-by', {
     enabledOverride: ENABLE_SOUP_GROUP_BY_OVERRIDE,
   });
@@ -55,7 +55,9 @@ export const SoupViewContextGroup = () => {
           onOpenChange={setGroupOpen}
         />
       </Show>
-      <Show when={isComponentListView('companies')}>
+      {/* The board is inherently grouped by stage columns, so grouping only
+          applies to the list mode. */}
+      <Show when={isComponentListView('companies') && viewMode() === 'list'}>
         <GroupDropdown
           value={value}
           onChange={onChange}

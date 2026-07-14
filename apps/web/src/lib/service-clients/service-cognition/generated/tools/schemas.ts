@@ -611,6 +611,100 @@ export const CreateDocumentResponse = z.object({
   documentId: z.string().uuid(),
 });
 
+export const CreateTag = z.object({
+  color: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('red'),
+      z.literal('tomato'),
+      z.literal('orange'),
+      z.literal('amber'),
+      z.literal('yellow'),
+      z.literal('green'),
+      z.literal('teal'),
+      z.literal('blue'),
+      z.literal('indigo'),
+      z.literal('purple'),
+      z.literal('pink'),
+      z.literal('gray'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  label: z.string(),
+  scope: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('personal'), z.literal('team')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('personal')
+    )
+    .optional(),
+});
+
+export const CreateTagResponse = z.object({
+  color: z.union([z.string(), z.null()]).optional(),
+  id: z.string().uuid(),
+  label: z.string(),
+  propertyDefinitionId: z.string().uuid(),
+  scope: z.any().superRefine((x, ctx) => {
+    const schemas = [z.literal('personal'), z.literal('team')];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  summary: z.string(),
+});
+
+export const DeleteTag = z.object({
+  id: z.string().uuid(),
+  property_definition_id: z.string().uuid(),
+});
+
+export const DeleteTagResponse = z.object({
+  message: z.string(),
+  success: z.boolean(),
+});
+
 export const DisplayResults = z.object({ view: z.any() });
 
 export const DisplayResultsResponse = z.object({ message: z.string() });
@@ -622,6 +716,56 @@ export const EditDocument = z.object({
 
 export const EditDocumentResponse = z.object({
   clarification: z.union([z.string(), z.null()]).optional(),
+  summary: z.string(),
+});
+
+export const EditTag = z.object({
+  color: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('red'),
+          z.literal('tomato'),
+          z.literal('orange'),
+          z.literal('amber'),
+          z.literal('yellow'),
+          z.literal('green'),
+          z.literal('teal'),
+          z.literal('blue'),
+          z.literal('indigo'),
+          z.literal('purple'),
+          z.literal('pink'),
+          z.literal('gray'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  id: z.string().uuid(),
+  label: z.union([z.string(), z.null()]).default(null),
+  property_definition_id: z.string().uuid(),
+});
+
+export const EditTagResponse = z.object({
+  color: z.union([z.string(), z.null()]).optional(),
+  id: z.string().uuid(),
+  label: z.string(),
+  propertyDefinitionId: z.string().uuid(),
   summary: z.string(),
 });
 

@@ -188,12 +188,11 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu',
+            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu',
             local.class
           )}
           depth={local.depth ?? 2}
           as={Surface}
-          bgToken="menu"
           {...rest}
           ref={setContentRef}
         >
@@ -230,12 +229,11 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation',
+            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu',
             local.class
           )}
           depth={local.depth ?? 2}
           as={Surface}
-          bgToken="menu"
           {...rest}
           ref={setContentRef}
         >

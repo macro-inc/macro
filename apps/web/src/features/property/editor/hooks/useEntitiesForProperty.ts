@@ -1,5 +1,5 @@
 import { useEmail, useUserId } from '@core/context/user';
-import { useAugmentUserWithDmActivity } from '@core/user';
+import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
@@ -28,7 +28,12 @@ import {
 
 export function useEntitiesForProperty(
   property: Accessor<Property | PropertyDefinitionDomain | undefined>,
-  searchQuery: Accessor<string>
+  searchQuery: Accessor<string>,
+  options?: {
+    /** Explicit pool for USER pickers (e.g. company owner → team members);
+     * when it returns a list, it replaces the quick-access people list. */
+    users?: Accessor<IUser[] | undefined>;
+  }
 ) {
   const [searchTerm, setSearchTerm] = createSignal('');
 
@@ -93,6 +98,16 @@ export function useEntitiesForProperty(
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = specificEntityType();
+
+    // An explicit user pool replaces the quick-access people list.
+    if (entityType === 'USER') {
+      const pool = options?.users?.();
+      if (pool) {
+        return pool.map((user) =>
+          userToEntity(augmentUserWithDmActivity(user))
+        );
+      }
+    }
 
     // For THREAD type, use email data (not in quickAccess yet)
     if (entityType === 'THREAD') {

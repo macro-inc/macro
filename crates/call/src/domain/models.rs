@@ -9,6 +9,7 @@ use item_filters::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
+use models_permissions::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -402,6 +403,10 @@ pub struct CallRecord {
     /// Viewer-relative call status when fetched in the context of a specific user.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<CallStatus>,
+    /// The caller's effective access level on this call. Set only on the
+    /// single-record read; `None` in list contexts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_access_level: Option<AccessLevel>,
     /// Participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Transcript segments ordered by `sequence_num`.

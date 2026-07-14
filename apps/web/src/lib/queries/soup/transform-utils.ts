@@ -23,6 +23,7 @@ import type {
   ForeignEntity,
   GithubPullRequestEntity,
   NamedSubType,
+  Notification,
   ProjectEntity,
   SearchData,
   WithSearch,
@@ -39,7 +40,6 @@ import type {
 import type {
   GithubPullRequest,
   SoupApiItem,
-  SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
@@ -57,6 +57,7 @@ type InnerSearchResult =
   | CallRecordSearchResult;
 
 type DisplayableSoupItem = SoupPage['items'][number];
+type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
   | DocumentEntity
@@ -68,6 +69,12 @@ type SoupEntity =
   | CallEntity
   | CrmCompanyEntity
   | ForeignEntity;
+
+type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
+  data: {
+    notifications?: Notification[] | null;
+  };
+};
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
@@ -553,8 +560,20 @@ function normalizeSentinelTs(
   return Date.parse(ts) > 0 ? ts : undefined;
 }
 
-export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
-  match(item)
+function withRawNotifications<T extends SoupEntity>(
+  entity: T,
+  item: DisplayableSoupItem
+): T {
+  const notifications = (item as SoupItemWithOptionalNotifications).data
+    .notifications;
+  if (!Array.isArray(notifications)) return entity;
+  return { ...entity, notifications } as T;
+}
+
+export const mapApiSoupItemToEntity = (
+  item: DisplayableSoupItem
+): SoupEntity => {
+  const entity = match(item)
     .with({ tag: 'chat' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,
@@ -805,6 +824,9 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
       } satisfies CrmCompanyEntity;
     })
     .exhaustive();
+
+  return withRawNotifications(entity, item);
+};
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,

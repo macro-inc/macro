@@ -63,6 +63,71 @@ fn test_list_tags_schema_validation() {
     );
 }
 
+#[test]
+fn test_create_tag_schema_validation() {
+    let result = generate_validated_input_schema::<CreateTag>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "CreateTag");
+    assert!(
+        validated.description.contains("Create a new tag"),
+        "Description should explain that it creates a new tag"
+    );
+
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(
+        schema_json.contains("label") && schema_json.contains("color"),
+        "schema should expose label and color"
+    );
+    assert!(
+        schema_json.contains("scope"),
+        "schema should expose the personal/team scope"
+    );
+}
+
+#[test]
+fn test_edit_tag_schema_validation() {
+    let result = generate_validated_input_schema::<EditTag>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "EditTag");
+    assert!(
+        validated.description.contains("Rename or recolor"),
+        "Description should explain rename/recolor"
+    );
+
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(
+        schema_json.contains("label") && schema_json.contains("color"),
+        "schema should expose label and color"
+    );
+    assert!(
+        schema_json.contains("property_definition_id"),
+        "schema should require the tag set's property_definition_id"
+    );
+}
+
+#[test]
+fn test_delete_tag_schema_validation() {
+    let result = generate_validated_input_schema::<DeleteTag>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "DeleteTag");
+    assert!(
+        validated.description.contains("Permanently delete a tag"),
+        "Description should explain the destructive delete"
+    );
+
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(
+        schema_json.contains("property_definition_id"),
+        "schema should require the tag set's property_definition_id"
+    );
+}
+
 // run `cargo test -p properties inbound::toolset::test::print_get_input_schema -- --nocapture --include-ignored`
 #[test]
 #[ignore = "prints the input schema"]

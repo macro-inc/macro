@@ -23,6 +23,7 @@ import {
 } from 'solid-js';
 
 const DEBOUNCE_MS = 300;
+const MAX_SIMILAR_TASKS = 2;
 
 type DebouncedInput = { title: string; markdown: string };
 
@@ -50,7 +51,7 @@ function SimilarTasksInner(props: {
     return input.title.trim().length > 0 || input.markdown.trim().length > 0;
   };
   const results = (): TaskSimilarityResult[] =>
-    hasInput() ? (similarity.data ?? []) : [];
+    hasInput() ? (similarity.data ?? []).slice(0, MAX_SIMILAR_TASKS) : [];
   const ids = () => results().map((result) => result.taskId);
 
   // Hydrate full soup entities (status, owner, assignees, …) for the matches so

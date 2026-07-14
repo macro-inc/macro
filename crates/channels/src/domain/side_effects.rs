@@ -612,7 +612,6 @@ where
             let _ = self
                 .macro_event_broker
                 .send_event(&broker_event)
-                .await
                 .inspect_err(|e| {
                     tracing::error!(error=?e, "failed to publish channel event");
                 });

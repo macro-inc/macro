@@ -2247,6 +2247,7 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "lru",
+ "maybe_send",
  "pollster",
  "postcard",
  "serde",
@@ -2860,6 +2861,8 @@ dependencies = [
  "model-entity",
  "model_user",
  "models_pagination",
+ "models_properties",
+ "serde",
  "soup",
  "tokio",
  "uuid",
@@ -5069,6 +5072,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bot_id",
  "cached",
  "cool_asserts",
  "macro_db_migrator",
@@ -8569,6 +8573,10 @@ dependencies = [
  "cfg-if",
  "rayon",
 ]
+
+[[package]]
+name = "maybe_send"
+version = "0.1.0"
 
 [[package]]
 name = "mcp_auth_proxy"
@@ -16177,7 +16185,9 @@ dependencies = [
  "anyhow",
  "guppy",
  "hakari",
+ "serde",
  "serde_json",
+ "toml",
  "xtask_graph",
 ]
 

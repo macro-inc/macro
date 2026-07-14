@@ -124,8 +124,8 @@ use models_soup::email_thread::{
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::foreign_entity::SoupForeignEntity;
-use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
+use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
@@ -224,6 +224,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_typing_handler,
         channels::inbound::axum_router::add_participants_handler,
         channels::inbound::axum_router::remove_participants_handler,
+        channels::inbound::axum_router::get_channel_join_link_handler,
+        channels::inbound::axum_router::join_channel_by_code_handler,
         channels::inbound::axum_router::join_channel_handler,
         channels::inbound::axum_router::leave_channel_handler,
         channels::inbound::axum_router::get_channel_messages_handler,
@@ -403,11 +405,12 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
-            SoupItem,
+            SoupItemWithProperties,
             SoupApiItem,
-            SoupDocument,
-            SoupChat,
-            SoupProject,
+            SoupDocument<SoupPropertiesField>,
+            SoupChat<SoupPropertiesField>,
+            SoupProject<SoupPropertiesField>,
+            SoupPropertiesField,
             SoupForeignEntity,
             ForeignEntity,
             Favorite,
@@ -417,7 +420,7 @@ use utoipa::OpenApi;
             ReorderFavoritesRequest,
             SoupApiSort,
             SoupPage,
-            SoupEnrichedEmailThreadPreview,
+            SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
             SoupEmailThreadPreview,
             SoupAttachment,
             SoupContact,
@@ -519,7 +522,7 @@ use utoipa::OpenApi;
             call::domain::models::GetBatchCallRecordPreviewResponse,
             call::domain::models::RingStatus,
             call::domain::models::RingStatusResponse,
-            SoupCallRecord,
+            SoupCallRecord<SoupPropertiesField>,
             SoupCallRecordParticipant,
 
             // Webhooks

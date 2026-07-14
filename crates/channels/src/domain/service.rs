@@ -2,8 +2,8 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
-        BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
-        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview,
+        BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelJoinCodeResponse,
+        ChannelMessage, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview,
         ChannelPreviewData, ChannelType, CreateEntityMentionOptions, DeleteMessageQuery,
         EntityMention, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
         GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
@@ -1039,12 +1039,35 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_channel_join_code(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if info.channel_type != ChannelType::Private {
+            return Err(ChannelMutationErr::Forbidden(
+                "join links are only available for private channels".to_string(),
+            ));
+        }
+
+        let join_code = self
+            .repo
+            .get_or_create_channel_join_code(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        Ok(ChannelJoinCodeResponse { join_code })
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn join_channel(
         &self,
         actor: Sender,
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
-        let actor_user = require_user_actor(&actor)?;
         let info = self
             .repo
             .get_channel_info(channel_id)
@@ -1055,25 +1078,55 @@ where
                 "cannot join direct message channel".to_string(),
             ));
         }
+        self.join_channel_with_info(actor, info).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn join_channel_by_code(
+        &self,
+        actor: Sender,
+        join_code: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        let info = self
+            .repo
+            .get_channel_info_by_join_code(join_code)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+            .ok_or_else(|| {
+                ChannelMutationErr::NotFound("channel join code not found".to_string())
+            })?;
+        if info.channel_type != ChannelType::Private {
+            return Err(ChannelMutationErr::Forbidden(
+                "join links are only valid for private channels".to_string(),
+            ));
+        }
+        self.join_channel_with_info(actor, info).await
+    }
+
+    async fn join_channel_with_info(
+        &self,
+        actor: Sender,
+        info: crate::domain::models::ChannelInfo,
+    ) -> Result<(), ChannelMutationErr> {
+        let actor_user = require_user_actor(&actor)?;
         let before = self
             .repo
-            .get_participants(channel_id)
+            .get_participants(info.id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        self.repo
-            .add_participant(channel_id, actor_user.copied(), ParticipantRole::Member)
-            .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-
         let mut active_participant_user_ids = participant_ids(&before);
-        if !active_participant_user_ids
-            .iter()
-            .any(|participant| participant == &actor_user)
-        {
-            active_participant_user_ids.push(actor_user.clone());
+        let changed = self
+            .repo
+            .add_participant(info.id, actor_user.copied(), ParticipantRole::Member)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if !changed {
+            return Ok(());
         }
+
+        active_participant_user_ids.push(actor_user.clone());
         self.events.dispatch(ChannelEvent::ParticipantJoined {
-            channel_id,
+            channel_id: info.id,
             channel_type: info.channel_type,
             user_id: Sender::new_from_user(actor_user),
             active_participant_user_ids,
@@ -1763,12 +1816,27 @@ where
         ChannelServiceImpl::remove_participants(self, actor, channel_id, req).await
     }
 
+    async fn get_channel_join_code(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        ChannelServiceImpl::get_channel_join_code(self, channel_id).await
+    }
+
     async fn join_channel(
         &self,
         actor: Sender,
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         ChannelServiceImpl::join_channel(self, actor, channel_id).await
+    }
+
+    async fn join_channel_by_code(
+        &self,
+        actor: Sender,
+        join_code: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        ChannelServiceImpl::join_channel_by_code(self, actor, join_code).await
     }
 
     async fn leave_channel(

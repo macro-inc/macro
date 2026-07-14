@@ -236,6 +236,9 @@ async fn build_tool_context(
             ),
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker: macro_event_broker.clone(),
+        // No search event queue is configured in this context, so no
+        // search-index refresh is published from here.
+        search_indexer: None,
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(

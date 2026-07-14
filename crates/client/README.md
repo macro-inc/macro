@@ -10,9 +10,13 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | `cache-core` | Pure engine: schema-metadata codegen (build.rs from `static_assets/schema.graphql`), normalize/denormalize, LRU hot tier, dependency index, async `Storage` trait |
 | `cache-sqlite` | `Storage` over SQLite — Tauri native host |
 | `cache-idb` | `Storage` over IndexedDB via the `idb` crate — browser wasm host (wasm32-only; empty shell elsewhere) |
+| `cache-wasm` | wasm-bindgen shell exposing the engine to the browser worker glue (`apps/web/src/lib/graphql-cache/`) |
 
-Planned (Phase 3): `cache-wasm` (wasm-bindgen shell + worker RPC), `cache-tauri`
-(Tauri plugin) — see the design doc.
+The Tauri host lives in the tauri workspace (it needs the patched tauri fork
+pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
+`cache-core`/`cache-sqlite`. Test it from `apps/web/tauri` with
+`cargo test -p graphql_cache_plugin` (on NixOS use the `js-app` dev shell —
+tauri's Linux desktop stack needs its webkitgtk/dbus system libs).
 
 ## Tests
 

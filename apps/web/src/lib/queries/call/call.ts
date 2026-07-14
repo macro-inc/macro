@@ -151,6 +151,10 @@ export function useCallRecordQuery(callId: Accessor<string>) {
     queryKey: callKeys.record(callId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.getCallRecord(callId())),
+    // The call block's load() primes this cache; a stale time keeps that
+    // primed record from triggering an immediate duplicate fetch on mount.
+    // Mutations still invalidate, so sharing edits stay reactive.
+    staleTime: 60_000,
   }));
 }
 

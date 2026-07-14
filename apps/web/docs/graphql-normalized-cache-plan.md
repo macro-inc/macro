@@ -197,8 +197,9 @@ Topology:
 `Storage` trait (async): `get_batch`, `put_batch`, `delete_batch`,
 `scan_prefix`, `approx_size`. Records serialized with `postcard` (stored as
 `Uint8Array` values in IDB / blobs in SQLite). Note: wasm futures are not
-`Send`, so the trait must be `?Send` (e.g. `async_trait(?Send)` or a
-maybe-send abstraction) to be implementable by both `idb` and native SQLite.
+`Send`, so the trait's futures are bound by `MaybeSend` (`crates/maybe_send`):
+`Send` on native targets — the Tauri host drives the engine directly from its
+multi-threaded runtime — and unbounded on wasm, implementable by `idb`.
 
 ### 4.4 Data model
 
@@ -232,11 +233,16 @@ soup entities from the normy config as they migrate.
 ## 5. Repo layout
 
 ```
-crates/client/            # new cargo workspace (or members of an existing one)
-  cache-core/                  # pure engine, native tests
-  cache-schema-codegen/        # schema.graphql → type metadata (build.rs or CLI)
+crates/client/            # members of the root cargo workspace
+  cache-core/                  # pure engine, native tests (schema codegen in build.rs)
+  cache-sqlite/                # Storage over SQLite (Tauri native host)
+  cache-idb/                   # Storage over IndexedDB (browser wasm host)
   cache-wasm/                  # wasm-bindgen shell (web)
-  cache-tauri/                 # tauri plugin/commands wrapping cache-core
+apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
+                                     # cache-core over cache-sqlite. Lives in the
+                                     # tauri workspace (not crates/client): it
+                                     # depends on the patched tauri fork pinned
+                                     # there, path-deps back to crates/client.
 apps/web/src/lib/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
@@ -280,7 +286,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
   `approx_size` for GC (hardening phase).
 
-**Phase 3 — hosts + JS glue** *(browser path done; Tauri host pending)*
+**Phase 3 — hosts + JS glue** *(done)*
 - ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id
   interning `"{clientId}:{urqlKey}"`), browser-verified via
   wasm-bindgen-test. Build: `just build-cache-wasm` →
@@ -291,8 +297,20 @@ apps/web/src/lib/graphql-cache/ # JS glue
   BroadcastChannel fanout in the fallback topology), `createWorkerCacheHost`
   implementing `CacheHost`. Type-checked; end-to-end browser exercise
   happens with the Phase 4 exchange integration.
-- **Pending:** `cache-tauri` plugin (commands + change events) + Tauri
-  `CacheHost` transport; `isTauri` → native selection.
+- ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
+  workspace — it needs the patched tauri fork pinned there; path-deps on
+  `crates/client/{cache-core,cache-sqlite}`): engine behind an async mutex
+  on the tauri runtime (`Storage` futures are `MaybeSend` → `Send` native;
+  SQLite completes immediately), commands mirroring the worker protocol
+  registered app-level in `src-tauri` (bundle-updater pattern, no
+  capability plumbing), changed ops broadcast to every webview via the
+  `graphql-cache://ops-affected` event. One native engine per app process = SharedWorker topology: no Web
+  Locks / BroadcastChannel machinery. DB at
+  `{app_data_dir}/graphql-cache/cache.sqlite`.
+  JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
+  RPC with the same 10s timeout + Error-normalized rejections, event
+  subscription filtered by clientId prefix; `isTauri()` selects it in
+  `graphql-soup.ts`.
 
 **Phase 4 — urql exchange, behind flag** *(done — needs manual smoke test)*
 - `normalizedCacheExchange`
@@ -302,8 +320,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
   `cache-first`, write-through of network results, cache errors degrade to
   network. 8 vitest cases against a scripted fake host.
 - Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
-  (browser only, `isTauri` → plain client): lazily builds the cached client
-  scoped to the current `userId`; `fetchGraphqlSoup` uses
+  (browser: worker host; Tauri: native host): lazily builds the cached
+  client; `fetchGraphqlSoup` uses
   `cache-and-network` (`.toPromise()` skips stale emissions → identical
   fresh semantics today) and falls back to a `cache-only` re-read on
   network errors → offline replay of previously-seen pages.

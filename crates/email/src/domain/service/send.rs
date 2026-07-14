@@ -55,8 +55,7 @@ where
                 scheduled_send_at: send_time,
                 is_scheduled: false,
             },
-        ))
-        .await;
+        ));
 
         Ok(created)
     }

@@ -78,6 +78,82 @@ fn report_err(e: rootcause::Report) -> anyhow::Error {
     anyhow::anyhow!("{e:?}")
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_participant_atomically_adds_or_reactivates(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    assert!(
+        !repo
+            .add_participant(CH1, macro_user_id(USER_A), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.add_participant(CH1, macro_user_id(LEFT_USER), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .add_participant(CH1, macro_user_id(LEFT_USER), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.add_participant(CH1, macro_user_id(NON_MEMBER), ParticipantRole::Member)
+            .await
+            .unwrap()
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_join_code_is_generated_once_and_reused(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    let first = repo.get_or_create_channel_join_code(CH1).await.unwrap();
+    let second = repo.get_or_create_channel_join_code(CH1).await.unwrap();
+
+    assert_eq!(first, second);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_can_be_resolved_by_join_code(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+    let join_code = repo.get_or_create_channel_join_code(CH1).await.unwrap();
+
+    let channel = repo
+        .get_channel_info_by_join_code(join_code)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(channel.id, CH1);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn unknown_channel_join_code_resolves_to_none(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    let channel = repo
+        .get_channel_info_by_join_code(Uuid::new_v4())
+        .await
+        .unwrap();
+
+    assert!(channel.is_none());
+}
+
 async fn insert_channel_message_notification(
     pool: &Pool<Postgres>,
     user_id: &str,

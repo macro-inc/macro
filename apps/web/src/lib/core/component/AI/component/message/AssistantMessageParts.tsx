@@ -1,8 +1,8 @@
+import { AssistantActivityGroup } from '@core/component/AI/component/message/AssistantActivityGroup';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { ThinkingBlock } from '@core/component/AI/component/message/ThinkingBlock';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
-import { Tool } from '@core/component/AI/component/tool/Tool';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
@@ -34,17 +34,20 @@ function getAssistantPartKey(
   return `${part.type}:${count}`;
 }
 
-type ToolGroupEntry = {
+type ActivityGroupEntry = {
   key: string;
-  part: Extract<AssistantMessagePart, { type: 'toolCall' | 'mcpToolCall' }>;
+  part: Extract<
+    AssistantMessagePart,
+    { type: 'thinking' | 'toolCall' | 'mcpToolCall' }
+  >;
   index: number;
 };
 
 type RenderItem =
   | {
-      type: 'toolGroup';
+      type: 'activityGroup';
       key: string;
-      entries: ToolGroupEntry[];
+      entries: ActivityGroupEntry[];
     }
   | {
       type: 'part';
@@ -60,9 +63,8 @@ type RenderItem =
     };
 
 /**
- * Tools rendered OUTSIDE the standard grouped tool chrome (no `Tool.Group`
- * background) — they own their full presentation. The dashboard renders as a
- * full-bleed view, not a tool row.
+ * Tools rendered outside the standard grouped activity chrome own their full
+ * presentation. The dashboard renders as a full-bleed view, not a tool row.
  */
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
 
@@ -106,7 +108,9 @@ export function AssistantMessageParts(props: {
   const parts = createMemo(() => {
     return props.parts.filter(
       (part) =>
-        part.type !== 'toolCallResponseJson' && part.type !== 'toolCallErr'
+        part.type !== 'toolCallResponseJson' &&
+        part.type !== 'toolCallErr' &&
+        (part.type !== 'thinking' || part.thinking.trim().length > 0)
     );
   });
   const streamingTailTextIndex = createMemo(() => {
@@ -122,12 +126,6 @@ export function AssistantMessageParts(props: {
     if (!props.isStreaming || streamingTailTextIndex() === undefined) {
       chat.setStreamTailState(undefined);
     }
-  });
-
-  const isThinkingDone = createMemo(() => {
-    if (!props.isStreaming) return true;
-    const p = parts();
-    return p.some((part) => part.type !== 'thinking');
   });
 
   const keyedParts = createMemo(() => {
@@ -147,18 +145,18 @@ export function AssistantMessageParts(props: {
   const groupedParts = createMemo(() => {
     const itemByKey = new Map<string, RenderItem>();
     const orderedKeys: string[] = [];
-    let pendingToolEntries: ToolGroupEntry[] = [];
+    let pendingActivityEntries: ActivityGroupEntry[] = [];
 
-    const flushToolGroup = () => {
-      if (pendingToolEntries.length === 0) return;
-      const key = `toolGroup:${pendingToolEntries[0].key}`;
+    const flushActivityGroup = () => {
+      if (pendingActivityEntries.length === 0) return;
+      const key = `activityGroup:${pendingActivityEntries[0].key}`;
       orderedKeys.push(key);
       itemByKey.set(key, {
-        type: 'toolGroup',
+        type: 'activityGroup',
         key,
-        entries: pendingToolEntries,
+        entries: pendingActivityEntries,
       });
-      pendingToolEntries = [];
+      pendingActivityEntries = [];
     };
 
     keyedParts().orderedKeys.forEach((key, index) => {
@@ -168,7 +166,7 @@ export function AssistantMessageParts(props: {
       // Standalone tools (e.g. the dashboard) break out of the tool group and
       // render full-bleed on their own.
       if (part.type === 'toolCall' && STANDALONE_TOOLS.has(part.name)) {
-        flushToolGroup();
+        flushActivityGroup();
         orderedKeys.push(key);
         itemByKey.set(key, {
           type: 'standaloneTool',
@@ -179,12 +177,16 @@ export function AssistantMessageParts(props: {
         return;
       }
 
-      if (part.type === 'toolCall' || part.type === 'mcpToolCall') {
-        pendingToolEntries.push({ key, part, index });
+      if (
+        part.type === 'thinking' ||
+        part.type === 'toolCall' ||
+        part.type === 'mcpToolCall'
+      ) {
+        pendingActivityEntries.push({ key, part, index });
         return;
       }
 
-      flushToolGroup();
+      flushActivityGroup();
       orderedKeys.push(key);
       itemByKey.set(key, {
         type: 'part',
@@ -194,7 +196,7 @@ export function AssistantMessageParts(props: {
       });
     });
 
-    flushToolGroup();
+    flushActivityGroup();
     return { orderedKeys, itemByKey };
   });
 
@@ -206,15 +208,43 @@ export function AssistantMessageParts(props: {
     }
   );
 
-  function ToolEntry(props: { entry: Accessor<ToolGroupEntry> }) {
-    const toolPart = () => props.entry().part;
+  function ActivityEntry(props: {
+    entry: Accessor<ActivityGroupEntry>;
+    grouped: Accessor<boolean>;
+  }) {
+    const activityPart = () => props.entry().part;
 
     return (
       <Switch>
-        <Match when={toolPart().type === 'toolCall'}>
+        <Match when={activityPart().type === 'thinking'}>
+          {(() => {
+            const thinking = () => {
+              const part = activityPart();
+              return part.type === 'thinking' ? part.thinking : '';
+            };
+
+            return (
+              <Show when={thinking().trim().length > 0}>
+                <div classList={{ 'px-3': props.grouped() }}>
+                  <ThinkingBlock
+                    thinking={thinking()}
+                    isStreaming={
+                      outer.isStreaming &&
+                      props.entry().index === parts().length - 1
+                    }
+                  />
+                </div>
+              </Show>
+            );
+          })()}
+        </Match>
+        <Match when={activityPart().type === 'toolCall'}>
           {(() => {
             const part = () =>
-              toolPart() as Extract<AssistantMessagePart, { type: 'toolCall' }>;
+              activityPart() as Extract<
+                AssistantMessagePart,
+                { type: 'toolCall' }
+              >;
 
             return (
               <RenderTool
@@ -229,17 +259,17 @@ export function AssistantMessageParts(props: {
                 renderContext={{
                   renderContext: {
                     isStreaming: outer.isStreaming,
-                    grouped: true,
+                    grouped: props.grouped(),
                   },
                 }}
               />
             );
           })()}
         </Match>
-        <Match when={toolPart().type === 'mcpToolCall'}>
+        <Match when={activityPart().type === 'mcpToolCall'}>
           {(() => {
             const part = () =>
-              toolPart() as Extract<
+              activityPart() as Extract<
                 AssistantMessagePart,
                 { type: 'mcpToolCall' }
               >;
@@ -253,7 +283,7 @@ export function AssistantMessageParts(props: {
                 renderContext={{
                   renderContext: {
                     isStreaming: outer.isStreaming,
-                    grouped: true,
+                    grouped: props.grouped(),
                   },
                 }}
               />
@@ -264,26 +294,52 @@ export function AssistantMessageParts(props: {
     );
   }
 
-  function ToolGroupView(props: {
-    item: Accessor<Extract<RenderItem, { type: 'toolGroup' }>>;
+  function ActivityGroupView(props: {
+    item: Accessor<Extract<RenderItem, { type: 'activityGroup' }>>;
   }) {
     const entriesByKey = createMemo(() => {
-      const map = new Map<string, ToolGroupEntry>();
+      const map = new Map<string, ActivityGroupEntry>();
       for (const entry of props.item().entries) {
         map.set(entry.key, entry);
       }
       return map;
     });
+    const isGrouped = () => props.item().entries.length > 1;
 
     const entries = mapArray(
       () => props.item().entries.map((entry) => entry.key),
       (key) => {
         const entry = createMemo(() => entriesByKey().get(key)!);
-        return <ToolEntry entry={entry} />;
+        return <ActivityEntry entry={entry} grouped={isGrouped} />;
       }
     );
 
-    return <Tool.Group>{entries()}</Tool.Group>;
+    const isLatestStreamingGroup = createMemo(() => {
+      if (!outer.isStreaming) return false;
+      return groupedParts().orderedKeys.at(-1) === props.item().key;
+    });
+    const preview = createMemo(() => {
+      if (!isLatestStreamingGroup()) return;
+      const part = props.item().entries.at(-1)?.part;
+      if (!part) return;
+      if (part.type === 'thinking') {
+        const normalized = part.thinking.replace(/\s+/g, ' ').trim();
+        return normalized.slice(-160);
+      }
+      if (part.type === 'mcpToolCall') {
+        return part.display_name ?? `${part.service} / ${part.name}`;
+      }
+      return part.name;
+    });
+
+    return (
+      <AssistantActivityGroup
+        itemCount={props.item().entries.length}
+        preview={preview()}
+      >
+        {entries()}
+      </AssistantActivityGroup>
+    );
   }
 
   /** Renders a standalone tool (e.g. the dashboard) with no group chrome. */
@@ -341,22 +397,6 @@ export function AssistantMessageParts(props: {
             );
           })()}
         </Match>
-        <Match when={part().type === 'thinking'}>
-          {(() => {
-            const thinking = () => {
-              const p = part();
-              return p.type === 'thinking' ? p.thinking : '';
-            };
-            return (
-              <Show when={thinking().trim().length > 0}>
-                <ThinkingBlock
-                  thinking={thinking()}
-                  isStreaming={!isThinkingDone()}
-                />
-              </Show>
-            );
-          })()}
-        </Match>
       </Switch>
     );
   }
@@ -366,10 +406,12 @@ export function AssistantMessageParts(props: {
 
     return (
       <Switch>
-        <Match when={type() === 'toolGroup'}>
-          <ToolGroupView
+        <Match when={type() === 'activityGroup'}>
+          <ActivityGroupView
             item={
-              props.item as Accessor<Extract<RenderItem, { type: 'toolGroup' }>>
+              props.item as Accessor<
+                Extract<RenderItem, { type: 'activityGroup' }>
+              >
             }
           />
         </Match>

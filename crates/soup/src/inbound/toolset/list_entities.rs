@@ -1,7 +1,7 @@
 //! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
-    models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
+    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -212,7 +212,10 @@ pub enum EntityItem {
 }
 
 impl EntityItem {
-    pub(super) fn from_soup_item(item: SoupItem, tag_map: &HashMap<Uuid, AppliedTag>) -> Self {
+    pub(super) fn from_soup_item(
+        item: SoupItem<SoupPropertiesField>,
+        tag_map: &HashMap<Uuid, AppliedTag>,
+    ) -> Self {
         match item {
             SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
@@ -225,17 +228,17 @@ impl EntityItem {
                 }),
                 file_type: doc.file_type,
                 name: doc.name,
-                tags: resolve_applied_tags(&doc.properties, tag_map),
+                tags: resolve_applied_tags(&doc.extra.properties, tag_map),
             },
             SoupItem::Chat(chat) => EntityItem::AiChat {
                 id: chat.id,
                 name: chat.name,
-                tags: resolve_applied_tags(&chat.properties, tag_map),
+                tags: resolve_applied_tags(&chat.extra.properties, tag_map),
             },
             SoupItem::Project(project) => EntityItem::Project {
                 id: project.id,
                 name: project.name,
-                tags: resolve_applied_tags(&project.properties, tag_map),
+                tags: resolve_applied_tags(&project.extra.properties, tag_map),
             },
             SoupItem::EmailThread(thread) => EntityItem::Email {
                 id: thread.thread.id,
@@ -246,7 +249,7 @@ impl EntityItem {
                 inbox_visible: thread.thread.inbox_visible,
                 is_read: thread.thread.is_read,
                 is_draft: thread.thread.is_draft,
-                tags: resolve_applied_tags(&thread.properties, tag_map),
+                tags: resolve_applied_tags(&thread.extra.properties, tag_map),
             },
             SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
@@ -259,7 +262,7 @@ impl EntityItem {
             SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,
                 created_by: record.created_by,
-                tags: resolve_applied_tags(&record.properties, tag_map),
+                tags: resolve_applied_tags(&record.extra.properties, tag_map),
             },
             // `entity_filter_ast` force-filters CrmCompany out — kept
             // loud here so a contract break is obvious, not silent.
@@ -302,14 +305,14 @@ fn resolve_applied_tags(
 }
 
 /// True when any item carries a tag property that would need label resolution.
-fn any_item_has_tags(items: &[FrecencySoupItem]) -> bool {
-    items.iter().any(|FrecencySoupItem { item, .. }| {
+fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
+    items.iter().any(|EnrichedSoupItem { item, .. }| {
         let properties = match item {
-            SoupItem::Document(doc) => &doc.properties,
-            SoupItem::Chat(chat) => &chat.properties,
-            SoupItem::Project(project) => &project.properties,
-            SoupItem::EmailThread(thread) => &thread.properties,
-            SoupItem::CrmCompany(company) => &company.properties,
+            SoupItem::Document(doc) => &doc.extra.properties,
+            SoupItem::Chat(chat) => &chat.extra.properties,
+            SoupItem::Project(project) => &project.extra.properties,
+            SoupItem::EmailThread(thread) => &thread.extra.properties,
+            SoupItem::CrmCompany(company) => &company.extra.properties,
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
@@ -704,7 +707,7 @@ where
 
         let result = service_context
             .service
-            .get_user_soup(
+            .get_user_soup_with_properties(
                 SoupRequest {
                     soup_type: SoupType::Expanded,
                     limit,
@@ -736,7 +739,7 @@ where
         let items: Vec<EntityItem> = paginated
             .items
             .into_iter()
-            .map(|FrecencySoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
+            .map(|EnrichedSoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
             .collect();
 
         // Build summary

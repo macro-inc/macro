@@ -183,8 +183,7 @@ pub async fn archived_handler(
             archived: is_archiving,
             origin: EmailEventOrigin::UserAction,
         }),
-    )
-    .await;
+    );
 
     // Enqueue one gmail_ops message per provider message
     let (labels_to_add, labels_to_remove) = if is_archiving {

@@ -4,14 +4,15 @@ use crate::domain::models::RecentChannelMessage;
 use crate::domain::models::{
     Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
     BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
-    ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewRow,
-    CountedReaction, CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions,
-    DeleteMessageQuery, EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
-    MutatedMessage, NewChannelAttachment, PatchChannelRequest, PatchMessageRequest,
-    PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-    ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention,
-    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    ChannelJoinCodeResponse, ChannelMessageFilters, ChannelMetadata, ChannelParticipant,
+    ChannelPreview, ChannelPreviewRow, CountedReaction, CreateChannelRequest,
+    CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery, EntityMention,
+    GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment,
+    MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
+    PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+    PostReactionRequest, PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest,
+    ResolvedChannelMessage, Sender, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow,
+    TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -223,6 +224,18 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<ChannelInfo, Self::Err>> + Send;
 
+    /// Atomically assign a channel join code if absent and return the persisted code.
+    fn get_or_create_channel_join_code(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+
+    /// Resolve channel metadata by its join code.
+    fn get_channel_info_by_join_code(
+        &self,
+        join_code: Uuid,
+    ) -> impl Future<Output = Result<Option<ChannelInfo>, Self::Err>> + Send;
+
     /// Resolve channel metadata from a user's perspective.
     fn get_channel_metadata(
         &self,
@@ -289,13 +302,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Add a participant.
+    /// Atomically add or reactivate a participant, returning whether membership changed.
     fn add_participant<'a>(
         &self,
         channel_id: Uuid,
         user_id: MacroUserIdStr<'a>,
         role: super::models::ParticipantRole,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Remove a participant.
     fn remove_participant(
@@ -773,11 +786,36 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
+    /// Get or create the reusable join code for a private channel.
+    fn get_channel_join_code(
+        &self,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<ChannelJoinCodeResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
     /// Join a channel.
     fn join_channel(
         &self,
         _actor: Sender,
         _channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Join a private channel using its reusable join code.
+    fn join_channel_by_code(
+        &self,
+        _actor: Sender,
+        _join_code: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
@@ -1039,6 +1077,9 @@ pub enum ChannelMutationErr {
     /// Unauthorized mutation attempt.
     #[error("{0}")]
     Unauthorized(String),
+    /// Authenticated caller is forbidden from performing the mutation.
+    #[error("{0}")]
+    Forbidden(String),
     /// Not found.
     #[error("{0}")]
     NotFound(String),

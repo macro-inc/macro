@@ -317,6 +317,8 @@ type SearchableMultiSelectInlineProps = {
   inputRef?: (el: HTMLInputElement) => void;
   onRequestClose?: () => void;
   listboxClass?: string;
+  /** Keep `options` in their given order instead of pinning selected first. */
+  preserveOrder?: boolean;
 };
 
 /**
@@ -335,12 +337,14 @@ export const SearchableMultiSelectInline = (
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
-  const sortedOptions = useSelectedFirst({
+  const selectedFirstOptions = useSelectedFirst({
     items: props.options,
     selectedIds: props.activeIds,
     searchQuery,
     getId: getOptionId,
   });
+  const sortedOptions = () =>
+    props.preserveOrder ? props.options() : selectedFirstOptions();
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));

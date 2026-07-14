@@ -5,7 +5,7 @@ mod test;
 
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, EntityType, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
@@ -1061,6 +1061,11 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+
+        record.user_access_level = match receipt.entity_permission() {
+            EntityPermission::AccessLevel { access_level } => Some(*access_level),
+            _ => None,
+        };
 
         if let Some(recording_key) = &record.recording_key {
             record.recording_url = self

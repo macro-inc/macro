@@ -59,6 +59,9 @@ export const TOKENS = {
       priority: 'entity.action.priority',
       status: 'entity.action.status',
       assignee: 'entity.action.assignee',
+      stage: 'entity.action.stage',
+      owner: 'entity.action.owner',
+      revenue: 'entity.action.revenue',
     },
   },
 

@@ -1,6 +1,7 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
+import { convertTargetMessage } from '@block-channel/utils/target-message';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
@@ -293,24 +294,6 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       { replace: true }
     );
   });
-
-  const convertTargetMessage = (
-    params: ChannelTargetMessageParams
-  ): ChannelPropsTargetMessage => {
-    const messageId = params[URL_PARAMS.message] as string | undefined;
-    const threadId = params[URL_PARAMS.thread] as string | undefined;
-
-    // For compatibility the naming is a little strange here.
-    // New channels index by top level message and then separately handle replies.
-    // If we have a threadId that is actually the top level message and the reply is the message id.
-    const topLevelMessageId = threadId ? threadId : messageId;
-    const messageReplyId = threadId ? messageId : threadId;
-
-    return {
-      targetMessageId: topLevelMessageId,
-      targetMessageReplyId: messageReplyId,
-    };
-  };
 
   // A mention/link to a thread reply may carry only the message id (the reply)
   // without its thread id. Left as-is `convertTargetMessage` would treat that

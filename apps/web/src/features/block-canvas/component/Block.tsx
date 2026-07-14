@@ -297,7 +297,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
   return (
     <DocumentBlockContainer>
       <div
-        class="size-full select-none flex flex-col bg-surface"
+        class="size-full select-none flex flex-col"
         // TODO: we need a more robust solution for preventing parent blocks from stealing clicks
         // This is a temporary fix for canvas in markdown but it doesn't necessarily generalize well
         on:click={(e) => {

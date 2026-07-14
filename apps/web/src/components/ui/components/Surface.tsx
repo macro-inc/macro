@@ -1,4 +1,3 @@
-import type { SemanticToken } from '@theme/types/themeTypes';
 import { type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
@@ -10,8 +9,6 @@ export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   highlightColor?: string;
   active?: boolean;
   solid?: boolean;
-  // Surface handles the bg color styling. It defaults to the value of our `surface` token (`var(--b0)`). You can use this if you want to instead feed it a different token (e.g. if your surface is an input, you can give it the 'input' token).
-  bgToken?: SemanticToken;
   hideBorder?: boolean;
 };
 
@@ -25,17 +22,11 @@ export function Surface(props: SurfaceProps) {
     'depth',
     'class',
     'style',
-    'bgToken',
     'hideBorder',
   ]);
 
-  const bgVariable = () =>
-    local.bgToken ? `--color-${local.bgToken}` : '--b0';
-
   const style = (): JSX.CSSProperties => {
-    const base: JSX.CSSProperties = {
-      'background-color': `var(${bgVariable()})`,
-    };
+    const base: JSX.CSSProperties = {};
 
     if (!local.hideBorder) {
       base.border = `0.5px solid ${local.edgeColor ?? 'var(--b4)'}`;
@@ -55,7 +46,7 @@ export function Surface(props: SurfaceProps) {
       <div
         style={style()}
         class={cn(
-          'relative rounded-md overflow-clip min-h-0 size-full',
+          'relative rounded-md overflow-clip min-h-0 size-full bg-(--b0)',
           local.class
         )}
         {...rest}

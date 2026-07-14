@@ -4,6 +4,7 @@ import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   getChannelParams,
+  goToChannelLatest,
   goToChannelMessage,
 } from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
@@ -25,7 +26,7 @@ import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
-  type ChannelEntityTarget,
+  type ChannelClickTarget,
   type EntityData,
   getSnippetHit,
   isGithubPrEntity,
@@ -42,6 +43,7 @@ import {
   getAllNotificationsFromGroup,
   getChannelNotificationParams,
   type NotificationSource,
+  notificationIsRead,
   setDoneOverride,
   stackNotifications,
   type UnifiedNotification,
@@ -343,14 +345,24 @@ interface OpenEntityOptions {
  * driving notification (the same data the card renders), so read the target
  * from there, exactly like the old inbox did via getChannelNotificationParams.
  * Notifications are scoped to the row first (top-level sends for a channel,
- * this thread's replies for a thread) and the most recent one wins. With no
- * notification either, fall back to the row's own ids — a `channel_thread`
- * row opens at its root and a `channel` row has no message to target (open
- * latest).
+ * this thread's replies for a thread) and the most recent one wins.
+ *
+ * Read state only changes a whole-`channel` row: its notifications are skipped
+ * when read, because a channel aggregates many messages and the newest unread
+ * one (never your own send) can sit far above the latest — jumping there feels
+ * wrong once the row looks read. A `channel_thread`/`channel_message` row is
+ * scoped to one message, so it targets its driving notification read or not —
+ * that is the reply the row stands for and the message to highlight.
+ *
+ * With no aiming notification, fall back to the row's own semantics: a
+ * `channel_thread`/`channel_message` row opens at its own root/message, and a
+ * whole `channel` row opens at `latest` — landing on the newest message the
+ * row's preview shows (which may be your own send) rather than an older
+ * notification or nothing.
  */
 export function getChannelEntityTarget(
   entity: EntityData
-): ChannelEntityTarget | undefined {
+): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
     entity.type !== 'channel_message' &&
@@ -359,12 +371,22 @@ export function getChannelEntityTarget(
     return undefined;
   }
 
-  if (entity.target) return entity.target;
+  if (entity.target) {
+    return {
+      kind: 'message',
+      messageId: entity.target.messageId,
+      threadId: entity.target.threadId,
+    };
+  }
 
-  const fallback =
+  const fallback: ChannelClickTarget =
     entity.type === 'channel'
-      ? undefined
-      : { messageId: entity.messageId, threadId: entity.threadId };
+      ? { kind: 'latest' }
+      : {
+          kind: 'message',
+          messageId: entity.messageId,
+          threadId: entity.threadId,
+        };
 
   if (!isWithNotification(entity)) return fallback;
 
@@ -373,8 +395,20 @@ export function getChannelEntityTarget(
     entity.notifications?.() ?? []
   );
   for (const notification of scoped) {
+    // For a whole-`channel` row, ignore notifications you have already read:
+    // the row stands for the entire channel, so once read it should open at
+    // the latest message, not scroll up to an already-seen one. (Read ones
+    // are skipped here; if all are read the loop falls through to the
+    // `latest` fallback.) A read notification is also usually well above the
+    // latest message — you are never notified of your own sends, so the newest
+    // notification is someone else's and predates any message you sent after.
+    //
+    // A thread/message row stands for one specific message, so it always jumps
+    // to its notification's message, read or not — that is the message the row
+    // is about and the one to highlight.
+    if (entity.type === 'channel' && notificationIsRead(notification)) continue;
     const { messageId, threadId } = getChannelNotificationParams(notification);
-    if (messageId) return { messageId, threadId };
+    if (messageId) return { kind: 'message', messageId, threadId };
   }
 
   return fallback;
@@ -403,6 +437,11 @@ export async function navigateChannelEntityToTarget(
         ? entity.channelId
         : undefined;
   if (!channelId) return;
+
+  if (target.kind === 'latest') {
+    await goToChannelLatest(blockOrchestrator, channelId);
+    return;
+  }
 
   await goToChannelMessage(
     blockOrchestrator,
@@ -461,12 +500,18 @@ export const openEntityInSplitFromUnifiedList = async (
   const content = getEntitySplitContent(entity);
 
   const channelTarget = getChannelEntityTarget(entity);
+  const channelMessageTarget =
+    channelTarget?.kind === 'message' ? channelTarget : undefined;
+  const openChannelAtLatest = channelTarget?.kind === 'latest';
 
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
-  } else if (channelTarget) {
-    params = getChannelParams(channelTarget.messageId, channelTarget.threadId);
+  } else if (channelMessageTarget) {
+    params = getChannelParams(
+      channelMessageTarget.messageId,
+      channelMessageTarget.threadId
+    );
   } else if (entity.type === 'call' && location?.type === 'call_record') {
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
@@ -490,7 +535,7 @@ export const openEntityInSplitFromUnifiedList = async (
       mergeHistory,
       allowDuplicate,
       reopen:
-        entity.type === 'channel' && !location && !channelTarget
+        entity.type === 'channel' && !location && openChannelAtLatest
           ? 'latest'
           : undefined,
     }
@@ -499,17 +544,22 @@ export const openEntityInSplitFromUnifiedList = async (
   // Navigate to specific location if provided
   if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (channelTarget) {
+  } else if (channelMessageTarget) {
     // NOTE: This will force target message navigation in case the split is already open.
     await navigateToLocation(
       content.id,
       {
         type: 'channel',
-        messageId: channelTarget.messageId,
-        threadId: channelTarget.threadId,
+        messageId: channelMessageTarget.messageId,
+        threadId: channelMessageTarget.threadId,
       },
       blockOrchestrator
     );
+  } else if (openChannelAtLatest) {
+    // Force the scroll-to-bottom even when the channel is already open in a
+    // (preview) split, where reopen: 'latest' only reactivates the parked
+    // split without re-pinning it to the newest message.
+    await goToChannelLatest(blockOrchestrator, content.id);
   }
 };
 

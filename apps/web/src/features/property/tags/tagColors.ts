@@ -1,3 +1,6 @@
+// The AI tools mirror this palette in
+// crates/properties/src/inbound/toolset/tag_color.rs (TagColor::hex). Keep the
+// two in sync when adding, removing, recoloring, or reordering a tag color.
 export const TAG_COLORS = [
   '#E5484D', // Red
   '#E54D2E', // Tomato
