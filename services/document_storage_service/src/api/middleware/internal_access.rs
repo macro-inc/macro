@@ -9,6 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 pub(crate) use entity_access::inbound::axum_extractors::InternalUser;
+use macro_authorization::PreauthorizedContext;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::header::ToStrError;
@@ -81,13 +82,15 @@ pub(in crate::api) async fn handler(
         .map(|header| header.to_string())
         .unwrap_or(MACRO_INTERNAL_USER_ID.to_string());
 
-    // Attach user_id to the UserContext
-    req.extensions_mut().insert(UserContext {
-        user_id: user_id.clone(),
+    let user_context = UserContext {
+        user_id,
         fusion_user_id: "".to_string(), // not needed in this use case
         permissions: None,
         organization_id: None,
-    });
+    };
+    req.extensions_mut().insert(user_context.clone());
+    req.extensions_mut()
+        .insert(PreauthorizedContext::new(user_context));
 
     req.extensions_mut().insert(InternalUser {
         access_level: AccessLevel::Owner,

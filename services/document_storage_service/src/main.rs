@@ -69,6 +69,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{SharedMacroAuthorizationService, SharedUserPermissionsService};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -85,6 +86,9 @@ use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
+use roles_and_permissions::{
+    domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
+};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -238,6 +242,12 @@ async fn main() -> anyhow::Result<()> {
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let macro_authorization_service =
+        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_validation_args.clone());
+    let permissions_database = MacroDB::new(db.clone());
+    let user_permissions_service = SharedUserPermissionsService::new(
+        UserRolesAndPermissionsServiceImpl::new(permissions_database.clone(), permissions_database),
+    );
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -340,11 +350,14 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage.clone(),
     );
     // Create the legacy channel list router state for routes mounted under /comms.
-    let channel_list_state = ChannelListRouterState::new(ChannelListServiceImpl::new(
-        PgChannelsRepo::new(db.clone()),
-        PgChannelsRepo::new(db.clone()),
-        frecency_storage.clone(),
-    ));
+    let channel_list_state = ChannelListRouterState::new(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(db.clone()),
+            PgChannelsRepo::new(db.clone()),
+            frecency_storage.clone(),
+        ),
+        macro_authorization_service.clone(),
+    );
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -442,6 +455,7 @@ async fn main() -> anyhow::Result<()> {
     let foreign_entity_state = ForeignEntityRouterState::new(
         foreign_entity_service.clone(),
         entity_access_service.clone(),
+        macro_authorization_service.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
@@ -587,7 +601,11 @@ async fn main() -> anyhow::Result<()> {
             .with_voice_repo(PgVoiceRepo::new(db.clone())),
     );
 
-    let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
+    let call_state = CallRouterState::new(
+        call_service.clone(),
+        entity_access_service.clone(),
+        macro_authorization_service.clone(),
+    );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
@@ -615,6 +633,7 @@ async fn main() -> anyhow::Result<()> {
     let webhook_state = webhook::inbound::axum_router::WebhookRouterState::new(
         webhook_service,
         webhook_rate_limiter,
+        macro_authorization_service.clone(),
     );
 
     let webhook_ingestion_service =
@@ -765,6 +784,7 @@ async fn main() -> anyhow::Result<()> {
             bots_service.clone(),
             channels_service.clone(),
             (*entity_access_service).clone(),
+            macro_authorization_service.clone(),
         );
 
     let soup_service = Arc::new(SoupImpl::new(
@@ -785,6 +805,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service.clone(),
             email_service,
             entity_access_service.clone(),
+            macro_authorization_service.clone(),
         )
         .with_favorites_reader(Arc::new(
             service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
@@ -792,6 +813,7 @@ async fn main() -> anyhow::Result<()> {
         favorites_state: FavoritesRouterState::new(
             favorites_service.clone(),
             entity_access_service.clone(),
+            macro_authorization_service.clone(),
         ),
         favorites_service,
         #[cfg(feature = "graphql")]
@@ -813,6 +835,8 @@ async fn main() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
+        macro_authorization_service: macro_authorization_service.clone(),
+        user_permissions_service,
         jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
@@ -822,6 +846,7 @@ async fn main() -> anyhow::Result<()> {
         documents_state: DocumentRouterState {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
+            authorization: macro_authorization_service.clone(),
             pool: db.clone(),
             task_dedup_service,
             lexical_client: lexical_client.clone(),
@@ -836,10 +861,12 @@ async fn main() -> anyhow::Result<()> {
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
+            macro_authorization_service.clone(),
         ),
         bots_state: bots::inbound::axum_router::BotsRouterState::new(
             bots_service.clone(),
             (*entity_access_service).clone(),
+            macro_authorization_service.clone(),
         ),
         channel_bot_webhook_state,
         call_state,
@@ -851,6 +878,7 @@ async fn main() -> anyhow::Result<()> {
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             entity_access_service: entity_access_service.clone(),
+            authorization: macro_authorization_service.clone(),
         },
     };
 

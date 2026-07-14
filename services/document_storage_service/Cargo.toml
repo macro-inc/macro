@@ -24,7 +24,10 @@ default = ["connection_gateway", "delete_document_worker", "graphql", "location_
 delete_document_worker = []
 graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:complete_graph"]
 local = ["local_auth"]
-local_auth = ["macro_middleware/local_auth"]
+local_auth = [
+  "macro_authorization/local_auth",
+  "macro_middleware/local_auth",
+]
 location_check = []
 
 [dependencies]
@@ -89,6 +92,10 @@ lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "internal-identity",
+  "permissions",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_axum_utils = { path = "../../crates/macro_axum_utils" }
 macro_cors = { path = "../../crates/macro_cors" }
@@ -129,6 +136,9 @@ properties_service = { path = "../../crates/properties_service" }
 rayon = "1.10.0"
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = ["axum"] }
 readonly_pool = { path = "../../crates/readonly_pool" }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = [
+  "outbound",
+] }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
@@ -171,6 +181,7 @@ doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_authorization = { path = "../../crates/macro_authorization", features = ["testing"] }
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 ordered-float = { workspace = true }
 

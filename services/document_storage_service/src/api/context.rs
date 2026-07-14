@@ -69,6 +69,7 @@ use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{SharedMacroAuthorizationService, SharedUserPermissionsService};
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
@@ -385,6 +386,8 @@ pub(crate) struct ApiContext {
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
+    pub macro_authorization_service: SharedMacroAuthorizationService,
+    pub user_permissions_service: SharedUserPermissionsService,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,
@@ -416,6 +419,7 @@ impl From<&ApiContext> for PropertiesHandlerState {
         PropertiesHandlerState::new(
             ctx.properties_service.clone(),
             ctx.entity_access_service.clone(),
+            ctx.macro_authorization_service.clone(),
         )
     }
 }
@@ -432,6 +436,7 @@ impl From<&ApiContext> for SearchHandlerState {
             db: ctx.readonly_db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
+            macro_authorization_service: ctx.macro_authorization_service.clone(),
         }
     }
 }
