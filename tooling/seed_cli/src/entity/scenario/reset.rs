@@ -105,6 +105,9 @@ pub fn reset_user_statements(emails: &[String]) -> Vec<String> {
 
     vec![
         format!(r#"DELETE FROM "RolesOnUsers" WHERE "userId" IN ({user_ids})"#),
+        format!(
+            "DELETE FROM contacts_connections WHERE user1 IN ({user_ids}) OR user2 IN ({user_ids})"
+        ),
         format!("DELETE FROM macro_user_email_verification WHERE email IN ({emails})"),
         format!("DELETE FROM macro_user_info WHERE macro_user_id IN ({macro_user_ids})"),
         format!(r#"DELETE FROM "User" WHERE email IN ({emails})"#),
