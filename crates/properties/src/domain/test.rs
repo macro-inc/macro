@@ -62,7 +62,7 @@ fn view_receipt(entity_id: &str, entity_type: EntityType) -> ViewReceipt {
 fn bot_receipt_has_no_authenticated_user_identity() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_bot(
-        bot_id,
+        bot_id.into_storage_id(),
         "document-1",
         entity_access::domain::models::EntityType::Document,
     );
@@ -71,7 +71,7 @@ fn bot_receipt_has_no_authenticated_user_identity() {
             .unwrap();
 
     assert!(access.authenticated_user().is_none());
-    assert!(matches!(access.auth(), EntityAccessAuth::Bot(id) if *id == bot_id));
+    assert!(matches!(access.auth(), EntityAccessAuth::Bot(id) if id.bot_id() == bot_id));
 }
 
 /// Creates a mock permission service that mints edit receipts for any entity.

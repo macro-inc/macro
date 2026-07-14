@@ -6,7 +6,7 @@
 use cached::proc_macro::cached;
 
 use anyhow::Context;
-use bot_id::BotId;
+use bot_id::BotIdStr;
 use macro_user_id::{
     cowlike::CowLike,
     lowercased::Lowercase,
@@ -88,8 +88,10 @@ pub async fn get_user_source_ids(
         convert = r#"{bot_id.to_string()}"#,
     )
 )]
-pub async fn get_bot_source_ids(pool: &Pool<Postgres>, bot_id: BotId) -> anyhow::Result<SourceIds> {
-    let principal = bot_id.into_storage_id();
+pub async fn get_bot_source_ids(
+    pool: &Pool<Postgres>,
+    bot_id: &BotIdStr<'_>,
+) -> anyhow::Result<SourceIds> {
     let source_ids = sqlx::query_scalar!(
         r#"
         SELECT cp.channel_id::text FROM comms_channel_participants cp
@@ -100,7 +102,7 @@ pub async fn get_bot_source_ids(pool: &Pool<Postgres>, bot_id: BotId) -> anyhow:
         UNION ALL
         SELECT $1
         "#,
-        principal.as_ref(),
+        bot_id.as_ref(),
         bot_id.as_uuid(),
     )
     .fetch_all(pool)

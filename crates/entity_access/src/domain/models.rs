@@ -9,7 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub use bot_id::BotId;
+pub use bot_id::{BotId, BotIdStr};
 pub use model_entity::EntityType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
@@ -256,13 +256,6 @@ pub struct Entity {
     pub entity_type: EntityType,
 }
 
-fn serialize_bot_id<S>(bot_id: &BotId, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    BotId::into_storage_id(*bot_id).serialize(serializer)
-}
-
 /// The entity access auth type
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
@@ -270,7 +263,7 @@ pub enum EntityAccessAuth {
     /// The user is authenticated
     Authenticated(MacroUserIdStr<'static>),
     /// A bot is authenticated.
-    Bot(#[serde(serialize_with = "serialize_bot_id")] BotId),
+    Bot(BotIdStr<'static>),
     /// The user is unauthenticated
     Unauthenticated,
     /// Internally authenticated
@@ -328,7 +321,7 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
 
     /// Creates an access receipt for an authenticated bot after validating the provided permission.
     pub fn try_new_bot(
-        bot_id: BotId,
+        bot_id: BotIdStr<'static>,
         entity: Entity,
         entity_permission: EntityPermission,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -346,7 +339,7 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     }
 
     /// Get the authenticated bot or return an authorization error.
-    pub fn get_authenticated_bot(&self) -> Result<&BotId, AccessError> {
+    pub fn get_authenticated_bot(&self) -> Result<&BotIdStr<'static>, AccessError> {
         match &self.auth {
             EntityAccessAuth::Bot(bot_id) => Ok(bot_id),
             EntityAccessAuth::Authenticated(_)
@@ -422,7 +415,7 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     /// existence of the item or that the bot actually has the required
     /// permission.
     pub fn dangerously_assert_bot(
-        bot_id: BotId,
+        bot_id: BotIdStr<'static>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> EntityAccessReceipt<T> {

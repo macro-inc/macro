@@ -1,5 +1,5 @@
 use super::*;
-use bot_id::BotId;
+use bot_id::{BotId, BotIdStr};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
@@ -19,7 +19,7 @@ async fn insert_public_channel(pool: &PgPool, channel_id: Uuid) {
 async fn insert_bot_participant(
     pool: &PgPool,
     channel_id: Uuid,
-    bot_principal: &str,
+    bot_principal: &BotIdStr<'_>,
     departed: bool,
 ) {
     sqlx::query!(
@@ -33,7 +33,7 @@ async fn insert_bot_participant(
         )
         "#,
         channel_id,
-        bot_principal,
+        bot_principal.as_ref(),
         departed,
     )
     .execute(pool)
@@ -48,9 +48,9 @@ async fn bot_channel_role_active_participant_receives_stored_role(
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
     insert_public_channel(&pool, channel_id).await;
-    insert_bot_participant(&pool, channel_id, principal.as_ref(), false).await;
+    insert_bot_participant(&pool, channel_id, &principal, false).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, principal.as_ref()).await?;
+    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::Role(ParticipantRole::Admin));
     Ok(())
@@ -64,7 +64,7 @@ async fn bot_channel_role_public_channel_non_participant_has_no_access(
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
     insert_public_channel(&pool, channel_id).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, principal.as_ref()).await?;
+    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::NoAccess);
     Ok(())
@@ -75,9 +75,9 @@ async fn bot_channel_role_departed_participant_has_no_access(pool: PgPool) -> an
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
     insert_public_channel(&pool, channel_id).await;
-    insert_bot_participant(&pool, channel_id, principal.as_ref(), true).await;
+    insert_bot_participant(&pool, channel_id, &principal, true).await;
 
-    let role = get_bot_channel_role(&pool, &channel_id, principal.as_ref()).await?;
+    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::NoAccess);
     Ok(())
@@ -88,7 +88,7 @@ async fn bot_channel_role_unknown_channel_is_not_found(pool: PgPool) -> anyhow::
     let channel_id = Uuid::new_v4();
     let principal = BotId::new_from_uuid(Uuid::new_v4()).into_storage_id();
 
-    let role = get_bot_channel_role(&pool, &channel_id, principal.as_ref()).await?;
+    let role = get_bot_channel_role(&pool, &channel_id, &principal).await?;
 
     assert_eq!(role, ChannelRoleResult::NotFound);
     Ok(())

@@ -193,7 +193,7 @@ where
         };
 
         EntityAccessReceipt::try_new_bot(
-            bot_id,
+            bot_id.into_storage_id(),
             Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,

@@ -805,8 +805,8 @@ async fn generate_bot_entity_access_receipt_document_with_sufficient_access() {
         .await
         .unwrap();
 
-    assert!(matches!(receipt.auth(), EntityAccessAuth::Bot(id) if *id == bot_id));
-    assert_eq!(receipt.get_authenticated_bot().unwrap(), &bot_id);
+    assert!(matches!(receipt.auth(), EntityAccessAuth::Bot(id) if id.bot_id() == bot_id));
+    assert_eq!(receipt.get_authenticated_bot().unwrap().bot_id(), bot_id);
     assert!(matches!(
         receipt.get_authenticated_user(),
         Err(AccessError::Unauthorized)
@@ -868,7 +868,7 @@ async fn generate_bot_entity_access_receipt_channel_member_role_succeeds() {
         .await
         .unwrap();
 
-    assert_eq!(receipt.get_authenticated_bot().unwrap(), &bot_id);
+    assert_eq!(receipt.get_authenticated_bot().unwrap().bot_id(), bot_id);
     assert!(matches!(
         receipt.entity_permission(),
         EntityPermission::ChannelRole {

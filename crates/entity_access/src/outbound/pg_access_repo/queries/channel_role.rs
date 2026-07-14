@@ -4,6 +4,7 @@
 mod test;
 
 use crate::domain::models::{ChannelRoleResult, ParticipantRole};
+use bot_id::BotIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -102,7 +103,7 @@ pub async fn get_channel_role(
 pub async fn get_bot_channel_role(
     pool: &PgPool,
     channel_id: &Uuid,
-    bot_principal: &str,
+    bot_principal: &BotIdStr<'_>,
 ) -> Result<ChannelRoleResult, sqlx::Error> {
     let row = sqlx::query!(
         r#"
@@ -113,7 +114,7 @@ pub async fn get_bot_channel_role(
         WHERE c.id = $1
         "#,
         channel_id,
-        bot_principal,
+        bot_principal.as_ref(),
     )
     .fetch_optional(pool)
     .await?;

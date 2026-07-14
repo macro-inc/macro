@@ -196,7 +196,7 @@ impl EntityAccessService for TestAccessService {
 fn bot_actor_from_receipt_uses_canonical_principal() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let receipt = EntityAccessReceipt::<MemberParticipantRole>::try_new_bot(
-        bot_id,
+        bot_id.into_storage_id(),
         Entity {
             entity_id: Uuid::new_v4().to_string(),
             entity_type: EntityType::Channel,

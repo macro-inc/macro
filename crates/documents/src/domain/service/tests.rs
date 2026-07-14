@@ -90,7 +90,11 @@ fn bot_id() -> entity_access::domain::models::BotId {
 }
 
 fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
-    EntityAccessReceipt::dangerously_assert_bot(bot_id(), document_id, EntityType::Document)
+    EntityAccessReceipt::dangerously_assert_bot(
+        bot_id().into_storage_id(),
+        document_id,
+        EntityType::Document,
+    )
 }
 
 struct TestUploadUrlPort;
@@ -624,7 +628,7 @@ async fn bot_lifecycle_event_has_no_actor_user_id() {
 
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let receipt = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_bot(
-        bot_id(),
+        bot_id().into_storage_id(),
         "doc-1",
         EntityType::Document,
     );

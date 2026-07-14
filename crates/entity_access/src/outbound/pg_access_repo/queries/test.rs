@@ -140,6 +140,7 @@ async fn bot_source_ids_team_scoped_bot_includes_channels_team_and_principal(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
     let team_id = Uuid::new_v4();
     let first_channel_id = Uuid::new_v4();
     let second_channel_id = Uuid::new_v4();
@@ -150,12 +151,12 @@ async fn bot_source_ids_team_scoped_bot_includes_channels_team_and_principal(
     insert_bot_participant(&pool, first_channel_id, bot_id, false).await;
     insert_bot_participant(&pool, second_channel_id, bot_id, false).await;
 
-    let source_ids = source_id_set(get_bot_source_ids(&pool, bot_id).await?);
+    let source_ids = source_id_set(get_bot_source_ids(&pool, &bot_principal).await?);
     let expected = HashSet::from([
         first_channel_id.to_string(),
         second_channel_id.to_string(),
         team_id.to_string(),
-        bot_id.into_storage_id().to_string(),
+        bot_principal.to_string(),
     ]);
 
     assert_eq!(source_ids, expected);
@@ -165,14 +166,12 @@ async fn bot_source_ids_team_scoped_bot_includes_channels_team_and_principal(
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn bot_source_ids_user_scoped_bot_does_not_inherit_owner(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
     insert_owned_bot(&pool, bot_id, Some(BOT_OWNER), None).await;
 
-    let source_ids = source_id_set(get_bot_source_ids(&pool, bot_id).await?);
+    let source_ids = source_id_set(get_bot_source_ids(&pool, &bot_principal).await?);
 
-    assert_eq!(
-        source_ids,
-        HashSet::from([bot_id.into_storage_id().to_string()])
-    );
+    assert_eq!(source_ids, HashSet::from([bot_principal.to_string()]));
     assert!(!source_ids.contains(BOT_OWNER));
     Ok(())
 }
@@ -180,6 +179,7 @@ async fn bot_source_ids_user_scoped_bot_does_not_inherit_owner(pool: PgPool) -> 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn bot_source_ids_soft_deleted_bot_excludes_team(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
     let team_id = Uuid::new_v4();
     insert_team(&pool, team_id).await;
     insert_owned_bot(&pool, bot_id, None, Some(team_id)).await;
@@ -190,12 +190,9 @@ async fn bot_source_ids_soft_deleted_bot_excludes_team(pool: PgPool) -> anyhow::
     .execute(&pool)
     .await?;
 
-    let source_ids = source_id_set(get_bot_source_ids(&pool, bot_id).await?);
+    let source_ids = source_id_set(get_bot_source_ids(&pool, &bot_principal).await?);
 
-    assert_eq!(
-        source_ids,
-        HashSet::from([bot_id.into_storage_id().to_string()])
-    );
+    assert_eq!(source_ids, HashSet::from([bot_principal.to_string()]));
     assert!(!source_ids.contains(&team_id.to_string()));
     Ok(())
 }
@@ -203,17 +200,15 @@ async fn bot_source_ids_soft_deleted_bot_excludes_team(pool: PgPool) -> anyhow::
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn bot_source_ids_excludes_departed_channels(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
     let channel_id = Uuid::new_v4();
     insert_owned_bot(&pool, bot_id, Some(BOT_OWNER), None).await;
     insert_channel(&pool, channel_id).await;
     insert_bot_participant(&pool, channel_id, bot_id, true).await;
 
-    let source_ids = source_id_set(get_bot_source_ids(&pool, bot_id).await?);
+    let source_ids = source_id_set(get_bot_source_ids(&pool, &bot_principal).await?);
 
-    assert_eq!(
-        source_ids,
-        HashSet::from([bot_id.into_storage_id().to_string()])
-    );
+    assert_eq!(source_ids, HashSet::from([bot_principal.to_string()]));
     assert!(!source_ids.contains(&channel_id.to_string()));
     Ok(())
 }

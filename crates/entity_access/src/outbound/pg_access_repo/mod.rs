@@ -146,7 +146,8 @@ impl AccessRepository for PgAccessRepository {
         let entity_uuid = entity_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
-        let source_ids = queries::get_bot_source_ids(&self.pool, bot_id)
+        let bot_principal = bot_id.into_storage_id();
+        let source_ids = queries::get_bot_source_ids(&self.pool, &bot_principal)
             .await
             .map_err(|_| AccessError::Internal)?;
 
@@ -197,9 +198,9 @@ impl AccessRepository for PgAccessRepository {
         channel_id: &Uuid,
         bot_id: BotId,
     ) -> Result<ChannelRoleResult, AccessError> {
-        let principal = bot_id.into_storage_id();
+        let bot_principal = bot_id.into_storage_id();
         Ok(
-            queries::channel_role::get_bot_channel_role(&self.pool, channel_id, principal.as_ref())
+            queries::channel_role::get_bot_channel_role(&self.pool, channel_id, &bot_principal)
                 .await?,
         )
     }
