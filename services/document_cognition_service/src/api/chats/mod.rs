@@ -26,7 +26,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             entity_access_management::outbound::PgRepository::new(state.db.clone()),
         ),
     );
-    let chat_state = ChatRouterState::new(chat_service, access_service);
+    let chat_state = ChatRouterState::new(
+        chat_service,
+        access_service,
+        state.macro_authorization_service.clone(),
+        state.user_permissions_service.clone(),
+    );
 
     let ensure_chat_exists = axum::middleware::from_fn_with_state(
         state.clone(),

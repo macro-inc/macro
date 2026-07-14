@@ -19,7 +19,10 @@ path = "src/doppler_config.rs"
 
 [features]
 local = []
-local_auth = ["macro_middleware/local_auth"]
+local_auth = [
+  "macro_authorization/local_auth",
+  "macro_middleware/local_auth",
+]
 local_queue = []
 
 
@@ -67,6 +70,7 @@ lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 log = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", features = ["permissions"] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
@@ -103,7 +107,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest.workspace = true
-roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
@@ -143,4 +147,5 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 [dev-dependencies]
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_authorization = { path = "../../crates/macro_authorization", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

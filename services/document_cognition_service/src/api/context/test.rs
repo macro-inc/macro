@@ -2,11 +2,29 @@ use super::*;
 use connection_gateway::model::connection::StoredConnectionEntity;
 use connection_gateway::model::tracking::{EntityConnection, UserEntityConnection};
 use connection_gateway::service::connection::ConnectionRepo;
-use std::sync::Arc;
+use macro_authorization::testing::FakeMacroAuthorizationService;
+use macro_user_id::user_id::BorrowedUserIdStr;
+use roles_and_permissions::domain::{
+    model::{PermissionId, UserRolesAndPermissionsError},
+    port::UserPermissionsService,
+};
+use std::{collections::HashSet, sync::Arc};
 use stream::domain::{
     ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
 };
 use tokio::sync::broadcast::{self, Receiver};
+
+#[derive(Clone)]
+struct FakeUserPermissionsService;
+
+impl UserPermissionsService for FakeUserPermissionsService {
+    async fn get_user_permissions_for_user_id(
+        &self,
+        _user_id: &BorrowedUserIdStr<'_>,
+    ) -> Result<HashSet<PermissionId>, UserRolesAndPermissionsError> {
+        Ok(HashSet::new())
+    }
+}
 
 pub struct MockConnectionRepo;
 
@@ -404,12 +422,18 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
     );
 
+    let macro_authorization_service =
+        SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::default());
+    let user_permissions_service = SharedUserPermissionsService::new(FakeUserPermissionsService);
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         search_service_client,
         email_service_client_external,
+        macro_authorization_service: macro_authorization_service.clone(),
+        user_permissions_service,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),
@@ -480,7 +504,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 "http://localhost/mcp/servers/auth/callback".to_string(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
-            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
+            mcp_client::inbound::McpRouterState::new(
+                mcp_repo,
+                mcp_oauth,
+                macro_authorization_service,
+            )
         },
     };
     Arc::new(api_context)

@@ -28,6 +28,7 @@ use foreign_entity::{
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{SharedMacroAuthorizationService, SharedUserPermissionsService};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
     ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
@@ -40,6 +41,9 @@ use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
 use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
+use roles_and_permissions::{
+    domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
+};
 use search_service_client::SearchServiceClient;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -140,6 +144,12 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await
             .context("failed to create jwt validation args")?;
+    let macro_authorization_service =
+        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args.clone());
+    let permissions_database = MacroDB::new(db.clone());
+    let user_permissions_service = SharedUserPermissionsService::new(
+        UserRolesAndPermissionsServiceImpl::new(permissions_database.clone(), permissions_database),
+    );
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         internal_api_key.clone(),
@@ -515,7 +525,11 @@ async fn main() -> anyhow::Result<()> {
         mcp_redirect_uri,
         mcp_pre_registered,
     );
-    let mcp_state = mcp_client::inbound::McpRouterState::new(mcp_server_repo, mcp_oauth);
+    let mcp_state = mcp_client::inbound::McpRouterState::new(
+        mcp_server_repo,
+        mcp_oauth,
+        macro_authorization_service.clone(),
+    );
 
     api::setup_and_serve(ApiContext {
         db: db.clone(),
@@ -523,6 +537,8 @@ async fn main() -> anyhow::Result<()> {
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
         search_service_client,
+        macro_authorization_service,
+        user_permissions_service,
         jwt_args,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
