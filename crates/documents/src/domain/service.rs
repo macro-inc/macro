@@ -519,7 +519,7 @@ impl<
     }
 
     /// Publish a document lifecycle event; failures are logged and dropped.
-    async fn publish_document_event(&self, event: &DocumentMacroEvent) {
+    fn publish_document_event(&self, event: &DocumentMacroEvent) {
         let _ = self.macro_event_broker.send_event(event).inspect_err(|e| {
             tracing::error!(error=?e, "failed to publish document event");
         });
@@ -758,8 +758,7 @@ impl<
                 actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
                 project_id,
             },
-        ))
-        .await;
+        ));
 
         Ok(())
     }
@@ -1076,8 +1075,7 @@ impl<
                 sub_type: document_metadata.sub_type,
                 created_at: document_metadata.created_at,
             },
-        ))
-        .await;
+        ));
 
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
@@ -1243,8 +1241,7 @@ impl<
                 file_type: args.file_type,
                 share_permission_updated,
             },
-        ))
-        .await;
+        ));
 
         Ok(())
     }
@@ -1500,8 +1497,7 @@ impl<
                 project_id: new_metadata.project_id.clone(),
                 sub_type: new_metadata.sub_type,
             },
-        ))
-        .await;
+        ));
 
         Ok(DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(
