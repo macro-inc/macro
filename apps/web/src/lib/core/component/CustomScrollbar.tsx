@@ -248,8 +248,15 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
             : (e) => {
                 const container = props.scrollContainer();
                 if (!container) return;
-                container.scrollLeft += e.deltaX || (e.shiftKey ? e.deltaY : 0);
-                container.scrollTop += e.deltaY;
+                // Consume the event so ancestors don't also scroll, and
+                // drive only the axis this bar owns.
+                e.preventDefault();
+                if (horiz()) {
+                  container.scrollLeft +=
+                    e.deltaX || (e.shiftKey ? e.deltaY : 0);
+                } else {
+                  container.scrollTop += e.deltaY;
+                }
               }
         }
         onPointerDown={handlePointerDown}
