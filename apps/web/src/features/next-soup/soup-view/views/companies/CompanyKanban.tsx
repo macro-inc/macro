@@ -205,9 +205,6 @@ export function CompanyKanban() {
                         />
                       </Show>
                       <span class="truncate">{column.label}</span>
-                      <span class="ml-auto shrink-0 tabular-nums px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted font-medium">
-                        {column.entities.length}
-                      </span>
                     </div>
                     <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
                       <For each={column.entities}>
