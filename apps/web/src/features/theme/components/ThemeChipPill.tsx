@@ -1,5 +1,6 @@
 import { type ComponentProps, Show, splitProps, type ValidComponent } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn } from '@ui';
 import type { ThemeV2 } from '../types/themeTypes';
 import { ThemeChips } from './ThemeChips';
@@ -11,6 +12,8 @@ type ThemeChipPillProps = {
   theme?: ThemeV2 | null;
   /** Label shown beside the swatch. */
   name: string;
+  /** Shows a trailing caret, signalling the pill opens a dropdown. */
+  caret?: boolean;
 } & ComponentProps<'button'>;
 
 /**
@@ -19,7 +22,13 @@ type ThemeChipPillProps = {
  * pickers in settings/Appearance) and stay visually identical.
  */
 export function ThemeChipPill(props: ThemeChipPillProps) {
-  const [local, rest] = splitProps(props, ['as', 'theme', 'name', 'class']);
+  const [local, rest] = splitProps(props, [
+    'as',
+    'theme',
+    'name',
+    'class',
+    'caret',
+  ]);
   return (
     <Dynamic
       component={local.as ?? 'button'}
@@ -45,6 +54,9 @@ export function ThemeChipPill(props: ThemeChipPillProps) {
       >
         {local.name}
       </span>
+      <Show when={local.caret}>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+      </Show>
     </Dynamic>
   );
 }
