@@ -741,7 +741,7 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         properties::outbound::entity_property_queries::upsert_entity_property(
             &ctx.db.pool(),
             &document_id,
-            models_properties::EntityType::Document,
+            models_properties::EntityType::Task,
             system_properties::SystemPropertyKey::STATUS_UUID,
             Some(PropertyValue::SelectOption(vec![status.uuid()])),
         )
@@ -763,7 +763,7 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         properties::outbound::entity_property_queries::upsert_entity_property(
             &ctx.db.pool(),
             &document_id,
-            models_properties::EntityType::Document,
+            models_properties::EntityType::Task,
             system_properties::SystemPropertyKey::ASSIGNEES_UUID,
             Some(PropertyValue::EntityRef(references)),
         )
