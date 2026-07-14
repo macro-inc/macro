@@ -5,11 +5,12 @@ use crate::{
 };
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use macro_db_client::annotations::edit_comment::edit_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -18,7 +19,6 @@ use model::{
         edit::{EditCommentRequest, EditCommentResponse},
     },
     response::ErrorResponse,
-    user::UserContext,
 };
 use model_notifications::NotificationDocumentSubType;
 use notification::domain::service::NotificationIngress;
@@ -50,10 +50,12 @@ pub async fn edit_comment_handler(
     State(db): State<PgPool>,
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    Extension(UserContext { user_id, .. }): Extension<UserContext>,
+    authorization: OptionalSharedMacroAuthorizationExtractor,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {
+    let user_id = authorization.user_context.user_id;
+
     // TODO: check if the user has comment access to the document
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {

@@ -11,6 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use macro_db_client::annotations::create_comment::create_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -20,7 +21,6 @@ use model::{
     },
     document::DocumentBasic,
     response::ErrorResponse,
-    user::UserContext,
 };
 use model_notifications::NotificationDocumentSubType;
 use models_properties::service::property_value::PropertyValue;
@@ -59,11 +59,13 @@ pub async fn create_comment_handler(
     State(properties_service): State<Arc<crate::api::context::PropertiesService>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    Extension(UserContext { user_id, .. }): Extension<UserContext>,
+    authorization: OptionalSharedMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateCommentRequest>,
 ) -> Result<Response, Response> {
+    let user_id = authorization.user_context.user_id;
+
     if document_context.deleted_at.is_some() {
         return Err((
             StatusCode::BAD_REQUEST,

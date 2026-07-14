@@ -3,17 +3,16 @@ use crate::{
     model::request::pins::AddPinRequest,
 };
 use axum::{
-    Extension,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
 
 use entity_access::inbound::axum_extractors::PinAccessLevelExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::Deserialize;
 
@@ -37,16 +36,17 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, pin_type, inner), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, pin_type, inner), fields(user_id=?authorization.user_context.user_id))]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn add_pin_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { pinned_item_id }): Path<Params>,
     PinAccessLevelExtractor {
         pin_type, inner, ..
     }: PinAccessLevelExtractor<ViewAccessLevel, EntityAccessService, AddPinRequest>,
 ) -> impl IntoResponse {
+    let user_context = &authorization.user_context;
     match macro_db_client::pins::upsert_pin(
         ctx.db.clone(),
         user_context.user_id.as_str(),

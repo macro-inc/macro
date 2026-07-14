@@ -1,14 +1,14 @@
 use crate::api::context::ApiContext;
 use crate::api::context::EntityAccessService;
-use axum::extract::State;
-use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::extract::{Path, State};
+use axum::{http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::HistoryAccessExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 
 #[derive(serde::Deserialize)]
@@ -33,13 +33,14 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, history_access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, history_access), fields(user_id=?authorization.user_context.user_id))]
 pub async fn upsert_history_handler(
     history_access: HistoryAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
+    let user_context = &authorization.user_context;
     let access_level = match history_access.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,
         _ => AccessLevel::View,

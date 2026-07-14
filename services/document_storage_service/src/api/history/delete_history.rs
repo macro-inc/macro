@@ -1,10 +1,10 @@
 use crate::api::context::ApiContext;
-use axum::extract::State;
-use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::extract::{Path, State};
+use axum::{http::StatusCode, response::IntoResponse};
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -26,12 +26,13 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn delete_history_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
+    let user_context = &authorization.user_context;
     if let Err(e) = macro_db_client::history::delete_user_history(
         &ctx.db,
         &user_context.user_id,

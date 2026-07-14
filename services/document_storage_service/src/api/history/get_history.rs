@@ -2,8 +2,8 @@ use crate::api::context::ApiContext;
 use crate::model::response::history::GetUserHistoryResponse;
 use axum::extract::State;
 use axum::{Extension, http::StatusCode, response::IntoResponse};
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use model::version::ApiVersionEnum;
 
 /// Gets the users history
@@ -16,14 +16,15 @@ use model::version::ApiVersionEnum;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_history_handler(
     State(ctx): State<ApiContext>,
     api_version: Extension<ApiVersionEnum>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     tracing::info!("get_history_handler");
 
+    let user_context = &authorization.user_context;
     let history =
         match macro_db_client::history::get_user_history(&ctx.db, &user_context.user_id).await {
             Ok(history) => history,

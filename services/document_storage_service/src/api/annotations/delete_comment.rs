@@ -4,11 +4,12 @@ use std::sync::Arc;
 use crate::{api::context::ApiContext, service::conn_gateway::update_live_comment_state};
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use macro_db_client::annotations::delete_comment::delete_document_comment;
 use model::{
     annotations::{
@@ -16,7 +17,6 @@ use model::{
         delete::{DeleteCommentRequest, DeleteCommentResponse},
     },
     response::ErrorResponse,
-    user::UserContext,
 };
 use sqlx::PgPool;
 
@@ -46,11 +46,11 @@ pub struct Params {
 pub async fn delete_comment_handler(
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    user_context: Extension<UserContext>,
+    authorization: OptionalSharedMacroAuthorizationExtractor,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<DeleteCommentRequest>,
 ) -> Result<Response, Response> {
-    let user_id = user_context.user_id.as_str();
+    let user_id = authorization.user_context.user_id.as_str();
     match delete_document_comment(&db, comment_id, user_id, req).await {
         Ok(res) => {
             let response: DeleteCommentResponse = res;
