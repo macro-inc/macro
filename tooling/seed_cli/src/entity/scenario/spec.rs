@@ -203,9 +203,15 @@ pub struct DocumentSpec {
     #[serde(default)]
     pub name: Option<String>,
     /// File name under `seed/documents/files/` providing the content.
-    /// Omit for a name-only document row.
+    /// `.md` files are initialized as native sync-service documents; other
+    /// extensions upload to object storage. Omit (along with `content`) for
+    /// a name-only document row.
     #[serde(default)]
     pub file: Option<String>,
+    /// Inline markdown content for a native document. Mutually exclusive
+    /// with `file`.
+    #[serde(default)]
+    pub content: Option<String>,
     /// Project key this document lives in.
     #[serde(default)]
     pub project: Option<String>,
@@ -728,6 +734,11 @@ impl ScenarioSpec {
             {
                 errors.push(format!(
                     "document `{key}` references unknown project `{project}`"
+                ));
+            }
+            if document.file.is_some() && document.content.is_some() {
+                errors.push(format!(
+                    "document `{key}` sets both `file` and `content`; pick one"
                 ));
             }
             check_shares(&mut errors, &format!("document `{key}`"), &document.share);

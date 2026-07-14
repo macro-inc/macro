@@ -69,6 +69,7 @@ pub async fn main() -> anyhow::Result<()> {
             &env_vars.document_storage_bucket,
             macro_aws_config::s3_client().await,
         ),
+        doc_content: crate::config::DocContentClients::from_env(),
     };
 
     cli.command.execute(context).await

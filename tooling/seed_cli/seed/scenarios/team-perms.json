@@ -32,13 +32,13 @@
     "q3-plan": {
       "owner": "alice",
       "name": "Q3 Plan",
-      "file": "md.md",
+      "content": "# Q3 Plan\n\n- Ship the tagging system\n- Verify permissions across every entity type\n- Grow the Acme team\n",
       "project": "roadmap"
     },
     "design-doc": {
       "owner": "alice",
       "name": "Design Doc",
-      "file": "md.md",
+      "content": "# Design Doc\n\nDave has edit access; the eng channel can view this via the share and Bob's mention.\n",
       "share": [
         { "with": "user:dave", "level": "edit" },
         { "with": "channel:eng", "level": "view" }

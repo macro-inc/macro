@@ -36,6 +36,11 @@ use super::spec::{
 use super::{sql_string, values_sql};
 use crate::config::SeedCliContext;
 
+/// Canonical blank-markdown loro snapshot, matching the one production uses
+/// to initialize empty documents.
+const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
+    include_bytes!("../../../../../static_assets/markdown-golden.1.bin");
+
 /// System labels created for every seeded inbox.
 const EMAIL_SYSTEM_LABELS: &[&str] = &[
     "INBOX",
@@ -456,17 +461,17 @@ async fn seed_documents(
         let owner =
             MacroUserIdStr::parse_from_str(owner_id.clone().leak()).context("valid owner id")?;
 
-        let file_type = document
-            .file
-            .as_deref()
-            .map(|file| {
+        let file_type = match (&document.content, document.file.as_deref()) {
+            (Some(_), _) => Some(FileType::Md),
+            (None, Some(file)) => {
                 let extension = file
                     .split('.')
                     .next_back()
                     .context("document file needs an extension")?;
-                FileType::from_str(extension).context("valid file type")
-            })
-            .transpose()?;
+                Some(FileType::from_str(extension).context("valid file type")?)
+            }
+            (None, None) => None,
+        };
 
         let is_public = document.public.is_some();
         let project_id = document.project.as_deref().map(|p| spec.project_id(p));
@@ -510,9 +515,49 @@ async fn seed_documents(
             })
             .await?;
 
-        if let Some(file) = document.file.as_deref() {
+        let markdown = match (&document.content, document.file.as_deref()) {
+            (Some(content), _) => Some(content.clone()),
+            (None, Some(file)) if file_type == Some(FileType::Md) => {
+                let path = files_dir.join(file);
+                Some(
+                    std::fs::read_to_string(&path)
+                        .with_context(|| format!("reading {}", path.display()))?,
+                )
+            }
+            _ => None,
+        };
+
+        if let Some(markdown) = markdown {
+            // Native markdown documents live in sync-service, not object
+            // storage: markdown -> loro snapshot (via lexical) -> boot the
+            // document's durable object, then mark the content ready.
+            match ctx.doc_content.as_ref() {
+                Some(clients) => {
+                    let snapshot = if markdown.trim().is_empty() {
+                        MARKDOWN_GOLDEN_SNAPSHOT.to_vec()
+                    } else {
+                        clients
+                            .lexical
+                            .markdown_to_loro_snapshot(&markdown)
+                            .await
+                            .context("converting markdown via lexical-service")?
+                    };
+                    clients
+                        .sync
+                        .initialize_from_snapshot(&document_id, &snapshot)
+                        .await
+                        .context("initializing document in sync-service")?;
+                    ctx.db
+                        .set_document_content_ready(&document_id, "sync_service")
+                        .await?;
+                }
+                None => println!(
+                    "  document `{key}`: SYNC_SERVICE_URL/LEXICAL_SERVICE_URL unset — content left pending, the doc won't open"
+                ),
+            }
+        } else if let Some(file) = document.file.as_deref() {
             let file_type = file_type.expect("file implies file type");
-            let key = format!(
+            let s3_key = format!(
                 "{}/{}/{}.{}",
                 created.owner,
                 created.document_id,
@@ -521,9 +566,12 @@ async fn seed_documents(
             );
             let path = files_dir.join(file);
             ctx.s3
-                .upload_file(&key, &path.to_string_lossy())
+                .upload_file(&s3_key, &path.to_string_lossy())
                 .await
                 .with_context(|| format!("uploading {}", path.display()))?;
+            ctx.db
+                .set_document_content_ready(&document_id, "object_storage")
+                .await?;
         }
 
         let mut rows: Vec<AccessRow> = document

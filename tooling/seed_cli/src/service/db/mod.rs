@@ -658,6 +658,26 @@ impl SeedDb {
         Ok(())
     }
 
+    /// Mark a document's content as ready at the given location
+    /// (`sync_service` for native markdown, `object_storage` for uploads).
+    #[tracing::instrument(skip(self), err)]
+    pub async fn set_document_content_ready(
+        &self,
+        document_id: &str,
+        location: &str,
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            r#"UPDATE "Document"
+               SET uploaded = true, "contentState" = 'ready', "contentLocation" = $2, "updatedAt" = NOW()
+               WHERE id = $1"#,
+            document_id,
+            location,
+        )
+        .execute(&self.inner)
+        .await?;
+        Ok(())
+    }
+
     /// Read-only handle to the underlying pool (for the matrix verifier).
     pub fn pool(&self) -> sqlx::PgPool {
         self.inner.clone()
