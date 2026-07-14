@@ -63,7 +63,7 @@ export function CompanyKanban() {
   const saveMutation = useBulkSaveEntityPropertiesMutation();
   const orchestrator = useGlobalBlockOrchestrator();
 
-  const { stages, stageProperty, resolveStage } = useDealStages();
+  const { stages, stageProperty, resolveStage, stageLabel } = useDealStages();
   const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
   const closedStageIds = useClosedStageIds(stages);
 
@@ -76,9 +76,26 @@ export function CompanyKanban() {
     // not just their (already predicate-filtered) cards.
     const filter = stageFilter();
     if (filter.length === 0) return all;
-    return all.filter((column) =>
+    const kept = all.filter((column) =>
       filter.includes(column.key === NO_STAGE_KEY ? NO_STAGE : column.key)
     );
+    // Filtered-in stages outside the active set (retired legacy stages) get
+    // their own column so their companies stay visible; keep "No stage" last.
+    const known = new Set(all.map((column) => column.key));
+    const extras = filter
+      .filter((id) => id !== NO_STAGE && !known.has(id))
+      .map((id) => ({ key: id, label: stageLabel(id) ?? 'Unknown stage' }));
+    if (extras.length === 0) return kept;
+    const noStageIndex = kept.findIndex(
+      (column) => column.key === NO_STAGE_KEY
+    );
+    return noStageIndex === -1
+      ? [...kept, ...extras]
+      : [
+          ...kept.slice(0, noStageIndex),
+          ...extras,
+          ...kept.slice(noStageIndex),
+        ];
   });
 
   const { paneVisible, selectedEntity } = usePreviewPaneVisiblity();

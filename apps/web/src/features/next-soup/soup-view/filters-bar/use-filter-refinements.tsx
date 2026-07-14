@@ -300,10 +300,11 @@ export function useFilterRefinements() {
 
   /**
    * Stage options for the Customers view's stage sub-filter: the team's
-   * active deal-stage set plus a trailing "No stage" row.
+   * active deal-stage set (plus retired legacy stages on the default set)
+   * and a trailing "No stage" row.
    */
   const stageSearchableOptions = createMemo((): SearchableOption[] => [
-    ...dealStages.stages().map((stage, index) => ({
+    ...dealStages.filterStages().map((stage, index) => ({
       id: stage.id,
       label: stage.label,
       icon: () => (

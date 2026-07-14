@@ -20,6 +20,7 @@ import { getCompanyStageOptionId } from '@entity/utils/company-properties';
 import {
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
+  LEGACY_COMPANY_STAGE_OPTIONS,
 } from '@entity/utils/task-properties';
 import {
   CRM_TEAM_STAGE_DEFINITION_NAME,
@@ -45,6 +46,12 @@ export type DealStage = {
 export type DealStages = {
   /** Active stages, in display order (team set when customized). */
   stages: Accessor<DealStage[]>;
+  /**
+   * Stages offered by stage *filters*: the active set plus, on the system
+   * default set, the retired legacy stages — companies may still carry
+   * those values and should stay reachable.
+   */
+  filterStages: Accessor<DealStage[]>;
   /** True when the team has its own stage set. */
   isCustomized: Accessor<boolean>;
   /** Definition id stage values are read from / written to. */
@@ -78,6 +85,13 @@ const DEFAULT_STAGES: DealStage[] = COMPANY_STAGE_OPTIONS.map((option) => ({
   id: option.value as string,
   label: option.label,
 }));
+
+const LEGACY_STAGES: DealStage[] = LEGACY_COMPANY_STAGE_OPTIONS.map(
+  (option) => ({
+    id: option.value as string,
+    label: option.label,
+  })
+);
 
 function optionLabel(option: PropertyOption): string {
   const value = option.value;
@@ -219,6 +233,10 @@ export function useDealStages(): DealStages {
     return customStages.length > 0 ? customStages : DEFAULT_STAGES;
   });
 
+  const filterStages = createMemo((): DealStage[] =>
+    isCustomized() ? stages() : [...stages(), ...LEGACY_STAGES]
+  );
+
   const stageDefinitionId = createMemo(() => {
     const definition = teamStageDefinition();
     return definition && stagesFromDefinition(definition).length > 0
@@ -265,6 +283,7 @@ export function useDealStages(): DealStages {
 
   return {
     stages,
+    filterStages,
     isCustomized,
     stageDefinitionId,
     stageProperty,

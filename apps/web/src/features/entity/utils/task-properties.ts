@@ -24,8 +24,8 @@ export const COMPANY_STAGE_OPTIONS = [
 ] as const;
 
 // Retired from the default stage set, but companies may still carry these
-// values — keep their labels resolvable.
-const LEGACY_COMPANY_STAGE_OPTIONS = [
+// values — keep their labels resolvable and offer them in stage filters.
+export const LEGACY_COMPANY_STAGE_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STAGE.QUALIFIED, label: 'Qualified' },
   { value: PROPERTY_OPTION_IDS.STAGE.TRIAL, label: 'Trial' },
   { value: PROPERTY_OPTION_IDS.STAGE.NEGOTIATION, label: 'Negotiation' },
