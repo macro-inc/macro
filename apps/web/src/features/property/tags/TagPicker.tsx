@@ -24,6 +24,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import { TagDot } from './TagDot';
 import { DEFAULT_TAG_COLOR, type TAG_COLORS } from './tagColors';
@@ -77,7 +78,7 @@ export function TagPicker(props: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = createSignal(false);
-  let saveAndClose: (() => void) | undefined;
+  let saveAndClose: (() => Promise<void>) | undefined;
 
   const setOpenState = (value: boolean) => {
     setOpen(value);
@@ -90,8 +91,11 @@ export function TagPicker(props: {
       return;
     }
 
-    saveAndClose?.();
-    setOpenState(false);
+    if (saveAndClose) {
+      void saveAndClose();
+    } else {
+      setOpenState(false);
+    }
   };
 
   return (
@@ -131,7 +135,7 @@ export function TagPickerPopover(props: {
   onOpenChange: (open: boolean) => void;
   getAnchorRect: () => { x: number; y: number } | undefined;
 }) {
-  let saveAndClose: (() => void) | undefined;
+  let saveAndClose: (() => Promise<void>) | undefined;
 
   const handleOpenChange = (value: boolean) => {
     if (value) {
@@ -139,8 +143,11 @@ export function TagPickerPopover(props: {
       return;
     }
 
-    saveAndClose?.();
-    props.onOpenChange(false);
+    if (saveAndClose) {
+      void saveAndClose();
+    } else {
+      props.onOpenChange(false);
+    }
   };
 
   return (
@@ -167,7 +174,7 @@ export function TagPickerPopover(props: {
 function TagPickerBody(props: {
   docTags: DocTags;
   onClose: () => void;
-  registerSave: (handler: (() => void) | undefined) => void;
+  registerSave: (handler: (() => Promise<void>) | undefined) => void;
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -183,38 +190,52 @@ function TagPickerBody(props: {
   const ensureTagSet = useEnsureTagSetMutation();
   let scrollContainerRef: HTMLDivElement | undefined;
 
-  const initialAppliedTags = props.docTags.appliedTags();
-  const initialAppliedIds = new Set(
-    initialAppliedTags.map((tag) => tag.optionId)
+  const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
+  const initialAppliedIds = createMemo(
+    () => new Set(initialAppliedTags().map((tag) => tag.optionId))
   );
-  const initialOptionScopes = new Map<string, TagScope>();
-  const initialOptionsById = new Map<string, PropertyOptionResponse>();
-  const initialItemsByScope = new Map<TagScope, TagOptionItem[]>();
+  const initialTagState = createMemo(() => {
+    const optionScopes = new Map<string, TagScope>();
+    const optionsById = new Map<string, PropertyOptionResponse>();
+    const itemsByScope = new Map<TagScope, TagOptionItem[]>();
 
-  for (const set of props.docTags.tagSets()) {
-    for (const option of set.options) {
-      initialOptionsById.set(option.id, option);
+    for (const set of props.docTags.tagSets()) {
+      for (const option of set.options) {
+        optionsById.set(option.id, option);
+      }
+
+      itemsByScope.set(
+        set.scope,
+        [...set.options]
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .map((option) => {
+            optionScopes.set(option.id, set.scope);
+            return {
+              scope: set.scope,
+              option,
+            };
+          })
+      );
     }
 
-    initialItemsByScope.set(
-      set.scope,
-      [...set.options]
-        .sort((a, b) => a.displayOrder - b.displayOrder)
-        .map((option) => {
-          initialOptionScopes.set(option.id, set.scope);
-          return {
-            scope: set.scope,
-            option,
-          };
-        })
-    );
-  }
+    const selectedItems = initialAppliedTags().flatMap((tag) => {
+      const option = optionsById.get(tag.optionId);
+      return option ? [{ scope: tag.scope, option }] : [];
+    });
 
-  const initialSelectedItems = initialAppliedTags.flatMap((tag) => {
-    const option = initialOptionsById.get(tag.optionId);
-    return option ? [{ scope: tag.scope, option }] : [];
+    return {
+      optionScopes,
+      itemsByScope,
+      selectedItems,
+      items: [...itemsByScope.values()].flat(),
+    };
   });
-  const initialItems = [...initialItemsByScope.values()].flat();
+
+  createEffect(() => {
+    const appliedTags = initialAppliedTags();
+    if (untrack(saved)) return;
+    setSelectedIds(new Set(appliedTags.map((tag) => tag.optionId)));
+  });
 
   const isSelected = (optionId: string) => selectedIds().has(optionId);
 
@@ -228,33 +249,39 @@ function TagPickerBody(props: {
   };
 
   const optionScope = (optionId: string): TagScope | undefined =>
-    initialOptionScopes.get(optionId);
+    initialTagState().optionScopes.get(optionId);
 
   const persistSelection = async () => {
-    if (saved()) return;
+    if (saved()) return true;
     setSaved(true);
 
-    const nextSelectedIds = selectedIds();
-    for (const tag of initialAppliedTags) {
-      if (!nextSelectedIds.has(tag.optionId)) {
-        await props.docTags.removeTag(tag.scope, tag.optionId);
+    try {
+      const nextSelectedIds = selectedIds();
+      for (const tag of initialAppliedTags()) {
+        if (!nextSelectedIds.has(tag.optionId)) {
+          await props.docTags.removeTag(tag.scope, tag.optionId);
+        }
       }
-    }
 
-    for (const optionId of nextSelectedIds) {
-      if (initialAppliedIds.has(optionId)) continue;
-      const scope = optionScope(optionId);
-      if (scope) await props.docTags.applyTag(scope, optionId);
+      for (const optionId of nextSelectedIds) {
+        if (initialAppliedIds().has(optionId)) continue;
+        const scope = optionScope(optionId);
+        if (scope) await props.docTags.applyTag(scope, optionId);
+      }
+      return true;
+    } catch (error) {
+      setSaved(false);
+      console.error('Failed to persist tag selection', error);
+      return false;
     }
   };
 
-  const save = () => {
-    void persistSelection();
+  const save = async () => {
+    return persistSelection();
   };
 
-  const saveAndClose = () => {
-    save();
-    props.onClose();
+  const saveAndClose = async () => {
+    if (await save()) props.onClose();
   };
 
   const filteredItems = createMemo(() => {
@@ -262,10 +289,12 @@ function TagPickerBody(props: {
     const matchesSearch = (item: TagOptionItem) =>
       !query || optionLabel(item.option).toLowerCase().includes(query);
 
-    const selectedAtOpen = initialSelectedItems.filter(matchesSearch);
+    const selectedAtOpen =
+      initialTagState().selectedItems.filter(matchesSearch);
     const remainingForScope = (scope: TagScope) =>
-      (initialItemsByScope.get(scope) ?? []).filter(
-        (item) => !initialAppliedIds.has(item.option.id) && matchesSearch(item)
+      (initialTagState().itemsByScope.get(scope) ?? []).filter(
+        (item) =>
+          !initialAppliedIds().has(item.option.id) && matchesSearch(item)
       );
 
     return [
@@ -277,16 +306,16 @@ function TagPickerBody(props: {
 
   const selectedAtOpenItems = createMemo(() => {
     const query = search().trim().toLowerCase();
-    return initialSelectedItems.filter(
+    return initialTagState().selectedItems.filter(
       (item) => !query || optionLabel(item.option).toLowerCase().includes(query)
     );
   });
 
   const remainingItemsForScope = (scope: TagScope) => {
     const query = search().trim().toLowerCase();
-    return (initialItemsByScope.get(scope) ?? []).filter(
+    return (initialTagState().itemsByScope.get(scope) ?? []).filter(
       (item) =>
-        !initialAppliedIds.has(item.option.id) &&
+        !initialAppliedIds().has(item.option.id) &&
         (!query || optionLabel(item.option).toLowerCase().includes(query))
     );
   };
@@ -296,7 +325,7 @@ function TagPickerBody(props: {
     const label = createLabel().toLowerCase();
     return (
       !!label &&
-      initialItems.some(
+      initialTagState().items.some(
         (item) => optionLabel(item.option).toLowerCase() === label
       )
     );
@@ -327,25 +356,29 @@ function TagPickerBody(props: {
     const value = createDraftLabel().trim();
     if (!value) return;
 
-    await persistSelection();
+    try {
+      if (!(await persistSelection())) return;
 
-    const provisioned = await ensureTagSet.mutateAsync({ scope });
-    if (!provisioned.definition) return;
+      const provisioned = await ensureTagSet.mutateAsync({ scope });
+      if (!provisioned.definition) return;
 
-    const created = await addOption.mutateAsync({
-      propertyDefinitionId: provisioned.definition.id,
-      body: {
-        type: 'select_string',
-        option: {
-          value,
-          display_order: nextDisplayOrder(provisioned.options),
-          color: selectedColor(),
+      const created = await addOption.mutateAsync({
+        propertyDefinitionId: provisioned.definition.id,
+        body: {
+          type: 'select_string',
+          option: {
+            value,
+            display_order: nextDisplayOrder(provisioned.options),
+            color: selectedColor(),
+          },
         },
-      },
-    });
-    invalidateTags();
-    await props.docTags.applyTag(scope, created.id);
-    props.onClose();
+      });
+      invalidateTags();
+      await props.docTags.applyTag(scope, created.id);
+      props.onClose();
+    } catch (error) {
+      console.error('Failed to create tag', error);
+    }
   };
 
   const handleCreateKeyDown = (event: KeyboardEvent) => {
@@ -479,7 +512,7 @@ function TagPickerBody(props: {
                       when={filteredItems().length > 0 || showCreateRow()}
                       fallback={
                         <div class="px-2 py-4 text-center text-ink-muted">
-                          {initialItems.length === 0
+                          {initialTagState().items.length === 0
                             ? 'No tags available'
                             : 'No tags match your search'}
                         </div>

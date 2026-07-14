@@ -5,10 +5,6 @@ import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-s
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
-import {
-  TagSoupView,
-  type TagSoupViewParams,
-} from '@app/features/property/tags/TagSoupView';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { ChannelCompose } from '@block-channel/component/Compose';
@@ -350,13 +346,6 @@ registerComponent(
         initialSearchText={params.initialQuery}
       />
     );
-  })
-);
-registerComponent(
-  'tag',
-  withAuth((params: TagSoupViewParams = {}) => {
-    usePageViewTracking('tag');
-    return <TagSoupView {...params} />;
   })
 );
 /** END - APP ROUTES */

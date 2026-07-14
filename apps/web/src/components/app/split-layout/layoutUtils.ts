@@ -36,13 +36,6 @@ export function decodePairs(segments: string[]): SplitContent[] {
       // threaded through content params. See `contentUrlSegments` in
       // layoutManager for the matching encode.
       pairs.push({ type: 'component', id: 'settings' });
-    } else if (type === 'tag') {
-      pairs.push({
-        type: 'component',
-        id: 'tag',
-        preserveParams: true,
-        params: { tagOptionId: id },
-      });
     } else if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {
@@ -67,19 +60,11 @@ export function decodePairs(segments: string[]): SplitContent[] {
 }
 
 function _encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
-  return splits.flatMap((s) => {
-    if (s.type === 'component' && s.id === 'tag') {
-      const tagOptionId = s.params?.tagOptionId;
-      if (typeof tagOptionId === 'string' && tagOptionId.length > 0) {
-        return ['tag', tagOptionId];
-      }
-    }
-    return [
-      // Use the alias type if available, otherwise use the base type
-      s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
-      s.id,
-    ];
-  });
+  return splits.flatMap((s) => [
+    // Use the alias type if available, otherwise use the base type
+    s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
+    s.id,
+  ]);
 }
 
 const _isInSplit = createCallback(() => {

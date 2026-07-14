@@ -76,14 +76,6 @@ export type NavigationCause =
   | 'replace';
 
 function sameContent(a: SplitContent, b: SplitContent): boolean {
-  if (
-    a.type === 'component' &&
-    a.id === 'tag' &&
-    b.type === 'component' &&
-    b.id === 'tag'
-  ) {
-    return a.params?.tagOptionId === b.params?.tagOptionId;
-  }
   return a.type === b.type && a.id === b.id;
 }
 
@@ -94,11 +86,12 @@ function getAliasOrType(content: SplitContent): string {
 }
 
 /**
- * The `type/id` URL pair for a split's content. Some component views have
- * stable URL aliases for meaningful params: settings serializes as
- * `settings/<active-tab-slug>`, and tagged items serialize as
- * `tag/<tag-option-id>`. `decodePairs` maps these aliases back to internal
- * component content on the way in.
+ * The `type/id` URL pair for a split's content. The settings panel is stored
+ * internally as `component/settings` content, but serializes as
+ * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
+ * settings page is open. Reads the active-tab signal, so the URL updates
+ * reactively as the tab changes. `decodePairs` maps `settings/<tab>` back to
+ * the internal `component/settings` content on the way in.
  *
  * This applies on mobile too: settings docks as a split there, and now that
  * settings is no longer a standalone `/settings/:tab` route, `settings/<tab>`
@@ -109,20 +102,10 @@ function contentUrlSegments(content: SplitContent): string[] {
   if (content.type === 'component' && content.id === 'settings') {
     return ['settings', settingsTabToSlug(activeTabId())];
   }
-  if (content.type === 'component' && content.id === 'tag') {
-    const tagOptionId = content.params?.tagOptionId;
-    if (typeof tagOptionId === 'string' && tagOptionId.length > 0) {
-      return ['tag', tagOptionId];
-    }
-  }
   return [getAliasOrType(content), content.id].map(String);
 }
 
 function keyOfSplitContent(s: SplitContent): SplitKey {
-  if (s.type === 'component' && s.id === 'tag') {
-    const tagOptionId = s.params?.tagOptionId;
-    return `component:tag:${typeof tagOptionId === 'string' ? tagOptionId : ''}` as SplitKey;
-  }
   return `${s.type}:${s.id}`;
 }
 
@@ -856,7 +839,12 @@ export function createSplitLayout(
   };
 
   const getUrl = () => {
-    return getUrlSegments().join('/');
+    const visibleSplits = state.splits.filter((s) => !isExcluded(s));
+    return (
+      visibleSplits.map((s) => getAliasOrType(s.content)).join('/') +
+      '/' +
+      visibleSplits.map((s) => s.content.id).join('/')
+    );
   };
 
   function activateSplit(id: SplitId) {

@@ -26,6 +26,7 @@ const chipClass = cn(
 function TagChip(props: {
   tag: ResolvedTag;
   docTags: ReturnType<typeof useDocTags>;
+  canEdit: boolean;
 }) {
   const split = useSplitLayout();
   const panel = useSplitPanel();
@@ -45,15 +46,25 @@ function TagChip(props: {
     <Layer depth={2}>
       <ContextMenu>
         <ContextMenu.Trigger class="contents">
-          <TagPicker
-            docTags={props.docTags}
-            replaceTag={props.tag}
-            triggerClass={chipClass}
-            triggerLabel={`Change or select tag ${props.tag.label}`}
+          <Show
+            when={props.canEdit}
+            fallback={
+              <span class={cn(chipClass, 'cursor-default hover:bg-surface')}>
+                <TagDot color={props.tag.color} />
+                <span class="min-w-0 truncate">{props.tag.label}</span>
+              </span>
+            }
           >
-            <TagDot color={props.tag.color} />
-            <span class="min-w-0 truncate">{props.tag.label}</span>
-          </TagPicker>
+            <TagPicker
+              docTags={props.docTags}
+              replaceTag={props.tag}
+              triggerClass={chipClass}
+              triggerLabel={`Change or select tag ${props.tag.label}`}
+            >
+              <TagDot color={props.tag.color} />
+              <span class="min-w-0 truncate">{props.tag.label}</span>
+            </TagPicker>
+          </Show>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenuContent class="text-xs text-ink-muted">
@@ -62,7 +73,9 @@ function TagChip(props: {
               text="View all items with tag"
               onClick={viewTaggedItems}
             />
-            <MenuItem icon={XIcon} text="Remove tag" onClick={removeTag} />
+            <Show when={props.canEdit}>
+              <MenuItem icon={XIcon} text="Remove tag" onClick={removeTag} />
+            </Show>
           </ContextMenuContent>
         </ContextMenu.Portal>
       </ContextMenu>
@@ -83,7 +96,9 @@ export function TagsRow(props: {
   return (
     <div class="flex flex-wrap items-center gap-1.5">
       <For each={docTags.appliedTags()}>
-        {(tag) => <TagChip tag={tag} docTags={docTags} />}
+        {(tag) => (
+          <TagChip tag={tag} docTags={docTags} canEdit={props.canEdit} />
+        )}
       </For>
       <Show
         when={props.canEdit}
