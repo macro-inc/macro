@@ -128,7 +128,7 @@ pub async fn complete_transaction_with_processing_error<T>(
 
 /// Publish an email event to the `macro.email` Kafka topic, logging and
 /// dropping failures — event emission must never fail the email operation.
-pub async fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
+pub fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
     let _ = broker
         .send_event(event)
         .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));

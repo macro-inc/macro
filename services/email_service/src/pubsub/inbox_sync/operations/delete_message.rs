@@ -125,8 +125,7 @@ pub async fn delete_message(
             provider_message_id: payload.provider_message_id.clone(),
             thread_id: message.thread_db_id,
         }),
-    )
-    .await;
+    );
 
     // tell FE to refresh user's inbox
     cg_refresh_email(

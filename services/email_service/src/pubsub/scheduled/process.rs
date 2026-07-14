@@ -222,8 +222,7 @@ async fn process_scheduled_message_inner(
                         origin: EmailEventOrigin::UserAction,
                         sent_at: Utc::now(),
                     }),
-                )
-                .await;
+                );
             }
 
             // Cleanup attachments in the background after successful send
