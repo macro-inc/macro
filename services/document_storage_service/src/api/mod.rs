@@ -244,17 +244,7 @@ fn api_router(state: ApiContext) -> Router {
             "/crm",
             crm::inbound::axum_router::crm_router(state.crm_state.clone()),
         )
-        .layer(
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::auth::initialize_user_context::handler,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.jwt_validation_args.clone(),
-                    macro_middleware::auth::attach_user::handler,
-                )),
-        )
-        // Merge after the user-auth layer so webhook calls authenticate only with the bot token.
+        // Channel bot webhooks authenticate only with the bot token.
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(
                 state.channel_bot_webhook_state.clone(),
@@ -294,23 +284,8 @@ fn api_router(state: ApiContext) -> Router {
                         )),
                 ),
         )
-        .nest(
-            "/recents",
-            recents::router().layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                macro_middleware::auth::decode_jwt::handler, // The user has to exist for all recents calls
-            )),
-        )
-        .nest(
-            "/saved_views",
-            saved_views::router().layer(compose_layers![
-                axum::middleware::from_fn(macro_middleware::auth::initialize_user_context::handler),
-                axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    macro_middleware::auth::attach_user::handler
-                ),
-            ]),
-        )
+        .nest("/recents", recents::router())
+        .nest("/saved_views", saved_views::router())
         .with_state(state);
     Router::new()
         .nest("/{version}", internal_router.clone())

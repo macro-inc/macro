@@ -243,7 +243,7 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let macro_authorization_service =
-        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_validation_args.clone());
+        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_validation_args);
     let permissions_database = MacroDB::new(db.clone());
     let user_permissions_service = SharedUserPermissionsService::new(
         UserRolesAndPermissionsServiceImpl::new(permissions_database.clone(), permissions_database),
@@ -837,7 +837,6 @@ async fn main() -> anyhow::Result<()> {
         opensearch_client: Arc::new(opensearch_client),
         macro_authorization_service: macro_authorization_service.clone(),
         user_permissions_service,
-        jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
         frecency_storage,

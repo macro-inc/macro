@@ -24,10 +24,7 @@ default = ["connection_gateway", "delete_document_worker", "graphql", "location_
 delete_document_worker = []
 graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:complete_graph"]
 local = ["local_auth"]
-local_auth = [
-  "macro_authorization/local_auth",
-  "macro_middleware/local_auth",
-]
+local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
@@ -110,7 +107,6 @@ macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",
-  "user_permissions",
 ] }
 macro_project_utils = { path = "../../crates/macro_project_utils" }
 macro_sha_count_client = { path = "../../crates/macro_sha_count_client" }
@@ -121,7 +117,7 @@ mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
+model_user = { path = "../../crates/model_user" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_opensearch = { path = "../../crates/models_opensearch" }
