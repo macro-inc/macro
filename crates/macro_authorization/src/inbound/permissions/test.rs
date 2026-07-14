@@ -14,7 +14,7 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    MacroAuthorizationError, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 
@@ -73,17 +73,17 @@ impl UserPermissionsService for FakeUserPermissionsService {
 
 #[derive(Clone)]
 struct TestState {
-    authorization: SharedMacroAuthorizationService,
-    permissions: SharedUserPermissionsService,
+    authorization: MacroAuthorizationServiceHandle,
+    permissions: UserPermissionsServiceHandle,
 }
 
-impl FromRef<TestState> for SharedMacroAuthorizationService {
+impl FromRef<TestState> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
 }
 
-impl FromRef<TestState> for SharedUserPermissionsService {
+impl FromRef<TestState> for UserPermissionsServiceHandle {
     fn from_ref(state: &TestState) -> Self {
         state.permissions.clone()
     }
@@ -113,8 +113,8 @@ fn test_router(
     Router::new()
         .route("/permissioned", get(permissioned_handler))
         .with_state(TestState {
-            authorization: SharedMacroAuthorizationService::new(authorization),
-            permissions: SharedUserPermissionsService::new(permissions),
+            authorization: MacroAuthorizationServiceHandle::new(authorization),
+            permissions: UserPermissionsServiceHandle::new(permissions),
         })
 }
 

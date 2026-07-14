@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_auth::macro_api_token::EncodeMacroApiTokenArgs;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -44,7 +44,7 @@ pub struct MacroApiTokenQuery {
 pub async fn handler(
     State(db): State<PgPool>,
     State(macro_api_token_context): State<MacroApiTokenContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
     Query(query): Query<MacroApiTokenQuery>,
 ) -> Result<Response, Response> {
     let email = if let Some(email) = query.email.clone() {

@@ -7,7 +7,7 @@ use axum::{
 };
 use entity_access::domain::ports::NoOpEntityAccessService;
 use macro_authorization::{
-    MacroAuthorizationError, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer},
 };
 use tower::ServiceExt;
@@ -21,7 +21,7 @@ fn test_router(authorization: FakeMacroAuthorizationService) -> Router {
     crm_router(CrmRouterState {
         service: Arc::new(NoOpCrmService),
         entity_access_service: Arc::new(NoOpEntityAccessService),
-        authorization: SharedMacroAuthorizationService::new(authorization),
+        authorization: MacroAuthorizationServiceHandle::new(authorization),
     })
 }
 

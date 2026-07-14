@@ -8,9 +8,7 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use macro_authorization::{
-    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
-};
+use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::{
@@ -32,7 +30,7 @@ use model::document::DocumentBasic;
 ///
 /// # Prerequisites
 ///
-/// - Caller identity must be resolvable from shared authorization state
+/// - Caller identity must be resolvable from authorization state
 /// - Document context must be loaded (DocumentBasic in extensions)
 #[derive(Debug)]
 pub struct DocumentAccessExtractor<T: RequiredPermission, Svc> {
@@ -45,7 +43,7 @@ impl<T, S, Svc> FromRequestParts<S> for DocumentAccessExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -55,8 +53,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalSharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+        let OptionalMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<OptionalMacroAuthorizationExtractor, S>(state)
             .await?;
 
         let document_context: Extension<DocumentBasic> = parts

@@ -4,7 +4,7 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use model_error_response::ErrorResponse;
 use models_pagination::{
     CursorOptionExt, CursorWithValAndFilter, SimpleSortMethod, TypeEraseCursor,
@@ -25,7 +25,7 @@ use crate::{
 
 pub struct EmailRouterState<T> {
     pub(crate) inner: Arc<T>,
-    pub authorization: SharedMacroAuthorizationService,
+    pub authorization: MacroAuthorizationServiceHandle,
 }
 
 impl<T> Clone for EmailRouterState<T> {
@@ -37,7 +37,7 @@ impl<T> Clone for EmailRouterState<T> {
     }
 }
 
-impl<T> FromRef<EmailRouterState<T>> for SharedMacroAuthorizationService {
+impl<T> FromRef<EmailRouterState<T>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &EmailRouterState<T>) -> Self {
         state.authorization.clone()
     }
@@ -47,7 +47,7 @@ impl<T> EmailRouterState<T>
 where
     T: EmailService,
 {
-    pub fn new(state: T, authorization: SharedMacroAuthorizationService) -> Self {
+    pub fn new(state: T, authorization: MacroAuthorizationServiceHandle) -> Self {
         Self {
             inner: Arc::new(state),
             authorization,
@@ -91,7 +91,7 @@ where
 #[tracing::instrument(skip(links, authorization, service), fields(user_id=authorization.macro_user_id.as_ref(), fusionauth_user_id=authorization.user_context.fusion_user_id))]
 async fn cursor_handler<T: EmailService>(
     State(service): State<EmailRouterState<T>>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,

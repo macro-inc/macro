@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::GenericResponse;
 use model::thread::response::GetThreadUserAccessLevelResponse;
@@ -18,7 +18,7 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { thread_id }): Path<Params>,
 ) -> impl IntoResponse {
     let user_id = match MacroUserIdStr::parse_from_str(&authorization.user_context.user_id) {

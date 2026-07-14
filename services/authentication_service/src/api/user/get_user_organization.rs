@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -71,7 +71,7 @@ impl IntoResponse for GetUserOrganizationResponse {
 #[tracing::instrument(skip(ctx, auth), err, fields(user_id=%auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
 ) -> Result<GetUserOrganizationResponse, UserOrganizationError> {
     let organization_id = if let Some(organization_id) = auth.user_context.organization_id {
         organization_id

@@ -13,7 +13,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_error_response::ErrorResponse;
@@ -28,7 +28,7 @@ use crate::domain::{
 pub struct FavoritesRouterState<S, AccessSvc> {
     service: Arc<S>,
     access_service: Arc<AccessSvc>,
-    authorization: SharedMacroAuthorizationService,
+    authorization: MacroAuthorizationServiceHandle,
 }
 
 impl<S, AccessSvc> Clone for FavoritesRouterState<S, AccessSvc> {
@@ -41,7 +41,7 @@ impl<S, AccessSvc> Clone for FavoritesRouterState<S, AccessSvc> {
     }
 }
 
-impl<S, AccessSvc> FromRef<FavoritesRouterState<S, AccessSvc>> for SharedMacroAuthorizationService {
+impl<S, AccessSvc> FromRef<FavoritesRouterState<S, AccessSvc>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &FavoritesRouterState<S, AccessSvc>) -> Self {
         state.authorization.clone()
     }
@@ -52,11 +52,11 @@ where
     S: FavoritesService,
     AccessSvc: EntityAccessService,
 {
-    /// Create router state from shared service references.
+    /// Create router state from service handles.
     pub fn new(
         service: Arc<S>,
         access_service: Arc<AccessSvc>,
-        authorization: SharedMacroAuthorizationService,
+        authorization: MacroAuthorizationServiceHandle,
     ) -> Self {
         Self {
             service,
@@ -183,7 +183,7 @@ pub struct ReorderFavoritesRequest {
 #[tracing::instrument(err, skip_all)]
 pub async fn list_favorites_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
 ) -> Result<Json<FavoritesList>, FavoritesApiError>
 where
     S: FavoritesService,
@@ -211,7 +211,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn add_favorite_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     Json(req): Json<AddFavoriteRequest>,
 ) -> Result<Json<Favorite>, FavoritesApiError>
 where
@@ -253,7 +253,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn remove_favorite_by_entity_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     Path(params): Path<RemoveFavoriteByEntityParams>,
 ) -> Result<Json<()>, FavoritesApiError>
 where
@@ -285,7 +285,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn reorder_favorites_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     Json(req): Json<ReorderFavoritesRequest>,
 ) -> Result<Json<()>, FavoritesApiError>
 where

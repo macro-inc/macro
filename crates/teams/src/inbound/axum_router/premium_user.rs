@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationRejection, SharedMacroAuthorizationExtractor};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationRejection};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 
@@ -78,7 +78,7 @@ where
         parts: &mut Parts,
         state: &TeamRouterState<T, Eas>,
     ) -> Result<Self, Self::Rejection> {
-        let user = SharedMacroAuthorizationExtractor::from_request_parts(parts, state).await?;
+        let user = MacroAuthorizationExtractor::from_request_parts(parts, state).await?;
 
         let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
         else {

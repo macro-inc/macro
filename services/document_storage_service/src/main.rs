@@ -69,7 +69,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{SharedMacroAuthorizationService, SharedUserPermissionsService};
+use macro_authorization::{MacroAuthorizationServiceHandle, UserPermissionsServiceHandle};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -243,9 +243,9 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let macro_authorization_service =
-        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_validation_args);
+        MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_validation_args);
     let permissions_database = MacroDB::new(db.clone());
-    let user_permissions_service = SharedUserPermissionsService::new(
+    let user_permissions_service = UserPermissionsServiceHandle::new(
         UserRolesAndPermissionsServiceImpl::new(permissions_database.clone(), permissions_database),
     );
 

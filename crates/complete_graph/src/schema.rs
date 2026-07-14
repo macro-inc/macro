@@ -18,8 +18,8 @@ use graphql_properties::{
 };
 use graphql_soup::{SoupInput, SoupPage, resolve_soup};
 use macro_authorization::{
-    MacroAuthorizationError, MacroAuthorizationService, SharedMacroAuthorizationExtractor,
-    SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationServiceHandle,
 };
 use model_user::UserContext;
 use rootcause::Report;
@@ -64,9 +64,9 @@ impl MacroAuthorizationService for NoOpMacroAuthorizationService {
     }
 }
 
-impl FromRef<SchemaOnlyState> for SharedMacroAuthorizationService {
+impl FromRef<SchemaOnlyState> for MacroAuthorizationServiceHandle {
     fn from_ref(_state: &SchemaOnlyState) -> Self {
-        SharedMacroAuthorizationService::new(NoOpMacroAuthorizationService)
+        MacroAuthorizationServiceHandle::new(NoOpMacroAuthorizationService)
     }
 }
 
@@ -74,7 +74,7 @@ impl FromRef<SchemaOnlyState> for EmailRouterState<NoOpEmailService> {
     fn from_ref(state: &SchemaOnlyState) -> Self {
         EmailRouterState::new(
             NoOpEmailService,
-            SharedMacroAuthorizationService::from_ref(state),
+            MacroAuthorizationServiceHandle::from_ref(state),
         )
     }
 }
@@ -129,7 +129,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    SharedMacroAuthorizationService: FromRef<St>,
+    MacroAuthorizationServiceHandle: FromRef<St>,
     W: EntityPropertyWriter,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
@@ -153,7 +153,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    SharedMacroAuthorizationService: FromRef<St>,
+    MacroAuthorizationServiceHandle: FromRef<St>,
     W: EntityPropertyWriter,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
@@ -170,7 +170,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    SharedMacroAuthorizationService: FromRef<St>,
+    MacroAuthorizationServiceHandle: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
 {
@@ -192,14 +192,14 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    SharedMacroAuthorizationService: FromRef<St>,
+    MacroAuthorizationServiceHandle: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
 {
     /// Stable id of the authenticated user.
     async fn id(&self, ctx: &Context<'_>) -> async_graphql::Result<async_graphql::ID> {
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } =
-            extract_part::<SharedMacroAuthorizationExtractor, St>(ctx).await?;
+        let MacroAuthorizationExtractor { macro_user_id, .. } =
+            extract_part::<MacroAuthorizationExtractor, St>(ctx).await?;
         Ok(async_graphql::ID(macro_user_id.to_string()))
     }
 

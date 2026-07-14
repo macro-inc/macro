@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use axum::extract::{Path, State};
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -29,7 +29,7 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn delete_history_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
     let user_context = &authorization.user_context;

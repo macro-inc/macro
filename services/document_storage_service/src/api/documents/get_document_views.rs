@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::{document::DocumentBasic, response::GenericErrorResponse};
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -39,7 +39,7 @@ pub async fn get_document_views_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { document_id }): Path<Params>,
     State(db): State<PgPool>,
-    user_context: OptionalSharedMacroAuthorizationExtractor,
+    user_context: OptionalMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
 ) -> Result<Response, Response> {
     let users = macro_db_client::document::get_document_views(&db, &document_context.document_id)

@@ -15,7 +15,7 @@ use axum::{
 };
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use models_properties::api::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::{EntityReference, EntityType};
@@ -238,10 +238,10 @@ fn validate_bulk_request_size(
 #[tracing::instrument(skip(state, request, user), fields(entity_count = request.entities.len()), err)]
 pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    SharedMacroAuthorizationExtractor {
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: SharedMacroAuthorizationExtractor,
+    }: MacroAuthorizationExtractor,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
     // The public endpoint requires explicit property IDs. An empty property_ids
@@ -523,10 +523,10 @@ impl IntoResponse for DeleteEntityPropertyErr {
 pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService>(
     Path(entity_property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    SharedMacroAuthorizationExtractor {
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: SharedMacroAuthorizationExtractor,
+    }: MacroAuthorizationExtractor,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 

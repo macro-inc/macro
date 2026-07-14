@@ -12,7 +12,7 @@ use entity_access::inbound::axum_extractors::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
 use model::{project::request::PatchProjectRequestV2, response::ErrorResponse, user::UserContext};
@@ -41,7 +41,7 @@ pub struct Params {
     )]
 #[allow(unused, reason = "used to generate OpenAPI documentation")]
 pub async fn edit_project_handler_v2(
-    _authorization: SharedMacroAuthorizationExtractor,
+    _authorization: MacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
     Json(req): Json<PatchProjectRequestV2>,
 ) -> impl IntoResponse {
@@ -53,7 +53,7 @@ pub async fn edit_project_handler_v2(
 pub async fn edit_project_handler(
     access: ProjectAccessLevelExtractor<EditAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     project_context: Extension<BasicProject>,
     Path(Params { id }): Path<Params>,
     project: ProjectBodyAccessLevelExtractor<

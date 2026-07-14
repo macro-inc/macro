@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use axum::http::StatusCode;
 use http_body_util::BodyExt;
 use macro_authorization::{
-    SharedMacroAuthorizationService,
+    MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -75,7 +75,7 @@ fn build_router_with(service: Arc<MockService>) -> axum::Router {
     let authorization = FakeMacroAuthorizationService::always(test_user_context(TEST_USER_ID));
     let state = AiProjectionRouterState {
         service,
-        auth: SharedMacroAuthorizationService::new(authorization),
+        auth: MacroAuthorizationServiceHandle::new(authorization),
     };
     ai_projections_router(state)
 }

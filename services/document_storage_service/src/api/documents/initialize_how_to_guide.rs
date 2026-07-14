@@ -7,7 +7,7 @@ use documents_hex::domain::create::{
     MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
 };
 use favorites::domain::ports::FavoritesService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{ErrorResponse, GenericSuccessResponse};
 use model_entity::EntityType;
 use reqwest::StatusCode;
@@ -21,7 +21,7 @@ const HOW_TO_GUIDE_TEMPLATE: &str = include_str!("./template/macro_how_to_guide.
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     tracing::info!("initialize how to guide");
 

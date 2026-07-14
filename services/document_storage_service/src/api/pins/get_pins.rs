@@ -2,7 +2,7 @@ use crate::model::response::pin::GetPinsResponse;
 use crate::{api::context::ApiContext, model::response::pin::UserPinsResponse};
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, GenericResponse};
 
 /// Gets the users pinned items
@@ -18,7 +18,7 @@ use model::response::{GenericErrorResponse, GenericResponse};
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_pins_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     let user_context = &authorization.user_context;
     let pins = match macro_db_client::pins::get_pins(ctx.db.clone(), user_context.user_id.as_str())

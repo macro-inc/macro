@@ -6,7 +6,7 @@ use crate::model::response::documents::get::{GetDocumentKeyResponse, GetDocument
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::document::FileType;
 use model::response::GenericErrorResponse;
 use model::{document::DocumentBasic, response::GenericResponse};
@@ -38,7 +38,7 @@ pub struct Params {
 pub async fn get_document_key_handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
-    user_context: OptionalSharedMacroAuthorizationExtractor,
+    user_context: OptionalMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params {
         document_id,

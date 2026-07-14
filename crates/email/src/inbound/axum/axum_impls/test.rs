@@ -15,7 +15,7 @@ use axum::{
 use axum_extra::extract::Cached;
 use chrono::Utc;
 use macro_authorization::{
-    MacroAuthorizationError, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer},
 };
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
@@ -121,7 +121,7 @@ async fn expired_credentials_propagate_through_cached_email_link_extractor() {
         FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired);
     let state = EmailRouterState::new(
         NoOpEmailService,
-        SharedMacroAuthorizationService::new(authorization.clone()),
+        MacroAuthorizationServiceHandle::new(authorization.clone()),
     );
     let request = bearer(Request::get("/"), "expired").body(()).unwrap();
     let (mut parts, _) = request.into_parts();

@@ -8,7 +8,7 @@ use macro_db_client::user::get_user_name::get_user_name;
 
 use crate::api::context::ApiContext;
 
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use model::user::UserName;
 
@@ -26,7 +26,7 @@ use model::user::UserName;
 #[tracing::instrument(skip(ctx, auth), fields(user_id = %auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     let user_name = get_user_name(&ctx.db, &auth.user_context.fusion_user_id)
         .await

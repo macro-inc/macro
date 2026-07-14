@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 
@@ -33,7 +33,7 @@ pub struct CreateInProgressLinkResponse {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     tracing::info!("create_in_progress_link");
 

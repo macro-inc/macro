@@ -18,7 +18,7 @@ use crate::api::context::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::StreamExt;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::GenericErrorResponse;
 
 use model::{
@@ -56,7 +56,7 @@ pub struct Params {
 pub async fn presave_document_handler(
     _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<PreSaveDocumentRequest>,

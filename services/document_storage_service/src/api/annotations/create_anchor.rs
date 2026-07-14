@@ -10,7 +10,7 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::annotations::create_anchor::create_unthreaded_anchor;
 use model::{
     annotations::{
@@ -51,7 +51,7 @@ pub async fn create_anchor_handler(
     _access: DocumentAccessExtractor<CommentAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
     State(connection_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateUnthreadedAnchorRequest>,

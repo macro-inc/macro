@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 
 use crate::api::context::ApiContext;
 
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -42,7 +42,7 @@ pub struct UserLinkResponse {
 #[tracing::instrument(skip(ctx, auth), fields(user_id = %auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
     extract::Query(params): extract::Query<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("get_user_link_exists");

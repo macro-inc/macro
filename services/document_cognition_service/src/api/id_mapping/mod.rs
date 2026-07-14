@@ -6,7 +6,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 
 use crate::api::context::ApiContext;
 
@@ -19,7 +19,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route("/{source_id}", post(create::create_id_mapping_handler))
         .route("/{source_id}", get(get_mapping::get_id_mapping_handler))
         .layer(axum::middleware::from_extractor_with_state::<
-            SharedMacroAuthorizationExtractor,
+            MacroAuthorizationExtractor,
             _,
         >(state))
 }

@@ -7,9 +7,7 @@ use axum::response::Response;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
-use macro_authorization::{
-    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationExtractor,
-};
+use macro_authorization::{MacroAuthorizationExtractor, OptionalMacroAuthorizationExtractor};
 use model::project::response::{
     GetProjectContentResponse, GetProjectResponse, GetProjectResponseData,
 };
@@ -42,7 +40,7 @@ pub struct Params {
 pub async fn get_project_content_handler(
     access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     let access_level = match access.entity_access_receipt.entity_permission() {
@@ -89,7 +87,7 @@ pub async fn get_project_content_handler(
 pub async fn get_project_handler(
     access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     let project_metadata =

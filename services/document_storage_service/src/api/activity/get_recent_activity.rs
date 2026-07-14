@@ -12,7 +12,7 @@ use crate::{
     api::context::ApiContext,
     model::response::activity::{GetActivitiesResponse, UserActivitiesResponse},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     request::pagination::{Pagination, PaginationQueryParams},
     response::{GenericErrorResponse, GenericResponse},
@@ -37,7 +37,7 @@ use model::{
 #[deprecated]
 pub async fn get_recent_activity_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Query(pagination_query): Query<PaginationQueryParams>,
 ) -> impl IntoResponse {
     if let Some(limit) = pagination_query.limit

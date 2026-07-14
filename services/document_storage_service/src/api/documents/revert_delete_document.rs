@@ -4,7 +4,7 @@ use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::DocumentBasic;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
@@ -38,7 +38,7 @@ pub struct Params {
 pub async fn handler(
     _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {

@@ -50,24 +50,24 @@ fn user_context(user_id: &str, organization_id: Option<i32>) -> UserContext {
 
 #[derive(Clone)]
 struct TestState {
-    authorization: SharedMacroAuthorizationService,
+    authorization: MacroAuthorizationServiceHandle,
     _unrelated_state: &'static str,
 }
 
-impl FromRef<TestState> for SharedMacroAuthorizationService {
+impl FromRef<TestState> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
 }
 
-async fn required_handler(extractor: SharedMacroAuthorizationExtractor) -> Json<Value> {
+async fn required_handler(extractor: MacroAuthorizationExtractor) -> Json<Value> {
     Json(json!({
         "macro_user_id": extractor.macro_user_id.to_string(),
         "user_context": extractor.user_context,
     }))
 }
 
-async fn optional_handler(extractor: OptionalSharedMacroAuthorizationExtractor) -> Json<Value> {
+async fn optional_handler(extractor: OptionalMacroAuthorizationExtractor) -> Json<Value> {
     Json(json!({
         "macro_user_id": extractor.macro_user_id.map(|id| id.to_string()),
         "user_context": extractor.user_context,
@@ -87,7 +87,7 @@ fn test_router() -> (Router, FakeMacroAuthorizationService) {
 
 fn test_state(authorization: FakeMacroAuthorizationService) -> TestState {
     TestState {
-        authorization: SharedMacroAuthorizationService::new(authorization),
+        authorization: MacroAuthorizationServiceHandle::new(authorization),
         _unrelated_state: "composite state",
     }
 }
@@ -124,8 +124,8 @@ fn assert_clone_without_service_clone<T: Clone>() {}
 fn extractors_are_clone_without_requiring_service_clone() {
     struct NotClone;
 
-    assert_clone_without_service_clone::<MacroAuthorizationExtractor<NotClone>>();
-    assert_clone_without_service_clone::<OptionalMacroAuthorizationExtractor<NotClone>>();
+    assert_clone_without_service_clone::<MacroAuthorizationExtractorFor<NotClone>>();
+    assert_clone_without_service_clone::<OptionalMacroAuthorizationExtractorFor<NotClone>>();
 }
 
 #[tokio::test]
@@ -351,11 +351,11 @@ fn rejection_kinds_have_stable_messages() {
 }
 
 #[tokio::test]
-async fn shared_service_erases_the_concrete_service_type() {
+async fn service_handle_erases_the_concrete_service_type() {
     let service = fake_authorization_service();
-    let shared = SharedMacroAuthorizationService::new(service.clone());
+    let handle = MacroAuthorizationServiceHandle::new(service.clone());
 
-    let context = shared.authorize("valid").await.unwrap();
+    let context = handle.authorize("valid").await.unwrap();
 
     assert_eq!(context.user_id, VALID_USER_ID);
     assert_eq!(service.calls(), ["valid"]);
@@ -363,8 +363,8 @@ async fn shared_service_erases_the_concrete_service_type() {
 
 #[cfg(feature = "outbound")]
 #[test]
-fn shared_service_can_be_created_from_jwt_validation_args() {
-    let _service = SharedMacroAuthorizationService::from_jwt_validation_args(
+fn service_handle_can_be_created_from_jwt_validation_args() {
+    let _service = MacroAuthorizationServiceHandle::from_jwt_validation_args(
         macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
     );
 }
@@ -376,10 +376,10 @@ async fn authenticated_outcome_is_cached_across_extractions() {
     let request = empty_body(bearer(request("/required"), "valid"));
     let (mut parts, _) = request.into_parts();
 
-    SharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+    MacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
         .await
         .unwrap();
-    OptionalSharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+    OptionalMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
         .await
         .unwrap();
 
@@ -392,14 +392,14 @@ async fn required_extraction_rejects_cached_anonymous_outcome() {
     let state = test_state(service.clone());
     let (mut parts, _) = empty_body(request("/optional")).into_parts();
 
-    OptionalSharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+    OptionalMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
         .await
         .unwrap();
     parts.headers.insert(
         header::AUTHORIZATION,
         "Bearer valid".parse().expect("valid header value"),
     );
-    let rejection = SharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
+    let rejection = MacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
         .await
         .err()
         .expect("required extraction should reject cached anonymity");
@@ -418,7 +418,7 @@ async fn extractor_gate_propagates_the_cached_outcome() {
     let router = Router::new()
         .route("/gated", get(required_handler))
         .route_layer(middleware::from_extractor_with_state::<
-            SharedMacroAuthorizationExtractor,
+            MacroAuthorizationExtractor,
             _,
         >(state.clone()))
         .with_state(state);
@@ -519,7 +519,7 @@ async fn raw_user_context_extension_is_not_an_identity_channel() {
 }
 
 #[tokio::test]
-async fn shared_fake_defaults_to_a_test_user_and_records_calls() {
+async fn fake_defaults_to_a_test_user_and_records_calls() {
     let service = FakeMacroAuthorizationService::default();
 
     let user_context = service.authorize("any-token").await.unwrap();
@@ -638,7 +638,7 @@ async fn local_auth_wins_over_credentials_and_primes_the_request_cache() {
     let router = Router::new()
         .route("/gated", get(required_handler))
         .route_layer(middleware::from_extractor_with_state::<
-            SharedMacroAuthorizationExtractor,
+            MacroAuthorizationExtractor,
             _,
         >(state.clone()))
         .with_state(state);

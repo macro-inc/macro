@@ -3,7 +3,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use uuid::Uuid;
@@ -28,7 +28,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     link: Extension<Link>,
     Path(label_id): Path<Uuid>,
 ) -> Result<Response, Response> {

@@ -9,7 +9,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService as EntityAccessServiceTrait;
 use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::response::GenericErrorResponse;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
@@ -40,7 +40,7 @@ pub struct Params {
 pub async fn get_project_permissions_handler(
     State(ctx): State<ApiContext>,
     _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     get_project_permission_v2(&ctx.db, &id).await
@@ -88,7 +88,7 @@ async fn get_project_permission_v2(
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_project_access_level_handler(
     State(ctx): State<ApiContext>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> impl IntoResponse {
     let user_access_level: Option<AccessLevel> = match ctx

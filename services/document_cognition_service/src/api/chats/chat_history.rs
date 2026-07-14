@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::chat_history::get_chat_history;
 use model::chat::ChatHistory;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -27,7 +27,7 @@ use sqlx::PgPool;
 )]
 #[tracing::instrument(skip(db, authorization, _access), fields(chat_id = %chat_id, user_id = %authorization.user_context.user_id))]
 pub async fn get_chat_history_handler(
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     _access: ChatAccessLevelExtractor<ViewAccessLevel, DcsEntityAccessService>,
     State(db): State<PgPool>,
     Path(chat_id): Path<String>,

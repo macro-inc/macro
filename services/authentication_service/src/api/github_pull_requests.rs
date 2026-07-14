@@ -9,7 +9,7 @@ use github::domain::{
     models::{EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse, GithubError},
     ports::GithubLinkService,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 
 use crate::api::context::ApiContext;
@@ -67,7 +67,7 @@ pub fn router() -> Router<ApiContext> {
 #[tracing::instrument(skip(ctx, user_context, request), fields(user_id = %user_context.macro_user_id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     extract::Json(request): extract::Json<EnrichGithubPullRequestsProxyRequest>,
 ) -> Result<Json<EnrichGithubPullRequestsResponse>, EnrichGithubPullRequestsProxyError> {
     tracing::info!("enrich_github_pull_requests");

@@ -24,7 +24,7 @@ use axum::{
 use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractor;
-use macro_authorization::SharedMacroAuthorizationService;
+use macro_authorization::MacroAuthorizationServiceHandle;
 
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
@@ -33,7 +33,7 @@ use crate::domain::service::PropertiesService;
 pub struct PropertiesRouterState<S, A> {
     properties_service: Arc<S>,
     entity_access_service: Arc<A>,
-    authorization_service: SharedMacroAuthorizationService,
+    authorization_service: MacroAuthorizationServiceHandle,
 }
 
 impl<S, A> Clone for PropertiesRouterState<S, A> {
@@ -51,7 +51,7 @@ impl<S: PropertiesService, A: EntityAccessService> PropertiesRouterState<S, A> {
     pub fn new(
         properties_service: Arc<S>,
         entity_access_service: Arc<A>,
-        authorization_service: SharedMacroAuthorizationService,
+        authorization_service: MacroAuthorizationServiceHandle,
     ) -> Self {
         Self {
             properties_service,
@@ -68,7 +68,7 @@ impl<S, A> FromRef<PropertiesRouterState<S, A>> for Arc<A> {
     }
 }
 
-impl<S, A> FromRef<PropertiesRouterState<S, A>> for SharedMacroAuthorizationService {
+impl<S, A> FromRef<PropertiesRouterState<S, A>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &PropertiesRouterState<S, A>) -> Self {
         state.authorization_service.clone()
     }

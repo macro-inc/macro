@@ -7,7 +7,7 @@ use axum::{
 
 use crate::api::context::ApiContext;
 
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 
 /// Gets a list of the users permissions
 #[utoipa::path(
@@ -23,7 +23,7 @@ use macro_authorization::SharedMacroAuthorizationExtractor;
 #[tracing::instrument(skip(ctx, auth), fields(user_id=%auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     let permissions = macro_db_client::user::get_permissions::get_user_permissions(
         &ctx.db,

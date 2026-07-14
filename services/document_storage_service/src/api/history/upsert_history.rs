@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::{http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::HistoryAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
@@ -37,7 +37,7 @@ pub struct Params {
 pub async fn upsert_history_handler(
     history_access: HistoryAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
     let user_context = &authorization.user_context;

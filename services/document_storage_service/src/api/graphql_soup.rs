@@ -8,7 +8,7 @@ use axum::{
     routing::get,
 };
 use complete_graph::GraphqlSoupRequestParts;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new().route("/soup/graphql", get(graphiql).post(handler))
@@ -24,9 +24,7 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
     // Authentication stays eager: it gates execution for non-introspection
     // queries and primes the request-local authorization cache for resolvers.
     let auth =
-        match OptionalSharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state)
-            .await
-        {
+        match OptionalMacroAuthorizationExtractor::from_request_parts(&mut parts, &state).await {
             Ok(auth) => auth,
             Err(err) => return err.into_response(),
         };

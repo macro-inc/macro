@@ -11,7 +11,7 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_authorization::{
-    SharedMacroAuthorizationService,
+    MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
@@ -43,8 +43,8 @@ static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZ
 const TEST_TOKEN: &str = "soup-test-token";
 const TEST_USER_ID: &str = "macro|test@example.com";
 
-fn authorization() -> SharedMacroAuthorizationService {
-    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+fn authorization() -> MacroAuthorizationServiceHandle {
+    MacroAuthorizationServiceHandle::new(FakeMacroAuthorizationService::always(test_user_context(
         TEST_USER_ID,
     )))
 }

@@ -42,7 +42,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::SharedMacroAuthorizationService;
+use macro_authorization::MacroAuthorizationServiceHandle;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -60,7 +60,7 @@ pub struct TeamRouterState<T, Eas> {
     /// The entity access service.
     pub entity_access_service: Arc<Eas>,
     /// The authorization service.
-    pub authorization_service: SharedMacroAuthorizationService,
+    pub authorization_service: MacroAuthorizationServiceHandle,
 }
 
 impl<T, Eas> FromRef<TeamRouterState<T, Eas>> for Arc<Eas> {
@@ -69,7 +69,7 @@ impl<T, Eas> FromRef<TeamRouterState<T, Eas>> for Arc<Eas> {
     }
 }
 
-impl<T, Eas> FromRef<TeamRouterState<T, Eas>> for SharedMacroAuthorizationService {
+impl<T, Eas> FromRef<TeamRouterState<T, Eas>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &TeamRouterState<T, Eas>) -> Self {
         state.authorization_service.clone()
     }

@@ -252,7 +252,7 @@ impl EntityAccessService for CountingEntityAccessService {
 struct TestState {
     email: EmailRouterState<CountingEmailService>,
     entity_access: Arc<CountingEntityAccessService>,
-    authorization: SharedMacroAuthorizationService,
+    authorization: MacroAuthorizationServiceHandle,
 }
 
 impl FromRef<TestState> for EmailRouterState<CountingEmailService> {
@@ -267,7 +267,7 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
     }
 }
 
-impl FromRef<TestState> for SharedMacroAuthorizationService {
+impl FromRef<TestState> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
@@ -293,7 +293,7 @@ fn harness() -> TestHarness {
     let email = CountingEmailService::default();
     let entity_access = CountingEntityAccessService::default();
     let authorization = FakeMacroAuthorizationService::always(test_user_context(TEST_USER_ID));
-    let shared_authorization = SharedMacroAuthorizationService::new(authorization.clone());
+    let shared_authorization = MacroAuthorizationServiceHandle::new(authorization.clone());
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let team_calls = Arc::clone(&entity_access.team_calls);
     TestHarness {

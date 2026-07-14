@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::{
     chat::get_chat_ids_for_messages, chat_history::get_chat_history_for_messages,
     share_permission::access_level::chat::get_highest_access_level_for_chats,
@@ -28,7 +28,7 @@ use sqlx::PgPool;
 #[tracing::instrument(skip(db, authorization, request), fields(user_id = %authorization.user_context.user_id, message_count = request.message_ids.len()))]
 pub async fn get_chat_history_batch_messages_handler(
     State(db): State<PgPool>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(request): Json<ChatHistoryBatchMessagesRequest>,
 ) -> Result<Json<ChatHistory>, Response> {
     let user_context = &authorization.user_context;

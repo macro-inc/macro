@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::project::BasicProject;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
@@ -34,7 +34,7 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, authorization, project_context, id), fields(user_id=?authorization.user_context.user_id, project_id=?id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
     project_context: Extension<BasicProject>,
 ) -> impl IntoResponse {

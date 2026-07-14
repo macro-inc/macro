@@ -6,7 +6,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::{DocumentBasic, FileTypeExt};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
@@ -42,7 +42,7 @@ use crate::domain::ports::DocumentService;
 pub async fn copy_document_handler<T: DocumentService, Svc: EntityAccessService>(
     access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Query(params): Query<CopyDocumentQueryParams>,

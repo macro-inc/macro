@@ -9,7 +9,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     document::{ContentType, DocumentMetadata, FileType},
@@ -50,7 +50,7 @@ type UploadFolderResponse = TypedSuccessResponse<UploadFolderResponseData>;
 #[tracing::instrument(skip(ctx, authorization, req), fields(user_id=?authorization.user_context.user_id))]
 pub async fn upload_extract_folder_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     extract::Json(req): extract::Json<UploadExtractFolderRequest>,
 ) -> impl IntoResponse {
     let user_id = authorization.user_context.user_id.as_str();
@@ -121,7 +121,7 @@ pub async fn upload_extract_folder_handler(
 #[tracing::instrument(skip(ctx, authorization, req), fields(user_id=%authorization.macro_user_id))]
 pub async fn upload_folder_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     internal_context: Option<Extension<InternalFlag>>,
     extract::Json(req): extract::Json<UploadFolderRequest>,
 ) -> impl IntoResponse {
@@ -375,7 +375,7 @@ async fn build_documents(
 #[tracing::instrument(skip(ctx, authorization))]
 pub async fn mark_uploaded_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     extract::Json(req): extract::Json<MarkProjectUploadedRequest>,
 ) -> impl IntoResponse {
     let user_id = authorization.user_context.user_id.as_str();

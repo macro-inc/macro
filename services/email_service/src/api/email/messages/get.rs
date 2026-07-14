@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
 use std::collections::HashSet;
@@ -81,7 +81,7 @@ pub struct PathParams {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(PathParams { id }): Path<PathParams>,
 ) -> Result<Response, GetMessageError> {
     let message = email_db_client::messages::get_parsed::get_parsed_message_by_id(&ctx.db, &id)
@@ -117,7 +117,7 @@ pub async fn handler(
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn batch_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Response, GetMessageError> {
     let messages =

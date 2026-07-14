@@ -4,7 +4,7 @@ use axum::{
     extract::{self, State},
     http::StatusCode,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::user::get_user_name::get_user_names_with_email;
 use macro_user_id::user_id::MacroUserId;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
@@ -33,7 +33,7 @@ pub struct GetNamesWithEmailRequestBody {
 #[tracing::instrument(skip(ctx, auth), fields(user_id = %auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
     extract::Json(req): extract::Json<GetNamesWithEmailRequestBody>,
 ) -> Result<Json<UserNames>, (StatusCode, String)> {
     let user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase>>> = NonEmpty::new(

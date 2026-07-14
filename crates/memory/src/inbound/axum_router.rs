@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use serde::Serialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -29,7 +29,7 @@ pub struct MemoryRouterState<T> {
     /// The memory service implementation.
     pub service: Arc<T>,
     /// The authorization service used to authenticate callers.
-    pub authorization: SharedMacroAuthorizationService,
+    pub authorization: MacroAuthorizationServiceHandle,
 }
 
 impl<T> Clone for MemoryRouterState<T> {
@@ -47,7 +47,7 @@ impl<T> FromRef<MemoryRouterState<T>> for Arc<T> {
     }
 }
 
-impl<T> FromRef<MemoryRouterState<T>> for SharedMacroAuthorizationService {
+impl<T> FromRef<MemoryRouterState<T>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &MemoryRouterState<T>) -> Self {
         state.authorization.clone()
     }
@@ -81,7 +81,7 @@ where
 #[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
 pub async fn get_memory_handler<T: MemoryService>(
     State(service): State<Arc<T>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
 ) -> Response {
     match service.get_or_generate_memory(user.macro_user_id).await {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),

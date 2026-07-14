@@ -13,7 +13,7 @@ use axum::{
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
@@ -191,7 +191,7 @@ pub fn router() -> Router<SearchHandlerState> {
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
 ) -> Result<Json<ChannelSearchResponse>, SearchError> {

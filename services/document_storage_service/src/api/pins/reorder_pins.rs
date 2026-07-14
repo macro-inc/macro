@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     pin::request::ReorderPinRequest,
     response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse},
@@ -24,7 +24,7 @@ use model::{
 #[tracing::instrument(skip(ctx, authorization, req), fields(user_id=?authorization.user_context.user_id))]
 pub async fn reorder_pins_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     extract::Json(req): extract::Json<Vec<ReorderPinRequest>>,
 ) -> impl IntoResponse {
     let user_context = &authorization.user_context;

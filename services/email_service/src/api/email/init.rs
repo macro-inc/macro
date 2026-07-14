@@ -13,7 +13,7 @@ use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_service::pubsub::publish_email_event;
 use email_utils::token_cache_key::TokenCacheKey;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -195,7 +195,7 @@ pub struct InitParams {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<InitParams>,
-    user_extractor: SharedMacroAuthorizationExtractor,
+    user_extractor: MacroAuthorizationExtractor,
 ) -> Result<Response, InitError> {
     // Init runs on every authentication, so its expected no-op outcomes (400s)
     // must not error-log. The span skips the auto err event and the result is
@@ -220,7 +220,7 @@ async fn init_user(
         link_id,
         force_share,
     }): Query<InitParams>,
-    user_extractor: SharedMacroAuthorizationExtractor,
+    user_extractor: MacroAuthorizationExtractor,
 ) -> Result<Response, InitError> {
     let macro_user_id = user_extractor.macro_user_id;
     let user_context = user_extractor.user_context;

@@ -5,7 +5,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use cloudfront_sign::{SignedOptions, get_signed_url};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::email::service::attachment;
 use models_email::service;
@@ -39,7 +39,7 @@ pub struct GetAttachmentResponse {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(attachment_id): Path<Uuid>,
 ) -> Result<Response, Response> {
     // Resolve which of the caller's inboxes owns this attachment. Each inbox is a

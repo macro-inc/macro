@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 
 use crate::api::context::ApiContext;
@@ -70,7 +70,7 @@ impl IntoResponse for PatchAiConsentError {
 #[tracing::instrument(skip(ctx, auth), err, fields(user_id=%auth.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
     extract::Json(req): extract::Json<PatchAiConsentRequest>,
 ) -> Result<Json<EmptyResponse>, PatchAiConsentError> {
     let user_id = MacroUserId::parse_from_str(&auth.user_context.user_id)

@@ -1,6 +1,6 @@
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::item::Item;
 use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
 use sqlx::PgPool;
@@ -30,7 +30,7 @@ pub type RecentlyDeletedResponse = TypedSuccessResponse<RecentlyDeletedResponseD
 #[tracing::instrument(skip(db, user_context), fields(user_id=?user_context.user_context.user_id))]
 pub async fn handler(
     State(db): State<PgPool>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     tracing::info!("recently_deleted");
 

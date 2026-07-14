@@ -4,7 +4,7 @@ use anyhow::Context;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use uuid::Uuid;
@@ -33,7 +33,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn delete_link_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(link_id): Path<Uuid>,
 ) -> Result<Response, InboxActionError> {
     let user_context = authorization.user_context;

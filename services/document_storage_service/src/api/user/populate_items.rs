@@ -1,5 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse};
 
 /// Populates the users items
@@ -19,7 +19,7 @@ use model::response::{GenericErrorResponse, GenericResponse, GenericSuccessRespo
     )]
 #[tracing::instrument(skip(authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn populate_items_handler(
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     let response_data = GenericSuccessResponse { success: true };
 

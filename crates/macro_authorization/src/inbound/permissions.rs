@@ -18,8 +18,8 @@ use roles_and_permissions::domain::{
 };
 use thiserror::Error;
 
-use super::SharedMacroAuthorizationExtractor;
-use crate::SharedMacroAuthorizationService;
+use super::MacroAuthorizationExtractor;
+use crate::MacroAuthorizationServiceHandle;
 
 const INTERNAL_ERROR_MESSAGE: &str = "internal server error";
 
@@ -55,12 +55,12 @@ where
 /// Store this handle by value in application state so permission-aware
 /// extractors do not expose the concrete roles-and-permissions service type.
 #[derive(Clone)]
-pub struct SharedUserPermissionsService {
+pub struct UserPermissionsServiceHandle {
     inner: Arc<dyn ErasedUserPermissionsService>,
 }
 
-impl SharedUserPermissionsService {
-    /// Erase and share a user-permissions service implementation.
+impl UserPermissionsServiceHandle {
+    /// Wrap a user-permissions service implementation in a type-erased handle.
     pub fn new<T>(service: T) -> Self
     where
         T: UserPermissionsService,
@@ -71,7 +71,7 @@ impl SharedUserPermissionsService {
     }
 }
 
-impl UserPermissionsService for SharedUserPermissionsService {
+impl UserPermissionsService for UserPermissionsServiceHandle {
     async fn get_user_permissions_for_user_id(
         &self,
         user_id: &BorrowedUserIdStr<'_>,
@@ -124,19 +124,18 @@ impl IntoResponse for PermissionedMacroAuthorizationRejection {
 
 impl<S> FromRequestParts<S> for PermissionedMacroAuthorizationExtractor
 where
-    SharedMacroAuthorizationService: FromRef<S>,
-    SharedUserPermissionsService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
+    UserPermissionsServiceHandle: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = PermissionedMacroAuthorizationRejection;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let authorization =
-            SharedMacroAuthorizationExtractor::from_request_parts(parts, state).await?;
+        let authorization = MacroAuthorizationExtractor::from_request_parts(parts, state).await?;
         let original_user_id =
             BorrowedUserIdStr::try_from(authorization.user_context.user_id.as_str())
-                .expect("shared authorization validates user IDs before permission lookup");
-        let permissions_service = SharedUserPermissionsService::from_ref(state);
+                .expect("authorization validates user IDs before permission lookup");
+        let permissions_service = UserPermissionsServiceHandle::from_ref(state);
         let permissions = permissions_service
             .get_user_permissions_for_user_id(&original_user_id)
             .await

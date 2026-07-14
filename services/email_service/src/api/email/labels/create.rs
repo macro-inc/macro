@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::service;
 use models_email::service::link::Link;
@@ -39,7 +39,7 @@ pub struct CreateLabelResponse {
 #[tracing::instrument(skip(ctx, authorization, link, gmail_token), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     link: Extension<Link>,
     gmail_token: Extension<String>,
     Json(request_body): Json<CreateLabelRequest>,

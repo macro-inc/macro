@@ -8,7 +8,7 @@ use axum::{
 use documents_hex::domain::permission_token::encode_permission_token;
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
@@ -46,7 +46,7 @@ pub struct DocumentPermissionsTokenResponse {
 #[tracing::instrument(skip(state, user_context, users_access_level), fields(user_id=?user_context.user_context.user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     users_access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {

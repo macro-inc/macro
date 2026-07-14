@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{RequestPartsExt, Router};
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use macro_user_id::user_id::MacroUserIdStr;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
@@ -47,7 +47,7 @@ pub struct AddContactRequest {
 #[instrument(skip(user, contacts), fields(user_id = user.macro_user_id.as_ref()))]
 pub async fn handler<S: ContactsService>(
     State(contacts): State<Arc<S>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     match contacts.query_contacts(user.macro_user_id).await {
         Ok(contacts) if !contacts.is_empty() => {
@@ -72,7 +72,7 @@ pub async fn handler<S: ContactsService>(
 #[instrument(skip(service, user), fields(user_id = user.macro_user_id.as_ref()), err)]
 pub async fn add_contact_handler<S: ContactsService>(
     State(service): State<Arc<S>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     Json(body): Json<AddContactRequest>,
 ) -> Result<StatusCode, StatusCode> {
     service
@@ -88,11 +88,11 @@ pub async fn add_contact_handler<S: ContactsService>(
 }
 
 /// Rate limit for adding contacts: 50 requests per user per hour.
-pub struct PerUserAddContactRateLimit(SharedMacroAuthorizationExtractor);
+pub struct PerUserAddContactRateLimit(MacroAuthorizationExtractor);
 
 impl<S> RateLimitExtractable<S> for PerUserAddContactRateLimit
 where
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     S: Send + Sync + 'static,
 {
     fn config() -> RateLimitConfig {
@@ -111,10 +111,10 @@ where
 
 impl<S> FromRequestParts<S> for PerUserAddContactRateLimit
 where
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     S: Send + Sync + 'static,
 {
-    type Rejection = <SharedMacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;
+    type Rejection = <MacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
@@ -132,7 +132,7 @@ pub struct ContactsRouterState<S, R> {
     /// The rate limiter service.
     pub rate_limiter: R,
     /// The authorization service used to authenticate callers.
-    pub authorization: SharedMacroAuthorizationService,
+    pub authorization: MacroAuthorizationServiceHandle,
 }
 
 impl<S, R: Clone> Clone for ContactsRouterState<S, R> {
@@ -151,7 +151,7 @@ impl<S, R> FromRef<ContactsRouterState<S, R>> for Arc<S> {
     }
 }
 
-impl<S, R> FromRef<ContactsRouterState<S, R>> for SharedMacroAuthorizationService {
+impl<S, R> FromRef<ContactsRouterState<S, R>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &ContactsRouterState<S, R>) -> Self {
         state.authorization.clone()
     }
@@ -219,7 +219,7 @@ pub struct AppState<S> {
     /// The port to listen on.
     pub port: usize,
     /// The authorization service used to authenticate callers.
-    pub authorization: SharedMacroAuthorizationService,
+    pub authorization: MacroAuthorizationServiceHandle,
     /// The contacts service instance.
     pub contacts_service: Arc<S>,
     /// The rate limiter service.

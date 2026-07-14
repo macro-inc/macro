@@ -9,7 +9,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use chrono::Utc;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::document::FileType;
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(ctx, identity), fields(user_id=?identity.macro_user_id))]
 pub async fn put_presigned_url(
     State(ctx): State<AppState>,
-    identity: OptionalSharedMacroAuthorizationExtractor,
+    identity: OptionalMacroAuthorizationExtractor,
     Json(request): Json<PutFileRequest>,
 ) -> Result<Response, Response> {
     let content_type = if let Some(content_type) = request.content_type {

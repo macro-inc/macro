@@ -12,7 +12,7 @@ use axum::{
 };
 use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
@@ -661,7 +661,7 @@ pub(in crate::api::search) async fn perform_unified_search(
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {

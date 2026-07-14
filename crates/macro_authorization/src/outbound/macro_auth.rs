@@ -12,7 +12,7 @@ use crate::domain::{
     ports::JwtValidator,
 };
 
-/// JWT validator backed by the shared `macro_auth` validation implementation.
+/// JWT validator backed by the `macro_auth` validation implementation.
 ///
 /// The adapter delegates all cryptographic and claims validation to
 /// [`decode_jwt::handler`] and converts validated token claims into the

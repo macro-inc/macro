@@ -1,6 +1,6 @@
 use axum::extract::{Path, State};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{model::JoinTeamError, team_repo::TeamService};
@@ -32,7 +32,7 @@ pub struct TeamInvitePathParam {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService>(
     State(state): State<TeamRouterState<T, Eas>>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     Path(TeamInvitePathParam { team_invite_id }): Path<TeamInvitePathParam>,
 ) -> Result<(), JoinTeamError> {
     state

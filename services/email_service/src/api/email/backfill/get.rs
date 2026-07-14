@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
@@ -39,7 +39,7 @@ pub struct GetBackfillJobResponse {
 #[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     link: Extension<Link>,
     Path(job_id): Path<Uuid>,
 ) -> Result<Response, Response> {
@@ -154,7 +154,7 @@ pub struct ListBackfillJobsResponse {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn list_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> Result<Response, ListBackfillJobsError> {
     let jobs = email_db_client::backfill::job::get::get_all_jobs_by_fusionauth_user_id(
         &ctx.db,

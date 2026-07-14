@@ -7,7 +7,7 @@ use axum::{Extension, Json, extract};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::share_permission::edit::edit_thread_permission;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
@@ -52,7 +52,7 @@ pub struct PatchThreadRequestV2 {
 pub async fn edit_thread_handler(
     thread_access: ThreadAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
     project: ProjectBodyAccessLevelExtractor<

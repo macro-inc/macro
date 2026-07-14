@@ -8,7 +8,7 @@ use axum::{
     routing::get,
 };
 use frecency::domain::models::AggregateFrecency;
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -30,7 +30,7 @@ const DEFAULT_CHANNEL_LIST_LIMIT: u32 = 100;
 pub struct ChannelListRouterState<S> {
     /// Inner channel list service.
     pub inner: Arc<S>,
-    authorization: SharedMacroAuthorizationService,
+    authorization: MacroAuthorizationServiceHandle,
 }
 
 impl<S> Clone for ChannelListRouterState<S> {
@@ -44,7 +44,7 @@ impl<S> Clone for ChannelListRouterState<S> {
 
 impl<S: ChannelListService> ChannelListRouterState<S> {
     /// Build router state from channel list and authorization services.
-    pub fn new(s: S, authorization: SharedMacroAuthorizationService) -> Self {
+    pub fn new(s: S, authorization: MacroAuthorizationServiceHandle) -> Self {
         Self {
             inner: Arc::new(s),
             authorization,
@@ -52,7 +52,7 @@ impl<S: ChannelListService> ChannelListRouterState<S> {
     }
 }
 
-impl<S> FromRef<ChannelListRouterState<S>> for SharedMacroAuthorizationService {
+impl<S> FromRef<ChannelListRouterState<S>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &ChannelListRouterState<S>) -> Self {
         state.authorization.clone()
     }
@@ -100,7 +100,7 @@ impl IntoResponse for ChannelListRouterErr {
 )]
 async fn get_channels_handler<S: ChannelListService>(
     State(service): State<ChannelListRouterState<S>>,
-    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
+    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor,
 ) -> Result<Json<Vec<ApiChannelWithLatest>>, ChannelListRouterErr> {
     let res = service
         .inner
@@ -135,7 +135,7 @@ async fn get_channels_handler<S: ChannelListService>(
 /// Handle legacy channel activity list requests.
 pub async fn get_activity_handler<S: ChannelListService>(
     State(service): State<ChannelListRouterState<S>>,
-    SharedMacroAuthorizationExtractor { macro_user_id, .. }: SharedMacroAuthorizationExtractor,
+    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor,
 ) -> Result<Json<Vec<ApiActivity>>, ChannelListRouterErr> {
     let res = service
         .inner

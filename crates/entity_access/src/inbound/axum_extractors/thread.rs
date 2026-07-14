@@ -9,9 +9,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{
-    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
-};
+use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
 use crate::domain::{
@@ -38,7 +36,7 @@ impl<T, S, Svc> FromRequestParts<S> for ThreadAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -48,8 +46,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalSharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+        let OptionalMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<OptionalMacroAuthorizationExtractor, S>(state)
             .await?;
 
         let Path(path_params): Path<HashMap<String, String>> = parts

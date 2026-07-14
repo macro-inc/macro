@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::patch,
 };
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 use uuid::Uuid;
@@ -87,7 +87,7 @@ where
     G: GmailTokenProvider,
     EmailRouterState<T>: axum::extract::FromRef<S>,
     GmailTokenState<G>: axum::extract::FromRef<S>,
-    SharedMacroAuthorizationService: axum::extract::FromRef<S>,
+    MacroAuthorizationServiceHandle: axum::extract::FromRef<S>,
 {
     Router::new().route("/{id}/labels", patch(update_thread_labels_handler::<T, G>))
 }
@@ -114,7 +114,7 @@ where
 pub async fn update_thread_labels_handler<T: EmailService, G: GmailTokenProvider>(
     State(state): State<EmailRouterState<T>>,
     State(token_state): State<GmailTokenState<G>>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(thread_id): Path<Uuid>,
     Json(body): Json<UpdateThreadLabelRequest>,
 ) -> Result<Json<UpdateThreadLabelsResponse>, UpdateThreadLabelError> {

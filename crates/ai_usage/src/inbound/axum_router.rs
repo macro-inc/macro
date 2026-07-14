@@ -12,7 +12,7 @@ use axum::{
     routing::post,
 };
 use chrono::{DateTime, Utc};
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -59,7 +59,7 @@ pub struct AiUsageRouterState<T> {
     /// The AI usage service implementation.
     pub service: Arc<T>,
     /// The authorization service used to authenticate callers.
-    pub auth: SharedMacroAuthorizationService,
+    pub auth: MacroAuthorizationServiceHandle,
 }
 
 impl<T> Clone for AiUsageRouterState<T> {
@@ -71,7 +71,7 @@ impl<T> Clone for AiUsageRouterState<T> {
     }
 }
 
-impl<T> FromRef<AiUsageRouterState<T>> for SharedMacroAuthorizationService {
+impl<T> FromRef<AiUsageRouterState<T>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &AiUsageRouterState<T>) -> Self {
         state.auth.clone()
     }
@@ -90,7 +90,7 @@ where
 }
 
 /// Returns `Some(403)` unless the caller is a Macro admin.
-fn admin_rejection(user: &SharedMacroAuthorizationExtractor) -> Option<Response> {
+fn admin_rejection(user: &MacroAuthorizationExtractor) -> Option<Response> {
     if user.macro_user_id.email_str().ends_with(ADMIN_EMAIL_SUFFIX) {
         None
     } else {
@@ -132,7 +132,7 @@ fn internal_error(context: &str) -> Response {
 #[tracing::instrument(skip(state, user), fields(user_id = %user.macro_user_id))]
 pub async fn get_usage_handler<T: UsageService>(
     State(state): State<AiUsageRouterState<T>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     Json(req): Json<UsageRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {
@@ -188,7 +188,7 @@ pub async fn get_usage_handler<T: UsageService>(
 #[tracing::instrument(skip(state, user), fields(user_id = %user.macro_user_id))]
 pub async fn set_pricing_handler<T: UsageService>(
     State(state): State<AiUsageRouterState<T>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {

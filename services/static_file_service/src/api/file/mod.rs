@@ -11,11 +11,11 @@ use axum::Router;
 use axum::routing::{delete, get, post, put};
 
 use crate::api::context::AppState;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 
 const ANONYMOUS_OWNER_ID: &str = "nobody";
 
-fn authenticated_user_id(identity: &OptionalSharedMacroAuthorizationExtractor) -> Option<&str> {
+fn authenticated_user_id(identity: &OptionalMacroAuthorizationExtractor) -> Option<&str> {
     identity
         .macro_user_id
         .as_ref()

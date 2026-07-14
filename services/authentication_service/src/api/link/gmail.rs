@@ -5,9 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::{
-    PermissionedMacroAuthorizationExtractor, SharedMacroAuthorizationExtractor,
-};
+use macro_authorization::{MacroAuthorizationExtractor, PermissionedMacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -246,7 +244,7 @@ impl IntoResponse for GmailLinkStatusError {
 pub async fn check_gmail_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
 ) -> Result<Json<GmailLinkStatusResponse>, GmailLinkStatusError> {
     // Check if the user has an email link in db
     if macro_db_client::email::check_user_email_link(&ctx.db, &user_context.macro_user_id)

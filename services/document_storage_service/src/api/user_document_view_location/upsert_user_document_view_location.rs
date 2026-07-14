@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, GenericErrorResponse, GenericResponse};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
@@ -35,7 +35,7 @@ pub struct Params {
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { document_id }): Path<Params>,
     extract::Json(req): extract::Json<UpsertUserDocumentViewLocationRequest>,
 ) -> impl IntoResponse {

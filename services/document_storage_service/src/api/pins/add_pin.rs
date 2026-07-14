@@ -9,7 +9,7 @@ use axum::{
 };
 
 use entity_access::inbound::axum_extractors::PinAccessLevelExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -40,7 +40,7 @@ pub struct Params {
 #[axum::debug_handler(state = ApiContext)]
 pub async fn add_pin_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { pinned_item_id }): Path<Params>,
     PinAccessLevelExtractor {
         pin_type, inner, ..

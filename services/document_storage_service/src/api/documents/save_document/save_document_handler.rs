@@ -16,7 +16,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt},
@@ -52,7 +52,7 @@ pub struct Params {
 pub async fn save_document_handler(
     _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     project: ProjectBodyAccessLevelExtractor<

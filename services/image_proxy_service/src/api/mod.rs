@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -42,7 +42,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new().nest(
         "/proxy",
         proxy::router().layer(axum::middleware::from_extractor_with_state::<
-            SharedMacroAuthorizationExtractor,
+            MacroAuthorizationExtractor,
             _,
         >(state)),
     )

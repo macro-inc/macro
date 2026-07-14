@@ -13,8 +13,7 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_authorization::{
-    SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
-    SharedUserPermissionsService,
+    MacroAuthorizationExtractor, MacroAuthorizationServiceHandle, UserPermissionsServiceHandle,
 };
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
@@ -29,8 +28,8 @@ use crate::inbound::http::extractors::ChatModelAccess;
 pub struct ChatRouterState<S, Svc> {
     inner: Arc<S>,
     access_service: Arc<Svc>,
-    authorization: SharedMacroAuthorizationService,
-    permissions: SharedUserPermissionsService,
+    authorization: MacroAuthorizationServiceHandle,
+    permissions: UserPermissionsServiceHandle,
 }
 
 impl<S, Svc> Clone for ChatRouterState<S, Svc> {
@@ -50,13 +49,13 @@ impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
-impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for SharedMacroAuthorizationService {
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
         state.authorization.clone()
     }
 }
 
-impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for SharedUserPermissionsService {
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for UserPermissionsServiceHandle {
     fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
         state.permissions.clone()
     }
@@ -67,8 +66,8 @@ impl<S: ChatService, Svc: EntityAccessService> ChatRouterState<S, Svc> {
     pub fn new(
         service: S,
         access_service: Svc,
-        authorization: SharedMacroAuthorizationService,
-        permissions: SharedUserPermissionsService,
+        authorization: MacroAuthorizationServiceHandle,
+        permissions: UserPermissionsServiceHandle,
     ) -> Self {
         Self {
             inner: Arc::new(service),
@@ -159,7 +158,7 @@ pub struct CreateChatRequest {
 #[tracing::instrument(skip(state, user, req), fields(user_id = %user.macro_user_id), err(Debug))]
 pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
     State(state): State<ChatRouterState<S, Svc>>,
-    user: SharedMacroAuthorizationExtractor,
+    user: MacroAuthorizationExtractor,
     _model_access: ChatModelAccess,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>> {

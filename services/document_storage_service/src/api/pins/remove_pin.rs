@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
@@ -32,7 +32,7 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn remove_pin_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { pinned_item_id }): Path<Params>,
     Json(req): Json<PinRequest>,
 ) -> impl IntoResponse {

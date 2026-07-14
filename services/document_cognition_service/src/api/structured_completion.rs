@@ -9,7 +9,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use mcp_client::domain::ports::McpServerStore;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -66,7 +66,7 @@ impl IntoResponse for StructuredCompletionError {
 pub async fn structured_completion(
     State(state): State<ApiContext>,
     model_access: ChatModelAccess,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);

@@ -6,7 +6,7 @@ use axum::{
     response::Json,
     routing::get,
 };
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::dcs::get_part_by_id::get_part_by_id;
 use model::citations::DocumentTextPart;
 use sqlx::PgPool;
@@ -35,7 +35,7 @@ pub struct Params {
 #[tracing::instrument(skip(db, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_citation_handler(
     State(db): State<PgPool>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Json<DocumentTextPart>, (StatusCode, String)> {
     match get_part_by_id(db, id.as_str()).await {

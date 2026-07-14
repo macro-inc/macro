@@ -9,7 +9,7 @@ use axum::{
     routing::{get, post},
 };
 use macro_authorization::{
-    MacroAuthorizationError, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer},
 };
 use macro_user_id::{
@@ -130,7 +130,7 @@ impl EntityAccessService for PublicEntityAccessService {
 #[derive(Clone)]
 struct TestState {
     access: Arc<PublicEntityAccessService>,
-    authorization: SharedMacroAuthorizationService,
+    authorization: MacroAuthorizationServiceHandle,
 }
 
 impl FromRef<TestState> for Arc<PublicEntityAccessService> {
@@ -139,7 +139,7 @@ impl FromRef<TestState> for Arc<PublicEntityAccessService> {
     }
 }
 
-impl FromRef<TestState> for SharedMacroAuthorizationService {
+impl FromRef<TestState> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
@@ -205,7 +205,7 @@ fn test_router(authorization: FakeMacroAuthorizationService) -> Router {
         .layer(Extension(public_document()))
         .with_state(TestState {
             access: Arc::new(PublicEntityAccessService),
-            authorization: SharedMacroAuthorizationService::new(authorization),
+            authorization: MacroAuthorizationServiceHandle::new(authorization),
         })
 }
 

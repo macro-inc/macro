@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::dcs::get_chats_for_attachment::{
     get_latest_single_attachment_chat, get_multi_attachment_chat,
 };
@@ -31,7 +31,7 @@ pub struct Params {
 #[tracing::instrument(skip(db, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_chats_for_attachment_handler(
     State(db): State<PgPool>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { attachment_id }): Path<Params>,
 ) -> Result<Response, Response> {
     let user_context = &authorization.user_context;

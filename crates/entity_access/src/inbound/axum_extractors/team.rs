@@ -12,7 +12,7 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
@@ -52,7 +52,7 @@ impl<T, S, Svc> FromRequestParts<S> for OptionalMacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -62,8 +62,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<MacroAuthorizationExtractor, S>(state)
             .await?;
 
         let team_info = service
@@ -118,7 +118,7 @@ impl<T, S, Svc> FromRequestParts<S> for MacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -128,8 +128,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<MacroAuthorizationExtractor, S>(state)
             .await?;
 
         let team_info = service

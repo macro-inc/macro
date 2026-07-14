@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use models_properties::api::{AddPropertyOptionRequest, UpdatePropertyOptionRequest};
 use models_properties::service::property_option::PropertyOption;
 use thiserror::Error;
@@ -59,10 +59,10 @@ impl IntoResponse for GetPropertyOptionsErr {
 pub async fn get_property_options<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    SharedMacroAuthorizationExtractor {
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: SharedMacroAuthorizationExtractor,
+    }: MacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
     tracing::info!("retrieving property options");
@@ -125,10 +125,10 @@ impl IntoResponse for AddPropertyOptionErr {
 pub async fn add_property_option<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    SharedMacroAuthorizationExtractor {
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: SharedMacroAuthorizationExtractor,
+    }: MacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<AddPropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
@@ -196,10 +196,10 @@ impl IntoResponse for UpdatePropertyOptionErr {
 pub async fn update_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    SharedMacroAuthorizationExtractor {
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: SharedMacroAuthorizationExtractor,
+    }: MacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<UpdatePropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), UpdatePropertyOptionErr> {
@@ -262,10 +262,10 @@ impl IntoResponse for DeletePropertyOptionErr {
 pub async fn delete_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    SharedMacroAuthorizationExtractor {
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: SharedMacroAuthorizationExtractor,
+    }: MacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
     tracing::info!("deleting property option");

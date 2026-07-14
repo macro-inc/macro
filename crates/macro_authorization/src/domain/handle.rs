@@ -31,12 +31,12 @@ where
 /// resolve authorization without adding the concrete service type to router
 /// and handler signatures.
 #[derive(Clone)]
-pub struct SharedMacroAuthorizationService {
+pub struct MacroAuthorizationServiceHandle {
     inner: Arc<dyn ErasedMacroAuthorizationService>,
 }
 
-impl SharedMacroAuthorizationService {
-    /// Erase and share an authorization service implementation.
+impl MacroAuthorizationServiceHandle {
+    /// Wrap an authorization service implementation in a type-erased handle.
     pub fn new<T>(service: T) -> Self
     where
         T: MacroAuthorizationService,
@@ -55,7 +55,7 @@ impl SharedMacroAuthorizationService {
     }
 }
 
-impl MacroAuthorizationService for SharedMacroAuthorizationService {
+impl MacroAuthorizationService for MacroAuthorizationServiceHandle {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         self.inner.authorize_erased(jwt).await
     }

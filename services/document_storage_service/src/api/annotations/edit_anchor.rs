@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::annotations::edit_anchor::edit_document_anchor;
 use model::{
     annotations::{
@@ -37,7 +37,7 @@ use super::comment_error_response;
 pub async fn edit_anchor_handler(
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Json(req): Json<EditAnchorRequest>,
 ) -> Result<Response, Response> {
     let user_id = authorization.user_context.user_id.as_str();

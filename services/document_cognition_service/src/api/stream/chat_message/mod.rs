@@ -26,7 +26,7 @@ use chat::domain::ports::MessageService;
 use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::dcs::create_chat;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
@@ -139,7 +139,7 @@ impl IntoResponse for ChatMessageError {
 pub async fn send_chat_message(
     State(state): State<ApiContext>,
     model_access: ChatModelAccess,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Extension(bearer): Extension<BearerToken>,
     Json(request): Json<HttpSendChatMessageRequest>,
 ) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
@@ -156,7 +156,7 @@ pub async fn send_chat_message(
 async fn send_chat_message_inner(
     state: ApiContext,
     model_access: ChatModelAccess,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     bearer: BearerToken,
     request: HttpSendChatMessageRequest,
 ) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {

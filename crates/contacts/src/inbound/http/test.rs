@@ -3,7 +3,7 @@ use super::*;
 use axum::{body::Body, http::Request};
 use http_body_util::BodyExt;
 use macro_authorization::{
-    SharedMacroAuthorizationService,
+    MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use rate_limit::{
@@ -113,7 +113,7 @@ fn build_test_router(
     let router = contacts_router(ContactsRouterState {
         service: mock_service(),
         rate_limiter,
-        authorization: SharedMacroAuthorizationService::new(authorization.clone()),
+        authorization: MacroAuthorizationServiceHandle::new(authorization.clone()),
     });
     (router, authorization)
 }

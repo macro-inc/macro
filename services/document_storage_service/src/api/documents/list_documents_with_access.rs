@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::list::{DocumentListFilters, ListDocumentsWithAccessResponse};
 use model::response::GenericErrorResponse;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -48,7 +48,7 @@ pub struct ListDocumentsWithAccessQuery {
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_context.user_id))]
 pub async fn list_documents_with_access_handler(
     State(ctx): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     Query(query): Query<ListDocumentsWithAccessQuery>,
 ) -> impl IntoResponse {
     let page_size = if query.page_size <= 0 || query.page_size > MAX_PAGE_SIZE {

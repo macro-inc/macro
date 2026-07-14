@@ -11,7 +11,7 @@ use axum::{
     extract::{self, State},
     response::Json,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_search::unified::{
     UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
@@ -39,7 +39,7 @@ use std::cmp::Ordering;
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {

@@ -2,7 +2,7 @@ use crate::api::context::ApiContext;
 use crate::model::response::history::GetUserHistoryResponse;
 use axum::extract::State;
 use axum::{Extension, http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, GenericResponse};
 use model::version::ApiVersionEnum;
 
@@ -20,7 +20,7 @@ use model::version::ApiVersionEnum;
 pub async fn get_history_handler(
     State(ctx): State<ApiContext>,
     api_version: Extension<ApiVersionEnum>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     tracing::info!("get_history_handler");
 

@@ -5,8 +5,8 @@ use axum::routing::get;
 use axum::{Extension, Router};
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationError, PreauthorizedContext, SharedMacroAuthorizationExtractor,
-    SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceHandle,
+    PreauthorizedContext,
     testing::{FakeMacroAuthorizationService, test_user_context},
 };
 use tower::ServiceExt;
@@ -20,7 +20,7 @@ const TOKEN_USER_ID: &str = "macro|token-user@example.com";
 #[derive(Clone, FromRef)]
 struct TestState {
     auth_key: DocumentStorageServiceAuthKey,
-    authorization: SharedMacroAuthorizationService,
+    authorization: MacroAuthorizationServiceHandle,
 }
 
 fn make_app() -> Router {
@@ -35,7 +35,7 @@ fn make_app() -> Router {
 fn make_authorized_app(authorization: FakeMacroAuthorizationService) -> Router {
     let state = TestState {
         auth_key: DocumentStorageServiceAuthKey::Comptime(TEST_AUTH_KEY),
-        authorization: SharedMacroAuthorizationService::new(authorization),
+        authorization: MacroAuthorizationServiceHandle::new(authorization),
     };
     let app: Router<TestState> = Router::new()
         .route("/marker", get(marker_handler))
@@ -49,7 +49,7 @@ fn make_authorized_app(authorization: FakeMacroAuthorizationService) -> Router {
 
 async fn marker_handler(Extension(_marker): Extension<PreauthorizedContext>) {}
 
-async fn identity_handler(identity: SharedMacroAuthorizationExtractor) -> String {
+async fn identity_handler(identity: MacroAuthorizationExtractor) -> String {
     identity.user_context.user_id
 }
 

@@ -2,14 +2,14 @@ use crate::api::MACRO_INTERNAL_USER_ID;
 use crate::api::context::ApiContext;
 use axum::extract::{Json, State};
 use axum::http::StatusCode;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document_storage_service_internal::{ValidateItemIDsRequest, ValidateItemIDsResponse};
 
 /// Validates the user has access to the provided list of item ids
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(req): Json<ValidateItemIDsRequest>,
 ) -> Result<(StatusCode, Json<ValidateItemIDsResponse>), (StatusCode, String)> {
     tracing::info!("validate_item_ids");

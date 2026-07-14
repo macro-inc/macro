@@ -17,7 +17,7 @@ use axum::{
     response::IntoResponse,
 };
 use cloudfront_sign::{SignedOptions, get_signed_url};
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
@@ -53,7 +53,7 @@ static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
 pub async fn get_location_handler(
     _access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
-    user_context: OptionalSharedMacroAuthorizationExtractor,
+    user_context: OptionalMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     params: Query<LocationQueryParams>,

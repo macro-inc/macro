@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Json, Response};
 use email_service::util::gmail::auth::{
     fetch_token_or_mark_reauth_no_cache, is_reauth_required_error,
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::pubsub::LinkManagerMessage;
 use std::time::Duration;
@@ -58,7 +58,7 @@ impl IntoResponse for HealthCheckError {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn health_check_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> Result<Response, HealthCheckError> {
     let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
         &ctx.db,

@@ -9,8 +9,8 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    PermissionedMacroAuthorizationExtractor, PermissionedMacroAuthorizationRejection,
-    SharedMacroAuthorizationService, SharedUserPermissionsService,
+    MacroAuthorizationServiceHandle, PermissionedMacroAuthorizationExtractor,
+    PermissionedMacroAuthorizationRejection, UserPermissionsServiceHandle,
 };
 use roles_and_permissions::domain::model::PermissionId;
 
@@ -52,8 +52,8 @@ impl ChatModelAccess {
 
 impl<S> FromRequestParts<S> for ChatModelAccess
 where
-    SharedMacroAuthorizationService: FromRef<S>,
-    SharedUserPermissionsService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
+    UserPermissionsServiceHandle: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = PermissionedMacroAuthorizationRejection;

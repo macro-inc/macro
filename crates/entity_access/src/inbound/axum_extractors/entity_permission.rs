@@ -8,9 +8,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{
-    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
-};
+use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
 
 use super::{ExtractorError, InternalUser};
 use crate::domain::{
@@ -42,7 +40,7 @@ pub struct EntityPermissionExtractor<Svc> {
 impl<S, Svc> FromRequestParts<S> for EntityPermissionExtractor<Svc>
 where
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -52,12 +50,12 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalSharedMacroAuthorizationExtractor {
+        let OptionalMacroAuthorizationExtractor {
             macro_user_id,
             user_context,
             ..
         } = parts
-            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+            .extract_with_state::<OptionalMacroAuthorizationExtractor, S>(state)
             .await?;
 
         let Path(EntityPermissionParams {

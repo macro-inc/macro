@@ -21,8 +21,7 @@ use entity_access::domain::models::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
-    MacroAuthorizationRejection, OptionalSharedMacroAuthorizationExtractor,
-    SharedMacroAuthorizationExtractor,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
@@ -163,11 +162,11 @@ where
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let OptionalSharedMacroAuthorizationExtractor {
+        let OptionalMacroAuthorizationExtractor {
             macro_user_id: user,
             ..
         } = parts
-            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, _>(state)
+            .extract_with_state::<OptionalMacroAuthorizationExtractor, _>(state)
             .await?;
 
         let receipt = mint_view_receipt(
@@ -200,11 +199,11 @@ where
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let SharedMacroAuthorizationExtractor {
+        let MacroAuthorizationExtractor {
             macro_user_id: user,
             ..
         } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, _>(state)
+            .extract_with_state::<MacroAuthorizationExtractor, _>(state)
             .await?;
 
         let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(

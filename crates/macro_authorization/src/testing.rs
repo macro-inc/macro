@@ -1,4 +1,4 @@
-//! Shared test doubles and credential helpers for authorization-aware routers.
+//! Test doubles and credential helpers for authorization-aware routers.
 
 use std::{
     collections::HashMap,
@@ -80,7 +80,7 @@ impl FakeMacroAuthorizationService {
 
     /// Configure or replace the authorization result for a raw token.
     ///
-    /// The shared state uses interior mutability, so this method can program a
+    /// The fake state uses interior mutability, so this method can program a
     /// fake after cloning it into router state.
     pub fn set_token_result(
         &self,

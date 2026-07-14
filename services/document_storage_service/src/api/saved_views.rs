@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
 use axum::{Router, routing::get};
 use macro_authorization::{
-    MacroAuthorizationRejection, SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationServiceHandle,
 };
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -126,14 +126,14 @@ impl<S> FromRequestParts<S> for SavedViewOwner
 where
     S: Send + Sync + 'static,
     PgPool: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
 {
     type Rejection = SavedViewErr;
 
     #[tracing::instrument(skip(parts, state), err)]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-        let user_context = SharedMacroAuthorizationExtractor::from_request_parts(parts, state)
+        let user_context = MacroAuthorizationExtractor::from_request_parts(parts, state)
             .await?
             .user_context;
 
@@ -166,7 +166,7 @@ where
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id), err)]
 async fn get_views_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> Result<(StatusCode, Json<ViewsResponse>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
     let user_context = authorization.user_context;
@@ -205,7 +205,7 @@ async fn get_views_handler(
 )]
 async fn create_view_handler(
     ctx: State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(create_view_request): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<View>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
@@ -293,7 +293,7 @@ async fn patch_view_handler(
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id), err)]
 pub async fn exclude_default_view_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(ExcludeDefaultViewRequest {
         default_view_id: id,
     }): Json<ExcludeDefaultViewRequest>,

@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use macro_authorization::{
-    MacroAuthorizationError, SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer},
 };
 use serde_json::{Value, json};
@@ -20,10 +20,10 @@ use super::{invite_to_team::InviteToTeamError, premium_user::PremiumUserRejectio
 const CUSTOMER_ERROR_SENTINEL: &str = "sentinel customer repository failure";
 
 struct AuthorizationState {
-    authorization_service: SharedMacroAuthorizationService,
+    authorization_service: MacroAuthorizationServiceHandle,
 }
 
-impl FromRef<AuthorizationState> for SharedMacroAuthorizationService {
+impl FromRef<AuthorizationState> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &AuthorizationState) -> Self {
         state.authorization_service.clone()
     }
@@ -58,7 +58,7 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
 #[tokio::test]
 async fn premium_user_authorization_rejection_is_preserved() {
     let state = AuthorizationState {
-        authorization_service: SharedMacroAuthorizationService::new(
+        authorization_service: MacroAuthorizationServiceHandle::new(
             FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired),
         ),
     };
@@ -67,7 +67,7 @@ async fn premium_user_authorization_rejection_is_preserved() {
         .expect("test request should be valid");
     let (mut parts, _) = request.into_parts();
     let authorization_rejection =
-        match SharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state).await {
+        match MacroAuthorizationExtractor::from_request_parts(&mut parts, &state).await {
             Ok(_) => panic!("expired credentials should be rejected"),
             Err(rejection) => rejection,
         };

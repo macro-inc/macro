@@ -13,7 +13,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use futures::StreamExt;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
@@ -66,7 +66,7 @@ pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { .. }): Path<Params>,
     State(state): State<ApiContext>,
-    user_context: OptionalSharedMacroAuthorizationExtractor,
+    user_context: OptionalMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
 ) -> Result<Response, Response> {
     tracing::info!("export document");

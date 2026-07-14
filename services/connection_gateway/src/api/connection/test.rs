@@ -13,18 +13,18 @@ use axum::{
 
 use super::authenticated_websocket_upgrade;
 use macro_authorization::{
-    MacroAuthorizationError, SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceHandle,
     testing::FakeMacroAuthorizationService,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Error as WebSocketError};
 
 #[derive(Clone)]
 struct TestState {
-    authorization_service: SharedMacroAuthorizationService,
+    authorization_service: MacroAuthorizationServiceHandle,
     upgrade_count: Arc<AtomicUsize>,
 }
 
-impl FromRef<TestState> for SharedMacroAuthorizationService {
+impl FromRef<TestState> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &TestState) -> Self {
         state.authorization_service.clone()
     }
@@ -33,7 +33,7 @@ impl FromRef<TestState> for SharedMacroAuthorizationService {
 async fn authenticated_upgrade(
     ws: WebSocketUpgrade,
     State(state): State<TestState>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     state.upgrade_count.fetch_add(1, Ordering::SeqCst);
     authenticated_websocket_upgrade(
@@ -46,7 +46,7 @@ async fn authenticated_upgrade(
 fn test_router(authorization_service: FakeMacroAuthorizationService) -> (Router, Arc<AtomicUsize>) {
     let upgrade_count = Arc::new(AtomicUsize::new(0));
     let state = TestState {
-        authorization_service: SharedMacroAuthorizationService::new(authorization_service),
+        authorization_service: MacroAuthorizationServiceHandle::new(authorization_service),
         upgrade_count: Arc::clone(&upgrade_count),
     };
 

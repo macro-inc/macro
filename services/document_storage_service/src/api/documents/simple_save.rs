@@ -13,7 +13,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt},
@@ -50,7 +50,7 @@ pub struct Params {
 pub async fn handler(
     _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
     State(state): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     mut multipart: Multipart,

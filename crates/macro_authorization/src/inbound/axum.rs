@@ -17,7 +17,7 @@ use rootcause::Report;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::{MacroAuthorizationError, MacroAuthorizationService, SharedMacroAuthorizationService};
+use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationServiceHandle};
 
 #[cfg(feature = "local_auth")]
 macro_env_var::maybe_env_vars! {
@@ -135,13 +135,13 @@ impl PreauthorizedContext {
     }
 }
 
-/// Required authorization using the shared, type-erased service handle.
-pub type SharedMacroAuthorizationExtractor =
-    MacroAuthorizationExtractor<SharedMacroAuthorizationService>;
+/// Extracts required authorization using the type-erased service handle.
+pub type MacroAuthorizationExtractor =
+    MacroAuthorizationExtractorFor<MacroAuthorizationServiceHandle>;
 
-/// Optional authorization using the shared, type-erased service handle.
-pub type OptionalSharedMacroAuthorizationExtractor =
-    OptionalMacroAuthorizationExtractor<SharedMacroAuthorizationService>;
+/// Extracts optional authorization using the type-erased service handle.
+pub type OptionalMacroAuthorizationExtractor =
+    OptionalMacroAuthorizationExtractorFor<MacroAuthorizationServiceHandle>;
 
 /// Extracts and authorizes credentials for a required authenticated user.
 ///
@@ -149,7 +149,7 @@ pub type OptionalSharedMacroAuthorizationExtractor =
 /// followed by a bearer header or access-token cookie. The authorization
 /// service is resolved from Axum state.
 #[non_exhaustive]
-pub struct MacroAuthorizationExtractor<Svc> {
+pub struct MacroAuthorizationExtractorFor<Svc> {
     /// The validated Macro user identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The complete context returned by the authorization service.
@@ -157,7 +157,7 @@ pub struct MacroAuthorizationExtractor<Svc> {
     _service: PhantomData<fn() -> Svc>,
 }
 
-impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
+impl<Svc> Clone for MacroAuthorizationExtractorFor<Svc> {
     fn clone(&self) -> Self {
         Self {
             macro_user_id: self.macro_user_id.clone(),
@@ -167,7 +167,7 @@ impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
     }
 }
 
-impl<S, Svc> FromRequestParts<S> for MacroAuthorizationExtractor<Svc>
+impl<S, Svc> FromRequestParts<S> for MacroAuthorizationExtractorFor<Svc>
 where
     Svc: FromRef<S> + MacroAuthorizationService,
     S: Send + Sync + 'static,
@@ -194,7 +194,7 @@ where
 /// Requests without credentials succeed with an empty [`UserContext`]. Any
 /// supplied credential must still pass authorization.
 #[non_exhaustive]
-pub struct OptionalMacroAuthorizationExtractor<Svc> {
+pub struct OptionalMacroAuthorizationExtractorFor<Svc> {
     /// The validated Macro user identifier, or `None` for an anonymous request.
     pub macro_user_id: Option<MacroUserIdStr<'static>>,
     /// The authorized context, or the default context for an anonymous request.
@@ -202,7 +202,7 @@ pub struct OptionalMacroAuthorizationExtractor<Svc> {
     _service: PhantomData<fn() -> Svc>,
 }
 
-impl<Svc> Clone for OptionalMacroAuthorizationExtractor<Svc> {
+impl<Svc> Clone for OptionalMacroAuthorizationExtractorFor<Svc> {
     fn clone(&self) -> Self {
         Self {
             macro_user_id: self.macro_user_id.clone(),
@@ -212,7 +212,7 @@ impl<Svc> Clone for OptionalMacroAuthorizationExtractor<Svc> {
     }
 }
 
-impl<S, Svc> FromRequestParts<S> for OptionalMacroAuthorizationExtractor<Svc>
+impl<S, Svc> FromRequestParts<S> for OptionalMacroAuthorizationExtractorFor<Svc>
 where
     Svc: FromRef<S> + MacroAuthorizationService,
     S: Send + Sync + 'static,

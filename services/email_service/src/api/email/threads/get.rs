@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, extract};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
 use std::collections::HashSet;
@@ -92,7 +92,7 @@ const MESSAGE_MAX: i64 = 100;
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn get_thread_messages_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(PathParams { id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadMessagesParams>,
 ) -> Result<Response, GetThreadError> {

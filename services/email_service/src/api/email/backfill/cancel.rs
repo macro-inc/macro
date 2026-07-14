@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::backfill::BackfillJobStatus;
 use models_email::email::service::link::Link;
@@ -34,7 +34,7 @@ pub struct CancelBackfillParams {
 #[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     link: Extension<Link>,
     Json(req_body): Json<CancelBackfillParams>,
 ) -> Result<Response, Response> {

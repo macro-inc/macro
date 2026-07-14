@@ -26,7 +26,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ExtractorError,
 };
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use uuid::Uuid;
 
 use crate::{
@@ -61,7 +61,7 @@ impl<T, S, Svc> FromRequestParts<S> for CrmCompanyAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -77,8 +77,8 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing company_id path parameter"))?;
         let company_id = extract_company_id(&path_params)?.to_string();
 
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<MacroAuthorizationExtractor, S>(state)
             .await?;
 
         let (permission, team_id) = service
@@ -132,7 +132,7 @@ impl<T, S, Svc> FromRequestParts<S> for CrmContactAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -148,8 +148,8 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing contact_id path parameter"))?;
         let contact_id = extract_contact_id(&path_params)?.to_string();
 
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<MacroAuthorizationExtractor, S>(state)
             .await?;
 
         let (permission, team_id) = service
@@ -202,7 +202,7 @@ where
     T: RequiredPermission,
     CrmServiceRef<C>: FromRef<S>,
     Arc<Eas>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     C: CrmService,
     Eas: EntityAccessService,
     S: Send + Sync + 'static,
@@ -220,8 +220,8 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing comment_id path parameter"))?;
         let comment_id = extract_comment_id(&path_params)?;
 
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<MacroAuthorizationExtractor, S>(state)
             .await?;
 
         let (crm_entity_type, entity_id) = crm_service

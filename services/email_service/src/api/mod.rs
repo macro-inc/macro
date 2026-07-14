@@ -1,7 +1,7 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -52,7 +52,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest(
             "/email",
             email::router(state.clone()).layer(axum::middleware::from_extractor_with_state::<
-                SharedMacroAuthorizationExtractor,
+                MacroAuthorizationExtractor,
                 _,
             >(state.clone())),
         )

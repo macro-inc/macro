@@ -15,7 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use macro_authorization::SharedMacroAuthorizationService;
+use macro_authorization::MacroAuthorizationServiceHandle;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -28,7 +28,7 @@ pub struct AiProjectionRouterState<T> {
     /// The ai projection service implementation.
     pub service: Arc<T>,
     /// The authorization service.
-    pub auth: SharedMacroAuthorizationService,
+    pub auth: MacroAuthorizationServiceHandle,
 }
 
 // Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
@@ -41,7 +41,7 @@ impl<T> Clone for AiProjectionRouterState<T> {
     }
 }
 
-impl<T> FromRef<AiProjectionRouterState<T>> for SharedMacroAuthorizationService {
+impl<T> FromRef<AiProjectionRouterState<T>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &AiProjectionRouterState<T>) -> Self {
         state.auth.clone()
     }

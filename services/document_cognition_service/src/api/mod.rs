@@ -4,7 +4,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::post;
 use context::GLOBAL_CONTEXT;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -112,7 +112,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .route(
             "/chat/completions",
             post(completions::handler).layer(axum::middleware::from_extractor_with_state::<
-                SharedMacroAuthorizationExtractor,
+                MacroAuthorizationExtractor,
                 _,
             >(api_context.clone())),
         );

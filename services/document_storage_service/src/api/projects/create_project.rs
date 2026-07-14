@@ -7,7 +7,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
@@ -34,7 +34,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[tracing::instrument(skip(ctx, authorization, project), fields(user_id=?authorization.macro_user_id))]
 pub async fn create_project_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     project: ProjectBodyAccessLevelExtractor<
         EditAccessLevel,
         CreateProjectRequest,
@@ -65,7 +65,7 @@ pub async fn create_project_handler(
 
 async fn create_project_v2(
     ctx: ApiContext,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
     if req.name.graphemes(true).count() > 100 {

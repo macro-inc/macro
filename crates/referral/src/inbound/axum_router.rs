@@ -7,7 +7,7 @@ use crate::domain::models::ReferralError;
 use crate::domain::ports::ReferralService;
 use axum::{Json, Router, extract::FromRef, http::StatusCode, response::IntoResponse};
 pub use get_referral_code::{__path_get_referral_code_handler, get_referral_code_handler};
-use macro_authorization::SharedMacroAuthorizationService;
+use macro_authorization::MacroAuthorizationServiceHandle;
 use model_error_response::ErrorResponse;
 use rate_limit::{
     RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService, domain::models::RateLimitOk,
@@ -60,7 +60,7 @@ pub struct ReferralRouterState<T, R> {
     /// The rate limiter service implementation.
     pub rate_limiter: R,
     /// The authorization service used to authenticate callers.
-    pub authorization: SharedMacroAuthorizationService,
+    pub authorization: MacroAuthorizationServiceHandle,
 }
 
 impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
@@ -73,14 +73,14 @@ impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
     }
 }
 
-impl<T, R> FromRef<ReferralRouterState<T, R>> for SharedMacroAuthorizationService {
+impl<T, R> FromRef<ReferralRouterState<T, R>> for MacroAuthorizationServiceHandle {
     fn from_ref(state: &ReferralRouterState<T, R>) -> Self {
         state.authorization.clone()
     }
 }
 
 // A nominal wrapper avoids overlapping `FromRef` implementations when the
-// generic rate limiter is itself a shared authorization service.
+// generic rate limiter is itself an authorization service handle.
 #[derive(Clone)]
 struct ReferralRateLimiter<R>(R);
 

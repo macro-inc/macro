@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::SharedMacroAuthorizationService;
+use macro_authorization::MacroAuthorizationServiceHandle;
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
 use notification::domain::service::SqsNotificationIngress;
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
         .await
         .context("failed to build jwt validation args")?;
 
-    let authorization = SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args);
+    let authorization = MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_args);
     let state = ScheduledActionRouterState {
         service,
         authorization,

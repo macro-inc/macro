@@ -10,7 +10,7 @@ use axum::{
 use entity_access::domain::ports::NoOpEntityAccessService;
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationError, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -83,7 +83,7 @@ fn build_router(
     let state = FavoritesRouterState::new(
         Arc::new(service.clone()),
         Arc::new(NoOpEntityAccessService),
-        SharedMacroAuthorizationService::new(authorization),
+        MacroAuthorizationServiceHandle::new(authorization),
     );
     (favorites_router(state), service)
 }

@@ -1,5 +1,5 @@
 use axum::{Json, extract::State};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -30,7 +30,7 @@ pub struct CreatePortalSessionRequest {
 #[tracing::instrument(skip(ctx, auth), err, fields(user_id = %auth.macro_user_id))]
 pub async fn create_portal_session(
     State(ctx): State<ApiContext>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
     Json(req): Json<CreatePortalSessionRequest>,
 ) -> Result<Json<StripeSessionResponse>, StripeOperationError> {
     let user_id = macro_user_id::user_id::MacroUserId::parse_from_str(&auth.user_context.user_id)?

@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use email_service::pubsub::publish_email_event;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::service;
 use sqlx::types::Uuid;
@@ -46,7 +46,7 @@ pub struct UpdateLabelBatchResponse {
 #[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(body): Json<UpdateLabelBatchRequest>,
 ) -> Result<Response, Response> {
     let user_context = authorization.user_context;

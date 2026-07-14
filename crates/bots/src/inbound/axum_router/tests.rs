@@ -17,7 +17,7 @@ use entity_access::domain::{
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_authorization::{
-    SharedMacroAuthorizationService,
+    MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -289,8 +289,8 @@ impl EntityAccessService for TestAccessService {
 const TEST_TOKEN: &str = "bot-test-token";
 const TEST_USER_ID: &str = "macro|bot-admin@example.com";
 
-fn authorization(user_id: &str) -> SharedMacroAuthorizationService {
-    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+fn authorization(user_id: &str) -> MacroAuthorizationServiceHandle {
+    MacroAuthorizationServiceHandle::new(FakeMacroAuthorizationService::always(test_user_context(
         user_id,
     )))
 }

@@ -9,7 +9,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use uuid::Uuid;
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
@@ -35,7 +35,7 @@ impl<T, S, Svc> FromRequestParts<S> for ForeignEntityAccessLevelExtractor<T, Svc
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -64,8 +64,8 @@ where
             );
         }
 
-        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
-            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<MacroAuthorizationExtractor, S>(state)
             .await?;
 
         let permission = service

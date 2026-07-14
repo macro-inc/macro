@@ -11,7 +11,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -72,7 +72,7 @@ impl IntoResponse for StopChatStreamError {
 #[tracing::instrument(skip(state, authorization), fields(chat_id = %request.chat_id, stream_id = %request.stream_id, user_id = %authorization.user_context.user_id), err)]
 pub async fn stop_chat_stream(
     State(state): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Json(request): Json<StopChatStreamRequest>,
 ) -> Result<Json<StopChatStreamResponse>, StopChatStreamError> {
     let access = chat_permissions::chat_access(

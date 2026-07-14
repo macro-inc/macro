@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::document::get_document_version;
 use macro_db_client::user_document_view_location::get::get_user_document_view_location;
 use model::document::response::{GetDocumentResponse, GetDocumentResponseData};
@@ -39,7 +39,7 @@ pub struct Params {
 pub async fn handler(
     access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     Path(Params {
         document_id,
         document_version_id,

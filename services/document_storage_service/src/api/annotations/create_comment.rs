@@ -11,7 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::annotations::create_comment::create_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -59,7 +59,7 @@ pub async fn create_comment_handler(
     State(properties_service): State<Arc<crate::api::context::PropertiesService>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateCommentRequest>,

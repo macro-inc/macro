@@ -20,7 +20,7 @@ use futures::{
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::handle_websocket_stream;
 use model::user::UserContext;
@@ -43,7 +43,7 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(ctx): State<ApiContext>,
     State(config): State<Arc<Config>>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     authenticated_websocket_upgrade(ws, authorization, move |socket, user_id, user_context| {
         handle_websocket_connection(socket, ctx, config, user_id, user_context)
@@ -52,7 +52,7 @@ pub async fn ws_handler(
 
 fn authenticated_websocket_upgrade<C, Fut>(
     ws: WebSocketUpgrade,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     callback: C,
 ) -> axum::response::Response
 where

@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use futures::StreamExt;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::user::onboarding_status::get_onboarding_status;
 use macro_user_id::cowlike::CowLike;
 use model::{
@@ -37,7 +37,7 @@ const CANVAS_TEMPLATE: &str = include_str!("./template/canvas_template.canvas");
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     tracing::info!("initialize user documents");
 

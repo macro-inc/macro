@@ -23,7 +23,7 @@ use entity_access::domain::{
 };
 use http_body_util::BodyExt;
 use macro_authorization::{
-    SharedMacroAuthorizationService,
+    MacroAuthorizationServiceHandle,
     testing::{FakeMacroAuthorizationService, test_user_context},
 };
 use macro_user_id::cowlike::CowLike;
@@ -677,8 +677,8 @@ impl ChannelService for RecordingMutationService {
 const TEST_USER_ID: &str = "macro|test@example.com";
 const TEST_AUTHORIZATION: &str = "Bearer test-token";
 
-fn authorization() -> SharedMacroAuthorizationService {
-    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+fn authorization() -> MacroAuthorizationServiceHandle {
+    MacroAuthorizationServiceHandle::new(FakeMacroAuthorizationService::always(test_user_context(
         TEST_USER_ID,
     )))
 }

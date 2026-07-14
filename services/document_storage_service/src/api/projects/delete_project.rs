@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     project::BasicProject,
     response::{
@@ -58,7 +58,7 @@ pub type ProjectDeleteResponse = TypedSuccessResponse<ProjectDeleteResponseData>
 pub async fn delete_project_handler(
     _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
     project: Extension<BasicProject>,
 ) -> impl IntoResponse {
@@ -147,7 +147,7 @@ pub async fn delete_project_handler(
 pub async fn permanently_delete_project_handler(
     _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("permanently_delete_project");

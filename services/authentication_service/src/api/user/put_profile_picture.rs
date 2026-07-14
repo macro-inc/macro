@@ -7,7 +7,7 @@ use axum::{
 
 use crate::api::context::ApiContext;
 
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::user::update_profile_picture::update_profile_picture;
 use model::response::{EmptyResponse, ErrorResponse};
 use serde::Deserialize;
@@ -34,7 +34,7 @@ pub struct ProfilePictureQueryParams {
 pub async fn handler(
     State(ctx): State<ApiContext>,
     Query(params): Query<ProfilePictureQueryParams>,
-    auth: SharedMacroAuthorizationExtractor,
+    auth: MacroAuthorizationExtractor,
 ) -> Result<Response, Response> {
     update_profile_picture(
         &ctx.db,

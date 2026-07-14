@@ -8,7 +8,7 @@ use axum::{
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_authorization::{
-    MacroAuthorizationError, PreauthorizedContext, SharedMacroAuthorizationService,
+    MacroAuthorizationError, MacroAuthorizationServiceHandle, PreauthorizedContext,
     testing::{FakeMacroAuthorizationService, bearer_request, test_user_context},
 };
 use opensearch_client::OpensearchClient;
@@ -38,7 +38,7 @@ fn test_state(authorization: FakeMacroAuthorizationService) -> SearchHandlerStat
         db: ReadOnlyPool(pool),
         opensearch_client: Arc::new(opensearch_client),
         entity_access_service: Arc::new(entity_access_service),
-        macro_authorization_service: SharedMacroAuthorizationService::new(authorization),
+        macro_authorization_service: MacroAuthorizationServiceHandle::new(authorization),
     }
 }
 

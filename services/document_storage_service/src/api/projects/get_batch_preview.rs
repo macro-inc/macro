@@ -6,7 +6,7 @@ use axum::{
     extract::{Json, State},
     response::{IntoResponse, Response},
 };
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::{
     project::{
         ProjectPreview, ProjectPreviewData, ProjectPreviewV2, WithProjectId,
@@ -30,7 +30,7 @@ use reqwest::StatusCode;
 )]
 pub async fn get_batch_preview_handler(
     State(ctx): State<ApiContext>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Json(req): Json<GetBatchProjectPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchProjectPreviewResponse>), Response> {
     // Ensure the project ids are unique to prevent duplicate work

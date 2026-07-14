@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, GenericResponse};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
@@ -37,7 +37,7 @@ pub struct Params {
 pub async fn handler(
     _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {
     let processing_result = match macro_db_client::document::get_document_process_content(

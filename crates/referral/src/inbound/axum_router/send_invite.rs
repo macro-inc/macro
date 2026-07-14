@@ -5,7 +5,7 @@ use axum::extract::{FromRef, FromRequestParts};
 use axum::http::StatusCode;
 use axum::{Json, extract::State};
 use ip_extractor::ClientIp;
-use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
 use macro_user_id::email::EmailStr;
 use rate_limit::inbound::RateLimitExtractable;
 use rate_limit::{RateLimitConfig, RateLimitKey};
@@ -41,7 +41,7 @@ pub struct SendInviteBody {
 #[tracing::instrument(skip(state, user_context), err)]
 pub async fn post_referral_invite_handler<T: ReferralService, R>(
     State(state): State<ReferralRouterState<T, R>>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
 ) -> Result<StatusCode, ReferralError> {
     let () = state
@@ -53,11 +53,11 @@ pub async fn post_referral_invite_handler<T: ReferralService, R>(
 }
 
 /// the rate limit definition for the per-user rate limit on referring new users
-pub struct PerUserReferralRateLimit(SharedMacroAuthorizationExtractor);
+pub struct PerUserReferralRateLimit(MacroAuthorizationExtractor);
 
 impl<S> RateLimitExtractable<S> for PerUserReferralRateLimit
 where
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     S: Send + Sync + 'static,
 {
     fn config() -> rate_limit::RateLimitConfig {
@@ -77,10 +77,10 @@ where
 
 impl<S> FromRequestParts<S> for PerUserReferralRateLimit
 where
-    SharedMacroAuthorizationService: FromRef<S>,
+    MacroAuthorizationServiceHandle: FromRef<S>,
     S: Send + Sync + 'static,
 {
-    type Rejection = <SharedMacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;
+    type Rejection = <MacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,

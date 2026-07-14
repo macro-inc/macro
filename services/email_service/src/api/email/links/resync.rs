@@ -3,7 +3,7 @@ use crate::api::email::links::access::{InboxActionError, authorize_inbox_access}
 use anyhow::Context;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Json, Response};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
@@ -44,7 +44,7 @@ pub struct ResyncResponse {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn resync_link_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(link_id): Path<Uuid>,
 ) -> Result<Response, InboxActionError> {
     let (link, _access) =

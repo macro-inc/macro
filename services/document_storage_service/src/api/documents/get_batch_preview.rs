@@ -9,7 +9,7 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
 use model::response::{GenericErrorResponse, GenericResponse};
 use reqwest::StatusCode;
@@ -28,7 +28,7 @@ use reqwest::StatusCode;
 )]
 pub async fn get_batch_preview_handler(
     State(ctx): State<ApiContext>,
-    user_context: OptionalSharedMacroAuthorizationExtractor,
+    user_context: OptionalMacroAuthorizationExtractor,
     Json(req): Json<GetBatchPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchPreviewResponse>), Response> {
     // Ensure the document ids are unique to prevent duplicate work

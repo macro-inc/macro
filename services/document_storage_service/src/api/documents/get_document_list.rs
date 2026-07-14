@@ -1,7 +1,7 @@
 use crate::{api::context::ApiContext, model::response::documents::get::GetDocumentSearchResponse};
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     document::response::GetDocumentListResult,
     response::{GenericErrorResponse, GenericResponse},
@@ -22,7 +22,7 @@ use model::{
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_context.user_id))]
 pub async fn get_document_list_handler(
     State(ctx): State<ApiContext>,
-    user_context: SharedMacroAuthorizationExtractor,
+    user_context: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     let document_search_response_date: Vec<GetDocumentListResult> =
         match macro_db_client::document::get_document_list(

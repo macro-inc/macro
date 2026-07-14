@@ -6,7 +6,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ pub struct Params {
 pub async fn handle_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    identity: OptionalSharedMacroAuthorizationExtractor,
+    identity: OptionalMacroAuthorizationExtractor,
     internal_key: Option<ValidInternalKey>,
     Path(Params { file_id }): Path<Params>,
 ) -> Result<Response, Response> {

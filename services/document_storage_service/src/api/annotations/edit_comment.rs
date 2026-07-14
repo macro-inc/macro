@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::annotations::edit_comment::edit_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -50,7 +50,7 @@ pub async fn edit_comment_handler(
     State(db): State<PgPool>,
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    authorization: OptionalSharedMacroAuthorizationExtractor,
+    authorization: OptionalMacroAuthorizationExtractor,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {

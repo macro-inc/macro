@@ -4,7 +4,7 @@ use axum::extract::State;
 use futures::stream::{FuturesUnordered, StreamExt};
 
 use axum::{http::StatusCode, response::IntoResponse};
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::project::PendingProject;
 use model::project::response::GetProjectsResponse;
 use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
@@ -26,7 +26,7 @@ type PendingProjectsResponse = TypedSuccessResponse<Vec<PendingProject>>;
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_projects_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     tracing::trace!("get_projects_handler");
     let projects = match macro_db_client::projects::get_projects(
@@ -64,7 +64,7 @@ pub async fn get_projects_handler(
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_pending_projects_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
 ) -> impl IntoResponse {
     tracing::trace!("get_pending_projects_handler");
     let projects = match macro_db_client::projects::get_pending_root_projects(

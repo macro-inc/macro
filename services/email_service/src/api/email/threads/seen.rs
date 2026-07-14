@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadReadMetadata};
 use email_service::pubsub::publish_email_event;
-use macro_authorization::SharedMacroAuthorizationExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::label::system_labels;
 use models_email::service::message::Message;
@@ -71,7 +71,7 @@ pub struct PathParams {
 #[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn seen_handler(
     State(ctx): State<ApiContext>,
-    authorization: SharedMacroAuthorizationExtractor,
+    authorization: MacroAuthorizationExtractor,
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
     let user_context = authorization.user_context;
