@@ -215,7 +215,8 @@ fn task_expectations_cover_team_share_and_inheritance() {
     assert_eq!(level(&rows, "task:ship-tags", "dave"), None);
     assert_eq!(level(&rows, "task:ship-tags", "eve"), None);
 
-    // fix-perms: dave's personal task shared to the eng channel.
+    // fix-perms: dave's personal task shared to the eng channel; assigning
+    // alice grants nothing by itself — her view comes from the channel.
     assert_eq!(
         level(&rows, "task:fix-perms", "dave"),
         Some(AccessLevel::Owner)
@@ -225,4 +226,16 @@ fn task_expectations_cover_team_share_and_inheritance() {
         Some(AccessLevel::View)
     );
     assert_eq!(level(&rows, "task:fix-perms", "carol"), None);
+
+    // write-docs: alice owns it, carol is the assignee and sees it through
+    // the team share.
+    assert_eq!(
+        level(&rows, "task:write-docs", "alice"),
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        level(&rows, "task:write-docs", "carol"),
+        Some(AccessLevel::Comment)
+    );
+    assert_eq!(level(&rows, "task:write-docs", "dave"), None);
 }

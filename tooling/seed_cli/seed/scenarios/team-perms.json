@@ -65,7 +65,16 @@
     "fix-perms": {
       "owner": "dave",
       "name": "Fix the perms edge case",
+      "assignees": ["alice"],
       "share": [{ "with": "channel:eng", "level": "view" }]
+    },
+    "write-docs": {
+      "owner": "alice",
+      "name": "Write the perms docs",
+      "content": "# Write the perms docs\n\nCover every access edge the seeder exercises.\n",
+      "status": "in_review",
+      "assignees": ["carol"],
+      "share_with_team": true
     }
   },
   "chats": {
