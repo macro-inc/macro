@@ -235,27 +235,29 @@ fn push_thread_candidate_select(
             // email) are excluded. The receipt has already been validated
             // upstream, so the team_id is trusted here.
             //
-            // resolve_filters pre-resolves the team's primary link ids, so
-            // this is a direct ANY probe. The inline subquery remains only
-            // as a fallback for resolutions that didn't carry team links.
-            Some(team_id) => match params.resolved.team_link_ids() {
-                Some(team_links) => {
+            // resolve_filters pre-resolves the team's primary link ids: the
+            // ANY probe gives the planner a tight static link set, and the
+            // membership subquery revalidates it at execution time so a
+            // member or link removed between resolve_filters and this query
+            // can't leak threads (same belt-and-suspenders rationale as the
+            // crm_enabled EXISTS below). The subquery alone remains as a
+            // fallback for resolutions that didn't carry team links.
+            Some(team_id) => {
+                if let Some(team_links) = params.resolved.team_link_ids() {
                     builder.push("t.link_id = ANY(");
                     builder.push_bind(team_links.to_vec());
-                    builder.push(")");
+                    builder.push(") AND ");
                 }
-                None => {
-                    builder.push(
-                        r#"t.link_id IN (
+                builder.push(
+                    r#"t.link_id IN (
                         SELECT el.id
                         FROM email_links el
                         JOIN team_user tu ON tu.user_id = el.macro_id
                         WHERE tu.team_id = "#,
-                    );
-                    builder.push_bind(team_id);
-                    builder.push(" AND el.is_primary)");
-                }
-            },
+                );
+                builder.push_bind(team_id);
+                builder.push(" AND el.is_primary)");
+            }
         },
         ThreadCandidateSource::Shared => {
             builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");

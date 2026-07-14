@@ -1354,7 +1354,10 @@ fn test_full_query_team_scoped_uses_resolved_team_links() {
     // With team links pre-resolved, the candidate WHERE probes the link set
     // directly and the matching CTEs are scoped to the same links, instead
     // of matching mail across every mailbox in the table and discarding
-    // non-team threads afterwards.
+    // non-team threads afterwards. The live membership subquery must remain
+    // alongside the cached probe — it revalidates the cached ids at
+    // execution time so a member removed between resolve_filters and the
+    // main query can't leak threads.
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let team_link = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
@@ -1366,8 +1369,8 @@ fn test_full_query_team_scoped_uses_resolved_team_links() {
         "candidate WHERE must probe the resolved link set: {sql}"
     );
     assert!(
-        !sql.contains("JOIN team_user tu"),
-        "inline team-links subquery should be replaced: {sql}"
+        sql.contains("JOIN team_user tu"),
+        "live membership revalidation subquery missing: {sql}"
     );
     assert!(
         sql.contains("c.link_id = ANY("),
