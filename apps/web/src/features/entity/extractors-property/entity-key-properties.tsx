@@ -112,29 +112,27 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   };
 
   return (
-    <Show when={keyProperties().length > 0}>
-      <PropertiesProvider
-        entityType={entityType()}
-        canEdit={true}
+    <PropertiesProvider
+      entityType={entityType()}
+      canEdit={true}
+      properties={keyProperties}
+      onRefresh={props.onRefresh ?? (() => {})}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={saveHandler}
+    >
+      <KeyPropertiesRow
         properties={keyProperties}
-        onRefresh={props.onRefresh ?? (() => {})}
-        onPropertyAdded={() => {}}
-        onPropertyDeleted={() => {}}
-        saveHandler={saveHandler}
-      >
-        <KeyPropertiesRow
-          properties={keyProperties}
-          onRefresh={props.onRefresh}
-          maxUserStackUsers={props.maxUserStackUsers}
-          showCaret={props.showCaret}
-        />
-        <ScopedPortal scope="split">
-          <Suspense>
-            <Modals />
-          </Suspense>
-        </ScopedPortal>
-      </PropertiesProvider>
-    </Show>
+        onRefresh={props.onRefresh}
+        maxUserStackUsers={props.maxUserStackUsers}
+        showCaret={props.showCaret}
+      />
+      <ScopedPortal scope="split">
+        <Suspense>
+          <Modals />
+        </Suspense>
+      </ScopedPortal>
+    </PropertiesProvider>
   );
 }
 

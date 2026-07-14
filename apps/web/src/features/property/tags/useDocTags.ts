@@ -55,15 +55,17 @@ function definitionDomain(
   };
 }
 
+type SetTagOptionIdsForDefinition = (
+  definition: PropertyDefinitionDetailResponse,
+  optionIds: string[]
+) => Promise<void> | void;
+
 function createDocTags(
-  entityId: string,
-  entityType: EntityType,
-  appliedOptionIdsForDefinition: (definitionId: string) => string[]
+  appliedOptionIdsForDefinition: (definitionId: string) => string[],
+  setTagOptionIdsForDefinition: SetTagOptionIdsForDefinition
 ) {
   const tagsQuery = useTagsQuery();
   const ensureTagSet = useEnsureTagSetMutation();
-  const addOption = useAddEntityPropertyOptionMutation();
-  const removeOption = useRemoveEntityPropertyOptionMutation();
   const [pendingOptionIdsByDefinition, setPendingOptionIdsByDefinition] =
     createSignal<Map<string, string[]>>(new Map());
   const [displayOptionOrder, setDisplayOptionOrder] = createSignal<string[]>(
@@ -167,13 +169,7 @@ function createDocTags(
     const definition = await resolveDefinition(scope);
     const current = appliedOptionIdsForDefinition(definition.id);
     if (current.includes(optionId)) return;
-    await addOption.mutateAsync({
-      entityId,
-      entityType,
-      property: definitionDomain(definition),
-      optionId,
-      optimisticOptionIds: [...current, optionId],
-    });
+    await setTagOptionIdsForDefinition(definition, [...current, optionId]);
   };
 
   const removeTag = async (scope: TagScope, optionId: string) => {
@@ -181,13 +177,10 @@ function createDocTags(
     if (!definition) return;
     const current = appliedOptionIdsForDefinition(definition.id);
     if (!current.includes(optionId)) return;
-    await removeOption.mutateAsync({
-      entityId,
-      entityType,
-      property: definitionDomain(definition),
-      optionId,
-      optimisticOptionIds: current.filter((id) => id !== optionId),
-    });
+    await setTagOptionIdsForDefinition(
+      definition,
+      current.filter((id) => id !== optionId)
+    );
   };
 
   const toggleTag = async (scope: TagScope, optionId: string) => {
@@ -268,16 +261,52 @@ function createDocTags(
 
 export function useDocTags(entityId: string, entityType: EntityType) {
   const { properties } = useEntityProperties(entityId, entityType, false);
+  const addOption = useAddEntityPropertyOptionMutation();
+  const removeOption = useRemoveEntityPropertyOptionMutation();
 
-  return createDocTags(entityId, entityType, (definitionId) => {
-    const property = properties().find(
-      (prop) => prop.propertyDefinitionId === definitionId
-    );
-    if (!property) return [];
-    return property.valueType === 'SELECT_STRING' && property.value
-      ? property.value
-      : [];
-  });
+  return createDocTags(
+    (definitionId) => {
+      const property = properties().find(
+        (prop) => prop.propertyDefinitionId === definitionId
+      );
+      if (!property) return [];
+      return property.valueType === 'SELECT_STRING' && property.value
+        ? property.value
+        : [];
+    },
+    async (definition, optionIds) => {
+      const property = definitionDomain(definition);
+      const current = (() => {
+        const source = properties().find(
+          (prop) => prop.propertyDefinitionId === definition.id
+        );
+        return source?.valueType === 'SELECT_STRING' && source.value
+          ? source.value
+          : [];
+      })();
+      const added = optionIds.find((id) => !current.includes(id));
+      if (added) {
+        await addOption.mutateAsync({
+          entityId,
+          entityType,
+          property,
+          optionId: added,
+          optimisticOptionIds: optionIds,
+        });
+        return;
+      }
+      const removed = current.find((id) => !optionIds.includes(id));
+      if (removed) {
+        await removeOption.mutateAsync({
+          entityId,
+          entityType,
+          property,
+          optionId: removed,
+          optimisticOptionIds: optionIds,
+        });
+      }
+    }
+  );
 }
 
 /**
@@ -290,11 +319,55 @@ export function useSoupDocTags(
   entityType: EntityType,
   properties: Accessor<SoupProperty[] | undefined>
 ) {
-  return createDocTags(entityId, entityType, (definitionId) => {
-    const property = properties()?.find(
-      (prop) => prop.definition.id === definitionId
-    );
-    const value = property?.value;
-    return value?.type === 'SelectOption' ? value.value : [];
-  });
+  const addOption = useAddEntityPropertyOptionMutation();
+  const removeOption = useRemoveEntityPropertyOptionMutation();
+
+  return createDocTags(
+    (definitionId) => {
+      const property = properties()?.find(
+        (prop) => prop.definition.id === definitionId
+      );
+      const value = property?.value;
+      return value?.type === 'SelectOption' ? value.value : [];
+    },
+    async (definition, optionIds) => {
+      const property = definitionDomain(definition);
+      const source = properties()?.find(
+        (prop) => prop.definition.id === definition.id
+      );
+      const current =
+        source?.value?.type === 'SelectOption' ? source.value.value : [];
+      const added = optionIds.find((id) => !current.includes(id));
+      if (added) {
+        await addOption.mutateAsync({
+          entityId,
+          entityType,
+          property,
+          optionId: added,
+          optimisticOptionIds: optionIds,
+        });
+        return;
+      }
+      const removed = current.find((id) => !optionIds.includes(id));
+      if (removed) {
+        await removeOption.mutateAsync({
+          entityId,
+          entityType,
+          property,
+          optionId: removed,
+          optimisticOptionIds: optionIds,
+        });
+      }
+    }
+  );
+}
+
+export function useLocalDocTags(
+  appliedOptionIdsForDefinition: (definitionId: string) => string[],
+  setTagOptionIdsForDefinition: SetTagOptionIdsForDefinition
+) {
+  return createDocTags(
+    appliedOptionIdsForDefinition,
+    setTagOptionIdsForDefinition
+  );
 }

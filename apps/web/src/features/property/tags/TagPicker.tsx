@@ -18,6 +18,7 @@ import type { PropertyOptionResponse } from '@service-properties/generated/schem
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Button, cn, Dialog, Layer } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -54,17 +55,39 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 // row's action buttons are never clipped below the scroll viewport. Deferred a
 // frame so it runs after the expanded layout settles.
 function scrollExpandedRowIntoView(el: HTMLElement) {
-  requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' }));
+  requestAnimationFrame(() => {
+    const container = el.parentElement;
+    if (container) scrollElementIntoContainerView(container, el);
+  });
 }
 
 function focusWithoutScroll(el: HTMLInputElement) {
   requestAnimationFrame(() => el.focus({ preventScroll: true }));
 }
 
+function scrollElementIntoContainerView(
+  container: HTMLElement,
+  element: HTMLElement
+) {
+  const top = element.offsetTop;
+  const bottom = top + element.offsetHeight;
+  const viewTop = container.scrollTop;
+  const viewBottom = viewTop + container.clientHeight;
+
+  if (top < viewTop) {
+    container.scrollTop = top;
+  } else if (bottom > viewBottom) {
+    container.scrollTop = bottom - container.clientHeight;
+  }
+}
+
 const SCOPE_LABEL: Record<TagScope, string> = {
   user: 'My tags',
   team: 'Team tags',
 };
+const TAG_PICKER_ROW_HEIGHT = 32;
+const TAG_PICKER_VISIBLE_ROWS = 6;
+const TAG_PICKER_LIST_HEIGHT = TAG_PICKER_ROW_HEIGHT * TAG_PICKER_VISIBLE_ROWS;
 
 export function TagPicker(props: {
   docTags: DocTags;
@@ -177,6 +200,7 @@ function SimpleTagPickerBody(props: {
 
   const addOption = useAddPropertyOptionMutation();
   const ensureTagSet = useEnsureTagSetMutation();
+  let scrollContainerRef: HTMLDivElement | undefined;
 
   const initialAppliedTags = props.docTags.appliedTags();
   const initialAppliedIds = new Set(
@@ -324,6 +348,15 @@ function SimpleTagPickerBody(props: {
     enableNumericHotkeys: false,
   });
 
+  createEffect(() => {
+    const index = dropdown.selectedIndex();
+    if (!dropdown.keyboardMode() || !scrollContainerRef) return;
+    const row = scrollContainerRef.querySelector<HTMLDivElement>(
+      `[data-tag-index="${index}"]`
+    );
+    if (row) scrollElementIntoContainerView(scrollContainerRef, row);
+  });
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (saved()) return;
     dropdown.handleKeyDown(event);
@@ -342,6 +375,7 @@ function SimpleTagPickerBody(props: {
   const row = (item: TagOptionItem) => (
     <TagPickerSimpleRow
       item={item}
+      index={optionIndex(item.option.id)}
       checked={isSelected(item.option.id)}
       selected={dropdown.selectedIndex() === optionIndex(item.option.id)}
       onSelect={(event) => {
@@ -365,44 +399,51 @@ function SimpleTagPickerBody(props: {
         >
           <DropdownSearchInput
             value={search()}
-            placeholder="Change or select tags..."
+            placeholder="Change or add tags..."
             onInput={(value) => {
               setSearch(value);
               dropdown.setSearchQuery(value);
             }}
           />
-          <div class="max-h-72 scroll-pb-1.5 overflow-y-auto p-1.5">
-            <For each={initiallySelectedVisibleItems()}>{row}</For>
-            <Show
-              when={
-                initiallySelectedVisibleItems().length > 0 &&
-                initiallyUnselectedVisibleItems().length > 0
-              }
+          <div class="p-1.5">
+            <div
+              ref={scrollContainerRef}
+              class="overflow-y-auto overflow-x-hidden"
+              style={{ 'max-height': `${TAG_PICKER_LIST_HEIGHT}px` }}
             >
-              <div class="my-1 border-t border-edge-muted" />
-            </Show>
-            <For each={initiallyUnselectedVisibleItems()}>{row}</For>
-            <Show when={showCreateRow()}>
-              <CreateRow
-                label={search().trim()}
-                scope={createScope()}
-                color={createColor()}
-                hasTeamSet={hasTeamSet()}
-                pending={addOption.isPending || ensureTagSet.isPending}
-                onScope={setCreateScope}
-                onColor={setCreateColor}
-                onCreate={handleCreate}
-                onCancel={() => setSearch('')}
-                selected={
-                  dropdown.selectedIndex() === selectableItems().length - 1
+              <For each={initiallySelectedVisibleItems()}>{row}</For>
+              <Show
+                when={
+                  initiallySelectedVisibleItems().length > 0 &&
+                  initiallyUnselectedVisibleItems().length > 0
                 }
-                onMouseEnter={() => {
-                  if (!dropdown.keyboardMode()) {
-                    dropdown.setSelectedIndex(selectableItems().length - 1);
+              >
+                <div class="my-1 border-t border-edge-muted" />
+              </Show>
+              <For each={initiallyUnselectedVisibleItems()}>{row}</For>
+              <Show when={showCreateRow()}>
+                <CreateRow
+                  index={selectableItems().length - 1}
+                  label={search().trim()}
+                  scope={createScope()}
+                  color={createColor()}
+                  hasTeamSet={hasTeamSet()}
+                  pending={addOption.isPending || ensureTagSet.isPending}
+                  onScope={setCreateScope}
+                  onColor={setCreateColor}
+                  onCreate={handleCreate}
+                  onCancel={() => setSearch('')}
+                  selected={
+                    dropdown.selectedIndex() === selectableItems().length - 1
                   }
-                }}
-              />
-            </Show>
+                  onMouseEnter={() => {
+                    if (!dropdown.keyboardMode()) {
+                      dropdown.setSelectedIndex(selectableItems().length - 1);
+                    }
+                  }}
+                />
+              </Show>
+            </div>
           </div>
         </Popover.Content>
       </Layer>
@@ -412,23 +453,26 @@ function SimpleTagPickerBody(props: {
 
 function TagPickerSimpleRow(props: {
   item: TagOptionItem;
+  index: number;
   checked: boolean;
   selected: boolean;
   onSelect: (event: MouseEvent) => void;
   onMouseEnter: () => void;
 }) {
   return (
-    <DropdownSelectableRow
-      isSelected={props.selected}
-      onClick={props.onSelect}
-      onMouseEnter={props.onMouseEnter}
-    >
-      <OptionCheckBox checked={props.checked} multiselect />
-      <TagDot color={props.item.option.color ?? undefined} />
-      <span class="min-w-0 flex-1 truncate">
-        {optionLabel(props.item.option)}
-      </span>
-    </DropdownSelectableRow>
+    <div data-tag-index={props.index}>
+      <DropdownSelectableRow
+        isSelected={props.selected}
+        onClick={props.onSelect}
+        onMouseEnter={props.onMouseEnter}
+      >
+        <OptionCheckBox checked={props.checked} multiselect />
+        <TagDot color={props.item.option.color ?? undefined} />
+        <span class="min-w-0 flex-1 truncate">
+          {optionLabel(props.item.option)}
+        </span>
+      </DropdownSelectableRow>
+    </div>
   );
 }
 
@@ -671,7 +715,7 @@ function _TagPickerBody(props: {
         >
           <DropdownSearchInput
             value={search()}
-            placeholder="Change or select tags..."
+            placeholder="Change or add tags..."
             onInput={setPickerSearch}
           />
 
@@ -934,6 +978,7 @@ function TagPickerRow(props: {
 }
 
 function CreateRow(props: {
+  index?: number;
   label: string;
   scope: TagScope;
   color: string;
@@ -948,6 +993,7 @@ function CreateRow(props: {
 }) {
   return (
     <div
+      data-tag-index={props.index}
       class={cn(
         'mt-1 flex flex-col gap-2 rounded-lg border border-edge-muted p-2',
         props.selected && 'bg-hover'

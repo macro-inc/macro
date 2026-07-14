@@ -40,15 +40,18 @@ import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
+import { InlineTagsPill, useLocalDocTags } from '@property/tags';
 import type {
   Property,
   PropertyApiValues,
   PropertyOption,
 } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
+import { useTagsQuery } from '@queries/properties/tags';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
@@ -94,6 +97,7 @@ const COMPOSER_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
+const COMPOSER_PROPERTY_SET = new Set<string>(COMPOSER_PROPERTIES);
 
 function composerTitleNavigationPlugin(
   bodyEditor: Accessor<LexicalEditor | undefined>,
@@ -278,12 +282,20 @@ async function createTaskWithProperties(
   taskTitle: string,
   taskContent: string,
   properties: Array<[string, PropertyApiValues]>,
-  definitions: Map<string, PropertyDefinition>,
+  definitions: Map<
+    string,
+    PropertyDefinition | PropertyDefinitionDetailResponse
+  >,
   upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
 ) {
   // Convert properties to API format (filter out null values)
   const propertyValues = properties.flatMap(([id, value]) => {
-    const isMultiSelect = definitions.get(id)?.is_multi_select ?? false;
+    const definition = definitions.get(id);
+    const isMultiSelect = definition
+      ? 'is_multi_select' in definition
+        ? definition.is_multi_select
+        : definition.isMultiSelect
+      : value.valueType === 'SELECT_STRING' && !COMPOSER_PROPERTY_SET.has(id);
     const apiValue = propertyValueToApi(value, isMultiSelect);
     if (apiValue === null) return [];
     return [{ propertyId: id, value: apiValue }];
@@ -519,6 +531,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     refetchOnReconnect: false,
     placeholderData: (prev) => prev,
   }));
+  const tagsQuery = useTagsQuery();
 
   const definitions = () => {
     if (!systemPropertiesQuery.isSuccess) return new Map();
@@ -529,6 +542,19 @@ export function ComposeTask(props: ComposeTaskProps) {
         return [definition.id, definition];
       })
     );
+  };
+
+  const createDefinitions = () => {
+    const map = new Map<
+      PropertyDefinition['id'],
+      PropertyDefinition | PropertyDefinitionDetailResponse
+    >(definitions());
+    for (const tagSet of tagsQuery.data ?? []) {
+      if (tagSet.definition) {
+        map.set(tagSet.definition.id, tagSet.definition);
+      }
+    }
+    return map;
   };
 
   const options = () => {
@@ -574,6 +600,21 @@ export function ComposeTask(props: ComposeTaskProps) {
       });
     },
   };
+
+  const composerTags = useLocalDocTags(
+    (definitionId) => {
+      const value = propertyValues[definitionId];
+      return value?.valueType === 'SELECT_STRING' && value.values
+        ? value.values
+        : [];
+    },
+    (definition, optionIds) => {
+      setPropertyValues(definition.id, {
+        valueType: 'SELECT_STRING',
+        values: optionIds,
+      });
+    }
+  );
 
   const showTaskCreatedToast = async (documentId: string) => {
     // Auto-copy link to clipboard
@@ -651,7 +692,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         taskTitle,
         taskContent,
         properties,
-        definitions(),
+        createDefinitions(),
         (params) => upsertToHistoryMutation.mutate(params)
       );
 
@@ -678,7 +719,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       taskTitle,
       taskContent,
       properties,
-      definitions(),
+      createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
@@ -737,7 +778,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       taskTitle,
       taskContent,
       properties,
-      definitions(),
+      createDefinitions(),
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
@@ -989,6 +1030,7 @@ export function ComposeTask(props: ComposeTaskProps) {
                   />
                 )}
               </For>
+              <InlineTagsPill docTags={composerTags} showPlaceholder />
             </div>
             <Modals />
           </PropertiesProvider>
