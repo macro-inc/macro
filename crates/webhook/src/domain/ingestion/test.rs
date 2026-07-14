@@ -21,7 +21,7 @@ use documents::domain::events::{
     DocumentUpdatedMetadata,
 };
 use entity_access::domain::models::{
-    AccessLevel, CallChannelInfo, EntityAccessReceipt, EntityPermission, RequiredPermission,
+    AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission, RequiredPermission,
     UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -82,6 +82,15 @@ impl EntityAccessService for MockAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        unimplemented!("not used by webhook event ingestion")
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

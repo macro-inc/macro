@@ -192,6 +192,22 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
 
+    /// Generates an [`EntityAccessReceipt<T>`] for an authenticated bot.
+    ///
+    /// Document, chat, project, email-thread, and call permissions are resolved
+    /// from the bot's entity-access sources. Channel permissions require an
+    /// explicit active participant role; public and organization channels do
+    /// not implicitly admit bots. All other entity types are unsupported.
+    ///
+    /// The type parameter `T` specifies the minimum permission required.
+    /// Returns an error if the bot does not satisfy that requirement.
+    fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
+
     /// Get the access level a user has for an entity.
     ///
     /// Returns `None` if the user has no access to the entity.
@@ -305,6 +321,15 @@ impl EntityAccessService for NoOpEntityAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

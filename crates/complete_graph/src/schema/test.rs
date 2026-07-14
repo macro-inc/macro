@@ -6,7 +6,7 @@ use email::domain::models::{
     UpsertEmailFilterInput,
 };
 use entity_access::domain::models::{
-    AccessError, AccessLevel, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
+    AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
     EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
 };
 use graphql_common::GraphqlSoupRequestParts;
@@ -159,6 +159,15 @@ impl EntityAccessService for CountingEntityAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

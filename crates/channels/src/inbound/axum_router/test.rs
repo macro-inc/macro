@@ -92,6 +92,15 @@ impl EntityAccessService for TestAccessService {
         Err(self.access_err())
     }
 
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(self.access_err())
+    }
+
     async fn get_access_level(
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
