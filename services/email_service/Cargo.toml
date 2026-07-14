@@ -166,7 +166,7 @@ static_file_service_client = { path = "../../crates/static_file_service_client" 
 strum_macros = { workspace = true }
 system_properties = { path = "../../crates/system_properties" }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["signal"] }
+tokio = { workspace = true, features = ["signal", "sync", "time"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = [
   "compression-gzip",

@@ -15,7 +15,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::{BufferedBrokerConfig, BufferedMacroEventBroker, KafkaEventPublisher};
 use macro_service_urls::{AuthServiceUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -134,10 +134,25 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
-    let macro_event_broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-    );
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
+    let auth_service_client = Arc::new(auth_service_client);
+    let redis_conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for gmail token provider")?;
+    let redis_client = Arc::new(redis_client);
+    let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
+        redis_conn,
+        auth_service_client.clone(),
+    ));
+
+    let event_publisher = KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+        .context("failed to create kafka event publisher")?;
+    let (macro_event_broker, broker_runtime) =
+        BufferedMacroEventBroker::start(event_publisher, BufferedBrokerConfig::default());
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
@@ -151,25 +166,12 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_macro_event_broker(macro_event_broker.clone()),
     );
-    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-        db.clone(),
-    )));
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
     };
-    let auth_service_client = Arc::new(auth_service_client);
-    let redis_conn = redis_client
-        .inner
-        .get_multiplexed_async_connection()
-        .await
-        .context("failed to get multiplexed redis connection for gmail token provider")?;
-    let redis_client = Arc::new(redis_client);
-    let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
-        redis_conn,
-        auth_service_client.clone(),
-    ));
-    api::setup_and_serve(ApiContext {
+
+    let server_result = api::setup_and_serve(ApiContext {
         db,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
@@ -188,6 +190,8 @@ async fn main() -> anyhow::Result<()> {
         gmail_token_state,
         macro_event_broker: Arc::new(macro_event_broker),
     })
-    .await?;
-    Ok(())
+    .await;
+
+    broker_runtime.shutdown().await;
+    server_result
 }
