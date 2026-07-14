@@ -488,7 +488,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         ai_projections_service_impl.clone(),
     );
-    tokio::spawn(async move {
+    let ai_projection_worker_handle = tokio::spawn(async move {
         ai_projection_worker.poll().await;
     });
 
@@ -552,6 +552,18 @@ async fn main() -> anyhow::Result<()> {
     })
     .await
     .context("failed to setup and serve api");
+
+    tracing::info!("HTTP server stopped; stopping AI projection worker");
+    ai_projection_worker_handle.abort();
+    match ai_projection_worker_handle.await {
+        Ok(()) => {}
+        Err(error) if error.is_cancelled() => {}
+        Err(error) => {
+            tracing::error!(error=?error, "AI projection worker failed while stopping");
+        }
+    }
+    tracing::info!("AI projection worker stopped; draining macro event broker");
+
     broker_runtime.shutdown().await;
     server_result
 }

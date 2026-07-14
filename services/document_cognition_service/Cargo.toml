@@ -126,7 +126,7 @@ strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal", "time"] }
 tokio-util = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["limit", "timeout"] }

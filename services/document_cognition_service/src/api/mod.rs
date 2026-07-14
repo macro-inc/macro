@@ -5,6 +5,9 @@ use axum::extract::DefaultBodyLimit;
 use axum::routing::post;
 use context::GLOBAL_CONTEXT;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use std::future::{IntoFuture, pending};
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
@@ -25,6 +28,8 @@ pub mod utils;
 mod attachments;
 mod chats;
 pub mod structured_completion;
+
+const ACTIVE_REQUEST_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(4);
 
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
@@ -64,9 +69,71 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         ?environment,
         "document cognition service is up and running"
     );
-    axum::serve(listener, app.into_make_service())
-        .await
-        .context("error starting service")
+    let shutdown = CancellationToken::new();
+    let server_shutdown = shutdown.clone();
+    let server = axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(async move {
+            server_shutdown.cancelled().await;
+        })
+        .into_future();
+    tokio::pin!(server);
+
+    tokio::select! {
+        result = &mut server => result.context("error starting service"),
+        () = shutdown_signal() => {
+            tracing::info!(
+                timeout_seconds = ACTIVE_REQUEST_SHUTDOWN_TIMEOUT.as_secs(),
+                "stopping HTTP server and waiting for active requests"
+            );
+            shutdown.cancel();
+
+            match tokio::time::timeout(ACTIVE_REQUEST_SHUTDOWN_TIMEOUT, &mut server).await {
+                Ok(result) => result.context("error starting service"),
+                Err(_) => {
+                    tracing::warn!(
+                        timeout_seconds = ACTIVE_REQUEST_SHUTDOWN_TIMEOUT.as_secs(),
+                        "active request shutdown timed out; forcing HTTP server shutdown"
+                    );
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+async fn shutdown_signal() {
+    let interrupt = async {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install SIGINT handler");
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install SIGTERM handler");
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = pending::<()>();
+
+    tokio::select! {
+        () = interrupt => {}
+        () = terminate => {}
+    }
+
+    tracing::info!("shutdown signal received");
 }
 
 fn api_router(api_context: ApiContext) -> Router {
