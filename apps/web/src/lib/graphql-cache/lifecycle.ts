@@ -1,4 +1,5 @@
 import type { CacheHost } from './host/types';
+import { rotateCacheScope } from './scope';
 
 const hosts = new Set<CacheHost>();
 
@@ -9,5 +10,10 @@ export function registerCacheHost(host: CacheHost): void {
 
 /** Best-effort wipe of records and queued user intent during logout. */
 export async function clearRegisteredCaches(): Promise<void> {
-  await Promise.allSettled([...hosts].map((host) => host.clear()));
+  const results = await Promise.allSettled(
+    [...hosts].map((host) => host.clear())
+  );
+  if (results.some((result) => result.status === 'rejected')) {
+    rotateCacheScope();
+  }
 }
