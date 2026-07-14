@@ -2,8 +2,11 @@
 //! `graphql_properties`, `graphql_notification`, `graphql_email`) into the complete schema
 //! served by `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
+#![deny(clippy::missing_docs_in_private_items)]
 
+/// Cross-domain fields composed onto Soup entities.
 mod edges;
+/// Complete schema types and construction helpers.
 mod schema;
 #[cfg(test)]
 mod sdl_test;

@@ -72,7 +72,9 @@ type ServicesMarker<E, EAS, St, NR, PR, ER> = PhantomData<fn() -> (E, EAS, St, N
 
 /// Root GraphQL query object for Soup.
 pub struct SoupQueryRoot<S, E, EAS, St, NR, PR, ER> {
+    /// Soup domain service used by user-scoped query resolvers.
     service: S,
+    /// Associates the root with its adapter and reader types.
     _marker: ServicesMarker<E, EAS, St, NR, PR, ER>,
 }
 
@@ -90,7 +92,9 @@ impl<S, E, EAS, St, NR, PR, ER> SoupQueryRoot<S, E, EAS, St, NR, PR, ER> {
 /// object so clients (and their normalized caches) observe data ownership
 /// structurally rather than implicitly through the session.
 pub struct GraphqlUser<S, E, EAS, St, NR, PR, ER> {
+    /// Soup domain service used by this user's resolvers.
     service: S,
+    /// Associates the user object with its adapter and reader types.
     _marker: ServicesMarker<E, EAS, St, NR, PR, ER>,
 }
 
@@ -142,6 +146,7 @@ where
     build_schema_with_service(service)
 }
 
+/// Root entry point for the complete GraphQL API.
 #[Object]
 impl<S, E, EAS, St, NR, PR, ER> SoupQueryRoot<S, E, EAS, St, NR, PR, ER>
 where
@@ -164,6 +169,7 @@ where
     }
 }
 
+/// The authenticated user and their user-scoped data.
 #[Object(name = "GraphqlUser")]
 impl<S, E, EAS, St, NR, PR, ER> GraphqlUser<S, E, EAS, St, NR, PR, ER>
 where

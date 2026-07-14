@@ -8,6 +8,7 @@ use notification::domain::models::{
 };
 use rootcause::markers::{Cloneable, Dynamic};
 
+/// Map a shared entity type to the notification domain's item type.
 fn notification_item_type(
     entity_type: model_entity::EntityType,
 ) -> Result<NotificationItemType, rootcause::Report> {
@@ -113,7 +114,9 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
 
 /// DataLoader for entity notification edges.
 pub struct EntityNotificationsLoader<R> {
+    /// User whose notifications are loaded.
     user_id: MacroUserIdStr<'static>,
+    /// Notification reader used to fulfill batches.
     reader: R,
 }
 

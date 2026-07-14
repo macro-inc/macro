@@ -8,56 +8,70 @@ use crate::loaders::{
 /// A lightweight email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(ParsedMessage);
 
+/// A lightweight email content projection for Soup queries.
 #[Object]
 impl GraphqlSoupEmailMessage {
+    /// The unique message identifier.
     async fn id(&self) -> ID {
         ID(self.0.db_id.to_string())
     }
 
+    /// The identifier of the containing thread.
     async fn thread_id(&self) -> ID {
         ID(self.0.thread_db_id.to_string())
     }
 
+    /// The identifier of the linked email account.
     async fn link_id(&self) -> ID {
         ID(self.0.link_id.to_string())
     }
 
+    /// The message subject.
     async fn subject(&self) -> Option<&str> {
         self.0.subject.as_deref()
     }
 
+    /// A short preview of the message content.
     async fn snippet(&self) -> Option<&str> {
         self.0.snippet.as_deref()
     }
 
+    /// The provider's internal timestamp in RFC 3339 format.
     async fn internal_date_ts(&self) -> Option<String> {
         self.0.internal_date_ts.map(|value| value.to_rfc3339())
     }
 
+    /// The sent timestamp in RFC 3339 format.
     async fn sent_at(&self) -> Option<String> {
         self.0.sent_at.map(|value| value.to_rfc3339())
     }
 
+    /// Whether the message has been read.
     async fn is_read(&self) -> bool {
         self.0.is_read
     }
 
+    /// Whether the message is starred.
     async fn is_starred(&self) -> bool {
         self.0.is_starred
     }
 
+    /// Whether the message was sent by the linked account.
     async fn is_sent(&self) -> bool {
         self.0.is_sent
     }
 
+    /// Whether the message has attachments.
     async fn has_attachments(&self) -> bool {
         self.0.has_attachments
     }
 
+    /// The sender of the message.
     async fn from(&self) -> Option<GraphqlSoupEmailContact> {
         self.0.from.clone().map(GraphqlSoupEmailContact)
     }
 
+    /// The primary recipients of the message.
     async fn to(&self) -> Vec<GraphqlSoupEmailContact> {
         self.0
             .to
@@ -67,6 +81,7 @@ impl GraphqlSoupEmailMessage {
             .collect()
     }
 
+    /// The carbon-copy recipients of the message.
     async fn cc(&self) -> Vec<GraphqlSoupEmailContact> {
         self.0
             .cc
@@ -76,6 +91,7 @@ impl GraphqlSoupEmailMessage {
             .collect()
     }
 
+    /// The blind-carbon-copy recipients of the message.
     async fn bcc(&self) -> Vec<GraphqlSoupEmailContact> {
         self.0
             .bcc
@@ -85,6 +101,7 @@ impl GraphqlSoupEmailMessage {
             .collect()
     }
 
+    /// Labels assigned to the message.
     async fn labels(&self) -> Vec<GraphqlSoupEmailMessageLabel> {
         self.0
             .labels
@@ -94,30 +111,37 @@ impl GraphqlSoupEmailMessage {
             .collect()
     }
 
+    /// The parsed message body.
     async fn body_parsed(&self) -> Option<&str> {
         self.0.body_parsed.as_deref()
     }
 
+    /// The plain-text message body.
     async fn body_text(&self) -> Option<&str> {
         self.0.body_text.as_deref()
     }
 
+    /// The sanitized HTML message body.
     async fn body_html_sanitized(&self) -> Option<&str> {
         self.0.body_html_sanitized.as_deref()
     }
 
+    /// The message body in Macro's rich-text format.
     async fn body_macro(&self) -> Option<&str> {
         self.0.body_macro.as_deref()
     }
 
+    /// The message body with quoted replies removed.
     async fn body_replyless(&self) -> Option<&str> {
         self.0.body_replyless.as_deref()
     }
 
+    /// The creation timestamp in RFC 3339 format.
     async fn created_at(&self) -> String {
         self.0.created_at.to_rfc3339()
     }
 
+    /// The last-updated timestamp in RFC 3339 format.
     async fn updated_at(&self) -> String {
         self.0.updated_at.to_rfc3339()
     }
@@ -126,16 +150,20 @@ impl GraphqlSoupEmailMessage {
 /// An email sender or recipient embedded in a message.
 pub struct GraphqlSoupEmailContact(ContactInfo);
 
+/// An email sender or recipient embedded in a message.
 #[Object]
 impl GraphqlSoupEmailContact {
+    /// The contact's email address.
     async fn email(&self) -> &str {
         &self.0.email
     }
 
+    /// The contact's display name.
     async fn name(&self) -> Option<&str> {
         self.0.name.as_deref()
     }
 
+    /// The contact's profile photo URL.
     async fn photo_url(&self) -> Option<&str> {
         self.0.photo_url.as_deref()
     }
@@ -144,12 +172,15 @@ impl GraphqlSoupEmailContact {
 /// A lightweight label embedded in an email message.
 pub struct GraphqlSoupEmailMessageLabel(ParsedLabel);
 
+/// A lightweight label embedded in an email message.
 #[Object]
 impl GraphqlSoupEmailMessageLabel {
+    /// The label identifier assigned by the email provider.
     async fn provider_label_id(&self) -> &str {
         &self.0.provider_id
     }
 
+    /// The label name.
     async fn name(&self) -> &str {
         &self.0.name
     }

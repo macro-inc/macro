@@ -7,6 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use rootcause::markers::{Cloneable, Dynamic};
 
+/// Map a shared entity type to its properties-domain representation.
 fn property_entity_type(
     entity_type: model_entity::EntityType,
 ) -> Option<models_properties::EntityType> {
@@ -55,7 +56,9 @@ impl EntityPropertyReader for NoOpEntityPropertyReader {
 /// GraphQL property reader backed by the properties domain service and the
 /// canonical entity access service.
 pub struct PropertiesEntityPropertyReader<P, A> {
+    /// Domain service used to load properties.
     properties_service: Arc<P>,
+    /// Access service used to authorize each requested entity.
     entity_access_service: Arc<A>,
 }
 
@@ -155,7 +158,9 @@ where
 
 /// DataLoader for entity property edges.
 pub struct EntityPropertiesLoader<R> {
+    /// User on whose behalf properties are loaded.
     user_id: MacroUserIdStr<'static>,
+    /// Property reader used to fulfill batches.
     reader: R,
 }
 
