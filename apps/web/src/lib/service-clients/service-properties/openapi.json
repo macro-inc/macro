@@ -1027,6 +1027,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALL_RECORD",
           "CHANNEL",
           "CHAT",
           "COMPANY",

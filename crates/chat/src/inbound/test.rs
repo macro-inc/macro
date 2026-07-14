@@ -16,8 +16,8 @@ use crate::domain::ports::ChatService;
 use crate::inbound::http::router::{ChatRouterState, chat_id_router};
 use ai_toolset::tool_object::UserToolResponse;
 use entity_access::domain::models::{
-    AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-    OwnerAccessLevel, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, BotId, EditAccessLevel, EntityAccessReceipt, EntityPermission,
+    EntityType, OwnerAccessLevel, UserTeamInfo, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::lowercased::Lowercase;
@@ -353,6 +353,18 @@ impl EntityAccessService for MockAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> std::result::Result<entity_access::domain::models::EntityAccessReceipt<T>, AccessError>
+    {
+        unreachable!("not used by ChatAccessLevelExtractor")
+    }
+
+    async fn generate_bot_entity_access_receipt<
+        T: entity_access::domain::models::RequiredPermission,
+    >(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> std::result::Result<entity_access::domain::models::EntityAccessReceipt<T>, AccessError>

@@ -175,6 +175,7 @@ export * from './callRecordTranscriptSegment';
 export * from './callRecordTranscriptSegmentDiarizedSpeakerId';
 export * from './callRecordTranscriptSegmentEndedAt';
 export * from './callRecordTranscriptSegmentSegmentId';
+export * from './callRecordUserAccessLevel';
 export * from './callStatus';
 export * from './callTokenResponse';
 export * from './channel';

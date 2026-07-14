@@ -17,8 +17,9 @@ interface CustomScrollbarProps {
 const MIN_THUMB_SIZE = 24;
 const GUTTER_SIZE = 8;
 const THUMB_INSET = 3;
-const THUMB_THICKNESS = 2;
-const EDGE_INSET = 3;
+const THUMB_THICKNESS = 4;
+// Centers the thumb in the gutter: (GUTTER_SIZE - THUMB_THICKNESS) / 2.
+const EDGE_INSET = 2;
 
 export function CustomScrollbar(props: CustomScrollbarProps) {
   return (
@@ -36,6 +37,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const [clientSize, setClientSize] = createSignal(0);
   const [isDragging, setIsDragging] = createSignal(false);
   const [isScrolling, setIsScrolling] = createSignal(false);
+  const [isHovered, setIsHovered] = createSignal(false);
 
   const [scrollLabelVisible, setScrollLabelVisible] = createSignal(
     props.labelVisibilityDebounceMs === Infinity
@@ -183,6 +185,8 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onPointerEnter={() => setIsHovered(true)}
+        onPointerLeave={() => setIsHovered(false)}
         aria-hidden="true"
       >
         {/* Thumb */}
@@ -197,9 +201,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
                   bottom: `${EDGE_INSET}px`,
                   left: '0',
                   'background-color': 'var(--c4)',
-                  'border-radius': '1px',
+                  'border-radius': '2px',
                   'pointer-events': 'none',
-                  opacity: isDragging() || isScrolling() ? 1 : 0,
+                  opacity: isDragging() || isScrolling() || isHovered() ? 1 : 0,
                   transition: 'opacity 150ms ease-in-out',
                 }
               : {
@@ -209,9 +213,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
                   right: `${EDGE_INSET}px`,
                   top: '0',
                   'background-color': 'var(--c4)',
-                  'border-radius': '1px',
+                  'border-radius': '2px',
                   'pointer-events': 'none',
-                  opacity: isDragging() || isScrolling() ? 1 : 0,
+                  opacity: isDragging() || isScrolling() || isHovered() ? 1 : 0,
                   transition: 'opacity 150ms ease-in-out',
                 }
           }

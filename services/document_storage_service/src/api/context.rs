@@ -270,6 +270,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
+    lexical_mention_extractor::LexicalMentionExtractor,
 >;
 
 /// Type alias for the channels router state.

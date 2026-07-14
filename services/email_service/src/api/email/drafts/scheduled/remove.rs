@@ -119,8 +119,7 @@ pub async fn handler(
                 thread_id,
                 reason: SendCancelReason::Undo,
             }),
-        )
-        .await;
+        );
     }
 
     Ok(StatusCode::NO_CONTENT)

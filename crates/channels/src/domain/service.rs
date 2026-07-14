@@ -14,9 +14,9 @@ use crate::domain::{
         WithChannelId,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
-        ChannelMessagesQueryResult, ChannelMutationErr, ChannelReferenceSharePermissions,
-        ChannelRepo, ChannelService,
+        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMentionExtractor,
+        ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+        ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
 };
 use bot_id::BotIdStr;
@@ -39,10 +39,12 @@ pub struct ChannelServiceImpl<
     R,
     E = NoopChannelEventDispatcher,
     P = NoopChannelReferenceSharePermissions,
+    M = NoopChannelMentionExtractor,
 > {
     repo: R,
     events: E,
     reference_share_permissions: P,
+    mention_extractor: M,
 }
 
 /// No-op event dispatcher used by read-only contexts.
@@ -70,6 +72,19 @@ impl ChannelReferenceSharePermissions for NoopChannelReferenceSharePermissions {
     }
 }
 
+/// No-op mention extractor used by contexts that don't derive mentions from
+/// message content.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopChannelMentionExtractor;
+
+impl ChannelMentionExtractor for NoopChannelMentionExtractor {
+    type Err = anyhow::Error;
+
+    async fn extract_mentions(&self, _content: &str) -> Result<Vec<SimpleMention>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
 impl<R> ChannelServiceImpl<R, NoopChannelEventDispatcher, NoopChannelReferenceSharePermissions>
 where
     R: ChannelRepo,
@@ -80,6 +95,7 @@ where
             repo,
             events: NoopChannelEventDispatcher,
             reference_share_permissions: NoopChannelReferenceSharePermissions,
+            mention_extractor: NoopChannelMentionExtractor,
         }
     }
 }
@@ -91,11 +107,28 @@ impl<R, E, P> ChannelServiceImpl<R, E, P> {
             repo,
             events,
             reference_share_permissions,
+            mention_extractor: NoopChannelMentionExtractor,
         }
     }
 }
 
-impl<R, E, P> ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M> {
+    /// Replace the mention extractor used to derive mentions from
+    /// bot-authored message content.
+    pub fn with_mention_extractor<M2>(
+        self,
+        mention_extractor: M2,
+    ) -> ChannelServiceImpl<R, E, P, M2> {
+        ChannelServiceImpl {
+            repo: self.repo,
+            events: self.events,
+            reference_share_permissions: self.reference_share_permissions,
+            mention_extractor,
+        }
+    }
+}
+
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     anyhow::Error: From<R::Err>,
@@ -294,11 +327,12 @@ fn created_channel_participant_ids<'a>(
         .collect()
 }
 
-impl<R, E, P> ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
+    M: ChannelMentionExtractor,
 {
     #[tracing::instrument(err, skip(self, req))]
     async fn create_channel(
@@ -481,6 +515,18 @@ where
         Ok(())
     }
 
+    /// Best-effort extraction of the mentions embedded in message content;
+    /// extraction failure yields no mentions rather than failing the send.
+    async fn extract_content_mentions(&self, content: &str) -> Vec<SimpleMention> {
+        match self.mention_extractor.extract_mentions(content).await {
+            Ok(mentions) => mentions,
+            Err(err) => {
+                tracing::error!(error=?err.into(), "unable to extract mentions from message content");
+                Vec::new()
+            }
+        }
+    }
+
     #[tracing::instrument(err, skip(self, req))]
     async fn post_message(
         &self,
@@ -488,6 +534,14 @@ where
         channel_id: Uuid,
         req: PostMessageRequest,
     ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        // Bots send raw macro markdown without a tracked mention list (the web
+        // editor builds that list for user-authored messages), so derive it
+        // from the content to keep bot-created references tracked.
+        let mut req = req;
+        if actor.as_bot().is_some() && req.mentions.is_empty() {
+            req.mentions = self.extract_content_mentions(&req.content).await;
+        }
+
         let message = self
             .repo
             .create_message(
@@ -599,6 +653,16 @@ where
             nonce,
             notification_policy,
         } = req;
+
+        // As in post_message: bots don't track a mention list, so when a bot
+        // replaces message content (e.g. Macro AI swapping its "thinking"
+        // placeholder for the reply), derive the mentions from the new content.
+        let replacement_mentions = match (replacement_mentions, &content) {
+            (None, Some(content)) if actor.as_bot().is_some() => {
+                Some(self.extract_content_mentions(content).await)
+            }
+            (mentions, _) => mentions,
+        };
 
         let owner = self
             .repo
@@ -1056,11 +1120,12 @@ where
     }
 }
 
-impl<R, E, P> ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
+    M: ChannelMentionExtractor,
 {
     async fn create_channel_record<'a>(
         &self,
@@ -1281,11 +1346,12 @@ fn center_window(
     }
 }
 
-impl<R, E, P> ChannelService for ChannelServiceImpl<R, E, P>
+impl<R, E, P, M> ChannelService for ChannelServiceImpl<R, E, P, M>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
+    M: ChannelMentionExtractor,
     anyhow::Error: From<R::Err>,
 {
     #[tracing::instrument(err, skip(self))]

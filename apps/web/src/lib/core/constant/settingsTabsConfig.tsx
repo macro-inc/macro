@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import BotIcon from '@icon/wide-bot.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
@@ -6,7 +7,6 @@ import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -19,7 +19,8 @@ import {
   BOT_MANAGEMENT_OVERRIDE,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
-  ENABLE_CRM,
+  ENABLE_CRM_FLAG,
+  ENABLE_CRM_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
@@ -66,7 +67,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
-      { tab: 'Bots', label: 'Bots', icon: RobotIcon },
+      { tab: 'Bots', label: 'Bots', icon: BotIcon },
     ],
   },
   {
@@ -144,6 +145,9 @@ export const useSettingsTabAvailable = () => {
   const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
     enabledOverride: BOT_MANAGEMENT_OVERRIDE,
   });
+  const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
+    enabledOverride: ENABLE_CRM_OVERRIDE,
+  });
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
@@ -155,10 +159,10 @@ export const useSettingsTabAvailable = () => {
       case 'Team':
         return teamsFlag().enabled;
       // CRM is still rolling out (Macro-internal only); keep the settings tab
-      // behind the same ENABLE_CRM gate as every other CRM surface so it never
+      // behind the same enable-crm gate as every other CRM surface so it never
       // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return teamsFlag().enabled && ENABLE_CRM;
+        return teamsFlag().enabled && crmFlag().enabled;
       case 'Connected':
         return true;
       case 'Shortcuts':

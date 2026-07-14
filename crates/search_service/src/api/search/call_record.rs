@@ -2,12 +2,15 @@ use channels::outbound::channel_name::batch_resolve_channel_names;
 use indexmap::IndexMap;
 use item_filters::CallStatus;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::{EntityReference, EntityType};
 use models_search::call_record::{
     CallRecordMetadata, CallRecordSearchResponseItem, CallRecordSearchResponseItemWithMetadata,
     CallRecordSearchResult,
 };
+use models_soup::SoupProperty;
 use opensearch_client::search::model::{SearchGotoContent, SearchHit};
 use sqlx::types::Uuid;
+use std::collections::HashMap;
 
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
@@ -49,7 +52,7 @@ pub(in crate::api::search) async fn enrich_call_records(
             .collect()
     };
     let channel_names_by_id =
-        batch_resolve_channel_names(&ctx.db, &unique_channel_ids, viewer_user_id)
+        batch_resolve_channel_names(&ctx.db, &unique_channel_ids, viewer_user_id.clone())
             .await
             .map_err(|e| SearchError::InternalError(e.into()))?;
 
@@ -107,6 +110,35 @@ pub(in crate::api::search) async fn enrich_call_records(
             });
     }
 
+    // Fetch each call's tags so rows can render and re-check them. Scope to the
+    // viewer (like the soup path) so another user's personal tags never leak
+    // into the response.
+    let call_entity_refs: Vec<EntityReference> = call_ids
+        .iter()
+        .map(|id| EntityReference::new(id.to_string(), EntityType::CallRecord))
+        .collect();
+    let properties_map: HashMap<String, Vec<SoupProperty>> =
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
+            &ctx.db,
+            &call_entity_refs,
+            &[],
+            Some(&viewer_user_id),
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "failed to fetch call record properties"))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, props)| {
+            (
+                id,
+                props
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+
     let result = hits_by_call_id
         .into_iter()
         .map(|(call_id, mut hits)| {
@@ -117,6 +149,10 @@ pub(in crate::api::search) async fn enrich_call_records(
                 .cloned()
                 .expect("CallRecords hit missing SearchGotoCallRecord");
             let metadata = metadata_by_id.get(&call_id).cloned();
+            let properties = properties_map
+                .get(&call_id.to_string())
+                .cloned()
+                .filter(|p| !p.is_empty());
 
             CallRecordSearchResponseItemWithMetadata {
                 extra: CallRecordSearchResponseItem {
@@ -132,6 +168,7 @@ pub(in crate::api::search) async fn enrich_call_records(
                     call_search_results: hits,
                 },
                 metadata,
+                properties,
             }
         })
         .collect();

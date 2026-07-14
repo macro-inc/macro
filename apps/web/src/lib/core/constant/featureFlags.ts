@@ -132,8 +132,20 @@ export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
-// global search. override with VITE_ENABLE_CRM.
-export const ENABLE_CRM = resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV);
+// global search. PostHog-gated (currently targeted at the Macro team in prod)
+// with a dev-mode default; override with VITE_ENABLE_CRM.
+export const ENABLE_CRM_FLAG = 'enable-crm';
+export const ENABLE_CRM_OVERRIDE =
+  resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV) || undefined;
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_CRM_FLAG, { enabledOverride: ENABLE_CRM_OVERRIDE })`.
+ */
+export function ENABLE_CRM(): boolean {
+  if (ENABLE_CRM_OVERRIDE !== undefined) return ENABLE_CRM_OVERRIDE;
+  return analytics.posthog.isFeatureEnabled(ENABLE_CRM_FLAG) ?? false;
+}
 
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',

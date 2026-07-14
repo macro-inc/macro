@@ -498,7 +498,7 @@ export function useSearchFacets(
       case 'channels':
         return [type, channelIn, channelFrom];
       case 'calls':
-        return [type, callIn, callFrom, callStatus];
+        return [type, callIn, callFrom, callStatus, ...tagFacets()];
       case 'task':
         return [
           type,

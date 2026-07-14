@@ -673,8 +673,7 @@ async fn init_user(
             is_primary: link.is_primary,
             connected_at: link.created_at,
         }),
-    )
-    .await;
+    );
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {

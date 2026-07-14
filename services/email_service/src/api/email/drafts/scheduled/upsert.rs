@@ -132,8 +132,7 @@ pub async fn handler(
                 scheduled_send_at: request.send_time,
                 is_scheduled: true,
             }),
-        )
-        .await;
+        );
     }
 
     Ok(Json(UpsertScheduledResponse {

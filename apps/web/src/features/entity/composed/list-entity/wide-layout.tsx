@@ -219,6 +219,17 @@ export function WideLayout(props: LayoutProps) {
           )}
         </Show>
         <Show
+          when={rowTagsVisible() && isCallEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.CALL_RECORD}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
+        <Show
           when={
             props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
           }

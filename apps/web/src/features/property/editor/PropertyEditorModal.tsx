@@ -1,5 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import type { IUser } from '@core/user';
+import { idToDisplayName, idToEmail } from '@core/user/util';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -10,6 +12,7 @@ import {
 import { type EntityData, InlineEntity } from '@entity';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertySelection } from '@property/hooks';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import type {
@@ -23,6 +26,7 @@ import {
   toPropertyApiValue,
 } from '@property/utils';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn, Dialog, Hotkey, Surface } from '@ui';
@@ -527,9 +531,30 @@ function EntityPropertyEditor(props: {
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
 }) {
+  // Company owners are always teammates, so the owner picker offers the
+  // team roster instead of the default quick-access people pool (same as
+  // the row-cell owner editor in EntityEditor).
+  const isCompanyOwner = () => {
+    const property = props.property;
+    if (!property) return false;
+    const definitionId =
+      'propertyDefinitionId' in property
+        ? property.propertyDefinitionId
+        : property.id;
+    return definitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
+  };
+  const teamQuery = useCurrentTeamQuery();
+  const teamMembers = (): IUser[] =>
+    (teamQuery.data?.members ?? []).map((member) => ({
+      id: member.user_id,
+      email: idToEmail(member.user_id),
+      name: idToDisplayName(member.user_id),
+    }));
+
   const { entities } = useEntitiesForProperty(
     () => props.property,
-    props.searchValue
+    props.searchValue,
+    { users: () => (isCompanyOwner() ? teamMembers() : undefined) }
   );
 
   createEffect(() => {

@@ -35,6 +35,7 @@ import { getGraphqlSoupClient } from './graphql-soup';
  * bad request.
  */
 const ENTITY_TYPE_TO_GRAPHQL: Record<EntityType, GraphqlPropertyEntityType> = {
+  CALL_RECORD: 'CALL_RECORD',
   CHANNEL: 'CHANNEL',
   CHAT: 'CHAT',
   COMPANY: 'COMPANY',

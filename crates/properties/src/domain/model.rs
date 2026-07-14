@@ -17,6 +17,8 @@ use uuid::Uuid;
 pub fn access_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {
         EntityType::Document => AccessEntityType::Document,
+        // Call access is resolved through the call's owning channel.
+        EntityType::CallRecord => AccessEntityType::Call,
         EntityType::Chat => AccessEntityType::Chat,
         EntityType::Project => AccessEntityType::Project,
         EntityType::Thread => AccessEntityType::EmailThread,
@@ -86,11 +88,13 @@ impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
     }
 
     /// The authenticated user this receipt was minted for, if any
-    /// (`None` for internal and anonymous-public access).
+    /// (`None` for bot, internal, and anonymous-public access).
     pub fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>> {
         match self.receipt.auth() {
             EntityAccessAuth::Authenticated(user) => Some(user),
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
         }
     }
 

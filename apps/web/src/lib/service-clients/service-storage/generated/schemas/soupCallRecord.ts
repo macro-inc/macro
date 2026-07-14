@@ -12,6 +12,7 @@ import type { SoupCallRecordDurationMs } from './soupCallRecordDurationMs';
 import type { SoupCallRecordEndedAt } from './soupCallRecordEndedAt';
 import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
 import type { SoupCallRecordSummary } from './soupCallRecordSummary';
+import type { SoupProperty } from './soupProperty';
 
 /**
  * A call record as displayed in Soup. Excludes room_name, egress_id,
@@ -39,6 +40,8 @@ and derived from `status == ATTENDED`. */
   isActive: boolean;
   /** Participants in the call. */
   participants: SoupCallRecordParticipant[];
+  /** Entity properties (e.g. tags). Populated after fetch by the soup repo. */
+  properties: SoupProperty[];
   /** When the call started. */
   startedAt: string;
   /** Viewer-relative call status for the requesting user. */

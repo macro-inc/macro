@@ -23,6 +23,7 @@ import type {
   ForeignEntity,
   GithubPullRequestEntity,
   NamedSubType,
+  Notification,
   ProjectEntity,
   SearchData,
   WithSearch,
@@ -68,6 +69,12 @@ type SoupEntity =
   | CallEntity
   | CrmCompanyEntity
   | ForeignEntity;
+
+type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
+  data: {
+    notifications?: Notification[] | null;
+  };
+};
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
@@ -507,6 +514,7 @@ export const useSearchResponseItemMapper = () => {
             attended: status === 'ATTENDED',
             durationMs: result.metadata.duration_ms,
             participantIds: result.participant_ids,
+            properties: result.properties ?? undefined,
             search,
           },
         ];
@@ -552,8 +560,20 @@ function normalizeSentinelTs(
   return Date.parse(ts) > 0 ? ts : undefined;
 }
 
-export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
-  match(item)
+function withRawNotifications<T extends SoupEntity>(
+  entity: T,
+  item: DisplayableSoupItem
+): T {
+  const notifications = (item as SoupItemWithOptionalNotifications).data
+    .notifications;
+  if (!Array.isArray(notifications)) return entity;
+  return { ...entity, notifications } as T;
+}
+
+export const mapApiSoupItemToEntity = (
+  item: DisplayableSoupItem
+): SoupEntity => {
+  const entity = match(item)
     .with({ tag: 'chat' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,
@@ -642,6 +662,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
         summary: item.data.summary ?? undefined,
+        properties: item.data.properties,
       } satisfies CallEntity;
     })
     .with({ tag: 'channelThread' }, (item) => {
@@ -803,6 +824,9 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
       } satisfies CrmCompanyEntity;
     })
     .exhaustive();
+
+  return withRawNotifications(entity, item);
+};
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,

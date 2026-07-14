@@ -318,6 +318,13 @@
                     "description": "`None` if the call has been deleted."
                   }
                 ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the call."
               }
             }
           }
@@ -1692,6 +1699,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALL_RECORD",
           "CHANNEL",
           "CHAT",
           "COMPANY",

@@ -405,14 +405,17 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     > + Send;
 
     /// Enables or disables CRM for a team. On a `false → true`
-    /// transition, fans out a `PopulateCrmForUser` enqueue per current
-    /// team member (best-effort, log-and-swallow). On any disable call,
-    /// flips the flag and purges the team's `crm_companies` rows in a
-    /// single transaction — the FK cascade clears the rest of the CRM
-    /// tables. Idempotent in both directions.
+    /// transition with `backfill`, fans out a `PopulateCrmForUser`
+    /// enqueue per current team member (best-effort, log-and-swallow);
+    /// without `backfill` the flag flips and the CRM starts empty. On
+    /// any disable call, flips the flag and purges the team's
+    /// `crm_companies` rows in a single transaction — the FK cascade
+    /// clears the rest of the CRM tables. Idempotent in both
+    /// directions.
     fn set_team_crm_enabled(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         enabled: bool,
+        backfill: bool,
     ) -> impl Future<Output = Result<PatchTeamCrmSettingsResponse, TeamError>> + Send;
 }

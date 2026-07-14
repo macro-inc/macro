@@ -2,24 +2,15 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-call/constants';
 import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
-import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
+import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
-import { ThrownResultError } from '@core/util/result';
 import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
-import { createSignal, Match, Switch } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
-import { CallRecordingSplitHeaderLoading } from './CallRecording/CallRecordingSplitHeader';
 import { ModalsProvider } from './ModalsProvider';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
-
-function isUnauthorized(error: Error | null): boolean {
-  if (error instanceof ThrownResultError) {
-    return error.errors[0]?.code === 'UNAUTHORIZED';
-  }
-  return false;
-}
 
 export type CallBlockProps = {
   [URL_PARAMS.transcriptId]?: string;
@@ -60,11 +51,15 @@ export function CallBlockAdapter(props: CallBlockProps) {
     },
   });
 
+  // Loading / Unauthorized / not-found / error are rendered by
+  // DocumentBlockContainer from the block loader's result (like every other
+  // block). load() primes the record query, so callRecord.data is present
+  // whenever the container renders this content.
   return (
-    <ModalsProvider>
+    <DocumentBlockContainer>
       <div class="h-full flex flex-col @container">
-        <Switch>
-          <Match when={callRecord.data}>
+        <ModalsProvider>
+          <Show when={callRecord.data}>
             {(data) => (
               <SidePanel.Layout>
                 <CallSidePanelSections record={data} />
@@ -76,27 +71,9 @@ export function CallBlockAdapter(props: CallBlockProps) {
                 </div>
               </SidePanel.Layout>
             )}
-          </Match>
-          <Match when={callRecord.isLoading}>
-            <CallRecordingSplitHeaderLoading />
-            <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-ink-faint">
-              Loading call...
-            </div>
-          </Match>
-          <Match when={callRecord.isError && isUnauthorized(callRecord.error)}>
-            <CallRecordingSplitHeaderLoading />
-            <div class="flex flex-1 min-h-0 overflow-hidden">
-              <Unauthorized />
-            </div>
-          </Match>
-          <Match when={callRecord.isError}>
-            <CallRecordingSplitHeaderLoading />
-            <div class="flex flex-1 min-h-0 items-center justify-center text-sm text-failure">
-              Failed to load call recording.
-            </div>
-          </Match>
-        </Switch>
+          </Show>
+        </ModalsProvider>
       </div>
-    </ModalsProvider>
+    </DocumentBlockContainer>
   );
 }

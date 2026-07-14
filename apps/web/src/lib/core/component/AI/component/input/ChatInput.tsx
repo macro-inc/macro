@@ -246,7 +246,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         selectedModel={model()}
         models={modelOptions()}
         onSelect={(m) => input.setModel(m)}
-        onLocked={() => showPaywall(PaywallKey.MODEL_LIMIT)}
+        onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />
       <Show when={generating() && props.onStop} fallback={<SendButton />}>

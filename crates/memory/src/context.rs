@@ -155,7 +155,7 @@ pub async fn build_tool_service_context(
     let document_tool_context = DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
-        lexical_client,
+        lexical_client.clone(),
         sync_client.as_ref().clone(),
     );
 
@@ -236,7 +236,10 @@ pub async fn build_tool_service_context(
         call_tool_context,
         notification_tool_context,
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        channel_tool_context: ai_tools::build_channel_tool_context(
+            pool.clone(),
+            Arc::new(lexical_client),
+        ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,

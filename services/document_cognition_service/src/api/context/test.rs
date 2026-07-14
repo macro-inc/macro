@@ -278,7 +278,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
-        test_lexical_client,
+        test_lexical_client.clone(),
         sync_service_client.as_ref().clone(),
         test_editing_client,
         "test-jwt-secret".to_string(),
@@ -351,7 +351,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         call_tool_context: call_tool_context.clone(),
         notification_tool_context: notification_tool_context.clone(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
+        channel_tool_context: ai_tools::build_channel_tool_context(
+            pool.clone(),
+            std::sync::Arc::new(test_lexical_client),
+        ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),

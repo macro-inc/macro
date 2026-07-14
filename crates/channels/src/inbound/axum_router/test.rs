@@ -16,8 +16,9 @@ use axum::{
 };
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotId, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+        MemberParticipantRole, ParticipantRole as EntityParticipantRole, RequiredPermission,
+        UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -85,6 +86,15 @@ impl EntityAccessService for TestAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(self.access_err())
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
@@ -180,6 +190,26 @@ impl EntityAccessService for TestAccessService {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         unimplemented!()
     }
+}
+
+#[test]
+fn bot_actor_from_receipt_uses_canonical_principal() {
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
+    let receipt = EntityAccessReceipt::<MemberParticipantRole>::try_new_bot(
+        bot_id.into_storage_id(),
+        Entity {
+            entity_id: Uuid::new_v4().to_string(),
+            entity_type: EntityType::Channel,
+        },
+        EntityPermission::ChannelRole {
+            role: EntityParticipantRole::Member,
+        },
+    )
+    .unwrap();
+
+    let sender = actor_from_receipt(&receipt).unwrap();
+
+    assert_eq!(sender.as_ref(), bot_id.into_storage_id().as_ref());
 }
 
 // --- Mock services (business logic only, no auth concerns) ---

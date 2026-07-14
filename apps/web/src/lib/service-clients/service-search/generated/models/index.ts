@@ -15,6 +15,7 @@ export * from './callRecordSearchResponseItemName';
 export * from './callRecordSearchResponseItemWithMetadata';
 export * from './callRecordSearchResponseItemWithMetadataAllOf';
 export * from './callRecordSearchResponseItemWithMetadataAllOfMetadata';
+export * from './callRecordSearchResponseItemWithMetadataAllOfProperties';
 export * from './callRecordSearchResult';
 export * from './callRecordSearchResultEndedAt';
 export * from './callRecordSearchResultScore';

@@ -373,6 +373,23 @@ pub(crate) async fn update_document_metadata(
                 method: Some("update_document_metadata".to_string()),
             })?;
 
+    // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
+    // next full index will carry the current name. A *missing index* 404
+    // (`index_not_found_exception`) is a real outage and must propagate. This
+    // mirrors `update_document_properties`.
+    if status_code.as_u16() == 404 {
+        let error_type = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|value| value["error"]["type"].as_str().map(str::to_owned));
+        if error_type.as_deref() == Some("document_missing_exception") {
+            tracing::debug!(
+                document_id=%document_id,
+                "document not indexed yet; skipping name update"
+            );
+            return Ok(());
+        }
+    }
+
     tracing::error!(
         status_code=?status_code,
         body=?body,

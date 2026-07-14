@@ -121,6 +121,7 @@ fn actor_from_receipt<T: RequiredPermission>(
 ) -> Result<Sender, ChannelsHandlerErr> {
     match receipt.auth() {
         EntityAccessAuth::Authenticated(user_id) => Ok(Sender::new_from_user(user_id.clone())),
+        EntityAccessAuth::Bot(bot_id) => Ok(Sender::new_from_bot(bot_id.bot_id())),
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => Err(
             ChannelsHandlerErr::BadRequest("authenticated actor required"),
         ),

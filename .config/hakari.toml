@@ -56,11 +56,17 @@ workspace-members = [
     "macro_sync_service_jwt",
     "sync_service",
     "sync_service_bebop_schema",
-    # client/*: browser/Tauri cache crates (cache-core compiles to wasm32 via
-    # cache-wasm; cache-sqlite ships in the Tauri app, not services). They
-    # must stay wasm-safe and out of the deploy dependency layers.
-    "cache-core",
-    "cache-idb",
-    "cache-sqlite",
-    "cache-wasm",
+    # maybe_send: zero-dep marker traits used by cache-core; must stay
+    # wasm-safe (workspace-hack pulls native-only deps like mio into wasm32).
+    "maybe_send",
 ]
+
+# Xtask extension (the hakari engine ignores this table; `cargo x deps` in
+# tooling/xtask/crates/xtask_deps expands it into traversal excludes).
+# Entries are workspace-relative member-path prefixes ending in `*`.
+[xtask]
+# crates/client/*: browser/Tauri cache crates (cache-core compiles to wasm32
+# via cache-wasm; cache-sqlite ships in the Tauri app, not services). They
+# must stay wasm-safe and out of the deploy dependency layers — the glob
+# keeps future client crates from silently gaining the workspace-hack dep.
+traversal-exclude-globs = ["crates/client/*"]

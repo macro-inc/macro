@@ -21,6 +21,7 @@ use models_search::{
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
+use opensearch_client::search::call_records::CallRecordSearchMode;
 use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg};
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
@@ -232,15 +233,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
     // (which drops them) and attach them to the document search args below.
-    // Tags additionally apply to the emails index (thread properties
-    // denormalized onto every message doc) and the chats index (nested on
-    // the parent chat doc).
+    // Tags, by contrast, are indexed on every taggable source, each of which
+    // applies the tag filter itself (see the per-source gating below).
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
     let tag_option_ids = req.filters.tag_option_ids.clone();
     let match_all_tags = req.filters.tag_filter_mode == item_filters::TagFilterMode::All;
-    // Tags are only indexed for the documents, emails, and chats indexes.
-    // With a tag filter active every other source is dropped, so response
-    // pages contain only rows the filter was actually applied to.
+    // A tag filter keeps only the tag-indexed sources; channels and CRM drop
+    // out below (see should_include_channels), so response pages contain only
+    // rows the filter was actually applied to.
     let tags_active = !tag_option_ids.is_empty();
 
     // CRM is opt-in: it only runs when the caller resolved a team receipt
@@ -258,13 +258,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     let call_filters = search_filters.call_filters;
 
     let should_include_documents = search_filters.should_include_documents;
+    // A tag filter drops channels (and CRM, below) because they aren't
+    // tag-indexed. Every tag-indexed source — documents, chats, projects,
+    // emails, call records — stays included and applies the filter itself.
     let should_include_channels = search_filters.should_include_channels && !tags_active;
-    // Chats stay live under a tag filter: both chat legs apply it (nested
-    // clause on the chats index, entity_properties EXISTS on the name leg).
     let should_include_chats = search_filters.should_include_chats;
     let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
-    let should_include_call_records = search_filters.should_include_call_records && !tags_active;
+    let should_include_call_records = search_filters.should_include_call_records;
     let email_terms = search_terms.clone();
 
     // Await all tasks in parallel
@@ -336,6 +337,8 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_email_response.tag_option_ids = tag_option_ids.clone();
     filter_email_response.match_all_tags = match_all_tags;
     filter_call_record_response.terms = search_terms.clone();
+    filter_call_record_response.tag_option_ids = tag_option_ids.clone();
+    filter_call_record_response.match_all_tags = match_all_tags;
     filter_project_response.terms = search_terms.clone();
     filter_project_response.tag_option_ids = tag_option_ids;
     filter_project_response.match_all_tags = match_all_tags;
@@ -455,25 +458,28 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            // Documents, email subjects, and project names are name-searched
-            // in OpenSearch. In Name mode keep only those indices: chats
-            // still name-search in Postgres above, and channels/call records
+            // Documents, email subjects, project names, and call names are
+            // name-searched in OpenSearch. In Name mode keep only those
+            // indices: chats still name-search in Postgres above, and channels
             // have no name concept. Documents match `document_name`, emails
-            // their subject, projects their `name`. Projects have no content,
-            // so a content-only search drops them.
+            // their subject, projects their `name`, calls their `name`.
+            // Projects have no content, so a content-only search drops them.
             let mut args = unified_search_args;
             match search_on {
                 SearchOn::Name => {
                     args.document_search_args.mode = DocumentSearchMode::Name;
+                    args.call_record_search_args.mode = CallRecordSearchMode::Name;
                     args.email_search_args.subject_only = true;
                     args.search_indices.retain(|i| {
                         *i == models_opensearch::OpenSearchEntityType::Documents
                             || *i == models_opensearch::OpenSearchEntityType::Emails
                             || *i == models_opensearch::OpenSearchEntityType::Projects
+                            || *i == models_opensearch::OpenSearchEntityType::CallRecords
                     });
                 }
                 SearchOn::NameContent => {
                     args.document_search_args.mode = DocumentSearchMode::NameContent;
+                    args.call_record_search_args.mode = CallRecordSearchMode::NameContent;
                 }
                 SearchOn::Content => {
                     args.document_search_args.mode = DocumentSearchMode::Content;

@@ -5,7 +5,7 @@
 import { asChatMessage } from '@core/component/AI/util/message';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
-import { render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { createMemo, createRoot, createSignal, type JSX, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantMessageParts } from './AssistantMessageParts';
@@ -192,10 +192,11 @@ describe('AssistantMessageParts streaming identity', () => {
       return items;
     });
 
-    render(() => <StreamedAssistantParts data={data} />);
+    const rendered = render(() => <StreamedAssistantParts data={data} />);
 
     append(response({ thinking: 'Need', type: 'thinking' }));
     await waitFor(() => expect(lifecycle.thinkingMounts).toBe(1));
+    expect(rendered.queryByTestId('activity-toggle')).toBeNull();
 
     append(response({ thinking: ' context', type: 'thinking' }));
     await waitFor(() => {
@@ -212,6 +213,12 @@ describe('AssistantMessageParts streaming identity', () => {
       })
     );
     await waitFor(() => expect(lifecycle.toolMounts.get('tool-1')).toBe(1));
+    expect(rendered.getByTestId('activity-toggle').textContent).toContain(
+      '2 steps'
+    );
+    expect(rendered.getByTestId('activity-content').classList).toContain(
+      'hidden'
+    );
     expect(lifecycle.thinkingMounts).toBe(1);
     expect(lifecycle.thinkingCleanups).toBe(0);
 
@@ -259,6 +266,155 @@ describe('AssistantMessageParts streaming identity', () => {
     expect(lifecycle.toolCleanups.get('tool-1') ?? 0).toBe(0);
     expect(lifecycle.mcpMounts.get('search')).toBe(1);
     expect(lifecycle.mcpCleanups.get('search') ?? 0).toBe(0);
+    disposeStream();
+  });
+
+  it('collapses heterogeneous activity until the user expands it', async () => {
+    const parts: AssistantMessagePart[] = [
+      { thinking: 'Check the channel', type: 'thinking' },
+      {
+        id: 'tool-1',
+        json: { channelId: 'channel-1' },
+        name: 'ReadChannelMessages',
+        type: 'toolCall',
+      },
+      {
+        id: 'tool-1',
+        json: { messages: [] },
+        name: 'ReadChannelMessages',
+        type: 'toolCallResponseJson',
+      },
+      {
+        display_name: 'Search issues',
+        id: 'mcp-1',
+        json: { query: 'streaming' },
+        name: 'search',
+        service: 'linear',
+        type: 'mcpToolCall',
+      },
+      { text: 'Done', type: 'text' },
+    ];
+    const rendered = render(() => (
+      <AssistantMessageParts
+        parts={parts}
+        message={{
+          attachments: [],
+          content: parts,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+        isStreaming={false}
+      />
+    ));
+
+    const toggle = rendered.getByTestId('activity-toggle');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(rendered.getByTestId('activity-content').classList).toContain(
+      'hidden'
+    );
+    expect(rendered.getByTestId('thinking')).toBeTruthy();
+    expect(rendered.getByTestId('tool')).toBeTruthy();
+    expect(rendered.getByTestId('mcp-tool')).toBeTruthy();
+
+    fireEvent.click(toggle);
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(rendered.getByTestId('activity-content').classList).not.toContain(
+      'hidden'
+    );
+    expect(rendered.getByTestId('thinking').textContent).toBe(
+      'Check the channel'
+    );
+    expect(rendered.getByTestId('tool').textContent).toBe('tool-1');
+    expect(rendered.getByTestId('mcp-tool').textContent).toBe('search');
+    expect(rendered.getByTestId('markdown').textContent).toBe('Done');
+  });
+
+  it('does not group isolated activity separated by visible answer text', () => {
+    const parts: AssistantMessagePart[] = [
+      { thinking: 'First thought', type: 'thinking' },
+      { text: 'Interim answer', type: 'text' },
+      {
+        id: 'tool-1',
+        json: { query: 'mentions' },
+        name: 'Search',
+        type: 'toolCall',
+      },
+    ];
+    const rendered = render(() => (
+      <AssistantMessageParts
+        parts={parts}
+        message={{
+          attachments: [],
+          content: parts,
+          id: 'message-1',
+          role: 'assistant',
+        }}
+        isStreaming={false}
+      />
+    ));
+
+    expect(rendered.queryByTestId('activity-toggle')).toBeNull();
+    expect(rendered.getByTestId('thinking').textContent).toBe('First thought');
+    expect(rendered.getByTestId('tool').textContent).toBe('tool-1');
+    expect(rendered.getByTestId('markdown').textContent).toBe('Interim answer');
+  });
+
+  it('previews only the latest activity group while streaming', async () => {
+    let append!: (item: ChatStream) => void;
+    let disposeStream!: () => void;
+    const data = createRoot((dispose) => {
+      disposeStream = dispose;
+      const [items, setItems] = createSignal<ChatStream[]>([]);
+      append = (item) => setItems((prev) => [...prev, item]);
+      return items;
+    });
+    const rendered = render(() => <StreamedAssistantParts data={data} />);
+
+    append(response({ thinking: 'Need some context', type: 'thinking' }));
+    await waitFor(() =>
+      expect(rendered.queryByTestId('activity-preview')).toBeNull()
+    );
+
+    append(
+      response({
+        id: 'tool-1',
+        json: { query: 'mentions' },
+        name: 'Search',
+        type: 'toolCall',
+      })
+    );
+    await waitFor(() =>
+      expect(rendered.getByTestId('activity-preview').textContent).toBe(
+        'Search'
+      )
+    );
+
+    append(response({ text: 'Interim answer', type: 'text' }));
+    await waitFor(() =>
+      expect(rendered.queryByTestId('activity-preview')).toBeNull()
+    );
+
+    append(
+      response({
+        display_name: 'Search issues',
+        id: 'mcp-1',
+        json: { query: 'streaming' },
+        name: 'search',
+        service: 'linear',
+        type: 'mcpToolCall',
+      })
+    );
+    await waitFor(() =>
+      expect(rendered.queryByTestId('activity-preview')).toBeNull()
+    );
+
+    append(response({ thinking: 'Review the results', type: 'thinking' }));
+    await waitFor(() =>
+      expect(rendered.getByTestId('activity-preview').textContent).toBe(
+        'Review the results'
+      )
+    );
     disposeStream();
   });
 

@@ -55,6 +55,12 @@ export type SoupRow = {
 
 type NavigationResult = { row: SoupRow; index: number } | undefined;
 
+type NavigationOptions = {
+  wrapNavigation?: boolean;
+  skipGroupHeaders?: boolean;
+  skipLoadMore?: boolean;
+};
+
 export type SortConfig<T> = {
   id: string;
   fn: (a: T, b: T) => number;
@@ -213,43 +219,49 @@ export const createSoupState = <TId extends string = FilterID>(
     return result;
   };
 
-  const peek = (offset: number): NavigationResult => {
-    const current = focusedIndex();
-    if (current === -1) {
-      return calculateFocusRow(offset > 0 ? 0 : rows().length - 1);
-    }
-    return calculateFocusRow(current + offset);
-  };
-
-  const shouldSkipRow = (row: SoupRow): boolean => {
+  const shouldSkipRow = (
+    row: SoupRow,
+    options?: NavigationOptions
+  ): boolean => {
+    if (row.getIsLoadMore() && options?.skipLoadMore) return true;
     if (!row.group) return false;
     if (row.getIsGrouped()) {
-      return !!skipGroupHeaders;
+      return options?.skipGroupHeaders ?? !!skipGroupHeaders;
     }
     return !row.group.isExpanded();
   };
 
-  const findNextIndex = (startIndex: number, offset: number): number => {
+  const findNextIndex = (
+    startIndex: number,
+    offset: number,
+    options?: NavigationOptions
+  ): number => {
     const allRows = rows();
     if (allRows.length === 0) return -1;
+    if (offset === 0) return startIndex;
 
     const direction = offset > 0 ? 1 : -1;
     let steps = Math.abs(offset);
     let cursor = startIndex;
-    let lastValid = startIndex;
+    let lastValid = shouldSkipRow(allRows[startIndex], options)
+      ? -1
+      : startIndex;
+    let iterations = 0;
+    const maxIterations = allRows.length * steps;
+    const shouldWrap = options?.wrapNavigation ?? wrapNavigation;
 
-    while (steps > 0) {
+    while (steps > 0 && iterations < maxIterations) {
+      iterations++;
       cursor += direction;
 
       if (cursor < 0 || cursor >= allRows.length) {
-        if (!wrapNavigation) break;
+        if (!shouldWrap) break;
         cursor = (cursor + allRows.length) % allRows.length;
       }
 
       const row = allRows[cursor];
       if (!row) break;
-
-      if (shouldSkipRow(row)) continue;
+      if (shouldSkipRow(row, options)) continue;
 
       lastValid = cursor;
       steps--;
@@ -258,7 +270,10 @@ export const createSoupState = <TId extends string = FilterID>(
     return lastValid;
   };
 
-  const navigateBy = (offset: number): NavigationResult => {
+  const peek = (
+    offset: number,
+    options?: NavigationOptions
+  ): NavigationResult => {
     const current = focusedIndex();
     const allRows = rows();
 
@@ -266,15 +281,29 @@ export const createSoupState = <TId extends string = FilterID>(
       const startIndex = offset > 0 ? 0 : allRows.length - 1;
       const direction = offset > 0 ? 1 : -1;
       let i = startIndex;
-      while (i >= 0 && i < allRows.length && shouldSkipRow(allRows[i])) {
+      while (
+        i >= 0 &&
+        i < allRows.length &&
+        shouldSkipRow(allRows[i], options)
+      ) {
         i += direction;
       }
       if (i < 0 || i >= allRows.length) return;
-      return setFocus(i);
+
+      return calculateFocusRow(i);
     }
 
-    const nextIndex = findNextIndex(current, offset);
-    return setFocus(nextIndex);
+    const nextIndex = findNextIndex(current, offset, options);
+    if (nextIndex < 0) return;
+
+    return calculateFocusRow(nextIndex);
+  };
+
+  const navigateBy = (offset: number): NavigationResult => {
+    const peeked = peek(offset);
+    if (!peeked) return;
+
+    return setFocus(peeked.index);
   };
 
   const clearFocus = () => {

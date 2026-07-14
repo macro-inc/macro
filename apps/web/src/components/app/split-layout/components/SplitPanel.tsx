@@ -148,7 +148,7 @@ export function SplitPanel(props: SplitPanelProps) {
       isSoloSettings()
   );
 
-  const hasFocusedSplitBorder = createMemo(
+  const showsSplitFocus = createMemo(
     () =>
       !isMobile() &&
       props.active &&
@@ -224,15 +224,16 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               edgeColor={
-                hasFocusedSplitBorder()
+                showsSplitFocus()
                   ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
                   : undefined
               }
               class={cn(
-                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!',
+                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0! bg-panel',
                 {
-                  'shadow-sm shadow-drop-shadow/50': !hasFocusedSplitBorder(),
-                  'shadow-lg shadow-drop-shadow/70': hasFocusedSplitBorder(),
+                  'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
+                    !showsSplitFocus(),
+                  'shadow-2xl shadow-drop-shadow': showsSplitFocus(),
                 }
               )}
               depth={isMobile() ? 0 : 1}

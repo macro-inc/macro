@@ -256,7 +256,7 @@ pub async fn handler(
             EmailEventOrigin::UserAction,
         );
         if let Some(event) = event {
-            publish_email_event(ctx.macro_event_broker.as_ref(), &event).await;
+            publish_email_event(ctx.macro_event_broker.as_ref(), &event);
         }
     }
 

@@ -247,8 +247,7 @@ async fn handle_notify_reauth_required(
             email_address: link.email_address.0.as_ref().to_string(),
             observed_at: link.last_sync_error_at.unwrap_or_else(chrono::Utc::now),
         }),
-    )
-    .await;
+    );
 
     Ok(())
 }
@@ -418,8 +417,7 @@ async fn handle_delete(
                 DeletionReason::AccessRevoked => LinkDisconnectReason::AccessRevoked,
             },
         }),
-    )
-    .await;
+    );
 
     // Mark the link as deleted in history table for tracking (best-effort)
     if let Err(e) = email_db_client::links_history::update::set_deleted_at(

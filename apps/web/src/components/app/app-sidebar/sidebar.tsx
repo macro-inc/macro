@@ -232,18 +232,6 @@ const SIDEBAR_LINKS = [
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
-  ...(ENABLE_CRM
-    ? ([
-        {
-          id: 'companies',
-          label: 'Companies',
-          href: LIST_VIEW_PATHS.companies,
-          icon: AnimatedCompanyIcon,
-          hotkey: 'o',
-          hotkeyToken: TOKENS.sidebar.goTo.companies,
-        },
-      ] satisfies SidebarItem[])
-    : []),
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
@@ -925,6 +913,15 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const COMPANIES_LINK: SidebarItem = {
+  id: 'companies',
+  label: 'Customers',
+  href: LIST_VIEW_PATHS.companies,
+  icon: AnimatedCompanyIcon,
+  hotkey: 'o',
+  hotkeyToken: TOKENS.sidebar.goTo.companies,
+};
+
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
   label: 'Home',
@@ -936,12 +933,12 @@ const DASHBOARD_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Calls entry in their correct positions. Shared by the rendered
- * sidebar (`AppSidebar.visibleLinks`) and the always-mounted `GoToHotkeys`
- * registrar so their link sets can't drift. Call from a reactive context — it
- * reads `ENABLE_CALLS()`. Rendered sections additionally drop
- * `hiddenFromSidebar`
- * entries, which have hotkeys but no sidebar row.
+ * flag-gated Calls and CRM entries in their correct positions. Shared by the
+ * rendered sidebar (`AppSidebar.visibleLinks`) and the always-mounted
+ * `GoToHotkeys` registrar so their link sets can't drift. Call from a reactive
+ * context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`. Rendered sections
+ * additionally drop `hiddenFromSidebar` entries, which have hotkeys but no
+ * sidebar row.
  */
 const buildSidebarLinks = (): SidebarItem[] => {
   let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
@@ -949,6 +946,17 @@ const buildSidebarLinks = (): SidebarItem[] => {
   if (ENABLE_CALLS()) {
     const idx = links.findIndex((l) => l.id === 'channels');
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+  }
+
+  if (ENABLE_CRM()) {
+    // Customers sits just after Channels (and Calls when present).
+    const anchorId = ENABLE_CALLS() ? 'calls' : 'channels';
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [
+      ...links.slice(0, idx + 1),
+      COMPANIES_LINK,
+      ...links.slice(idx + 1),
+    ];
   }
 
   return links;

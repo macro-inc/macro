@@ -84,14 +84,13 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
 
     /// Publish an email event to the `macro.email` topic, logging and
     /// dropping failures — event emission must never fail the operation.
-    pub(crate) async fn publish_email_event(&self, event: &EmailMacroEvent)
+    pub(crate) fn publish_email_event(&self, event: &EmailMacroEvent)
     where
         B: MacroEventBroker,
     {
         let _ = self
             .macro_event_broker
             .send_event(event)
-            .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
     }
 }
@@ -355,8 +354,7 @@ where
                                 previous_project_id: old_project_id.clone(),
                                 project_id: project_id.map(|p| p.to_string()),
                             },
-                        ))
-                        .await;
+                        ));
                     }
                     Ok(None) => tracing::warn!(
                         %thread_id,

@@ -30,6 +30,7 @@ import {
   makeMoveToProjectAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
+  makeSetCompanyPropertyAction,
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
@@ -116,6 +117,9 @@ export function createSoupEntityActions(): {
     isTeamAdmin: () => isTeamAdmin(),
     setHidden: (companyId, hidden) =>
       hiddenMutation.mutateAsync({ companyId, hidden }),
+  });
+  const setCompanyPropertyAction = makeSetCompanyPropertyAction({
+    isTeamAdmin: () => isTeamAdmin(),
   });
 
   const buildActionGroups: BuildActionGroups = (
@@ -370,8 +374,29 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // CRM group: Hide / Unhide (admin/owner only, single company)
+    // CRM group (admin/owner only): Set stage/owner/revenue on the whole
+    // company selection, Hide / Unhide for a single company.
     const crmItems: SoupEntityActionItem[] = [];
+
+    if (canExecuteAll(setCompanyPropertyAction.canExecute)) {
+      crmItems.push(
+        {
+          id: 'set-stage',
+          label: 'Set stage',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'stage'),
+        },
+        {
+          id: 'set-owner',
+          label: 'Set owner',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'owner'),
+        },
+        {
+          id: 'set-revenue',
+          label: 'Set revenue',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'revenue'),
+        }
+      );
+    }
 
     const singleEntity = entities.length === 1 ? entities[0] : undefined;
     if (

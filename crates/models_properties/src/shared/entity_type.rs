@@ -13,6 +13,7 @@ use utoipa::ToSchema;
     rename_all = "SCREAMING_SNAKE_CASE"
 )]
 pub enum EntityType {
+    CallRecord,
     Channel,
     Chat,
     Company,
@@ -26,6 +27,7 @@ pub enum EntityType {
 impl fmt::Display for EntityType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EntityType::CallRecord => write!(f, "call_record"),
             EntityType::Channel => write!(f, "channel"),
             EntityType::Chat => write!(f, "chat"),
             EntityType::Company => write!(f, "company"),
@@ -46,6 +48,7 @@ impl FromStr for EntityType {
     type Err = NoConversion;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "call_record" => Ok(Self::CallRecord),
             "channel" => Ok(Self::Channel),
             "chat" => Ok(Self::Chat),
             "company" => Ok(Self::Company),

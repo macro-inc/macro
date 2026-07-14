@@ -11196,6 +11196,17 @@
               "$ref": "#/components/schemas/CallRecordTranscriptSegment"
             },
             "description": "Transcript segments ordered by `sequence_num`."
+          },
+          "userAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The caller's effective access level on this call. Set only on the\nsingle-record read; `None` in list contexts."
+              }
+            ]
           }
         }
       },
@@ -14354,6 +14365,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALL_RECORD",
           "CHANNEL",
           "CHAT",
           "COMPANY",
@@ -18184,7 +18196,8 @@
           "isActive",
           "status",
           "attended",
-          "participants"
+          "participants",
+          "properties"
         ],
         "properties": {
           "attended": {
@@ -18233,6 +18246,13 @@
               "$ref": "#/components/schemas/SoupCallRecordParticipant"
             },
             "description": "Participants in the call."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Entity properties (e.g. tags). Populated after fetch by the soup repo."
           },
           "startedAt": {
             "type": "string",
