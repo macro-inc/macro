@@ -43,6 +43,18 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
   );
 }
 
+function OutlineDash(props: { active: boolean }) {
+  return (
+    <span
+      class={
+        props.active
+          ? 'h-px w-3 rounded-full bg-accent'
+          : 'h-px w-2 rounded-full bg-ink/20'
+      }
+    />
+  );
+}
+
 function OutlineItem(props: {
   active: boolean;
   label: string;
@@ -53,21 +65,11 @@ function OutlineItem(props: {
       type="button"
       aria-label={props.label}
       aria-current={props.active ? 'location' : undefined}
-      class="flex h-6 w-6 items-center overflow-hidden rounded-md px-1 text-left text-xs text-ink-muted transition-[width,color,background-color] hover:bg-hover hover:text-ink group-hover/outline:w-full group-hover/outline:px-2 group-focus-within/outline:w-full group-focus-within/outline:px-2"
-      classList={{ 'font-semibold text-ink': props.active }}
+      class="h-7 w-full truncate rounded-md px-2 text-left text-xs text-ink-muted hover:bg-hover hover:text-ink"
+      classList={{ 'font-semibold text-accent': props.active }}
       onClick={props.onClick}
     >
-      <span
-        aria-hidden="true"
-        class={
-          props.active
-            ? 'h-0.5 w-3 shrink-0 rounded-full bg-ink transition-[width,background-color] group-hover/outline:hidden group-focus-within/outline:hidden'
-            : 'h-0.5 w-2 shrink-0 rounded-full bg-ink/20 transition-[width,background-color] group-hover/outline:hidden group-focus-within/outline:hidden'
-        }
-      />
-      <span class="hidden min-w-0 truncate group-hover/outline:block group-focus-within/outline:block">
-        {props.label}
-      </span>
+      {props.label}
     </button>
   );
 }
@@ -191,9 +193,23 @@ export function MarkdownOutline(props: {
     <Show when={headings().length > 0 || props.discussion()}>
       <nav
         aria-label="Document outline"
-        class="group/outline w-6 overflow-visible py-1 transition-[width] hover:w-52 hover:rounded-xl hover:bg-surface hover:p-2 hover:shadow-menu hover:ring hover:ring-edge focus-within:w-52 focus-within:rounded-xl focus-within:bg-surface focus-within:p-2 focus-within:shadow-menu focus-within:ring focus-within:ring-edge"
+        class="group/outline relative w-3 outline-none"
+        tabIndex={0}
       >
-        <div class="flex flex-col gap-0.5">
+        <div
+          aria-hidden="true"
+          class="flex w-3 flex-col items-start gap-1 py-1"
+        >
+          <For each={headings()}>
+            {(heading) => (
+              <OutlineDash active={activeHeadingKey() === heading.key} />
+            )}
+          </For>
+          <Show when={props.discussion()}>
+            <OutlineDash active={discussionActive()} />
+          </Show>
+        </div>
+        <div class="invisible absolute top-0 left-0 z-1 max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge group-hover/outline:visible group-focus-within/outline:visible">
           <For each={headings()}>
             {(heading) => (
               <OutlineItem

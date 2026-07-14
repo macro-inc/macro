@@ -73,8 +73,8 @@ const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
 const OutlineWidth = 208;
-const OutlineGap = 24;
-const OutlineMinWidth = NoteTargetWidth + 2 * (OutlineWidth + OutlineGap);
+const OutlineEdgeInset = 16;
+const OutlineMinWidth = NoteTargetWidth + 2 * (OutlineWidth + OutlineEdgeInset);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -142,9 +142,6 @@ export function Notebook(props: {
     !showComments() &&
     !history.isOpen() &&
     !isMobile();
-
-  const outlineLeft = () =>
-    (width() - NoteTargetWidth) / 2 - OutlineWidth - OutlineGap;
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -325,9 +322,12 @@ export function Notebook(props: {
       <Show when={showOutline()}>
         <div
           class="pointer-events-none absolute inset-y-0 z-1"
-          style={{ left: `${outlineLeft()}px`, width: `${OutlineWidth}px` }}
+          style={{
+            left: `${OutlineEdgeInset}px`,
+            width: `${OutlineWidth}px`,
+          }}
         >
-          <div class="pointer-events-auto sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div class="pointer-events-auto sticky top-6">
             <MarkdownOutline
               discussion={discussionRef}
               editor={() => md.editor}
