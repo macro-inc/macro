@@ -8,11 +8,11 @@ use crate::api::{
     },
 };
 use axum::{
-    Extension,
     extract::{self, State},
     response::Json,
 };
-use model::{response::ErrorResponse, user::UserContext};
+use macro_authorization::SharedMacroAuthorizationExtractor;
+use model::response::ErrorResponse;
 use models_search::unified::{
     UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
@@ -39,10 +39,12 @@ use std::cmp::Ordering;
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
+    let user_context = authorization.user_context;
+
     tracing::info!(
         user_id = user_context.user_id,
         query = ?req.query,

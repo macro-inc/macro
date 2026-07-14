@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use axum::Router;
 use context::SearchHandlerState;
 

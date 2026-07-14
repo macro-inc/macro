@@ -7,14 +7,14 @@ use std::collections::HashMap;
 use crate::api::context::SearchHandlerState;
 use crate::api::search::SearchPaginationParams;
 use axum::{
-    Extension, Router,
+    Router,
     extract::{self, State},
     response::Json,
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
-use model::user::UserContext;
 use models_search::MatchType;
 use models_search::channel::{
     ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem,
@@ -191,11 +191,11 @@ pub fn router() -> Router<SearchHandlerState> {
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
 ) -> Result<Json<ChannelSearchResponse>, SearchError> {
-    let user_id = user_context.user_id.clone();
+    let user_id = authorization.user_context.user_id;
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
