@@ -168,7 +168,7 @@ export function MarkdownOutline(props: {
                 type="button"
                 class="w-full truncate rounded-md border-l-2 border-transparent py-1 pr-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
                 classList={{
-                  'border-accent bg-accent/10 text-ink':
+                  'border-accent bg-accent/10 font-semibold text-ink':
                     activeHeadingKey() === heading.key,
                 }}
                 style={{
@@ -184,9 +184,10 @@ export function MarkdownOutline(props: {
           <Show when={props.discussion()}>
             <button
               type="button"
-              class="mt-1 w-full truncate border-edge-muted border-t border-l-2 border-l-transparent py-2 pr-2 pl-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
+              class="mt-1 w-full truncate rounded-md border-edge-muted border-t border-l-2 border-l-transparent py-2 pr-2 pl-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
               classList={{
-                'border-l-accent bg-accent/10 text-ink': discussionActive(),
+                'border-l-accent bg-accent/10 font-semibold text-ink':
+                  discussionActive(),
               }}
               onClick={scrollToDiscussion}
             >
