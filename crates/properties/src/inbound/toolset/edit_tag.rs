@@ -4,12 +4,13 @@ use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
-use models_properties::api::{UpdatePropertyOptionRequest, is_valid_hex_color};
+use models_properties::api::UpdatePropertyOptionRequest;
 use models_properties::service::property_option::PropertyOptionValue;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::tag_color::TagColor;
 use super::{PropertiesToolContext, caller_team_receipt_opt};
 
 /// Rename or recolor an existing tag.
@@ -33,10 +34,10 @@ pub struct EditTag {
     pub label: Option<String>,
 
     #[schemars(
-        description = "A new color as a 6-digit hex string like \"#3B82F6\". Omit to keep the current color."
+        description = "A new color for the tag, chosen from the fixed tag palette. Omit to keep the current color."
     )]
     #[serde(default)]
-    pub color: Option<String>,
+    pub color: Option<TagColor>,
 }
 
 /// Response from the [`EditTag`] tool.
@@ -87,22 +88,11 @@ where
             });
         }
 
-        if let Some(color) = &self.color {
-            if !is_valid_hex_color(color) {
-                return Err(ToolCallError {
-                    description: format!(
-                        "Invalid color \"{color}\": use a 6-digit hex string like \"#3B82F6\"."
-                    ),
-                    internal_error: anyhow::anyhow!("invalid tag color"),
-                });
-            }
-        }
-
         let team = caller_team_receipt_opt(&service_context, &request_context).await?;
 
         let request = UpdatePropertyOptionRequest {
             value: self.label.clone(),
-            color: self.color.clone(),
+            color: self.color.map(|c| c.hex().to_string()),
             display_order: None,
         };
 

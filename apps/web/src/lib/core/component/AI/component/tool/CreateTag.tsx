@@ -1,5 +1,6 @@
 import Tag from '@phosphor-icons/core/regular/tag.svg';
 import { TagDot } from '@property/tags/TagDot';
+import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
@@ -11,7 +12,9 @@ const handler = createToolRenderer({
         <span class="shrink-0">
           {ctx.response ? 'Created tag' : 'Create tag'}
         </span>
-        <TagDot color={ctx.tool.data.color} />
+        <Show when={ctx.response?.data.color}>
+          {(color) => <TagDot color={color()} />}
+        </Show>
         <span class="truncate text-ink">{ctx.tool.data.label}</span>
       </div>
     </BaseTool>

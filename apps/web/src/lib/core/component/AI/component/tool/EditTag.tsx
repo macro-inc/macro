@@ -8,8 +8,7 @@ const handler = createToolRenderer({
   name: 'EditTag',
   render: (ctx) => {
     const label = () => ctx.response?.data.label ?? ctx.tool.data.label;
-    const color = () =>
-      ctx.response?.data.color ?? ctx.tool.data.color ?? undefined;
+    const color = () => ctx.response?.data.color ?? undefined;
     return (
       <BaseTool
         icon={PencilSimple}

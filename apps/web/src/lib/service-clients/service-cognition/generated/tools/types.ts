@@ -127,6 +127,22 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * A tag color from the fixed palette.
+ */
+export type TagColor =
+  | 'red'
+  | 'tomato'
+  | 'orange'
+  | 'amber'
+  | 'yellow'
+  | 'green'
+  | 'teal'
+  | 'blue'
+  | 'indigo'
+  | 'purple'
+  | 'pink'
+  | 'gray';
+/**
  * Where document content is, or is expected to be, read from.
  */
 export type DocumentContentLocation =
@@ -1129,10 +1145,7 @@ export interface CreateDocumentResponse {
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
-  /**
-   * The tag's color as a 6-digit hex string like "#3B82F6". Every tag must have a color; pick a distinct, sensible one for the label.
-   */
-  color: string;
+  color: TagColor;
   /**
    * The tag's label, e.g. "Urgent" or "Follow-up".
    */
@@ -1378,9 +1391,9 @@ export interface EditDocumentResponse {
  */
 export interface EditTag {
   /**
-   * A new color as a 6-digit hex string like "#3B82F6". Omit to keep the current color.
+   * A new color for the tag, chosen from the fixed tag palette. Omit to keep the current color.
    */
-  color?: string | null;
+  color?: TagColor | null;
   /**
    * The tag's option id (the `id` field from a ListTags result).
    */
