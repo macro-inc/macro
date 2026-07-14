@@ -60,7 +60,6 @@ import {
   applySystemTheme,
   applyTheme,
   clearThemePreview,
-  pinTheme,
   previewTheme,
   resolveActiveThemeId,
 } from '@theme/utils/themeUtils';
@@ -381,6 +380,15 @@ export default function GlobalShortcuts() {
         (systemMode() === 'dark' ? darkModeTheme() : lightModeTheme())
     );
 
+  const setVisibleTheme = (themeId: string) => {
+    const resolvedMode = themeMode() === 'system' ? systemMode() : themeMode();
+    if (resolvedMode === 'dark') {
+      setDarkModeTheme(themeId);
+    } else {
+      setLightModeTheme(themeId);
+    }
+  };
+
   // "System preference" mirrors the Active-theme dropdown's first option: follow
   // the OS scheme rather than pinning a fixed theme.
   registerHotkey({
@@ -412,9 +420,9 @@ export default function GlobalShortcuts() {
       scopeId: setThemeScope.commandScopeId,
       description: `${theme.name}`,
       keyDownHandler: () => {
-        // Pin the theme (mode + per-mode theme) so the choice shows up in the
-        // Appearance settings, then apply it live.
-        pinTheme(theme);
+        // Change the theme currently being viewed without switching between
+        // static and system-driven theme modes.
+        setVisibleTheme(theme.id);
         applyTheme(resolveActiveThemeId());
         analytics.track('theme_changed', { themeId: theme.id });
         return true;
