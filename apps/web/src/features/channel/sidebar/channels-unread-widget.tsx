@@ -11,6 +11,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   ContextMenuContent,
   MenuGroup,
@@ -204,6 +205,7 @@ function ChannelGroupItem(props: {
   isSlim?: boolean;
   onFloatingOpenChange?: (open: boolean) => void;
 }) {
+  const layout = useSplitLayout();
   const notificationSource = useGlobalNotificationSource();
   const [isVisible, setIsVisible] = createSignal(!props.animate);
 
@@ -232,6 +234,7 @@ function ChannelGroupItem(props: {
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
 
   const navigateToLatestNotification = (newSplit = false) => {
     const manager = globalSplitManager();
@@ -259,13 +262,16 @@ function ChannelGroupItem(props: {
 
   const openFullscreen = () => {
     const { params } = getChannelNotificationParams(latestNotification());
-    globalSplitManager()?.createPopoverSplit({
-      content: {
+    const split = layout.replaceAllSplits(
+      {
         type: 'channel',
         id: props.group.entityId,
         params,
       },
-    });
+      { referredFrom: 'sidebar' }
+    );
+    globalSplitManager()?.returnFocus();
+    return split;
   };
 
   const isSlim = () => props.isSlim ?? false;
@@ -356,7 +362,9 @@ function ChannelGroupItem(props: {
               onClick={openInNewSplit}
               disabled={!canOpenInNewSplit()}
             />
-            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+            <Show when={canOpenFullscreen()}>
+              <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+            </Show>
             <MenuItem
               text="Open in current split"
               onClick={openInCurrentSplit}
