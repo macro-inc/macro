@@ -1,6 +1,11 @@
 #![recursion_limit = "256"]
 use crate::{
-    api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
+    api::{
+        MACRO_INTERNAL_USER_ID,
+        context::{
+            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, TaskPropertiesAdapter,
+        },
+    },
     config::{
         CalEventTypeContentNamesKey, CalWebhookSecretKey, MetaAccessToken, MetaPixelId,
         MetaTestEventCode,
@@ -69,6 +74,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -238,6 +244,13 @@ async fn main() -> anyhow::Result<()> {
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(
+        AuthorizationService::new(MacroAuthJwtValidator::new(jwt_validation_args.clone()))
+            .with_internal_auth(InternalAuthConfig {
+                api_key: dss_auth_key.as_ref().to_string(),
+                default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
+            }),
+    ));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -813,6 +826,7 @@ async fn main() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
+        authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
@@ -822,6 +836,7 @@ async fn main() -> anyhow::Result<()> {
         documents_state: DocumentRouterState {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
+            authorization_state: authorization_state.clone(),
             pool: db.clone(),
             task_dedup_service,
             lexical_client: lexical_client.clone(),

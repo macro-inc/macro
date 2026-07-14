@@ -4230,6 +4230,7 @@ dependencies = [
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_axum_utils",
  "macro_config",

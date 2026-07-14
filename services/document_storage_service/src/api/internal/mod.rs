@@ -1,5 +1,5 @@
 use super::{
-    context::{ApiContext, EntityAccessService},
+    context::{ApiContext, AuthorizationService, EntityAccessService},
     documents::{export_document, get_document_version},
     history::upsert_history,
     projects::upload_folder,
@@ -51,6 +51,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::get_document::get_document_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             )
             .layer(ensure_document_exists_middleware.clone()),
@@ -83,6 +84,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::get_location::get_location_v3_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             )
             .layer(ensure_document_exists_middleware.clone()),
@@ -101,6 +103,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::create_document::create_document_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             ),
         )
@@ -136,6 +139,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::put_snapshot::put_snapshot_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             ),
         )
