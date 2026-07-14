@@ -11,7 +11,6 @@ use chat::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_r
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
-use tower::ServiceBuilder;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     let access_repo = PgAccessRepository::new(state.db.clone());
@@ -39,49 +38,17 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     );
 
     Router::new()
-        // Create route — needs ensure_user_exists, no ensure_chat_exists.
-        // Note: free users are intentionally no longer capped by chat/document count,
-        // so no quota-enforcement middleware is applied here.
-        .merge(
-            chat_create_router(chat_state.clone()).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    )),
-            ),
-        )
-        // All /{chat_id} routes — need ensure_chat_exists for ChatAccessLevelExtractor
-        .merge(
-            chat_id_router(chat_state).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        // History routes — remain in DCS
+        // Chat creation does not require ensure_chat_exists.
+        .merge(chat_create_router(chat_state.clone()))
+        // All /{chat_id} routes need ensure_chat_exists for ChatAccessLevelExtractor.
+        .merge(chat_id_router(chat_state).layer(ensure_chat_exists.clone()))
+        // History routes remain in DCS.
         .route(
             "/history/{chat_id}",
-            get(chat_history::get_chat_history_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(ensure_chat_exists),
-            ),
+            get(chat_history::get_chat_history_handler).layer(ensure_chat_exists),
         )
         .route(
             "/history_batch_messages",
-            post(chat_history_batch_messages::get_chat_history_batch_messages_handler).layer(
-                ServiceBuilder::new().layer(axum::middleware::from_fn(
-                    macro_middleware::auth::ensure_user_exists::handler,
-                )),
-            ),
+            post(chat_history_batch_messages::get_chat_history_batch_messages_handler),
         )
 }

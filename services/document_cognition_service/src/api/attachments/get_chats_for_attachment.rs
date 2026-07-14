@@ -1,15 +1,15 @@
 use crate::model::response::attachments::GetChatsForAttachmentResponse;
 use anyhow::Result;
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_db_client::dcs::get_chats_for_attachment::{
     get_latest_single_attachment_chat, get_multi_attachment_chat,
 };
-use model::user::UserContext;
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
@@ -28,12 +28,13 @@ pub struct Params {
         ),
         params( ("attachment_id" = String, Path, description = "id of the attachment"))
     )]
-#[tracing::instrument(skip(db, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, authorization), fields(user_id=?authorization.user_context.user_id))]
 pub async fn get_chats_for_attachment_handler(
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { attachment_id }): Path<Params>,
 ) -> Result<Response, Response> {
+    let user_context = &authorization.user_context;
     let mut transaction = db.begin().await.map_err(|e| {
         tracing::error!(error=?e, user_id=%user_context.user_id, attachment_id=%attachment_id, "failed to begin transaction");
         StatusCode::INTERNAL_SERVER_ERROR.into_response()

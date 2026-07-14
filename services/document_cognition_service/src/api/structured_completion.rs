@@ -4,14 +4,13 @@ use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
 use axum::Json;
-use axum::extract::{Extension, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use chat::inbound::http::extractors::ChatModelAccess;
 use futures::StreamExt;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use mcp_client::domain::ports::McpServerStore;
-use model::user::UserContext;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
@@ -60,26 +59,19 @@ impl IntoResponse for StructuredCompletionError {
         (status = 200, description = "Structured completion result", body = StructuredCompletionResponse),
         (status = 400, description = "Bad request", body = StructuredCompletionError),
         (status = 401, description = "Unauthorized"),
-        (status = 402, description = "Payment required"),
         (status = 500, description = "Internal error", body = StructuredCompletionError),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user_context, request), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, model_access, authorization, request), fields(user_id = %authorization.user_context.user_id), err)]
 pub async fn structured_completion(
     State(state): State<ApiContext>,
     model_access: ChatModelAccess,
-    Extension(user_context): Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);
     let model = model_access.best_model();
-
-    let user_id = MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| {
-        StructuredCompletionError {
-            error: "Invalid user ID".to_string(),
-            status: StatusCode::BAD_REQUEST,
-        }
-    })?;
+    let user_id = authorization.macro_user_id;
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,

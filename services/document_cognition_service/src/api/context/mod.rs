@@ -17,7 +17,6 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{SharedMacroAuthorizationService, SharedUserPermissionsService};
 use macro_middleware::auth::internal_access::InternalApiKey;
 use notification::domain::service::SqsNotificationIngress;
@@ -86,7 +85,6 @@ pub struct ApiContext {
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub macro_authorization_service: SharedMacroAuthorizationService,
     pub user_permissions_service: SharedUserPermissionsService,
-    pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,

@@ -145,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("failed to create jwt validation args")?;
     let macro_authorization_service =
-        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args.clone());
+        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args);
     let permissions_database = MacroDB::new(db.clone());
     let user_permissions_service = SharedUserPermissionsService::new(
         UserRolesAndPermissionsServiceImpl::new(permissions_database.clone(), permissions_database),
@@ -539,7 +539,6 @@ async fn main() -> anyhow::Result<()> {
         search_service_client,
         macro_authorization_service,
         user_permissions_service,
-        jwt_args,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
         notification_ingress_service,

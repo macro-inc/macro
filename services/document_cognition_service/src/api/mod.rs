@@ -4,6 +4,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::post;
 use context::GLOBAL_CONTEXT;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -79,24 +80,15 @@ fn api_router(api_context: ApiContext) -> Router {
 
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
-        .nest("/stream", stream::router(api_context.clone()))
+        .nest("/stream", stream::router())
         .route(
             "/structured-completion",
-            post(structured_completion::structured_completion).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        api_context.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    )),
-            ),
+            post(structured_completion::structured_completion),
         )
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())
-        .nest("/id_mapping", id_mapping::router())
+        .nest("/id_mapping", id_mapping::router(api_context.clone()))
         .merge(memory::inbound::axum_router::memory_router(
             memory::inbound::axum_router::MemoryRouterState {
                 service: memory_service,
@@ -119,19 +111,10 @@ fn api_router(api_context: ApiContext) -> Router {
         .with_state(api_context.clone())
         .route(
             "/chat/completions",
-            post(completions::handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
-            )),
-        )
-        .layer(
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::auth::initialize_user_context::handler,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    api_context.jwt_args.clone(),
-                    macro_middleware::auth::attach_user::handler,
-                )),
+            post(completions::handler).layer(axum::middleware::from_extractor_with_state::<
+                SharedMacroAuthorizationExtractor,
+                _,
+            >(api_context.clone())),
         );
 
     Router::new()

@@ -19,10 +19,7 @@ path = "src/doppler_config.rs"
 
 [features]
 local = []
-local_auth = [
-  "macro_authorization/local_auth",
-  "macro_middleware/local_auth",
-]
+local_auth = ["macro_authorization/local_auth"]
 local_queue = []
 
 
@@ -83,7 +80,6 @@ macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",
-  "user_permissions",
 ] }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
@@ -146,6 +142,5 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
-macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_authorization = { path = "../../crates/macro_authorization", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

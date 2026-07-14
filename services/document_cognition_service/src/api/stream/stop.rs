@@ -8,10 +8,10 @@
 use crate::api::context::ApiContext;
 use crate::api::stream::util::chat_permissions;
 use axum::Json;
-use axum::extract::{Extension, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use model::user::UserContext;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -65,18 +65,19 @@ impl IntoResponse for StopChatStreamError {
     request_body = StopChatStreamRequest,
     responses(
         (status = 200, description = "Stop signal sent (or stream already finished)", body = StopChatStreamResponse),
+        (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden", body = StopChatStreamError),
     )
 )]
-#[tracing::instrument(skip(state, user_context), fields(chat_id = %request.chat_id, stream_id = %request.stream_id, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, authorization), fields(chat_id = %request.chat_id, stream_id = %request.stream_id, user_id = %authorization.user_context.user_id), err)]
 pub async fn stop_chat_stream(
     State(state): State<ApiContext>,
-    Extension(user_context): Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Json(request): Json<StopChatStreamRequest>,
 ) -> Result<Json<StopChatStreamResponse>, StopChatStreamError> {
     let access = chat_permissions::chat_access(
         &state,
-        &user_context,
+        &authorization.user_context,
         &request.chat_id,
         request.stream_id.clone(),
     )
