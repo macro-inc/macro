@@ -307,16 +307,21 @@ function SimpleTagPickerBody(props: {
 
   const dropdown = useDropdownSearch({
     itemCount: () => selectableItems().length,
-    onSelect: (index) => {
+    onSelect: (index, event) => {
       const item = selectableItems()[index];
       if (!item) return;
       if (item.type === 'add') {
-        void handleCreate();
+        void (async () => {
+          await handleCreate();
+          if (!event?.shiftKey) saveAndClose();
+        })();
       } else {
         toggleSelected(item.option.id);
+        if (!event?.shiftKey) saveAndClose();
       }
     },
     onClose: saveAndClose,
+    enableNumericHotkeys: false,
   });
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -339,11 +344,10 @@ function SimpleTagPickerBody(props: {
       item={item}
       checked={isSelected(item.option.id)}
       selected={dropdown.selectedIndex() === optionIndex(item.option.id)}
-      showHotkey={
-        dropdown.shouldShowHotkeys() && optionIndex(item.option.id) <= 9
-      }
-      hotkeyShortcut={`${optionIndex(item.option.id)}`}
-      onSelect={() => toggleSelected(item.option.id)}
+      onSelect={(event) => {
+        toggleSelected(item.option.id);
+        if (!event.shiftKey) saveAndClose();
+      }}
       onMouseEnter={() => {
         if (!dropdown.keyboardMode()) {
           dropdown.setSelectedIndex(optionIndex(item.option.id));
@@ -356,7 +360,7 @@ function SimpleTagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-lg ring ring-edge-muted"
+          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-menu ring ring-edge-muted menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
         >
           <DropdownSearchInput
@@ -410,9 +414,7 @@ function TagPickerSimpleRow(props: {
   item: TagOptionItem;
   checked: boolean;
   selected: boolean;
-  showHotkey: boolean;
-  hotkeyShortcut: string;
-  onSelect: () => void;
+  onSelect: (event: MouseEvent) => void;
   onMouseEnter: () => void;
 }) {
   return (
@@ -420,8 +422,6 @@ function TagPickerSimpleRow(props: {
       isSelected={props.selected}
       onClick={props.onSelect}
       onMouseEnter={props.onMouseEnter}
-      showHotkey={props.showHotkey}
-      hotkeyShortcut={props.hotkeyShortcut}
     >
       <OptionCheckBox checked={props.checked} multiselect />
       <TagDot color={props.item.option.color ?? undefined} />
@@ -599,6 +599,7 @@ function _TagPickerBody(props: {
     onClose: () => {
       void closePicker();
     },
+    enableNumericHotkeys: false,
   });
 
   const setPickerSearch = (value: string) => {
@@ -654,7 +655,7 @@ function _TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-lg ring ring-edge-muted"
+          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-menu ring ring-edge-muted menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (props.dismissOnFocusOutside === false) event.preventDefault();

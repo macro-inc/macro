@@ -27,8 +27,9 @@ import type { OptionSelectorConfig, SelectableOption } from './types';
 
 export type UseDropdownSearchOptions = {
   itemCount: Accessor<number>;
-  onSelect: (index: number) => void;
+  onSelect: (index: number, event?: KeyboardEvent) => void;
   onClose: () => void;
+  enableNumericHotkeys?: boolean;
 };
 
 export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
@@ -46,7 +47,9 @@ export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
   });
 
   const shouldShowHotkeys = () =>
-    !searchQuery().trim() && options.itemCount() <= 9;
+    (options.enableNumericHotkeys ?? true) &&
+    !searchQuery().trim() &&
+    options.itemCount() <= 9;
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -64,7 +67,7 @@ export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
       const keyNum = parseInt(e.key);
       // 0 selects index 0 (the clear option when present)
       // 1-9 select indices 1-9 (the actual options)
-      if (keyNum < count) options.onSelect(keyNum);
+      if (keyNum < count) options.onSelect(keyNum, e);
       return;
     }
 
@@ -76,7 +79,7 @@ export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
       setSelectedIndex((prev) => (prev - 1 + count) % count);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      options.onSelect(selectedIndex());
+      options.onSelect(selectedIndex(), e);
     }
   };
 
@@ -193,18 +196,22 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     }
   };
 
-  const handleSelectableItem = (idx: number) => {
+  const shouldCloseAfterSelect = (
+    event?: KeyboardEvent | MouseEvent
+  ): boolean => !props.config.isMultiSelect || !event?.shiftKey;
+
+  const handleSelectableItem = (idx: number, event?: KeyboardEvent) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
       handleAddOption();
     } else if (item?.type === 'clear') {
       props.clearOption?.onClear();
-      if (!props.config.isMultiSelect && props.onClose) {
+      if (shouldCloseAfterSelect(event) && props.onClose) {
         props.onClose();
       }
     } else if (item?.type === 'option') {
       props.onToggleOption(item.option.id);
-      if (!props.config.isMultiSelect && props.onClose) {
+      if (shouldCloseAfterSelect(event) && props.onClose) {
         props.onClose();
       }
     }
@@ -411,10 +418,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             {(optionItem) => (
                               <DropdownSelectableRow
                                 isSelected={isSelected()}
-                                onClick={() => {
+                                onClick={(event) => {
                                   props.onToggleOption(optionItem().option.id);
                                   if (
-                                    !props.config.isMultiSelect &&
+                                    shouldCloseAfterSelect(event) &&
                                     props.onClose
                                   ) {
                                     props.onClose();
@@ -453,10 +460,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             {(clear) => (
                               <DropdownSelectableRow
                                 isSelected={isSelected()}
-                                onClick={() => {
+                                onClick={(event) => {
                                   clear().onClear();
                                   if (
-                                    !props.config.isMultiSelect &&
+                                    shouldCloseAfterSelect(event) &&
                                     props.onClose
                                   ) {
                                     props.onClose();
