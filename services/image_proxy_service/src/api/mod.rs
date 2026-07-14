@@ -1,6 +1,7 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -40,11 +41,9 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new().nest(
         "/proxy",
-        proxy::router().layer(
-            ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
-        ),
+        proxy::router().layer(axum::middleware::from_extractor_with_state::<
+            SharedMacroAuthorizationExtractor,
+            _,
+        >(state)),
     )
 }

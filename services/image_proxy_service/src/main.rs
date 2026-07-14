@@ -5,6 +5,7 @@ mod config;
 use anyhow::Context;
 use config::Config;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::SharedMacroAuthorizationService;
 use macro_entrypoint::MacroEntrypoint;
 
 #[tokio::main]
@@ -22,11 +23,12 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization = SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args);
 
     let http_client = api::proxy::build_http_client().context("failed to build http client")?;
 
     let state = api::context::ApiContext {
-        jwt_args,
+        authorization,
         environment: config.environment,
         http_client,
     };
