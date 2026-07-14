@@ -549,18 +549,30 @@ export const authServiceClient = {
       ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
       : `${authHost}/link/gmail`;
     return (
-      await fetchWithAuth<InitGmailLinkResponse, 'PAYMENT_REQUIRED'>(url, {
+      await fetchWithAuth<
+        InitGmailLinkResponse,
+        'PAYMENT_REQUIRED' | 'TOO_MANY_PENDING_LINKS'
+      >(url, {
         method: 'POST',
         // The backend returns 402 when the user isn't entitled to additional
-        // inboxes; surface it as a distinct code so the add-inbox flow can open
-        // the paywall instead of showing a generic failure.
-        errorResponseHandler: async (response) =>
-          response.status === 402
-            ? { code: 'PAYMENT_REQUIRED', message: 'Payment required' }
-            : {
-                code: 'HTTP_ERROR',
-                message: `HTTP error! status: ${response.status}`,
-              },
+        // inboxes, and 429 when they have too many incomplete link attempts in
+        // flight. Surface each as a distinct code so the add-inbox flow can open
+        // the paywall or explain the wait instead of a generic failure.
+        errorResponseHandler: async (response) => {
+          if (response.status === 402) {
+            return { code: 'PAYMENT_REQUIRED', message: 'Payment required' };
+          }
+          if (response.status === 429) {
+            return {
+              code: 'TOO_MANY_PENDING_LINKS',
+              message: 'Too many pending inbox connections',
+            };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
       })
     ).map((result) => result);
   },

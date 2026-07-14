@@ -196,6 +196,21 @@ function isPaymentRequired(errors: ReadonlyArray<{ code: string }>): boolean {
 }
 
 /**
+ * The backend answers `POST /link/gmail` with 429 when the user has too many
+ * incomplete link attempts in flight (each abandoned OAuth leaves a pending row
+ * that expires after 24h). The auth client maps that to `TOO_MANY_PENDING_LINKS`
+ * so the flow can explain the wait instead of a dead-end generic failure.
+ */
+function isTooManyPendingLinks(
+  errors: ReadonlyArray<{ code: string }>
+): boolean {
+  return errors.some((error) => error.code === 'TOO_MANY_PENDING_LINKS');
+}
+
+const TOO_MANY_PENDING_LINKS_MESSAGE =
+  'Too many inbox connections in progress. Finish or wait for a pending one to expire, then try again.';
+
+/**
  * Starts the add-inbox flow: fetches the Gmail link authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
@@ -244,6 +259,10 @@ export function useAddInboxFlow() {
         showPaywall(PaywallKey.MULTI_INBOX);
         return;
       }
+      if (isTooManyPendingLinks(result.error)) {
+        toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
+        return;
+      }
       toast.failure('Failed to start Gmail link flow');
       return;
     }
@@ -285,6 +304,8 @@ export function useAddInboxFlow() {
       window.location.href = result.value.authorization_url;
     } else if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);
+    } else if (isTooManyPendingLinks(result.error)) {
+      toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
     } else {
       toast.failure('Failed to start Gmail link flow');
     }
