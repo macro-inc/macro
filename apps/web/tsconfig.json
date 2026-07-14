@@ -104,6 +104,9 @@
       "@service-cognition/*": [
         "./src/lib/service-clients/service-cognition/*"
       ],
+      "@service-ai-editing/*": [
+        "./src/lib/service-clients/ai-editing-worker/*"
+      ],
       "@service-connection/*": [
         "./src/lib/service-clients/service-connection/*"
       ],

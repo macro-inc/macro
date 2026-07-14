@@ -185,7 +185,9 @@ export function dssFetch<T extends Record<string, any> = never>(
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
-async function getDocumentPermissionToken(documentId: string): Promise<string> {
+export async function getDocumentPermissionToken(
+  documentId: string
+): Promise<string> {
   const token = await fetchWithToken<GetDocumentPermissionsTokenResponse>(
     `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${documentId}`,
     {

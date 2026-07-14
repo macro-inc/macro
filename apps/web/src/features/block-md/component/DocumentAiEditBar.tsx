@@ -1,0 +1,171 @@
+import { mdStore } from '@block-md/signal/markdownBlockData';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
+import { AnimatedStarIcon } from '@icon/wide-star';
+import {
+  cancelAiEdit,
+  requestAiEditWithToast,
+} from '@service-ai-editing/client';
+import { Button, Hotkey, SendButton, Surface } from '@ui';
+import { createEffect, createSignal, Show, untrack } from 'solid-js';
+
+/**
+ * Right-aligned "Edit with AI" pill above the document discussion that expands
+ * (click or cmd+j) into a prompt card matching the Discussion composer. Submitting
+ * sends the instruction directly to the ai-editing-worker; the edit lands in the
+ * document via live sync while the pill reports progress — the worker only responds
+ * once the session finishes, so the request promise doubles as the done signal.
+ */
+export function DocumentAiEditBar(props: { documentId: string }) {
+  const scopeId = blockHotkeyScopeSignal.get;
+  const md = mdStore.get;
+
+  const [expanded, setExpanded] = createSignal(false);
+  const [editing, setEditing] = createSignal(false);
+  const [hovering, setHovering] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const [prompt, setPrompt] = createSignal('');
+
+  const editor = buildChatEditor();
+
+  const collapse = () => {
+    setExpanded(false);
+    md.editor?.focus();
+  };
+
+  const submit = () => {
+    const value = prompt().trim();
+    if (!value || editing()) return;
+    editor.controls.clear();
+    setPrompt('');
+    collapse();
+    setEditing(true);
+    requestAiEditWithToast(
+      { documentId: props.documentId, prompt: value },
+      () => setEditing(false)
+    );
+  };
+
+  editor
+    .onEnter(() => {
+      submit();
+      return true;
+    })
+    .onEscape(() => {
+      collapse();
+      return true;
+    })
+    .onChange((markdown) => setPrompt(markdown));
+
+  // cmd+j - expand the AI edit bar and focus the input
+  createEffect(() => {
+    if (!scopeId()) return;
+    untrack(() =>
+      registerHotkey({
+        hotkey: 'cmd+j',
+        scopeId: scopeId(),
+        hotkeyToken: TOKENS.chat.input.focus,
+        description: 'Ask AI to edit this document',
+        keyDownHandler: () => {
+          if (editing()) return true;
+          if (expanded()) editor.controls.focus();
+          else setExpanded(true);
+          return true;
+        },
+      })
+    );
+  });
+
+  return (
+    <div class="flex justify-end">
+      {/* breathe keyframe for the star while an edit runs */}
+      <style>{`
+        @keyframes ai-edit-breathe {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.18); }
+        }
+        .ai-edit-star-breathing {
+          animation: ai-edit-breathe 1.8s ease-in-out infinite;
+          transform-origin: center;
+        }
+      `}</style>
+      <Show
+        when={expanded()}
+        fallback={
+          <Button
+            onClick={() => {
+              if (editing()) cancelAiEdit(props.documentId);
+              else setExpanded(true);
+            }}
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            tooltip={editing() ? 'Stop AI edit' : 'Ask AI to edit'}
+            hotkey={editing() ? undefined : TOKENS.chat.input.focus}
+            variant="ghost"
+            size="sm"
+            depth={2}
+            class="gap-1.5 rounded-full px-2.5 ring ring-edge-muted"
+          >
+            <span
+              class="flex size-4 shrink-0 items-center justify-center"
+              classList={{
+                'ai-edit-star-breathing text-accent': editing(),
+              }}
+            >
+              <AnimatedStarIcon triggerAnimation={hovering() && !editing()} />
+            </span>
+            <span
+              class="text-xs font-medium"
+              classList={{ 'text-ink-muted': editing() && !hovering() }}
+            >
+              {editing() ? (hovering() ? 'Stop' : 'Editing…') : 'Edit with AI'}
+            </span>
+          </Button>
+        }
+      >
+        <Surface
+          onFocusIn={() => setFocused(true)}
+          onFocusOut={(event) => {
+            const next = event.relatedTarget as Node | null;
+            if (next && event.currentTarget.contains(next)) return;
+            setFocused(false);
+          }}
+          active={focused()}
+          class="w-96 max-w-full rounded-xl"
+          depth={2}
+          solid
+        >
+          <div class="flex flex-col gap-2 p-3">
+            <div class="flex items-start gap-2">
+              <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center text-accent">
+                <AnimatedStarIcon triggerAnimation={focused()} />
+              </span>
+              <div class="min-w-0 grow text-sm text-ink">
+                <MarkdownShell
+                  config={editor}
+                  placeholder="Describe the edit…"
+                  autofocus
+                />
+              </div>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-1.5 text-2xs text-ink-extra-muted">
+                <Hotkey shortcut="escape" theme="subtle" />
+                to dismiss
+              </span>
+              <SendButton
+                tooltip="Send edit"
+                shortcut="enter"
+                disabled={prompt().trim().length === 0}
+                onClick={submit}
+              />
+            </div>
+          </div>
+        </Surface>
+      </Show>
+    </div>
+  );
+}

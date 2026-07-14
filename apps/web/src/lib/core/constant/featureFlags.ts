@@ -318,6 +318,12 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   true
 );
 
+// Floating cmd+j AI edit bar in the document view
+export const ENABLE_DOCUMENT_AI_EDIT_BAR = resolveFeatureFlag(
+  'ENABLE_DOCUMENT_AI_EDIT_BAR',
+  true
+);
+
 export const ENABLE_EMAIL_SCHEDULED_SEND = resolveFeatureFlag(
   'ENABLE_EMAIL_SCHEDULED_SEND',
   true

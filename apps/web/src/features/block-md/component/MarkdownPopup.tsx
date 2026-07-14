@@ -46,14 +46,21 @@ import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
+import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
+import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
+import {
+  cancelAiEdit,
+  hasActiveAiEdit,
+  requestAiEditWithToast,
+} from '@service-ai-editing/client';
 import { generateTitle } from '@service-cognition/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
@@ -103,6 +110,37 @@ export function MarkdownPopup(props: {
   const [highlightLocation, setHighlightLocation] =
     createSignal<PersistentLocation | null>(null);
   const [highlightRect, setHighlightRect] = createSignal<DOMRect | null>(null);
+  // The selected range, painted with the accent highlight whenever the prompt
+  // box holds focus (focusing it drops the native selection paint) and kept on
+  // as the loading indicator while an edit session runs.
+  const [aiEditLocation, setAiEditLocation] =
+    createSignal<PersistentLocation | null>(null);
+  const [aiEditRunning, setAiEditRunning] = createSignal(false);
+  const [aiInputFocused, setAiInputFocused] = createSignal(false);
+
+  // Ctrl (held alone) is the opt-in: selecting while holding it sends the
+  // caret to the prompt box. Pressing any other key — even with ctrl down,
+  // e.g. ctrl+A / ctrl+C — disarms it so shortcuts never trigger the focus.
+  const [ctrlHeld, setCtrlHeld] = createSignal(false);
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      setCtrlHeld(
+        e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey
+      );
+      // Escape anywhere stops a running edit on this document (no-op
+      // otherwise; the prompt box's own Escape stops propagation first).
+      if (e.key === 'Escape') cancelAiEdit(blockId);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setCtrlHeld(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    onCleanup(() => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    });
+  });
 
   plugins.use(
     popupPlugin({
@@ -328,6 +366,76 @@ export function MarkdownPopup(props: {
 
     const handleRewrite = (_instructions: string) => {};
 
+    // The prompt row shows alongside the format tools whenever the user can
+    // edit — Escape dismisses just the row.
+    const [aiEditOpen, setAiEditOpen] = createSignal(canEdit());
+    const [aiEditInput, setAiEditInput] = createSignal('');
+    let aiInputRef: HTMLTextAreaElement | undefined;
+
+    // Mirror the selection into the highlight for as long as the toolbar is
+    // up; an in-flight edit keeps it alive past the popup.
+    createEffect(
+      on(selection, () => {
+        setAiEditLocation(editor.read(() => $getSelectionLocation()));
+      })
+    );
+    onCleanup(() => {
+      if (!aiEditRunning()) setAiEditLocation(null);
+    });
+
+    // Ctrl-selecting opts into the prompt box: once the selection settles
+    // with ctrl held, the caret moves there.
+    const settledSelection = debouncedDependent(selection, 150);
+    createEffect(
+      on(settledSelection, () => {
+        if (!ctrlHeld()) return;
+        setAiEditOpen(true);
+        requestAnimationFrame(() => aiInputRef?.focus());
+      })
+    );
+
+    // Resolves the loro-mirror node id of the top-level block containing the
+    // selection anchor, via the nodeIdPlugin's node state / key mapping.
+    const resolveSelectedNodeId = (): string | null => {
+      const lexicalSelection = selection()?.lexicalSelection;
+      if (!lexicalSelection) return null;
+      return editor.read(() => {
+        const anchorNode = lexicalSelection.anchor.getNode();
+        const topNode = anchorNode.getTopLevelElement() ?? anchorNode;
+        return (
+          $getId(topNode) ??
+          props.lexicalMapping.nodeKeyToIdMap.get(topNode.getKey()) ??
+          null
+        );
+      });
+    };
+
+    const handleAiEditSubmit = () => {
+      const instruction = aiEditInput().trim();
+      if (!instruction) return;
+      const nodeId = resolveSelectedNodeId();
+      if (!nodeId) {
+        toast.failure('Could not resolve the selected node');
+        return;
+      }
+      // The highlight is already tracking the selection; flagging the run
+      // keeps it alive (as the loading indicator) after the popup closes.
+      setAiEditRunning(true);
+      requestAiEditWithToast(
+        {
+          documentId: blockId,
+          prompt: `user has selected node ${nodeId} and asks for you to: ${instruction}. focus on only editing around this region`,
+        },
+        () => {
+          setAiEditLocation(null);
+          setAiEditRunning(false);
+        }
+      );
+      setAiEditInput('');
+      setAiEditOpen(false);
+      setPopupVisible(false);
+    };
+
     createEffect(
       on([completionType, rewriteInputRef], () => {
         if (highlightLocation()) {
@@ -444,6 +552,65 @@ export function MarkdownPopup(props: {
             Share
           </Button>
         </div>
+
+        <Show when={aiEditOpen()}>
+          <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
+            <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
+            <textarea
+              class="grow resize-none overflow-hidden bg-transparent text-sm placeholder-gray-400 focus:outline-none"
+              rows={1}
+              placeholder="Ask Macro to edit this selection"
+              ref={(el) => {
+                aiInputRef = el;
+              }}
+              onFocus={() => setAiInputFocused(true)}
+              onBlur={() => setAiInputFocused(false)}
+              onInput={(e) => {
+                setAiEditInput(e.currentTarget.value);
+                e.currentTarget.style.height = 'auto';
+                e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAiEditSubmit();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setAiEditInput('');
+                  setAiEditOpen(false);
+                }
+              }}
+            />
+            <Show
+              when={hasActiveAiEdit(blockId)}
+              fallback={
+                <Button
+                  size="icon-sm"
+                  class="rounded-md"
+                  depth={3}
+                  variant="ghost"
+                  tooltip="Ask Macro"
+                  disabled={!aiEditInput().trim()}
+                  onClick={handleAiEditSubmit}
+                >
+                  <CheckIcon class="size-4" />
+                </Button>
+              }
+            >
+              <Button
+                size="icon-sm"
+                class="rounded-md"
+                depth={3}
+                variant="ghost"
+                tooltip="Stop AI edit"
+                onClick={() => cancelAiEdit(blockId)}
+              >
+                <div class="size-2.5 rounded-xs bg-current" />
+              </Button>
+            </Show>
+          </div>
+        </Show>
 
         <Show when={!completion() && completionType() === 'rewrite'}>
           <div class="flex flex-col border-t border-edge mt-1 pt-2 w-full">
@@ -670,6 +837,34 @@ export function MarkdownPopup(props: {
           padding={[0, 2]}
           class="bg-ink-extra-muted"
           captureBoundingDomRect={setHighlightRect}
+        />
+      </Show>
+      <Show when={(aiInputFocused() || aiEditRunning()) && aiEditLocation()}>
+        <style>{`
+          .ai-edit-highlight {
+            background: var(--color-accent);
+            opacity: 0.25;
+            border-radius: 3px;
+          }
+          @keyframes ai-edit-pulse {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.6; }
+          }
+          .ai-edit-highlight-running {
+            animation: ai-edit-pulse 1.4s ease-in-out infinite;
+          }
+        `}</style>
+        <LocationHighlight
+          editor={editor}
+          mountRef={props.highlightLayerRef}
+          location={aiEditLocation()!}
+          mapping={props.lexicalMapping}
+          padding={[0, 2]}
+          class={
+            aiEditRunning()
+              ? 'ai-edit-highlight ai-edit-highlight-running'
+              : 'ai-edit-highlight'
+          }
         />
       </Show>
     </>

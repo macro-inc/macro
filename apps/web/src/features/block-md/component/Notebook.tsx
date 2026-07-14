@@ -16,6 +16,7 @@ import {
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
+  ENABLE_DOCUMENT_AI_EDIT_BAR,
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
   LOCAL_ONLY,
@@ -29,6 +30,7 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
+import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
@@ -45,6 +47,7 @@ import {
 import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DispatchAgentButton } from './DispatchAgentMenu';
+import { DocumentAiEditBar } from './DocumentAiEditBar';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -116,6 +119,7 @@ export function Notebook(props: {
   const history = useHistory();
   const { navigatedFromJK } = useNavigatedFromJK();
   const documentId = props.documentId;
+  const canEdit = useCanEdit();
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -365,6 +369,13 @@ export function Notebook(props: {
             </Show>
           </div>
           <Show when={!history.isOpen()}>
+            <Show
+              when={ENABLE_DOCUMENT_AI_EDIT_BAR && canEdit() && !isMobile()}
+            >
+              <div class="mb-2">
+                <DocumentAiEditBar documentId={props.documentId} />
+              </div>
+            </Show>
             <DocumentDiscussion />
           </Show>
         </ParamsProvider>
