@@ -6,6 +6,7 @@ import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAu
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
 import { Signup } from '@app/features/auth/Signup';
+import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
@@ -382,6 +383,10 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/team-invite',
     component: TeamInviteAcceptance,
+  },
+  {
+    path: '/channel-invite',
+    component: ChannelInviteAcceptance,
   },
   {
     // This splat route must be last to catch all unmatched routes
