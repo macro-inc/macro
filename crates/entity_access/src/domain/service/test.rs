@@ -3,8 +3,9 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::domain::models::{
-    AdminParticipantRole, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
-    MemberParticipantRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo, ViewAccessLevel,
+    AdminParticipantRole, BotId, CallChannelInfo, CommentAccessLevel, EditAccessLevel,
+    EntityAccessAuth, MemberParticipantRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
+    ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
@@ -19,6 +20,8 @@ struct MockRepo {
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
+    bot_entity_access: Arc<Mutex<Option<AccessLevel>>>,
+    bot_channel_role: Arc<Mutex<ChannelRoleResult>>,
     foreign_entity_access: Arc<Mutex<bool>>,
     crm_company_access: Arc<Mutex<Option<AccessLevel>>>,
     crm_contact_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -41,6 +44,8 @@ impl MockRepo {
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
             call_access: Arc::new(Mutex::new(None)),
+            bot_entity_access: Arc::new(Mutex::new(None)),
+            bot_channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
             foreign_entity_access: Arc::new(Mutex::new(false)),
             crm_company_access: Arc::new(Mutex::new(None)),
             crm_contact_access: Arc::new(Mutex::new(None)),
@@ -79,6 +84,18 @@ impl MockRepo {
     #[allow(dead_code)]
     fn with_call_access(mut self, level: AccessLevel) -> Self {
         self.call_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    #[allow(dead_code)]
+    fn with_bot_entity_access(mut self, level: AccessLevel) -> Self {
+        self.bot_entity_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    #[allow(dead_code)]
+    fn with_bot_channel_role(mut self, result: ChannelRoleResult) -> Self {
+        self.bot_channel_role = Arc::new(Mutex::new(result));
         self
     }
 
@@ -186,6 +203,23 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.call_access.lock().await)
+    }
+
+    async fn get_bot_entity_access(
+        &self,
+        _bot_id: BotId,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.bot_entity_access.lock().await)
+    }
+
+    async fn get_bot_channel_role(
+        &self,
+        _channel_id: &Uuid,
+        _bot_id: BotId,
+    ) -> Result<ChannelRoleResult, AccessError> {
+        Ok(*self.bot_channel_role.lock().await)
     }
 
     async fn has_foreign_entity_access(
