@@ -1,11 +1,15 @@
 //! Domain models for entity access.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use bot_id::BotId;
 pub use model_entity::EntityType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
@@ -252,12 +256,21 @@ pub struct Entity {
     pub entity_type: EntityType,
 }
 
+fn serialize_bot_id<S>(bot_id: &BotId, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    BotId::into_storage_id(*bot_id).serialize(serializer)
+}
+
 /// The entity access auth type
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum EntityAccessAuth {
     /// The user is authenticated
     Authenticated(MacroUserIdStr<'static>),
+    /// A bot is authenticated.
+    Bot(#[serde(serialize_with = "serialize_bot_id")] BotId),
     /// The user is unauthenticated
     Unauthenticated,
     /// Internally authenticated
@@ -313,11 +326,32 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
         )
     }
 
-    /// get the authenticated user or error
+    /// Creates an access receipt for an authenticated bot after validating the provided permission.
+    pub fn try_new_bot(
+        bot_id: BotId,
+        entity: Entity,
+        entity_permission: EntityPermission,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Self::try_new(EntityAccessAuth::Bot(bot_id), entity, entity_permission)
+    }
+
+    /// Get the authenticated user or return an authorization error.
     pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
         match &self.auth {
             EntityAccessAuth::Authenticated(user) => Ok(user),
-            _ => Err(AccessError::Unauthorized),
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
+        }
+    }
+
+    /// Get the authenticated bot or return an authorization error.
+    pub fn get_authenticated_bot(&self) -> Result<&BotId, AccessError> {
+        match &self.auth {
+            EntityAccessAuth::Bot(bot_id) => Ok(bot_id),
+            EntityAccessAuth::Authenticated(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
         }
     }
 
@@ -370,6 +404,30 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
     ) -> EntityAccessReceipt<T> {
         EntityAccessReceipt {
             auth: EntityAccessAuth::Authenticated(user_id),
+            entity: Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission: EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    /// Dangerously generates an `EntityAccessReceipt` for an authenticated bot
+    /// without performing the underlying access check.
+    ///
+    /// **NOTE** This is intended for tests. It **DOES NOT** assert the
+    /// existence of the item or that the bot actually has the required
+    /// permission.
+    pub fn dangerously_assert_bot(
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> EntityAccessReceipt<T> {
+        EntityAccessReceipt {
+            auth: EntityAccessAuth::Bot(bot_id),
             entity: Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,

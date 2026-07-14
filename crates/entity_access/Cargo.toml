@@ -27,6 +27,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
+bot_id = { path = "../bot_id" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }

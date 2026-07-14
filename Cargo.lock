@@ -5069,6 +5069,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bot_id",
  "cached",
  "cool_asserts",
  "macro_db_migrator",

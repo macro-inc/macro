@@ -83,6 +83,16 @@ fn internal_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::dangerously_assert_internal_user(document_id, EntityType::Document)
 }
 
+fn bot_id() -> entity_access::domain::models::BotId {
+    entity_access::domain::models::BotId::new_from_uuid(uuid::uuid!(
+        "00000000-0000-0000-0000-000000000123"
+    ))
+}
+
+fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_bot(bot_id(), document_id, EntityType::Document)
+}
+
 struct TestUploadUrlPort;
 
 impl PresignedUploadUrlPort for TestUploadUrlPort {
@@ -581,6 +591,78 @@ fn assert_shallow_pull_request_with_foreign_entity_id(
 }
 
 #[tokio::test]
+async fn bot_document_has_no_saved_user_view_location() {
+    let mut repo = make_mock_repo();
+    let metadata = make_test_metadata();
+
+    repo.expect_get_document_metadata()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(metadata))));
+    repo.expect_get_user_view_location().times(0);
+    repo.expect_get_persisted_document_content()
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+                DocumentContentLocation::ObjectStorage,
+            )))))
+        });
+    repo.expect_get_team_task_metadata()
+        .return_once(|_| Box::pin(std::future::ready(Ok(None))));
+
+    let response = make_test_service(repo)
+        .get_document(bot_receipt("doc-1"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.view_location, None);
+}
+
+#[tokio::test]
+async fn bot_lifecycle_event_has_no_actor_user_id() {
+    let mut repo = make_mock_repo();
+    repo.expect_soft_delete_document()
+        .withf(|id| id == "doc-1")
+        .return_once(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let receipt = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_bot(
+        bot_id(),
+        "doc-1",
+        EntityType::Document,
+    );
+
+    service.delete_document(receipt, None).await.unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0].payload["metadata"]["actor_user_id"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn bot_task_branch_uses_macro_fallback() {
+    let document_id = "00000000-0000-0000-0000-000000000124";
+    let service = make_test_service(make_mock_repo());
+
+    let response = service
+        .get_task_branch_name(bot_receipt(document_id), "Fix bot auth".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.branch_name,
+        build_task_branch_name(
+            "macro",
+            None,
+            None,
+            &short_id_for_entity_id(document_id).unwrap(),
+            "Fix bot auth",
+        )
+    );
+}
+
+#[tokio::test]
 async fn test_get_document_happy_path() {
     let mut repo = make_mock_repo();
     let metadata = make_test_metadata();
@@ -634,6 +716,50 @@ async fn test_soft_delete_document() {
 
     let result = repo.soft_delete_document("doc-1").await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn bot_pull_request_does_not_hydrate_foreign_entity() {
+    let document_id = "00000000-0000-0000-0000-000000000125";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000126");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/17".to_string(),
+            ])))
+        });
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![make_foreign_entity(
+            foreign_entity_id,
+            "macro/repo/pull/17",
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            bot_id().into_storage_id().as_ref(),
+            "bot",
+        )],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            bot_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/17",
+        "macro",
+        "repo",
+        17,
+    );
 }
 
 #[tokio::test]

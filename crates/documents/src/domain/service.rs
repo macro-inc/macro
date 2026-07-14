@@ -138,7 +138,9 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
 fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
     match auth {
         EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
-        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -625,7 +627,9 @@ impl<
                 .get_user_view_location(user_id.as_ref(), &document_id)
                 .await
                 .map_err(|e| DocumentError::Internal(e.into()))?,
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
         };
 
         let access_level = match entity_access_receipt.entity_permission() {
@@ -853,9 +857,9 @@ impl<
                     context.team_task_id,
                 )
             }
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
-                ("macro".to_string(), None, None)
-            }
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => ("macro".to_string(), None, None),
         };
 
         let branch_name = build_task_branch_name(
@@ -910,6 +914,7 @@ impl<
                 source_ids.extend(team_ids.into_iter().map(SourceId::team));
                 Some(source_ids)
             }
+            EntityAccessAuth::Bot(_) => Some(Vec::new()),
             EntityAccessAuth::Unauthenticated => Some(Vec::new()),
             EntityAccessAuth::Internal => None,
         };
