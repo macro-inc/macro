@@ -322,7 +322,7 @@ impl TestEventBroker {
 }
 
 impl MacroEventBroker for TestEventBroker {
-    async fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
+    fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
         self.published.lock().unwrap().push(PublishedEvent {
             topic: event.topic().as_str(),
             key: event.key().to_string(),

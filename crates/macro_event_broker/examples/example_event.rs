@@ -137,7 +137,8 @@ pub async fn main() -> Result<(), EventBrokerError> {
         },
     );
 
-    service.send_event(&event).await?;
+    service.send_event(&event)?;
+    tokio::task::yield_now().await;
 
     Ok(())
 }

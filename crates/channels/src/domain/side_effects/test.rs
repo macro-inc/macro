@@ -1046,7 +1046,7 @@ struct PublishedEvent {
 }
 
 impl MacroEventBroker for TestEventBroker {
-    async fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
+    fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
         &self,
         event: &E,
     ) -> Result<(), macro_event_broker::EventBrokerError> {
@@ -1064,7 +1064,7 @@ impl MacroEventBroker for TestEventBroker {
 struct FailingEventBroker;
 
 impl MacroEventBroker for FailingEventBroker {
-    async fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
+    fn send_event<E: macro_event_broker::MacroEvent + ?Sized>(
         &self,
         _event: &E,
     ) -> Result<(), macro_event_broker::EventBrokerError> {

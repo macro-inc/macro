@@ -91,7 +91,6 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
         let _ = self
             .macro_event_broker
             .send_event(event)
-            .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
     }
 }

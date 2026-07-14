@@ -131,7 +131,6 @@ pub async fn complete_transaction_with_processing_error<T>(
 pub async fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
     let _ = broker
         .send_event(event)
-        .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
 }
 

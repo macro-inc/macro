@@ -520,13 +520,9 @@ impl<
 
     /// Publish a document lifecycle event; failures are logged and dropped.
     async fn publish_document_event(&self, event: &DocumentMacroEvent) {
-        let _ = self
-            .macro_event_broker
-            .send_event(event)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to publish document event");
-            });
+        let _ = self.macro_event_broker.send_event(event).inspect_err(|e| {
+            tracing::error!(error=?e, "failed to publish document event");
+        });
     }
 }
 

@@ -10,12 +10,12 @@ use crate::domain::models::{EventBrokerError, MacroEvent};
 ///
 /// Implemented by [`MacroEventBrokerService`](crate::domain::service::MacroEventBrokerService).
 pub trait MacroEventBroker: Send + Sync + 'static {
-    /// Serialize `event` to JSON and publish it to the topic declared by its typed payload,
-    /// keyed by [`MacroEvent::key`].
-    fn send_event<E: MacroEvent + ?Sized>(
-        &self,
-        event: &E,
-    ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;
+    /// Serialize `event` to JSON and schedule it for publication to the topic declared by its
+    /// typed payload, keyed by [`MacroEvent::key`].
+    ///
+    /// Serialization and scheduling errors are returned immediately. Publication runs in a
+    /// detached task, so publisher errors and timeouts are logged instead of returned.
+    fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError>;
 }
 
 /// Outbound port: the boundary to the underlying message broker (e.g. Kafka).
