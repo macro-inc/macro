@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::activity;
 use anyhow::{Context, Result};
 use channels::domain::models::{ChannelType, ParticipantRole};
