@@ -177,12 +177,15 @@ async fn bot_source_ids_user_scoped_bot_does_not_inherit_owner(pool: PgPool) -> 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bot_source_ids_soft_deleted_bot_excludes_team(pool: PgPool) -> anyhow::Result<()> {
+async fn bot_source_ids_soft_deleted_bot_has_no_sources(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let bot_principal = bot_id.into_storage_id();
     let team_id = Uuid::new_v4();
+    let channel_id = Uuid::new_v4();
     insert_team(&pool, team_id).await;
     insert_owned_bot(&pool, bot_id, None, Some(team_id)).await;
+    insert_channel(&pool, channel_id).await;
+    insert_bot_participant(&pool, channel_id, bot_id, false).await;
     sqlx::query!(
         "UPDATE bots SET deleted_at = now() WHERE id = $1",
         bot_id.as_uuid(),
@@ -192,8 +195,7 @@ async fn bot_source_ids_soft_deleted_bot_excludes_team(pool: PgPool) -> anyhow::
 
     let source_ids = source_id_set(get_bot_source_ids(&pool, &bot_principal).await?);
 
-    assert_eq!(source_ids, HashSet::from([bot_principal.to_string()]));
-    assert!(!source_ids.contains(&team_id.to_string()));
+    assert!(source_ids.is_empty());
     Ok(())
 }
 

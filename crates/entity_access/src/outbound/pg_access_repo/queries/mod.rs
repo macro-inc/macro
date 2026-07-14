@@ -94,13 +94,22 @@ pub async fn get_bot_source_ids(
 ) -> anyhow::Result<SourceIds> {
     let source_ids = sqlx::query_scalar!(
         r#"
-        SELECT cp.channel_id::text FROM comms_channel_participants cp
-            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        WITH active_bot AS (
+            SELECT team_id
+            FROM bots
+            WHERE id = $2 AND deleted_at IS NULL
+        )
+        SELECT cp.channel_id::text
+        FROM active_bot
+        JOIN comms_channel_participants cp
+            ON cp.user_id = $1 AND cp.left_at IS NULL
         UNION ALL
-        SELECT b.team_id::text FROM bots b
-            WHERE b.id = $2 AND b.team_id IS NOT NULL AND b.deleted_at IS NULL
+        SELECT team_id::text
+        FROM active_bot
+        WHERE team_id IS NOT NULL
         UNION ALL
         SELECT $1
+        FROM active_bot
         "#,
         bot_id.as_ref(),
         bot_id.as_uuid(),

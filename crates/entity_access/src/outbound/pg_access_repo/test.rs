@@ -728,6 +728,8 @@ async fn pg_bot_channel_role_requires_explicit_canonical_participation(
     let participating_bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let other_bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let channel_id = Uuid::new_v4();
+    insert_pg_bot(&pool, participating_bot_id, Some(PG_BOT_OWNER), None).await?;
+    insert_pg_bot(&pool, other_bot_id, Some(PG_BOT_OWNER), None).await?;
     insert_pg_bot_channel(&pool, channel_id, "public").await?;
     insert_pg_bot_participant(&pool, channel_id, participating_bot_id, "admin").await?;
     let repo = PgAccessRepository::new(pool);

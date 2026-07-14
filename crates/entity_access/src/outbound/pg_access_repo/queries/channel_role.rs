@@ -98,7 +98,8 @@ pub async fn get_channel_role(
 /// Get a bot's explicit role in a channel.
 ///
 /// Unlike [`get_channel_role`], public and organization channels do not grant a
-/// default role. The bot must have an active participant row.
+/// default role. The bot must exist, not be soft-deleted, and have an active
+/// participant row.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_bot_channel_role(
     pool: &PgPool,
@@ -110,11 +111,19 @@ pub async fn get_bot_channel_role(
         SELECT cp.role::text as "role?"
         FROM comms_channels c
         LEFT JOIN comms_channel_participants cp
-            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
+            ON cp.channel_id = c.id
+            AND cp.user_id = $2
+            AND cp.left_at IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM bots b
+                WHERE b.id = $3 AND b.deleted_at IS NULL
+            )
         WHERE c.id = $1
         "#,
         channel_id,
         bot_principal.as_ref(),
+        bot_principal.as_uuid(),
     )
     .fetch_optional(pool)
     .await?;
