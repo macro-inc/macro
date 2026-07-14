@@ -14,7 +14,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::StreamExt;
@@ -53,7 +53,7 @@ pub struct Params {
 #[allow(deprecated, reason = "we just want deprecated to show up in utoipa")]
 #[deprecated(note = "we no longer support editing docx files as they are now converted to pdf.")]
 pub async fn presave_document_handler(
-    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

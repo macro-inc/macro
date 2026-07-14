@@ -1,4 +1,4 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{
     Extension,
     extract::{Path, State},
@@ -36,7 +36,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(db, user_context, _access), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
     user_context: Extension<UserContext>,
     Path(Params { document_id }): Path<Params>,

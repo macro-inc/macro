@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -63,7 +63,7 @@ pub struct ExportDocumentResponse {
     )]
 #[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     Path(Params { .. }): Path<Params>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::service::conn_gateway::update_live_comment_state;
 use axum::{
     Json,
@@ -48,7 +48,7 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn create_anchor_handler(
-    _access: DocumentAccessExtractor<CommentAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<CommentAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
     State(connection_gateway_client): State<Arc<ConnectionGatewayClient>>,
     user_context: Extension<UserContext>,

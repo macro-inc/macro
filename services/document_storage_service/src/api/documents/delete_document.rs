@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::api::util::count_occurrences;
 use axum::Json;
 use axum::extract::State;
@@ -40,7 +40,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(state, user_context, _access), fields(user_id=?user_context.user_id))]
 pub async fn permanently_delete_document_handler(
-    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::{
     api::{context::ApiContext, documents::utils},
     model::{
@@ -50,7 +50,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(ctx, user_context, document_context, _access, project), fields(user_id=?user_context.user_id))]
 pub async fn save_document_handler(
-    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     document_context: Extension<DocumentBasic>,

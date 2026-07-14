@@ -1,4 +1,4 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::model::response::documents::get::GetDocumentPermissionsResponseDataV2;
 use axum::{
     Extension,
@@ -45,7 +45,7 @@ pub(in crate::api) async fn get_document_permissions_handler_v2(
 /// Gets the current documents share permissions
 #[tracing::instrument(skip(db, _access))]
 pub async fn get_document_permissions_handler(
-    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {

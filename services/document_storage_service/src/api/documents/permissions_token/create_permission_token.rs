@@ -1,4 +1,4 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -46,7 +46,11 @@ pub struct DocumentPermissionsTokenResponse {
 pub async fn handler(
     State(state): State<ApiContext>,
     user_context: Extension<UserContext>,
-    users_access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    users_access_level: DocumentAccessExtractor<
+        ViewAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
     let user_id = if user_context.user_id.is_empty() {

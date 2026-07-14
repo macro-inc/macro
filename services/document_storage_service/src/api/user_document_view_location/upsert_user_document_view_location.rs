@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::model::request::documents::user_document_view_location::UpsertUserDocumentViewLocationRequest;
 use axum::extract::{Path, State};
 use axum::{
@@ -33,7 +33,7 @@ pub struct Params {
 )]
 #[tracing::instrument(skip(ctx, user_context, req, _access), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { document_id }): Path<Params>,

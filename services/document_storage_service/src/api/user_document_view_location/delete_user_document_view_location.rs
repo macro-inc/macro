@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{
     Extension,
     extract::{Path, State},
@@ -31,7 +31,7 @@ pub struct Params {
 )]
 #[tracing::instrument(skip(ctx, user_context, _document), fields(user_id=?user_context.user_id))]
 pub async fn handler(
-    _document: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _document: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(Params { document_id }): Path<Params>,
