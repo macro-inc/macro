@@ -3,6 +3,7 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
+import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
 import HashIcon from '@phosphor/hash.svg';
 import XIcon from '@phosphor/x.svg';
@@ -11,8 +12,10 @@ import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
+const newChannelModalFocusLock = useFocusLock('create-channel');
 
 export function openNewChannelModal() {
+  newChannelModalFocusLock.acquire();
   setNewChannelModalOpen(true);
 }
 
@@ -36,10 +39,15 @@ export function CreateChannelModal() {
     setError(undefined);
   }
 
-  function close() {
-    if (createChannelMutation.isPending) return;
+  function resetAndClose() {
+    newChannelModalFocusLock.release();
     reset();
     setNewChannelModalOpen(false);
+  }
+
+  function close() {
+    if (createChannelMutation.isPending) return;
+    resetAndClose();
   }
 
   async function handleSubmit(event: SubmitEvent) {
@@ -59,8 +67,7 @@ export function CreateChannelModal() {
         name: trimmedName,
         participants: destination.users,
       });
-      reset();
-      setNewChannelModalOpen(false);
+      resetAndClose();
       replaceOrInsertSplit({ type: 'channel', id });
     } catch (cause) {
       console.error('Failed to create channel', cause);

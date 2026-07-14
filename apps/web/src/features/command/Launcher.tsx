@@ -383,8 +383,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.channel,
     hotkey: 'g',
     keyDownHandler: () => {
-      setCreateMenuOpen(false, false);
       openNewChannelModal();
+      setCreateMenuOpen(false, false);
       return true;
     },
   },
