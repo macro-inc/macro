@@ -36,6 +36,11 @@ just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
   know emails, so accounts created through the signup webhook survive it.
 - `apply` creates each user's FusionAuth account first (the signup webhook
   writes the base rows, which the seeder then adopts), so every seeded user
-  can log in through the real passwordless flow — the one-time codes land in
-  mailpit (http://localhost:8025). If FusionAuth is unreachable, apply seeds
-  database rows only and says so.
+  can log in through the real passwordless flow — grab the one-time code with
+  `just code <email>` (it reads mailpit). If FusionAuth is unreachable, apply
+  seeds database rows only and says so.
+- To drive several personas at once in one browser window, open each one on
+  its own hostname: `http://alice.localhost:3000`, `http://carol.localhost:3000`,
+  and so on. Hostnames get separate cookie jars (ports don't), and the app
+  follows the page hostname to the backend proxy, so every tab holds an
+  independent live session against the same stack.

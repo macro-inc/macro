@@ -181,7 +181,19 @@ pub async fn apply(
 
     println!("\nScenario `{}` applied.", spec.scenario);
     for (key, user) in &spec.users {
-        println!("  {key}: log in as {}", user.email);
+        // Per-persona hostnames get separate cookie jars, so each of these
+        // can hold its own live session in ordinary tabs of one browser.
+        if key
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
+            println!(
+                "  {key}: http://{key}.localhost:3000 (log in as {})",
+                user.email
+            );
+        } else {
+            println!("  {key}: log in as {}", user.email);
+        }
     }
     Ok(())
 }
