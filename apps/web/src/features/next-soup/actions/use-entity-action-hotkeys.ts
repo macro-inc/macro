@@ -13,6 +13,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -25,6 +26,7 @@ import {
   makeMarkDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
+  makeSetCompanyPropertyAction,
   makeShareAction,
 } from './index';
 
@@ -75,6 +77,11 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+
+  const isTeamAdmin = useIsTeamAdmin();
+  const setCompanyPropertyAction = makeSetCompanyPropertyAction({
+    isTeamAdmin: () => isTeamAdmin(),
+  });
 
   const getEntitiesForAction = (): EntityData[] => {
     if (
@@ -470,6 +477,42 @@ export const useEntityActionHotkeys = (
     },
     scopeId,
   }).withGroup(group);
+
+  // Set stage / owner / revenue for CRM companies (command menu only, no
+  // keybindings) — company counterpart of the task property commands above.
+  const companyPropertyCommands = [
+    { token: TOKENS.entity.action.stage, field: 'stage', label: 'Set stage' },
+    { token: TOKENS.entity.action.owner, field: 'owner', label: 'Set owner' },
+    {
+      token: TOKENS.entity.action.revenue,
+      field: 'revenue',
+      label: 'Set revenue',
+    },
+  ] as const;
+  for (const { token, field, label } of companyPropertyCommands) {
+    registerHotkey({
+      hotkeyToken: token,
+      tags: [HotkeyTags.SelectionModification],
+      displayPriority: 10,
+      description: label,
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        setCompanyPropertyAction.execute(entities, field);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return (
+          entities.length > 0 &&
+          entities.every(setCompanyPropertyAction.canExecute)
+        );
+      },
+      scopeId,
+    }).withGroup(group);
+  }
 
   onCleanup(() => group.dispose());
 

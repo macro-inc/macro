@@ -50,6 +50,7 @@ import {
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { idToDisplayName } from '@core/user/util';
 import {
   COMPANY_STAGE_OPTIONS,
   type EntityData,
@@ -119,6 +120,9 @@ type SoupViewInitializeOptions = {
 
 export type ReadFilter = 'all' | 'unread' | 'read';
 
+/** List/board display mode — currently only the Customers view offers a board. */
+export type SoupViewMode = 'list' | 'board';
+
 interface SoupViewContextValues {
   soup: SoupState;
   initialize: (options?: SoupViewInitializeOptions) => void;
@@ -145,6 +149,8 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  viewMode: Accessor<SoupViewMode>;
+  setViewMode: Setter<SoupViewMode>;
   readFilter: Accessor<ReadFilter>;
   setReadFilter: Setter<ReadFilter>;
   groupByField: Accessor<GroupByField | undefined>;
@@ -328,6 +334,11 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.tab',
     { default: undefined }
   );
+  // List/board display mode — per-entry state so back/forward restores the
+  // mode the user left each entry with.
+  const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
+    default: 'board',
+  });
   const [readFilter, setReadFilter] = useEntryState<ReadFilter>(
     'soup.readFilter',
     { default: 'unread' }
@@ -794,11 +805,23 @@ export const SoupViewContextProvider: FlowComponent<
     );
   };
 
+  const isOwnerGrouping = () => {
+    const field = groupByField();
+    return (
+      field?.type === 'property' &&
+      field.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER
+    );
+  };
+
   // Group-key → label, preferring the active deal-stage set for stage
   // groupings (custom option ids are unknown to the static option table).
   const resolveGroupLabel = (key: string): string | undefined => {
     if (isStageGrouping()) {
       return dealStages.stageLabel(key) ?? getPropertyOptionLabel(key);
+    }
+    // Owner group keys are user ids — resolve to the display name.
+    if (isOwnerGrouping()) {
+      return idToDisplayName(key) || undefined;
     }
     return getPropertyOptionLabel(key);
   };
@@ -1113,6 +1136,8 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    viewMode,
+    setViewMode,
     readFilter,
     setReadFilter,
     groupByField,
