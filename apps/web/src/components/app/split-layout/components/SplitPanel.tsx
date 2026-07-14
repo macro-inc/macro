@@ -148,13 +148,14 @@ export function SplitPanel(props: SplitPanelProps) {
       isSoloSettings()
   );
 
-  const showsSplitFocus = createMemo(
-    () =>
-      !isMobile() &&
-      props.active &&
-      multipleSplits() &&
-      !props.handle.isSpotLight()
-  );
+  const splitFocusStyling = () =>
+    !isMobile() &&
+    props.active &&
+    multipleSplits() &&
+    !props.handle.isSpotLight();
+
+  const splitUnfocusedStyling = () =>
+    !isMobile() && !props.active && multipleSplits();
 
   return (
     <SoupContextProvider soup={nextSoup}>
@@ -224,7 +225,7 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               edgeColor={
-                showsSplitFocus()
+                splitFocusStyling()
                   ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
                   : undefined
               }
@@ -232,8 +233,8 @@ export function SplitPanel(props: SplitPanelProps) {
                 'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0! bg-panel',
                 {
                   'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
-                    !showsSplitFocus(),
-                  'shadow-2xl shadow-drop-shadow': showsSplitFocus(),
+                    splitUnfocusedStyling(),
+                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
                 }
               )}
               depth={isMobile() ? 0 : 1}
