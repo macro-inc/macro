@@ -131,6 +131,54 @@ fn expected_matrix_covers_owner_team_channel_public_edges() {
 }
 
 #[test]
+fn mentions_grant_channel_view_to_projects_and_calls() {
+    let spec = ScenarioSpec::parse(
+        &serde_json::json!({
+            "scenario": "mention-check",
+            "users": {
+                "owner": { "email": "owner@x.local" },
+                "peer": { "email": "peer@x.local" },
+                "member": { "email": "member@x.local" }
+            },
+            "channels": {
+                "dm": { "type": "direct_message", "members": ["owner", "peer"] },
+                "room": { "type": "private", "owner": "owner", "members": ["member"] }
+            },
+            "projects": { "plans": { "owner": "owner" } },
+            "calls": { "huddle": { "channel": "dm", "created_by": "owner" } },
+            "messages": [
+                { "channel": "room", "from": "owner", "text": "fyi",
+                  "mentions": ["project:plans", "call:huddle"] }
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let rows = expected_matrix(&spec);
+
+    // `member` is only in `room`; the mentions there grant view on both the
+    // project and the call, mirroring what seeding the message does.
+    assert_eq!(
+        level(&rows, "project:plans", "member"),
+        Some(AccessLevel::View)
+    );
+    assert_eq!(
+        level(&rows, "call:huddle", "member"),
+        Some(AccessLevel::View)
+    );
+
+    // The call's own channel keeps edit; the mention's view doesn't lower it.
+    assert_eq!(level(&rows, "call:huddle", "peer"), Some(AccessLevel::Edit));
+    assert_eq!(
+        level(&rows, "call:huddle", "owner"),
+        Some(AccessLevel::Owner)
+    );
+
+    // `peer` isn't in `room`, so the mention grants them nothing.
+    assert_eq!(level(&rows, "project:plans", "peer"), None);
+}
+
+#[test]
 fn expected_matrix_row_count_matches_entities() {
     let spec = example();
     let rows = expected_matrix(&spec);

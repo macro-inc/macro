@@ -88,6 +88,22 @@ fn owner_row(spec: &ScenarioSpec, owner_key: &str) -> apply::AccessRow {
     }
 }
 
+/// Channel view rows granted by message mentions of `kind:key`, mirroring
+/// the mention-sharing that seeding messages performs.
+fn mention_channel_rows(spec: &ScenarioSpec, kind: &str, key: &str) -> Vec<apply::AccessRow> {
+    let reference = format!("{kind}:{key}");
+    spec.messages
+        .iter()
+        .filter(|message| message.mentions.contains(&reference))
+        .map(|message| apply::AccessRow {
+            source_id: spec.channel_id(&message.channel).to_string(),
+            source_type: entity_access_db_utils::EntityAccessSourceType::Channel,
+            access_level: AccessLevel::View,
+            granted_from_project_id: None,
+        })
+        .collect()
+}
+
 /// Compute the full expected matrix for a scenario.
 pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
     let mut rows = Vec::new();
@@ -112,6 +128,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
         if let Some(parent) = project.parent.as_deref() {
             access_rows.extend(apply::inherited_rows(spec, parent));
         }
+        access_rows.extend(mention_channel_rows(spec, "project", project_key));
         rows.push(ExpectedRow {
             label: format!("project:{project_key}"),
             entity_id: spec.project_id(project_key),
@@ -126,20 +143,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
         if let Some(project) = document.project.as_deref() {
             access_rows.extend(apply::inherited_rows(spec, project));
         }
-        for message in &spec.messages {
-            if message
-                .mentions
-                .iter()
-                .any(|m| m == &format!("document:{document_key}"))
-            {
-                access_rows.push(apply::AccessRow {
-                    source_id: spec.channel_id(&message.channel).to_string(),
-                    source_type: entity_access_db_utils::EntityAccessSourceType::Channel,
-                    access_level: AccessLevel::View,
-                    granted_from_project_id: None,
-                });
-            }
-        }
+        access_rows.extend(mention_channel_rows(spec, "document", document_key));
         rows.push(ExpectedRow {
             label: format!("document:{document_key}"),
             entity_id: spec.document_id(document_key),
@@ -151,20 +155,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
     for (chat_key, chat) in &spec.chats {
         let mut access_rows = vec![owner_row(spec, &chat.owner)];
         access_rows.extend(chat.share.iter().map(|s| apply::share_to_row(spec, s)));
-        for message in &spec.messages {
-            if message
-                .mentions
-                .iter()
-                .any(|m| m == &format!("chat:{chat_key}"))
-            {
-                access_rows.push(apply::AccessRow {
-                    source_id: spec.channel_id(&message.channel).to_string(),
-                    source_type: entity_access_db_utils::EntityAccessSourceType::Channel,
-                    access_level: AccessLevel::View,
-                    granted_from_project_id: None,
-                });
-            }
-        }
+        access_rows.extend(mention_channel_rows(spec, "chat", chat_key));
         rows.push(ExpectedRow {
             label: format!("chat:{chat_key}"),
             entity_id: spec.chat_id(chat_key),
@@ -193,6 +184,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
                 granted_from_project_id: None,
             });
         }
+        access_rows.extend(mention_channel_rows(spec, "call", call_key));
         rows.push(ExpectedRow {
             label: format!("call:{call_key}"),
             entity_id: spec.call_id(call_key).to_string(),
