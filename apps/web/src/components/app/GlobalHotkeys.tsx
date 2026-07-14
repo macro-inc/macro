@@ -48,8 +48,9 @@ import { ThemeChips } from '@theme/components/ThemeChips';
 import {
   setDarkModeTheme,
   setLightModeTheme,
-  setThemeShouldMatchSystem,
-  themeShouldMatchSystem,
+  setThemeMode,
+  systemMode,
+  themeMode,
   themes,
 } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
@@ -437,9 +438,11 @@ export default function GlobalShortcuts() {
   registerHotkey({
     scopeId: 'global',
     description: () =>
-      `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`,
+      `${themeMode() === 'system' ? 'Turn off a' : 'A'}uto-detect color scheme`,
     keyDownHandler: () => {
-      setThemeShouldMatchSystem((prev) => !prev);
+      // Toggle system (auto-detect) on/off; turning it off pins the theme to the
+      // OS's current scheme so the appearance doesn't visibly change.
+      setThemeMode((prev) => (prev === 'system' ? systemMode() : 'system'));
       return true;
     },
     runWithInputFocused: true,

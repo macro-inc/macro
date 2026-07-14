@@ -1,4 +1,4 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setUserThemes, systemMode, themeDepth, themeMode, themes, userThemes} from '../signals/themeSignals';
 import { semanticTokens, type ThemeV2, type ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
@@ -139,24 +139,26 @@ export function clearThemePreview(): void{
   previewSnapshot = null;
 }
 
-/** When auto-detect is on, keeps the active theme in sync with the OS color
- *  scheme by applying the preferred light or dark theme as the system flips.
- *  Call once from a reactive root (see Root.tsx). */
+/** Resolves the theme id that should be live for the current "Active theme"
+ *  mode: the pinned light/dark theme, or — in system mode — whichever matches
+ *  the OS color scheme. Read inside a reactive scope, it subscribes to the mode,
+ *  the OS scheme (system mode only), and the relevant per-mode theme. */
+export function resolveActiveThemeId(): string{
+  const resolved = themeMode() === 'system' ? systemMode() : themeMode();
+  return resolved === 'dark' ? darkModeTheme() : lightModeTheme();
+}
+
+/** Keeps the active theme in sync with the "Active theme" mode: applies the
+ *  pinned light/dark theme, or follows the OS color scheme in system mode.
+ *  Re-applies whenever the mode, the OS scheme, or the *active* mode's theme
+ *  changes — but not when the inactive mode's theme changes (that id isn't read
+ *  by resolveActiveThemeId, so it isn't tracked). Call once from a reactive root
+ *  (see Root.tsx). */
 export function systemThemeEffect(): void{
   createEffect(
     on(
-      // Only react to the OS color scheme flipping or auto-detect turning on —
-      // deliberately NOT to darkModeTheme/lightModeTheme. `on` runs its callback
-      // untracked, so reading the defaults below does not subscribe to them. This
-      // keeps "Set default light/dark theme" from re-applying the current mode's
-      // default and clobbering the active theme; a new default takes effect on the
-      // next mode change (or when auto-detect is toggled on).
-      [themeShouldMatchSystem, systemMode],
-      () => {
-        if(themeShouldMatchSystem()){
-          applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
-        }
-      },
+      resolveActiveThemeId,
+      (id) => applyTheme(id),
       { defer: true }
     )
   );

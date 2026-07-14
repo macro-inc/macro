@@ -92,10 +92,10 @@ import {
   type RouterProps,
   useSearchParams,
 } from '@solidjs/router';
-import { currentThemeId } from '@theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
+  resolveActiveThemeId,
   systemThemeEffect,
 } from '@theme/utils/themeUtils';
 import { Button } from '@ui';
@@ -569,7 +569,7 @@ export function Root() {
   });
 
   onMount(() => {
-    applyTheme(currentThemeId());
+    applyTheme(resolveActiveThemeId());
     ensureMinimalThemeContrast();
   });
 

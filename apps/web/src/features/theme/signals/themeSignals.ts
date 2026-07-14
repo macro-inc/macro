@@ -35,9 +35,10 @@ export const themes = createMemo<ThemeV2[]>(() => [
   ...userThemes(),
 ]);
 
-// Per-mode theme preferences, persisted to localStorage. Applied by
-// systemThemeEffect (themeUtils.ts) when themeShouldMatchSystem is on and the OS
-// color scheme is (or becomes) the matching mode.
+// Per-mode theme preferences, persisted to localStorage. The active one is
+// applied by systemThemeEffect / resolveActiveThemeId (themeUtils.ts): the light
+// theme when themeMode is 'light' (or 'system' + OS light), the dark theme when
+// 'dark' (or 'system' + OS dark).
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_LIGHT_THEME),
   {name: 'macro-light-mode-theme'}
@@ -48,16 +49,21 @@ export const [darkModeTheme, setDarkModeTheme] = makePersisted(
   {name: 'macro-dark-mode-theme'}
 );
 
-export const [themeShouldMatchSystem, setThemeShouldMatchSystem] = makePersisted(
-  createSignal<boolean>(true),
-  {name: 'macro-theme-should-match-system'}
+/** The "Active theme" mode: pin a fixed light or dark theme, or follow the OS
+ *  ('system'). Drives which per-mode theme (lightModeTheme/darkModeTheme) is
+ *  live — see resolveActiveThemeId / systemThemeEffect in themeUtils. */
+export type ThemeMode = 'light' | 'dark' | 'system';
+
+export const [themeMode, setThemeMode] = makePersisted(
+  createSignal<ThemeMode>('system'),
+  {name: 'macro-theme-mode'}
 );
 
 const supportsMatchMedia =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function';
 
-// Tracks the OS color scheme so the active theme can follow it when
-// themeShouldMatchSystem is on.
+// Tracks the OS color scheme so the active theme can follow it when themeMode is
+// 'system'.
 export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
   supportsMatchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
