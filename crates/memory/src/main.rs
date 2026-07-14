@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 
-use ai_tools::{all_tools, build_tool_service_context_from_env};
+use ai_tools::{ManagedToolServiceContext, all_tools, build_tool_service_context_from_env};
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::config::Config;
@@ -19,16 +19,21 @@ async fn main() -> anyhow::Result<()> {
         .connect(&config.database_url)
         .await?;
 
-    let tool_context = build_tool_service_context_from_env(pool.clone()).await?;
+    let user = MacroUserIdStr::try_from(config.user_id.clone())
+        .context("USER_ID must be a valid Macro user id")?;
+    let ManagedToolServiceContext {
+        tool_context,
+        broker_runtime,
+    } = build_tool_service_context_from_env(pool.clone()).await?;
     let tools = all_tools();
     let memory_repo = PgMemoryRepo::new(pool.clone());
     let memory_service = MemoryServiceImpl::new(pool, memory_repo, tool_context, tools);
 
-    let user = MacroUserIdStr::try_from(config.user_id.clone())
-        .context("USER_ID must be a valid Macro user id")?;
-
     tracing::info!("Generating memory for {user}...");
-    match memory_service.get_or_generate_memory(user).await? {
+    let generation_result = memory_service.get_or_generate_memory(user).await;
+    broker_runtime.shutdown().await;
+
+    match generation_result? {
         Some(memory) => println!("{memory}"),
         None => println!("No memory yet, generation triggered in background"),
     }

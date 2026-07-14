@@ -29,6 +29,7 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
+use macro_event_broker::{BufferedBrokerConfig, BufferedMacroEventBroker, KafkaEventPublisher};
 use macro_service_urls::{
     ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
     LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
@@ -278,10 +279,10 @@ async fn main() -> anyhow::Result<()> {
         properties_service.clone(),
         entity_access_service.clone(),
     );
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-    );
+    let event_publisher = KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+        .context("failed to create kafka event publisher")?;
+    let (macro_event_broker, broker_runtime) =
+        BufferedMacroEventBroker::start(event_publisher, BufferedBrokerConfig::default());
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -517,7 +518,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let mcp_state = mcp_client::inbound::McpRouterState::new(mcp_server_repo, mcp_oauth);
 
-    api::setup_and_serve(ApiContext {
+    let server_result = api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external,
         sqs_client: Arc::new(sqs_client),
@@ -550,6 +551,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_state,
     })
     .await
-    .context("failed to setup and serve api")?;
-    Ok(())
+    .context("failed to setup and serve api");
+    broker_runtime.shutdown().await;
+    server_result
 }

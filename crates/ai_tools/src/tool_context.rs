@@ -80,7 +80,7 @@ pub type ToolUserEmailService = EmailServiceImpl<
     sqs_client::SQS,
     ToolCrmService,
     ToolEamService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    macro_event_broker::BufferedMacroEventBroker,
 >;
 
 /// Type alias for the channel list service implementation.
@@ -521,7 +521,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
-    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
+    macro_event_broker::BufferedMacroEventBroker,
 >;
 
 /// Type alias for the entity access service implementation

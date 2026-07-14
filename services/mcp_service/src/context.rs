@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpScheduleContext,
-    NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
+    ManagedToolServiceContext, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
+    NoOpScheduleContext, NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use channels::{
@@ -28,6 +28,9 @@ use foreign_entity::{
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_event_broker::{
+    BufferedBrokerConfig, BufferedBrokerRuntime, BufferedMacroEventBroker, KafkaEventPublisher,
+};
 use macro_service_urls::{
     AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
     SyncServiceUrl,
@@ -47,13 +50,13 @@ use sync_service_client::SyncServiceClient;
 
 use crate::config::Config;
 
-#[derive(Clone)]
 pub struct McpContext {
     pub jwt_args: JwtValidationArgs,
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
     pub mcp_public_host: String,
     pub db: PgPool,
+    pub broker_runtime: BufferedBrokerRuntime,
 }
 
 pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
@@ -90,7 +93,10 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
     .await
     .context("failed to load sync service auth key")?;
 
-    let tool_context = build_tool_context(
+    let ManagedToolServiceContext {
+        tool_context,
+        broker_runtime,
+    } = build_tool_context(
         config,
         &db,
         &secretsmanager_client,
@@ -114,6 +120,7 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
         auth_proxy,
         mcp_public_host,
         db,
+        broker_runtime,
     })
 }
 
@@ -124,7 +131,7 @@ async fn build_tool_context(
     sqs_client: sqs_client::SQS,
     document_storage_service_auth_key: String,
     sync_service_auth_key: String,
-) -> anyhow::Result<ToolServiceContext> {
+) -> anyhow::Result<ManagedToolServiceContext> {
     let dss_url = DocumentStorageServiceUrl::new()?.to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
@@ -219,10 +226,10 @@ async fn build_tool_context(
         properties_service.clone(),
         entity_access_service.clone(),
     );
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-    );
+    let event_publisher = KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+        .context("failed to create kafka event publisher")?;
+    let (macro_event_broker, broker_runtime) =
+        BufferedMacroEventBroker::start(event_publisher, BufferedBrokerConfig::default());
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -344,7 +351,10 @@ async fn build_tool_context(
 
     tracing::info!("initialized tool context");
 
-    Ok(tool_context)
+    Ok(ManagedToolServiceContext {
+        tool_context,
+        broker_runtime,
+    })
 }
 
 async fn build_auth_proxy(

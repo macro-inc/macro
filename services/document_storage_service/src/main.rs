@@ -738,7 +738,10 @@ async fn main() -> anyhow::Result<()> {
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.
-    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
+    let ai_tools::ManagedToolServiceContext {
+        tool_context: mut macro_agent_tool_context,
+        broker_runtime: macro_agent_broker_runtime,
+    } = ai_tools::build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build Macro agent tool context")?;
     // Wire the agent's SendChannelMessage tool to the same side-effect pipeline
@@ -878,7 +881,7 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    api::setup_and_serve(api_context).await?;
-
-    Ok(())
+    let server_result = api::setup_and_serve(api_context).await;
+    macro_agent_broker_runtime.shutdown().await;
+    server_result
 }

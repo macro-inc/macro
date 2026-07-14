@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 use std::sync::Arc;
 
-use ai_tools::build_tool_service_context_from_env;
+use ai_tools::{ManagedToolServiceContext, build_tool_service_context_from_env};
 use anyhow::{Context, Result};
 use axum::Router;
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -40,7 +40,10 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
-    let tool_context = build_tool_service_context_from_env(db.clone())
+    let ManagedToolServiceContext {
+        tool_context,
+        broker_runtime,
+    } = build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build tool service context")?;
 
@@ -115,8 +118,9 @@ async fn main() -> Result<()> {
 
     tracing::info!("scheduled_action service listening on {addr}");
 
-    axum::serve(listener, router.into_make_service())
+    let server_result = axum::serve(listener, router.into_make_service())
         .await
-        .context("server closed")?;
-    unreachable!();
+        .context("server closed");
+    broker_runtime.shutdown().await;
+    server_result
 }

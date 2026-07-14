@@ -106,7 +106,12 @@ impl StreamRepo for MockStreamRepo {
     }
 }
 
-pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
+pub async fn test_api_context(
+    pool: sqlx::Pool<sqlx::Postgres>,
+) -> (
+    std::sync::Arc<ApiContext>,
+    macro_event_broker::BufferedBrokerRuntime,
+) {
     use aws_sdk_sqs;
     use channels::{
         domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
@@ -252,9 +257,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     // Producer creation is lazy: nothing connects to Kafka unless an event
     // is published, so a dummy broker address is safe for tests.
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new("localhost:9092")
-            .expect("kafka producer config is valid"),
+    let event_publisher = macro_event_broker::KafkaEventPublisher::new("localhost:9092")
+        .expect("kafka producer config is valid");
+    let (macro_event_broker, broker_runtime) = macro_event_broker::BufferedMacroEventBroker::start(
+        event_publisher,
+        macro_event_broker::BufferedBrokerConfig::default(),
     );
 
     let document_service = documents::domain::service::DocumentServiceImpl::new(
@@ -483,5 +490,5 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
         },
     };
-    Arc::new(api_context)
+    (Arc::new(api_context), broker_runtime)
 }

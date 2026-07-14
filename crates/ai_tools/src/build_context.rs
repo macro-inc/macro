@@ -32,6 +32,9 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use macro_event_broker::{
+    BufferedBrokerConfig, BufferedBrokerRuntime, BufferedMacroEventBroker, KafkaEventPublisher,
+};
 use macro_service_urls::{
     AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
     SyncServiceUrl,
@@ -69,6 +72,14 @@ maybe_env_var! {
     }
 }
 
+/// A shared AI tool context and the runtime managing its event broker.
+pub struct ManagedToolServiceContext {
+    /// The context used to execute AI tools.
+    pub tool_context: ToolServiceContext,
+    /// The runtime that must be shut down after all tool event producers stop.
+    pub broker_runtime: BufferedBrokerRuntime,
+}
+
 /// Builds a [`ToolServiceContext`] by reading the required environment
 /// variables and wiring up all the shared services.
 ///
@@ -97,7 +108,7 @@ maybe_env_var! {
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
-) -> anyhow::Result<ToolServiceContext> {
+) -> anyhow::Result<ManagedToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
     let environment = Environment::new_or_prod();
@@ -249,10 +260,10 @@ pub async fn build_tool_service_context_from_env(
         properties_service.clone(),
         entity_access_service.clone(),
     );
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-    );
+    let event_publisher = KafkaEventPublisher::new(env.kafka_brokers.as_ref())
+        .context("failed to create kafka event publisher")?;
+    let (macro_event_broker, broker_runtime) =
+        BufferedMacroEventBroker::start(event_publisher, BufferedBrokerConfig::default());
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -356,7 +367,7 @@ pub async fn build_tool_service_context_from_env(
 
     let anthropic_tool_context = build_anthropic_tool_context();
 
-    Ok(ToolServiceContext {
+    let tool_context = ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
         soup_service,
@@ -374,6 +385,11 @@ pub async fn build_tool_service_context_from_env(
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
+    };
+
+    Ok(ManagedToolServiceContext {
+        tool_context,
+        broker_runtime,
     })
 }
 

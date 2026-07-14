@@ -9,7 +9,7 @@ mod context;
 mod tool_service;
 use anyhow::Context;
 use config::Config;
-use context::build_context;
+use context::{McpContext, build_context};
 use macro_entrypoint::MacroEntrypoint;
 use mcp_auth_proxy::domain::service::McpAuthProxyService;
 use mcp_auth_proxy::inbound::axum_router::mcp_router;
@@ -33,7 +33,14 @@ async fn main() -> anyhow::Result<()> {
     // responses.
     let item_base_url = config.app_base_url.as_ref().to_string();
 
-    let context = build_context(&config).await?;
+    let McpContext {
+        jwt_args,
+        tool_context,
+        auth_proxy,
+        mcp_public_host,
+        db,
+        broker_runtime,
+    } = build_context(&config).await?;
 
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
@@ -41,15 +48,15 @@ async fn main() -> anyhow::Result<()> {
             let tools = ai_tools::mcp_tools();
             Ok(AuthenticatedToolService::new(
                 tools.toolset,
-                context.tool_context.clone(),
-                context.db.clone(),
+                tool_context.clone(),
+                db.clone(),
                 item_base_url.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),
         {
             let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-                context.mcp_public_host.clone(),
+                mcp_public_host.clone(),
                 "localhost".into(),
                 "127.0.0.1".into(),
             ]);
@@ -60,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Spawn background cleanup for expired OAuth entries
-    let cleanup_state = context.auth_proxy.clone();
+    let cleanup_state = auth_proxy.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(AUTH_PROXY_CLEANUP_INTERVAL);
         loop {
@@ -71,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let app = mcp_router(context.auth_proxy, context.jwt_args, mcp_service);
+    let app = mcp_router(auth_proxy, jwt_args, mcp_service);
 
     let port = config.port;
     let addr = format!("0.0.0.0:{port}");
@@ -81,9 +88,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("MCP server listening on http://{addr}/mcp");
 
-    axum::serve(listener, app)
-        .await
-        .context("MCP server error")?;
-
-    Ok(())
+    let server_result = axum::serve(listener, app).await.context("MCP server error");
+    broker_runtime.shutdown().await;
+    server_result
 }

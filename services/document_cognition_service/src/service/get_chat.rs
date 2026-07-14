@@ -72,8 +72,10 @@ mod tests {
     /// it has 0 active attachments
     /// but message-one has 3 message attachments
     async fn test_get_chat(pool: Pool<Postgres>) {
-        let ctx = crate::api::context::test_api_context(pool.clone()).await;
-        let chat = get_chat(&ctx, "chat-three", "user").await.unwrap();
+        let (ctx, broker_runtime) = crate::api::context::test_api_context(pool.clone()).await;
+        let chat_result = get_chat(&ctx, "chat-three", "user").await;
+        broker_runtime.shutdown().await;
+        let chat = chat_result.unwrap();
 
         assert_eq!(chat.id, "chat-three".to_string());
         assert_eq!(chat.user_id, "macro|user@user.com".to_string());

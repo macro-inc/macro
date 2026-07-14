@@ -37,7 +37,9 @@ use teams::inbound::toolset::team_toolset;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use build_context::build_anthropic_tool_context_test;
-pub use build_context::{build_anthropic_tool_context, build_tool_service_context_from_env};
+pub use build_context::{
+    ManagedToolServiceContext, build_anthropic_tool_context, build_tool_service_context_from_env,
+};
 pub use search::search_toolset;
 #[cfg(any(test, feature = "test-support"))]
 pub use tool_context::no_op_schedule_context;
