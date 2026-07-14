@@ -10,15 +10,20 @@ use entity_access::domain::models::{
     EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
 };
 use graphql_common::GraphqlSoupRequestParts;
+use macro_authorization::testing::{
+    FakeMacroAuthorizationService, bearer_request, test_user_context,
+};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use model_user::UserContext;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 use super::*;
+
+const AUTHORIZATION_TOKEN: &str = "complete-graph-test-token";
+const TEST_USER_ID: &str = "macro|user@example.com";
 
 /// Email service whose inbox lookups are counted, so tests can assert when
 /// the lazy extraction actually runs.
@@ -247,6 +252,7 @@ impl EntityAccessService for CountingEntityAccessService {
 struct TestState {
     email: EmailRouterState<CountingEmailService>,
     entity_access: Arc<CountingEntityAccessService>,
+    authorization: SharedMacroAuthorizationService,
 }
 
 impl FromRef<TestState> for EmailRouterState<CountingEmailService> {
@@ -261,6 +267,12 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
     }
 }
 
+impl FromRef<TestState> for SharedMacroAuthorizationService {
+    fn from_ref(state: &TestState) -> Self {
+        state.authorization.clone()
+    }
+}
+
 struct TestHarness {
     schema: SoupSchema<
         NoOpSoupService,
@@ -272,6 +284,7 @@ struct TestHarness {
         NoOpEntityPropertyReader,
     >,
     state: TestState,
+    authorization: FakeMacroAuthorizationService,
     inbox_calls: Arc<AtomicUsize>,
     team_calls: Arc<AtomicUsize>,
 }
@@ -279,27 +292,26 @@ struct TestHarness {
 fn harness() -> TestHarness {
     let email = CountingEmailService::default();
     let entity_access = CountingEntityAccessService::default();
+    let authorization = FakeMacroAuthorizationService::always(test_user_context(TEST_USER_ID));
+    let shared_authorization = SharedMacroAuthorizationService::new(authorization.clone());
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let team_calls = Arc::clone(&entity_access.team_calls);
     TestHarness {
         schema: build_schema_with_service(NoOpSoupService),
         state: TestState {
-            email: EmailRouterState::new(email),
+            email: EmailRouterState::new(email, shared_authorization.clone()),
             entity_access: Arc::new(entity_access),
+            authorization: shared_authorization,
         },
+        authorization,
         inbox_calls,
         team_calls,
     }
 }
 
 fn authenticated_parts() -> axum::http::request::Parts {
-    let (mut parts, ()) = axum::http::Request::new(()).into_parts();
-    parts.extensions.insert(UserContext {
-        user_id: "macro|user@example.com".to_owned(),
-        fusion_user_id: String::new(),
-        permissions: None,
-        organization_id: None,
-    });
+    let request = bearer_request(axum::http::Request::new(()), AUTHORIZATION_TOKEN);
+    let (parts, ()) = request.into_parts();
     parts
 }
 
@@ -313,15 +325,19 @@ impl TestHarness {
 }
 
 #[tokio::test]
-async fn user_id_resolves_without_touching_services() {
+async fn repeated_user_id_resolution_authorizes_once_without_touching_services() {
     let harness = harness();
 
-    let response = harness.execute("{ user { id } }").await;
+    let response = harness.execute("{ user { id repeatedId: id } }").await;
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.to_string(),
-        r#"{user: {id: "macro|user@example.com"}}"#
+        r#"{user: {id: "macro|user@example.com", repeatedId: "macro|user@example.com"}}"#
+    );
+    assert_eq!(
+        harness.authorization.calls(),
+        vec![AUTHORIZATION_TOKEN.to_owned()]
     );
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);

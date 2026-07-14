@@ -5,7 +5,6 @@ use std::{marker::PhantomData, sync::Arc};
 
 use async_graphql::{Context, EmptySubscription, Object, Schema};
 use axum::extract::FromRef;
-use axum_extra::extract::Cached;
 use email::{
     domain::ports::{EmailService, NoOpEmailService},
     inbound::axum::previews_router::EmailRouterState,
@@ -18,7 +17,12 @@ use graphql_properties::{
     PropertiesMutationRoot,
 };
 use graphql_soup::{SoupInput, SoupPage, resolve_soup};
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{
+    MacroAuthorizationError, MacroAuthorizationService, SharedMacroAuthorizationExtractor,
+    SharedMacroAuthorizationService,
+};
+use model_user::UserContext;
+use rootcause::Report;
 use soup::domain::ports::{NoOpSoupService, SoupService};
 
 use crate::SoupEdges;
@@ -51,9 +55,27 @@ pub type SchemaOnlySoupSchema = SoupSchema<
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SchemaOnlyState;
 
-impl FromRef<SchemaOnlyState> for EmailRouterState<NoOpEmailService> {
+#[derive(Clone, Copy)]
+struct NoOpMacroAuthorizationService;
+
+impl MacroAuthorizationService for NoOpMacroAuthorizationService {
+    async fn authorize(&self, _jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+}
+
+impl FromRef<SchemaOnlyState> for SharedMacroAuthorizationService {
     fn from_ref(_state: &SchemaOnlyState) -> Self {
-        EmailRouterState::new(NoOpEmailService)
+        SharedMacroAuthorizationService::new(NoOpMacroAuthorizationService)
+    }
+}
+
+impl FromRef<SchemaOnlyState> for EmailRouterState<NoOpEmailService> {
+    fn from_ref(state: &SchemaOnlyState) -> Self {
+        EmailRouterState::new(
+            NoOpEmailService,
+            SharedMacroAuthorizationService::from_ref(state),
+        )
     }
 }
 
@@ -107,6 +129,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    SharedMacroAuthorizationService: FromRef<St>,
     W: EntityPropertyWriter,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
@@ -130,6 +153,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    SharedMacroAuthorizationService: FromRef<St>,
     W: EntityPropertyWriter,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
@@ -146,6 +170,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    SharedMacroAuthorizationService: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
 {
@@ -167,13 +192,14 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    SharedMacroAuthorizationService: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
 {
     /// Stable id of the authenticated user.
     async fn id(&self, ctx: &Context<'_>) -> async_graphql::Result<async_graphql::ID> {
-        let Cached(MacroUserExtractor { macro_user_id, .. }) =
-            extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } =
+            extract_part::<SharedMacroAuthorizationExtractor, St>(ctx).await?;
         Ok(async_graphql::ID(macro_user_id.to_string()))
     }
 
