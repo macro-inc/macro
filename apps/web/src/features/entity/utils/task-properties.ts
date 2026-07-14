@@ -18,18 +18,26 @@ const TASK_PRIORITY_OPTIONS = [
 
 export const COMPANY_STAGE_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STAGE.LEAD, label: 'Lead' },
-  { value: PROPERTY_OPTION_IDS.STAGE.QUALIFIED, label: 'Qualified' },
   { value: PROPERTY_OPTION_IDS.STAGE.DEMO, label: 'Demo' },
-  { value: PROPERTY_OPTION_IDS.STAGE.TRIAL, label: 'Trial' },
-  { value: PROPERTY_OPTION_IDS.STAGE.NEGOTIATION, label: 'Negotiation' },
   { value: PROPERTY_OPTION_IDS.STAGE.CUSTOMER, label: 'Customer' },
   { value: PROPERTY_OPTION_IDS.STAGE.CHURNED, label: 'Churned' },
+] as const;
+
+// Retired from the default stage set, but companies may still carry these
+// values — keep their labels resolvable.
+const LEGACY_COMPANY_STAGE_OPTIONS = [
+  { value: PROPERTY_OPTION_IDS.STAGE.QUALIFIED, label: 'Qualified' },
+  { value: PROPERTY_OPTION_IDS.STAGE.TRIAL, label: 'Trial' },
+  { value: PROPERTY_OPTION_IDS.STAGE.NEGOTIATION, label: 'Negotiation' },
 ] as const;
 
 const PROPERTY_OPTION_LABELS: Record<string, string> = {
   ...Object.fromEntries(TASK_STATUS_OPTIONS.map((o) => [o.value, o.label])),
   ...Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label])),
   ...Object.fromEntries(COMPANY_STAGE_OPTIONS.map((o) => [o.value, o.label])),
+  ...Object.fromEntries(
+    LEGACY_COMPANY_STAGE_OPTIONS.map((o) => [o.value, o.label])
+  ),
 };
 
 export const getPropertyOptionLabel = (

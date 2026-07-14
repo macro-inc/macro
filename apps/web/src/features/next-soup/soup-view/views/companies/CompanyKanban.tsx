@@ -247,7 +247,15 @@ export function CompanyKanban() {
               </For>
             </div>
           </div>
-          <CustomScrollbar scrollContainer={scrollRef} horizontal />
+          {/* watchContent: columns mount after the initial measurement, so
+              overflow must be re-detected as they load in. */}
+          <CustomScrollbar
+            scrollContainer={scrollRef}
+            horizontal
+            revealZone={48}
+            gutterSize={20}
+            watchContent
+          />
         </div>
       </Resize.Panel>
       <Show when={paneVisible()}>

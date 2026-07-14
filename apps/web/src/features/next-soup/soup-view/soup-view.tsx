@@ -752,9 +752,14 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
       </div>
       <Suspense>
+        {/* The board hides the AI bar: it floats over the bottom edge, where
+            it would cover the board's horizontal scrollbar. */}
         <Show
           when={
-            ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile() && !isNewInboxEnabled()
+            ENABLE_UNIFIED_LIST_AI_INPUT &&
+            !isMobile() &&
+            !isNewInboxEnabled() &&
+            !isBoardMode()
           }
         >
           <SoupChatInput />

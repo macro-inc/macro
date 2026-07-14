@@ -224,6 +224,14 @@ export const SoupViewContextProvider: FlowComponent<
   const resolveTransport = (groupBy: GroupByField | undefined) =>
     useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined;
 
+  const panel = useSplitPanelOrThrow();
+
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component') return;
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
 
@@ -233,12 +241,12 @@ export const SoupViewContextProvider: FlowComponent<
       : 'created_at';
 
     return {
-      limit: 100,
+      // CRM views load every company (drained eagerly below), so use the
+      // backend's max page size to cut round trips.
+      limit: activeListView() === 'companies' ? 500 : 100,
       sort_method: sortMethod,
     };
   });
-
-  const panel = useSplitPanelOrThrow();
 
   const store = createQueryStore({
     initial: props.initialQuery,
@@ -409,12 +417,6 @@ export const SoupViewContextProvider: FlowComponent<
     dealStages.resolveStage(
       entity as Parameters<typeof dealStages.resolveStage>[0]
     );
-
-  const activeListView = createMemo<ListView | undefined>(() => {
-    const content = panel.handle.content();
-    if (content.type !== 'component') return;
-    return isListViewID(content.id) ? content.id : undefined;
-  });
 
   // CRM companies come back from a dedicated soup request (not the dynamic
   // query the server-side grouped path is built on), so property grouping on
@@ -689,6 +691,16 @@ export const SoupViewContextProvider: FlowComponent<
       }
     },
   };
+
+  // CRM views (list and board) render the full company set — the board has no
+  // scroll pagination and the list groups client-side — so keep paging until
+  // the query is drained.
+  createEffect(() => {
+    if (activeListView() !== 'companies') return;
+    if (!itemsSource.isEnabled() || itemsSource.isFetching()) return;
+    if (!reactiveActive() && itemsQuery.isError) return;
+    if (itemsSource.hasNextPage()) itemsSource.fetchNextPage();
+  });
 
   const items = createMemo<SoupEntity[]>(
     (prev) => {
