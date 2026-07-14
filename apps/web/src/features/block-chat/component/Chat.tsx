@@ -318,7 +318,7 @@ function ChatInner(props: {
 
   return (
     <DragDropWrapper
-      class="size-full bg-surface overscroll-none overflow-hidden flex flex-col"
+      class="size-full overscroll-none overflow-hidden flex flex-col"
       isEntityDraggingOver={isDraggingOver}
     >
       <Show when={!isNestedBlock}>

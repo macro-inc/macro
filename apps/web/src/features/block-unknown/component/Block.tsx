@@ -18,7 +18,7 @@ import { TopBar } from './TopBar';
 export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
-      <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="size-full select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
           <SidePanel.Layout>
             <FileSidePanelSections />

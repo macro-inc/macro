@@ -60,7 +60,7 @@ export default function BlockImage() {
 
   return (
     <DocumentBlockContainer>
-      <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col">
+      <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
         <ModalsProvider>
           <SidePanel.Layout defaultOpen={false}>
             <FileSidePanelSections />
