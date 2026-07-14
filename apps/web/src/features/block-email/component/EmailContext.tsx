@@ -4,6 +4,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { URL_PARAMS } from '@block-email/constants';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   getPermissions,
@@ -348,6 +349,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   };
 
   const soup = useMaybeSoup();
+  const previewPanel = useMaybePreviewPanel();
   const splitPanel = useSplitPanel();
 
   const userId = useUserId();
@@ -392,7 +394,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         soup,
         (nextEntity) => {
           const splitHandle = splitPanel?.handle;
-          if (!splitHandle) return;
+          if (!splitHandle || previewPanel !== undefined) return;
           void openEntityInSplitFromUnifiedList(nextEntity, {
             splitHandle,
             mergeHistory: true,
