@@ -71,7 +71,7 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::{BufferedBrokerConfig, BufferedMacroEventBroker, KafkaEventPublisher};
 use macro_service_urls::{
     AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
 };
@@ -91,7 +91,7 @@ use soup::{
     outbound::pg_soup_repo::PgSoupRepo,
 };
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
@@ -108,6 +108,8 @@ mod api;
 mod config;
 mod model;
 mod service;
+
+const PRODUCER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
 maybe_env_vars! {
     struct AppleBundleId;
@@ -393,10 +395,10 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
-    let macro_event_broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-    );
+    let event_publisher = KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+        .context("failed to create kafka event publisher")?;
+    let (macro_event_broker, macro_event_broker_runtime) =
+        BufferedMacroEventBroker::start(event_publisher, BufferedBrokerConfig::default());
 
     let document_service = Arc::new(
         DocumentServiceImpl::new(
@@ -724,10 +726,11 @@ async fn main() -> anyhow::Result<()> {
     .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
 
+    let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
     let channels_service = Arc::new(
         ChannelServiceImpl::with_dependencies(
             channels_repo,
-            SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
+            channel_event_dispatcher.clone(),
             PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         )
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
@@ -750,7 +753,7 @@ async fn main() -> anyhow::Result<()> {
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
-            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            std::sync::Arc::new(channel_event_dispatcher.clone()),
             lexical_client.clone(),
         );
     let macro_agent_tools = ai_tools::all_tools();
@@ -761,7 +764,7 @@ async fn main() -> anyhow::Result<()> {
             macro_agent_tools,
         )),
     );
-    bot_trigger_router.spawn(bot_trigger_receiver);
+    let mut bot_trigger_router_handle = bot_trigger_router.spawn(bot_trigger_receiver);
 
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
@@ -882,6 +885,38 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let server_result = api::setup_and_serve(api_context).await;
-    macro_agent_broker_runtime.shutdown().await;
+
+    let producer_shutdown_deadline = tokio::time::Instant::now() + PRODUCER_SHUTDOWN_TIMEOUT;
+    tracing::info!("stopping channel bot router");
+    bot_trigger_router_handle.abort();
+    match tokio::time::timeout_at(producer_shutdown_deadline, &mut bot_trigger_router_handle).await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) if error.is_cancelled() => {}
+        Ok(Err(error)) => {
+            tracing::error!(error=?error, "channel bot router failed during shutdown");
+        }
+        Err(_) => {
+            tracing::warn!(
+                timeout_seconds = PRODUCER_SHUTDOWN_TIMEOUT.as_secs(),
+                "channel bot router shutdown timed out"
+            );
+        }
+    }
+    tracing::info!("channel bot router stopped");
+
+    let side_effect_shutdown_timeout =
+        producer_shutdown_deadline.saturating_duration_since(tokio::time::Instant::now());
+    channel_event_dispatcher
+        .shutdown(side_effect_shutdown_timeout)
+        .await;
+    tracing::info!("channel side-effect dispatcher stopped");
+
+    tracing::info!("draining document storage event brokers concurrently");
+    tokio::join!(
+        macro_event_broker_runtime.shutdown(),
+        macro_agent_broker_runtime.shutdown(),
+    );
+
     server_result
 }

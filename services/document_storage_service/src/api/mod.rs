@@ -58,6 +58,8 @@ pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 // permission based constants
 pub static MACRO_READ_PROFESSIONAL_PERMISSION_ID: &str = "read:professional_features";
 
+const HTTP_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let app = api_router(state.clone())
         .merge(health::router())
@@ -78,15 +80,75 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", state.config.port))
         .await
-        .unwrap();
+        .context("failed to bind document storage service listener")?;
     tracing::info!(
         "document storage service is up and running with environment {:?} on port {}",
         &state.config.environment,
         &state.config.port
     );
-    axum::serve(listener, app.into_make_service())
-        .await
-        .context("error starting service")
+
+    let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
+    let server = std::future::IntoFuture::into_future(
+        axum::serve(listener, app.into_make_service()).with_graceful_shutdown(async move {
+            let _ = shutdown_receiver.await;
+        }),
+    );
+    tokio::pin!(server);
+
+    tokio::select! {
+        result = &mut server => result.context("error serving document storage service"),
+        () = shutdown_signal() => {
+            tracing::info!("shutdown signal received; stopping document storage HTTP intake");
+            let _ = shutdown_sender.send(());
+
+            match tokio::time::timeout(HTTP_SHUTDOWN_TIMEOUT, &mut server).await {
+                Ok(result) => {
+                    tracing::info!("document storage HTTP requests finished");
+                    result.context("error serving document storage service")
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        timeout_seconds = HTTP_SHUTDOWN_TIMEOUT.as_secs(),
+                        "document storage HTTP shutdown timed out; cancelling remaining requests"
+                    );
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+async fn shutdown_signal() -> () {
+    let ctrl_c = async {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install SIGINT handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {}
+        () = terminate => {}
+    }
 }
 
 fn items_router(state: ApiContext) -> Router<ApiContext> {
