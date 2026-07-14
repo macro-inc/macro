@@ -6,7 +6,7 @@ mod loaders;
 mod objects;
 
 pub use loaders::{
-    EmailContentEdgeService, EmailContentKey, EmailContentLoad, EmailContentLoader,
+    EmailContentKey, EmailContentLoad, EmailContentLoader, NoOpSoupEmailContentEdgeReader,
     SoupEmailContentEdgeReader, email_content_loader,
 };
 pub use objects::{GraphqlSoupEmailMessage, load_latest_email_message};

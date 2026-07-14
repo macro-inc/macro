@@ -11,6 +11,10 @@ use axum_extra::extract::Cached;
 use complete_graph::GraphqlSoupRequestParts;
 use model_user::axum_extractor::OptionalMacroUserExtractor;
 
+mod email_content;
+
+pub(crate) use email_content::DssEmailContentReader;
+
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new().route("/soup/graphql", get(graphiql).post(handler))
 }
@@ -63,11 +67,10 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
         state.entity_access_service.clone(),
         macro_user_id.clone(),
     );
-    let email_content_reader: std::sync::Arc<dyn complete_graph::SoupEmailContentEdgeReader> =
-        std::sync::Arc::new(complete_graph::EmailContentEdgeService::new(
-            state.soup_router_state.email_service(),
-            state.entity_access_service.clone(),
-        ));
+    let email_content_reader = DssEmailContentReader::new(
+        state.soup_router_state.email_service(),
+        state.entity_access_service.clone(),
+    );
     let request = request
         .data(GraphqlSoupRequestParts::new(parts))
         .data(state.clone())

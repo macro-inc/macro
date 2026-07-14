@@ -1,7 +1,9 @@
 use async_graphql::{Context, ID, Object, dataloader::DataLoader};
 use email::domain::models::{ContactInfo, ParsedLabel, ParsedMessage};
 
-use crate::loaders::{EmailContentKey, EmailContentLoad, EmailContentLoader};
+use crate::loaders::{
+    EmailContentKey, EmailContentLoad, EmailContentLoader, SoupEmailContentEdgeReader,
+};
 
 /// A lightweight email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(ParsedMessage);
@@ -154,11 +156,14 @@ impl GraphqlSoupEmailMessageLabel {
 }
 
 /// Load the newest non-draft content message for an email thread.
-pub async fn load_latest_email_message(
+pub async fn load_latest_email_message<R>(
     ctx: &Context<'_>,
     key: EmailContentKey,
-) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
-    let loader = ctx.data::<DataLoader<EmailContentLoader>>()?;
+) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>>
+where
+    R: SoupEmailContentEdgeReader,
+{
+    let loader = ctx.data::<DataLoader<EmailContentLoader<R>>>()?;
     let value = loader.load_one(key).await?;
     Ok(match value {
         Some(EmailContentLoad::Found(message)) => Some(GraphqlSoupEmailMessage(*message)),
@@ -168,7 +173,7 @@ pub async fn load_latest_email_message(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::collections::HashMap;
 
     use async_graphql::{EmptyMutation, EmptySubscription, Schema};
     use chrono::Utc;
@@ -186,7 +191,7 @@ mod tests {
             &self,
             ctx: &Context<'_>,
         ) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
-            load_latest_email_message(
+            load_latest_email_message::<ContentReader>(
                 ctx,
                 EmailContentKey {
                     thread_id: Uuid::from_u128(2).to_string(),
@@ -198,7 +203,6 @@ mod tests {
 
     struct ContentReader;
 
-    #[async_trait::async_trait]
     impl SoupEmailContentEdgeReader for ContentReader {
         async fn get_email_content(
             &self,
@@ -247,9 +251,8 @@ mod tests {
     #[tokio::test]
     async fn executes_content_field_with_request_scoped_loader() {
         let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-        let reader: Arc<dyn SoupEmailContentEdgeReader> = Arc::new(ContentReader);
         let schema = Schema::build(ContentQuery, EmptyMutation, EmptySubscription)
-            .data(email_content_loader(user_id, reader))
+            .data(email_content_loader(user_id, ContentReader))
             .finish();
 
         let response = schema

@@ -11,8 +11,8 @@ mod sdl_test;
 pub use edges::{SoupEdges, SoupEmailThreadEdges};
 pub use graphql_common::GraphqlSoupRequestParts;
 pub use graphql_email::{
-    EmailContentEdgeService, EmailContentKey, EmailContentLoader, SoupEmailContentEdgeReader,
-    email_content_loader,
+    EmailContentKey, EmailContentLoad, EmailContentLoader, NoOpSoupEmailContentEdgeReader,
+    SoupEmailContentEdgeReader, email_content_loader,
 };
 pub use graphql_notification::{
     EntityNotificationsLoader, SoupNotificationEdgeReader, entity_notifications_loader,
