@@ -45,6 +45,12 @@ const replyNotification = (
     },
   }) as unknown as UnifiedNotification;
 
+const asRead = (notification: UnifiedNotification): UnifiedNotification =>
+  ({
+    ...notification,
+    viewed_at: '2026-07-14T00:00:00.000Z',
+  }) as unknown as UnifiedNotification;
+
 const channelMessageRow = (opts?: {
   target?: ChannelEntityTarget;
   notifications?: UnifiedNotification[];
@@ -91,6 +97,7 @@ describe('getChannelEntityTarget', () => {
       notifications: [sendNotification('n1', 'recent-unread-msg')],
     });
     expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
       messageId: 'hit-msg',
       threadId: 'hit-thread',
     });
@@ -102,6 +109,7 @@ describe('getChannelEntityTarget', () => {
       notifications: [replyNotification('n1', 'newest-reply', 'root-msg')],
     });
     expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
       messageId: 'hit-reply',
       threadId: 'root-msg',
     });
@@ -109,30 +117,53 @@ describe('getChannelEntityTarget', () => {
 
   it('falls back to own ids for an unstamped channel_message row without notifications', () => {
     expect(getChannelEntityTarget(channelMessageRow())).toEqual({
+      kind: 'message',
       messageId: 'hit-msg',
       threadId: 'hit-thread',
     });
   });
 
-  it('targets the driving notification for a channel row', () => {
+  it('targets the driving unread notification for a channel row', () => {
     const entity = channelRow({
       notifications: [sendNotification('n1', 'notif-msg')],
     });
     expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
       messageId: 'notif-msg',
       threadId: undefined,
     });
   });
 
-  it('returns no target for a channel row without notifications', () => {
-    expect(getChannelEntityTarget(channelRow())).toBeUndefined();
+  it('opens a channel row at latest when it has no notifications', () => {
+    expect(getChannelEntityTarget(channelRow())).toEqual({ kind: 'latest' });
   });
 
-  it('skips thread-reply notifications for a channel row', () => {
+  it('opens a channel row at latest, skipping read notifications (latest send is your own)', () => {
+    const entity = channelRow({
+      notifications: [asRead(sendNotification('n1', 'read-msg'))],
+    });
+    expect(getChannelEntityTarget(entity)).toEqual({ kind: 'latest' });
+  });
+
+  it('targets the newest unread notification, skipping newer read ones', () => {
+    const entity = channelRow({
+      notifications: [
+        asRead(sendNotification('n1', 'read-newer-msg')),
+        sendNotification('n2', 'unread-older-msg'),
+      ],
+    });
+    expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
+      messageId: 'unread-older-msg',
+      threadId: undefined,
+    });
+  });
+
+  it('opens a channel row at latest when its only notification is a thread reply', () => {
     const entity = channelRow({
       notifications: [replyNotification('n1', 'reply-msg', 'other-thread')],
     });
-    expect(getChannelEntityTarget(entity)).toBeUndefined();
+    expect(getChannelEntityTarget(entity)).toEqual({ kind: 'latest' });
   });
 
   it('targets the reply notification scoped to a channel_thread row', () => {
@@ -143,6 +174,18 @@ describe('getChannelEntityTarget', () => {
       ],
     });
     expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
+      messageId: 'reply-msg',
+      threadId: 'root-msg',
+    });
+  });
+
+  it('targets a read reply notification on a channel_thread row (read state only gates channel rows)', () => {
+    const entity = channelThreadRow({
+      notifications: [asRead(replyNotification('n1', 'reply-msg', 'root-msg'))],
+    });
+    expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
       messageId: 'reply-msg',
       threadId: 'root-msg',
     });
@@ -152,7 +195,11 @@ describe('getChannelEntityTarget', () => {
     const entity = channelThreadRow({
       notifications: [replyNotification('n1', 'reply-msg', 'other-thread')],
     });
+    // The row carries its own ids (root === root). Collapsing that to a
+    // top-level target is the decoder's job (see convertTargetMessage), so
+    // here it passes through unchanged.
     expect(getChannelEntityTarget(entity)).toEqual({
+      kind: 'message',
       messageId: 'root-msg',
       threadId: 'root-msg',
     });

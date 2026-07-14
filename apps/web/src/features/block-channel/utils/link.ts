@@ -33,6 +33,21 @@ export async function goToChannelMessage(
   await handle?.goToLocationFromParams(getChannelParams(messageId, threadId));
 }
 
+/**
+ * Drive an (already-mounted) channel block to its latest message via the
+ * block handle — a scroll-to-bottom with no highlight. Used for channel rows
+ * that open at their latest activity rather than a targeted message; forces
+ * the scroll even when the channel is already open (where `reopen: 'latest'`
+ * would otherwise just reactivate the parked split).
+ */
+export async function goToChannelLatest(
+  orchestrator: BlockOrchestrator,
+  channelId: string
+) {
+  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
+  await handle?.goToLatest();
+}
+
 export async function navigateToChannelMessage(
   orchestrator: BlockOrchestrator,
   channelId: string,

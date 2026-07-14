@@ -191,11 +191,14 @@ export function createSoupEntityActions(): {
         ) {
           // Thread rows are keyed by their root; getChannelEntityTarget
           // recovers the clicked reply from the driving notification so the
-          // new split lands on it rather than the root message.
-          const target = getChannelEntityTarget(entity) ?? {
-            messageId: entity.messageId,
-            threadId: entity.threadId,
-          };
+          // new split lands on it rather than the root message. These rows
+          // always resolve to a message target (their own ids at worst), never
+          // `latest`, which only a whole-channel row produces.
+          const resolved = getChannelEntityTarget(entity);
+          const target =
+            resolved?.kind === 'message'
+              ? resolved
+              : { messageId: entity.messageId, threadId: entity.threadId };
           splitManager.createNewSplit({
             content: {
               type: 'channel',
