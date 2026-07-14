@@ -34,6 +34,7 @@ import type {
   MacroApiTokenResponse,
   PasswordlessCallbackParams,
   PasswordlessRequest,
+  PasswordlessStartedResponse,
   PasswordRequest,
   PatchTeamCrmSettingsRequest,
   PatchTeamCrmSettingsResponse,
@@ -1078,7 +1079,7 @@ export const passwordLogin = async (
  * @summary Initiates a passwordless login
  */
 export type passwordlessLoginResponse200 = {
-  data: EmptyResponse;
+  data: PasswordlessStartedResponse;
   status: 200;
 };
 

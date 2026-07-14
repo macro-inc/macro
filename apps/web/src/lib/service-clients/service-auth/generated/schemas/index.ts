@@ -70,6 +70,8 @@ export * from './macroApiTokenResponse';
 export * from './passwordlessCallbackParams';
 export * from './passwordlessRequest';
 export * from './passwordlessRequestReferralCode';
+export * from './passwordlessStartedResponse';
+export * from './passwordlessStartedResponseCode';
 export * from './passwordRequest';
 export * from './patchTeamCrmSettingsRequest';
 export * from './patchTeamCrmSettingsResponse';

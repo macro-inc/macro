@@ -10,10 +10,14 @@ use std::borrow::Cow;
 
 use crate::{api::context::ApiContext, generate_password::generate_random_password};
 use fusionauth::error::FusionAuthClientError;
+use macro_env::Environment;
 use macro_user_id::user_id::MacroUserId;
 use model::{
-    authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
-    response::{EmptyResponse, ErrorResponse},
+    authentication::login::{
+        request::PasswordlessRequest,
+        response::{PasswordlessStartedResponse, SsoRequiredResponse},
+    },
+    response::ErrorResponse,
 };
 use referral::domain::{models::ReferralCode, ports::ReferralService};
 
@@ -23,7 +27,7 @@ use referral::domain::{models::ReferralCode, ports::ReferralService};
         operation_id = "passwordless_login",
         path = "/login/passwordless",
         responses(
-            (status = 200, body = EmptyResponse),
+            (status = 200, body = PasswordlessStartedResponse),
             (status = 202, body = SsoRequiredResponse),
             (status = 400, body=String),
             (status = 403, body=String),
@@ -186,5 +190,11 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
+    // Locally, hand the code back so dev tooling (persona tabs, tests) can
+    // complete the login without reading the email. Never outside Local.
+    let body = PasswordlessStartedResponse {
+        code: matches!(Environment::new_or_prod(), Environment::Local).then_some(code),
+    };
+
+    Ok((StatusCode::OK, Json(body)).into_response())
 }

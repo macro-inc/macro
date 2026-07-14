@@ -191,7 +191,7 @@ pub async fn apply(
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         {
             println!(
-                "  {key}: http://{key}.localhost:{frontend_port} (log in as {})",
+                "  {key}: http://{key}.localhost:{frontend_port}/app/login?email={}",
                 user.email
             );
         } else {
