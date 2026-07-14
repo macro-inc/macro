@@ -184,94 +184,52 @@ async fn seed_users(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
     }
     println!("Seeding {} users", spec.users.len());
 
-    let macro_user_values = values_sql(spec.users.iter().map(|(key, user)| {
-        vec![
-            sql_string(&spec.macro_user_uuid(key).to_string()),
-            sql_string(&user.email),
-            sql_string(&user.email),
-            sql_string(&format!("stripe-seed-{}-{key}", spec.scenario)),
-            "false".to_string(),
-        ]
-    }));
+    // Create the FusionAuth accounts first: the signup webhook writes the
+    // base macrodb rows, and it refuses to create an account whose email
+    // already has a User row — so FusionAuth must come before our upserts
+    // for seeded users to be log-in-able through the real flow.
+    let mut fusionauth_reachable = true;
+    for (key, user) in &spec.users {
+        if !fusionauth_reachable {
+            break;
+        }
+        match ctx.fusionauth_client.ensure_user(user.email.clone()).await {
+            Ok(true) => println!("  user `{key}`: created FusionAuth account"),
+            Ok(false) => {}
+            Err(e) => {
+                let message = format!("{e:#}");
+                if message.contains("connect") || message.contains("Connection") {
+                    fusionauth_reachable = false;
+                    println!(
+                        "  FusionAuth unreachable — seeding database rows only (users won't be able to log in until it's up)"
+                    );
+                } else {
+                    println!("  user `{key}`: FusionAuth account creation failed: {message}");
+                }
+            }
+        }
+    }
 
-    let user_values = values_sql(spec.users.iter().map(|(key, user)| {
-        vec![
-            sql_string(&spec.user_id(key)),
-            sql_string(&user.email),
-            sql_string(&format!("stripe-seed-{}-{key}", spec.scenario)),
-            sql_string(&spec.macro_user_uuid(key).to_string()),
-            "true".to_string(),
-            "true".to_string(),
-        ]
-    }));
-
-    let verification_values = values_sql(spec.users.iter().map(|(key, user)| {
-        vec![
-            sql_string(&spec.macro_user_uuid(key).to_string()),
-            sql_string(&user.email),
-            "true".to_string(),
-        ]
-    }));
-
-    let info_values = values_sql(spec.users.iter().map(|(key, user)| {
+    for (key, user) in &spec.users {
         let mut chars = key.chars();
         let capitalized = chars
             .next()
             .map(|c| c.to_uppercase().collect::<String>() + chars.as_str())
             .unwrap_or_default();
-        vec![
-            sql_string(&spec.macro_user_uuid(key).to_string()),
-            sql_string(user.first_name.as_deref().unwrap_or(&capitalized)),
-            sql_string(user.last_name.as_deref().unwrap_or("Seed")),
-        ]
-    }));
 
-    let role_values = values_sql(
-        spec.users
-            .keys()
-            .map(|key| vec![sql_string(&spec.user_id(key)), sql_string("self_serve")]),
-    );
-
-    let statements = vec![
-        format!(
-            r#"INSERT INTO macro_user (id, username, email, stripe_customer_id, has_trialed) VALUES
-  {macro_user_values}
-ON CONFLICT (id) DO UPDATE SET
-  username = EXCLUDED.username,
-  email = EXCLUDED.email,
-  stripe_customer_id = EXCLUDED.stripe_customer_id"#
-        ),
-        format!(
-            r#"INSERT INTO "User" (id, email, "stripeCustomerId", macro_user_id, "tutorialComplete", "hasOnboardingDocuments") VALUES
-  {user_values}
-ON CONFLICT (id) DO UPDATE SET
-  email = EXCLUDED.email,
-  macro_user_id = EXCLUDED.macro_user_id,
-  "tutorialComplete" = EXCLUDED."tutorialComplete",
-  "hasOnboardingDocuments" = EXCLUDED."hasOnboardingDocuments""#
-        ),
-        format!(
-            r#"INSERT INTO macro_user_email_verification (macro_user_id, email, is_verified) VALUES
-  {verification_values}
-ON CONFLICT (email) DO UPDATE SET
-  macro_user_id = EXCLUDED.macro_user_id,
-  is_verified = EXCLUDED.is_verified"#
-        ),
-        format!(
-            r#"INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES
-  {info_values}
-ON CONFLICT (macro_user_id) DO UPDATE SET
-  first_name = EXCLUDED.first_name,
-  last_name = EXCLUDED.last_name"#
-        ),
-        format!(
-            r#"INSERT INTO "RolesOnUsers" ("userId", "roleId") VALUES
-  {role_values}
-ON CONFLICT DO NOTHING"#
-        ),
-    ];
-
-    ctx.db.execute_statements(&statements).await
+        ctx.db
+            .adopt_or_seed_user(
+                &user.email,
+                &spec.user_id(key),
+                spec.macro_user_uuid(key),
+                user.first_name.as_deref().unwrap_or(&capitalized),
+                user.last_name.as_deref().unwrap_or("Seed"),
+                &format!("stripe-seed-{}-{key}", spec.scenario),
+            )
+            .await?;
+        println!("  user `{key}` -> {}", spec.user_id(key));
+    }
+    Ok(())
 }
 
 async fn seed_teams(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result<()> {

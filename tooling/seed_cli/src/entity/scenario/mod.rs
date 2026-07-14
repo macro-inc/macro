@@ -280,14 +280,20 @@ async fn apply_scenario(ctx: &SeedCliContext, args: &ApplyScenarioArgs) -> anyho
 
 #[tracing::instrument(skip(ctx), err)]
 async fn reset_scenario(ctx: &SeedCliContext, args: &ResetScenarioArgs) -> anyhow::Result<()> {
-    let marker = if args.all {
-        spec::SEED_MARKER.to_string()
+    let (marker, emails) = if args.all {
+        (spec::SEED_MARKER.to_string(), Vec::new())
     } else {
         let file = args
             .file
             .as_deref()
             .context("pass --file <scenario.json> or --all")?;
-        spec::scenario_marker(&load_scenario(file)?.scenario)
+        let scenario = load_scenario(file)?;
+        let emails = scenario
+            .users
+            .values()
+            .map(|user| user.email.clone())
+            .collect();
+        (spec::scenario_marker(&scenario.scenario), emails)
     };
 
     println!("Deleting seeded rows with marker {marker}");
@@ -297,9 +303,9 @@ async fn reset_scenario(ctx: &SeedCliContext, args: &ResetScenarioArgs) -> anyho
             &reset::reset_contacts_outbox_statement(&marker),
         )
         .await?;
-    ctx.db
-        .execute_statements(&reset::reset_statements(&marker))
-        .await?;
+    let mut statements = reset::reset_statements(&marker);
+    statements.extend(reset::reset_user_statements(&emails));
+    ctx.db.execute_statements(&statements).await?;
     println!("Done.");
     Ok(())
 }

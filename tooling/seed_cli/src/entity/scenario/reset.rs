@@ -86,3 +86,27 @@ DELETE FROM "SharePermission" WHERE id IN (SELECT id FROM sp_ids)"#
 pub fn reset_contacts_outbox_statement(marker: &str) -> String {
     format!("DELETE FROM contacts_backfill_outbox WHERE comms_channel_id::text LIKE '{marker}%'")
 }
+
+/// Delete scenario users by email. Needed on top of the marker deletes
+/// because accounts created through the signup webhook (so they can log in)
+/// carry database-generated ids, not marker-prefixed ones.
+pub fn reset_user_statements(emails: &[String]) -> Vec<String> {
+    if emails.is_empty() {
+        return Vec::new();
+    }
+    let emails = emails
+        .iter()
+        .map(|email| format!("'{}'", email.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let user_ids = format!(r#"SELECT id FROM "User" WHERE email IN ({emails})"#);
+    let macro_user_ids = format!("SELECT id FROM macro_user WHERE email IN ({emails})");
+
+    vec![
+        format!(r#"DELETE FROM "RolesOnUsers" WHERE "userId" IN ({user_ids})"#),
+        format!("DELETE FROM macro_user_email_verification WHERE email IN ({emails})"),
+        format!("DELETE FROM macro_user_info WHERE macro_user_id IN ({macro_user_ids})"),
+        format!(r#"DELETE FROM "User" WHERE email IN ({emails})"#),
+        format!("DELETE FROM macro_user WHERE email IN ({emails})"),
+    ]
+}

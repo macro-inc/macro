@@ -697,12 +697,12 @@ impl ScenarioSpec {
                 &format!("project `{key}` owner"),
                 &project.owner,
             );
-            if let Some(parent) = project.parent.as_deref() {
-                if !self.projects.contains_key(parent) {
-                    errors.push(format!(
-                        "project `{key}` references unknown parent `{parent}`"
-                    ));
-                }
+            if let Some(parent) = project.parent.as_deref()
+                && !self.projects.contains_key(parent)
+            {
+                errors.push(format!(
+                    "project `{key}` references unknown parent `{parent}`"
+                ));
             }
             check_shares(&mut errors, &format!("project `{key}`"), &project.share);
         }
@@ -723,12 +723,12 @@ impl ScenarioSpec {
                 &format!("document `{key}` owner"),
                 &document.owner,
             );
-            if let Some(project) = document.project.as_deref() {
-                if !self.projects.contains_key(project) {
-                    errors.push(format!(
-                        "document `{key}` references unknown project `{project}`"
-                    ));
-                }
+            if let Some(project) = document.project.as_deref()
+                && !self.projects.contains_key(project)
+            {
+                errors.push(format!(
+                    "document `{key}` references unknown project `{project}`"
+                ));
             }
             check_shares(&mut errors, &format!("document `{key}`"), &document.share);
         }

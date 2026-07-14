@@ -29,6 +29,11 @@ just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
 - `matrix` computes the expected access level for every (user, entity) pair
   from the config and verifies it against the live database using the real
   `entity_access` service; it exits non-zero on any mismatch.
-- `reset` deletes exactly the rows carrying the scenario's id marker.
-- With `run_local`'s passwordless FusionAuth, every seeded user can log in
-  immediately using their configured email.
+- `reset` deletes exactly the rows carrying the scenario's id marker, plus
+  (with `--file`) the scenario's user accounts by email. `reset --all` cannot
+  know emails, so accounts created through the signup webhook survive it.
+- `apply` creates each user's FusionAuth account first (the signup webhook
+  writes the base rows, which the seeder then adopts), so every seeded user
+  can log in through the real passwordless flow — the one-time codes land in
+  mailpit (http://localhost:8025). If FusionAuth is unreachable, apply seeds
+  database rows only and says so.

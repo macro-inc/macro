@@ -42,4 +42,32 @@ impl SeedAuth {
 
         Ok(result)
     }
+
+    /// Ensure a FusionAuth user exists and is registered to the application,
+    /// so the account can log in through the real passwordless flow.
+    /// Returns whether the user was created (false = already existed).
+    ///
+    /// Creating the user fires the `user.create` webhook, which writes the
+    /// base macrodb rows — call this BEFORE seeding user rows directly.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn ensure_user(&self, email: String) -> anyhow::Result<bool> {
+        if self.inner.get_user_id_by_email(&email).await.is_ok() {
+            return Ok(false);
+        }
+
+        self.create_user(fusionauth::user::create::User {
+            email: std::borrow::Cow::Owned(email.clone()),
+            username: None,
+            password: "hardcodeLocalPassword123!".into(),
+        })
+        .await?;
+
+        self.inner
+            .register_user_from_email(&email)
+            .await
+            .inspect_err(|e| tracing::warn!(error=?e, "user registration failed, continuing"))
+            .ok();
+
+        Ok(true)
+    }
 }

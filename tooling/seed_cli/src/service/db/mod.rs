@@ -573,6 +573,97 @@ impl SeedDb {
         Ok(())
     }
 
+    /// Seed one user, adopting rows the signup webhook may already have
+    /// created for the email (their `macro_user` id wins over the derived
+    /// one so login-created accounts stay intact).
+    #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn adopt_or_seed_user(
+        &self,
+        email: &str,
+        user_id: &str,
+        derived_macro_user_id: Uuid,
+        first_name: &str,
+        last_name: &str,
+        stripe_customer_id: &str,
+    ) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
+
+        let existing: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM macro_user WHERE email = $1 LIMIT 1")
+                .bind(email)
+                .fetch_optional(transaction.as_mut())
+                .await?;
+
+        let macro_user_id = match existing {
+            Some(id) => id,
+            None => {
+                sqlx::query(
+                    r#"INSERT INTO macro_user (id, username, email, stripe_customer_id, has_trialed)
+                       VALUES ($1, $2, $3, $4, false)"#,
+                )
+                .bind(derived_macro_user_id)
+                .bind(email)
+                .bind(email)
+                .bind(stripe_customer_id)
+                .execute(transaction.as_mut())
+                .await?;
+                derived_macro_user_id
+            }
+        };
+
+        sqlx::query(
+            r#"INSERT INTO "User" (id, email, "stripeCustomerId", macro_user_id, "tutorialComplete", "hasOnboardingDocuments")
+               VALUES ($1, $2, $3, $4, true, true)
+               ON CONFLICT (id) DO UPDATE SET
+                 macro_user_id = EXCLUDED.macro_user_id,
+                 "tutorialComplete" = true,
+                 "hasOnboardingDocuments" = true"#,
+        )
+        .bind(user_id)
+        .bind(email)
+        .bind(stripe_customer_id)
+        .bind(macro_user_id)
+        .execute(transaction.as_mut())
+        .await?;
+
+        sqlx::query(
+            r#"INSERT INTO macro_user_email_verification (macro_user_id, email, is_verified)
+               VALUES ($1, $2, true)
+               ON CONFLICT (email) DO UPDATE SET
+                 macro_user_id = EXCLUDED.macro_user_id,
+                 is_verified = true"#,
+        )
+        .bind(macro_user_id)
+        .bind(email)
+        .execute(transaction.as_mut())
+        .await?;
+
+        sqlx::query(
+            r#"INSERT INTO macro_user_info (macro_user_id, first_name, last_name)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (macro_user_id) DO UPDATE SET
+                 first_name = EXCLUDED.first_name,
+                 last_name = EXCLUDED.last_name"#,
+        )
+        .bind(macro_user_id)
+        .bind(first_name)
+        .bind(last_name)
+        .execute(transaction.as_mut())
+        .await?;
+
+        sqlx::query(
+            r#"INSERT INTO "RolesOnUsers" ("userId", "roleId") VALUES ($1, 'self_serve')
+               ON CONFLICT DO NOTHING"#,
+        )
+        .bind(user_id)
+        .execute(transaction.as_mut())
+        .await?;
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
     /// Read-only handle to the underlying pool (for the matrix verifier).
     pub fn pool(&self) -> sqlx::PgPool {
         self.inner.clone()
