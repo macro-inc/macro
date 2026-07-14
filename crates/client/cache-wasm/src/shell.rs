@@ -113,7 +113,7 @@ fn parse_timestamp(value: f64, label: &str) -> Result<i64, JsValue> {
     if !value.is_finite()
         || value.fract() != 0.0
         || value < i64::MIN as f64
-        || value > i64::MAX as f64
+        || value >= i64::MAX as f64
     {
         return Err(err_js(format!("invalid {label} `{value}`")));
     }
