@@ -1,7 +1,7 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{
     model::{TeamError, TeamInviteDetails},
@@ -32,7 +32,7 @@ pub struct TeamInvitesResponse {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService>(
     State(state): State<TeamRouterState<T, Eas>>,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<TeamInvitesResponse>, TeamError> {
     let invites = state
         .service

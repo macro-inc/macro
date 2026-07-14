@@ -14,8 +14,8 @@ ai_tools = [
 ]
 axum = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -68,8 +68,10 @@ tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Notification dependencies (for ports)
@@ -88,6 +90,10 @@ models_email = { path = "../models_email", optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+  "testing",
+] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rootcause = { workspace = true }
 serde_json = { workspace = true }

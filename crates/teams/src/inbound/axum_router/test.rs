@@ -1,4 +1,13 @@
-use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
+use axum::{
+    body::to_bytes,
+    extract::{FromRef, FromRequestParts},
+    http::{Request, StatusCode, header},
+    response::IntoResponse,
+};
+use macro_authorization::{
+    MacroAuthorizationError, SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer},
+};
 use serde_json::{Value, json};
 
 use crate::domain::model::{
@@ -6,9 +15,19 @@ use crate::domain::model::{
     RemoveUserFromTeamError,
 };
 
-use super::invite_to_team::InviteToTeamError;
+use super::{invite_to_team::InviteToTeamError, premium_user::PremiumUserRejection};
 
 const CUSTOMER_ERROR_SENTINEL: &str = "sentinel customer repository failure";
+
+struct AuthorizationState {
+    authorization_service: SharedMacroAuthorizationService,
+}
+
+impl FromRef<AuthorizationState> for SharedMacroAuthorizationService {
+    fn from_ref(state: &AuthorizationState) -> Self {
+        state.authorization_service.clone()
+    }
+}
 
 fn customer_error() -> CustomerError {
     CustomerError::StorageLayerError(anyhow::anyhow!(CUSTOMER_ERROR_SENTINEL))
@@ -34,6 +53,37 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
     assert_eq!(body_text, r#"{"message":"internal server error"}"#);
     assert_eq!(body_json, json!({ "message": "internal server error" }));
     assert!(!body_text.contains(CUSTOMER_ERROR_SENTINEL));
+}
+
+#[tokio::test]
+async fn premium_user_authorization_rejection_is_preserved() {
+    let state = AuthorizationState {
+        authorization_service: SharedMacroAuthorizationService::new(
+            FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired),
+        ),
+    };
+    let request = bearer(Request::builder(), "expired-token")
+        .body(())
+        .expect("test request should be valid");
+    let (mut parts, _) = request.into_parts();
+    let authorization_rejection =
+        match SharedMacroAuthorizationExtractor::from_request_parts(&mut parts, &state).await {
+            Ok(_) => panic!("expired credentials should be rejected"),
+            Err(rejection) => rejection,
+        };
+
+    let response = PremiumUserRejection::from(authorization_rejection).into_response();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers().get(header::WWW_AUTHENTICATE),
+        Some(&axum::http::HeaderValue::from_static(
+            "Bearer error=\"invalid_token\", error_description=\"jwt expired\"",
+        )),
+    );
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("authorization rejection body should be readable");
+    assert_eq!(body.as_ref(), br#"{"message":"jwt expired"}"#);
 }
 
 #[tokio::test]

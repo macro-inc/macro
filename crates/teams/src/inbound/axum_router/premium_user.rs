@@ -7,9 +7,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{MacroAuthorizationRejection, SharedMacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
 
 use crate::domain::{model::TeamError, team_repo::TeamService};
 
@@ -27,15 +27,21 @@ pub struct PremiumUserExtractor {
 /// Rejection returned when the premium user check fails.
 #[derive(Debug, thiserror::Error)]
 pub enum PremiumUserRejection {
-    /// The user could not be extracted from the request.
-    #[error(transparent)]
-    User(#[from] UserExtractorErr),
+    /// The request credentials could not authorize a user.
+    #[error("{0}")]
+    User(MacroAuthorizationRejection),
     /// The user does not have an active subscription.
     #[error("active subscription required")]
     NotPremium,
     /// The premium check could not be performed.
     #[error(transparent)]
     Service(#[from] TeamError),
+}
+
+impl From<MacroAuthorizationRejection> for PremiumUserRejection {
+    fn from(rejection: MacroAuthorizationRejection) -> Self {
+        Self::User(rejection)
+    }
 }
 
 impl IntoResponse for PremiumUserRejection {
@@ -72,7 +78,7 @@ where
         parts: &mut Parts,
         state: &TeamRouterState<T, Eas>,
     ) -> Result<Self, Self::Rejection> {
-        let user = MacroUserExtractor::from_request_parts(parts, state).await?;
+        let user = SharedMacroAuthorizationExtractor::from_request_parts(parts, state).await?;
 
         let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
         else {
