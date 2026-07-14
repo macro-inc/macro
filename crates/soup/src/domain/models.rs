@@ -33,12 +33,11 @@ use item_filters::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_grouping::GroupingConfig;
-use models_pagination::{
-    Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
-    SimpleSortMethod, SortOn,
-};
+use models_pagination::{Cursor, CursorWithValAndFilter, Frecency, Query, SimpleSortMethod};
+use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
@@ -364,6 +363,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,
             }?,
+            include_frecency: false,
             team_receipt,
             crm_scope,
         })
@@ -518,6 +518,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
         Some(GetChannelsRequest {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
+            include_frecency: false,
             query: match &self.cursor {
                 SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
                     *t,
@@ -749,42 +750,17 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
     }
 }
 
-/// a [SoupItem] with an associated frecency score
+/// A Soup result with both optional enrichments represented in one model.
+///
+/// Service methods decide which fields to populate. An unfetched enrichment
+/// remains empty without changing the response model.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct FrecencySoupItem {
-    /// the soup item
-    pub item: SoupItem,
-    /// the frecency score
+pub struct EnrichedSoupItem {
+    /// The Soup item with its property projection.
+    pub item: SoupItem<SoupPropertiesField>,
+    /// The aggregate frecency score, when requested and available.
     pub frecency_score: Option<AggregateFrecency>,
-}
-
-impl Identify for FrecencySoupItem {
-    type Id = String;
-
-    fn id(&self) -> Self::Id {
-        self.item.entity().entity_id.to_string()
-    }
-}
-
-impl SortOn<Frecency> for FrecencySoupItem {
-    fn sort_on(sort_type: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
-        move |val| CursorVal {
-            sort_type,
-            // if this record does not have a frecency score we fallback to created_at as the sort
-            last_val: match &val.frecency_score {
-                Some(f) => FrecencyValue::FrecencyScore(f.data.frecency_score),
-                None => FrecencyValue::UpdatedAt(val.item.updated_at()),
-            },
-        }
-    }
-}
-
-impl SortOn<SimpleSortMethod> for FrecencySoupItem {
-    fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
-        let mut cb = SoupItem::sort_on(sort);
-        move |v| cb(&v.item)
-    }
 }
 
 /// A soup request with optional grouping configuration.
@@ -798,9 +774,9 @@ pub struct GroupedSoupRequest<T> {
 
 /// A soup item with group metadata attached (returned from grouped queries).
 #[derive(Debug)]
-pub struct GroupedSoupItem {
+pub struct GroupedSoupItem<T = ()> {
     /// The soup item
-    pub item: SoupItem,
+    pub item: SoupItem<T>,
     /// The frecency score (if available)
     pub frecency_score: Option<AggregateFrecency>,
     /// Which group this item belongs to
@@ -850,4 +826,22 @@ pub enum SoupErr {
     /// Entity filter AST expansion failed.
     #[error(transparent)]
     AstErr(#[from] ExpandErr),
+}
+
+/// Property fields that can be flattened into property-bearing Soup items.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct SoupPropertiesField {
+    /// Properties attached to the entity.
+    pub properties: Vec<SoupProperty>,
+}
+
+/// A Soup item with entity properties attached.
+pub type SoupItemWithProperties = SoupItem<SoupPropertiesField>;
+
+impl SoupPropertiesField {
+    /// Creates an extra field containing the supplied properties.
+    pub fn new(properties: Vec<SoupProperty>) -> Self {
+        Self { properties }
+    }
 }

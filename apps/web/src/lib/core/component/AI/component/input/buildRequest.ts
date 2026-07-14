@@ -33,7 +33,7 @@ export function useSendChatMessage() {
   }: ChatSendInput & { chatId?: string }): Promise<SendChatMessageResult> {
     // Append the dynamic-UI (displayResults) JSON schema so the model knows the
     // shape of the tool's `any` `view` argument.
-    const base = additionalInstructions();
+    const base = additionalInstructions(chatId);
     const dashboard = displayResultsInstructions();
     const merged = base ? `${base}\n\n${dashboard}` : dashboard;
 

@@ -342,7 +342,7 @@ async fn publish_label_diff_events(
     }
 
     for event in &events {
-        publish_email_event(&ctx.macro_event_broker, event).await;
+        publish_email_event(&ctx.macro_event_broker, event);
     }
 }
 

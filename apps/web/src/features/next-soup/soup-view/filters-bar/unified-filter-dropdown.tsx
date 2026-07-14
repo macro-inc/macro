@@ -34,6 +34,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { idToDisplayName } from '@core/user/util';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
@@ -42,6 +43,7 @@ import { PropertyValueIcon } from '@property/component/propertyValue/PropertyVal
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useGithubLinkStatusQuery } from '@queries/auth';
 import { useContacts } from '@queries/contacts/contacts';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -395,6 +397,8 @@ const SearchableFilterSubmenu = (props: {
   placeholder?: string;
   open?: Accessor<boolean>;
   onOpenChange?: (v: boolean) => void;
+  /** Keep `options` in their given order instead of pinning selected first. */
+  preserveOrder?: boolean;
 }) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
   const isOpen = () => props.open?.() ?? internalOpen();
@@ -466,6 +470,7 @@ const SearchableFilterSubmenu = (props: {
             onChange={props.onChange}
             options={props.options}
             inputRef={setInputRef}
+            preserveOrder={props.preserveOrder}
           />
         </Dropdown.Group>
       </Dropdown.SubContent>
@@ -554,6 +559,7 @@ export const UnifiedFilterDropdown = (
     setReadFilter,
   } = useSoupView();
   const contacts = useContacts();
+  const teamQuery = useCurrentTeamQuery();
   const userId = useUserId();
   const dealStages = useDealStages();
 
@@ -715,7 +721,9 @@ export const UnifiedFilterDropdown = (
     });
   };
 
-  // Owner options for the Customers view (contacts, plus a "No owner" row).
+  // Owner options for the Customers view (team members, plus a "No owner"
+  // row) — company owners are always teammates, so the broader contacts
+  // list (anyone ever interacted with) would mostly be noise here.
   const ownerOptions = createMemo((): SearchableOption[] => {
     const currentUserId = userId();
     const noOwnerOption: SearchableOption = {
@@ -724,31 +732,27 @@ export const UnifiedFilterDropdown = (
       icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
     };
     let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
+    const memberOptions: SearchableOption[] = [];
+    for (const member of teamQuery.data?.members ?? []) {
+      const id = member.user_id;
       const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
+        id,
+        label: buildContactLabel(
+          { id, name: idToDisplayName(id) },
+          currentUserId
+        ),
         icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
+          <UserIcon id={id} size="sm" suppressClick showTooltip={false} />
         ),
       };
-      if (contact.id === currentUserId) {
+      if (id === currentUserId) {
         meOption = opt;
       } else {
-        otherContactOptions.push(opt);
+        memberOptions.push(opt);
       }
     }
-    return [
-      ...(meOption ? [meOption] : []),
-      noOwnerOption,
-      ...otherContactOptions,
-    ];
+    memberOptions.sort((a, b) => a.label.localeCompare(b.label));
+    return [...(meOption ? [meOption] : []), noOwnerOption, ...memberOptions];
   });
 
   // Owner filtering is a client-side predicate (companies come back from a
@@ -764,9 +768,10 @@ export const UnifiedFilterDropdown = (
   };
 
   // Stage options for the Customers view: the team's active deal-stage set
-  // plus a trailing "No stage" row.
+  // (plus retired legacy stages on the default set) and a trailing
+  // "No stage" row.
   const stageOptions = createMemo((): SearchableOption[] => [
-    ...dealStages.stages().map((stage, index) => ({
+    ...dealStages.filterStages().map((stage, index) => ({
       id: stage.id,
       label: stage.label,
       icon: () => (
@@ -780,11 +785,29 @@ export const UnifiedFilterDropdown = (
     },
   ]);
 
+  // The stage set shown when no filter is active: the active deal stages
+  // plus "No stage" — retired legacy stages only display when filtered in.
+  const defaultStageIds = createMemo(
+    () => new Set([...dealStages.stages().map((stage) => stage.id), NO_STAGE])
+  );
+
+  // The stage submenu reflects what's on screen: an empty filter shows the
+  // default columns, so exactly those read as checked (legacy stages don't).
+  const effectiveStageFilter = () =>
+    stageFilter().length > 0 ? stageFilter() : [...defaultStageIds()];
+
   // Stage filtering is a client-side predicate, mirroring the owner filter.
   const handleStageChange = (ids: string[]) => {
+    // Checking exactly the default set is the same as no filter — store it
+    // as empty so the predicate deactivates.
+    const next =
+      ids.length === defaultStageIds().size &&
+      ids.every((id) => defaultStageIds().has(id))
+        ? []
+        : ids;
     batch(() => {
-      setStageFilter(ids);
-      const shouldBeActive = ids.length > 0;
+      setStageFilter(next);
+      const shouldBeActive = next.length > 0;
       if (shouldBeActive !== soup.predicates.isActive('company-stage')) {
         soup.predicates.toggle({ and: ['company-stage'] });
       }
@@ -945,9 +968,10 @@ export const UnifiedFilterDropdown = (
                     <SearchableFilterSubmenu
                       label="Stage"
                       options={stageOptions}
-                      activeIds={stageFilter}
+                      activeIds={effectiveStageFilter}
                       onChange={handleStageChange}
                       placeholder="Filter stages..."
+                      preserveOrder
                     />
                     <SearchableFilterSubmenu
                       label="Owner"

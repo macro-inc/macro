@@ -189,6 +189,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const entities = createMemo((): CombinedEntity[] => {
     const specificEntityType = props.config.specificEntityType;
 
+    // An explicit user pool replaces the quick-access people list.
+    if (specificEntityType === 'USER' && props.config.users) {
+      return props.config
+        .users()
+        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+    }
+
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
       return emails().map(threadMapper);

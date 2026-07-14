@@ -4,9 +4,9 @@ use std::{collections::HashMap, marker::PhantomData, str::FromStr};
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess, Entity,
-        EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
-        UserTeamInfo, ViewAccessLevel,
+        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+        Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+        RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -244,6 +244,45 @@ where
         .await;
         receipts.extend(fallback);
         receipts
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        let entity_permission = match entity_type {
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread
+            | EntityType::Call => {
+                let access_level = self
+                    .repo
+                    .get_bot_entity_access(bot_id, entity_id, entity_type)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?;
+                EntityPermission::AccessLevel { access_level }
+            }
+            EntityType::Channel => {
+                let channel_id = Uuid::from_str(entity_id)
+                    .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
+                let result = self.repo.get_bot_channel_role(&channel_id, bot_id).await?;
+                channel_role_result_to_permission(result)?
+            }
+            _ => return Err(AccessError::BadRequest("Unsupported bot entity type")),
+        };
+
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]

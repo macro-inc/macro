@@ -15,32 +15,35 @@ use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// A single item in the Soup feed.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "tag", content = "data")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub enum SoupItem {
+pub enum SoupItem<T = ()> {
     /// Document item.
-    Document(SoupDocument),
+    Document(SoupDocument<T>),
     /// Chat item.
-    Chat(SoupChat),
+    Chat(SoupChat<T>),
     /// Project item.
-    Project(SoupProject),
+    Project(SoupProject<T>),
     /// Email thread item.
-    EmailThread(SoupEnrichedEmailThreadPreview),
+    EmailThread(SoupEnrichedEmailThreadPreview<T>),
     /// Channel item.
     Channel(SoupChannel),
     /// Channel thread item.
     ChannelThread(SoupChannelThread),
     /// Call record item.
-    Call(SoupCallRecord),
+    Call(SoupCallRecord<T>),
     /// CRM company item.
-    CrmCompany(SoupCrmCompany),
+    CrmCompany(SoupCrmCompany<T>),
     /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
 }
 
-impl SoupItem {
+impl<T> SoupItem<T> {
     /// return the [Entity] for this soup item
     pub fn entity(&self) -> Entity<'static> {
         match self {
@@ -88,9 +91,7 @@ impl SoupItem {
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
         }
     }
-}
 
-impl SoupItem {
     fn cursor_timestamp(&self, sort: SimpleSortMethod) -> DateTime<Utc> {
         match (self, sort) {
             (SoupItem::Document(soup_document), SimpleSortMethod::ViewedAt) => {
@@ -161,41 +162,7 @@ impl SoupItem {
             (SoupItem::ForeignEntity(foreign_entity), _) => foreign_entity.updated_at,
         }
     }
-}
 
-impl Identify for SoupItem {
-    type Id = Uuid;
-
-    fn id(&self) -> Self::Id {
-        match self {
-            SoupItem::Document(soup_document) => soup_document.id,
-            SoupItem::Chat(soup_chat) => soup_chat.id,
-            SoupItem::Project(soup_project) => soup_project.id,
-            SoupItem::EmailThread(thread) => thread.thread.id,
-            SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
-            SoupItem::ChannelThread(thread) => thread.id,
-            SoupItem::Call(record) => record.call_id,
-            SoupItem::CrmCompany(company) => company.id,
-            SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
-        }
-    }
-}
-
-impl SortOn<SimpleSortMethod> for SoupItem {
-    fn sort_on(
-        sort: SimpleSortMethod,
-    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
-        move |v| {
-            let last_val = v.cursor_timestamp(sort);
-            models_pagination::CursorVal {
-                sort_type: sort,
-                last_val,
-            }
-        }
-    }
-}
-
-impl SoupItem {
     /// Converts this item to an [`EntityReference`] for property lookups.
     ///
     /// Returns `None` for item types that don't support properties
@@ -228,6 +195,202 @@ impl SoupItem {
                 PropertiesEntityType::Company,
             )),
             SoupItem::ForeignEntity(_) => None,
+        }
+    }
+
+    /// Maps the extra fields attached to property-bearing Soup variants.
+    pub fn map_extra<U, F>(self, f: F) -> SoupItem<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            SoupItem::Document(SoupDocument {
+                id,
+                document_version_id,
+                owner_id,
+                name,
+                file_type,
+                sha,
+                project_id,
+                branched_from_id,
+                branched_from_version_id,
+                document_family_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                sub_type,
+                deleted_at,
+                extra,
+            }) => SoupItem::Document(SoupDocument {
+                id,
+                document_version_id,
+                owner_id,
+                name,
+                file_type,
+                sha,
+                project_id,
+                branched_from_id,
+                branched_from_version_id,
+                document_family_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                sub_type,
+                deleted_at,
+                extra: f(extra),
+            }),
+            SoupItem::Chat(SoupChat {
+                id,
+                name,
+                owner_id,
+                project_id,
+                is_persistent,
+                created_at,
+                updated_at,
+                viewed_at,
+                deleted_at,
+                extra,
+            }) => SoupItem::Chat(SoupChat {
+                id,
+                name,
+                owner_id,
+                project_id,
+                is_persistent,
+                created_at,
+                updated_at,
+                viewed_at,
+                deleted_at,
+                extra: f(extra),
+            }),
+            SoupItem::Project(SoupProject {
+                id,
+                name,
+                owner_id,
+                parent_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                deleted_at,
+                extra,
+            }) => SoupItem::Project(SoupProject {
+                id,
+                name,
+                owner_id,
+                parent_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                deleted_at,
+                extra: f(extra),
+            }),
+            SoupItem::EmailThread(SoupEnrichedEmailThreadPreview {
+                thread,
+                attachments,
+                participants,
+                labels,
+                extra,
+            }) => SoupItem::EmailThread(SoupEnrichedEmailThreadPreview {
+                thread,
+                attachments,
+                participants,
+                labels,
+                extra: f(extra),
+            }),
+            SoupItem::Channel(channel) => SoupItem::Channel(channel),
+            SoupItem::ChannelThread(soup_channel_thread) => {
+                SoupItem::ChannelThread(soup_channel_thread)
+            }
+            SoupItem::Call(SoupCallRecord {
+                call_id,
+                channel_id,
+                created_by,
+                started_at,
+                ended_at,
+                duration_ms,
+                channel_name,
+                custom_name,
+                summary,
+                is_active,
+                status,
+                attended,
+                participants,
+                extra,
+            }) => SoupItem::Call(SoupCallRecord {
+                call_id,
+                channel_id,
+                created_by,
+                started_at,
+                ended_at,
+                duration_ms,
+                channel_name,
+                custom_name,
+                summary,
+                is_active,
+                status,
+                attended,
+                participants,
+                extra: f(extra),
+            }),
+            SoupItem::CrmCompany(SoupCrmCompany {
+                id,
+                team_id,
+                name,
+                description,
+                email_sync,
+                hidden,
+                created_at,
+                updated_at,
+                viewed_at,
+                domains,
+                extra,
+            }) => SoupItem::CrmCompany(SoupCrmCompany {
+                id,
+                team_id,
+                name,
+                description,
+                email_sync,
+                hidden,
+                created_at,
+                updated_at,
+                viewed_at,
+                domains,
+                extra: f(extra),
+            }),
+            SoupItem::ForeignEntity(soup_foreign_entity) => {
+                SoupItem::ForeignEntity(soup_foreign_entity)
+            }
+        }
+    }
+}
+
+impl<T> Identify for SoupItem<T> {
+    type Id = Uuid;
+
+    fn id(&self) -> Self::Id {
+        match self {
+            SoupItem::Document(soup_document) => soup_document.id,
+            SoupItem::Chat(soup_chat) => soup_chat.id,
+            SoupItem::Project(soup_project) => soup_project.id,
+            SoupItem::EmailThread(thread) => thread.thread.id,
+            SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
+            SoupItem::ChannelThread(thread) => thread.id,
+            SoupItem::Call(record) => record.call_id,
+            SoupItem::CrmCompany(company) => company.id,
+            SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
+        }
+    }
+}
+
+impl<T> SortOn<SimpleSortMethod> for SoupItem<T> {
+    fn sort_on(
+        sort: SimpleSortMethod,
+    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+        move |v| {
+            let last_val = v.cursor_timestamp(sort);
+            models_pagination::CursorVal {
+                sort_type: sort,
+                last_val,
+            }
         }
     }
 }

@@ -3,6 +3,10 @@ import type { OptimisticPostMessageAttachment } from '@channel/Input/message-pay
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
+import {
+  invalidateSoupEntity,
+  refetchSoupEntity,
+} from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type ApiChannelMessage,
@@ -457,16 +461,26 @@ export function useSendMessageMutation(
           });
         },
         onSuccess(data, variables) {
+          const threadId = variables.message.thread_id ?? undefined;
           replaceOptimisticMessage({
             channelId: variables.channelID,
             optimisticId: variables.optimisticId,
             realId: data.id,
-            threadId: variables.message.thread_id ?? undefined,
+            threadId,
           });
+
+          // The sender does not receive the notification that normally refreshes
+          // this soup entity. Refresh root messages here so the channel moves to
+          // its updated position in soup lists.
+          if (threadId === undefined) {
+            refetchSoupEntity(variables.channelID, 'channel');
+            invalidateSoupEntity(variables.channelID);
+          }
+
           analytics.track('channel_message_sent', {
             contentLength: variables.message.content?.length ?? 0,
             attachmentsLength: variables.message.attachments.length,
-            isThreadReply: variables.message.thread_id !== undefined,
+            isThreadReply: threadId !== undefined,
           });
         },
         onError(error, vars, context) {

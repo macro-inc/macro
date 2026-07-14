@@ -456,7 +456,6 @@ function CategoryFilterTabs() {
         items={CATEGORIES}
         value={SearchState.categoryFilter()}
         onChange={(value) => SearchState.setCategoryFilter(value)}
-        preserveFocus
       />
     </div>
   );

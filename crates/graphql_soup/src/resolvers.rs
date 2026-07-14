@@ -62,6 +62,19 @@ where
         None
     };
 
-    let page = service.get_user_soup(request, team_receipt).await?;
-    Ok(SoupPage::from(page.type_erase()))
+    let include_frecency = ctx
+        .look_ahead()
+        .field("items")
+        .field("frecencyScore")
+        .exists();
+
+    if include_frecency {
+        let page = service
+            .get_user_soup_with_frecency(request, team_receipt)
+            .await?;
+        Ok(SoupPage::from(page.type_erase()))
+    } else {
+        let page = service.get_user_soup(request, team_receipt).await?;
+        Ok(SoupPage::from(page.type_erase()))
+    }
 }

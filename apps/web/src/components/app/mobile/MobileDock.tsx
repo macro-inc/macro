@@ -129,7 +129,6 @@ function MoreViewsMenu(props: {
   return (
     <MobileTouchMenu
       triggerIcon={CaretUpIcon}
-      triggerAriaLabel="More views"
       footerLabel="Views"
       footerCaretClass="mr-11"
       items={[
@@ -179,7 +178,6 @@ function CreateMenu() {
   return (
     <MobileTouchMenu
       triggerIcon={PlusIcon}
-      triggerAriaLabel="Create"
       footerLabel="Create"
       items={[
         uploadItem,

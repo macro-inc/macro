@@ -480,6 +480,13 @@ export function Channel(props: ChannelProps) {
   // fully loaded data.
   createEffect(() => {
     if (!pendingScrollToLatest()) return;
+    // A specific message navigation supersedes scroll-to-latest: once a target
+    // scroll is pending, abandon the latest-scroll so it can't yank the view
+    // back to the bottom.
+    if (targetMessageController.pendingScrollTargetId()) {
+      setPendingScrollToLatest(false);
+      return;
+    }
     const navigation = threadListNavigation();
     const scrollState = threadListScrollState();
     if (!navigation || !scrollState?.didInitialScroll) return;
@@ -691,7 +698,9 @@ export function Channel(props: ChannelProps) {
                     </Show>
                   </div>
                 </Show>
-                <ActiveCallMessage channelId={props.channelId} />
+                <DebugSuspense name="Channel.active-call">
+                  <ActiveCallMessage channelId={props.channelId} />
+                </DebugSuspense>
               </div>
               <DebugSuspense name="Channel.input">
                 <FloatRegionOrInline region="accessory">

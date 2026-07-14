@@ -116,6 +116,12 @@ pub enum EventBrokerError {
     /// The broker rejected or failed to deliver the message.
     #[error("failed to publish event: {0}")]
     Publish(String),
+    /// Publishing did not complete within the configured timeout.
+    #[error("event publish timed out after {timeout:?}")]
+    PublishTimeout {
+        /// Maximum duration allowed for publication.
+        timeout: std::time::Duration,
+    },
     /// An otherwise-unclassified internal error.
     #[error("internal event broker error: {0:?}")]
     Internal(rootcause::Report),

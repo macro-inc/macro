@@ -1799,6 +1799,80 @@
         }
       }
     },
+    "/channels/join/{join_code}": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/join/{join_code}`.",
+        "operationId": "join_channel_by_code",
+        "parameters": [
+          {
+            "name": "join_code",
+            "in": "path",
+            "description": "Channel join code",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/mentions": {
       "post": {
         "tags": ["channels"],
@@ -2441,6 +2515,87 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/join-link": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/join-link`.",
+        "operationId": "get_channel_join_link",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelJoinCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -11196,6 +11351,17 @@
               "$ref": "#/components/schemas/CallRecordTranscriptSegment"
             },
             "description": "Transcript segments ordered by `sequence_num`."
+          },
+          "userAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The caller's effective access level on this call. Set only on the\nsingle-record read; `None` in list contexts."
+              }
+            ]
           }
         }
       },
@@ -11487,6 +11653,18 @@
               "type": "string"
             },
             "description": "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
+          }
+        }
+      },
+      "ChannelJoinCodeResponse": {
+        "type": "object",
+        "description": "Response containing a channel's reusable join code.",
+        "required": ["join_code"],
+        "properties": {
+          "join_code": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reusable code for joining the channel."
           }
         }
       },
@@ -18174,90 +18352,6 @@
           }
         }
       },
-      "SoupCallRecord": {
-        "type": "object",
-        "description": "A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.",
-        "required": [
-          "callId",
-          "channelId",
-          "createdBy",
-          "startedAt",
-          "isActive",
-          "status",
-          "attended",
-          "participants",
-          "properties"
-        ],
-        "properties": {
-          "attended": {
-            "type": "boolean",
-            "description": "Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`."
-          },
-          "callId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The call identifier."
-          },
-          "channelId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The channel this call belongs to."
-          },
-          "channelName": {
-            "type": ["string", "null"],
-            "description": "Resolved display name for the channel."
-          },
-          "createdBy": {
-            "type": "string",
-            "description": "User who created the call."
-          },
-          "customName": {
-            "type": ["string", "null"],
-            "description": "User-supplied or AI-generated display name for the call."
-          },
-          "durationMs": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Call duration in milliseconds (None if still active)."
-          },
-          "endedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the call ended (None if still active)."
-          },
-          "isActive": {
-            "type": "boolean",
-            "description": "Whether the call is currently active."
-          },
-          "participants": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoupCallRecordParticipant"
-            },
-            "description": "Participants in the call."
-          },
-          "properties": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoupProperty"
-            },
-            "description": "Entity properties (e.g. tags). Populated after fetch by the soup repo."
-          },
-          "startedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the call started."
-          },
-          "status": {
-            "$ref": "#/components/schemas/CallStatus",
-            "description": "Viewer-relative call status for the requesting user."
-          },
-          "summary": {
-            "type": ["string", "null"],
-            "description": "AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`."
-          }
-        }
-      },
       "SoupCallRecordParticipant": {
         "type": "object",
         "description": "A participant in a call record, as displayed in Soup.",
@@ -18278,6 +18372,100 @@
             "description": "The user id."
           }
         }
+      },
+      "SoupCallRecord_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "callId",
+              "channelId",
+              "createdBy",
+              "startedAt",
+              "isActive",
+              "status",
+              "attended",
+              "participants"
+            ],
+            "properties": {
+              "attended": {
+                "type": "boolean",
+                "description": "Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`."
+              },
+              "callId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The call identifier."
+              },
+              "channelId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The channel this call belongs to."
+              },
+              "channelName": {
+                "type": ["string", "null"],
+                "description": "Resolved display name for the channel."
+              },
+              "createdBy": {
+                "type": "string",
+                "description": "User who created the call."
+              },
+              "customName": {
+                "type": ["string", "null"],
+                "description": "User-supplied or AI-generated display name for the call."
+              },
+              "durationMs": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "Call duration in milliseconds (None if still active)."
+              },
+              "endedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the call ended (None if still active)."
+              },
+              "isActive": {
+                "type": "boolean",
+                "description": "Whether the call is currently active."
+              },
+              "participants": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupCallRecordParticipant"
+                },
+                "description": "Participants in the call."
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the call started."
+              },
+              "status": {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Viewer-relative call status for the requesting user."
+              },
+              "summary": {
+                "type": ["string", "null"],
+                "description": "AI-generated summary of the call. Only set on archived\n`call_records` once summarization has run; active calls always\nreturn `None`."
+              }
+            }
+          }
+        ],
+        "description": "A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed."
       },
       "SoupChannel": {
         "allOf": [
@@ -18385,69 +18573,79 @@
           }
         }
       },
-      "SoupChat": {
-        "type": "object",
-        "description": "A chat as displayed in Soup.",
-        "required": [
-          "id",
-          "name",
-          "ownerId",
-          "isPersistent",
-          "createdAt",
-          "updatedAt",
-          "properties"
-        ],
-        "properties": {
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The time the chat was created"
+      "SoupChat_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
           },
-          "deletedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "The time the chat was deleted"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The chat uuid"
-          },
-          "isPersistent": {
-            "type": "boolean",
-            "description": "Whether the chat is persistent or not"
-          },
-          "name": {
-            "type": "string",
-            "description": "The name of the chat"
-          },
-          "ownerId": {
-            "type": "string",
-            "description": "Who the chat belongs to"
-          },
-          "projectId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The project id of the chat"
-          },
-          "properties": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoupProperty"
-            },
-            "description": "Properties"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The time the chat was last updated"
-          },
-          "viewedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "The time the chat was last viewed"
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "ownerId",
+              "isPersistent",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the chat was created"
+              },
+              "deletedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the chat was deleted"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The chat uuid"
+              },
+              "isPersistent": {
+                "type": "boolean",
+                "description": "Whether the chat is persistent or not"
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the chat"
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "Who the chat belongs to"
+              },
+              "projectId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The project id of the chat"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the chat was last updated"
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the chat was last viewed"
+              }
+            }
           }
-        }
+        ],
+        "description": "A chat as displayed in Soup."
       },
       "SoupContact": {
         "type": "object",
@@ -18496,75 +18694,86 @@
           }
         }
       },
-      "SoupCrmCompany": {
-        "type": "object",
-        "description": "A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.",
-        "required": [
-          "id",
-          "teamId",
-          "emailSync",
-          "hidden",
-          "createdAt",
-          "updatedAt",
-          "domains"
-        ],
-        "properties": {
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the company was created."
+      "SoupCrmCompany_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
           },
-          "description": {
-            "type": ["string", "null"],
-            "description": "Display description from the primary domain's directory entry."
-          },
-          "domains": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoupCrmDomain"
-            },
-            "description": "Domains associated with this company, ordered by creation time\nascending (primary first)."
-          },
-          "emailSync": {
-            "type": "boolean",
-            "description": "Whether email sync is enabled for this company."
-          },
-          "hidden": {
-            "type": "boolean",
-            "description": "Whether the company is hidden from CRM listings. Soup filters\nthese out by default."
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The id of the company."
-          },
-          "name": {
-            "type": ["string", "null"],
-            "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
-          },
-          "properties": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoupProperty"
-            },
-            "description": "Properties attached to this company (system CRM properties like\nStage / Owner / Revenue plus any custom ones)."
-          },
-          "teamId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The id of the team that owns this company record."
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the company was last updated."
-          },
-          "viewedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry."
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "teamId",
+              "emailSync",
+              "hidden",
+              "createdAt",
+              "updatedAt",
+              "domains"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the company was created."
+              },
+              "description": {
+                "type": ["string", "null"],
+                "description": "Display description from the primary domain's directory entry."
+              },
+              "domains": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupCrmDomain"
+                },
+                "description": "Domains associated with this company, ordered by creation time\nascending (primary first)."
+              },
+              "emailSync": {
+                "type": "boolean",
+                "description": "Whether email sync is enabled for this company."
+              },
+              "hidden": {
+                "type": "boolean",
+                "description": "Whether the company is hidden from CRM listings. Soup filters\nthese out by default."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The id of the company."
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+              },
+              "teamId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The id of the team that owns this company record."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the company was last updated."
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry."
+              }
+            }
           }
-        }
+        ],
+        "description": "A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain."
       },
       "SoupCrmDomain": {
         "type": "object",
@@ -18589,105 +18798,6 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the domain record."
-          }
-        }
-      },
-      "SoupDocument": {
-        "type": "object",
-        "description": "A document as displayed in Soup.",
-        "required": [
-          "id",
-          "documentVersionId",
-          "ownerId",
-          "name",
-          "createdAt",
-          "updatedAt",
-          "properties"
-        ],
-        "properties": {
-          "branchedFromId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The id of the document this document branched from"
-          },
-          "branchedFromVersionId": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The time the document was created"
-          },
-          "deletedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "The time the document was deleted"
-          },
-          "documentFamilyId": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The id of the document family this document belongs to"
-          },
-          "documentVersionId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type"
-          },
-          "fileType": {
-            "type": ["string", "null"],
-            "description": "The file type of the document (e.g. pdf, docx)"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The document id"
-          },
-          "name": {
-            "type": "string",
-            "description": "The name of the document"
-          },
-          "ownerId": {
-            "type": "string",
-            "description": "The owner of the document"
-          },
-          "projectId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The id of the project that this document belongs to"
-          },
-          "properties": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoupProperty"
-            },
-            "description": "Properties"
-          },
-          "sha": {
-            "type": ["string", "null"],
-            "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
-          },
-          "subType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SoupDocumentSubType",
-                "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
-              }
-            ]
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The time the document instance / document BOM was updated"
-          },
-          "viewedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "The time the document was last viewed"
           }
         }
       },
@@ -18721,6 +18831,115 @@
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
+      },
+      "SoupDocument_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "documentVersionId",
+              "ownerId",
+              "name",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "branchedFromId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The id of the document this document branched from"
+              },
+              "branchedFromVersionId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the document was created"
+              },
+              "deletedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the document was deleted"
+              },
+              "documentFamilyId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The id of the document family this document belongs to"
+              },
+              "documentVersionId": {
+                "type": "integer",
+                "format": "int64",
+                "description": "The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type"
+              },
+              "fileType": {
+                "type": ["string", "null"],
+                "description": "The file type of the document (e.g. pdf, docx)"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The document id"
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the document"
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The owner of the document"
+              },
+              "projectId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The id of the project that this document belongs to"
+              },
+              "sha": {
+                "type": ["string", "null"],
+                "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
+              },
+              "subType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupDocumentSubType",
+                    "description": "The sub type of the document if present.\nTask-related properties are encoded within the variant."
+                  }
+                ]
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the document instance / document BOM was updated"
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the document was last viewed"
+              }
+            }
+          }
+        ],
+        "description": "A document as displayed in Soup."
       },
       "SoupEmailThreadPreview": {
         "type": "object",
@@ -18812,7 +19031,7 @@
           }
         }
       },
-      "SoupEnrichedEmailThreadPreview": {
+      "SoupEnrichedEmailThreadPreview_SoupPropertiesField": {
         "allOf": [
           {
             "$ref": "#/components/schemas/SoupEmailThreadPreview",
@@ -18820,7 +19039,21 @@
           },
           {
             "type": "object",
-            "required": ["attachments", "participants", "labels", "properties"],
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["attachments", "participants", "labels"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -18842,13 +19075,6 @@
                   "$ref": "#/components/schemas/SoupContact"
                 },
                 "description": "Contacts participating in the thread."
-              },
-              "properties": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SoupProperty"
-                },
-                "description": "Properties attached to the thread."
               }
             }
           }
@@ -18914,7 +19140,7 @@
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupDocument",
+                "$ref": "#/components/schemas/SoupDocument_SoupPropertiesField",
                 "description": "Document item."
               },
               "tag": {
@@ -18929,7 +19155,7 @@
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupChat",
+                "$ref": "#/components/schemas/SoupChat_SoupPropertiesField",
                 "description": "Chat item."
               },
               "tag": {
@@ -18944,7 +19170,7 @@
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupProject",
+                "$ref": "#/components/schemas/SoupProject_SoupPropertiesField",
                 "description": "Project item."
               },
               "tag": {
@@ -18959,7 +19185,7 @@
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview",
+                "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview_SoupPropertiesField",
                 "description": "Email thread item."
               },
               "tag": {
@@ -19004,7 +19230,7 @@
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupCallRecord",
+                "$ref": "#/components/schemas/SoupCallRecord_SoupPropertiesField",
                 "description": "Call record item."
               },
               "tag": {
@@ -19019,7 +19245,7 @@
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupCrmCompany",
+                "$ref": "#/components/schemas/SoupCrmCompany_SoupPropertiesField",
                 "description": "CRM company item."
               },
               "tag": {
@@ -19191,62 +19417,80 @@
           }
         }
       },
-      "SoupProject": {
-        "type": "object",
-        "description": "A project as displayed in Soup.",
-        "required": [
-          "id",
-          "name",
-          "ownerId",
-          "createdAt",
-          "updatedAt",
-          "properties"
+      "SoupProject_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the project was created"
+              },
+              "deletedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the project was deleted"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The id of the project"
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the project"
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The user id of who created the project"
+              },
+              "parentId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The parent project id"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the project was updated"
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the document was last viewed"
+              }
+            }
+          }
         ],
+        "description": "A project as displayed in Soup."
+      },
+      "SoupPropertiesField": {
+        "type": "object",
+        "description": "Property fields that can be flattened into property-bearing Soup items.",
+        "required": ["properties"],
         "properties": {
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The time the project was created"
-          },
-          "deletedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "The time the project was deleted"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The id of the project"
-          },
-          "name": {
-            "type": "string",
-            "description": "The name of the project"
-          },
-          "ownerId": {
-            "type": "string",
-            "description": "The user id of who created the project"
-          },
-          "parentId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The parent project id"
-          },
           "properties": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SoupProperty"
             },
-            "description": "Properties"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The time the project was updated"
-          },
-          "viewedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "The time the document was last viewed"
+            "description": "Properties attached to the entity."
           }
         }
       },

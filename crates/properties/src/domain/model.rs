@@ -88,11 +88,13 @@ impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
     }
 
     /// The authenticated user this receipt was minted for, if any
-    /// (`None` for internal and anonymous-public access).
+    /// (`None` for bot, internal, and anonymous-public access).
     pub fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>> {
         match self.receipt.auth() {
             EntityAccessAuth::Authenticated(user) => Some(user),
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
         }
     }
 

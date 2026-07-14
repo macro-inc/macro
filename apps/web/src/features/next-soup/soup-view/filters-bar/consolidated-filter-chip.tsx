@@ -53,6 +53,8 @@ export type ConsolidatedFilter = {
   searchPlaceholder?: string;
   isPopupOpen?: Accessor<boolean>;
   setPopupOpen?: (v: boolean) => void;
+  /** Keep options in their given order instead of pinning selected first. */
+  preserveOptionOrder?: boolean;
 };
 
 interface ConsolidatedFilterChipProps {
@@ -257,6 +259,7 @@ const SearchableValueSegment = (props: {
       placement="bottom-start"
       open={props.filter.isPopupOpen}
       onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
+      preserveOrder={props.filter.preserveOptionOrder}
     >
       <Combobox.Trigger
         class={cn(

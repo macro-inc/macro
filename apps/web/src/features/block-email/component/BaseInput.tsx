@@ -260,6 +260,7 @@ export function BaseInput(props: {
   onMarkDone?: (opts?: {
     silent?: boolean;
     onUndoHandle?: (handle: UndoHandle) => void;
+    nextEntityId?: string;
   }) => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -458,6 +459,7 @@ export function BaseInput(props: {
   // can reverse it. Cleared on each send: undo-send must only un-mark-done
   // when this send did the marking.
   let markDoneUndoHandle: UndoHandle | undefined;
+  let pendingMarkDoneNavigationTargetId: string | undefined;
 
   const undoSend = async (draftId: string) => {
     try {
@@ -570,7 +572,9 @@ export function BaseInput(props: {
           onUndoHandle: (handle) => {
             markDoneUndoHandle = handle;
           },
+          nextEntityId: pendingMarkDoneNavigationTargetId,
         });
+        pendingMarkDoneNavigationTargetId = undefined;
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -578,6 +582,7 @@ export function BaseInput(props: {
       // Restore autosave so the user can keep editing after a failed send.
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
+      pendingMarkDoneNavigationTargetId = undefined;
       toast.failure('Failed to send email');
     },
   });
@@ -707,7 +712,7 @@ export function BaseInput(props: {
     };
   }
 
-  async function executeSaveDraft() {
+  async function executeSaveDraft(skipSoupRefetch = false) {
     if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
     }
@@ -719,6 +724,7 @@ export function BaseInput(props: {
           draftId,
           threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
+          skipSoupRefetch,
         });
         refetchThreadMessages();
       }
@@ -750,6 +756,7 @@ export function BaseInput(props: {
         thread_db_id: currentThread?.db_id,
       },
       linkId: headerLinkId(),
+      skipSoupRefetch,
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -1009,9 +1016,17 @@ export function BaseInput(props: {
 
     const currentEditor = editor();
 
+    // Sending a reply marks the thread done. Gated on inbox_visible because
+    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
+    // replying from search or the sent view) would be unarchived.
+    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
+    pendingMarkDoneNavigationTargetId = willMarkDone
+      ? ctx.getMarkDoneNavigationTargetId()
+      : undefined;
+
     // Ensure draft is saved before sending so undo-send always has a draft to restore
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
-    await executeSaveDraft();
+    await executeSaveDraft(willMarkDone);
 
     // Snapshot editor state before watermark so undo-send can restore it.
     // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
@@ -1062,10 +1077,6 @@ export function BaseInput(props: {
     }
 
     pendingMentions = prepared.mentions;
-    // Sending a reply marks the thread done. Gated on inbox_visible because
-    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
-    // replying from search or the sent view) would be unarchived.
-    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
     setShouldMarkDoneOnSuccess(willMarkDone);
     markDoneUndoHandle = undefined;
 

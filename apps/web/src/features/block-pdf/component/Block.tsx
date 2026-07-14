@@ -186,7 +186,7 @@ export default function BlockPdf() {
   return (
     <DocumentBlockContainer>
       <div
-        class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col"
+        class="size-full select-none overscroll-none overflow-hidden flex flex-col"
         onContextMenu={(e) => e.preventDefault()}
         data-tut="App"
       >

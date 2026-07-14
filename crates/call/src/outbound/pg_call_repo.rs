@@ -1157,6 +1157,7 @@ impl CallRepository for PgCallRepo {
             tx.commit().await?;
             return Ok(Some(CallRecord {
                 call_id: active.id,
+                user_access_level: None,
                 channel_id: active.channel_id,
                 room_name: active.room_name,
                 created_by: active.created_by,
@@ -1242,6 +1243,7 @@ impl CallRepository for PgCallRepo {
         tx.commit().await?;
         Ok(Some(CallRecord {
             call_id: archived.id,
+            user_access_level: None,
             channel_id: archived.channel_id,
             room_name: archived.room_name,
             created_by: archived.created_by,
@@ -1612,6 +1614,7 @@ impl CallRepository for PgCallRepo {
 
             records.push(CallRecord {
                 call_id: row.call_id,
+                user_access_level: None,
                 channel_id: row.channel_id,
                 room_name: row.room_name,
                 created_by: row.created_by,

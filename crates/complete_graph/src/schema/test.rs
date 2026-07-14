@@ -6,7 +6,7 @@ use email::domain::models::{
     UpsertEmailFilterInput,
 };
 use entity_access::domain::models::{
-    AccessError, AccessLevel, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
+    AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
     EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
 };
 use graphql_common::GraphqlSoupRequestParts;
@@ -19,6 +19,97 @@ use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 use super::*;
+
+#[derive(Clone, Default)]
+struct CountingSoupService {
+    raw_calls: Arc<AtomicUsize>,
+    frecency_calls: Arc<AtomicUsize>,
+}
+
+fn test_soup_err() -> soup::domain::models::SoupErr {
+    soup::domain::models::SoupErr::SoupDbErr(anyhow::anyhow!("counting Soup service"))
+}
+
+impl SoupService for CountingSoupService {
+    async fn get_user_soup<T>(
+        &self,
+        _req: soup::domain::models::SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
+    where
+        soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        self.raw_calls.fetch_add(1, Ordering::SeqCst);
+        Err(test_soup_err())
+    }
+
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        _req: soup::domain::models::SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<
+        soup::domain::ports::SoupOutput<T, soup::domain::models::EnrichedSoupItem>,
+        soup::domain::models::SoupErr,
+    >
+    where
+        soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        Err(test_soup_err())
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        _req: soup::domain::models::SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<
+        soup::domain::ports::SoupOutput<T, soup::domain::models::EnrichedSoupItem>,
+        soup::domain::models::SoupErr,
+    >
+    where
+        soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        self.frecency_calls.fetch_add(1, Ordering::SeqCst);
+        Err(test_soup_err())
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        _req: soup::domain::models::SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<
+        soup::domain::ports::SoupOutput<T, soup::domain::models::EnrichedSoupItem>,
+        soup::domain::models::SoupErr,
+    >
+    where
+        soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        Err(test_soup_err())
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        _req: soup::domain::models::GroupedSortRequest<'_>,
+    ) -> Result<
+        Vec<soup::domain::models::GroupedSoupItem<soup::domain::models::SoupPropertiesField>>,
+        soup::domain::models::SoupErr,
+    > {
+        Err(test_soup_err())
+    }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        _user_id: MacroUserIdStr<'a>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        soup::domain::models::SoupErr,
+    >{
+        Err(test_soup_err())
+    }
+}
 
 /// Email service whose inbox lookups are counted, so tests can assert when
 /// the lazy extraction actually runs.
@@ -165,6 +256,15 @@ impl EntityAccessService for CountingEntityAccessService {
         Err(AccessError::Internal)
     }
 
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
     async fn get_access_level(
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
@@ -263,7 +363,7 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
 
 struct TestHarness {
     schema: SoupSchema<
-        NoOpSoupService,
+        CountingSoupService,
         CountingEmailService,
         CountingEntityAccessService,
         TestState,
@@ -275,21 +375,28 @@ struct TestHarness {
     state: TestState,
     inbox_calls: Arc<AtomicUsize>,
     team_calls: Arc<AtomicUsize>,
+    raw_soup_calls: Arc<AtomicUsize>,
+    frecency_soup_calls: Arc<AtomicUsize>,
 }
 
 fn harness() -> TestHarness {
     let email = CountingEmailService::default();
     let entity_access = CountingEntityAccessService::default();
+    let soup = CountingSoupService::default();
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let team_calls = Arc::clone(&entity_access.team_calls);
+    let raw_soup_calls = Arc::clone(&soup.raw_calls);
+    let frecency_soup_calls = Arc::clone(&soup.frecency_calls);
     TestHarness {
-        schema: build_schema_with_service(NoOpSoupService),
+        schema: build_schema_with_service(soup),
         state: TestState {
             email: EmailRouterState::new(email),
             entity_access: Arc::new(entity_access),
         },
         inbox_calls,
         team_calls,
+        raw_soup_calls,
+        frecency_soup_calls,
     }
 }
 
@@ -332,14 +439,26 @@ async fn user_id_resolves_without_touching_services() {
 async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
     let harness = harness();
 
-    // The schema-only soup service errors, but the laziness assertions below
-    // are about which lookups ran before the service call.
     let _response = harness
         .execute("{ user { soup(input: {}) { hasMore } } }")
         .await;
 
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_requests_frecency_only_when_selected() {
+    let harness = harness();
+
+    let _response = harness
+        .execute("{ user { soup(input: {}) { items { frecencyScore } } } }")
+        .await;
+
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

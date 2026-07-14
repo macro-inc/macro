@@ -9,13 +9,13 @@ use crate::domain::models::{
     ParticipantRole, ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
 };
 pub use crate::domain::models::{
-    AddParticipantsRequest, ChannelPreview, ChannelPreviewData, CreateChannelRequest,
-    CreateChannelResponse, CreateEntityMentionRequest, CreateEntityMentionResponse,
-    DeleteEntityMentionResponse, DeleteMessageQuery, GetBatchChannelPreviewRequest,
-    GetBatchChannelPreviewResponse, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-    PostMessageResponse, PostReactionRequest, PostTypingRequest, RemoveParticipantsRequest,
-    WithChannelId,
+    AddParticipantsRequest, ChannelJoinCodeResponse, ChannelPreview, ChannelPreviewData,
+    CreateChannelRequest, CreateChannelResponse, CreateEntityMentionRequest,
+    CreateEntityMentionResponse, DeleteEntityMentionResponse, DeleteMessageQuery,
+    GetBatchChannelPreviewRequest, GetBatchChannelPreviewResponse, GetOrCreateChannelResponse,
+    GetOrCreateDmRequest, GetOrCreatePrivateRequest, PatchChannelRequest, PatchMessageRequest,
+    PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
+    RemoveParticipantsRequest, WithChannelId,
 };
 pub use crate::domain::models::{ChannelMessageFilters, NotificationFilters};
 use crate::domain::ports::{
@@ -121,6 +121,7 @@ fn actor_from_receipt<T: RequiredPermission>(
 ) -> Result<Sender, ChannelsHandlerErr> {
     match receipt.auth() {
         EntityAccessAuth::Authenticated(user_id) => Ok(Sender::new_from_user(user_id.clone())),
+        EntityAccessAuth::Bot(bot_id) => Ok(Sender::new_from_bot(bot_id.bot_id())),
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => Err(
             ChannelsHandlerErr::BadRequest("authenticated actor required"),
         ),
@@ -285,6 +286,10 @@ where
             delete(delete_message_handler::<S, Svc>),
         )
         .route("/{channel_id}/join", post(join_channel_handler::<S, Svc>))
+        .route(
+            "/join/{join_code}",
+            post(join_channel_by_code_handler::<S, Svc>),
+        )
         .route("/{channel_id}/leave", post(leave_channel_handler::<S, Svc>))
         .route(
             "/{channel_id}/participants",
@@ -305,6 +310,10 @@ where
 {
     channel_mutation_router::<S, Svc>()
         .route("/{channel_id}", get(get_channel_handler::<S, Svc>))
+        .route(
+            "/{channel_id}/join-link",
+            get(get_channel_join_link_handler::<S, Svc>),
+        )
         .route(
             "/{channel_id}/messages",
             get(get_channel_messages_handler::<S, Svc>)
@@ -722,6 +731,65 @@ pub async fn remove_participants_handler<S: ChannelService, Svc: EntityAccessSer
     state
         .service
         .remove_participants(actor, channel_id, req)
+        .await?;
+    Ok(StatusCode::OK)
+}
+
+/// Handler for `GET /channels/{channel_id}/join-link`.
+#[utoipa::path(
+    get,
+    tag = "channels",
+    operation_id = "get_channel_join_link",
+    path = "/channels/{channel_id}/join-link",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 200, body = ChannelJoinCodeResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_channel_join_link_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+) -> Result<Json<ChannelJoinCodeResponse>, ChannelsHandlerErr> {
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let response = state.service.get_channel_join_code(channel_id).await?;
+    Ok(Json(response))
+}
+
+/// Handler for `POST /channels/join/{join_code}`.
+#[utoipa::path(
+    post,
+    tag = "channels",
+    operation_id = "join_channel_by_code",
+    path = "/channels/join/{join_code}",
+    params(
+        ("join_code" = Uuid, Path, description = "Channel join code")
+    ),
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn join_channel_by_code_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    Path(join_code): Path<Uuid>,
+    user: MacroUserExtractor,
+) -> Result<StatusCode, ChannelsHandlerErr> {
+    state
+        .service
+        .join_channel_by_code(Sender::new_from_user(user.macro_user_id), join_code)
         .await?;
     Ok(StatusCode::OK)
 }
@@ -2200,6 +2268,7 @@ impl IntoResponse for ChannelsHandlerErr {
                 let status = match &err {
                     ChannelMutationErr::BadRequest(_) => StatusCode::BAD_REQUEST,
                     ChannelMutationErr::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+                    ChannelMutationErr::Forbidden(_) => StatusCode::FORBIDDEN,
                     ChannelMutationErr::NotFound(_) => StatusCode::NOT_FOUND,
                     ChannelMutationErr::Repo(_)
                     | ChannelMutationErr::Gateway(_)

@@ -672,11 +672,20 @@ const SidebarDropdownLink = (
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
   const openInNewSplit = () => {
     if (canOpenInNewSplit()) open(true);
   };
   const openInCurrentSplit = () => open(false);
-  const openFullscreen = () => open(false)?.toggleSpotlight(true);
+  const openFullscreen = () => {
+    analytics.track('sidebar_click', { view: props.id });
+    const handle = layout.replaceAllSplits(
+      { type: 'component', id: props.id, params: props.params },
+      { referredFrom: 'sidebar' }
+    );
+    if (props.id === 'search' && handle) requestSearchFocus(handle.id);
+    globalSplitManager()?.returnFocus();
+  };
 
   const ContextMenuTriggerItem = (
     triggerProps: ComponentProps<typeof ContextMenu.Trigger>
@@ -690,7 +699,9 @@ const SidebarDropdownLink = (
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>
@@ -1511,6 +1522,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
     }) as const;
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
 
   const openInCurrentSplit = () =>
     layout.openWithSplit(content(), {
@@ -1534,8 +1546,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
   };
 
   const openFullscreen = () => {
-    const split = openInCurrentSplit();
-    split?.toggleSpotlight(true);
+    const split = layout.replaceAllSplits(content(), {
+      referredFrom: 'sidebar',
+    });
+    if (props.id === 'search' && split) requestSearchFocus(split.id);
+    globalSplitManager()?.returnFocus();
   };
 
   return (
@@ -1660,7 +1675,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>

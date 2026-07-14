@@ -1,7 +1,10 @@
-use crate::outbound::pg_soup_repo::expanded::{
-    by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
-    by_ids::expanded_soup_by_ids,
-    dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
+use crate::outbound::pg_soup_repo::{
+    expanded::{
+        by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
+        by_ids::expanded_soup_by_ids,
+        dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
+    },
+    populate_properties,
 };
 use filter_ast::Expr;
 use item_filters::{
@@ -2585,7 +2588,7 @@ async fn test_filter_projects_by_importance(db: PgPool) -> anyhow::Result<()> {
         scripts("soup_items_with_properties")
     )
 )]
-async fn test_expanded_dynamic_cursor_populates_properties(
+async fn test_bulk_populate_properties_enriches_raw_soup_items(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
@@ -2600,6 +2603,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
         },
     )
     .await?;
+    let items = populate_properties(&pool, user_id, items).await?;
 
     // Should get 2 documents and 2 projects (A and B)
     assert!(!items.is_empty(), "Should return some items");
@@ -2613,7 +2617,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
 
     let doc = unwrap_enum!(doc_a, SoupItem::Document);
     assert_eq!(
-        doc.properties.len(),
+        doc.extra.properties.len(),
         2,
         "Document in A should have 2 properties"
     );
@@ -2626,7 +2630,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
     let doc = unwrap_enum!(doc_b, Some => SoupItem::Document);
     // Document in B has Priority and Due Date properties
     assert_eq!(
-        doc.properties.len(),
+        doc.extra.properties.len(),
         2,
         "Document in B should have 2 properties"
     );
@@ -2638,11 +2642,15 @@ async fn test_expanded_dynamic_cursor_populates_properties(
 
     let proj = unwrap_enum!(proj_a, Some => SoupItem::Project);
     assert!(
-        !proj.properties.is_empty(),
+        !proj.extra.properties.is_empty(),
         "Project A should have properties populated"
     );
     // Project A has Priority property
-    assert_eq!(proj.properties.len(), 1, "Project A should have 1 property");
+    assert_eq!(
+        proj.extra.properties.len(),
+        1,
+        "Project A should have 1 property"
+    );
 
     // Check that Project B has no properties (none were added in fixture)
     let proj_b_uuid = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap();
@@ -2651,7 +2659,7 @@ async fn test_expanded_dynamic_cursor_populates_properties(
 
     let proj = unwrap_enum!(proj_b, Some => SoupItem::Project);
     // Project B has no properties in the fixture, so it should be empty or None
-    let props_count = proj.properties.len();
+    let props_count = proj.extra.properties.len();
     assert_eq!(props_count, 0, "Project B should have 0 properties");
 
     Ok(())

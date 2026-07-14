@@ -1,6 +1,6 @@
 //! Grouping utilities for soup queries.
 
-use super::FrecencySoupItem;
+use super::{EnrichedSoupItem, SoupPropertiesField};
 use item_filters::ast::EntityFilterAst;
 use models_grouping::{GroupByField, date_bucket_label, date_bucket_order};
 use models_pagination::{
@@ -52,7 +52,7 @@ pub struct GroupMeta {
 #[derive(Debug)]
 pub struct GroupedResponse {
     /// Items pool keyed by id. Ordering is described by `groups[].item_ids`.
-    pub items: HashMap<Uuid, FrecencySoupItem>,
+    pub items: HashMap<Uuid, EnrichedSoupItem>,
     /// Group metadata for each group.
     pub groups: Vec<GroupMeta>,
     /// Page-level cursor for loading more items.
@@ -61,7 +61,7 @@ pub struct GroupedResponse {
 
 /// Build a grouped response from grouped soup items.
 pub fn build_grouped_response(
-    items: Vec<super::GroupedSoupItem>,
+    items: Vec<super::GroupedSoupItem<SoupPropertiesField>>,
     group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
@@ -77,7 +77,7 @@ pub fn build_grouped_response(
     }
 
     let mut group_stats: HashMap<String, GroupData> = HashMap::new();
-    let mut items_pool: HashMap<Uuid, FrecencySoupItem> = HashMap::with_capacity(items.len());
+    let mut items_pool: HashMap<Uuid, EnrichedSoupItem> = HashMap::with_capacity(items.len());
     let mut get_cursor_val = SoupItem::sort_on(sort_method);
 
     for grouped_item in items.into_iter() {
@@ -108,7 +108,7 @@ pub fn build_grouped_response(
         // overwriting an already-populated entry.
         items_pool
             .entry(item_id)
-            .or_insert_with(|| FrecencySoupItem {
+            .or_insert_with(|| EnrichedSoupItem {
                 item: grouped_item.item,
                 frecency_score: grouped_item.frecency_score,
             });

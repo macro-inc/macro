@@ -327,7 +327,7 @@ export type SplitManager = {
   /** Replace all splits with a single split containing the given content. */
   replaceAllSplits: (
     content: SplitContent,
-    options?: { referredFrom?: string | null }
+    options?: { referredFrom?: ReferredFrom }
   ) => SplitHandle;
 
   /** Check if a split exists by its split id */
@@ -1374,12 +1374,39 @@ export function createSplitLayout(
     content: SplitContent,
     options: { referredFrom?: ReferredFrom } = {}
   ): SplitHandle {
-    reconcileSplits([content]);
-    const handle = getSplitByContent(content.type, content.id);
+    const visibleSplits = state.splits.filter((split) => !isExcluded(split));
+    const splitToKeep =
+      visibleSplits.find((split) => sameContent(split.content, content)) ??
+      visibleSplits[0];
+
+    if (!splitToKeep) {
+      return createNewSplit({
+        content,
+        activate: true,
+        referredFrom: options.referredFrom ?? null,
+      });
+    }
+
+    for (const split of visibleSplits) {
+      if (split.id !== splitToKeep.id) {
+        removeSplit(split.id, false);
+      }
+    }
+
+    const handle = getSplit(splitToKeep.id);
     if (handle) {
+      if (!sameContent(splitToKeep.content, content)) {
+        handle.replace({
+          next: content,
+          mergeHistory: false,
+          referredFrom: options.referredFrom,
+        });
+      }
       handle.activate();
+      unSpotlightSplit();
       return handle;
     }
+
     return createNewSplit({
       content,
       activate: true,

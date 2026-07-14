@@ -12,6 +12,7 @@ export { makeMarkSenderNoiseAction } from './make-mark-sender-noise-action';
 export { makeMoveToProjectAction } from './make-move-to-project-action';
 export { makeRemoveFromProjectAction } from './make-remove-from-project-action';
 export { makeRenameAction } from './make-rename-action';
+export { makeSetCompanyPropertyAction } from './make-set-company-property-action';
 export { makeShareAction } from './make-share-action';
 export { useBlockEntityCommands } from './use-block-entity-commands';
 export { useEntityActionHotkeys } from './use-entity-action-hotkeys';

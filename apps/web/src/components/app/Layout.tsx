@@ -26,6 +26,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
+import { CreateChannelModal } from '@channel/CreateChannelModal';
 import {
   AppSidebar,
   GoToHotkeys,
@@ -332,6 +333,7 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
+          <CreateChannelModal />
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>

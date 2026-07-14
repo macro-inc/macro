@@ -89,6 +89,7 @@ async fn get_channels_handler<S: ChannelListService>(
         .get_channels(GetChannelsRequest {
             macro_id: macro_user_id,
             limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
+            include_frecency: true,
             query: models_pagination::Query::Sort(
                 models_pagination::SimpleSortMethod::UpdatedAt,
                 None,

@@ -185,6 +185,69 @@ describe('layoutManager', () => {
     });
   });
 
+  describe('replaceAllSplits', () => {
+    it('keeps the first split that already contains the target content', () => {
+      createRoot((dispose) => {
+        const target = {
+          type: 'component',
+          id: 'documents',
+        } satisfies SplitContent;
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          target,
+          { type: 'component', id: 'documents' },
+          { type: 'md', id: 'right' },
+        ]);
+
+        const keptSplitId = manager.splits()[1].id;
+        const keptSplit = manager.getSplit(keptSplitId)!;
+        const historyBefore = keptSplit.history();
+        const handle = manager.replaceAllSplits(target, {
+          referredFrom: 'sidebar',
+        });
+
+        expect(manager.splits()).toHaveLength(1);
+        expect(manager.splits()[0].id).toBe(keptSplitId);
+        expect(manager.splits()[0].content).toEqual(target);
+        expect(manager.activeSplitId()).toBe(handle.id);
+        expect(handle.history()).toEqual(historyBefore);
+
+        dispose();
+      });
+    });
+
+    it('keeps the 0th split and replaces it when the target content is not open', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'md', id: 'right' },
+        ]);
+        const keptSplitId = manager.splits()[0].id;
+        manager.spotlightSplit(manager.splits()[1].id);
+
+        const target = {
+          type: 'component',
+          id: 'documents',
+        } satisfies SplitContent;
+        const handle = manager.replaceAllSplits(target, {
+          referredFrom: 'sidebar',
+        });
+
+        expect(manager.splits()).toHaveLength(1);
+        expect(manager.splits()[0].id).toBe(keptSplitId);
+        expect(manager.splits()[0].content).toEqual(target);
+        expect(manager.activeSplitId()).toBe(handle.id);
+        expect(handle.isSpotLight()).toBe(false);
+        expect(handle.previousContent()).toEqual({
+          type: 'component',
+          id: 'inbox',
+        });
+
+        dispose();
+      });
+    });
+  });
+
   describe('indexed insertion', () => {
     it('creates a split at the requested index', () => {
       createRoot((dispose) => {

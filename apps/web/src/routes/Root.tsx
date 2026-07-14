@@ -6,6 +6,7 @@ import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAu
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
 import { Signup } from '@app/features/auth/Signup';
+import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
@@ -17,6 +18,11 @@ import {
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
+import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
+import {
+  useEmailSoupBackfill,
+  useSoupBackfill,
+} from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallProvider } from '@channel/Call/CallContext';
@@ -73,7 +79,6 @@ import {
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { prefetchHistory } from '@queries/history/history';
-import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
@@ -88,10 +93,10 @@ import {
   type RouterProps,
   useSearchParams,
 } from '@solidjs/router';
-import { currentThemeId } from '@theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
+  resolveActiveThemeId,
   systemThemeEffect,
 } from '@theme/utils/themeUtils';
 import { Button } from '@ui';
@@ -380,6 +385,10 @@ const ROUTES: RouteDefinition[] = [
     component: TeamInviteAcceptance,
   },
   {
+    path: '/channel-invite',
+    component: ChannelInviteAcceptance,
+  },
+  {
     // This splat route must be last to catch all unmatched routes
     path: '*404',
     component: NotFound,
@@ -391,6 +400,10 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
+
+  if (isNativeMobilePlatform()) {
+    useInvalidateQueriesOnReconnect();
+  }
 
   const onNotification = (notification: UnifiedNotification) => {
     if (notifInterface === 'not-supported') return;
@@ -406,18 +419,6 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     connectionGatewayWebsocket,
     onNotification
   );
-
-  if (isNativeMobilePlatform()) {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        invalidateUserNotifications();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    onCleanup(() =>
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    );
-  }
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);
@@ -441,6 +442,9 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
+
+  useSoupBackfill(() => userInfo()?.id);
+  useEmailSoupBackfill(() => userInfo()?.id);
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
@@ -562,7 +566,7 @@ export function Root() {
   });
 
   onMount(() => {
-    applyTheme(currentThemeId());
+    applyTheme(resolveActiveThemeId());
     ensureMinimalThemeContrast();
   });
 

@@ -1,19 +1,13 @@
-import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
+import CheckIcon from '@phosphor/check.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import ShuffleIcon from '@phosphor/shuffle.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
 import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import { ThemeChips } from '@theme/components/ThemeChips';
-import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
-import {
-  randomizeTheme,
-  ThemeEditorBasic,
-} from '@theme/components/ThemeEditorBasic';
+import { ThemeEditor } from '@theme/components/ThemeEditor';
 import { DEFAULT_THEMES } from '@theme/constants';
 import {
   currentThemeId,
@@ -22,8 +16,9 @@ import {
   setDarkModeTheme,
   setIsThemeSaved,
   setLightModeTheme,
-  setThemeShouldMatchSystem,
-  themeShouldMatchSystem,
+  setThemeMode,
+  systemMode,
+  themeMode,
   themes,
   userThemes,
 } from '@theme/signals/themeSignals';
@@ -36,10 +31,11 @@ import {
   getLiveTheme,
   isTokensDark,
   previewTheme,
+  resolveActiveThemeId,
   saveTheme,
   updateTheme,
 } from '@theme/utils/themeUtils';
-import { Button, cn, Dropdown, Layer, ToggleSwitch } from '@ui';
+import { Dropdown, Layer, ToggleSwitch, Tooltip } from '@ui';
 import {
   monochromeIcons,
   setMonochromeIcons,
@@ -54,44 +50,46 @@ import {
   SettingsSection,
 } from './primitives';
 
-type EditorTab = 'basic' | 'advanced';
-
 /** Copies a theme's JSON to the clipboard (for sharing / importing elsewhere). */
 function CopyThemeButton(props: { themeId: string; name: string }) {
   return (
-    <button
-      type="button"
-      aria-label={`Copy ${props.name}`}
-      class="rounded p-0.5 hover:text-ink mobile:p-1.5"
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        exportTheme(props.themeId);
-        toast.success('Theme copied to clipboard');
-      }}
-    >
-      <ClipboardIcon class="size-3.5 mobile:size-5" />
-    </button>
+    <Tooltip as="span" label="Copy theme">
+      <button
+        type="button"
+        aria-label={`Copy ${props.name}`}
+        class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          exportTheme(props.themeId);
+          toast.success('Theme copied to clipboard');
+        }}
+      >
+        <ClipboardIcon class="size-3.5 mobile:size-5" />
+      </button>
+    </Tooltip>
   );
 }
 
 /** Edits a theme in the inline editor (custom → in place, default → forked). */
 function EditThemeButton(props: { name: string; onEdit: () => void }) {
   return (
-    <button
-      type="button"
-      aria-label={`Edit ${props.name}`}
-      class="rounded p-0.5 hover:text-ink mobile:p-1.5"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        props.onEdit();
-      }}
-    >
-      <PencilIcon class="size-3.5 mobile:size-5" />
-    </button>
+    <Tooltip as="span" label="Edit theme">
+      <button
+        type="button"
+        aria-label={`Edit ${props.name}`}
+        class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          props.onEdit();
+        }}
+      >
+        <PencilIcon class="size-3.5 mobile:size-5" />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -107,84 +105,161 @@ function ThemePillActions(props: {
 }) {
   return (
     <span class="flex shrink-0 items-center gap-0.5 text-ink-extra-muted">
-      <CopyThemeButton themeId={props.themeId} name={props.name} />
       <EditThemeButton name={props.name} onEdit={props.onEdit} />
+      <CopyThemeButton themeId={props.themeId} name={props.name} />
     </span>
   );
 }
 
-/** A default/preferred-theme picker row, shown indented beneath auto-detect. */
-function ThemePreferenceRow(props: {
+/**
+ * One per-mode theme picker row (Light or Dark): a full theme picker filtered to
+ * this mode's themes, with copy/edit/delete affordances and a "New theme"
+ * action, plus its own inline theme editor that opens beneath the row. Picking a
+ * theme sets this mode's stored theme; if the mode is currently active, the
+ * change applies live via systemThemeEffect.
+ */
+/**
+ * The inline-theme-editor state shared by every theme picker (per-mode rows and
+ * the Active theme row): tracking the open editor, the theme being edited, and
+ * the handlers to edit/save/delete/discard. `onSelect(id)` points the caller's
+ * target (a per-mode theme, or the active theme) at a chosen or newly-saved
+ * theme.
+ */
+function createThemeEditorController(onSelect: (id: string) => void) {
+  const [editorOpen, setEditorOpen] = createSignal(false);
+  // The custom theme being edited (saving writes back to it); undefined for a
+  // brand-new theme.
+  const [editingThemeId, setEditingThemeId] = createSignal<string | undefined>(
+    undefined
+  );
+  // The editable name of the theme being edited.
+  const [themeName, setThemeName] = createSignal('New Theme');
+
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setEditingThemeId(undefined);
+  };
+
+  // Abandon any in-progress edits: resync the live tokens with the active theme
+  // (via resolveActiveThemeId) so a draft/preview doesn't linger, then close.
+  // Shared by every edit-abandoning exit — the pill's edit toggle, the editor's
+  // close button, and picking a different theme.
+  const discardAndCloseEditor = () => {
+    applyTheme(resolveActiveThemeId());
+    closeEditor();
+  };
+
+  const chooseTheme = (id: string) => {
+    onSelect(id);
+    // Resync with the (now possibly newly-selected) active theme rather than
+    // leaving the dropdown's draft/preview tokens applied, then close.
+    discardAndCloseEditor();
+  };
+
+  const startNewTheme = () => {
+    // Seed the new theme from the current live tokens (already shown in the
+    // editor); mark it unsaved so the editor treats it as a new, nameable theme.
+    // Revert any hover preview first so it doesn't become the starting point.
+    clearThemePreview();
+    setEditingThemeId(undefined);
+    setIsThemeSaved(false);
+    setThemeName('New Theme');
+    setEditorOpen(true);
+  };
+
+  // Edit a theme: apply it (so the editor shows it live), then open the editor.
+  // Custom themes bind to their id so saving updates them in place; default
+  // themes can't be edited in place, so the editor opens as a new (forked) theme
+  // seeded from the default's now-live tokens.
+  const editTheme = (id: string) => {
+    applyTheme(id);
+    const source = themes().find((t) => t.id === id);
+    const isCustom = userThemes().some((t) => t.id === id);
+    if (isCustom) {
+      setEditingThemeId(id);
+      setThemeName(source?.name ?? 'Theme');
+    } else {
+      setEditingThemeId(undefined);
+      setIsThemeSaved(false);
+      setThemeName(`${source?.name ?? 'Theme'} copy`);
+    }
+    setEditorOpen(true);
+  };
+
+  // Save the live theme: update the bound custom theme in place, or create a new
+  // one, point the target at it, and keep editing it.
+  const saveCurrentTheme = () => {
+    const name = themeName().trim() || 'New Theme';
+    const editing = editingThemeId();
+    if (editing) {
+      updateTheme(editing, name);
+    } else {
+      saveTheme(name);
+      const newId = currentThemeId();
+      setEditingThemeId(newId);
+      onSelect(newId);
+    }
+    toast.success('Theme saved');
+  };
+
+  const deleteThemeById = (theme: ThemeV2) => {
+    // The delete button sits inside the theme's (hovered, so previewed) row and
+    // closes the dropdown programmatically, which skips onOpenChange — revert
+    // the preview here so the deleted theme's colors don't linger.
+    clearThemePreview();
+    deleteTheme(theme.id);
+    // If the editor was open on the deleted theme, close it.
+    if (editingThemeId() === theme.id) closeEditor();
+  };
+
+  return {
+    editorOpen,
+    themeName,
+    setThemeName,
+    discardAndCloseEditor,
+    chooseTheme,
+    startNewTheme,
+    editTheme,
+    saveCurrentTheme,
+    deleteThemeById,
+  };
+}
+
+function ThemeSelectorRow(props: {
   label: string;
+  description?: string;
   value: () => string;
-  options: () => ThemeV2[];
   onSelect: (id: string) => void;
-  // Default themes only take effect while auto-detect is on, so the control is
-  // dimmed and non-interactive otherwise.
-  disabled?: () => boolean;
+  filter: (theme: ThemeV2) => boolean;
 }) {
-  const selectedTheme = () =>
-    themes().find((theme) => theme.id === props.value());
+  const editor = createThemeEditorController(props.onSelect);
 
   return (
-    <div
-      class={cn(
-        // Nested under the auto-detect toggle: the indent marks these as
-        // sub-settings that only apply while auto-detect is on.
-        'bg-surface flex items-center justify-between h-12 px-6 pl-10 transition-opacity',
-        props.disabled?.() && 'opacity-50 pointer-events-none'
-      )}
-      aria-disabled={props.disabled?.()}
-    >
-      <div class="text-sm">{props.label}</div>
-      <div class="flex items-center gap-1">
-        {/* Preview only lasts while browsing: picking a default doesn't change
-            the active theme, so closing always restores the live tokens. */}
-        <Dropdown onOpenChange={(open) => !open && clearThemePreview()}>
-          <KobalteDropdownMenu.Trigger
-            as={ThemeChipPill}
-            class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-2 hover:bg-ink/4"
-            disabled={props.disabled?.()}
-            theme={selectedTheme()}
-            name={selectedTheme()?.name ?? props.value()}
-          />
-          <Dropdown.Content
-            as="div"
-            class="overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
-          >
-            <Layer depth={3}>
-              <Dropdown.Group>
-                <For each={props.options()}>
-                  {(theme) => (
-                    <Dropdown.Item
-                      class="group touch:min-h-10"
-                      onSelect={() => props.onSelect(theme.id)}
-                      onFocus={() => previewTheme(theme.id)}
-                    >
-                      <span class="flex min-w-0 flex-1 items-center gap-2">
-                        <ThemeChips theme={theme} size="sm" />
-                        <span class="truncate">{theme.name}</span>
-                      </span>
-                      <span class="ml-2 shrink-0 text-ink-extra-muted opacity-0 group-hover:opacity-100 touch:opacity-100">
-                        <CopyThemeButton themeId={theme.id} name={theme.name} />
-                      </span>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Layer>
-          </Dropdown.Content>
-        </Dropdown>
-        {/* Default rows expose copy only — editing a per-mode default happens
-            from the main Interface theme picker. */}
-        <span class="flex shrink-0 items-center text-ink-extra-muted">
-          <CopyThemeButton
-            themeId={props.value()}
-            name={selectedTheme()?.name ?? props.value()}
-          />
-        </span>
-      </div>
-    </div>
+    <>
+      <SettingsRow label={props.label} description={props.description}>
+        <InterfaceThemeSelect
+          value={props.value}
+          filter={props.filter}
+          onPick={editor.chooseTheme}
+          onEdit={editor.editTheme}
+          onDelete={editor.deleteThemeById}
+          onNewTheme={editor.startNewTheme}
+          editorOpen={editor.editorOpen}
+          onCloseEditor={editor.discardAndCloseEditor}
+        />
+      </SettingsRow>
+
+      {/* The theme editor opens inline beneath its selector; it mounts fresh
+          each time (resetting to the Basic tab). */}
+      <Show when={editor.editorOpen()}>
+        <ThemeEditor
+          name={editor.themeName()}
+          onNameChange={editor.setThemeName}
+          onClose={editor.discardAndCloseEditor}
+          onSave={editor.saveCurrentTheme}
+        />
+      </Show>
+    </>
   );
 }
 
@@ -193,17 +268,26 @@ function ThemePreferenceRow(props: {
  * scrollable dropdown of Default then Custom themes, plus a "New theme" action.
  */
 function InterfaceThemeSelect(props: {
+  value: () => string;
   onPick: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (theme: ThemeV2) => void;
   onNewTheme: () => void;
+  // Restricts the listed themes to this mode's themes (light or dark). The
+  // selected value's swatch is always shown, even if it falls outside the filter.
+  filter?: (theme: ThemeV2) => boolean;
+  // Whether this selector's inline editor is open — makes the pill's edit button
+  // a toggle that scraps edits and closes via onCloseEditor.
+  editorOpen?: () => boolean;
+  onCloseEditor?: () => void;
 }) {
   const [filter, setFilter] = createSignal('');
   const [open, setOpen] = createSignal(false);
   let inputRef: HTMLInputElement | undefined;
 
-  const current = () => themes().find((theme) => theme.id === currentThemeId());
+  const current = () => themes().find((theme) => theme.id === props.value());
   const matches = (theme: ThemeV2) =>
+    (props.filter?.(theme) ?? true) &&
     theme.name.toLowerCase().includes(filter().trim().toLowerCase());
   const defaults = () =>
     (DEFAULT_THEMES as unknown as ThemeV2[]).filter(matches);
@@ -272,7 +356,8 @@ function InterfaceThemeSelect(props: {
       >
         <KobalteDropdownMenu.Trigger
           as={ThemeChipPill}
-          class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-2 hover:bg-ink/4"
+          class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-1.5 hover:bg-ink/4"
+          caret
           // With no stored theme selected (e.g. the active theme was just
           // deleted), fall back to the live tokens so the swatch still reflects
           // the current colors and the label reads "Unsaved Theme".
@@ -363,209 +448,237 @@ function InterfaceThemeSelect(props: {
       </Dropdown>
       <Show when={current()}>
         <ThemePillActions
-          themeId={currentThemeId()}
+          themeId={props.value()}
           name={current()?.name ?? 'Theme'}
-          onEdit={() => props.onEdit(currentThemeId())}
+          onEdit={() =>
+            props.editorOpen?.()
+              ? props.onCloseEditor?.()
+              : props.onEdit(props.value())
+          }
         />
       </Show>
     </div>
   );
 }
 
-export function Appearance() {
-  const [editorTab, setEditorTab] = createSignal<EditorTab>('basic');
-  const [editorOpen, setEditorOpen] = createSignal(false);
-  // The custom theme being edited (saving writes back to it); undefined for a
-  // brand-new theme.
-  const [editingThemeId, setEditingThemeId] = createSignal<string | undefined>(
-    undefined
+/** Sentinel radio value for the "follow the OS" option, distinct from any
+ *  theme id (theme ids are default names or UUIDs, never "system"). */
+const SYSTEM_VALUE = 'system';
+
+/**
+ * The "Active theme" picker: a chip showing the currently-active theme that
+ * opens a dropdown to either follow the OS ("System preference") or pin a
+ * specific theme by name. Replaces the old segmented control. Hovering an option
+ * previews it live (reverted on close); picking commits via the callbacks.
+ * System preference shows a swatch of whatever the OS scheme currently resolves
+ * to, so the user sees the theme it would apply.
+ */
+function ActiveThemeSelect(props: {
+  onChooseTheme: (theme: ThemeV2) => void;
+  onChooseSystem: () => void;
+}) {
+  const [open, setOpen] = createSignal(false);
+
+  // The theme the OS scheme currently resolves to (for the System preference
+  // swatch). Falls back to the live tokens so a swatch always renders.
+  const systemTheme = (): ThemeV2 => {
+    const id = systemMode() === 'dark' ? darkModeTheme() : lightModeTheme();
+    return themes().find((theme) => theme.id === id) ?? getLiveTheme();
+  };
+
+  // The active theme shown on the chip: the OS-resolved theme in system mode,
+  // otherwise the pinned theme (via resolveActiveThemeId).
+  const activeTheme = (): ThemeV2 =>
+    themes().find((theme) => theme.id === resolveActiveThemeId()) ??
+    getLiveTheme();
+
+  // The checked radio value: the sentinel in system mode, else the active
+  // theme's id.
+  const selectedValue = () =>
+    themeMode() === 'system' ? SYSTEM_VALUE : resolveActiveThemeId();
+
+  const onChange = (value: string) => {
+    if (value === SYSTEM_VALUE) {
+      props.onChooseSystem();
+      return;
+    }
+    const theme = themes().find((t) => t.id === value);
+    if (theme) props.onChooseTheme(theme);
+  };
+
+  return (
+    <Dropdown
+      // Right-align the menu's edge with the (right-aligned) chip pill.
+      placement="bottom-end"
+      open={open()}
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        // Closing without picking reverts the hover preview; a pick commits via
+        // applyTheme first, which makes this a no-op.
+        if (!isOpen) clearThemePreview();
+      }}
+    >
+      <KobalteDropdownMenu.Trigger
+        as={ThemeChipPill}
+        class="h-auto text-xs rounded-lg border border-edge-muted py-1 pl-1 pr-1.5 hover:bg-ink/4"
+        caret
+        // Let "System preference" display in full rather than truncating.
+        maxLabelWidth="max-w-none"
+        theme={activeTheme()}
+        name={
+          themeMode() === 'system' ? 'System preference' : activeTheme().name
+        }
+      />
+      <Dropdown.Content
+        as="div"
+        class="w-56 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
+        onMouseLeave={clearThemePreview}
+      >
+        <Layer depth={3}>
+          <Dropdown.RadioGroup value={selectedValue()} onChange={onChange}>
+            <div class="bg-surface p-1.5">
+              <Dropdown.RadioItem
+                value={SYSTEM_VALUE}
+                class="justify-between"
+                closeOnSelect
+                onFocus={() => previewTheme(systemTheme().id)}
+              >
+                <span class="flex min-w-0 flex-1 items-center gap-2">
+                  <ThemeChips theme={systemTheme()} size="sm" />
+                  <span class="flex min-w-0 flex-col">
+                    <span class="truncate">System preference</span>
+                    <span class="text-xs text-ink-extra-muted">
+                      Currently {systemMode() === 'dark' ? 'Dark' : 'Light'}
+                    </span>
+                  </span>
+                </span>
+                <Dropdown.ItemIndicator class="shrink-0">
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Dropdown.ItemIndicator>
+              </Dropdown.RadioItem>
+            </div>
+            <Dropdown.Separator class="h-px border-0 bg-edge-muted" />
+            <div class="max-h-64 overflow-y-auto bg-surface p-1.5">
+              <For each={themes()}>
+                {(theme) => (
+                  <Dropdown.RadioItem
+                    value={theme.id}
+                    class="justify-between"
+                    closeOnSelect
+                    onFocus={() => previewTheme(theme.id)}
+                  >
+                    <span class="flex min-w-0 flex-1 items-center gap-2">
+                      <ThemeChips theme={theme} size="sm" />
+                      <span class="truncate">{theme.name}</span>
+                    </span>
+                    <Dropdown.ItemIndicator class="shrink-0">
+                      <CheckIcon class="size-3.5 text-accent" />
+                    </Dropdown.ItemIndicator>
+                  </Dropdown.RadioItem>
+                )}
+              </For>
+            </div>
+          </Dropdown.RadioGroup>
+        </Layer>
+      </Dropdown.Content>
+    </Dropdown>
   );
-  // The editable name of the theme being edited.
-  const [themeName, setThemeName] = createSignal('New Theme');
+}
 
-  const lightThemes = () =>
-    themes().filter((theme) => !isTokensDark(theme.tokens));
-  const darkThemes = () =>
-    themes().filter((theme) => isTokensDark(theme.tokens));
-
-  const chooseTheme = (id: string) => {
-    applyTheme(id);
-    setEditingThemeId(undefined);
-    setEditorOpen(false);
-  };
-
-  const startNewTheme = () => {
-    // Initialize the new theme from the current theme's variables (already live
-    // in the editor); mark it unsaved so the editor treats it as a new, nameable
-    // theme rather than the saved one it was copied from. Any hover preview is
-    // reverted first so it doesn't become the new theme's starting point.
-    clearThemePreview();
-    setEditingThemeId(undefined);
-    setIsThemeSaved(false);
-    setThemeName('New Theme');
-    setEditorTab('basic');
-    setEditorOpen(true);
-  };
-
-  // Edit a theme: apply it, then open the inline editor. Custom themes bind to
-  // their id so saving updates them in place; default themes can't be edited in
-  // place, so the editor opens as a new (forked) theme seeded from the default's
-  // now-live tokens.
-  const editTheme = (id: string) => {
-    applyTheme(id);
-    const source = themes().find((t) => t.id === id);
-    const isCustom = userThemes().some((t) => t.id === id);
-    if (isCustom) {
-      setEditingThemeId(id);
-      setThemeName(source?.name ?? 'Theme');
+/**
+ * The full "Active theme" row: the picker chip plus copy/edit affordances for
+ * the active theme and its own inline theme editor (opened by the edit button),
+ * mirroring the per-mode ThemeSelectorRow. Picking a theme pins it — the mode
+ * follows the theme's intrinsic light/dark and it becomes that mode's stored
+ * theme, so resolveActiveThemeId / systemThemeEffect apply it live.
+ */
+function ActiveThemeRow() {
+  const pinTheme = (theme: ThemeV2) => {
+    if (isTokensDark(theme.tokens)) {
+      setDarkModeTheme(theme.id);
+      setThemeMode('dark');
     } else {
-      setEditingThemeId(undefined);
-      setIsThemeSaved(false);
-      setThemeName(`${source?.name ?? 'Theme'} copy`);
+      setLightModeTheme(theme.id);
+      setThemeMode('light');
     }
-    setEditorTab('basic');
-    setEditorOpen(true);
   };
 
-  const closeEditor = () => {
-    setEditorOpen(false);
-    setEditingThemeId(undefined);
-  };
+  // Saving a new theme from the editor pins it as the active theme.
+  const editor = createThemeEditorController((id) => {
+    const theme = themes().find((t) => t.id === id);
+    if (theme) pinTheme(theme);
+  });
 
-  // Save the live theme: update the bound custom theme in place, or create a
-  // new one (then keep editing it).
-  const saveCurrentTheme = () => {
-    const name = themeName().trim() || 'New Theme';
-    const editing = editingThemeId();
-    if (editing) {
-      updateTheme(editing, name);
-    } else {
-      saveTheme(name);
-      setEditingThemeId(currentThemeId());
-    }
-    toast.success('Theme saved');
-  };
+  const activeName = () =>
+    themes().find((theme) => theme.id === resolveActiveThemeId())?.name ??
+    'Unsaved Theme';
 
-  const deleteThemeById = (theme: ThemeV2) => {
-    // The delete button sits inside the theme's (hovered, so previewed) row and
-    // closes the dropdown programmatically, which skips onOpenChange — revert
-    // the preview here so the deleted theme's colors don't linger.
-    clearThemePreview();
-    deleteTheme(theme.id);
-    // If the editor was open on the deleted theme, close it.
-    if (editingThemeId() === theme.id) closeEditor();
-  };
+  return (
+    <>
+      <SettingsRow
+        label="Active theme"
+        description="Match your system, or always use light or dark."
+      >
+        <div class="flex items-center gap-1">
+          <ActiveThemeSelect
+            // Pin + commit + close any open editor, via the shared controller.
+            onChooseTheme={(theme) => editor.chooseTheme(theme.id)}
+            onChooseSystem={() => {
+              setThemeMode('system');
+              editor.discardAndCloseEditor();
+            }}
+          />
+          <ThemePillActions
+            themeId={resolveActiveThemeId()}
+            name={activeName()}
+            onEdit={() =>
+              editor.editorOpen()
+                ? editor.discardAndCloseEditor()
+                : editor.editTheme(resolveActiveThemeId())
+            }
+          />
+        </div>
+      </SettingsRow>
 
+      <Show when={editor.editorOpen()}>
+        <ThemeEditor
+          name={editor.themeName()}
+          onNameChange={editor.setThemeName}
+          onClose={editor.discardAndCloseEditor}
+          onSave={editor.saveCurrentTheme}
+        />
+      </Show>
+    </>
+  );
+}
+
+export function Appearance() {
   return (
     // Soften any stray `b4` edge in the theme editor to the muted `b3` tone.
     <div class="h-full" style={{ '--b4l': 'var(--b3l)' }}>
       <SettingsPage title="Appearance">
         <SettingsSection title="Color Theme">
           <SettingsCard>
-            <SettingsRow
-              label="Interface theme"
-              description="The color theme used across the app."
-            >
-              <InterfaceThemeSelect
-                onPick={chooseTheme}
-                onEdit={editTheme}
-                onDelete={deleteThemeById}
-                onNewTheme={startNewTheme}
-              />
-            </SettingsRow>
+            {/* Active theme: pin a specific theme by name, or follow the OS. */}
+            <ActiveThemeRow />
 
-            {/* The theme editor opens inline beneath "Interface theme" as a
-                distinct active-editing block: a neutral, slightly elevated
-                surface (one step lighter than the card via Layer depth), inset +
-                rounded so it reads as a nested element. No color-forward accent. */}
-            <Show when={editorOpen()}>
-              <Layer depth={3}>
-                <div class="mx-3 my-2 flex flex-col gap-3 rounded-xl border border-ink/[0.05] bg-surface px-4 py-4">
-                  <div class="flex items-center gap-2">
-                    <Button
-                      label="Close editor"
-                      onClick={closeEditor}
-                      variant="ghost"
-                      size="icon-sm"
-                    >
-                      <XIcon class="size-4" />
-                    </Button>
-                    <input
-                      type="text"
-                      value={themeName()}
-                      onInput={(e) => setThemeName(e.currentTarget.value)}
-                      spellcheck={false}
-                      placeholder="Theme name"
-                      aria-label="Theme name"
-                      class="w-40 min-w-0 rounded-md border border-edge-muted bg-transparent px-2 py-1 text-xs text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
-                    />
-                    <div class="flex-1" />
-                    <Button
-                      label="Randomize theme"
-                      onPointerDown={randomizeTheme}
-                      variant="ghost"
-                      size="icon-sm"
-                    >
-                      <ShuffleIcon class="size-4" />
-                    </Button>
-                    <TabsInset
-                      depth={3}
-                      onChange={(value) => setEditorTab(value as EditorTab)}
-                      list={[
-                        { value: 'basic', label: 'Basic' },
-                        { value: 'advanced', label: 'Variables' },
-                      ]}
-                      value={editorTab()}
-                      defaultValue="basic"
-                    />
-                  </div>
-                  <div class="relative overflow-hidden rounded-lg">
-                    {/* The Basic view defines the box height; it stays mounted
-                      (just hidden) on the Variables tab so the variables list
-                      scrolls within that same height. Basic rows use dividers
-                      only; the Variables list keeps a bordered container. */}
-                    <div classList={{ invisible: editorTab() !== 'basic' }}>
-                      <ThemeEditorBasic />
-                    </div>
-                    <Show when={editorTab() === 'advanced'}>
-                      <div class="absolute inset-0 overflow-y-auto rounded-lg border border-ink/[0.05] bg-surface">
-                        <ThemeEditorAdvanced />
-                      </div>
-                    </Show>
-                  </div>
-                  <div class="flex justify-end">
-                    <Button variant="base" size="sm" onClick={saveCurrentTheme}>
-                      Save theme
-                    </Button>
-                  </div>
-                </div>
-              </Layer>
-            </Show>
-
-            <SettingsRow
-              label="Auto-detect color scheme"
-              description="Switch theme with your system's light/dark mode."
-            >
-              <ToggleSwitch
-                size="md"
-                onChange={setThemeShouldMatchSystem}
-                checked={themeShouldMatchSystem()}
-              />
-            </SettingsRow>
-
-            {/* Sub-settings collapse away while auto-detect is off. */}
-            <Show when={themeShouldMatchSystem()}>
-              <ThemePreferenceRow
-                label="Default light theme"
+            {/* When following the OS, these pick which theme each system scheme
+                maps to. Hidden when a specific theme is pinned (Active theme
+                isn't System preference), since it fully determines the look. */}
+            <Show when={themeMode() === 'system'}>
+              <ThemeSelectorRow
+                label="Light theme"
+                description="Used when your system is set to light."
                 value={lightModeTheme}
-                options={lightThemes}
                 onSelect={setLightModeTheme}
+                filter={(theme) => !isTokensDark(theme.tokens)}
               />
-              <ThemePreferenceRow
-                label="Default dark theme"
+              <ThemeSelectorRow
+                label="Dark theme"
+                description="Used when your system is set to dark."
                 value={darkModeTheme}
-                options={darkThemes}
                 onSelect={setDarkModeTheme}
+                filter={(theme) => isTokensDark(theme.tokens)}
               />
             </Show>
           </SettingsCard>

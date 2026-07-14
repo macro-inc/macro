@@ -59,6 +59,9 @@ export const TOKENS = {
       priority: 'entity.action.priority',
       status: 'entity.action.status',
       assignee: 'entity.action.assignee',
+      stage: 'entity.action.stage',
+      owner: 'entity.action.owner',
+      revenue: 'entity.action.revenue',
     },
   },
 
@@ -238,6 +241,7 @@ export const TOKENS = {
     emailNewSplit: 'create.emailNewSplit',
     message: 'create.message',
     messageNewSplit: 'create.messageNewSplit',
+    channel: 'create.channel',
     chat: 'create.chat',
     chatNewSplit: 'create.chatNewSplit',
     canvas: 'create.canvas',

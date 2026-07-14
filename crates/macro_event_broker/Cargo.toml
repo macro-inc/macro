@@ -26,11 +26,11 @@ rdkafka = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"], optional = true }
+tokio = { workspace = true, features = ["macros", "time"], optional = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_event_topics = { path = "../macro_event_topics" }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "time"] }

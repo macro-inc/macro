@@ -13,6 +13,7 @@ import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ChannelBotsPanel } from './ChannelBotsPanel';
+import { ChannelJoinLinkButton } from './ChannelJoinLinkButton';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
 import { ParticipantsList } from './ParticipantsList';
 import { ParticipantsSearchInput } from './ParticipantsSearchInput';
@@ -87,8 +88,11 @@ export function ChannelParticipantsTab(props: {
     <div class="h-full overflow-hidden flex justify-center p-2">
       <div class="max-w-200 size-full flex flex-col gap-2">
         <Panel depth={2} class="min-h-0 flex-1 overflow-hidden text-ink">
-          <Panel.Header class="px-6">
+          <Panel.Header class="justify-between gap-2 px-6">
             <div class="text-sm font-semibold">Participants</div>
+            <Show when={channelType() === ChannelType.private}>
+              <ChannelJoinLinkButton channelId={props.channelId} />
+            </Show>
           </Panel.Header>
           <Panel.Toolbar class="h-15.25 px-2">
             <ParticipantsSearchInput

@@ -3,13 +3,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// A project as displayed in Soup.
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SoupProject {
+pub struct SoupProject<T = ()> {
     /// The id of the project
     pub id: Uuid,
 
@@ -36,6 +34,7 @@ pub struct SoupProject {
     /// The time the project was deleted
     pub deleted_at: Option<chrono::DateTime<Utc>>,
 
-    /// Properties
-    pub properties: Vec<SoupProperty>,
+    /// Extra fields passed from above
+    #[serde(flatten)]
+    pub extra: T,
 }

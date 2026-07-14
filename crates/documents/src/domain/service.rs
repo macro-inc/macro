@@ -9,6 +9,7 @@ use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -51,7 +52,10 @@ use super::models::{
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
-use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
+use super::ports::{
+    DocumentRepo, DocumentSearchIndexer, DocumentService, PresignedUploadUrlPort,
+    TaskPropertiesPort,
+};
 use super::response::{
     CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
     DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
@@ -85,6 +89,9 @@ pub struct DocumentServiceImpl<
     pub foreign_entity_service: F,
     /// Macro event broker for publishing document lifecycle events
     pub macro_event_broker: B,
+    /// Optional publisher that refreshes a document's denormalized name in the
+    /// search index after a rename.
+    pub search_indexer: Option<Arc<dyn DocumentSearchIndexer>>,
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
@@ -131,7 +138,9 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
 fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
     match auth {
         EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
-        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -231,6 +240,30 @@ impl<
             entity_access_management_service,
             foreign_entity_service,
             macro_event_broker,
+            search_indexer: None,
+        }
+    }
+
+    /// Attach a search-index publisher so renames refresh the denormalized
+    /// name in the search index. Builder-style so existing constructions are
+    /// unaffected.
+    pub fn with_search_indexer(mut self, search_indexer: Arc<dyn DocumentSearchIndexer>) -> Self {
+        self.search_indexer = Some(search_indexer);
+        self
+    }
+
+    /// Best-effort publish of a search-index name refresh after a rename. Logs
+    /// and continues on failure so a missed refresh never fails the edit
+    /// itself; a full re-index would eventually correct the name anyway.
+    async fn enqueue_name_update(&self, document_id: &str) {
+        let Some(search_indexer) = self.search_indexer.as_ref() else {
+            return;
+        };
+        if let Err(error) = search_indexer
+            .enqueue_name_update(document_id.to_string())
+            .await
+        {
+            tracing::warn!(error = ?error, document_id = %document_id, "failed to enqueue search name update for rename");
         }
     }
 
@@ -488,14 +521,10 @@ impl<
     }
 
     /// Publish a document lifecycle event; failures are logged and dropped.
-    async fn publish_document_event(&self, event: &DocumentMacroEvent) {
-        let _ = self
-            .macro_event_broker
-            .send_event(event)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, "failed to publish document event");
-            });
+    fn publish_document_event(&self, event: &DocumentMacroEvent) {
+        let _ = self.macro_event_broker.send_event(event).inspect_err(|e| {
+            tracing::error!(error=?e, "failed to publish document event");
+        });
     }
 }
 
@@ -594,7 +623,9 @@ impl<
                 .get_user_view_location(user_id.as_ref(), &document_id)
                 .await
                 .map_err(|e| DocumentError::Internal(e.into()))?,
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
         };
 
         let access_level = match entity_access_receipt.entity_permission() {
@@ -731,8 +762,7 @@ impl<
                 actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
                 project_id,
             },
-        ))
-        .await;
+        ));
 
         Ok(())
     }
@@ -822,9 +852,9 @@ impl<
                     context.team_task_id,
                 )
             }
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
-                ("macro".to_string(), None, None)
-            }
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => ("macro".to_string(), None, None),
         };
 
         let branch_name = build_task_branch_name(
@@ -879,6 +909,7 @@ impl<
                 source_ids.extend(team_ids.into_iter().map(SourceId::team));
                 Some(source_ids)
             }
+            EntityAccessAuth::Bot(_) => Some(Vec::new()),
             EntityAccessAuth::Unauthenticated => Some(Vec::new()),
             EntityAccessAuth::Internal => None,
         };
@@ -1049,8 +1080,7 @@ impl<
                 sub_type: document_metadata.sub_type,
                 created_at: document_metadata.created_at,
             },
-        ))
-        .await;
+        ));
 
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
@@ -1149,6 +1179,14 @@ impl<
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
+        // A rename changes the denormalized `document_name` on the parent doc in
+        // the search index; nothing else re-indexes parent-only file types, so
+        // publish a targeted refresh once the new name is committed.
+        if document_name.is_some() {
+            self.enqueue_name_update(&entity_access_receipt.entity().entity_id)
+                .await;
+        }
+
         // Update project modified timestamps. args.project_id of None means "no change",
         // so only move the document out of its old project when a different project (or
         // "" for no project) was explicitly requested.
@@ -1208,8 +1246,7 @@ impl<
                 file_type: args.file_type,
                 share_permission_updated,
             },
-        ))
-        .await;
+        ));
 
         Ok(())
     }
@@ -1465,8 +1502,7 @@ impl<
                 project_id: new_metadata.project_id.clone(),
                 sub_type: new_metadata.sub_type,
             },
-        ))
-        .await;
+        ));
 
         Ok(DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(

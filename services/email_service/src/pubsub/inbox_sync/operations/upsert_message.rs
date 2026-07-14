@@ -272,7 +272,7 @@ pub async fn upsert_message(
                 received_at: event_received_at,
             })
         };
-        publish_email_event(&ctx.macro_event_broker, &event).await;
+        publish_email_event(&ctx.macro_event_broker, &event);
     }
 
     handle_attachment_upload(
