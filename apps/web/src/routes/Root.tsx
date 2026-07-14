@@ -17,6 +17,7 @@ import {
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
+import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import {
   useEmailSoupBackfill,
   useSoupBackfill,
@@ -77,7 +78,6 @@ import {
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { prefetchHistory } from '@queries/history/history';
-import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
@@ -396,6 +396,10 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
 
+  if (isNativeMobilePlatform()) {
+      useInvalidateQueriesOnReconnect();
+  }
+
   const onNotification = (notification: UnifiedNotification) => {
     if (notifInterface === 'not-supported') return;
     const layoutManager = globalSplitManager();
@@ -410,18 +414,6 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     connectionGatewayWebsocket,
     onNotification
   );
-
-  if (isNativeMobilePlatform()) {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        invalidateUserNotifications();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    onCleanup(() =>
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    );
-  }
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);
