@@ -183,6 +183,7 @@ export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersOrgId';
 export * from './channelFiltersTeamId';
+export * from './channelJoinCodeResponse';
 export * from './channelMessage';
 export * from './channelMessageDeletedAt';
 export * from './channelMessageFilters';

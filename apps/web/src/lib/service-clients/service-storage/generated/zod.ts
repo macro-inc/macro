@@ -1544,6 +1544,13 @@ export const getOrCreatePrivateResponse = zod
   .describe('Response for get-or-create channel operations.');
 
 /**
+ * @summary Handler for `POST /channels/join/{join_code}`.
+ */
+export const joinChannelByCodeParams = zod.object({
+  join_code: zod.uuid().describe('Channel join code'),
+});
+
+/**
  * @summary Handler for `POST /channels/mentions`.
  */
 export const createEntityMentionBody = zod
@@ -1971,6 +1978,19 @@ export const createChannelScopedBotBody = zod
 export const joinChannelParams = zod.object({
   channel_id: zod.uuid().describe('Channel ID'),
 });
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/join-link`.
+ */
+export const getChannelJoinLinkParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getChannelJoinLinkResponse = zod
+  .object({
+    join_code: zod.uuid().describe('Reusable code for joining the channel.'),
+  })
+  .describe("Response containing a channel's reusable join code.");
 
 /**
  * @summary Handler for `POST /channels/{channel_id}/leave`.
