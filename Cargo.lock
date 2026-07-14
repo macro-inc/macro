@@ -12608,6 +12608,7 @@ dependencies = [
  "properties",
  "rand 0.9.4",
  "reqwest 0.13.4",
+ "roles_and_permissions",
  "serde",
  "serde_json",
  "sha2 0.10.9",

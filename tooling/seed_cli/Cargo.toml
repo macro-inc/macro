@@ -35,6 +35,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }

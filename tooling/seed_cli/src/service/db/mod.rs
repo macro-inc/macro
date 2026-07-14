@@ -23,6 +23,25 @@ use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
+/// Everything needed to seed one scenario user.
+#[derive(Debug)]
+pub struct AdoptOrSeedUserArgs {
+    /// Login email.
+    pub email: String,
+    /// The `macro|email` user id.
+    pub user_id: String,
+    /// Derived uuid used when no `macro_user` row exists for the email.
+    pub derived_macro_user_id: Uuid,
+    /// First name for `macro_user_info`.
+    pub first_name: String,
+    /// Last name for `macro_user_info`.
+    pub last_name: String,
+    /// Fabricated stripe customer id used on fresh inserts.
+    pub stripe_customer_id: String,
+    /// Role rows written on top of the default `self_serve`.
+    pub extra_roles: Vec<String>,
+}
+
 /// Everything needed to seed an archived call record.
 #[derive(Debug)]
 pub struct InsertCallRecordArgs {
@@ -573,15 +592,19 @@ impl SeedDb {
     /// created for the email (their `macro_user` id wins over the derived
     /// one so login-created accounts stay intact).
     #[tracing::instrument(skip(self), err)]
-    pub async fn adopt_or_seed_user(
-        &self,
-        email: &str,
-        user_id: &str,
-        derived_macro_user_id: Uuid,
-        first_name: &str,
-        last_name: &str,
-        stripe_customer_id: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn adopt_or_seed_user(&self, args: AdoptOrSeedUserArgs) -> anyhow::Result<()> {
+        let AdoptOrSeedUserArgs {
+            email,
+            user_id,
+            derived_macro_user_id,
+            first_name,
+            last_name,
+            stripe_customer_id,
+            extra_roles,
+        } = args;
+        let (email, user_id) = (email.as_str(), user_id.as_str());
+        let (first_name, last_name) = (first_name.as_str(), last_name.as_str());
+        let stripe_customer_id = stripe_customer_id.as_str();
         let mut transaction = self.inner.begin().await?;
 
         let existing: Option<Uuid> =
@@ -646,6 +669,11 @@ impl SeedDb {
         .execute(transaction.as_mut())
         .await?;
 
+        // Converge on exactly self_serve + the configured roles, dropping
+        // whatever a previous apply granted.
+        sqlx::query!(r#"DELETE FROM "RolesOnUsers" WHERE "userId" = $1"#, user_id)
+            .execute(transaction.as_mut())
+            .await?;
         sqlx::query!(
             r#"INSERT INTO "RolesOnUsers" ("userId", "roleId") VALUES ($1, 'self_serve')
                ON CONFLICT DO NOTHING"#,
@@ -653,6 +681,17 @@ impl SeedDb {
         )
         .execute(transaction.as_mut())
         .await?;
+
+        for role in &extra_roles {
+            sqlx::query!(
+                r#"INSERT INTO "RolesOnUsers" ("userId", "roleId") VALUES ($1, $2)
+                   ON CONFLICT DO NOTHING"#,
+                user_id,
+                role,
+            )
+            .execute(transaction.as_mut())
+            .await?;
+        }
 
         transaction.commit().await?;
         Ok(())
@@ -672,6 +711,30 @@ impl SeedDb {
                WHERE id = $1"#,
             document_id,
             location,
+        )
+        .execute(&self.inner)
+        .await?;
+        Ok(())
+    }
+
+    /// Upsert pairwise contact connections, the rows the contacts worker
+    /// derives from channel/team membership messages. Pairs must already be
+    /// normalized (`user1 <= user2`, no self-pairs).
+    #[tracing::instrument(skip(self, pairs), err)]
+    pub async fn insert_contact_connections(
+        &self,
+        pairs: Vec<(String, String)>,
+    ) -> anyhow::Result<()> {
+        if pairs.is_empty() {
+            return Ok(());
+        }
+        let (users1, users2): (Vec<String>, Vec<String>) = pairs.into_iter().unzip();
+        sqlx::query!(
+            "INSERT INTO contacts_connections(user1, user2)
+             SELECT * FROM unnest($1::text[], $2::text[])
+             ON CONFLICT(user1, user2) DO UPDATE SET updated_at = now()",
+            &users1,
+            &users2,
         )
         .execute(&self.inner)
         .await?;

@@ -1,11 +1,27 @@
 {
   "scenario": "team-perms",
-  "description": "One team (acme: alice owner, bob admin, carol member), dave collaborates via channels without being on the team, eve is an outsider. Exercises owner/user/team/channel/public/project/delegation access edges across every entity type.",
+  "description": "One team (acme: alice owner, bob admin, carol member), dave collaborates via channels without being on the team, eve is an outsider. The Acme members carry team_subscriber + sub_opus like real paying-team members (join_team grants exactly those); dave is a solo professional_subscriber; eve is a free account. Exercises owner/user/team/channel/public/project/delegation access edges across every entity type.",
   "users": {
-    "alice": { "email": "alice@seed.macro.local", "first_name": "Alice" },
-    "bob": { "email": "bob@seed.macro.local", "first_name": "Bob" },
-    "carol": { "email": "carol@seed.macro.local", "first_name": "Carol" },
-    "dave": { "email": "dave@seed.macro.local", "first_name": "Dave" },
+    "alice": {
+      "email": "alice@seed.macro.local",
+      "first_name": "Alice",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "bob": {
+      "email": "bob@seed.macro.local",
+      "first_name": "Bob",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "carol": {
+      "email": "carol@seed.macro.local",
+      "first_name": "Carol",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "dave": {
+      "email": "dave@seed.macro.local",
+      "first_name": "Dave",
+      "roles": ["professional_subscriber"]
+    },
     "eve": { "email": "eve@seed.macro.local", "first_name": "Eve" }
   },
   "teams": {

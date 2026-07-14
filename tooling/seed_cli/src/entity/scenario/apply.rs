@@ -4,7 +4,7 @@
 //! the rows carrying the scenario's id marker), then seeds fresh, so a
 //! re-apply converges on the config.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -170,6 +170,7 @@ pub async fn apply(
     seed_users(ctx, spec).await?;
     seed_teams(ctx, spec).await?;
     seed_channels(ctx, spec).await?;
+    seed_contacts(ctx, spec).await?;
     seed_projects(ctx, spec).await?;
     seed_documents(ctx, spec, seed_dir).await?;
     seed_tasks(ctx, spec).await?;
@@ -225,14 +226,18 @@ async fn seed_users(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
             .unwrap_or_default();
 
         ctx.db
-            .adopt_or_seed_user(
-                &user.email,
-                &spec.user_id(key),
-                spec.macro_user_uuid(key),
-                user.first_name.as_deref().unwrap_or(&capitalized),
-                user.last_name.as_deref().unwrap_or("Seed"),
-                &format!("stripe-seed-{}-{key}", spec.scenario),
-            )
+            .adopt_or_seed_user(crate::service::db::AdoptOrSeedUserArgs {
+                email: user.email.clone(),
+                user_id: spec.user_id(key),
+                derived_macro_user_id: spec.macro_user_uuid(key),
+                first_name: user
+                    .first_name
+                    .clone()
+                    .unwrap_or_else(|| capitalized.clone()),
+                last_name: user.last_name.clone().unwrap_or_else(|| "Seed".to_string()),
+                stripe_customer_id: format!("stripe-seed-{}-{key}", spec.scenario),
+                extra_roles: user.roles.clone(),
+            })
             .await?;
         println!("  user `{key}` -> {}", spec.user_id(key));
     }
@@ -333,6 +338,43 @@ async fn seed_channels(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Res
         println!("  channel `{key}` -> {id}");
     }
     Ok(())
+}
+
+/// Seed the pairwise contact edges that production derives from channel and
+/// team membership (via the contacts SQS pipeline): everyone in a group
+/// becomes everyone else's contact, which is what makes teammates
+/// mentionable and assignable.
+async fn seed_contacts(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result<()> {
+    let mut groups: Vec<Vec<String>> = Vec::new();
+    for team in spec.teams.values() {
+        let mut members = vec![team.owner.clone()];
+        members.extend(team.members.keys().cloned());
+        groups.push(members);
+    }
+    for channel_key in spec.channels.keys() {
+        groups.push(spec.channel_members(channel_key));
+    }
+
+    let mut pairs: BTreeSet<(String, String)> = BTreeSet::new();
+    for group in groups {
+        for (i, a) in group.iter().enumerate() {
+            for b in group.iter().skip(i + 1) {
+                let (a, b) = (spec.user_id(a), spec.user_id(b));
+                if a == b {
+                    continue;
+                }
+                pairs.insert(if a <= b { (a, b) } else { (b, a) });
+            }
+        }
+    }
+
+    if pairs.is_empty() {
+        return Ok(());
+    }
+    println!("Seeding {} contact connections", pairs.len());
+    ctx.db
+        .insert_contact_connections(pairs.into_iter().collect())
+        .await
 }
 
 async fn apply_access_rows(

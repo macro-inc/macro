@@ -182,6 +182,19 @@ fn rejects_project_cycles() {
 }
 
 #[test]
+fn rejects_unknown_roles() {
+    let result = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": {
+            "alice": { "email": "alice@x.local", "roles": ["professional_subscriber", "royalty"] }
+        }
+    }));
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("unknown role `royalty`"), "{error}");
+    assert!(!error.contains("professional_subscriber"), "{error}");
+}
+
+#[test]
 fn rejects_unknown_fields() {
     let result = minimal(serde_json::json!({
         "scenario": "bad",

@@ -130,6 +130,14 @@ pub struct UserSpec {
     /// Last name shown in the app. Defaults to "Seed".
     #[serde(default)]
     pub last_name: Option<String>,
+    /// Extra role rows on top of the default `self_serve`. These drive
+    /// feature entitlements like `read:professional_features`, not entity
+    /// access. `professional_subscriber` = individually paid;
+    /// `team_subscriber` + `sub_opus` = what joining a paying team grants
+    /// (production keeps these in lockstep with team membership — the
+    /// seeder lets you diverge on purpose).
+    #[serde(default)]
+    pub roles: Vec<String>,
 }
 
 /// A team in the scenario.
@@ -625,6 +633,14 @@ impl ScenarioSpec {
             }
             if !emails.insert(user.email.clone()) {
                 errors.push(format!("user `{key}` reuses email `{}`", user.email));
+            }
+            for role in &user.roles {
+                if role
+                    .parse::<roles_and_permissions::domain::model::RoleId>()
+                    .is_err()
+                {
+                    errors.push(format!("user `{key}` has unknown role `{role}`"));
+                }
             }
         }
 
