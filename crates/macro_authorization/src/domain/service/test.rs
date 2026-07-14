@@ -4,7 +4,9 @@ use rootcause::Report;
 
 use super::*;
 use crate::domain::{
-    models::{MacroAuthorizationError, ValidatedIdentity},
+    models::{
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError, ValidatedIdentity,
+    },
     ports::JwtValidator,
 };
 
@@ -17,6 +19,20 @@ impl JwtValidator for FakeJwtValidator {
     fn validate(&self, _jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         self.result.clone().map_err(Report::new)
     }
+}
+
+const INTERNAL_API_KEY: &str = "secret-key";
+
+fn service_with_internal_auth(
+    default_user_id: Option<&str>,
+) -> MacroAuthorizationServiceImpl<FakeJwtValidator> {
+    MacroAuthorizationServiceImpl::new(FakeJwtValidator {
+        result: Err(MacroAuthorizationError::InvalidCredentials),
+    })
+    .with_internal_auth(InternalAuthConfig {
+        api_key: INTERNAL_API_KEY.to_string(),
+        default_user_id: default_user_id.map(str::to_string),
+    })
 }
 
 #[tokio::test]
@@ -37,6 +53,89 @@ async fn authorize_constructs_user_context_from_validated_identity() {
     assert_eq!(context.fusion_user_id, "fusion-user-id");
     assert_eq!(context.organization_id, Some(42));
     assert_eq!(context.permissions, Some(permissions));
+}
+
+#[tokio::test]
+async fn authorize_internal_rejects_when_internal_auth_is_not_configured() {
+    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
+        result: Err(MacroAuthorizationError::InvalidCredentials),
+    });
+
+    let error = service
+        .authorize_internal(INTERNAL_API_KEY, InternalIdentityClaims::default())
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.current_context(),
+        &MacroAuthorizationError::InvalidCredentials
+    );
+}
+
+#[tokio::test]
+async fn authorize_internal_rejects_an_incorrect_key() {
+    let service = service_with_internal_auth(None);
+
+    let error = service
+        .authorize_internal("secret-kex", InternalIdentityClaims::default())
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.current_context(),
+        &MacroAuthorizationError::InvalidCredentials
+    );
+}
+
+#[tokio::test]
+async fn authorize_internal_maps_explicit_identity_claims() {
+    let service = service_with_internal_auth(Some("macro|default@example.com"));
+
+    let context = service
+        .authorize_internal(
+            INTERNAL_API_KEY,
+            InternalIdentityClaims {
+                user_id: Some("macro|acting@example.com".to_string()),
+                fusion_user_id: Some("fusion-user-id".to_string()),
+                organization_id: Some(42),
+            },
+        )
+        .await
+        .unwrap()
+        .expect("explicit user claim should establish an identity");
+
+    assert_eq!(context.user_id, "macro|acting@example.com");
+    assert_eq!(context.fusion_user_id, "fusion-user-id");
+    assert_eq!(context.organization_id, Some(42));
+    assert_eq!(context.permissions, None);
+}
+
+#[tokio::test]
+async fn authorize_internal_uses_the_configured_default_user() {
+    let service = service_with_internal_auth(Some("macro|default@example.com"));
+
+    let context = service
+        .authorize_internal(INTERNAL_API_KEY, InternalIdentityClaims::default())
+        .await
+        .unwrap()
+        .expect("configured default user should establish an identity");
+
+    assert_eq!(context.user_id, "macro|default@example.com");
+    assert_eq!(context.fusion_user_id, "");
+    assert_eq!(context.organization_id, None);
+    assert_eq!(context.permissions, None);
+}
+
+#[tokio::test]
+async fn authorize_internal_returns_none_without_an_identity() {
+    let service = service_with_internal_auth(None);
+
+    let context = service
+        .authorize_internal(INTERNAL_API_KEY, InternalIdentityClaims::default())
+        .await
+        .unwrap();
+
+    assert!(context.is_none());
 }
 
 #[tokio::test]
