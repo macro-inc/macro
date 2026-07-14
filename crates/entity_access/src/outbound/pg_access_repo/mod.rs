@@ -2,7 +2,7 @@
 
 mod queries;
 
-pub use queries::{SourceIds, get_user_source_ids};
+pub use queries::{SourceIds, get_bot_source_ids, get_user_source_ids};
 
 #[cfg(test)]
 mod test;

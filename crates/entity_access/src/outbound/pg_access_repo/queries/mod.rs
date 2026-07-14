@@ -6,7 +6,7 @@
 use cached::proc_macro::cached;
 
 use anyhow::Context;
-
+use bot_id::BotId;
 use macro_user_id::{
     cowlike::CowLike,
     lowercased::Lowercase,
@@ -75,6 +75,38 @@ pub async fn get_user_source_ids(
     } else {
         Ok(SourceIds(vec![]))
     }
+}
+
+/// Grabs a bot's active channel, owning team, and principal source ids.
+#[tracing::instrument(skip(pool), err)]
+#[cfg_attr(
+    not(test),
+    cached(
+        time = 30,
+        result = true,
+        key = "String",
+        convert = r#"{bot_id.to_string()}"#,
+    )
+)]
+pub async fn get_bot_source_ids(pool: &Pool<Postgres>, bot_id: BotId) -> anyhow::Result<SourceIds> {
+    let principal = bot_id.into_storage_id();
+    let source_ids = sqlx::query_scalar!(
+        r#"
+        SELECT cp.channel_id::text FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        UNION ALL
+        SELECT b.team_id::text FROM bots b
+            WHERE b.id = $2 AND b.team_id IS NOT NULL AND b.deleted_at IS NULL
+        UNION ALL
+        SELECT $1
+        "#,
+        principal.as_ref(),
+        bot_id.as_uuid(),
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(SourceIds(source_ids.into_iter().flatten().collect()))
 }
 
 /// Grabs all user IDs with access to an entity via the entity_access table.

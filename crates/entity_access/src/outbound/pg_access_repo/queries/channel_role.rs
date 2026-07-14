@@ -1,5 +1,8 @@
 //! Queries for channel role resolution.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::{ChannelRoleResult, ParticipantRole};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -87,6 +90,40 @@ pub async fn get_channel_role(
 
     Ok(match role {
         Some(role) => ChannelRoleResult::Role(role),
+        None => ChannelRoleResult::NoAccess,
+    })
+}
+
+/// Get a bot's explicit role in a channel.
+///
+/// Unlike [`get_channel_role`], public and organization channels do not grant a
+/// default role. The bot must have an active participant row.
+#[tracing::instrument(err, skip(pool))]
+pub async fn get_bot_channel_role(
+    pool: &PgPool,
+    channel_id: &Uuid,
+    bot_principal: &str,
+) -> Result<ChannelRoleResult, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"
+        SELECT cp.role::text as "role?"
+        FROM comms_channels c
+        LEFT JOIN comms_channel_participants cp
+            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
+        WHERE c.id = $1
+        "#,
+        channel_id,
+        bot_principal,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(ChannelRoleResult::NotFound);
+    };
+
+    Ok(match row.role.as_deref() {
+        Some(role) => ChannelRoleResult::Role(parse_role(role)),
         None => ChannelRoleResult::NoAccess,
     })
 }
