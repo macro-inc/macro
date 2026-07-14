@@ -107,8 +107,8 @@ function ThemePillActions(props: {
 }) {
   return (
     <span class="flex shrink-0 items-center gap-0.5 text-ink-extra-muted">
-      <CopyThemeButton themeId={props.themeId} name={props.name} />
       <EditThemeButton name={props.name} onEdit={props.onEdit} />
+      <CopyThemeButton themeId={props.themeId} name={props.name} />
     </span>
   );
 }
