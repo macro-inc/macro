@@ -1,7 +1,13 @@
 //! The concrete event broker service.
 
+mod buffered;
 #[cfg(test)]
 mod test;
+
+pub use buffered::{
+    BufferedBrokerConfig, BufferedBrokerRuntime, BufferedBrokerShutdownReport, BufferedBrokerStats,
+    BufferedMacroEventBroker,
+};
 
 use macro_event_topics::Topic as _;
 

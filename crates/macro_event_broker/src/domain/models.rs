@@ -113,6 +113,15 @@ pub enum EventBrokerError {
     /// The Kafka topic name is not handled by a consumer-specific event enum.
     #[error("unknown event topic: {0}")]
     UnknownTopic(String),
+    /// The broker's bounded queue has no capacity for another event.
+    #[error("event broker queue is full (capacity: {capacity})")]
+    QueueFull {
+        /// Maximum number of events that can wait in the queue.
+        capacity: usize,
+    },
+    /// The broker is no longer accepting events.
+    #[error("event broker queue is closed")]
+    QueueClosed,
     /// The broker rejected or failed to deliver the message.
     #[error("failed to publish event: {0}")]
     Publish(String),

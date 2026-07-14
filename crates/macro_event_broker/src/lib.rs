@@ -6,9 +6,12 @@
 //! [`MacroEvent`](domain::models::MacroEvent) event abstraction, the inbound
 //! [`MacroEventBroker`](domain::ports::MacroEventBroker) API, the outbound
 //! [`EventPublisher`](domain::ports::EventPublisher) port, and the
-//! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService) that ties
-//! them together. Kafka topic definitions live in the `macro_event_topics` crate.
-//! The [`outbound`] layer provides the Kafka adapter implementation.
+//! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService) for
+//! acknowledged delivery, and
+//! [`BufferedMacroEventBroker`](domain::service::BufferedMacroEventBroker) for
+//! bounded best-effort publishing with managed shutdown. Kafka topic definitions
+//! live in the `macro_event_topics` crate. The [`outbound`] layer provides the
+//! Kafka adapter implementation.
 
 /// Domain layer: models, ports, and service.
 pub mod domain;
@@ -21,7 +24,10 @@ pub use macro_event_topics::{
 #[cfg(feature = "ports")]
 pub use domain::ports::{EventPublisher, MacroEventBroker};
 #[cfg(feature = "ports")]
-pub use domain::service::{MacroEventBrokerService, NoopMacroEventBroker};
+pub use domain::service::{
+    BufferedBrokerConfig, BufferedBrokerRuntime, BufferedBrokerShutdownReport, BufferedBrokerStats,
+    BufferedMacroEventBroker, MacroEventBrokerService, NoopMacroEventBroker,
+};
 #[cfg(feature = "outbound")]
 pub use outbound::kafka_event_publisher::KafkaEventPublisher;
 #[cfg(feature = "outbound")]
