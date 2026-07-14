@@ -397,6 +397,8 @@ const SearchableFilterSubmenu = (props: {
   placeholder?: string;
   open?: Accessor<boolean>;
   onOpenChange?: (v: boolean) => void;
+  /** Keep `options` in their given order instead of pinning selected first. */
+  preserveOrder?: boolean;
 }) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
   const isOpen = () => props.open?.() ?? internalOpen();
@@ -468,6 +470,7 @@ const SearchableFilterSubmenu = (props: {
             onChange={props.onChange}
             options={props.options}
             inputRef={setInputRef}
+            preserveOrder={props.preserveOrder}
           />
         </Dropdown.Group>
       </Dropdown.SubContent>
@@ -968,6 +971,7 @@ export const UnifiedFilterDropdown = (
                       activeIds={effectiveStageFilter}
                       onChange={handleStageChange}
                       placeholder="Filter stages..."
+                      preserveOrder
                     />
                     <SearchableFilterSubmenu
                       label="Owner"

@@ -44,10 +44,7 @@ import {
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
-import {
-  CompanyDisplayMenu,
-  CompanyViewsMenu,
-} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+import { CompanyDisplayMenu } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
@@ -667,7 +664,6 @@ export const SoupView = (props: SoupViewProps) => {
                   !narrowSearchExpanded() && isComponentListView('companies')
                 }
               >
-                <CompanyViewsMenu />
                 <CompanyDisplayMenu />
               </Show>
               <Show

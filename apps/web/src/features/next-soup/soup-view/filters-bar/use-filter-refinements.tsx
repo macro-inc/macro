@@ -816,6 +816,9 @@ export function useFilterRefinements() {
             activeSearchableIds: stageFilter,
             onSearchableChange: handleStageChange,
             searchPlaceholder: 'Filter stages...',
+            // Stages read as a pipeline — keep canonical order, don't pin
+            // checked ones to the top.
+            preserveOptionOrder: true,
             isPopupOpen,
             setPopupOpen,
             onRemoveAll: () => handleStageChange([]),
