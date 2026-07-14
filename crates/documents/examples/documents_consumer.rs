@@ -146,7 +146,6 @@ fn event_type(event: &DocumentTopicEvent) -> &'static str {
         DocumentTopicEvent::Updated(_) => "document.updated",
         DocumentTopicEvent::Deleted(_) => "document.deleted",
         DocumentTopicEvent::Copied(_) => "document.copied",
-        DocumentTopicEvent::Edited(_) => "document.edited",
         DocumentTopicEvent::Interaction(_) => "document.interaction",
     }
 }

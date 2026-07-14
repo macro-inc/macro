@@ -42,8 +42,7 @@ use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::events::{
     DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentEditedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
 };
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
@@ -1548,10 +1547,11 @@ impl<
     }
 
     async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
-        self.publish_document_event(&DocumentMacroEvent::edited(
+        self.publish_document_event(&DocumentMacroEvent::interaction(
             document_id,
-            DocumentEditedMetadata {
+            DocumentInteractionMetadata {
                 document_id: document_id.to_owned(),
+                reason: InteractionReason::Edited,
             },
         ));
         self.upload_url_service

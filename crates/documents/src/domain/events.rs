@@ -68,13 +68,6 @@ pub struct DocumentDeletedMetadata {
     pub project_id: Option<String>,
 }
 
-/// Metadata for [`DocumentTopicEvent::Edited`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentEditedMetadata {
-    /// The id of the edited document.
-    pub document_id: String,
-}
-
 /// Why a document interaction was reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -133,9 +126,6 @@ pub enum DocumentTopicEvent {
     /// A document was copied.
     #[serde(rename = "document.copied")]
     Copied(DocumentCopiedMetadata),
-    /// A document's content was edited (new snapshot persisted).
-    #[serde(rename = "document.edited")]
-    Edited(DocumentEditedMetadata),
     /// A peer joined, left, or a periodic save occurred.
     #[serde(rename = "document.interaction")]
     Interaction(DocumentInteractionMetadata),
@@ -174,11 +164,6 @@ impl DocumentMacroEvent {
     /// Build a copied event keyed by the new document id.
     pub fn copied(key: impl Into<String>, metadata: DocumentCopiedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Copied(metadata))
-    }
-
-    /// Build an edited event keyed by the document id.
-    pub fn edited(key: impl Into<String>, metadata: DocumentEditedMetadata) -> Self {
-        Self::new(key, DocumentTopicEvent::Edited(metadata))
     }
 
     /// Build an interaction event keyed by the document id.

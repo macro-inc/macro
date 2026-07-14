@@ -201,7 +201,6 @@ fn normalized_document_event(
         DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
         DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
         DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),
-        DocumentTopicEvent::Edited(metadata) => ("document.edited", &metadata.document_id),
         DocumentTopicEvent::Interaction(metadata) => {
             ("document.interaction", &metadata.document_id)
         }
