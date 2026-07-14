@@ -313,56 +313,71 @@ export function CompanyViewsMenu() {
  */
 export function CompanyDisplayMenu() {
   const { options, toggleListColumn } = useCrmDisplayOptions();
-  const { activeTab } = useSoupView();
+  const { activeTab, viewMode } = useSoupView();
   const { applyTabPreset } = useApplyPreset();
   const isTeamAdmin = useIsTeamAdmin();
 
   const showingHidden = () => activeTab() === 'hidden';
 
-  return (
-    <Dropdown>
-      <Tooltip label="Display options">
-        <Dropdown.Trigger depth={2} class="bg-surface" label="Display options">
-          <SlidersIcon />
-        </Dropdown.Trigger>
-      </Tooltip>
+  // On the board, the menu holds only the admin-gated hidden toggle — hide
+  // the trigger entirely when there'd be nothing to show.
+  const hasContent = () => viewMode() === 'list' || isTeamAdmin();
 
-      <Dropdown.Content class="w-56 shadow-menu">
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>List columns</Dropdown.GroupLabel>
-          <For each={Object.keys(CRM_LIST_COLUMN_LABELS) as CrmListColumnId[]}>
-            {(column) => (
+  return (
+    <Show when={hasContent()}>
+      <Dropdown>
+        <Tooltip label="Display options">
+          <Dropdown.Trigger
+            depth={2}
+            class="bg-surface"
+            label="Display options"
+          >
+            <SlidersIcon />
+          </Dropdown.Trigger>
+        </Tooltip>
+
+        <Dropdown.Content class="w-56 shadow-menu">
+          {/* Column visibility only applies to the list. */}
+          <Show when={viewMode() === 'list'}>
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>List columns</Dropdown.GroupLabel>
+              <For
+                each={Object.keys(CRM_LIST_COLUMN_LABELS) as CrmListColumnId[]}
+              >
+                {(column) => (
+                  <Dropdown.CheckboxItem
+                    checked={options().listColumns[column]}
+                    onChange={() => toggleListColumn(column)}
+                    closeOnSelect={false}
+                  >
+                    <span class="flex-1 truncate">
+                      {CRM_LIST_COLUMN_LABELS[column]}
+                    </span>
+                  </Dropdown.CheckboxItem>
+                )}
+              </For>
+            </Dropdown.Group>
+          </Show>
+          {/* Admin/owner only — the BE rejects hidden-set requests from
+            non-admins, matching the old Hidden tab's gating. */}
+          <Show when={isTeamAdmin()}>
+            <Dropdown.Group>
               <Dropdown.CheckboxItem
-                checked={options().listColumns[column]}
-                onChange={() => toggleListColumn(column)}
+                checked={showingHidden()}
+                onChange={() =>
+                  applyTabPreset(
+                    'companies',
+                    showingHidden() ? 'active' : 'hidden'
+                  )
+                }
                 closeOnSelect={false}
               >
-                <span class="flex-1 truncate">
-                  {CRM_LIST_COLUMN_LABELS[column]}
-                </span>
+                <span class="flex-1 truncate">Show hidden companies</span>
               </Dropdown.CheckboxItem>
-            )}
-          </For>
-        </Dropdown.Group>
-        {/* Admin/owner only — the BE rejects hidden-set requests from
-            non-admins, matching the old Hidden tab's gating. */}
-        <Show when={isTeamAdmin()}>
-          <Dropdown.Group>
-            <Dropdown.CheckboxItem
-              checked={showingHidden()}
-              onChange={() =>
-                applyTabPreset(
-                  'companies',
-                  showingHidden() ? 'active' : 'hidden'
-                )
-              }
-              closeOnSelect={false}
-            >
-              <span class="flex-1 truncate">Show hidden companies</span>
-            </Dropdown.CheckboxItem>
-          </Dropdown.Group>
-        </Show>
-      </Dropdown.Content>
-    </Dropdown>
+            </Dropdown.Group>
+          </Show>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
   );
 }

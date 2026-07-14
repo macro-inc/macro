@@ -765,9 +765,10 @@ export const UnifiedFilterDropdown = (
   };
 
   // Stage options for the Customers view: the team's active deal-stage set
-  // plus a trailing "No stage" row.
+  // (plus retired legacy stages on the default set) and a trailing
+  // "No stage" row.
   const stageOptions = createMemo((): SearchableOption[] => [
-    ...dealStages.stages().map((stage, index) => ({
+    ...dealStages.filterStages().map((stage, index) => ({
       id: stage.id,
       label: stage.label,
       icon: () => (
