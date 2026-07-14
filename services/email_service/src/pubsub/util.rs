@@ -127,7 +127,12 @@ pub async fn complete_transaction_with_processing_error<T>(
 }
 
 /// Publish an email event to the `macro.email` Kafka topic, logging and
-/// dropping failures — event emission must never fail the email operation.
+/// dropping failures so event emission never fails the email operation.
+///
+/// When `broker` is a [`macro_event_broker::BufferedMacroEventBroker`], completion
+/// acknowledges only successful serialization and acceptance by the local bounded
+/// queue; Kafka acknowledgement happens later in the managed publishing worker.
+/// Other broker implementations may wait for Kafka acknowledgement before returning.
 pub async fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {
     let _ = broker
         .send_event(event)

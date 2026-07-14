@@ -83,7 +83,13 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
     }
 
     /// Publish an email event to the `macro.email` topic, logging and
-    /// dropping failures — event emission must never fail the operation.
+    /// dropping failures so event emission never fails the email operation.
+    ///
+    /// With a [`macro_event_broker::BufferedMacroEventBroker`], completion
+    /// acknowledges only successful serialization and acceptance by the local
+    /// bounded queue; Kafka acknowledgement happens later in the managed
+    /// publishing worker. Other broker implementations may wait for Kafka
+    /// acknowledgement before returning.
     pub(crate) async fn publish_email_event(&self, event: &EmailMacroEvent)
     where
         B: MacroEventBroker,
