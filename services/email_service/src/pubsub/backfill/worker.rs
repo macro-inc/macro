@@ -7,10 +7,11 @@ use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::BufferedMacroEventBroker;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
 
 /// method that ingests sqs messages and calls the process function for each
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
@@ -28,8 +29,9 @@ pub async fn run_worker(
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     crm_service: CrmServiceType,
-    macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    macro_event_broker: BufferedMacroEventBroker,
     notifications_enabled: bool,
+    cancellation_token: CancellationToken,
 ) {
     let ctx = PubSubContext {
         db,
@@ -51,7 +53,7 @@ pub async fn run_worker(
     };
 
     loop {
-        let worker_result = tokio::spawn({
+        let mut worker_task = AbortOnDropHandle::new(tokio::spawn({
             let ctx = ctx.clone();
             let worker = worker.clone();
             async move {
@@ -65,11 +67,7 @@ pub async fn run_worker(
                                 .then(|message| {
                                     let ctx = ctx.clone();
                                     async move {
-                                        let result = process::process_message(
-                                            ctx,
-                                            message
-                                        )
-                                            .await;
+                                        let result = process::process_message(ctx, message).await;
 
                                         match result {
                                             Ok(_) => Ok(()),
@@ -103,8 +101,23 @@ pub async fn run_worker(
                     }
                 }
             }
-        })
-        .await;
+        }));
+
+        let worker_result = tokio::select! {
+            () = cancellation_token.cancelled() => {
+                worker_task.abort();
+                match worker_task.await {
+                    Ok(()) => {}
+                    Err(error) if error.is_cancelled() => {}
+                    Err(error) => {
+                        tracing::error!(error=?error, "backfill worker failed during cancellation");
+                    }
+                }
+                tracing::info!("backfill worker stopped");
+                return;
+            }
+            result = &mut worker_task => result,
+        };
 
         match worker_result {
             Ok(_) => {
@@ -118,6 +131,12 @@ pub async fn run_worker(
 
         // Add a delay before restarting to avoid rapid restart loops
         tracing::info!("WORKER RESTARTING...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::select! {
+            () = cancellation_token.cancelled() => {
+                tracing::info!("backfill worker stopped");
+                return;
+            }
+            () = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+        }
     }
 }

@@ -11,7 +11,7 @@ use crm::outbound::companies_repo::CompaniesRepositoryImpl;
 use crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver;
 use document_storage_service_client::DocumentStorageServiceClient;
 use gmail_client::GmailClient;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::BufferedMacroEventBroker;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
@@ -70,7 +70,7 @@ pub struct PubSubContext {
     pub dss_client: DocumentStorageServiceClient,
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub crm_service: CrmServiceType,
-    pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    pub macro_event_broker: BufferedMacroEventBroker,
     pub notifications_enabled: bool,
     pub retry_worker: bool,
 }

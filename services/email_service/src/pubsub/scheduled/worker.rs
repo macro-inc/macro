@@ -3,8 +3,9 @@ use crate::pubsub::scheduled::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use futures::StreamExt;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::BufferedMacroEventBroker;
 use sqlx::PgPool;
+use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
 
 /// method that ingests sqs messages and calls the process function for each
 #[expect(clippy::too_many_arguments, reason = "matches the other workers")]
@@ -16,7 +17,8 @@ pub async fn run_worker(
     redis_client: RedisClient,
     s3_client: s3_client::S3,
     attachment_bucket: String,
-    macro_event_broker: MacroEventBrokerService<KafkaEventPublisher>,
+    macro_event_broker: BufferedMacroEventBroker,
+    cancellation_token: CancellationToken,
 ) {
     let ctx = ScheduledContext {
         db,
@@ -29,7 +31,7 @@ pub async fn run_worker(
         macro_event_broker,
     };
     loop {
-        let worker_result = tokio::spawn({
+        let mut worker_task = AbortOnDropHandle::new(tokio::spawn({
             let ctx = ctx.clone();
             let worker = worker.clone();
             async move {
@@ -43,11 +45,7 @@ pub async fn run_worker(
                                 .then(|message| {
                                     let ctx = ctx.clone();
                                     async move {
-                                        let result = process::process_message(
-                                            ctx,
-                                            message,
-                                        )
-                                            .await;
+                                        let result = process::process_message(ctx, message).await;
 
                                         match result {
                                             Ok(_) => Ok(()),
@@ -81,8 +79,23 @@ pub async fn run_worker(
                     }
                 }
             }
-        })
-        .await;
+        }));
+
+        let worker_result = tokio::select! {
+            () = cancellation_token.cancelled() => {
+                worker_task.abort();
+                match worker_task.await {
+                    Ok(()) => {}
+                    Err(error) if error.is_cancelled() => {}
+                    Err(error) => {
+                        tracing::error!(error=?error, "scheduled worker failed during cancellation");
+                    }
+                }
+                tracing::info!("scheduled worker stopped");
+                return;
+            }
+            result = &mut worker_task => result,
+        };
 
         match worker_result {
             Ok(_) => {
@@ -96,6 +109,12 @@ pub async fn run_worker(
 
         // Add a delay before restarting to avoid rapid restart loops
         tracing::info!("WORKER RESTARTING...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::select! {
+            () = cancellation_token.cancelled() => {
+                tracing::info!("scheduled worker stopped");
+                return;
+            }
+            () = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+        }
     }
 }
