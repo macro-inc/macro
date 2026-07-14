@@ -43,6 +43,35 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
   );
 }
 
+function OutlineItem(props: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={props.label}
+      aria-current={props.active ? 'location' : undefined}
+      class="flex h-6 w-6 items-center overflow-hidden rounded-md px-1 text-left text-xs text-ink-muted transition-[width,color,background-color] hover:bg-hover hover:text-ink group-hover/outline:w-full group-hover/outline:px-2 group-focus-within/outline:w-full group-focus-within/outline:px-2"
+      classList={{ 'font-semibold text-ink': props.active }}
+      onClick={props.onClick}
+    >
+      <span
+        aria-hidden="true"
+        class={
+          props.active
+            ? 'h-0.5 w-3 shrink-0 rounded-full bg-ink transition-[width,background-color] group-hover/outline:hidden group-focus-within/outline:hidden'
+            : 'h-0.5 w-2 shrink-0 rounded-full bg-ink/20 transition-[width,background-color] group-hover/outline:hidden group-focus-within/outline:hidden'
+        }
+      />
+      <span class="hidden min-w-0 truncate group-hover/outline:block group-focus-within/outline:block">
+        {props.label}
+      </span>
+    </button>
+  );
+}
+
 export function MarkdownOutline(props: {
   discussion: Accessor<HTMLElement | undefined>;
   editor: Accessor<LexicalEditor | undefined>;
@@ -160,38 +189,26 @@ export function MarkdownOutline(props: {
 
   return (
     <Show when={headings().length > 0 || props.discussion()}>
-      <nav aria-label="Document outline" class="w-52 py-1">
+      <nav
+        aria-label="Document outline"
+        class="group/outline w-6 overflow-visible py-1 transition-[width] hover:w-52 hover:rounded-xl hover:bg-surface hover:p-2 hover:shadow-menu hover:ring hover:ring-edge focus-within:w-52 focus-within:rounded-xl focus-within:bg-surface focus-within:p-2 focus-within:shadow-menu focus-within:ring focus-within:ring-edge"
+      >
         <div class="flex flex-col gap-0.5">
           <For each={headings()}>
             {(heading) => (
-              <button
-                type="button"
-                class="w-full truncate rounded-md border-l-2 border-transparent py-1 pr-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
-                classList={{
-                  'border-accent font-semibold text-ink':
-                    activeHeadingKey() === heading.key,
-                }}
-                style={{
-                  'padding-left': `${8 + (heading.level - 1) * 12}px`,
-                }}
-                title={heading.text}
+              <OutlineItem
+                active={activeHeadingKey() === heading.key}
+                label={heading.text}
                 onClick={() => scrollToHeading(heading)}
-              >
-                {heading.text}
-              </button>
+              />
             )}
           </For>
           <Show when={props.discussion()}>
-            <button
-              type="button"
-              class="mt-1 w-full truncate rounded-md border-edge-muted border-t border-l-2 border-l-transparent py-2 pr-2 pl-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
-              classList={{
-                'border-l-accent font-semibold text-ink': discussionActive(),
-              }}
+            <OutlineItem
+              active={discussionActive()}
+              label="Discussion"
               onClick={scrollToDiscussion}
-            >
-              Discussion
-            </button>
+            />
           </Show>
         </div>
       </nav>
