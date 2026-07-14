@@ -412,10 +412,10 @@ export const SoupView = (props: SoupViewProps) => {
     batch(() => {
       soup.setPreviewEntity(persistedPreviewEntity);
       // Existing entries only stored the symbolic entity id. Treat one as an
-      // open pane while allowing new entries to use their view default.
+      // open pane. The new-inbox default is applied reactively below because
+      // its PostHog flag can resolve after this one-time initialization.
       soupView.setPreviewOpen(
-        persistedPreviewOpen ??
-          (persistedPreviewEntity ? true : isNewInboxEnabled())
+        persistedPreviewOpen ?? persistedPreviewEntity !== undefined
       );
 
       soupView.initialize({
@@ -479,6 +479,20 @@ export const SoupView = (props: SoupViewProps) => {
       }
     });
   });
+
+  // Production resolves the new-inbox flag asynchronously, so wait for it
+  // before applying the default instead of locking in the initial false value.
+  if (
+    persistedPreviewOpen === undefined &&
+    persistedPreviewEntity === undefined
+  ) {
+    let previewDefaulted = false;
+    createRenderEffect(() => {
+      if (previewDefaulted || !isNewInboxEnabled()) return;
+      previewDefaulted = true;
+      soupView.setPreviewOpen(true);
+    });
+  }
 
   const previewEntityCaptorTeardown = panel.handle.registerEntryStateCaptor(
     SOUP_PREVIEW_ENTITY_ENTRY_KEY,
