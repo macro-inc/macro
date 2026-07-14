@@ -332,6 +332,24 @@ impl MacroEventBroker for TestEventBroker {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct TestDocumentSearchIndexer {
+    enqueued: Arc<Mutex<Vec<String>>>,
+}
+
+impl crate::domain::ports::DocumentSearchIndexer for TestDocumentSearchIndexer {
+    fn enqueue_name_update(
+        &self,
+        document_id: String,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>> {
+        let enqueued = Arc::clone(&self.enqueued);
+        Box::pin(async move {
+            enqueued.lock().unwrap().push(document_id);
+            Ok(())
+        })
+    }
+}
+
 type TestDocumentService = DocumentServiceImpl<
     MockDocumentRepo,
     TestUploadUrlPort,
@@ -396,6 +414,29 @@ fn make_test_service_with_entity_access(
         TestEventBroker::default(),
     );
     (service, entity_access)
+}
+
+/// Build a test service along with a handle to its recording search indexer.
+fn make_test_service_with_search_indexer(
+    repo: MockDocumentRepo,
+) -> (TestDocumentService, TestDocumentSearchIndexer) {
+    let search_indexer = TestDocumentSearchIndexer::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService,
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    )
+    .with_search_indexer(Arc::new(search_indexer.clone()));
+    (service, search_indexer)
 }
 
 /// Build a test service along with a handle to its recording event broker.
@@ -1265,6 +1306,65 @@ async fn test_edit_document_rename_only_keeps_project_access() {
             .is_empty()
     );
     assert!(entity_access.added_to_projects.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_edit_document_rename_enqueues_search_name_update() {
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .withf(|args| args.document_id == "doc-1")
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, search_indexer) = make_test_service_with_search_indexer(repo);
+
+    service
+        .edit_document(
+            edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            EditDocumentServiceArgs {
+                document_name: Some("New name".to_string()),
+                project_id: None,
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *search_indexer.enqueued.lock().unwrap(),
+        vec!["doc-1".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn test_edit_document_without_rename_does_not_enqueue_search_name_update() {
+    let document_id = uuid::Uuid::new_v4().to_string();
+    let new_project_id = uuid::Uuid::new_v4();
+
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_update_project_modified()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, search_indexer) = make_test_service_with_search_indexer(repo);
+
+    service
+        .edit_document(
+            edit_receipt(&document_id),
+            task_document_context(&document_id),
+            EditDocumentServiceArgs {
+                document_name: None,
+                project_id: Some(new_project_id.to_string()),
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(search_indexer.enqueued.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

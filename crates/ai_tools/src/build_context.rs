@@ -268,6 +268,10 @@ pub async fn build_tool_service_context_from_env(
             pool.clone(),
         )),
         macro_event_broker: macro_event_broker.clone(),
+        // AI-agent contexts don't own a search event queue (their sqs_client is
+        // configured without one), so no search-index refresh is published from
+        // here — matching the properties service built in the same context.
+        search_indexer: None,
     };
 
     let document_tool_context = DocumentToolContext::new(

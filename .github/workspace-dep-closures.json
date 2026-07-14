@@ -529,20 +529,24 @@
       "crates/workspace-hack"
     ],
     "cache-core": [
-      "crates/client/cache-core"
+      "crates/client/cache-core",
+      "crates/maybe_send"
     ],
     "cache-idb": [
       "crates/client/cache-core",
-      "crates/client/cache-idb"
+      "crates/client/cache-idb",
+      "crates/maybe_send"
     ],
     "cache-sqlite": [
       "crates/client/cache-core",
-      "crates/client/cache-sqlite"
+      "crates/client/cache-sqlite",
+      "crates/maybe_send"
     ],
     "cache-wasm": [
       "crates/client/cache-core",
       "crates/client/cache-idb",
-      "crates/client/cache-wasm"
+      "crates/client/cache-wasm",
+      "crates/maybe_send"
     ],
     "cal": [
       "crates/analytics_client",
@@ -3330,6 +3334,9 @@
     "macro_uuid": [
       "crates/macro_uuid",
       "crates/workspace-hack"
+    ],
+    "maybe_send": [
+      "crates/maybe_send"
     ],
     "mcp_auth_proxy": [
       "crates/cowlike",

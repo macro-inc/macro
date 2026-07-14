@@ -45,14 +45,12 @@ export type MobileTouchMenuTriggerProps = {
 
 type MobileTouchMenuButtonProps = {
   icon: MobileTouchIconComponent;
-  ariaLabel: string;
   ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
-  onClick: () => void;
+  onPointerDown: () => void;
   onTouchMove?: (e: TouchEvent) => void;
   onTouchEnd?: (e: TouchEvent) => void;
   class?: string;
   animateIcon?: boolean;
-  fireOnPress?: boolean;
 };
 
 function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
@@ -62,23 +60,15 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
     <button
       type="button"
       ref={props.ref}
-      aria-label={props.ariaLabel}
       use:pressPulse
-      onPointerDown={() => {
+      onPointerDown={(e) => {
+        e.preventDefault();
         hapticImpact('light');
         if (props.animateIcon !== false) {
           setAnimating(true);
           setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
         }
-        if (props.fireOnPress) props.onClick();
-      }}
-      onClick={(e) => {
-        if (props.fireOnPress) {
-          // Keyboard/assistive activation dispatches click without pointerdown.
-          if (e.detail === 0) props.onClick();
-          return;
-        }
-        props.onClick();
+        props.onPointerDown();
       }}
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
@@ -98,27 +88,8 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
   );
 }
 
-// Touch menu triggers open on pointer-down, which also arms the
-// hold-and-drag-to-select gesture. Swallow the opening touch's trailing
-// synthesized click so it cannot accidentally select a freshly-mounted row.
-function suppressNextClick() {
-  const onClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    cleanup();
-  };
-  const cleanup = () => {
-    document.removeEventListener('click', onClick, true);
-    clearTimeout(timer);
-  };
-  const timer = setTimeout(cleanup, 400);
-  document.addEventListener('click', onClick, true);
-}
-
 export function MobileTouchMenu(props: {
-  triggerIcon?: MobileTouchIconComponent;
-  triggerAriaLabel: string;
-  trigger?: (props: MobileTouchMenuTriggerProps) => JSXElement;
+  triggerIcon: MobileTouchIconComponent;
   position?: 'bottom-row' | 'trigger-bottom';
   footerLabel: string;
   footerCaretClass?: string;
@@ -158,7 +129,6 @@ export function MobileTouchMenu(props: {
     syncTriggerPosition();
     setMounted(true);
     setOpen(true);
-    suppressNextClick();
   };
 
   const closeMenu = () => {
@@ -206,41 +176,17 @@ export function MobileTouchMenu(props: {
     select(id);
   };
 
-  const triggerProps = (): MobileTouchMenuTriggerProps => ({
-    open: open(),
-    ref: setTriggerRef,
-    onPointerDown: () => {
-      hapticImpact('light');
-      toggleMenu();
-    },
-    onClick: (e) => {
-      // Keyboard/assistive activation dispatches click without pointerdown.
-      if (e.detail === 0) toggleMenu();
-    },
-    onTouchMove: handleTouchMove,
-    onTouchEnd: handleTouchEnd,
-  });
-
   return (
     <>
-      <Show
-        when={props.trigger}
-        fallback={
-          <MobileTouchMenuButton
-            ref={setTriggerRef}
-            icon={props.triggerIcon!}
-            ariaLabel={props.triggerAriaLabel}
-            animateIcon={false}
-            fireOnPress
-            onClick={toggleMenu}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            class="size-10 rounded-full"
-          />
-        }
-      >
-        {(trigger) => trigger()(triggerProps())}
-      </Show>
+      <MobileTouchMenuButton
+        ref={setTriggerRef}
+        icon={props.triggerIcon}
+        animateIcon={false}
+        onPointerDown={toggleMenu}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        class="size-10 rounded-full"
+      />
       <Show when={mounted()}>
         <Portal>
           {/* Portaled to <body>, outside FloatRegionHost's Layer. Re-apply
@@ -323,7 +269,7 @@ export function MobileTouchMenu(props: {
                   <button
                     type="button"
                     class="flex h-9 shrink-0 items-center justify-between px-3 text-sm font-medium text-ink-muted"
-                    onClick={() => {
+                    onPointerDown={() => {
                       hapticImpact('light');
                       closeMenu();
                     }}

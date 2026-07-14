@@ -2247,6 +2247,7 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "lru",
+ "maybe_send",
  "pollster",
  "postcard",
  "serde",
@@ -8569,6 +8570,10 @@ dependencies = [
  "cfg-if",
  "rayon",
 ]
+
+[[package]]
+name = "maybe_send"
+version = "0.1.0"
 
 [[package]]
 name = "mcp_auth_proxy"
@@ -16177,7 +16182,9 @@ dependencies = [
  "anyhow",
  "guppy",
  "hakari",
+ "serde",
  "serde_json",
+ "toml",
  "xtask_graph",
 ]
 

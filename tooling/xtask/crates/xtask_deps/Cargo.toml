@@ -11,8 +11,12 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 guppy = { workspace = true }
+# For the [xtask] extension table in .config/hakari.toml (path-glob
+# traversal excludes); the hakari engine ignores that table.
+toml = "0.5"
 # Pinned engine for the generated dependency artifacts. This version lives in
 # Cargo.lock, so dev machines and CI always run the identical generator —
 # upgrading it is an explicit, reviewed lock change.

@@ -39,11 +39,6 @@ export function PillTabs<T extends string>(props: {
   items: readonly PillTabItem<T>[];
   value: T | undefined;
   onChange: (value: T) => void;
-  /**
-   * Keep the active element focused when a pill is tapped (e.g. so an open
-   * keyboard stays up in search) by preventing the pointer-down default.
-   */
-  preserveFocus?: boolean;
   /** Extra classes on the scroll strip. */
   class?: string;
 }) {
@@ -164,7 +159,7 @@ export function PillTabs<T extends string>(props: {
                   : 'text-ink-extra-muted'
               )}
               onPointerDown={(e) => {
-                if (props.preserveFocus) e.preventDefault();
+                e.preventDefault();
                 hapticImpact('light');
               }}
               onClick={() => props.onChange(item.value)}
@@ -176,7 +171,7 @@ export function PillTabs<T extends string>(props: {
       </For>
       <Show when={overflowItems().length > 0}>
         <MobileTouchMenu
-          triggerAriaLabel="More tabs"
+          triggerIcon={DotsThreeIcon}
           position="trigger-bottom"
           footerLabel="Tabs"
           items={overflowItems().map((item) => ({
@@ -185,24 +180,6 @@ export function PillTabs<T extends string>(props: {
             active: () => props.value === item.value,
             onSelect: () => props.onChange(item.value),
           }))}
-          trigger={(trigger) => (
-            <button
-              type="button"
-              use:pressPulse
-              ref={trigger.ref}
-              aria-label="More tabs"
-              class="h-10 w-10 shrink-0 rounded-full text-ink-extra-muted island flex items-center justify-center [&_svg]:size-5"
-              onPointerDown={(e) => {
-                if (props.preserveFocus) e.preventDefault();
-                trigger.onPointerDown();
-              }}
-              onClick={trigger.onClick}
-              onTouchMove={trigger.onTouchMove}
-              onTouchEnd={trigger.onTouchEnd}
-            >
-              <DotsThreeIcon />
-            </button>
-          )}
         />
       </Show>
       <div

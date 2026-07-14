@@ -13,6 +13,7 @@ import type {
   EntityData,
 } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
+import WideAutomation from '@icon/wide-automation.svg';
 import WideBook from '@icon/wide-book.svg';
 import WideCalendar from '@icon/wide-calendar.svg';
 import PhoneCall from '@icon/wide-call.svg';
@@ -54,7 +55,6 @@ import FolderUser from '@phosphor/folder-user.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import FileImage from '@phosphor/image.svg';
 import Canvas from '@phosphor/pencil-circle.svg';
-import Robot from '@phosphor/robot.svg';
 import Users from '@phosphor/users.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -281,7 +281,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Snippet',
   },
   automation: {
-    icon: Robot,
+    icon: WideAutomation,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Automation',
@@ -360,7 +360,7 @@ const WIDE_ICONS: Record<
   pr: GithubIcon,
   task: WideTask,
   snippet: WideSnippet,
-  automation: Robot,
+  automation: WideAutomation,
   crm_company: AnimatedCompanyIcon,
   company: AnimatedCompanyIcon,
 };
