@@ -397,7 +397,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   useReopenTrackedEntitiesOnReconnect();
 
   if (isNativeMobilePlatform()) {
-      useInvalidateQueriesOnReconnect();
+    useInvalidateQueriesOnReconnect();
   }
 
   const onNotification = (notification: UnifiedNotification) => {

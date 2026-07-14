@@ -1,4 +1,3 @@
-
 import { ws } from '@service-connection/websocket';
 import { queryClient } from './client';
 import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
