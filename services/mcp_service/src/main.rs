@@ -16,11 +16,14 @@ use mcp_auth_proxy::inbound::axum_router::mcp_router;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
+use std::future::IntoFuture;
 use std::sync::Arc;
-use tokio::time::Duration;
+use tokio::task::JoinHandle;
+use tokio::time::{Duration, timeout};
 use tool_service::AuthenticatedToolService;
 
 const AUTH_PROXY_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
+const HTTP_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(4);
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -66,29 +69,103 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
-    // Spawn background cleanup for expired OAuth entries
     let cleanup_state = auth_proxy.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(AUTH_PROXY_CLEANUP_INTERVAL);
-        loop {
-            interval.tick().await;
-            if let Err(error) = cleanup_state.cleanup_expired().await {
-                tracing::error!(error=?error, "auth proxy cleanup task failed");
-            }
-        }
-    });
-
     let app = mcp_router(auth_proxy, jwt_args, mcp_service);
 
     let port = config.port;
     let addr = format!("0.0.0.0:{port}");
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .context("failed to bind MCP server")?;
+    let server_result = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => {
+            tracing::info!("MCP server listening on http://{addr}/mcp");
 
-    tracing::info!("MCP server listening on http://{addr}/mcp");
+            let cleanup_task = tokio::spawn(async move {
+                let mut interval = tokio::time::interval(AUTH_PROXY_CLEANUP_INTERVAL);
+                loop {
+                    interval.tick().await;
+                    if let Err(error) = cleanup_state.cleanup_expired().await {
+                        tracing::error!(error=?error, "auth proxy cleanup task failed");
+                    }
+                }
+            });
 
-    let server_result = axum::serve(listener, app).await.context("MCP server error");
+            let server_result = {
+                let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
+                let server = axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        let _ = shutdown_receiver.await;
+                    })
+                    .into_future();
+                tokio::pin!(server);
+
+                tokio::select! {
+                    result = &mut server => result,
+                    signal = shutdown_signal() => {
+                        tracing::info!(signal, "shutdown signal received; stopping MCP HTTP server");
+                        let _ = shutdown_sender.send(());
+
+                        match timeout(HTTP_SHUTDOWN_TIMEOUT, &mut server).await {
+                            Ok(result) => result,
+                            Err(_) => {
+                                tracing::warn!(
+                                    timeout_seconds = HTTP_SHUTDOWN_TIMEOUT.as_secs(),
+                                    "MCP HTTP server active-request shutdown timed out; terminating remaining sessions"
+                                );
+                                Ok(())
+                            }
+                        }
+                    }
+                }
+            };
+
+            tracing::info!("MCP HTTP server stopped");
+            stop_cleanup_task(cleanup_task).await;
+            server_result.context("MCP server error")
+        }
+        Err(error) => Err(error).context("failed to bind MCP server"),
+    };
+
     broker_runtime.shutdown().await;
     server_result
+}
+
+async fn shutdown_signal() -> &'static str {
+    let interrupt = async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(error=?error, "failed to install SIGINT handler");
+            std::future::pending::<()>().await;
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(error=?error, "failed to install SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = interrupt => "SIGINT",
+        _ = terminate => "SIGTERM",
+    }
+}
+
+async fn stop_cleanup_task(cleanup_task: JoinHandle<()>) {
+    cleanup_task.abort();
+    match cleanup_task.await {
+        Ok(()) => {}
+        Err(error) if error.is_cancelled() => {}
+        Err(error) => {
+            tracing::error!(error=?error, "OAuth cleanup task terminated unexpectedly");
+        }
+    }
+    tracing::info!("OAuth cleanup task stopped");
 }
