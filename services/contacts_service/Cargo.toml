@@ -24,6 +24,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 contacts = { path = "../../crates/contacts", features = ["axum"] }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
