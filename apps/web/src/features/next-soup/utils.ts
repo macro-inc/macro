@@ -395,11 +395,17 @@ export function getChannelEntityTarget(
     entity.notifications?.() ?? []
   );
   for (const notification of scoped) {
-    // Read notifications only stop aiming a whole-`channel` row, which would
-    // otherwise jump to a stale message far above the latest (your own sends
-    // never notify you). A thread/message row is scoped to a single message,
-    // so it targets its driving notification regardless of read state — that
-    // is the reply the row stands for and the one to highlight.
+    // For a whole-`channel` row, ignore notifications you have already read:
+    // the row stands for the entire channel, so once read it should open at
+    // the latest message, not scroll up to an already-seen one. (Read ones
+    // are skipped here; if all are read the loop falls through to the
+    // `latest` fallback.) A read notification is also usually well above the
+    // latest message — you are never notified of your own sends, so the newest
+    // notification is someone else's and predates any message you sent after.
+    //
+    // A thread/message row stands for one specific message, so it always jumps
+    // to its notification's message, read or not — that is the message the row
+    // is about and the one to highlight.
     if (entity.type === 'channel' && notificationIsRead(notification)) continue;
     const { messageId, threadId } = getChannelNotificationParams(notification);
     if (messageId) return { kind: 'message', messageId, threadId };
