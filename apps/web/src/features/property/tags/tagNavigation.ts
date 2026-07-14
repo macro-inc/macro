@@ -1,6 +1,6 @@
-import {
-  type PropertyFilter,
-  type Query,
+import type {
+  PropertyFilter,
+  Query,
 } from '@app/features/next-soup/filters/filter-store';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import type {
@@ -13,9 +13,7 @@ export type TagNavigationTarget = {
   propertyDefinitionId: string;
 };
 
-export function tagToPropertyFilter(
-  tag: TagNavigationTarget
-): PropertyFilter {
+export function tagToPropertyFilter(tag: TagNavigationTarget): PropertyFilter {
   return {
     propertyId: tag.propertyDefinitionId,
     type: 'select',

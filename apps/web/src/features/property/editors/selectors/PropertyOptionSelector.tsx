@@ -25,13 +25,13 @@ import {
 import { OptionCheckBox } from './OptionCheckBox';
 import type { OptionSelectorConfig, SelectableOption } from './types';
 
-type UseDropdownSearchOptions = {
+export type UseDropdownSearchOptions = {
   itemCount: Accessor<number>;
   onSelect: (index: number) => void;
   onClose: () => void;
 };
 
-const useDropdownSearch = (options: UseDropdownSearchOptions) => {
+export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const keyboardMode = useKeyPressed(100);
@@ -91,15 +91,16 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
   };
 };
 
-type DropdownSearchInputProps = {
+export type DropdownSearchInputProps = {
   value: string;
   placeholder: string;
   onInput: (value: string) => void;
+  onKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
   inputType?: string;
   inputRef?: (element: HTMLInputElement) => void;
 };
 
-const DropdownSearchInput = (props: DropdownSearchInputProps) => {
+export const DropdownSearchInput = (props: DropdownSearchInputProps) => {
   return (
     <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
       <SearchIcon class="h-4 w-4 text-ink-muted" />
@@ -109,13 +110,14 @@ const DropdownSearchInput = (props: DropdownSearchInputProps) => {
         type={props.inputType ?? 'text'}
         value={props.value}
         onInput={(event) => props.onInput(event.currentTarget.value)}
+        onKeyDown={props.onKeyDown}
         placeholder={props.placeholder}
       />
     </div>
   );
 };
 
-type DropdownSelectableRowProps = {
+export type DropdownSelectableRowProps = {
   isSelected: boolean;
   showHotkey?: boolean;
   hotkeyShortcut?: string;
@@ -124,9 +126,9 @@ type DropdownSelectableRowProps = {
   onMouseEnter?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
-const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
-  props
-) => {
+export const DropdownSelectableRow: ParentComponent<
+  DropdownSelectableRowProps
+> = (props) => {
   return (
     <div
       class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default"

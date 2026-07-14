@@ -2,9 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import FunnelIcon from '@phosphor/funnel-simple.svg';
-import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -16,8 +14,8 @@ import {
   buildTaggedItemsSplitContent,
   buildTaggedItemsSplitOptions,
 } from './tagNavigation';
-import { useDocTags } from './useDocTags';
 import type { ResolvedTag } from './useDocTags';
+import { useDocTags } from './useDocTags';
 
 const chipClass = cn(
   'inline-flex items-center gap-1.5 m-px min-w-0 max-w-[30ch]',
@@ -51,11 +49,10 @@ function TagChip(props: {
             docTags={props.docTags}
             replaceTag={props.tag}
             triggerClass={chipClass}
-            triggerLabel={`Edit ${props.tag.label}`}
+            triggerLabel={`Change or select tag ${props.tag.label}`}
           >
             <TagDot color={props.tag.color} />
             <span class="min-w-0 truncate">{props.tag.label}</span>
-            <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
           </TagPicker>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
@@ -81,13 +78,12 @@ export function TagsRow(props: {
 }) {
   const docTags = useDocTags(props.entityId, props.entityType);
   const triggerVariant = () => props.triggerVariant ?? 'icon';
+  const hasTags = () => docTags.appliedTags().length > 0;
 
   return (
     <div class="flex flex-wrap items-center gap-1.5">
       <For each={docTags.appliedTags()}>
-        {(tag) => (
-          <TagChip tag={tag} docTags={docTags} />
-        )}
+        {(tag) => <TagChip tag={tag} docTags={docTags} />}
       </For>
       <Show
         when={props.canEdit}
@@ -98,7 +94,7 @@ export function TagsRow(props: {
         }
       >
         <Switch>
-          <Match when={triggerVariant() === 'pill'}>
+          <Match when={triggerVariant() === 'pill' && !hasTags()}>
             <TagPicker
               docTags={docTags}
               triggerClass={cn(
@@ -116,12 +112,13 @@ export function TagsRow(props: {
             <TagPicker
               docTags={docTags}
               triggerClass={cn(
-                'inline-flex size-5 items-center justify-center rounded-full',
-                'text-ink-muted transition-colors hover:bg-hover hover:text-ink'
+                'inline-flex items-center justify-center rounded-full px-1 py-1 leading-tight',
+                'm-px ring ring-edge-muted bg-surface text-ink-muted',
+                'transition-colors hover:bg-hover hover:text-ink'
               )}
-              triggerLabel="Edit tags"
+              triggerLabel="Add tags"
             >
-              <PencilSimpleIcon class="size-3" />
+              <PlusIcon class="size-3" />
             </TagPicker>
           </Match>
         </Switch>

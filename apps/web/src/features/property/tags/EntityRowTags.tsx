@@ -73,7 +73,7 @@ function TagChip(props: {
         <TagPicker
           docTags={props.docTags}
           triggerClass={chipClass}
-          triggerLabel={`Edit ${props.tag.label}`}
+          triggerLabel={`Change or select tag ${props.tag.label}`}
           onOpenChange={setPickerOpen}
         >
           <TagDot color={props.tag.color} class="size-2" />

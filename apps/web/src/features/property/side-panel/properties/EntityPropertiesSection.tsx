@@ -96,12 +96,7 @@ export function EntityTagsSection(props: EntityTagsSectionProps) {
     <Show
       when={tagsFlag().enabled && TAGGABLE_ENTITY_TYPES.has(props.entityType)}
     >
-      <SidePanel.Section
-        id="tags"
-        title="Tags"
-        defaultOpen
-        order={props.order}
-      >
+      <SidePanel.Section id="tags" title="Tags" defaultOpen order={props.order}>
         <Suspense fallback={<SidePanel.Loading />}>
           <div class="text-xs">
             <TagsRow
