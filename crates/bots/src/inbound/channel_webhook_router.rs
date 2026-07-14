@@ -345,6 +345,7 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
                 StatusCode::NOT_FOUND
             }
             Self::Channel(ChannelMutationErr::BadRequest(_)) => StatusCode::BAD_REQUEST,
+            Self::Channel(ChannelMutationErr::Forbidden(_)) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::Repo(_))
             | Self::Channel(ChannelMutationErr::Repo(_))
             | Self::Channel(ChannelMutationErr::Gateway(_))

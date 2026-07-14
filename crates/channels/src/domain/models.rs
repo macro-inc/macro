@@ -705,6 +705,14 @@ pub struct CreateChannelRequest {
     pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
+/// Response containing a channel's reusable join code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ChannelJoinCodeResponse {
+    /// Reusable code for joining the channel.
+    pub join_code: Uuid,
+}
+
 /// Response returned after creating a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

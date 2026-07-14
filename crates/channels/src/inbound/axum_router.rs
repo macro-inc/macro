@@ -2200,6 +2200,7 @@ impl IntoResponse for ChannelsHandlerErr {
                 let status = match &err {
                     ChannelMutationErr::BadRequest(_) => StatusCode::BAD_REQUEST,
                     ChannelMutationErr::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+                    ChannelMutationErr::Forbidden(_) => StatusCode::FORBIDDEN,
                     ChannelMutationErr::NotFound(_) => StatusCode::NOT_FOUND,
                     ChannelMutationErr::Repo(_)
                     | ChannelMutationErr::Gateway(_)

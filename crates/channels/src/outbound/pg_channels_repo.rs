@@ -2529,6 +2529,46 @@ impl ChannelRepo for PgChannelsRepo {
         })
     }
 
+    async fn get_or_create_channel_join_code(&self, channel_id: Uuid) -> Result<Uuid, Self::Err> {
+        let join_code = sqlx::query_scalar!(
+            r#"
+            UPDATE comms_channels
+            SET join_code = COALESCE(join_code, gen_random_uuid())
+            WHERE id = $1
+            RETURNING join_code AS "join_code!"
+            "#,
+            channel_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to get or create channel join code")?;
+        Ok(join_code)
+    }
+
+    async fn get_channel_info_by_join_code(
+        &self,
+        join_code: Uuid,
+    ) -> Result<Option<ChannelInfo>, Self::Err> {
+        let row = sqlx::query_as!(
+            ChannelInfoRow,
+            r#"
+            SELECT id, name, channel_type AS "channel_type: ChannelType", org_id, team_id
+            FROM comms_channels
+            WHERE join_code = $1
+            "#,
+            join_code,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| ChannelInfo {
+            id: row.id,
+            name: row.name,
+            channel_type: row.channel_type,
+            org_id: row.org_id,
+            team_id: row.team_id,
+        }))
+    }
+
     async fn get_channel_metadata(
         &self,
         channel_id: Uuid,
