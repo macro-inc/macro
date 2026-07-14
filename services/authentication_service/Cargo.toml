@@ -46,6 +46,7 @@ cookie = { workspace = true }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 email = { path = "../../crates/email", features = ["http_client"] }
 doppleganger = { workspace = true }
+decode_jwt = { path = "../../crates/decode_jwt" }
 email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
 entity_access = { path = "../../crates/entity_access" }

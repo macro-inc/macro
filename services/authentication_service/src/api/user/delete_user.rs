@@ -1,10 +1,10 @@
 use axum::{
-    Extension, Json,
+    Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::decode_jwt::JwtContext;
+use decode_jwt::DecodedJwt;
 use tower_cookies::Cookies;
 
 use crate::api::{
@@ -13,7 +13,6 @@ use crate::api::{
 };
 
 use model::response::{ErrorResponse, GenericSuccessResponse};
-use model::user::UserContext;
 
 /// Deletes the user who calls this endpoint
 #[utoipa::path(
@@ -26,18 +25,17 @@ use model::user::UserContext;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, jwt_context), fields(user_id=%user_context.user_id))]
+#[tracing::instrument(skip(ctx, decoded_jwt, cookies), fields(user_id=%decoded_jwt.user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    jwt_context: Extension<JwtContext>,
+    decoded_jwt: DecodedJwt,
     cookies: Cookies,
 ) -> Result<Response, Response> {
-    let user_id = &*user_context.user_id;
+    let user_id = &*decoded_jwt.user_context.user_id;
     // This may seem dumb, but if you delete this account it will delete my fusionauth account and
     // we will then be locked out of fusionauth. So this is a way to prevent any accidental fuck
     // ups from occurring.
-    if user_context.user_id == "macro|hutch@macro.com" {
+    if decoded_jwt.user_context.user_id == "macro|hutch@macro.com" {
         return Err((StatusCode::FORBIDDEN, "you cannot delete hutch").into_response());
     }
     // Perform a logout for the user
@@ -51,9 +49,13 @@ pub async fn handler(
     refresh_token_cookie.set_expires(Some(time::OffsetDateTime::now_utc()));
     cookies.add(refresh_token_cookie);
 
-    // Logout of fusionauth
-    if let Err(e) = ctx.auth_client.logout(&jwt_context.tid).await {
-        tracing::warn!(error=%e, "error logging out");
+    // Tokens without JWT context do not identify a FusionAuth session.
+    if let Some(jwt_context) = decoded_jwt.jwt_context {
+        let _ = ctx
+            .auth_client
+            .logout(&jwt_context.tid)
+            .await
+            .inspect_err(|e| tracing::warn!(error=?e, "error logging out"));
     }
 
     let email = user_id.replace("macro|", "");
