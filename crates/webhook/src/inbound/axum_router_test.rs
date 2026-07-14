@@ -9,12 +9,17 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
+use macro_authorization::{
+    MacroAuthorizationError, SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::UserContext;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
+
+const ACCESS_TOKEN: &str = "webhook-test-token";
 
 #[derive(Clone, Default)]
 struct FakeService {
@@ -244,9 +249,11 @@ async fn patch_passes_authenticated_user_path_and_body_to_service() {
 async fn validate_passes_authenticated_user_and_path_to_service() {
     let service = FakeService::default();
     let limiter = FakeRateLimiter::default();
-    let response = send(
+    let authorization = authorization();
+    let response = send_with_authorization(
         service.clone(),
         limiter.clone(),
+        authorization.clone(),
         "POST",
         "/webhooks/wh_123/validate",
         json!({}),
@@ -255,6 +262,7 @@ async fn validate_passes_authenticated_user_and_path_to_service() {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(limiter.checks(), 1);
+    assert_eq!(authorization.calls(), vec![ACCESS_TOKEN.to_string()]);
     match &service.calls()[0] {
         ServiceCall::Validate(user, webhook_id) => {
             assert_eq!(user.as_ref(), user_id());
@@ -290,6 +298,31 @@ async fn validate_remote_failure_returns_ok_and_consumes_rate_limit() {
     assert_eq!(body["is_valid"], false);
     assert_eq!(body["message"], "webhook returned HTTP 500");
     assert_eq!(limiter.checks(), 1);
+}
+
+#[tokio::test]
+async fn expired_credentials_return_401_before_rate_limiting() {
+    let service = FakeService::default();
+    let limiter = FakeRateLimiter::default();
+    let authorization =
+        FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired);
+
+    let response = send_with_authorization(
+        service.clone(),
+        limiter.clone(),
+        authorization,
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+    let status = response.status();
+    let body = response_json(response).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({"message": "jwt expired"}));
+    assert_eq!(limiter.checks(), 0);
+    assert!(service.calls().is_empty());
 }
 
 #[tokio::test]
@@ -378,22 +411,35 @@ async fn send(
     uri: &str,
     body: serde_json::Value,
 ) -> axum::response::Response {
-    let router = webhook_router::<_, _, ()>(WebhookRouterState::new(service, limiter));
+    send_with_authorization(service, limiter, authorization(), method, uri, body).await
+}
+
+async fn send_with_authorization(
+    service: FakeService,
+    limiter: FakeRateLimiter,
+    authorization: FakeMacroAuthorizationService,
+    method: &str,
+    uri: &str,
+    body: serde_json::Value,
+) -> axum::response::Response {
+    let authorization_service = SharedMacroAuthorizationService::new(authorization);
+    let state = WebhookRouterState::new(service, limiter, authorization_service);
+    let router = webhook_router::<_, _, ()>(state);
     router
         .oneshot(
-            Request::builder()
+            bearer(Request::builder(), ACCESS_TOKEN)
                 .method(method)
                 .uri(uri)
-                .extension(UserContext {
-                    user_id: user_id().to_string(),
-                    ..UserContext::default()
-                })
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )
         .await
         .unwrap()
+}
+
+fn authorization() -> FakeMacroAuthorizationService {
+    FakeMacroAuthorizationService::always(test_user_context(user_id()))
 }
 
 async fn response_json(response: axum::response::Response) -> serde_json::Value {

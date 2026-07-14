@@ -16,10 +16,10 @@ consumer = [
 default = ["consumer", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
-  "dep:axum-extra",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:rate_limit",
+  "dep:rootcause",
   "rate_limit/axum",
   "dep:serde_json",
   "dep:utoipa",
@@ -52,7 +52,6 @@ worker = ["dep:tokio", "ports"]
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
-axum-extra = { workspace = true, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
@@ -62,16 +61,19 @@ entity_access = { path = "../entity_access", default-features = false, features 
 futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
 macro_env = { path = "../macro_env", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
 macro_event_topics = { path = "../macro_event_topics", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 rate_limit = { path = "../rate_limit", optional = true, default-features = false }
 rdkafka = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
@@ -87,11 +89,14 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 channel_sender = { path = "../channel_sender" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+  "testing",
+] }
 tokio = { workspace = true, features = ["test-util"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rate_limit = { path = "../rate_limit", default-features = false, features = [
   "axum",
   "testing",
 ] }
-rootcause = { workspace = true }
 tower = { workspace = true }

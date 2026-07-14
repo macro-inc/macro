@@ -14,11 +14,11 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{patch, post},
 };
-use axum_extra::extract::Cached;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
+use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
-use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +26,7 @@ use std::time::Duration;
 pub struct WebhookRouterState<S, R> {
     service: Arc<S>,
     rate_limiter: R,
+    authorization_service: SharedMacroAuthorizationService,
 }
 
 impl<S, R: Clone> Clone for WebhookRouterState<S, R> {
@@ -33,16 +34,22 @@ impl<S, R: Clone> Clone for WebhookRouterState<S, R> {
         Self {
             service: self.service.clone(),
             rate_limiter: self.rate_limiter.clone(),
+            authorization_service: self.authorization_service.clone(),
         }
     }
 }
 
 impl<S: WebhookService, R: RateLimitService + Clone> WebhookRouterState<S, R> {
     /// Create webhook router state.
-    pub fn new(service: S, rate_limiter: R) -> Self {
+    pub fn new(
+        service: S,
+        rate_limiter: R,
+        authorization_service: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             service: Arc::new(service),
             rate_limiter,
+            authorization_service,
         }
     }
 }
@@ -50,6 +57,37 @@ impl<S: WebhookService, R: RateLimitService + Clone> WebhookRouterState<S, R> {
 impl<S, R: Clone> FromRef<WebhookRouterState<S, R>> for Arc<S> {
     fn from_ref(state: &WebhookRouterState<S, R>) -> Self {
         state.service.clone()
+    }
+}
+
+impl<S, R> FromRef<WebhookRouterState<S, R>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &WebhookRouterState<S, R>) -> Self {
+        state.authorization_service.clone()
+    }
+}
+
+// A nominal wrapper avoids overlapping `FromRef` implementations when the
+// webhook service and rate limiter are both generic.
+#[derive(Clone)]
+struct WebhookRateLimiter<R>(R);
+
+impl<S, R: Clone> FromRef<WebhookRouterState<S, R>> for WebhookRateLimiter<R> {
+    fn from_ref(state: &WebhookRouterState<S, R>) -> Self {
+        Self(state.rate_limiter.clone())
+    }
+}
+
+impl<R: RateLimitService> RateLimitService for WebhookRateLimiter<R> {
+    async fn check_rate_limit(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+    ) -> Result<RateLimitResult, rootcause::Report> {
+        self.0.check_rate_limit(key, config).await
+    }
+
+    async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), rootcause::Report> {
+        self.0.rollback_ticket(ticket).await
     }
 }
 
@@ -62,13 +100,14 @@ pub struct WebhookPath {
 
 /// Per-user validation attempt rate limit.
 pub struct PerUserValidateWebhookRateLimit {
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     webhook_id: WebhookId,
 }
 
 impl<S> RateLimitExtractable<S> for PerUserValidateWebhookRateLimit
 where
-    S: Send + Sync,
+    SharedMacroAuthorizationService: FromRef<S>,
+    S: Send + Sync + 'static,
 {
     fn config() -> RateLimitConfig {
         RateLimitConfig {
@@ -87,7 +126,8 @@ where
 
 impl<S> FromRequestParts<S> for PerUserValidateWebhookRateLimit
 where
-    S: Send + Sync,
+    SharedMacroAuthorizationService: FromRef<S>,
+    S: Send + Sync + 'static,
 {
     type Rejection = Response;
 
@@ -95,7 +135,7 @@ where
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(user): Cached<MacroUserExtractor> = parts
+        let user = parts
             .extract_with_state(state)
             .await
             .map_err(IntoResponse::into_response)?;
@@ -124,8 +164,12 @@ where
             post(validate_webhook::<S>),
         )
         .layer(axum::middleware::from_fn_with_state(
-            state.rate_limiter.clone(),
-            rate_limit_middleware::<R, PerUserValidateWebhookRateLimit, R>,
+            state.clone(),
+            rate_limit_middleware::<
+                WebhookRouterState<S, R>,
+                PerUserValidateWebhookRateLimit,
+                WebhookRateLimiter<R>,
+            >,
         ));
 
     Router::new()
@@ -146,6 +190,7 @@ where
     responses(
         (status = 201, description = "Webhook created", body = CreateWebhookResponse),
         (status = 400, description = "Bad request", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
     ),
@@ -153,7 +198,7 @@ where
 )]
 pub async fn create_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
     let webhook = service.create_webhook(user.macro_user_id, request).await?;
@@ -169,6 +214,7 @@ pub async fn create_webhook<S: WebhookService>(
     responses(
         (status = 200, description = "Webhook updated", body = Webhook),
         (status = 400, description = "Bad request", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 404, description = "Webhook not found", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
@@ -177,7 +223,7 @@ pub async fn create_webhook<S: WebhookService>(
 )]
 pub async fn patch_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
@@ -195,6 +241,7 @@ pub async fn patch_webhook<S: WebhookService>(
     params(("webhook_id" = String, Path, description = "Webhook id")),
     responses(
         (status = 204, description = "Webhook deleted"),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 404, description = "Webhook not found", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
@@ -203,7 +250,7 @@ pub async fn patch_webhook<S: WebhookService>(
 )]
 pub async fn delete_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<WebhookPath>,
 ) -> Result<StatusCode, WebhookHandlerError> {
     service
@@ -219,6 +266,7 @@ pub async fn delete_webhook<S: WebhookService>(
     params(("webhook_id" = String, Path, description = "Webhook id")),
     responses(
         (status = 200, description = "Webhook validation result", body = ValidateWebhookResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 404, description = "Webhook not found", body = ErrorResponse),
         (status = 429, description = "Rate limited", body = ErrorResponse),
@@ -228,7 +276,7 @@ pub async fn delete_webhook<S: WebhookService>(
 )]
 pub async fn validate_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<WebhookPath>,
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
     Ok(Json(
