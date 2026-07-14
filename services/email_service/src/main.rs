@@ -125,8 +125,7 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
-    let authorization_service =
-        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args.clone());
+    let authorization_service = SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args);
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
@@ -187,7 +186,6 @@ async fn main() -> anyhow::Result<()> {
         dss_client: Arc::new(dss_client),
         system_properties_service,
         authorization_service,
-        jwt_args,
         email_service,
         entity_access_service,
         email_thread_state,

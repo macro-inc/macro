@@ -1,14 +1,14 @@
 use crate::api::context::ApiContext;
 use crate::api::email::messages::BATCH_UPDATE_MESSAGE_LIMIT;
 use anyhow::Context;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use email_service::pubsub::publish_email_event;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::service;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
@@ -43,12 +43,14 @@ pub struct UpdateLabelBatchResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Json(body): Json<UpdateLabelBatchRequest>,
 ) -> Result<Response, Response> {
+    let user_context = authorization.user_context;
+
     if body.message_ids.is_empty() || body.message_ids.len() > BATCH_UPDATE_MESSAGE_LIMIT {
         return Err((
             StatusCode::BAD_REQUEST,

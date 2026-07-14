@@ -12,10 +12,10 @@ check:
     SQLX_OFFLINE=true cargo check
 
 run-local:
-    cargo run --features macro_middleware/local_auth
+    cargo run --features local_auth
 
 debug:
-    RUST_LOG=email_service=debug,info cargo run --features macro_middleware/local_auth
+    RUST_LOG=email_service=debug,info cargo run --features local_auth
 
 create-localstack:
     docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs,s3 localstack/localstack

@@ -70,10 +70,7 @@ default = [
   "sfs_delete",
 ]
 gmail_webhook_auth = []
-local_auth = [
-  "macro_authorization/local_auth",
-  "macro_middleware/local_auth",
-]
+local_auth = ["macro_authorization/local_auth"]
 local_queue = []
 sfs_map = []
 sfs_delete = []
@@ -125,7 +122,7 @@ mailparse = "0.16.1"
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth", "cloud_storage"
+  "auth"
 ] }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 notification = { path = "../../crates/notification" }
@@ -185,5 +182,3 @@ uuid = { workspace = true }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
-[dev-dependencies]
-macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

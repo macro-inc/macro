@@ -1,6 +1,7 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -50,23 +51,17 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .nest(
             "/email",
-            email::router(state.clone()).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
+            email::router(state.clone()).layer(axum::middleware::from_extractor_with_state::<
+                SharedMacroAuthorizationExtractor,
+                _,
+            >(state.clone())),
         )
         .nest("/gmail", gmail::router())
         .nest(
             "/internal",
-            internal::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state,
-                        macro_middleware::auth::internal_access::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::initialize_user_context::handler,
-                    )),
-            ),
+            internal::router().layer(axum::middleware::from_fn_with_state(
+                state,
+                macro_middleware::auth::internal_access::handler,
+            )),
         )
 }

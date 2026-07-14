@@ -1,11 +1,11 @@
 use crate::api::context::ApiContext;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
 use futures::future::join_all;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::api;
 use utoipa::ToSchema;
 
@@ -48,15 +48,17 @@ pub struct ListLinksResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
 ) -> Result<Response, ListLinksError> {
-    let links =
-        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
-            .await
-            .map_err(ListLinksError::DatabaseError)?;
+    let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
+        &ctx.db,
+        &authorization.user_context.user_id,
+    )
+    .await
+    .map_err(ListLinksError::DatabaseError)?;
 
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
