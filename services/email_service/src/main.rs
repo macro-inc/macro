@@ -13,6 +13,7 @@ use email::{
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::SharedMacroAuthorizationService;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -124,6 +125,8 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_service =
+        SharedMacroAuthorizationService::from_jwt_validation_args(jwt_args.clone());
 
     let sqs_client = Arc::new(sqs_client);
     let gmail_client = Arc::new(gmail_client);
@@ -150,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
             config.sent_undo_delay_secs,
         )
         .with_macro_event_broker(macro_event_broker.clone()),
+        authorization_service.clone(),
     );
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
@@ -157,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
+        authorization: authorization_service.clone(),
     };
     let auth_service_client = Arc::new(auth_service_client);
     let redis_conn = redis_client
@@ -181,6 +186,7 @@ async fn main() -> anyhow::Result<()> {
         s3_client: Arc::new(s3_client),
         dss_client: Arc::new(dss_client),
         system_properties_service,
+        authorization_service,
         jwt_args,
         email_service,
         entity_access_service,
