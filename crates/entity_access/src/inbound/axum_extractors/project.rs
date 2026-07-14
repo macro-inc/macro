@@ -1,5 +1,8 @@
 //! Project access extractors.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -8,6 +11,10 @@ use axum::{
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
+use macro_authorization::{
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
@@ -221,8 +228,26 @@ impl<T: RequiredPermission, V, Svc> ProjectBodyAccessLevelExtractor<T, V, Svc> {
     /// Extract the body from this extractor.
     pub fn into_inner(self) -> V {
         match self {
-            ProjectBodyAccessLevelExtractor::FoundProject { body, .. } => body,
-            ProjectBodyAccessLevelExtractor::ProjectNotInBody { body, .. } => body,
+            Self::FoundProject { body, .. } | Self::ProjectNotInBody { body, .. } => body,
+        }
+    }
+
+    fn from_outcome(outcome: ProjectBodyAccessOutcome<T, V>) -> Self {
+        match outcome {
+            ProjectBodyAccessOutcome::FoundProject {
+                project,
+                entity_access_receipt,
+                body,
+            } => Self::FoundProject {
+                project,
+                desired: PhantomData,
+                entity_access_receipt,
+                body,
+            },
+            ProjectBodyAccessOutcome::ProjectNotInBody { body } => Self::ProjectNotInBody {
+                body,
+                _marker: PhantomData,
+            },
         }
     }
 }
@@ -239,12 +264,10 @@ where
 
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-
         let OptionalMacroUserExtractor { macro_user_id, .. } = req
             .extract_parts()
             .await
             .map_err(|_| ExtractorError::Internal)?;
-
         let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
             req.extract_parts()
                 .await
@@ -253,80 +276,190 @@ where
             None
         };
 
-        let Json(json) = req
-            .extract::<Json<serde_json::Value>, _>()
+        extract_project_body_access(req, service, macro_user_id, internal_user.is_some())
             .await
-            .map_err(|_| ExtractorError::BadRequest("Invalid JSON body"))?;
+            .map(Self::from_outcome)
+    }
+}
 
-        let json_clone = json.clone();
-        let cb = move || {
-            serde_json::from_value::<V>(json_clone)
-                .map_err(|_| ExtractorError::BadRequest("Invalid request body"))
-        };
+/// V2 of [`ProjectBodyAccessLevelExtractor`], backed by state-resolved authorization.
+///
+/// This preserves the V1 body and receipt semantics while resolving identity
+/// through [`OptionalMacroAuthorizationExtractor`] and using native internal
+/// authorization instead of request extensions. Type parameter `T` specifies
+/// the required project access level, `V` is the request body, `Svc` is the
+/// entity access service, and `Auth` is the authorization service.
+#[allow(dead_code)]
+#[derive(Debug)]
+pub enum ProjectBodyAccessLevelExtractorV2<T: RequiredPermission, V, Svc, Auth> {
+    /// A project was found in the body and access was validated.
+    FoundProject {
+        /// The project ID that was found.
+        project: ProjectOrParentId,
+        /// Marker for the extractor's service and permission types.
+        desired: PhantomData<(T, Svc, Auth)>,
+        /// The entity access receipt.
+        entity_access_receipt: EntityAccessReceipt<T>,
+        /// The parsed body.
+        body: V,
+    },
+    /// No project was found in the body.
+    ProjectNotInBody {
+        /// The parsed body.
+        body: V,
+        /// Marker for the extractor's service and permission types.
+        _marker: PhantomData<(T, Svc, Auth)>,
+    },
+}
 
-        let Ok(Some(project)) = serde_json::from_value::<Option<ProjectOrParentId>>(json) else {
-            return Ok(Self::ProjectNotInBody {
-                body: cb()?,
-                _marker: PhantomData,
-            });
-        };
-
-        // An empty id clears the entity's project: no target project to authorize
-        if project.id().is_empty() {
-            return Ok(Self::ProjectNotInBody {
-                body: cb()?,
-                _marker: PhantomData,
-            });
+#[allow(dead_code)]
+impl<T: RequiredPermission, V, Svc, Auth> ProjectBodyAccessLevelExtractorV2<T, V, Svc, Auth> {
+    /// Extract the body from this extractor.
+    pub fn into_inner(self) -> V {
+        match self {
+            Self::FoundProject { body, .. } | Self::ProjectNotInBody { body, .. } => body,
         }
+    }
 
-        if internal_user.is_some() {
-            return Ok(Self::FoundProject {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: project.id().to_owned(),
-                        entity_type: EntityType::Project,
-                    },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
-                    },
-                    _marker: PhantomData,
-                },
+    fn from_outcome(outcome: ProjectBodyAccessOutcome<T, V>) -> Self {
+        match outcome {
+            ProjectBodyAccessOutcome::FoundProject {
+                project,
+                entity_access_receipt,
+                body,
+            } => Self::FoundProject {
                 project,
                 desired: PhantomData,
-                body: cb()?,
-            });
+                entity_access_receipt,
+                body,
+            },
+            ProjectBodyAccessOutcome::ProjectNotInBody { body } => Self::ProjectNotInBody {
+                body,
+                _marker: PhantomData,
+            },
         }
+    }
+}
 
-        let access_level = match service
+impl<T, S, V, Svc, Auth> FromRequest<S> for ProjectBodyAccessLevelExtractorV2<T, V, Svc, Auth>
+where
+    T: RequiredPermission,
+    Arc<Svc>: FromRef<S>,
+    Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+    V: DeserializeOwned,
+{
+    type Rejection = ExtractorError;
+
+    async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let service = <Arc<Svc>>::from_ref(state);
+        let OptionalMacroAuthorizationExtractor {
+            macro_user_id,
+            is_internal_access,
+            ..
+        } = req
+            .extract_parts_with_state(state)
+            .await
+            .map_err(ExtractorError::from)?;
+        let has_internal_owner_access = macro_user_id.is_none() && is_internal_access;
+
+        extract_project_body_access(req, service, macro_user_id, has_internal_owner_access)
+            .await
+            .map(Self::from_outcome)
+    }
+}
+
+enum ProjectBodyAccessOutcome<T: RequiredPermission, V> {
+    FoundProject {
+        project: ProjectOrParentId,
+        entity_access_receipt: EntityAccessReceipt<T>,
+        body: V,
+    },
+    ProjectNotInBody {
+        body: V,
+    },
+}
+
+async fn extract_project_body_access<T, V, Svc>(
+    req: Request,
+    service: Arc<Svc>,
+    macro_user_id: Option<MacroUserIdStr<'static>>,
+    has_internal_owner_access: bool,
+) -> Result<ProjectBodyAccessOutcome<T, V>, ExtractorError>
+where
+    T: RequiredPermission,
+    V: DeserializeOwned,
+    Svc: EntityAccessService,
+{
+    let Json(json) = req
+        .extract::<Json<serde_json::Value>, _>()
+        .await
+        .map_err(|_| ExtractorError::BadRequest("Invalid JSON body"))?;
+    let project = serde_json::from_value::<Option<ProjectOrParentId>>(json.clone());
+
+    let Ok(Some(project)) = project else {
+        return Ok(ProjectBodyAccessOutcome::ProjectNotInBody {
+            body: deserialize_body(json)?,
+        });
+    };
+
+    // An empty id clears the entity's project: no target project to authorize.
+    if project.id().is_empty() {
+        return Ok(ProjectBodyAccessOutcome::ProjectNotInBody {
+            body: deserialize_body(json)?,
+        });
+    }
+
+    let entity_access_receipt = if has_internal_owner_access {
+        project_access_receipt(
+            project.id(),
+            EntityAccessAuth::Internal,
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
+    } else {
+        let access_level = service
             .get_access_level(macro_user_id.as_deref(), project.id(), EntityType::Project)
             .await
             .map_err(ExtractorError::from)?
-        {
-            Some(access_level) => access_level,
-            None => return Err(ExtractorError::Unauthorized),
-        };
-
+            .ok_or(ExtractorError::Unauthorized)?;
         let permission = EntityPermission::AccessLevel { access_level };
         if !permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
-        };
+        }
+        let auth = macro_user_id
+            .map(EntityAccessAuth::Authenticated)
+            .unwrap_or(EntityAccessAuth::Unauthenticated);
 
-        Ok(Self::FoundProject {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
-                    entity_id: project.id().to_owned(),
-                    entity_type: EntityType::Project,
-                },
-                auth: macro_user_id
-                    .map(EntityAccessAuth::Authenticated)
-                    .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
-            project,
-            desired: PhantomData,
-            body: cb()?,
-        })
+        project_access_receipt(project.id(), auth, permission)
+    };
+
+    Ok(ProjectBodyAccessOutcome::FoundProject {
+        project,
+        entity_access_receipt,
+        body: deserialize_body(json)?,
+    })
+}
+
+fn deserialize_body<V: DeserializeOwned>(json: serde_json::Value) -> Result<V, ExtractorError> {
+    serde_json::from_value(json).map_err(|_| ExtractorError::BadRequest("Invalid request body"))
+}
+
+fn project_access_receipt<T: RequiredPermission>(
+    project_id: &str,
+    auth: EntityAccessAuth,
+    entity_permission: EntityPermission,
+) -> EntityAccessReceipt<T> {
+    EntityAccessReceipt {
+        entity: Entity {
+            entity_id: project_id.to_owned(),
+            entity_type: EntityType::Project,
+        },
+        auth,
+        entity_permission,
+        _marker: PhantomData,
     }
 }
