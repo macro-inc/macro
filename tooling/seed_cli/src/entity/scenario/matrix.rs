@@ -239,8 +239,10 @@ pub async fn verify(pool: sqlx::PgPool, spec: &ScenarioSpec) -> anyhow::Result<u
 
     let mut user_ids = BTreeMap::new();
     for user_key in &user_keys {
-        let id = spec.user_id(user_key);
-        user_ids.insert((*user_key).clone(), id);
+        let user_id = spec.user_id(user_key);
+        let parsed = MacroUserIdStr::parse_from_str(user_id.clone().leak())
+            .map_err(|e| anyhow::anyhow!("invalid user id {user_id}: {e:?}"))?;
+        user_ids.insert((*user_key).clone(), parsed);
     }
 
     let label_width = expected
@@ -268,11 +270,9 @@ pub async fn verify(pool: sqlx::PgPool, spec: &ScenarioSpec) -> anyhow::Result<u
     for row in &expected {
         let mut line = format!("{:label_width$}", row.label);
         for user_key in &user_keys {
-            let user_id = &user_ids[*user_key];
-            let parsed = MacroUserIdStr::parse_from_str(user_id.clone().leak())
-                .map_err(|e| anyhow::anyhow!("invalid user id {user_id}: {e:?}"))?;
+            let parsed = &user_ids[*user_key];
             let actual = service
-                .get_access_level(Some(&*parsed), &row.entity_id, row.entity_type)
+                .get_access_level(Some(&**parsed), &row.entity_id, row.entity_type)
                 .await
                 .map_err(|e| anyhow::anyhow!("access check failed for {}: {e}", row.label))?;
             let expected_level = row.levels.get(*user_key).copied();
