@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            m.id as message_id,\n            c.email_address as \"sender!\",\n            COALESCE(c.name, c.email_address) as \"pretty_sender!\"\n        FROM email_messages m\n        LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n        WHERE m.id = ANY($1)\n        AND m.link_id = ANY($2)\n        ",
+  "query": "\n        SELECT\n            m.id as \"message_id!\",\n            c.email_address as \"sender!\",\n            COALESCE(c.name, c.email_address) as \"pretty_sender!\"\n        FROM email_messages m\n        LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n        WHERE m.id = ANY($1)\n        AND m.link_id = ANY($2)\n        ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "message_id",
+        "name": "message_id!",
         "type_info": "Uuid"
       },
       {
@@ -26,10 +26,10 @@
       ]
     },
     "nullable": [
-      false,
       true,
+      false,
       null
     ]
   },
-  "hash": "0fa9fb46a9895ff170c9bbf339ec2369429e7fdc40a531ac5296b5442fa4f5aa"
+  "hash": "fab9a824cda630cab30894236104bd723c6473db79f05ce7fd94ccd1f02fcbc3"
 }
