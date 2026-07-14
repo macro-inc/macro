@@ -362,7 +362,6 @@ impl SeedDb {
 
     /// Insert a project row with a pre-defined id.
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
     pub async fn insert_project(
         &self,
         project_id: &str,
@@ -370,14 +369,14 @@ impl SeedDb {
         owner_id: &str,
         parent_id: Option<String>,
     ) -> anyhow::Result<()> {
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO "Project" (id, name, "userId", "parentId", "createdAt", "updatedAt")
                VALUES ($1, $2, $3, $4, NOW(), NOW())"#,
+            project_id,
+            name,
+            owner_id,
+            parent_id.as_deref(),
         )
-        .bind(project_id)
-        .bind(name)
-        .bind(owner_id)
-        .bind(parent_id.as_deref())
         .execute(&self.inner)
         .await?;
         Ok(())
@@ -385,19 +384,18 @@ impl SeedDb {
 
     /// Insert an AI chat row with a pre-defined id.
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
     pub async fn insert_chat(
         &self,
         chat_id: &str,
         owner_id: &str,
         name: &str,
     ) -> anyhow::Result<()> {
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO "Chat" (id, "userId", name, "isPersistent") VALUES ($1, $2, $3, true)"#,
+            chat_id,
+            owner_id,
+            name,
         )
-        .bind(chat_id)
-        .bind(owner_id)
-        .bind(name)
         .execute(&self.inner)
         .await?;
         Ok(())
@@ -443,15 +441,14 @@ impl SeedDb {
     /// rows, participants, and transcripts — the same rows `create_call` +
     /// `archive_call` leave behind.
     #[tracing::instrument(skip(self, args), fields(call_id = %args.call_id), err)]
-    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
     pub async fn insert_call_record(&self, args: InsertCallRecordArgs) -> anyhow::Result<()> {
         let mut transaction = self.inner.begin().await?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
                VALUES ($1, false, NULL, NOW(), NOW())"#,
+            args.share_permission_id,
         )
-        .bind(&args.share_permission_id)
         .execute(transaction.as_mut())
         .await?;
 
@@ -496,34 +493,34 @@ impl SeedDb {
         }
 
         let duration_ms = (args.ended_at - args.started_at).num_milliseconds().max(0);
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO call_records
                  (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms,
                   share_permission_id, share_with_team, custom_name)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
+            args.call_id,
+            args.channel_id,
+            args.room_name,
+            args.created_by,
+            args.started_at,
+            args.ended_at,
+            duration_ms,
+            args.share_permission_id,
+            args.share_with_team,
+            args.custom_name.as_deref(),
         )
-        .bind(args.call_id)
-        .bind(args.channel_id)
-        .bind(&args.room_name)
-        .bind(&args.created_by)
-        .bind(args.started_at)
-        .bind(args.ended_at)
-        .bind(duration_ms)
-        .bind(&args.share_permission_id)
-        .bind(args.share_with_team)
-        .bind(&args.custom_name)
         .execute(transaction.as_mut())
         .await?;
 
         for (user_id, joined_at, left_at) in &args.participants {
-            sqlx::query(
+            sqlx::query!(
                 r#"INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
                    VALUES ($1, $2, $3, $4)"#,
+                args.call_id,
+                user_id,
+                joined_at,
+                left_at as _,
             )
-            .bind(args.call_id)
-            .bind(user_id)
-            .bind(joined_at)
-            .bind(left_at)
             .execute(transaction.as_mut())
             .await?;
         }
@@ -531,18 +528,18 @@ impl SeedDb {
         for (index, (speaker_id, content, started_at, ended_at)) in
             args.transcripts.iter().enumerate()
         {
-            sqlx::query(
+            sqlx::query!(
                 r#"INSERT INTO call_record_transcripts
                      (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
                    VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+                args.call_id,
+                format!("seed-seg-{index}"),
+                speaker_id,
+                content,
+                started_at,
+                ended_at as _,
+                index as i32,
             )
-            .bind(args.call_id)
-            .bind(format!("seed-seg-{index}"))
-            .bind(speaker_id)
-            .bind(content)
-            .bind(started_at)
-            .bind(ended_at)
-            .bind(index as i32)
             .execute(transaction.as_mut())
             .await?;
         }
@@ -553,21 +550,20 @@ impl SeedDb {
 
     /// Delegate an email link from its owner to another user.
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
     pub async fn insert_macro_user_link(
         &self,
         primary_macro_id: &str,
         child_macro_id: &str,
         link_id: uuid::Uuid,
     ) -> anyhow::Result<()> {
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
                VALUES ($1, $2, $3)
                ON CONFLICT DO NOTHING"#,
+            primary_macro_id,
+            child_macro_id,
+            link_id,
         )
-        .bind(primary_macro_id)
-        .bind(child_macro_id)
-        .bind(link_id)
         .execute(&self.inner)
         .await?;
         Ok(())
@@ -577,7 +573,6 @@ impl SeedDb {
     /// created for the email (their `macro_user` id wins over the derived
     /// one so login-created accounts stay intact).
     #[tracing::instrument(skip(self), err)]
-    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
     pub async fn adopt_or_seed_user(
         &self,
         email: &str,
@@ -590,73 +585,72 @@ impl SeedDb {
         let mut transaction = self.inner.begin().await?;
 
         let existing: Option<Uuid> =
-            sqlx::query_scalar("SELECT id FROM macro_user WHERE email = $1 LIMIT 1")
-                .bind(email)
+            sqlx::query_scalar!("SELECT id FROM macro_user WHERE email = $1 LIMIT 1", email)
                 .fetch_optional(transaction.as_mut())
                 .await?;
 
         let macro_user_id = match existing {
             Some(id) => id,
             None => {
-                sqlx::query(
+                sqlx::query!(
                     r#"INSERT INTO macro_user (id, username, email, stripe_customer_id, has_trialed)
                        VALUES ($1, $2, $3, $4, false)"#,
+                    derived_macro_user_id,
+                    email,
+                    email,
+                    stripe_customer_id,
                 )
-                .bind(derived_macro_user_id)
-                .bind(email)
-                .bind(email)
-                .bind(stripe_customer_id)
                 .execute(transaction.as_mut())
                 .await?;
                 derived_macro_user_id
             }
         };
 
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO "User" (id, email, "stripeCustomerId", macro_user_id, "tutorialComplete", "hasOnboardingDocuments")
                VALUES ($1, $2, $3, $4, true, true)
                ON CONFLICT (id) DO UPDATE SET
                  macro_user_id = EXCLUDED.macro_user_id,
                  "tutorialComplete" = true,
                  "hasOnboardingDocuments" = true"#,
+            user_id,
+            email,
+            stripe_customer_id,
+            macro_user_id,
         )
-        .bind(user_id)
-        .bind(email)
-        .bind(stripe_customer_id)
-        .bind(macro_user_id)
         .execute(transaction.as_mut())
         .await?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO macro_user_email_verification (macro_user_id, email, is_verified)
                VALUES ($1, $2, true)
                ON CONFLICT (email) DO UPDATE SET
                  macro_user_id = EXCLUDED.macro_user_id,
                  is_verified = true"#,
+            macro_user_id,
+            email,
         )
-        .bind(macro_user_id)
-        .bind(email)
         .execute(transaction.as_mut())
         .await?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO macro_user_info (macro_user_id, first_name, last_name)
                VALUES ($1, $2, $3)
                ON CONFLICT (macro_user_id) DO UPDATE SET
                  first_name = EXCLUDED.first_name,
                  last_name = EXCLUDED.last_name"#,
+            macro_user_id,
+            first_name,
+            last_name,
         )
-        .bind(macro_user_id)
-        .bind(first_name)
-        .bind(last_name)
         .execute(transaction.as_mut())
         .await?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"INSERT INTO "RolesOnUsers" ("userId", "roleId") VALUES ($1, 'self_serve')
                ON CONFLICT DO NOTHING"#,
+            user_id,
         )
-        .bind(user_id)
         .execute(transaction.as_mut())
         .await?;
 
