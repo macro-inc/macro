@@ -8,13 +8,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::{
     project::BasicProject,
     response::{
         GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
         TypedSuccessResponse,
     },
-    user::UserContext,
 };
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use sqs_client::search::{
@@ -54,11 +54,11 @@ pub type ProjectDeleteResponse = TypedSuccessResponse<ProjectDeleteResponseData>
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, id, _access), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, authorization, id, _access), fields(user_id=?authorization.user_context.user_id, project_id=?id))]
 pub async fn delete_project_handler(
     _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
     project: Extension<BasicProject>,
 ) -> impl IntoResponse {
@@ -112,7 +112,7 @@ pub async fn delete_project_handler(
             macro_project_utils::ProjectModifiedArgs {
                 project_id: None,
                 old_project_id: Some(parent_id),
-                user_id: user_context.user_id.clone(),
+                user_id: authorization.user_context.user_id.clone(),
             },
         )
         .await;
@@ -143,11 +143,11 @@ pub async fn delete_project_handler(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, _access), fields(user_id=?authorization.user_context.user_id))]
 pub async fn permanently_delete_project_handler(
     _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("permanently_delete_project");

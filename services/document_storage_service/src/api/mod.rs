@@ -55,8 +55,6 @@ pub static MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY: &str =
 pub static MACRO_INTERNAL_USER_ID_HEADER_KEY: &str = "x-document-storage-service-user-id";
 
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
-// permission based constants
-pub static MACRO_READ_PROFESSIONAL_PERMISSION_ID: &str = "read:professional_features";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let app = api_router(state.clone())

@@ -7,10 +7,10 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
-    user::axum_extractor::MacroUserExtractor,
 };
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
@@ -31,10 +31,10 @@ use unicode_segmentation::UnicodeSegmentation;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, project), fields(user_id=?user_context.macro_user_id))]
+#[tracing::instrument(skip(ctx, authorization, project), fields(user_id=?authorization.macro_user_id))]
 pub async fn create_project_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    authorization: SharedMacroAuthorizationExtractor,
     project: ProjectBodyAccessLevelExtractor<
         EditAccessLevel,
         CreateProjectRequest,
@@ -44,7 +44,7 @@ pub async fn create_project_handler(
     let req = project.into_inner();
 
     let project =
-        create_project_v2(ctx, user_context, req)
+        create_project_v2(ctx, authorization, req)
             .await
             .map_err(|(status_code, message)| {
                 tracing::error!(error=?message, "unable to create project");
@@ -65,7 +65,7 @@ pub async fn create_project_handler(
 
 async fn create_project_v2(
     ctx: ApiContext,
-    user_context: MacroUserExtractor,
+    authorization: SharedMacroAuthorizationExtractor,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
     if req.name.graphemes(true).count() > 100 {
@@ -76,7 +76,7 @@ async fn create_project_v2(
 
     let project = match macro_db_client::projects::create_project_v2(
         ctx.db.clone(),
-        user_context.macro_user_id.clone(),
+        authorization.macro_user_id.clone(),
         &req.name,
         req.project_parent_id.map(|p| p.to_string()),
         &share_permission,
@@ -128,7 +128,7 @@ async fn create_project_v2(
             macro_project_utils::ProjectModifiedArgs {
                 project_id: Some(project_id.to_string()),
                 old_project_id: None,
-                user_id: user_context.user_context.user_id.clone(),
+                user_id: authorization.user_context.user_id.clone(),
             },
         )
         .await;

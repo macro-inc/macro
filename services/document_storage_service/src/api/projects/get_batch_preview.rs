@@ -3,21 +3,20 @@ use std::collections::HashSet;
 use crate::api::context::ApiContext;
 use anyhow::Result;
 use axum::{
-    Extension,
     extract::{Json, State},
     response::{IntoResponse, Response},
 };
+use macro_authorization::OptionalSharedMacroAuthorizationExtractor;
 use model::{
     project::{
         ProjectPreview, ProjectPreviewData, ProjectPreviewV2, WithProjectId,
         request::GetBatchProjectPreviewRequest, response::GetBatchProjectPreviewResponse,
     },
     response::{GenericErrorResponse, GenericResponse},
-    user::UserContext,
 };
 use reqwest::StatusCode;
 
-#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, req), fields(user_id=?authorization.user_context.user_id))]
 #[utoipa::path(
     tag = "project",
     post,
@@ -31,7 +30,7 @@ use reqwest::StatusCode;
 )]
 pub async fn get_batch_preview_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: OptionalSharedMacroAuthorizationExtractor,
     Json(req): Json<GetBatchProjectPreviewRequest>,
 ) -> Result<(StatusCode, Json<GetBatchProjectPreviewResponse>), Response> {
     // Ensure the project ids are unique to prevent duplicate work

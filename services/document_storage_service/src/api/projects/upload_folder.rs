@@ -9,6 +9,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
     document::{ContentType, DocumentMetadata, FileType},
@@ -17,7 +18,6 @@ use model::{
         UploadFolderResponseData, UploadFolderWithIdsResponse,
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl, TypedSuccessResponse},
-    user::{UserContext, axum_extractor::MacroUserExtractor},
 };
 use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, S3ObjectInfo,
@@ -47,13 +47,13 @@ type UploadFolderResponse = TypedSuccessResponse<UploadFolderResponseData>;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, authorization, req), fields(user_id=?authorization.user_context.user_id))]
 pub async fn upload_extract_folder_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     extract::Json(req): extract::Json<UploadExtractFolderRequest>,
 ) -> impl IntoResponse {
-    let user_id = user_context.user_id.as_str();
+    let user_id = authorization.user_context.user_id.as_str();
     let name = req.name.as_deref();
 
     // use local request id for local development
@@ -118,10 +118,10 @@ pub async fn upload_extract_folder_handler(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=%user_context.macro_user_id))]
+#[tracing::instrument(skip(ctx, authorization, req), fields(user_id=%authorization.macro_user_id))]
 pub async fn upload_folder_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    authorization: SharedMacroAuthorizationExtractor,
     internal_context: Option<Extension<InternalFlag>>,
     extract::Json(req): extract::Json<UploadFolderRequest>,
 ) -> impl IntoResponse {
@@ -130,7 +130,7 @@ pub async fn upload_folder_handler(
         ctx.s3_client.clone(),
         ctx.db.clone(),
         ctx.sqs_client.clone(),
-        user_context.macro_user_id,
+        authorization.macro_user_id,
         internal,
         req,
     )
@@ -372,13 +372,13 @@ async fn build_documents(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context))]
+#[tracing::instrument(skip(ctx, authorization))]
 pub async fn mark_uploaded_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: SharedMacroAuthorizationExtractor,
     extract::Json(req): extract::Json<MarkProjectUploadedRequest>,
 ) -> impl IntoResponse {
-    let user_id = user_context.user_id.as_str();
+    let user_id = authorization.user_context.user_id.as_str();
     let root_project_id = req.project_id;
 
     match macro_db_client::projects::upload_folder::mark_projects_uploaded(
