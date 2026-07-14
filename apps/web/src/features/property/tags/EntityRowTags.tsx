@@ -1,6 +1,6 @@
-import FilterIcon from '@phosphor/funnel-simple.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import FilterIcon from '@phosphor/funnel-simple.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn, HoverCard, Layer } from '@ui';
@@ -212,8 +212,12 @@ export function InlineTagsPill(props: {
         >
           <Switch>
             <Match when={tags().length === 0}>
-              <CircleDashedEmpty class="size-3 shrink-0" />
-              <span class="min-w-0 truncate @max-2xl/u-list:hidden">Tags</span>
+              <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+                <CircleDashedEmpty class="size-3 shrink-0" />
+                <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+                  Tags
+                </span>
+              </span>
             </Match>
             <Match when={tags().length === 1 && first()}>
               {(tag) => (

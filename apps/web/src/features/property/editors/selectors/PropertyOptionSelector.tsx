@@ -178,13 +178,20 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const isOptionSelected = (value: string) =>
     props.selectedOptions().has(value);
 
-  const handleAddOption = async () => {
+  const shouldCloseAfterSelect = (
+    event?: KeyboardEvent | MouseEvent
+  ): boolean => !props.config.isMultiSelect || !event?.shiftKey;
+
+  const handleAddOption = async (event?: KeyboardEvent | MouseEvent) => {
     if (!props.onAddOption || !isValidNewOption()) return;
 
     setIsAddingOption(true);
     try {
       await props.onAddOption(dropdown.searchQuery().trim());
       dropdown.setSearchQuery('');
+      if (shouldCloseAfterSelect(event) && props.onClose) {
+        props.onClose();
+      }
     } catch (error) {
       console.error(
         'PropertyOptionsList.handleAddOption:',
@@ -196,14 +203,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     }
   };
 
-  const shouldCloseAfterSelect = (
-    event?: KeyboardEvent | MouseEvent
-  ): boolean => !props.config.isMultiSelect || !event?.shiftKey;
-
   const handleSelectableItem = (idx: number, event?: KeyboardEvent) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
-      handleAddOption();
+      handleAddOption(event);
     } else if (item?.type === 'clear') {
       props.clearOption?.onClear();
       if (shouldCloseAfterSelect(event) && props.onClose) {

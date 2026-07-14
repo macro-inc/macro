@@ -1,8 +1,8 @@
 export {
   EntityRowTags,
-  InlineTagsPill,
   InlineEntityTagsPill,
   InlineFetchedEntityTagsPill,
+  InlineTagsPill,
 } from './EntityRowTags';
 export { TagPicker, TagPickerPopover } from './TagPicker';
 export { TagsRow } from './TagsRow';
