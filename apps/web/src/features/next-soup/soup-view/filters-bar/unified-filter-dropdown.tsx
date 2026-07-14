@@ -782,20 +782,26 @@ export const UnifiedFilterDropdown = (
     },
   ]);
 
-  // The stage submenu reflects what's on screen: an empty filter shows
-  // every stage, so everything reads as checked.
+  // The stage set shown when no filter is active: the active deal stages
+  // plus "No stage" — retired legacy stages only display when filtered in.
+  const defaultStageIds = createMemo(
+    () => new Set([...dealStages.stages().map((stage) => stage.id), NO_STAGE])
+  );
+
+  // The stage submenu reflects what's on screen: an empty filter shows the
+  // default columns, so exactly those read as checked (legacy stages don't).
   const effectiveStageFilter = () =>
-    stageFilter().length > 0
-      ? stageFilter()
-      : stageOptions().map((option) => option.id);
+    stageFilter().length > 0 ? stageFilter() : [...defaultStageIds()];
 
   // Stage filtering is a client-side predicate, mirroring the owner filter.
   const handleStageChange = (ids: string[]) => {
-    // Checking every stage is the same as no filter — store it as empty so
-    // the predicate deactivates.
-    const next = stageOptions().every((option) => ids.includes(option.id))
-      ? []
-      : ids;
+    // Checking exactly the default set is the same as no filter — store it
+    // as empty so the predicate deactivates.
+    const next =
+      ids.length === defaultStageIds().size &&
+      ids.every((id) => defaultStageIds().has(id))
+        ? []
+        : ids;
     batch(() => {
       setStageFilter(next);
       const shouldBeActive = next.length > 0;
