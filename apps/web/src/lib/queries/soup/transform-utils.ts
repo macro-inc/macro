@@ -39,7 +39,6 @@ import type {
 import type {
   GithubPullRequest,
   SoupApiItem,
-  SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
@@ -57,6 +56,7 @@ type InnerSearchResult =
   | CallRecordSearchResult;
 
 type DisplayableSoupItem = SoupPage['items'][number];
+type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
   | DocumentEntity
