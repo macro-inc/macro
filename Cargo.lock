@@ -4413,6 +4413,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "lexical_client",
+ "macro_authorization",
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",

@@ -6,8 +6,9 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
-    DocumentAccessExtractor, ProjectBodyAccessLevelExtractor,
+    DocumentAccessExtractor, ProjectBodyAccessLevelExtractorV2,
 };
+use macro_authorization::MacroAuthorizationService;
 use model::document::DocumentBasic;
 use model::response::GenericSuccessResponse;
 use models_permissions::share_permission::access_level::EditAccessLevel;
@@ -48,12 +49,16 @@ pub struct EditDocumentResponse {
     )
 )]
 #[tracing::instrument(skip(state, access, doc, project), err)]
-pub async fn edit_document_handler<T: DocumentService, Svc: EntityAccessService>(
-    access: DocumentAccessExtractor<EditAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
+pub async fn edit_document_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: DocumentAccessExtractor<EditAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
     doc: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, EditDocumentServiceArgs, Svc>,
+    project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, EditDocumentServiceArgs, Svc, Auth>,
 ) -> Result<Json<EditDocumentResponse>, DocumentError> {
     if doc.deleted_at.is_some() {
         return Err(DocumentError::BadRequest(

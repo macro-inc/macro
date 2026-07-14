@@ -26,8 +26,12 @@ pub use entity_permission::EntityPermissionExtractor;
 pub use foreign_entity::ForeignEntityAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
-pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor};
-pub use team::{MacroUserTeamExtractor, OptionalMacroUserTeamExtractor};
+pub use project::{
+    ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2,
+};
+pub use team::{
+    MacroUserTeamExtractor, OptionalMacroUserTeamExtractor, OptionalMacroUserTeamExtractorV2,
+};
 pub use thread::ThreadAccessLevelExtractor;
 
 use std::borrow::Cow;
