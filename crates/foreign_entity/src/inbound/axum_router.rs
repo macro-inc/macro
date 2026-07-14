@@ -16,7 +16,7 @@ use entity_access::{
     domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::ForeignEntityAccessLevelExtractor,
 };
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -28,7 +28,7 @@ use crate::domain::{
 pub struct ForeignEntityRouterState<S, AccessSvc> {
     service: Arc<S>,
     access_service: Arc<AccessSvc>,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S, AccessSvc> Clone for ForeignEntityRouterState<S, AccessSvc> {
@@ -50,7 +50,7 @@ where
     pub fn new(
         service: Arc<S>,
         access_service: Arc<AccessSvc>,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self {
             service,
@@ -67,7 +67,7 @@ impl<S, AccessSvc> FromRef<ForeignEntityRouterState<S, AccessSvc>> for Arc<Acces
 }
 
 impl<S, AccessSvc> FromRef<ForeignEntityRouterState<S, AccessSvc>>
-    for MacroAuthorizationServiceHandle
+    for MacroAuthorizationServiceImpl
 {
     fn from_ref(state: &ForeignEntityRouterState<S, AccessSvc>) -> Self {
         state.authorization.clone()

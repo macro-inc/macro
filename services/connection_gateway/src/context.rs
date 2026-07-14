@@ -6,7 +6,7 @@ use frecency::{
     outbound::postgres::FrecencyPgStorage,
 };
 use last_online_tracker::inbound::LastOnlineWorker;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use macro_middleware::auth::internal_access::InternalApiKey;
 use redis::{RedisError, aio::MultiplexedConnection};
 use std::sync::Arc;
@@ -32,7 +32,7 @@ impl ApiContext {
 pub struct AppState {
     pub context: ApiContext,
     pub config: Arc<Config>,
-    pub authorization_service: MacroAuthorizationServiceHandle,
+    pub authorization_service: MacroAuthorizationServiceImpl,
     pub internal_api_key: InternalApiKey,
     pub frecency_worker: Arc<FrecencyAggregatorWorkerHandle>,
 }

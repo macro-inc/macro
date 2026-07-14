@@ -50,11 +50,11 @@ fn user_context(user_id: &str, organization_id: Option<i32>) -> UserContext {
 
 #[derive(Clone)]
 struct TestState {
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
     _unrelated_state: &'static str,
 }
 
-impl FromRef<TestState> for MacroAuthorizationServiceHandle {
+impl FromRef<TestState> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
@@ -87,7 +87,7 @@ fn test_router() -> (Router, FakeMacroAuthorizationService) {
 
 fn test_state(authorization: FakeMacroAuthorizationService) -> TestState {
     TestState {
-        authorization: MacroAuthorizationServiceHandle::new(authorization),
+        authorization: MacroAuthorizationServiceImpl::new(authorization),
         _unrelated_state: "composite state",
     }
 }
@@ -351,20 +351,20 @@ fn rejection_kinds_have_stable_messages() {
 }
 
 #[tokio::test]
-async fn service_handle_erases_the_concrete_service_type() {
-    let service = fake_authorization_service();
-    let handle = MacroAuthorizationServiceHandle::new(service.clone());
+async fn service_impl_erases_the_concrete_service_type() {
+    let fake = fake_authorization_service();
+    let service = MacroAuthorizationServiceImpl::new(fake.clone());
 
-    let context = handle.authorize("valid").await.unwrap();
+    let context = service.authorize("valid").await.unwrap();
 
     assert_eq!(context.user_id, VALID_USER_ID);
-    assert_eq!(service.calls(), ["valid"]);
+    assert_eq!(fake.calls(), ["valid"]);
 }
 
 #[cfg(feature = "outbound")]
 #[test]
-fn service_handle_can_be_created_from_jwt_validation_args() {
-    let _service = MacroAuthorizationServiceHandle::from_jwt_validation_args(
+fn service_impl_can_be_created_from_jwt_validation_args() {
+    let _service = MacroAuthorizationServiceImpl::from_jwt_validation_args(
         macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
     );
 }

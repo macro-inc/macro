@@ -12,7 +12,7 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
@@ -52,7 +52,7 @@ impl<T, S, Svc> FromRequestParts<S> for OptionalMacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -118,7 +118,7 @@ impl<T, S, Svc> FromRequestParts<S> for MacroUserTeamExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

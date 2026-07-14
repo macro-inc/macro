@@ -9,7 +9,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use uuid::Uuid;
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
@@ -35,7 +35,7 @@ impl<T, S, Svc> FromRequestParts<S> for ForeignEntityAccessLevelExtractor<T, Svc
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

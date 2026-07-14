@@ -42,7 +42,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use models_pagination::{
@@ -57,7 +57,7 @@ use uuid::Uuid;
 pub struct ChannelsRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S, Svc> Clone for ChannelsRouterState<S, Svc> {
@@ -75,7 +75,7 @@ impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
     pub fn new(
         service: S,
         access_service: Svc,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self {
             service: Arc::new(service),
@@ -91,7 +91,7 @@ impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
     pub fn from_arc(
         service: Arc<S>,
         access_service: Svc,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self {
             service,
@@ -107,7 +107,7 @@ impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
-impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for MacroAuthorizationServiceHandle {
+impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &ChannelsRouterState<S, Svc>) -> Self {
         state.authorization.clone()
     }

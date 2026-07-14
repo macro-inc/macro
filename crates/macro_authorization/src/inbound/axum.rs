@@ -17,7 +17,7 @@ use rootcause::Report;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationServiceHandle};
+use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationServiceImpl};
 
 #[cfg(feature = "local_auth")]
 macro_env_var::maybe_env_vars! {
@@ -135,13 +135,13 @@ impl PreauthorizedContext {
     }
 }
 
-/// Extracts required authorization using the type-erased service handle.
+/// Extracts required authorization using the default service implementation.
 pub type MacroAuthorizationExtractor =
-    MacroAuthorizationExtractorFor<MacroAuthorizationServiceHandle>;
+    MacroAuthorizationExtractorFor<MacroAuthorizationServiceImpl>;
 
-/// Extracts optional authorization using the type-erased service handle.
+/// Extracts optional authorization using the default service implementation.
 pub type OptionalMacroAuthorizationExtractor =
-    OptionalMacroAuthorizationExtractorFor<MacroAuthorizationServiceHandle>;
+    OptionalMacroAuthorizationExtractorFor<MacroAuthorizationServiceImpl>;
 
 /// Extracts and authorizes credentials for a required authenticated user.
 ///

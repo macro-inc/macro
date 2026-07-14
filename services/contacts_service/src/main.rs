@@ -10,7 +10,7 @@ use contacts::inbound::http::{ApiDoc, AppState};
 use contacts::inbound::worker::{ContactsWorker, OutboxWorker};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::repository::DbContactsRepository;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
@@ -106,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
         &secretsmanager_client,
     )
     .await?;
-    let authorization = MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_args);
+    let authorization = MacroAuthorizationServiceImpl::from_jwt_validation_args(jwt_args);
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
         .context("failed to create redis client")?;

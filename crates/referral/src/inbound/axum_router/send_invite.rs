@@ -5,7 +5,7 @@ use axum::extract::{FromRef, FromRequestParts};
 use axum::http::StatusCode;
 use axum::{Json, extract::State};
 use ip_extractor::ClientIp;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::email::EmailStr;
 use rate_limit::inbound::RateLimitExtractable;
 use rate_limit::{RateLimitConfig, RateLimitKey};
@@ -57,7 +57,7 @@ pub struct PerUserReferralRateLimit(MacroAuthorizationExtractor);
 
 impl<S> RateLimitExtractable<S> for PerUserReferralRateLimit
 where
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     S: Send + Sync + 'static,
 {
     fn config() -> rate_limit::RateLimitConfig {
@@ -77,7 +77,7 @@ where
 
 impl<S> FromRequestParts<S> for PerUserReferralRateLimit
 where
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = <MacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;

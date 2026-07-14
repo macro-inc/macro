@@ -6,7 +6,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::Utc;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
 
@@ -18,7 +18,7 @@ use crate::domain::ports::ScheduledActionService;
 
 pub struct ScheduledActionRouterState<S> {
     pub service: Arc<S>,
-    pub authorization: MacroAuthorizationServiceHandle,
+    pub authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S> Clone for ScheduledActionRouterState<S> {
@@ -30,7 +30,7 @@ impl<S> Clone for ScheduledActionRouterState<S> {
     }
 }
 
-impl<S> FromRef<ScheduledActionRouterState<S>> for MacroAuthorizationServiceHandle {
+impl<S> FromRef<ScheduledActionRouterState<S>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &ScheduledActionRouterState<S>) -> Self {
         state.authorization.clone()
     }

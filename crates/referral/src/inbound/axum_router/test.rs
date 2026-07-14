@@ -4,7 +4,7 @@ use std::sync::Arc;
 use axum::{Extension, extract::ConnectInfo, http::StatusCode};
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationServiceHandle,
+    MacroAuthorizationServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use rate_limit::{
@@ -123,7 +123,7 @@ fn build_router(
     let state = ReferralRouterState {
         service: Arc::new(service),
         rate_limiter,
-        authorization: MacroAuthorizationServiceHandle::new(authorization.clone()),
+        authorization: MacroAuthorizationServiceImpl::new(authorization.clone()),
     };
     let router = referral_router(state).layer(Extension(ConnectInfo(SocketAddr::from((
         [127, 0, 0, 1],

@@ -9,7 +9,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationError, MacroAuthorizationServiceHandle, UserPermissionsServiceHandle,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl, UserPermissionsServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::user_id::BorrowedUserIdStr;
@@ -61,17 +61,17 @@ impl UserPermissionsService for FakeUserPermissionsService {
 
 #[derive(Clone)]
 struct TestState {
-    authorization: MacroAuthorizationServiceHandle,
-    permissions: UserPermissionsServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
+    permissions: UserPermissionsServiceImpl,
 }
 
-impl FromRef<TestState> for MacroAuthorizationServiceHandle {
+impl FromRef<TestState> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &TestState) -> Self {
         state.authorization.clone()
     }
 }
 
-impl FromRef<TestState> for UserPermissionsServiceHandle {
+impl FromRef<TestState> for UserPermissionsServiceImpl {
     fn from_ref(state: &TestState) -> Self {
         state.permissions.clone()
     }
@@ -92,8 +92,8 @@ fn test_router(
     Router::new()
         .route("/model-access", get(model_access_handler))
         .with_state(TestState {
-            authorization: MacroAuthorizationServiceHandle::new(authorization),
-            permissions: UserPermissionsServiceHandle::new(permissions),
+            authorization: MacroAuthorizationServiceImpl::new(authorization),
+            permissions: UserPermissionsServiceImpl::new(permissions),
         })
 }
 

@@ -13,7 +13,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationServiceHandle,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationServiceImpl,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -159,7 +159,7 @@ fn parse_link_id_header(parts: &Parts) -> Result<Option<Uuid>, EmailLinkErr> {
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -195,7 +195,7 @@ impl<U> Clone for MultiEmailLinkExtractor<U> {
 impl<S, U> FromRequestParts<S> for MultiEmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -225,7 +225,7 @@ impl<U> Clone for OptionalEmailLinkExtractor<U> {
 impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -307,7 +307,7 @@ impl<S, U, V> FromRequestParts<S> for GmailAccessTokenExtractor<U, V>
 where
     EmailRouterState<U>: FromRef<S>,
     GmailTokenState<V>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     U: EmailService,
     V: GmailTokenProvider,
     S: Send + Sync + 'static,

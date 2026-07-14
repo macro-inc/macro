@@ -19,7 +19,7 @@ use graphql_properties::{
 use graphql_soup::{SoupInput, SoupPage, resolve_soup};
 use macro_authorization::{
     MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationServiceHandle,
+    MacroAuthorizationServiceImpl,
 };
 use model_user::UserContext;
 use rootcause::Report;
@@ -64,9 +64,9 @@ impl MacroAuthorizationService for NoOpMacroAuthorizationService {
     }
 }
 
-impl FromRef<SchemaOnlyState> for MacroAuthorizationServiceHandle {
+impl FromRef<SchemaOnlyState> for MacroAuthorizationServiceImpl {
     fn from_ref(_state: &SchemaOnlyState) -> Self {
-        MacroAuthorizationServiceHandle::new(NoOpMacroAuthorizationService)
+        MacroAuthorizationServiceImpl::new(NoOpMacroAuthorizationService)
     }
 }
 
@@ -74,7 +74,7 @@ impl FromRef<SchemaOnlyState> for EmailRouterState<NoOpEmailService> {
     fn from_ref(state: &SchemaOnlyState) -> Self {
         EmailRouterState::new(
             NoOpEmailService,
-            MacroAuthorizationServiceHandle::from_ref(state),
+            MacroAuthorizationServiceImpl::from_ref(state),
         )
     }
 }
@@ -129,7 +129,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    MacroAuthorizationServiceHandle: FromRef<St>,
+    MacroAuthorizationServiceImpl: FromRef<St>,
     W: EntityPropertyWriter,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
@@ -153,7 +153,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    MacroAuthorizationServiceHandle: FromRef<St>,
+    MacroAuthorizationServiceImpl: FromRef<St>,
     W: EntityPropertyWriter,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
@@ -170,7 +170,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    MacroAuthorizationServiceHandle: FromRef<St>,
+    MacroAuthorizationServiceImpl: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
 {
@@ -192,7 +192,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    MacroAuthorizationServiceHandle: FromRef<St>,
+    MacroAuthorizationServiceImpl: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
 {

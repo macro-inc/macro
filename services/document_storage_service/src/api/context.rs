@@ -68,7 +68,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
-use macro_authorization::{MacroAuthorizationServiceHandle, UserPermissionsServiceHandle};
+use macro_authorization::{MacroAuthorizationServiceImpl, UserPermissionsServiceImpl};
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
@@ -385,8 +385,8 @@ pub(crate) struct ApiContext {
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
-    pub macro_authorization_service: MacroAuthorizationServiceHandle,
-    pub user_permissions_service: UserPermissionsServiceHandle,
+    pub macro_authorization_service: MacroAuthorizationServiceImpl,
+    pub user_permissions_service: UserPermissionsServiceImpl,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,
     // Shared frecency storage.

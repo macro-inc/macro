@@ -44,7 +44,7 @@ use item_filters::{
         properties::{PropertiesLiteral, PropertyEntityType},
     },
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
@@ -413,7 +413,7 @@ impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for Arc<EAS> {
     }
 }
 
-impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for MacroAuthorizationServiceHandle {
+impl<T, U, EAS> FromRef<SoupRouterState<T, U, EAS>> for MacroAuthorizationServiceImpl {
     fn from_ref(input: &SoupRouterState<T, U, EAS>) -> Self {
         input.email.authorization.clone()
     }
@@ -430,7 +430,7 @@ where
         service: T,
         email: U,
         entity_access_service: Arc<EAS>,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self::from_arc(
             Arc::new(service),
@@ -445,7 +445,7 @@ where
         service: Arc<T>,
         email: U,
         entity_access_service: Arc<EAS>,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         SoupRouterState {
             service,

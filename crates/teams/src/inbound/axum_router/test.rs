@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use macro_authorization::{
-    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceHandle,
+    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer},
 };
 use serde_json::{Value, json};
@@ -20,10 +20,10 @@ use super::{invite_to_team::InviteToTeamError, premium_user::PremiumUserRejectio
 const CUSTOMER_ERROR_SENTINEL: &str = "sentinel customer repository failure";
 
 struct AuthorizationState {
-    authorization_service: MacroAuthorizationServiceHandle,
+    authorization_service: MacroAuthorizationServiceImpl,
 }
 
-impl FromRef<AuthorizationState> for MacroAuthorizationServiceHandle {
+impl FromRef<AuthorizationState> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &AuthorizationState) -> Self {
         state.authorization_service.clone()
     }
@@ -58,7 +58,7 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
 #[tokio::test]
 async fn premium_user_authorization_rejection_is_preserved() {
     let state = AuthorizationState {
-        authorization_service: MacroAuthorizationServiceHandle::new(
+        authorization_service: MacroAuthorizationServiceImpl::new(
             FakeMacroAuthorizationService::never(MacroAuthorizationError::CredentialsExpired),
         ),
     };

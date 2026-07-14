@@ -1,39 +1,50 @@
-#[cfg(test)]
-mod test;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use model_user::UserContext;
 use rootcause::Report;
 
-use super::{
-    models::MacroAuthorizationError,
-    ports::{JwtValidator, MacroAuthorizationService},
-};
+use crate::{MacroAuthorizationError, MacroAuthorizationService};
 
-/// Default authorization service backed by a credential validator.
-#[derive(Clone)]
-pub struct MacroAuthorizationServiceImpl<V> {
-    validator: V,
+type AuthorizationFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send + 'a>>;
+
+trait ErasedMacroAuthorizationService: Send + Sync {
+    fn authorize_erased<'a>(&'a self, jwt: &'a str) -> AuthorizationFuture<'a>;
 }
 
-impl<V> MacroAuthorizationServiceImpl<V> {
-    /// Create an authorization service using the supplied validator.
-    pub fn new(validator: V) -> Self {
-        Self { validator }
+impl<T> ErasedMacroAuthorizationService for T
+where
+    T: MacroAuthorizationService,
+{
+    fn authorize_erased<'a>(&'a self, jwt: &'a str) -> AuthorizationFuture<'a> {
+        Box::pin(self.authorize(jwt))
     }
 }
 
-impl<V> MacroAuthorizationService for MacroAuthorizationServiceImpl<V>
-where
-    V: JwtValidator,
-{
-    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
-        let identity = self.validator.validate(jwt)?;
+/// The cloneable, type-erased authorization service implementation.
+///
+/// Store this service by value in application state so Axum extractors can
+/// resolve authorization without adding concrete service types to router and
+/// handler signatures.
+#[derive(Clone)]
+pub struct MacroAuthorizationServiceImpl {
+    inner: Arc<dyn ErasedMacroAuthorizationService>,
+}
 
-        Ok(UserContext {
-            user_id: identity.user_id,
-            fusion_user_id: identity.fusion_user_id,
-            permissions: identity.permissions,
-            organization_id: identity.organization_id,
-        })
+impl MacroAuthorizationServiceImpl {
+    /// Create a service from an authorization implementation.
+    pub fn new<T>(service: T) -> Self
+    where
+        T: MacroAuthorizationService,
+    {
+        Self {
+            inner: Arc::new(service),
+        }
+    }
+}
+
+impl MacroAuthorizationService for MacroAuthorizationServiceImpl {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.inner.authorize_erased(jwt).await
     }
 }

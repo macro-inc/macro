@@ -8,7 +8,7 @@ use axum::{
     Json, RequestExt,
     extract::{FromRef, FromRequest, Path, Request},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
@@ -47,7 +47,7 @@ impl<T, S, Svc, V> FromRequest<S> for PinAccessLevelExtractor<T, Svc, V>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     V: DeserializeOwned + std::fmt::Debug,
     S: Send + Sync + 'static,

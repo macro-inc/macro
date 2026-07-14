@@ -8,7 +8,7 @@ use axum::{
     routing::get,
 };
 use frecency::domain::models::AggregateFrecency;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -30,7 +30,7 @@ const DEFAULT_CHANNEL_LIST_LIMIT: u32 = 100;
 pub struct ChannelListRouterState<S> {
     /// Inner channel list service.
     pub inner: Arc<S>,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S> Clone for ChannelListRouterState<S> {
@@ -44,7 +44,7 @@ impl<S> Clone for ChannelListRouterState<S> {
 
 impl<S: ChannelListService> ChannelListRouterState<S> {
     /// Build router state from channel list and authorization services.
-    pub fn new(s: S, authorization: MacroAuthorizationServiceHandle) -> Self {
+    pub fn new(s: S, authorization: MacroAuthorizationServiceImpl) -> Self {
         Self {
             inner: Arc::new(s),
             authorization,
@@ -52,7 +52,7 @@ impl<S: ChannelListService> ChannelListRouterState<S> {
     }
 }
 
-impl<S> FromRef<ChannelListRouterState<S>> for MacroAuthorizationServiceHandle {
+impl<S> FromRef<ChannelListRouterState<S>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &ChannelListRouterState<S>) -> Self {
         state.authorization.clone()
     }

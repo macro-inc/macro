@@ -19,7 +19,7 @@ use github::{
 };
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{MacroAuthorizationServiceHandle, UserPermissionsServiceHandle};
+use macro_authorization::{MacroAuthorizationServiceImpl, UserPermissionsServiceImpl};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::AppServiceUrl;
 use macro_service_urls::DocumentStorageServiceUrl;
@@ -182,7 +182,7 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
     let authorization_service =
-        MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_args.clone());
+        MacroAuthorizationServiceImpl::from_jwt_validation_args(jwt_args.clone());
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
         .context("failed to create redis client")?;
@@ -270,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_macro_db,
     );
     let user_permissions_service =
-        UserPermissionsServiceHandle::new(user_roles_and_permissions_service.clone());
+        UserPermissionsServiceImpl::new(user_roles_and_permissions_service.clone());
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(

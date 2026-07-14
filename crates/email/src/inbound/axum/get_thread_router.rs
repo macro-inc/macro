@@ -10,7 +10,7 @@ use axum::{
 use entity_access::domain::models::{EntityPermission, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -26,7 +26,7 @@ const MESSAGE_MAX: i64 = 100;
 pub struct EmailThreadRouterState<T, Svc> {
     pub service: Arc<T>,
     pub access_service: Arc<Svc>,
-    pub authorization: MacroAuthorizationServiceHandle,
+    pub authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<T, Svc> Clone for EmailThreadRouterState<T, Svc> {
@@ -45,7 +45,7 @@ impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for Arc<Svc> {
     }
 }
 
-impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for MacroAuthorizationServiceHandle {
+impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &EmailThreadRouterState<T, Svc>) -> Self {
         state.authorization.clone()
     }

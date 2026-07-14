@@ -46,7 +46,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -150,7 +150,7 @@ pub struct DocumentRouterState<T, Svc> {
     /// The entity access service for authorization.
     pub access_service: Arc<Svc>,
     /// The service used to authorize request credentials.
-    pub authorization: MacroAuthorizationServiceHandle,
+    pub authorization: MacroAuthorizationServiceImpl,
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
     /// Task duplicate detection service.
@@ -188,7 +188,7 @@ impl<T, Svc> FromRef<DocumentRouterState<T, Svc>> for Arc<Svc> {
     }
 }
 
-impl<T, Svc> FromRef<DocumentRouterState<T, Svc>> for MacroAuthorizationServiceHandle {
+impl<T, Svc> FromRef<DocumentRouterState<T, Svc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &DocumentRouterState<T, Svc>) -> Self {
         state.authorization.clone()
     }

@@ -7,7 +7,7 @@ use crate::domain::models::ReferralError;
 use crate::domain::ports::ReferralService;
 use axum::{Json, Router, extract::FromRef, http::StatusCode, response::IntoResponse};
 pub use get_referral_code::{__path_get_referral_code_handler, get_referral_code_handler};
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use model_error_response::ErrorResponse;
 use rate_limit::{
     RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService, domain::models::RateLimitOk,
@@ -60,7 +60,7 @@ pub struct ReferralRouterState<T, R> {
     /// The rate limiter service implementation.
     pub rate_limiter: R,
     /// The authorization service used to authenticate callers.
-    pub authorization: MacroAuthorizationServiceHandle,
+    pub authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
@@ -73,7 +73,7 @@ impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
     }
 }
 
-impl<T, R> FromRef<ReferralRouterState<T, R>> for MacroAuthorizationServiceHandle {
+impl<T, R> FromRef<ReferralRouterState<T, R>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &ReferralRouterState<T, R>) -> Self {
         state.authorization.clone()
     }

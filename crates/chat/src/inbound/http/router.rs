@@ -13,7 +13,7 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationServiceHandle, UserPermissionsServiceHandle,
+    MacroAuthorizationExtractor, MacroAuthorizationServiceImpl, UserPermissionsServiceImpl,
 };
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
@@ -28,8 +28,8 @@ use crate::inbound::http::extractors::ChatModelAccess;
 pub struct ChatRouterState<S, Svc> {
     inner: Arc<S>,
     access_service: Arc<Svc>,
-    authorization: MacroAuthorizationServiceHandle,
-    permissions: UserPermissionsServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
+    permissions: UserPermissionsServiceImpl,
 }
 
 impl<S, Svc> Clone for ChatRouterState<S, Svc> {
@@ -49,13 +49,13 @@ impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
-impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for MacroAuthorizationServiceHandle {
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
         state.authorization.clone()
     }
 }
 
-impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for UserPermissionsServiceHandle {
+impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for UserPermissionsServiceImpl {
     fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
         state.permissions.clone()
     }
@@ -66,8 +66,8 @@ impl<S: ChatService, Svc: EntityAccessService> ChatRouterState<S, Svc> {
     pub fn new(
         service: S,
         access_service: Svc,
-        authorization: MacroAuthorizationServiceHandle,
-        permissions: UserPermissionsServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
+        permissions: UserPermissionsServiceImpl,
     ) -> Self {
         Self {
             inner: Arc::new(service),

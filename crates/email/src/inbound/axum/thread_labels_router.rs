@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::patch,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 use uuid::Uuid;
@@ -87,7 +87,7 @@ where
     G: GmailTokenProvider,
     EmailRouterState<T>: axum::extract::FromRef<S>,
     GmailTokenState<G>: axum::extract::FromRef<S>,
-    MacroAuthorizationServiceHandle: axum::extract::FromRef<S>,
+    MacroAuthorizationServiceImpl: axum::extract::FromRef<S>,
 {
     Router::new().route("/{id}/labels", patch(update_thread_labels_handler::<T, G>))
 }

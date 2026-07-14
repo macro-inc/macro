@@ -8,7 +8,7 @@ use axum::{
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{MacroAuthorizationServiceImpl, OptionalMacroAuthorizationExtractor};
 use serde::de::DeserializeOwned;
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
@@ -39,7 +39,7 @@ impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -231,7 +231,7 @@ impl<T, S, V, Svc> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
     V: DeserializeOwned,

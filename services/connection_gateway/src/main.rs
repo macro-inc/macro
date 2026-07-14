@@ -29,7 +29,7 @@ use last_online_tracker::{
     outbound::{redis::RedisLastOnlineRepo, time::DefaultTime as LastOnlineDefaultTime},
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use service::dynamodb::create_dynamo_db_connection_manager;
@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
-    let authorization_service = MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_args);
+    let authorization_service = MacroAuthorizationServiceImpl::from_jwt_validation_args(jwt_args);
 
     // allow requests from any origin
     let cors = CorsLayer::new()

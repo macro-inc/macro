@@ -10,7 +10,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use macro_authorization::{
-    MacroAuthorizationError, MacroAuthorizationServiceHandle,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -422,7 +422,7 @@ async fn send_with_authorization(
     uri: &str,
     body: serde_json::Value,
 ) -> axum::response::Response {
-    let authorization_service = MacroAuthorizationServiceHandle::new(authorization);
+    let authorization_service = MacroAuthorizationServiceImpl::new(authorization);
     let state = WebhookRouterState::new(service, limiter, authorization_service);
     let router = webhook_router::<_, _, ()>(state);
     router

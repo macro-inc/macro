@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use serde::Serialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -29,7 +29,7 @@ pub struct MemoryRouterState<T> {
     /// The memory service implementation.
     pub service: Arc<T>,
     /// The authorization service used to authenticate callers.
-    pub authorization: MacroAuthorizationServiceHandle,
+    pub authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<T> Clone for MemoryRouterState<T> {
@@ -47,7 +47,7 @@ impl<T> FromRef<MemoryRouterState<T>> for Arc<T> {
     }
 }
 
-impl<T> FromRef<MemoryRouterState<T>> for MacroAuthorizationServiceHandle {
+impl<T> FromRef<MemoryRouterState<T>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &MemoryRouterState<T>) -> Self {
         state.authorization.clone()
     }

@@ -22,7 +22,7 @@ impl JwtValidator for FakeJwtValidator {
 #[tokio::test]
 async fn authorize_constructs_user_context_from_validated_identity() {
     let permissions = HashSet::from(["documents:read".to_string(), "documents:write".to_string()]);
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
+    let service = ValidatorBackedAuthorizationService::new(FakeJwtValidator {
         result: Ok(ValidatedIdentity {
             user_id: "macro|user@example.com".to_string(),
             fusion_user_id: "fusion-user-id".to_string(),
@@ -41,7 +41,7 @@ async fn authorize_constructs_user_context_from_validated_identity() {
 
 #[tokio::test]
 async fn authorize_propagates_expired_credentials() {
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
+    let service = ValidatorBackedAuthorizationService::new(FakeJwtValidator {
         result: Err(MacroAuthorizationError::CredentialsExpired),
     });
 
@@ -55,7 +55,7 @@ async fn authorize_propagates_expired_credentials() {
 
 #[tokio::test]
 async fn authorize_propagates_invalid_credentials() {
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
+    let service = ValidatorBackedAuthorizationService::new(FakeJwtValidator {
         result: Err(MacroAuthorizationError::InvalidCredentials),
     });
 

@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
 use axum::{Router, routing::get};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationServiceHandle,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationServiceImpl,
 };
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -126,7 +126,7 @@ impl<S> FromRequestParts<S> for SavedViewOwner
 where
     S: Send + Sync + 'static,
     PgPool: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
 {
     type Rejection = SavedViewErr;
 

@@ -24,7 +24,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use std::sync::Arc;
@@ -34,7 +34,7 @@ use uuid::Uuid;
 pub struct BotsRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
-    auth: MacroAuthorizationServiceHandle,
+    auth: MacroAuthorizationServiceImpl,
 }
 
 impl<S, Svc> Clone for BotsRouterState<S, Svc> {
@@ -49,7 +49,7 @@ impl<S, Svc> Clone for BotsRouterState<S, Svc> {
 
 impl<S: BotService, Svc: EntityAccessService> BotsRouterState<S, Svc> {
     /// Create a router state.
-    pub fn new(service: S, access_service: Svc, auth: MacroAuthorizationServiceHandle) -> Self {
+    pub fn new(service: S, access_service: Svc, auth: MacroAuthorizationServiceImpl) -> Self {
         Self {
             service: Arc::new(service),
             access_service: Arc::new(access_service),
@@ -64,7 +64,7 @@ impl<S, Svc> FromRef<BotsRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
-impl<S, Svc> FromRef<BotsRouterState<S, Svc>> for MacroAuthorizationServiceHandle {
+impl<S, Svc> FromRef<BotsRouterState<S, Svc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &BotsRouterState<S, Svc>) -> Self {
         state.auth.clone()
     }

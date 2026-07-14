@@ -7,7 +7,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use chrono::{DateTime, Utc};
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 use uuid::Uuid;
@@ -122,7 +122,7 @@ where
     S: Send + Sync + Clone + 'static,
     T: EmailService,
     EmailRouterState<T>: axum::extract::FromRef<S>,
-    MacroAuthorizationServiceHandle: axum::extract::FromRef<S>,
+    MacroAuthorizationServiceImpl: axum::extract::FromRef<S>,
 {
     Router::new()
         .route("/", put(upsert_email_filter_handler::<T>))

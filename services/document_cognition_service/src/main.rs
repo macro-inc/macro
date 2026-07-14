@@ -28,7 +28,7 @@ use foreign_entity::{
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{MacroAuthorizationServiceHandle, UserPermissionsServiceHandle};
+use macro_authorization::{MacroAuthorizationServiceImpl, UserPermissionsServiceImpl};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
     ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
@@ -145,9 +145,9 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("failed to create jwt validation args")?;
     let macro_authorization_service =
-        MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_args);
+        MacroAuthorizationServiceImpl::from_jwt_validation_args(jwt_args);
     let permissions_database = MacroDB::new(db.clone());
-    let user_permissions_service = UserPermissionsServiceHandle::new(
+    let user_permissions_service = UserPermissionsServiceImpl::new(
         UserRolesAndPermissionsServiceImpl::new(permissions_database.clone(), permissions_database),
     );
 

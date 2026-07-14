@@ -27,7 +27,7 @@ use entity_access::{
         ChannelAccessLevelExtractor,
     },
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use model_error_response::ErrorResponse;
 use uuid::Uuid;
 
@@ -46,7 +46,7 @@ use crate::domain::ports::CallService;
 pub struct CallRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S, Svc> Clone for CallRouterState<S, Svc> {
@@ -64,7 +64,7 @@ impl<S: CallService, Svc: EntityAccessService> CallRouterState<S, Svc> {
     pub fn new(
         service: Arc<S>,
         access_service: Arc<Svc>,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self {
             service,
@@ -80,7 +80,7 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
     }
 }
 
-impl<S, Svc> FromRef<CallRouterState<S, Svc>> for MacroAuthorizationServiceHandle {
+impl<S, Svc> FromRef<CallRouterState<S, Svc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &CallRouterState<S, Svc>) -> Self {
         state.authorization.clone()
     }

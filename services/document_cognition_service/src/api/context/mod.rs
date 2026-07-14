@@ -17,7 +17,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
-use macro_authorization::{MacroAuthorizationServiceHandle, UserPermissionsServiceHandle};
+use macro_authorization::{MacroAuthorizationServiceImpl, UserPermissionsServiceImpl};
 use macro_middleware::auth::internal_access::InternalApiKey;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -83,8 +83,8 @@ pub struct ApiContext {
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
-    pub macro_authorization_service: MacroAuthorizationServiceHandle,
-    pub user_permissions_service: UserPermissionsServiceHandle,
+    pub macro_authorization_service: MacroAuthorizationServiceImpl,
+    pub user_permissions_service: UserPermissionsServiceImpl,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,

@@ -5,7 +5,7 @@ use axum::routing::get;
 use axum::{Extension, Router};
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceHandle,
+    MacroAuthorizationError, MacroAuthorizationExtractor, MacroAuthorizationServiceImpl,
     PreauthorizedContext,
     testing::{FakeMacroAuthorizationService, test_user_context},
 };
@@ -20,7 +20,7 @@ const TOKEN_USER_ID: &str = "macro|token-user@example.com";
 #[derive(Clone, FromRef)]
 struct TestState {
     auth_key: DocumentStorageServiceAuthKey,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 fn make_app() -> Router {
@@ -35,7 +35,7 @@ fn make_app() -> Router {
 fn make_authorized_app(authorization: FakeMacroAuthorizationService) -> Router {
     let state = TestState {
         auth_key: DocumentStorageServiceAuthKey::Comptime(TEST_AUTH_KEY),
-        authorization: MacroAuthorizationServiceHandle::new(authorization),
+        authorization: MacroAuthorizationServiceImpl::new(authorization),
     };
     let app: Router<TestState> = Router::new()
         .route("/marker", get(marker_handler))

@@ -4,6 +4,9 @@
 //! The domain layer validates credentials through a cryptographic validation
 //! port and returns the authenticated user's [`model_user::UserContext`].
 
+#[cfg(feature = "outbound")]
+mod builder;
+
 pub mod domain;
 /// Inbound transport adapters backed by the authorization service.
 #[cfg(feature = "axum")]
@@ -16,7 +19,6 @@ pub mod outbound;
 pub mod testing;
 
 pub use domain::{
-    handle::MacroAuthorizationServiceHandle,
     models::{MacroAuthorizationError, ValidatedIdentity},
     ports::{JwtValidator, MacroAuthorizationService},
     service::MacroAuthorizationServiceImpl,
@@ -31,11 +33,11 @@ pub use inbound::{
     MacroAuthorizationRejectionKind, OptionalMacroAuthorizationExtractor,
     OptionalMacroAuthorizationExtractorFor,
 };
-/// Permission-aware authorization extraction and type-erased service handle.
+/// Permission-aware authorization extraction and service implementation.
 #[cfg(feature = "permissions")]
 pub use inbound::{
     PermissionedMacroAuthorizationExtractor, PermissionedMacroAuthorizationRejection,
-    UserPermissionsServiceHandle,
+    UserPermissionsServiceImpl,
 };
 /// JWT validator backed by the `macro_auth` implementation.
 #[cfg(feature = "outbound")]

@@ -8,7 +8,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{MacroAuthorizationServiceImpl, OptionalMacroAuthorizationExtractor};
 
 use super::{ExtractorError, InternalUser};
 use crate::domain::{
@@ -40,7 +40,7 @@ pub struct EntityPermissionExtractor<Svc> {
 impl<S, Svc> FromRequestParts<S> for EntityPermissionExtractor<Svc>
 where
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

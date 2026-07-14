@@ -5,7 +5,7 @@ use axum::http::{Request, StatusCode};
 use axum::{Extension, Router};
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationServiceHandle, UserPermissionsServiceHandle,
+    MacroAuthorizationServiceImpl, UserPermissionsServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::user_id::{BorrowedUserIdStr, MacroUserIdStr};
@@ -464,14 +464,14 @@ impl UserPermissionsService for EmptyUserPermissionsService {
     }
 }
 
-fn authorization() -> MacroAuthorizationServiceHandle {
-    MacroAuthorizationServiceHandle::new(FakeMacroAuthorizationService::always(test_user_context(
+fn authorization() -> MacroAuthorizationServiceImpl {
+    MacroAuthorizationServiceImpl::new(FakeMacroAuthorizationService::always(test_user_context(
         TEST_USER_ID,
     )))
 }
 
-fn permissions() -> UserPermissionsServiceHandle {
-    UserPermissionsServiceHandle::new(EmptyUserPermissionsService)
+fn permissions() -> UserPermissionsServiceImpl {
+    UserPermissionsServiceImpl::new(EmptyUserPermissionsService)
 }
 
 fn chat_state<S: ChatService>(service: S) -> ChatRouterState<S, MockAccessService> {
@@ -509,7 +509,7 @@ async fn create_chat_uses_shared_authorization_for_both_extractors() {
     let state = ChatRouterState::new(
         MockService,
         MockAccessService,
-        MacroAuthorizationServiceHandle::new(authorization.clone()),
+        MacroAuthorizationServiceImpl::new(authorization.clone()),
         permissions(),
     );
     let request = bearer(Request::post("/"), TEST_TOKEN)

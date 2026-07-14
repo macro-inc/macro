@@ -14,7 +14,7 @@ use email_service::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_middleware::auth::internal_access::InternalApiKey;
 use static_file_service_client::StaticFileServiceClient;
@@ -47,7 +47,7 @@ pub(crate) struct ApiContext {
     pub sfs_client: Arc<StaticFileServiceClient>,
     pub dss_client: Arc<DocumentStorageServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
-    pub authorization_service: MacroAuthorizationServiceHandle,
+    pub authorization_service: MacroAuthorizationServiceImpl,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub email_service: EmailRouterState<EmailSvc>,

@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, post, put},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use utoipa::{IntoParams, ToSchema};
 pub struct McpRouterState<S, O> {
     store: Arc<S>,
     oauth: Arc<O>,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S, O> Clone for McpRouterState<S, O> {
@@ -32,7 +32,7 @@ impl<S, O> Clone for McpRouterState<S, O> {
     }
 }
 
-impl<S, O> FromRef<McpRouterState<S, O>> for MacroAuthorizationServiceHandle {
+impl<S, O> FromRef<McpRouterState<S, O>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &McpRouterState<S, O>) -> Self {
         state.authorization.clone()
     }
@@ -44,7 +44,7 @@ where
     O: OAuthClient,
 {
     /// Create a new router state from a server store, OAuth client, and authorization service.
-    pub fn new(store: S, oauth: O, authorization: MacroAuthorizationServiceHandle) -> Self {
+    pub fn new(store: S, oauth: O, authorization: MacroAuthorizationServiceImpl) -> Self {
         Self {
             store: Arc::new(store),
             oauth: Arc::new(oauth),

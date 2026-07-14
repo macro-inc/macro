@@ -14,7 +14,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{patch, post},
 };
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use model_error_response::ErrorResponse;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
@@ -26,7 +26,7 @@ use std::time::Duration;
 pub struct WebhookRouterState<S, R> {
     service: Arc<S>,
     rate_limiter: R,
-    authorization_service: MacroAuthorizationServiceHandle,
+    authorization_service: MacroAuthorizationServiceImpl,
 }
 
 impl<S, R: Clone> Clone for WebhookRouterState<S, R> {
@@ -44,7 +44,7 @@ impl<S: WebhookService, R: RateLimitService + Clone> WebhookRouterState<S, R> {
     pub fn new(
         service: S,
         rate_limiter: R,
-        authorization_service: MacroAuthorizationServiceHandle,
+        authorization_service: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self {
             service: Arc::new(service),
@@ -60,7 +60,7 @@ impl<S, R: Clone> FromRef<WebhookRouterState<S, R>> for Arc<S> {
     }
 }
 
-impl<S, R> FromRef<WebhookRouterState<S, R>> for MacroAuthorizationServiceHandle {
+impl<S, R> FromRef<WebhookRouterState<S, R>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &WebhookRouterState<S, R>) -> Self {
         state.authorization_service.clone()
     }
@@ -106,7 +106,7 @@ pub struct PerUserValidateWebhookRateLimit {
 
 impl<S> RateLimitExtractable<S> for PerUserValidateWebhookRateLimit
 where
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     S: Send + Sync + 'static,
 {
     fn config() -> RateLimitConfig {
@@ -126,7 +126,7 @@ where
 
 impl<S> FromRequestParts<S> for PerUserValidateWebhookRateLimit
 where
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = Response;

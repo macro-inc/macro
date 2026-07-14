@@ -19,7 +19,7 @@ use entity_access::{
 };
 use http_body_util::BodyExt;
 use macro_authorization::{
-    MacroAuthorizationServiceHandle,
+    MacroAuthorizationServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::{
@@ -278,7 +278,7 @@ fn test_router(
     foreign_entity_router(ForeignEntityRouterState::new(
         service,
         Arc::new(access_service),
-        MacroAuthorizationServiceHandle::new(authorization),
+        MacroAuthorizationServiceImpl::new(authorization),
     ))
 }
 

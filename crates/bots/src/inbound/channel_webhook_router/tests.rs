@@ -17,7 +17,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationServiceHandle,
+    MacroAuthorizationServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer, test_user_context},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -403,8 +403,8 @@ impl ChannelMessagePoster for TestChannelPoster {
 const TEST_TOKEN: &str = "channel-bot-test-token";
 const TEST_USER_ID: &str = "macro|bot-admin@example.com";
 
-fn authorization() -> MacroAuthorizationServiceHandle {
-    MacroAuthorizationServiceHandle::new(FakeMacroAuthorizationService::always(test_user_context(
+fn authorization() -> MacroAuthorizationServiceImpl {
+    MacroAuthorizationServiceImpl::new(FakeMacroAuthorizationService::always(test_user_context(
         TEST_USER_ID,
     )))
 }

@@ -19,7 +19,7 @@ use roles_and_permissions::domain::{
 use thiserror::Error;
 
 use super::MacroAuthorizationExtractor;
-use crate::MacroAuthorizationServiceHandle;
+use crate::MacroAuthorizationServiceImpl;
 
 const INTERNAL_ERROR_MESSAGE: &str = "internal server error";
 
@@ -50,17 +50,17 @@ where
     }
 }
 
-/// A cloneable, type-erased user-permissions service handle.
+/// A cloneable, type-erased user-permissions service implementation.
 ///
-/// Store this handle by value in application state so permission-aware
+/// Store this service by value in application state so permission-aware
 /// extractors do not expose the concrete roles-and-permissions service type.
 #[derive(Clone)]
-pub struct UserPermissionsServiceHandle {
+pub struct UserPermissionsServiceImpl {
     inner: Arc<dyn ErasedUserPermissionsService>,
 }
 
-impl UserPermissionsServiceHandle {
-    /// Wrap a user-permissions service implementation in a type-erased handle.
+impl UserPermissionsServiceImpl {
+    /// Create a service from a user-permissions implementation.
     pub fn new<T>(service: T) -> Self
     where
         T: UserPermissionsService,
@@ -71,7 +71,7 @@ impl UserPermissionsServiceHandle {
     }
 }
 
-impl UserPermissionsService for UserPermissionsServiceHandle {
+impl UserPermissionsService for UserPermissionsServiceImpl {
     async fn get_user_permissions_for_user_id(
         &self,
         user_id: &BorrowedUserIdStr<'_>,
@@ -124,8 +124,8 @@ impl IntoResponse for PermissionedMacroAuthorizationRejection {
 
 impl<S> FromRequestParts<S> for PermissionedMacroAuthorizationExtractor
 where
-    MacroAuthorizationServiceHandle: FromRef<S>,
-    UserPermissionsServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
+    UserPermissionsServiceImpl: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = PermissionedMacroAuthorizationRejection;
@@ -135,7 +135,7 @@ where
         let original_user_id =
             BorrowedUserIdStr::try_from(authorization.user_context.user_id.as_str())
                 .expect("authorization validates user IDs before permission lookup");
-        let permissions_service = UserPermissionsServiceHandle::from_ref(state);
+        let permissions_service = UserPermissionsServiceImpl::from_ref(state);
         let permissions = permissions_service
             .get_user_permissions_for_user_id(&original_user_id)
             .await

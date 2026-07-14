@@ -4,7 +4,7 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use model_error_response::ErrorResponse;
 use models_pagination::{
     CursorOptionExt, CursorWithValAndFilter, SimpleSortMethod, TypeEraseCursor,
@@ -25,7 +25,7 @@ use crate::{
 
 pub struct EmailRouterState<T> {
     pub(crate) inner: Arc<T>,
-    pub authorization: MacroAuthorizationServiceHandle,
+    pub authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<T> Clone for EmailRouterState<T> {
@@ -37,7 +37,7 @@ impl<T> Clone for EmailRouterState<T> {
     }
 }
 
-impl<T> FromRef<EmailRouterState<T>> for MacroAuthorizationServiceHandle {
+impl<T> FromRef<EmailRouterState<T>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &EmailRouterState<T>) -> Self {
         state.authorization.clone()
     }
@@ -47,7 +47,7 @@ impl<T> EmailRouterState<T>
 where
     T: EmailService,
 {
-    pub fn new(state: T, authorization: MacroAuthorizationServiceHandle) -> Self {
+    pub fn new(state: T, authorization: MacroAuthorizationServiceImpl) -> Self {
         Self {
             inner: Arc::new(state),
             authorization,

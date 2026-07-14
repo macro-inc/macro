@@ -1,7 +1,7 @@
 use axum::extract::FromRef;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use opensearch_client::OpensearchClient;
 use readonly_pool::ReadOnlyPool;
 use std::sync::Arc;
@@ -21,5 +21,5 @@ pub struct SearchHandlerState {
     /// Resolves the caller's team membership to mint CRM capability receipts.
     pub entity_access_service: Arc<SearchEntityAccessService>,
     /// Authorizes incoming search requests.
-    pub macro_authorization_service: MacroAuthorizationServiceHandle,
+    pub macro_authorization_service: MacroAuthorizationServiceImpl,
 }

@@ -11,7 +11,7 @@ use crate::api::context::AppState;
 use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -23,7 +23,7 @@ static MAX_REQUEST_SIZE: usize = 4096;
 
 pub async fn setup_and_serve(
     config: Config,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 ) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 

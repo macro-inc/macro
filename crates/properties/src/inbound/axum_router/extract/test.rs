@@ -18,7 +18,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationError, MacroAuthorizationServiceHandle,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl,
     testing::{FakeMacroAuthorizationService, bearer},
 };
 use macro_user_id::{
@@ -149,7 +149,7 @@ fn test_router(
     let state = PropertiesRouterState {
         properties_service: Arc::new(()),
         entity_access_service: Arc::new(entity_access_service.clone()),
-        authorization_service: MacroAuthorizationServiceHandle::new(authorization),
+        authorization_service: MacroAuthorizationServiceImpl::new(authorization),
     };
     let router = Router::new()
         .route("/view/{entity_type}/{entity_id}", get(view_handler))

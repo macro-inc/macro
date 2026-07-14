@@ -8,7 +8,7 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{MacroAuthorizationServiceImpl, OptionalMacroAuthorizationExtractor};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::{
@@ -43,7 +43,7 @@ impl<T, S, Svc> FromRequestParts<S> for DocumentAccessExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

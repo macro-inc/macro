@@ -12,7 +12,7 @@ use axum::{
     routing::post,
 };
 use chrono::{DateTime, Utc};
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -59,7 +59,7 @@ pub struct AiUsageRouterState<T> {
     /// The AI usage service implementation.
     pub service: Arc<T>,
     /// The authorization service used to authenticate callers.
-    pub auth: MacroAuthorizationServiceHandle,
+    pub auth: MacroAuthorizationServiceImpl,
 }
 
 impl<T> Clone for AiUsageRouterState<T> {
@@ -71,7 +71,7 @@ impl<T> Clone for AiUsageRouterState<T> {
     }
 }
 
-impl<T> FromRef<AiUsageRouterState<T>> for MacroAuthorizationServiceHandle {
+impl<T> FromRef<AiUsageRouterState<T>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &AiUsageRouterState<T>) -> Self {
         state.auth.clone()
     }

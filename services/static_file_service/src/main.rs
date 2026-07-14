@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 use anyhow::Context;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::MacroAuthorizationServiceHandle;
+use macro_authorization::MacroAuthorizationServiceImpl;
 use macro_entrypoint::MacroEntrypoint;
 
 mod api;
@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
     let authorization =
-        MacroAuthorizationServiceHandle::from_jwt_validation_args(jwt_validation_args);
+        MacroAuthorizationServiceImpl::from_jwt_validation_args(jwt_validation_args);
 
     api::setup_and_serve(config, authorization).await?;
     Ok(())

@@ -16,5 +16,5 @@ pub use axum::{
 #[cfg(feature = "permissions")]
 pub use permissions::{
     PermissionedMacroAuthorizationExtractor, PermissionedMacroAuthorizationRejection,
-    UserPermissionsServiceHandle,
+    UserPermissionsServiceImpl,
 };

@@ -423,8 +423,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let macro_authorization_service =
-        MacroAuthorizationServiceHandle::new(FakeMacroAuthorizationService::default());
-    let user_permissions_service = UserPermissionsServiceHandle::new(FakeUserPermissionsService);
+        MacroAuthorizationServiceImpl::new(FakeMacroAuthorizationService::default());
+    let user_permissions_service = UserPermissionsServiceImpl::new(FakeUserPermissionsService);
 
     let api_context = ApiContext {
         db: pool.clone(),

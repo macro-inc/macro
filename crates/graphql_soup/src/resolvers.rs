@@ -12,7 +12,7 @@ use entity_access::{
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
 };
 use graphql_common::extract_part;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use models_pagination::TypeEraseCursor;
 use soup::domain::ports::SoupService;
 
@@ -36,7 +36,7 @@ where
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
-    MacroAuthorizationServiceHandle: FromRef<St>,
+    MacroAuthorizationServiceImpl: FromRef<St>,
     Edges: SoupEntityEdges,
 {
     let MacroAuthorizationExtractor { macro_user_id, .. } =

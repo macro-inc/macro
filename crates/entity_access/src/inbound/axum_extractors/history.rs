@@ -8,7 +8,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{MacroAuthorizationServiceImpl, OptionalMacroAuthorizationExtractor};
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
 use crate::domain::{
@@ -41,7 +41,7 @@ impl<T, S, Svc> FromRequestParts<S> for HistoryAccessExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

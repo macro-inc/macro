@@ -11,7 +11,7 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use macro_authorization::{MacroAuthorizationServiceHandle, OptionalMacroAuthorizationExtractor};
+use macro_authorization::{MacroAuthorizationServiceImpl, OptionalMacroAuthorizationExtractor};
 use uuid::Uuid;
 
 use super::{ExtractorError, InternalUser};
@@ -56,7 +56,7 @@ impl<T, S, Svc> FromRequestParts<S> for CallAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -165,7 +165,7 @@ impl<T, S, Svc> FromRequestParts<S> for CallWithChannelIdAccessLevelExtractor<T,
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
-    MacroAuthorizationServiceHandle: FromRef<S>,
+    MacroAuthorizationServiceImpl: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {

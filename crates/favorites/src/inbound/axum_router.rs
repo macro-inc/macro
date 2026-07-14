@@ -13,7 +13,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceHandle};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationServiceImpl};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_error_response::ErrorResponse;
@@ -28,7 +28,7 @@ use crate::domain::{
 pub struct FavoritesRouterState<S, AccessSvc> {
     service: Arc<S>,
     access_service: Arc<AccessSvc>,
-    authorization: MacroAuthorizationServiceHandle,
+    authorization: MacroAuthorizationServiceImpl,
 }
 
 impl<S, AccessSvc> Clone for FavoritesRouterState<S, AccessSvc> {
@@ -41,7 +41,7 @@ impl<S, AccessSvc> Clone for FavoritesRouterState<S, AccessSvc> {
     }
 }
 
-impl<S, AccessSvc> FromRef<FavoritesRouterState<S, AccessSvc>> for MacroAuthorizationServiceHandle {
+impl<S, AccessSvc> FromRef<FavoritesRouterState<S, AccessSvc>> for MacroAuthorizationServiceImpl {
     fn from_ref(state: &FavoritesRouterState<S, AccessSvc>) -> Self {
         state.authorization.clone()
     }
@@ -56,7 +56,7 @@ where
     pub fn new(
         service: Arc<S>,
         access_service: Arc<AccessSvc>,
-        authorization: MacroAuthorizationServiceHandle,
+        authorization: MacroAuthorizationServiceImpl,
     ) -> Self {
         Self {
             service,
