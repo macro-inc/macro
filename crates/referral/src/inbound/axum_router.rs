@@ -5,11 +5,14 @@
 
 use crate::domain::models::ReferralError;
 use crate::domain::ports::ReferralService;
-use axum::{Json, Router, http::StatusCode, response::IntoResponse};
+use axum::{Json, Router, extract::FromRef, http::StatusCode, response::IntoResponse};
 pub use get_referral_code::{__path_get_referral_code_handler, get_referral_code_handler};
+use macro_authorization::SharedMacroAuthorizationService;
 use model_error_response::ErrorResponse;
-use rate_limit::RateLimitService;
-use rate_limit::inbound::rate_limit_middleware;
+use rate_limit::{
+    RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService, domain::models::RateLimitOk,
+    inbound::rate_limit_middleware,
+};
 pub use send_invite::{
     __path_post_referral_invite_handler, PerIpReferralRateLimit, PerUserReferralRateLimit,
     SendInviteBody, post_referral_invite_handler,
@@ -54,8 +57,10 @@ impl IntoResponse for ReferralError {
 pub struct ReferralRouterState<T, R> {
     /// The referral service implementation.
     pub service: Arc<T>,
-    /// the rate limiter service implementation
+    /// The rate limiter service implementation.
     pub rate_limiter: R,
+    /// The authorization service used to authenticate callers.
+    pub authorization: SharedMacroAuthorizationService,
 }
 
 impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
@@ -63,7 +68,39 @@ impl<T, R: Clone> Clone for ReferralRouterState<T, R> {
         Self {
             service: self.service.clone(),
             rate_limiter: self.rate_limiter.clone(),
+            authorization: self.authorization.clone(),
         }
+    }
+}
+
+impl<T, R> FromRef<ReferralRouterState<T, R>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &ReferralRouterState<T, R>) -> Self {
+        state.authorization.clone()
+    }
+}
+
+// A nominal wrapper avoids overlapping `FromRef` implementations when the
+// generic rate limiter is itself a shared authorization service.
+#[derive(Clone)]
+struct ReferralRateLimiter<R>(R);
+
+impl<T, R: Clone> FromRef<ReferralRouterState<T, R>> for ReferralRateLimiter<R> {
+    fn from_ref(state: &ReferralRouterState<T, R>) -> Self {
+        Self(state.rate_limiter.clone())
+    }
+}
+
+impl<R: RateLimitService> RateLimitService for ReferralRateLimiter<R> {
+    async fn check_rate_limit(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+    ) -> Result<RateLimitResult, rootcause::Report> {
+        self.0.check_rate_limit(key, config).await
+    }
+
+    async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), rootcause::Report> {
+        self.0.rollback_ticket(ticket).await
     }
 }
 
@@ -82,12 +119,20 @@ where
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(
-                    state.rate_limiter.clone(),
-                    rate_limit_middleware::<R, PerUserReferralRateLimit, R>,
+                    state.clone(),
+                    rate_limit_middleware::<
+                        ReferralRouterState<T, R>,
+                        PerUserReferralRateLimit,
+                        ReferralRateLimiter<R>,
+                    >,
                 ))
                 .layer(axum::middleware::from_fn_with_state(
-                    state.rate_limiter.clone(),
-                    rate_limit_middleware::<R, PerIpReferralRateLimit, R>,
+                    state.clone(),
+                    rate_limit_middleware::<
+                        ReferralRouterState<T, R>,
+                        PerIpReferralRateLimit,
+                        ReferralRateLimiter<R>,
+                    >,
                 )),
         )
         .route(

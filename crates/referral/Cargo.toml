@@ -7,10 +7,9 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
-  "dep:axum-extra",
   "dep:ip_extractor",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:tower",
   "dep:utoipa",
 ]
@@ -40,10 +39,11 @@ invite_email = { path = "../invite_email" }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-axum-extra = { workspace = true, optional = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
@@ -60,6 +60,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+macro_authorization = { path = "../macro_authorization", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }

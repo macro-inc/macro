@@ -1,13 +1,12 @@
 //! Handler for `POST /send`.
 
 use axum::RequestPartsExt;
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRef, FromRequestParts};
 use axum::http::StatusCode;
 use axum::{Json, extract::State};
-use axum_extra::extract::Cached;
 use ip_extractor::ClientIp;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_user_id::email::EmailStr;
-use model_user::axum_extractor::MacroUserExtractor;
 use rate_limit::inbound::RateLimitExtractable;
 use rate_limit::{RateLimitConfig, RateLimitKey};
 use serde::Deserialize;
@@ -42,7 +41,7 @@ pub struct SendInviteBody {
 #[tracing::instrument(skip(state, user_context), err)]
 pub async fn post_referral_invite_handler<T: ReferralService, R>(
     State(state): State<ReferralRouterState<T, R>>,
-    Cached(user_context): Cached<MacroUserExtractor>,
+    user_context: SharedMacroAuthorizationExtractor,
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
 ) -> Result<StatusCode, ReferralError> {
     let () = state
@@ -54,11 +53,12 @@ pub async fn post_referral_invite_handler<T: ReferralService, R>(
 }
 
 /// the rate limit definition for the per-user rate limit on referring new users
-pub struct PerUserReferralRateLimit(MacroUserExtractor);
+pub struct PerUserReferralRateLimit(SharedMacroAuthorizationExtractor);
 
 impl<S> RateLimitExtractable<S> for PerUserReferralRateLimit
 where
-    S: Send + Sync,
+    SharedMacroAuthorizationService: FromRef<S>,
+    S: Send + Sync + 'static,
 {
     fn config() -> rate_limit::RateLimitConfig {
         // The fixed window rate limit config for the number of invites a user can send to others
@@ -77,15 +77,16 @@ where
 
 impl<S> FromRequestParts<S> for PerUserReferralRateLimit
 where
-    S: Send + Sync,
+    SharedMacroAuthorizationService: FromRef<S>,
+    S: Send + Sync + 'static,
 {
-    type Rejection = <MacroUserExtractor as FromRequestParts<S>>::Rejection;
+    type Rejection = <SharedMacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(user): Cached<MacroUserExtractor> = parts.extract_with_state(state).await?;
+        let user = parts.extract_with_state(state).await?;
         Ok(Self(user))
     }
 }

@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use axum::{Extension, extract::ConnectInfo, http::StatusCode};
 use http_body_util::BodyExt;
-use model_user::UserContext;
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use rate_limit::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult, RateLimitServiceImpl,
     domain::models::RateLimitOk,
@@ -109,29 +112,28 @@ fn exceeding_rate_limiter() -> RateLimitServiceImpl<MockRateLimitPort> {
     }
 }
 
-fn test_user_context() -> UserContext {
-    UserContext {
-        user_id: "macro|test@test.com".to_string(),
-        fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
-        permissions: None,
-        organization_id: None,
-    }
-}
+const TEST_TOKEN: &str = "test-token";
 
 fn build_router(
     service: MockReferralService,
     rate_limiter: RateLimitServiceImpl<MockRateLimitPort>,
-) -> axum::Router {
+) -> (axum::Router, FakeMacroAuthorizationService) {
+    let authorization =
+        FakeMacroAuthorizationService::always(test_user_context("macro|test@test.com"));
     let state = ReferralRouterState {
         service: Arc::new(service),
         rate_limiter,
+        authorization: SharedMacroAuthorizationService::new(authorization.clone()),
     };
-    referral_router(state)
-        .layer(Extension(ConnectInfo(SocketAddr::from((
-            [127, 0, 0, 1],
-            0,
-        )))))
-        .layer(Extension(test_user_context()))
+    let router = referral_router(state).layer(Extension(ConnectInfo(SocketAddr::from((
+        [127, 0, 0, 1],
+        0,
+    )))));
+    (router, authorization)
+}
+
+fn authenticated_request() -> axum::http::request::Builder {
+    bearer(axum::http::Request::builder(), TEST_TOKEN)
 }
 
 fn ok_service() -> MockReferralService {
@@ -142,9 +144,9 @@ fn ok_service() -> MockReferralService {
 
 #[tokio::test]
 async fn test_get_referral_code_success() {
-    let app = build_router(ok_service(), allowing_rate_limiter());
+    let (app, _) = build_router(ok_service(), allowing_rate_limiter());
 
-    let request = axum::http::Request::builder()
+    let request = authenticated_request()
         .uri("/code")
         .method("GET")
         .body(axum::body::Body::empty())
@@ -164,9 +166,9 @@ async fn test_get_referral_code_internal_error() {
     let service = MockReferralService {
         result: Err(ReferralError::Internal(anyhow::anyhow!("db error"))),
     };
-    let app = build_router(service, allowing_rate_limiter());
+    let (app, _) = build_router(service, allowing_rate_limiter());
 
-    let request = axum::http::Request::builder()
+    let request = authenticated_request()
         .uri("/code")
         .method("GET")
         .body(axum::body::Body::empty())
@@ -179,12 +181,7 @@ async fn test_get_referral_code_internal_error() {
 
 #[tokio::test]
 async fn test_get_referral_code_unauthenticated() {
-    let state = ReferralRouterState {
-        service: Arc::new(ok_service()),
-        rate_limiter: allowing_rate_limiter(),
-    };
-    // No user context extension — should fail auth
-    let app: axum::Router = referral_router(state);
+    let (app, _) = build_router(ok_service(), allowing_rate_limiter());
 
     let request = axum::http::Request::builder()
         .uri("/code")
@@ -199,9 +196,9 @@ async fn test_get_referral_code_unauthenticated() {
 
 #[tokio::test]
 async fn test_send_invite_succeeds_under_rate_limit() {
-    let app = build_router(ok_service(), allowing_rate_limiter());
+    let (app, authorization) = build_router(ok_service(), allowing_rate_limiter());
 
-    let request = axum::http::Request::builder()
+    let request = authenticated_request()
         .uri("/send")
         .method("POST")
         .header("content-type", "application/json")
@@ -213,13 +210,14 @@ async fn test_send_invite_succeeds_under_rate_limit() {
     let response = app.oneshot(request).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(authorization.calls(), [TEST_TOKEN]);
 }
 
 #[tokio::test]
 async fn test_send_invite_blocked_when_rate_limit_exceeded() {
-    let app = build_router(ok_service(), exceeding_rate_limiter());
+    let (app, _) = build_router(ok_service(), exceeding_rate_limiter());
 
-    let request = axum::http::Request::builder()
+    let request = authenticated_request()
         .uri("/send")
         .method("POST")
         .header("content-type", "application/json")
@@ -235,12 +233,7 @@ async fn test_send_invite_blocked_when_rate_limit_exceeded() {
 
 #[tokio::test]
 async fn test_send_invite_unauthenticated() {
-    let state = ReferralRouterState {
-        service: Arc::new(ok_service()),
-        rate_limiter: allowing_rate_limiter(),
-    };
-    // No user context extension — should fail auth
-    let app: axum::Router = referral_router(state);
+    let (app, _) = build_router(ok_service(), allowing_rate_limiter());
 
     let request = axum::http::Request::builder()
         .uri("/send")
@@ -260,9 +253,9 @@ async fn test_send_invite_unauthenticated() {
 async fn test_get_code_not_affected_by_rate_limit() {
     // GET /code should succeed even when rate limiter would exceed,
     // because rate limiting middleware only applies to /send
-    let app = build_router(ok_service(), exceeding_rate_limiter());
+    let (app, _) = build_router(ok_service(), exceeding_rate_limiter());
 
-    let request = axum::http::Request::builder()
+    let request = authenticated_request()
         .uri("/code")
         .method("GET")
         .body(axum::body::Body::empty())
