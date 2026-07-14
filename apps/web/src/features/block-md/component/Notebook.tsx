@@ -128,6 +128,7 @@ export function Notebook(props: {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const [discussionRef, setDiscussionRef] = createSignal<HTMLDivElement>();
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   const comments = commentsStore.get;
@@ -328,6 +329,7 @@ export function Notebook(props: {
         >
           <div class="pointer-events-auto sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
             <MarkdownOutline
+              discussion={discussionRef}
               editor={() => md.editor}
               scrollContainer={() => md.scrollContainer}
             />
@@ -390,7 +392,9 @@ export function Notebook(props: {
             </Show>
           </div>
           <Show when={!history.isOpen()}>
-            <DocumentDiscussion />
+            <div ref={setDiscussionRef}>
+              <DocumentDiscussion />
+            </div>
           </Show>
         </ParamsProvider>
       </div>

@@ -44,13 +44,16 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
 }
 
 export function MarkdownOutline(props: {
+  discussion: Accessor<HTMLElement | undefined>;
   editor: Accessor<LexicalEditor | undefined>;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
   const [headings, setHeadings] = createSignal<OutlineHeading[]>([]);
   const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
+  const [discussionActive, setDiscussionActive] = createSignal(false);
 
   createEffect(() => {
+    const discussion = props.discussion();
     const editor = props.editor();
     const scrollContainer = props.scrollContainer();
     if (!editor || !scrollContainer) return;
@@ -60,15 +63,24 @@ export function MarkdownOutline(props: {
     const syncActiveHeading = () => {
       const currentHeadings = headings();
       const containerTop = scrollContainer.getBoundingClientRect().top;
+      const activeLine = containerTop + ACTIVE_HEADING_OFFSET;
+      const discussionIsActive =
+        (discussion?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY) <=
+          activeLine ||
+        scrollContainer.scrollTop + scrollContainer.clientHeight >=
+          scrollContainer.scrollHeight - 1;
+      setDiscussionActive(discussionIsActive);
+      if (discussionIsActive) {
+        setActiveHeadingKey();
+        return;
+      }
+
       const headingTops = currentHeadings.map(
         (heading) =>
           editor.getElementByKey(heading.key)?.getBoundingClientRect().top ??
           Number.POSITIVE_INFINITY
       );
-      const activeIndex = getActiveHeadingIndex(
-        headingTops,
-        containerTop + ACTIVE_HEADING_OFFSET
-      );
+      const activeIndex = getActiveHeadingIndex(headingTops, activeLine);
       setActiveHeadingKey(currentHeadings[activeIndex]?.key);
     };
 
@@ -112,29 +124,43 @@ export function MarkdownOutline(props: {
     });
   });
 
-  const scrollToHeading = (heading: OutlineHeading) => {
-    const editor = props.editor();
+  const scrollToElement = (element: HTMLElement) => {
     const scrollContainer = props.scrollContainer();
-    const headingElement = editor?.getElementByKey(heading.key);
-    if (!headingElement || !scrollContainer) return;
+    if (!scrollContainer) return;
 
     const containerTop = scrollContainer.getBoundingClientRect().top;
-    const headingTop = headingElement.getBoundingClientRect().top;
+    const elementTop = element.getBoundingClientRect().top;
     scrollContainer.scrollTo({
       top:
         scrollContainer.scrollTop +
-        headingTop -
+        elementTop -
         containerTop -
         ACTIVE_HEADING_OFFSET,
       behavior: 'smooth',
     });
+  };
+
+  const scrollToHeading = (heading: OutlineHeading) => {
+    const headingElement = props.editor()?.getElementByKey(heading.key);
+    if (!headingElement) return;
+
+    scrollToElement(headingElement);
     setActiveHeadingKey(heading.key);
+    setDiscussionActive(false);
+  };
+
+  const scrollToDiscussion = () => {
+    const discussion = props.discussion();
+    if (!discussion) return;
+
+    scrollToElement(discussion);
+    setActiveHeadingKey();
+    setDiscussionActive(true);
   };
 
   return (
-    <Show when={headings().length > 0}>
+    <Show when={headings().length > 0 || props.discussion()}>
       <nav aria-label="Document outline" class="w-52 py-1">
-        <div class="mb-2 px-2 text-xs font-medium text-ink-muted">Outline</div>
         <div class="flex flex-col gap-0.5">
           <For each={headings()}>
             {(heading) => (
@@ -155,6 +181,18 @@ export function MarkdownOutline(props: {
               </button>
             )}
           </For>
+          <Show when={props.discussion()}>
+            <button
+              type="button"
+              class="mt-1 w-full truncate border-edge-muted border-t border-l-2 border-l-transparent py-2 pr-2 pl-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
+              classList={{
+                'border-l-accent bg-accent/10 text-ink': discussionActive(),
+              }}
+              onClick={scrollToDiscussion}
+            >
+              Discussion
+            </button>
+          </Show>
         </div>
       </nav>
     </Show>
