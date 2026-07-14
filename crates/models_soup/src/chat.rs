@@ -9,7 +9,7 @@ use crate::SoupProperty;
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SoupChat {
+pub struct SoupChat<T> {
     /// The chat uuid
     pub id: Uuid,
 
@@ -39,6 +39,7 @@ pub struct SoupChat {
     /// The time the chat was deleted
     pub deleted_at: Option<chrono::DateTime<Utc>>,
 
-    /// Properties
-    pub properties: Vec<SoupProperty>,
+    /// Extra fields passed from above
+    #[serde(flatten)]
+    pub extra: T,
 }

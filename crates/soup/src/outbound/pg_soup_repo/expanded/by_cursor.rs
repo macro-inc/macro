@@ -271,7 +271,7 @@ pub async fn no_frecency_expanded_generic_soup(
     user_id: MacroUserIdStr<'_>,
     limit: u16,
     cursor: Query<Uuid, SimpleSortMethod, Frecency>,
-) -> Result<Vec<SoupItem>, sqlx::Error> {
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
@@ -280,7 +280,7 @@ pub async fn no_frecency_expanded_generic_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut items: Vec<SoupItem> = sqlx::query!(
+    let mut items: Vec<SoupItem<()>> = sqlx::query!(
 r#"        
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp

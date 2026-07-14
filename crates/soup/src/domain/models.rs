@@ -37,8 +37,10 @@ use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
     SimpleSortMethod, SortOn,
 };
+use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
@@ -752,14 +754,14 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
 /// a [SoupItem] with an associated frecency score
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct FrecencySoupItem {
+pub struct FrecencySoupItem<T> {
     /// the soup item
-    pub item: SoupItem,
+    pub item: SoupItem<T>,
     /// the frecency score
     pub frecency_score: Option<AggregateFrecency>,
 }
 
-impl Identify for FrecencySoupItem {
+impl<T> Identify for FrecencySoupItem<T> {
     type Id = String;
 
     fn id(&self) -> Self::Id {
@@ -767,7 +769,7 @@ impl Identify for FrecencySoupItem {
     }
 }
 
-impl SortOn<Frecency> for FrecencySoupItem {
+impl<T> SortOn<Frecency> for FrecencySoupItem<T> {
     fn sort_on(sort_type: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
         move |val| CursorVal {
             sort_type,
@@ -780,7 +782,7 @@ impl SortOn<Frecency> for FrecencySoupItem {
     }
 }
 
-impl SortOn<SimpleSortMethod> for FrecencySoupItem {
+impl<T> SortOn<SimpleSortMethod> for FrecencySoupItem<T> {
     fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
         let mut cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
@@ -798,9 +800,9 @@ pub struct GroupedSoupRequest<T> {
 
 /// A soup item with group metadata attached (returned from grouped queries).
 #[derive(Debug)]
-pub struct GroupedSoupItem {
+pub struct GroupedSoupItem<T> {
     /// The soup item
-    pub item: SoupItem,
+    pub item: SoupItem<T>,
     /// The frecency score (if available)
     pub frecency_score: Option<AggregateFrecency>,
     /// Which group this item belongs to
@@ -850,4 +852,11 @@ pub enum SoupErr {
     /// Entity filter AST expansion failed.
     #[error(transparent)]
     AstErr(#[from] ExpandErr),
+}
+
+/// This struct is a hack to allow returning properties values in soup items.
+/// soup should not depend directly on properties
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoupPropertiesField {
+    properties: Vec<SoupProperty>,
 }

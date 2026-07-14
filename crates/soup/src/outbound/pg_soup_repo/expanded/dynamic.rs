@@ -1435,7 +1435,7 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
-    fn into_soup_item(self) -> Result<SoupItem, sqlx::Error> {
+    fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
                 id,
@@ -1482,7 +1482,7 @@ impl SoupRow {
                 viewed_at,
                 sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
                 deleted_at,
-                properties: Default::default(),
+                extra: (),
             }),
             SoupRow::Chat(ChatRow {
                 id,
@@ -1510,7 +1510,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 deleted_at,
-                properties: Default::default(),
+                extra: (),
             }),
             SoupRow::Project(ProjectRow {
                 id,
@@ -1536,7 +1536,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 deleted_at,
-                properties: Default::default(),
+                extra: (),
             }),
         })
     }

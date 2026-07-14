@@ -157,7 +157,7 @@ where
         &self,
         soup_type: SoupType,
         req: AdvancedSortParams<'_>,
-    ) -> Result<Vec<SoupItem>, T::Err> {
+    ) -> Result<Vec<SoupItem<()>>, T::Err> {
         match soup_type {
             SoupType::Expanded => self.soup_storage.expanded_soup_by_ids(req).await,
             SoupType::UnExpanded => self.soup_storage.unexpanded_soup_by_ids(req).await,
@@ -336,7 +336,7 @@ where
 
         let mut frecency_scores: Vec<Option<AggregateFrecency>> =
             Vec::with_capacity(email_response.items.len());
-        let mut items: Vec<SoupItem> = email_response
+        let mut items: Vec<SoupItem<()>> = email_response
             .items
             .into_iter()
             .map(
@@ -354,7 +354,7 @@ where
                         attachments: Vec::<SoupAttachment>::mirror(attachments),
                         participants: Vec::<SoupContact>::mirror(participants),
                         labels: Vec::<SoupLabel>::mirror(labels),
-                        properties: Default::default(),
+                        extra: (),
                     };
                     SoupItem::EmailThread(soup_email)
                 },

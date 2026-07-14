@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::models::{
     AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-    SimpleSortRequest, SoupErr, SoupRequest,
+    SimpleSortRequest, SoupErr, SoupPropertiesField, SoupRequest,
 };
 use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -21,33 +21,33 @@ pub trait SoupRepo: Send + Sync + 'static {
     fn expanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for a simple sorted cursor query.
     fn unexpanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Fetch expanded soup items for an explicit list of entity ids.
     fn expanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for an explicit list of entity ids.
     fn unexpanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
     /// Populates properties for a slice of SoupItems. The user id scopes which
     /// tag properties are visible (the caller's own and their team's).
     fn populate_properties<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
-        items: &'a mut [SoupItem],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        items: Vec<SoupItem<()>>,
+    ) -> impl Future<Output = Result<Vec<SoupItem<SoupPropertiesField>>, Self::Err>> + Send;
 
     /// Fetches the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -60,7 +60,7 @@ pub trait SoupRepo: Send + Sync + 'static {
     fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup
@@ -70,8 +70,8 @@ pub trait SoupRepo: Send + Sync + 'static {
 /// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
 /// 1. The filter type is an [Option] [EntityFilterAst]
 pub type SoupOutput<T> = Either<
-    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, T>,
-    PaginatedCursor<FrecencySoupItem, String, Frecency, T>,
+    PaginatedCursor<FrecencySoupItem<SoupPropertiesField>, String, SimpleSortMethod, T>,
+    PaginatedCursor<FrecencySoupItem<SoupPropertiesField>, String, Frecency, T>,
 >;
 
 #[cfg(test)]
@@ -98,7 +98,7 @@ pub trait SoupService: Send + Sync + 'static {
     fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, SoupErr>> + Send;
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, SoupErr>> + Send;
 
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -127,7 +127,7 @@ where
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
         (**self).get_user_soup_grouped(req).await
     }
 
@@ -165,7 +165,7 @@ impl SoupService for NoOpSoupService {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
         Err(no_op_soup_err())
     }
 

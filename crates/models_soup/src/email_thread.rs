@@ -164,7 +164,7 @@ pub struct SoupEmailThreadPreview {
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct SoupEnrichedEmailThreadPreview {
+pub struct SoupEnrichedEmailThreadPreview<T> {
     /// Base email thread preview.
     #[serde(flatten)]
     pub thread: SoupEmailThreadPreview,
@@ -174,6 +174,7 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub participants: Vec<SoupContact>,
     /// Labels attached to the thread.
     pub labels: Vec<SoupLabel>,
-    /// Properties attached to the thread.
-    pub properties: Vec<SoupProperty>,
+    /// Extra fields passed from above
+    #[serde(flatten)]
+    pub extra: T,
 }

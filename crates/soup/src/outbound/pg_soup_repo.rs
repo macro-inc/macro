@@ -2,7 +2,7 @@ use crate::{
     domain::{
         models::{
             AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, SimpleSortQuery,
-            SimpleSortRequest,
+            SimpleSortRequest, SoupPropertiesField,
         },
         ports::SoupRepo,
     },
@@ -39,7 +39,7 @@ impl SoupRepo for PgSoupRepo {
     fn expanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
         match req.cursor {
             SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
                 // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
@@ -88,7 +88,7 @@ impl SoupRepo for PgSoupRepo {
     fn unexpanded_generic_cursor_soup<'a>(
         &self,
         req: SimpleSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
         match req.cursor {
             SimpleSortQuery::ItemsFilter(_) => Either::Left(Either::Left(not_implemented(req))),
             SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
@@ -116,22 +116,22 @@ impl SoupRepo for PgSoupRepo {
     fn expanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
         expanded::by_ids::expanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
     }
 
     fn unexpanded_soup_by_ids<'a>(
         &self,
         req: AdvancedSortParams<'a>,
-    ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
+    ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send {
         unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
     }
 
     fn populate_properties<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
-        items: &'a mut [SoupItem],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+        items: Vec<SoupItem<()>>,
+    ) -> impl Future<Output = Result<Vec<SoupItem<SoupPropertiesField>>, Self::Err>> + Send {
         populate_properties(&self.pool.0, user_id, items)
     }
 
@@ -282,7 +282,7 @@ macro_rules! map_soup_type {
                         r.is_completed,
                     ),
                     deleted_at: r.deleted_at,
-                    properties: Default::default(),
+                    extra: (),
                 },
             )),
             "chat" => Ok(::models_soup::item::SoupItem::Chat(
@@ -303,7 +303,7 @@ macro_rules! map_soup_type {
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
                     deleted_at: r.deleted_at,
-                    properties: Default::default(),
+                    extra: (),
                 },
             )),
             "project" => Ok(::models_soup::item::SoupItem::Project(
@@ -323,7 +323,7 @@ macro_rules! map_soup_type {
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
                     deleted_at: r.deleted_at,
-                    properties: Default::default(),
+                    extra: (),
                 },
             )),
             _ => Err(sqlx::Error::TypeNotFound {
