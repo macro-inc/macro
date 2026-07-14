@@ -76,6 +76,14 @@ export type NavigationCause =
   | 'replace';
 
 function sameContent(a: SplitContent, b: SplitContent): boolean {
+  if (
+    a.type === 'component' &&
+    a.id === 'tag' &&
+    b.type === 'component' &&
+    b.id === 'tag'
+  ) {
+    return a.params?.tagOptionId === b.params?.tagOptionId;
+  }
   return a.type === b.type && a.id === b.id;
 }
 
@@ -111,6 +119,10 @@ function contentUrlSegments(content: SplitContent): string[] {
 }
 
 function keyOfSplitContent(s: SplitContent): SplitKey {
+  if (s.type === 'component' && s.id === 'tag') {
+    const tagOptionId = s.params?.tagOptionId;
+    return `component:tag:${typeof tagOptionId === 'string' ? tagOptionId : ''}` as SplitKey;
+  }
   return `${s.type}:${s.id}`;
 }
 

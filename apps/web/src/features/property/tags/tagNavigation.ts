@@ -37,12 +37,14 @@ export function buildTaggedItemsQuery(tag: TagNavigationTarget): Query {
 export function buildTaggedItemsSplitContent(
   tag: TagNavigationTarget
 ): SplitContent {
+  const searchPreset = getViewPreset('search');
   return {
     type: 'component',
-    id: 'tag',
+    id: 'search',
     preserveParams: true,
     params: {
-      tagOptionId: tag.optionId,
+      initialFilters: buildTaggedItemsQuery(tag),
+      initialClientFilters: searchPreset?.clientFilters,
     },
   };
 }

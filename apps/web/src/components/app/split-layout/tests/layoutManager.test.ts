@@ -48,6 +48,12 @@ function createMockOrchestrator(): BlockOrchestrator {
   } as unknown as BlockOrchestrator;
 }
 
+function tagOptionId(content: SplitContent): unknown {
+  return content.type === 'component' && content.id === 'tag'
+    ? content.params?.tagOptionId
+    : undefined;
+}
+
 describe('layoutManager', () => {
   describe('url routing', () => {
     it('decodes tag urls into a tag component with preserved params', () => {
@@ -74,6 +80,74 @@ describe('layoutManager', () => {
 
         expect(manager.getUrlSegments()).toEqual(['tag', 'tag-option-1']);
         expect(manager.getUrl()).toBe('tag/tag-option-1');
+
+        dispose();
+      });
+    });
+
+    it('reconciles tag urls when only the tag id changes', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          {
+            type: 'component',
+            id: 'tag',
+            preserveParams: true,
+            params: { tagOptionId: 'tag-option-1' },
+          },
+        ]);
+
+        manager.reconcile([
+          {
+            type: 'component',
+            id: 'tag',
+            preserveParams: true,
+            params: { tagOptionId: 'tag-option-2' },
+          },
+        ]);
+
+        expect(manager.getUrlSegments()).toEqual(['tag', 'tag-option-2']);
+        expect(manager.activeSplit()?.content()).toEqual({
+          type: 'component',
+          id: 'tag',
+          preserveParams: true,
+          params: { tagOptionId: 'tag-option-2' },
+        });
+
+        dispose();
+      });
+    });
+
+    it('updates the selected tag while navigating split history', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          {
+            type: 'component',
+            id: 'tag',
+            preserveParams: true,
+            params: { tagOptionId: 'tag-option-1' },
+          },
+        ]);
+
+        const split = manager.activeSplit()!;
+        split.replace({
+          next: {
+            type: 'component',
+            id: 'tag',
+            preserveParams: true,
+            params: { tagOptionId: 'tag-option-2' },
+          },
+        });
+
+        expect(tagOptionId(split.content())).toBe('tag-option-2');
+        expect(manager.getUrlSegments()).toEqual(['tag', 'tag-option-2']);
+
+        split.goBack();
+        expect(tagOptionId(split.content())).toBe('tag-option-1');
+        expect(manager.getUrlSegments()).toEqual(['tag', 'tag-option-1']);
+
+        split.goForward();
+        expect(tagOptionId(split.content())).toBe('tag-option-2');
+        expect(manager.getUrlSegments()).toEqual(['tag', 'tag-option-2']);
 
         dispose();
       });
