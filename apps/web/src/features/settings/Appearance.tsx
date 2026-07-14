@@ -53,7 +53,7 @@ import {
 /** Copies a theme's JSON to the clipboard (for sharing / importing elsewhere). */
 function CopyThemeButton(props: { themeId: string; name: string }) {
   return (
-    <Tooltip as="span" label={`Copy ${props.name}`}>
+    <Tooltip as="span" label="Copy theme">
       <button
         type="button"
         aria-label={`Copy ${props.name}`}
@@ -76,7 +76,7 @@ function CopyThemeButton(props: { themeId: string; name: string }) {
 /** Edits a theme in the inline editor (custom → in place, default → forked). */
 function EditThemeButton(props: { name: string; onEdit: () => void }) {
   return (
-    <Tooltip as="span" label={`Edit ${props.name}`}>
+    <Tooltip as="span" label="Edit theme">
       <button
         type="button"
         aria-label={`Edit ${props.name}`}
