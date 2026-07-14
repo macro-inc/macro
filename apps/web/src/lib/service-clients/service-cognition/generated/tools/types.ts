@@ -1374,6 +1374,52 @@ export interface EditDocumentResponse {
   summary: string;
 }
 /**
+ * Rename or recolor an existing tag in the user's personal set or their team's shared set. The tag's id is preserved, so the change is reflected everywhere the tag is already applied — no item loses the tag. Provide the tag's `id` and its set's `property_definition_id` (both from ListTags) plus a new `label` and/or `color`; omit whichever you want to leave unchanged. This edits the tag itself; to change which tags are on a specific item, use SetEntityProperty instead.
+ */
+export interface EditTag {
+  /**
+   * A new color as a 6-digit hex string like "#3B82F6". Omit to keep the current color.
+   */
+  color?: string | null;
+  /**
+   * The tag's option id (the `id` field from a ListTags result).
+   */
+  id: string;
+  /**
+   * A new label for the tag. Omit to keep the current label.
+   */
+  label?: string | null;
+  /**
+   * The tag set's property definition id (the `propertyDefinitionId` of the ListTags set that contains this tag).
+   */
+  property_definition_id: string;
+}
+/**
+ * Response from the [`EditTag`] tool.
+ */
+export interface EditTagResponse {
+  /**
+   * The tag's color after the edit, when set.
+   */
+  color?: string | null;
+  /**
+   * The tag's option id (unchanged).
+   */
+  id: string;
+  /**
+   * The tag's label after the edit.
+   */
+  label: string;
+  /**
+   * The tag set's property definition id.
+   */
+  propertyDefinitionId: string;
+  /**
+   * Human-readable summary.
+   */
+  summary: string;
+}
+/**
  * A recipient for an email.
  */
 export interface EmailRecipient {

@@ -689,6 +689,21 @@ export const EditDocumentResponse = z.object({
   summary: z.string(),
 });
 
+export const EditTag = z.object({
+  color: z.union([z.string(), z.null()]).default(null),
+  id: z.string().uuid(),
+  label: z.union([z.string(), z.null()]).default(null),
+  property_definition_id: z.string().uuid(),
+});
+
+export const EditTagResponse = z.object({
+  color: z.union([z.string(), z.null()]).optional(),
+  id: z.string().uuid(),
+  label: z.string(),
+  propertyDefinitionId: z.string().uuid(),
+  summary: z.string(),
+});
+
 export const GetCompany = z.object({ company_id: z.string().uuid() });
 
 export const GetCompanyResponse = z.object({

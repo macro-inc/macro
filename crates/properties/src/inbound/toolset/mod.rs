@@ -2,6 +2,7 @@
 
 mod create_tag;
 mod delete_tag;
+mod edit_tag;
 mod get_entity_properties;
 mod list_tags;
 mod set_entity_property;
@@ -19,6 +20,7 @@ use std::sync::Arc;
 
 pub use create_tag::{CreateTag, CreateTagResponse};
 pub use delete_tag::{DeleteTag, DeleteTagResponse};
+pub use edit_tag::{EditTag, EditTagResponse};
 pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};
 pub use list_tags::{ListTags, ListTagsResponse};
 pub use set_entity_property::{SetEntityProperty, SetEntityPropertyResponse};
@@ -103,5 +105,6 @@ where
         .add_tool::<SetEntityProperty, PropertiesToolContext<T, A>>()
         .add_tool::<ListTags, PropertiesToolContext<T, A>>()
         .add_tool::<CreateTag, PropertiesToolContext<T, A>>()
+        .add_tool::<EditTag, PropertiesToolContext<T, A>>()
         .add_tool::<DeleteTag, PropertiesToolContext<T, A>>()
 }

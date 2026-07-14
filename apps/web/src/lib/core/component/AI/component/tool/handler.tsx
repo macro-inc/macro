@@ -11,6 +11,7 @@ import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
+import { editTagHandler } from './EditTag';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
@@ -78,6 +79,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateTag: createTagHandler,
   DeleteTag: deleteTagHandler,
   EditDocument: editDocumentHandler,
+  EditTag: editTagHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
   ReadCallRecord: readCallRecordHandler,

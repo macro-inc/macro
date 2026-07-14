@@ -30,6 +30,7 @@ type ToolParserMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -146,6 +147,7 @@ const toolParserMap = {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
   },
+  EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
   GetCompany: {
     call: schemas.GetCompany,
     response: schemas.GetCompanyResponse,
@@ -288,6 +290,7 @@ type ToolDataMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
