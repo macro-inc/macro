@@ -18,9 +18,9 @@
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { getCompanyStageOptionId } from '@entity/utils/company-properties';
 import {
+  ALL_COMPANY_STAGE_OPTIONS,
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
-  LEGACY_COMPANY_STAGE_OPTIONS,
 } from '@entity/utils/task-properties';
 import {
   CRM_TEAM_STAGE_DEFINITION_NAME,
@@ -86,7 +86,9 @@ const DEFAULT_STAGES: DealStage[] = COMPANY_STAGE_OPTIONS.map((option) => ({
   label: option.label,
 }));
 
-const LEGACY_STAGES: DealStage[] = LEGACY_COMPANY_STAGE_OPTIONS.map(
+// The filterable set on the system default: every system stage, in
+// canonical pipeline order (legacy stages included).
+const ALL_SYSTEM_STAGES: DealStage[] = ALL_COMPANY_STAGE_OPTIONS.map(
   (option) => ({
     id: option.value as string,
     label: option.label,
@@ -234,7 +236,7 @@ export function useDealStages(): DealStages {
   });
 
   const filterStages = createMemo((): DealStage[] =>
-    isCustomized() ? stages() : [...stages(), ...LEGACY_STAGES]
+    isCustomized() ? stages() : ALL_SYSTEM_STAGES
   );
 
   const stageDefinitionId = createMemo(() => {

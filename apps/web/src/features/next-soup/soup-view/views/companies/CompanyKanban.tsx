@@ -63,39 +63,31 @@ export function CompanyKanban() {
   const saveMutation = useBulkSaveEntityPropertiesMutation();
   const orchestrator = useGlobalBlockOrchestrator();
 
-  const { stages, stageProperty, resolveStage, stageLabel } = useDealStages();
+  const { stages, filterStages, stageProperty, resolveStage } = useDealStages();
   const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
   const closedStageIds = useClosedStageIds(stages);
 
   const stageColumns = createMemo((): StageColumn[] => {
-    const all: StageColumn[] = [
-      ...stages().map((stage) => ({ key: stage.id, label: stage.label })),
+    // Candidates in canonical pipeline order: the filterable set (active
+    // stages plus retired legacy stages on the system default), then
+    // "No stage" — checked columns always render in this fixed order.
+    const candidates: StageColumn[] = [
+      ...filterStages().map((stage) => ({ key: stage.id, label: stage.label })),
       { key: NO_STAGE_KEY, label: 'No stage' },
     ];
     // An active stage filter removes the filtered-out columns entirely,
-    // not just their (already predicate-filtered) cards.
+    // not just their (already predicate-filtered) cards. With no filter,
+    // only the active stage set shows (legacy stages are opt-in).
     const filter = stageFilter();
-    if (filter.length === 0) return all;
-    const kept = all.filter((column) =>
+    if (filter.length === 0) {
+      const active = new Set(stages().map((stage) => stage.id));
+      return candidates.filter(
+        (column) => column.key === NO_STAGE_KEY || active.has(column.key)
+      );
+    }
+    return candidates.filter((column) =>
       filter.includes(column.key === NO_STAGE_KEY ? NO_STAGE : column.key)
     );
-    // Filtered-in stages outside the active set (retired legacy stages) get
-    // their own column so their companies stay visible; keep "No stage" last.
-    const known = new Set(all.map((column) => column.key));
-    const extras = filter
-      .filter((id) => id !== NO_STAGE && !known.has(id))
-      .map((id) => ({ key: id, label: stageLabel(id) ?? 'Unknown stage' }));
-    if (extras.length === 0) return kept;
-    const noStageIndex = kept.findIndex(
-      (column) => column.key === NO_STAGE_KEY
-    );
-    return noStageIndex === -1
-      ? [...kept, ...extras]
-      : [
-          ...kept.slice(0, noStageIndex),
-          ...extras,
-          ...kept.slice(noStageIndex),
-        ];
   });
 
   const { paneVisible, selectedEntity } = usePreviewPaneVisiblity();
