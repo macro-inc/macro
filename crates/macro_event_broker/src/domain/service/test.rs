@@ -293,13 +293,3 @@ async fn dispatch_returns_serialization_failure_without_publishing() {
     tokio::task::yield_now().await;
     assert!(service.publisher.calls.lock().unwrap().is_empty());
 }
-
-#[test]
-fn dispatch_returns_internal_error_without_runtime() {
-    let service = MacroEventBrokerService::new(RecordingPublisher::default());
-
-    let error = service.send_event(&example_event()).unwrap_err();
-
-    assert!(matches!(error, EventBrokerError::Internal(_)));
-    assert!(service.publisher.calls.lock().unwrap().is_empty());
-}

@@ -13,8 +13,8 @@ pub trait MacroEventBroker: Send + Sync + 'static {
     /// Serialize `event` to JSON and schedule it for publication to the topic declared by its
     /// typed payload, keyed by [`MacroEvent::key`].
     ///
-    /// Serialization and scheduling errors are returned immediately. Publication runs in a
-    /// detached task, so publisher errors and timeouts are logged instead of returned.
+    /// Serialization errors are returned immediately. Publication runs in a detached task, so
+    /// publisher errors and timeouts are logged instead of returned.
     fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError>;
 }
 

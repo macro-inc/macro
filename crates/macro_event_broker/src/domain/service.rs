@@ -45,10 +45,7 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
         let publisher = Arc::clone(&self.publisher);
         let span = tracing::Span::current();
 
-        tokio::runtime::Handle::try_current()
-            .map_err(|error| EventBrokerError::Internal(rootcause::report!(error).into()))?;
-
-        let join_handle = tokio::spawn(
+        tokio::spawn(
             async move {
                 tokio::select! {
                     biased;
@@ -74,7 +71,6 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
             }
             .instrument(span),
         );
-        drop(join_handle);
 
         Ok(())
     }
