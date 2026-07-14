@@ -26,11 +26,19 @@ import {
 import CircleDashed from '@phosphor/circle-dashed.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, EmptyStatePanel, Layer } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Column key for companies without a Stage value. */
 const NO_STAGE_KEY = '';
+
+/** Minimum column width the snapping layout will shrink to. */
+const MIN_COLUMN_WIDTH = 224;
+/** gap-3 between columns. */
+const COLUMN_GAP = 12;
+/** p-3 on each side of the column row. */
+const BOARD_PADDING_X = 24;
 
 type StageColumn = {
   key: string;
@@ -103,6 +111,27 @@ export function CompanyKanban() {
   const [dropTarget, setDropTarget] = createSignal<string>();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
 
+  // Columns snap to a whole-column layout: as many columns as fit at the
+  // minimum width, each widened to exactly fill the viewport. Growing the
+  // board snaps in the next column once there's room; the rest scroll.
+  const boardSize = createElementSize(scrollRef);
+  const columnWidth = createMemo(() => {
+    const width = boardSize.width;
+    const count = stageColumns().length;
+    if (!width || count === 0) return undefined;
+    const usable = width - BOARD_PADDING_X;
+    const fit = Math.max(
+      1,
+      Math.min(
+        count,
+        Math.floor((usable + COLUMN_GAP) / (MIN_COLUMN_WIDTH + COLUMN_GAP))
+      )
+    );
+    // Floored so rounding can't overflow the viewport by a pixel and
+    // phantom-trigger the horizontal scrollbar.
+    return Math.floor((usable - (fit - 1) * COLUMN_GAP) / fit);
+  });
+
   const moveToStage = (entityId: string, stageKey: string) => {
     const entity = companies().find((company) => company.id === entityId);
     if (!entity) return;
@@ -161,13 +190,18 @@ export function CompanyKanban() {
                 {(column, columnIndex) => (
                   <div
                     class={cn(
-                      // Columns split the available width evenly, but never
-                      // shrink below w-64 — past that the board scrolls.
-                      'flex h-full min-w-64 flex-1 flex-col rounded-lg border border-edge-muted bg-surface',
+                      // Fallback sizing until the board is measured; after
+                      // that the snapping columnWidth() takes over.
+                      'flex h-full min-w-56 flex-1 flex-col rounded-lg border border-edge-muted bg-surface',
                       dropTarget() === column.key &&
                         draggedId() &&
                         'border-accent/50 bg-accent/5'
                     )}
+                    style={
+                      columnWidth() !== undefined
+                        ? { width: `${columnWidth()}px`, flex: 'none' }
+                        : undefined
+                    }
                     onDragOver={(e) => {
                       if (!draggedId()) return;
                       e.preventDefault();
