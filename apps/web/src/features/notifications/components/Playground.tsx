@@ -1,0 +1,793 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { NotificationRenderer } from '@core/component/NotificationRenderer';
+import { formatDate } from '@core/util/date';
+import { NotificationRow } from '@entity';
+import { Button } from '@ui';
+import {
+  type Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+} from 'solid-js';
+import {
+  maybeHandlePlatformNotification,
+  type PlatformNotificationData,
+  toPlatformNotificationData,
+} from '../notification-platform';
+import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
+import {
+  DefaultDocumentNameResolver,
+  DefaultUserNameResolver,
+} from '../notification-resolvers';
+import { createNotificationSource } from '../notification-source';
+import type { UnifiedNotification } from '../types';
+import { createMockWebsocket } from '../utils/mock-websocket';
+import {
+  PlatformNotificationProvider,
+  type PlatformNotificationState,
+  usePlatformNotificationState,
+} from './PlatformNotificationProvider';
+
+const PLAYGROUND_INITIAL_VALUE =
+  "Hey! Check out this **cool feature** we just shipped.\n\nHere's a code example:\n```typescript\nconst notify = () => {\n  console.log('Hello!');\n};\n```\n\nLet me know what you think!";
+
+type NotificationsByType = Map<string, UnifiedNotification[]>;
+
+function groupNotificationsByType(
+  notifications: UnifiedNotification[]
+): NotificationsByType {
+  const groups = new Map<string, UnifiedNotification[]>();
+  for (const notification of notifications) {
+    const type = notification.notification_event_type;
+    if (!groups.has(type)) {
+      groups.set(type, []);
+    }
+    groups.get(type)!.push(notification);
+  }
+  return groups;
+}
+
+function hasNotificationMetadata(notification: UnifiedNotification): boolean {
+  return notification.notification_metadata != null;
+}
+
+function TypeButton(props: {
+  type: string;
+  count: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const label =
+    NOTIFICATION_LABEL_BY_TYPE[
+      props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+    ] || props.type;
+
+  return (
+    <button
+      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
+        props.isSelected ? 'bg-accent text-ink' : 'bg-surface hover:bg-hover'
+      }`}
+      onClick={props.onSelect}
+    >
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-col gap-1 flex-1 min-w-0">
+          <span
+            class={`text-xs font-mono uppercase font-medium ${
+              props.isSelected ? 'text-[black]' : 'text-accent'
+            }`}
+          >
+            {label}
+          </span>
+          <span
+            class={`text-xs font-mono truncate ${
+              props.isSelected ? 'text-[black]/70' : 'text-ink-muted'
+            }`}
+          >
+            {props.type}
+          </span>
+        </div>
+        <span
+          class={`text-sm font-medium shrink-0 ${
+            props.isSelected ? 'text-[black]' : 'text-ink-muted'
+          }`}
+        >
+          {props.count}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function NotificationItem(props: {
+  notification: UnifiedNotification;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const hasData = () => hasNotificationMetadata(props.notification);
+  const isUnread = () => !props.notification.viewed_at;
+
+  return (
+    <button
+      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
+        props.isSelected
+          ? 'bg-accent/10 border-l-2 border-l-accent'
+          : 'bg-surface hover:bg-hover'
+      }`}
+      onClick={props.onSelect}
+    >
+      <div class="flex items-start gap-3">
+        <div
+          class={`size-2 mt-1 shrink-0 ${
+            isUnread() ? 'bg-accent' : 'bg-ink-extra-muted'
+          }`}
+        />
+        <div class="flex-1 min-w-0">
+          <Show when={hasData()}>
+            <NotificationRenderer
+              notification={props.notification}
+              mode="preview"
+            />
+          </Show>
+          <div class="text-xs text-ink-muted font-mono mt-2">
+            {formatDate(props.notification.created_at)}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function BrowserFormat(props: { notification: UnifiedNotification }) {
+  const hasData = () => hasNotificationMetadata(props.notification);
+  const [browserNotif, setBrowserNotif] = createSignal<any>(null);
+
+  createEffect(() => {
+    if (hasData()) {
+      toPlatformNotificationData(
+        props.notification,
+        DefaultUserNameResolver,
+        DefaultDocumentNameResolver
+      ).then(setBrowserNotif);
+    } else {
+      setBrowserNotif(null);
+    }
+  });
+
+  return (
+    <Show
+      when={hasData()}
+      fallback={
+        <div class="text-ink-muted text-sm italic">No extractable data</div>
+      }
+    >
+      <Show
+        when={browserNotif()}
+        fallback={
+          <div class="text-ink-muted text-sm animate-pulse">Loading...</div>
+        }
+      >
+        <div class="space-y-6">
+          <div>
+            <div class="text-xs font-mono text-ink-muted uppercase mb-3">
+              Visual Preview
+            </div>
+            <BrowserNotificationPreview
+              title={browserNotif()!.title}
+              body={browserNotif()!.options.body}
+              icon={browserNotif()!.options.icon}
+            />
+          </div>
+
+          <div class="pt-4 border-t border-edge-muted space-y-4">
+            <div>
+              <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+                Title
+              </div>
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
+                {browserNotif()!.title}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+                Description (Body)
+              </div>
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted text-sm text-ink">
+                {browserNotif()!.body || (
+                  <span class="italic text-ink-muted">(empty)</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+                Icon
+              </div>
+              <div class="bg-surface p-4 rounded-lg border border-edge-muted">
+                <code class="text-xs text-ink-muted">
+                  {browserNotif()!.icon}
+                </code>
+              </div>
+            </div>
+          </div>
+
+          <details class="group">
+            <summary class="text-xs font-mono text-ink-muted uppercase hover:text-accent">
+              Raw JSON ▸
+            </summary>
+            <pre class="bg-surface p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
+              {JSON.stringify(browserNotif(), null, 2)}
+            </pre>
+          </details>
+        </div>
+      </Show>
+    </Show>
+  );
+}
+
+function PermissionButton(props: { platformNotif: any }) {
+  return (
+    <Show when={props.platformNotif !== 'not-supported'}>
+      <div class="mt-4 pt-4 border-t border-edge-muted">
+        <Show
+          when={props.platformNotif.permission() === 'granted'}
+          fallback={
+            <Button
+              variant="active"
+              onClick={() => props.platformNotif.requestPermission()}
+            >
+              Enable Browser Notifications
+            </Button>
+          }
+        >
+          <div class="flex items-center gap-3 text-sm text-accent bg-accent/10 px-4 py-3 rounded-lg">
+            <div class="size-2 bg-accent rounded-full animate-pulse" />
+            <span class="font-medium">Notifications Enabled</span>
+          </div>
+        </Show>
+      </div>
+    </Show>
+  );
+}
+
+function CustomBuilder(props: {
+  markdownEditor: ReturnType<typeof createConfiguredChannelMarkdownEditor>;
+  customNotification: UnifiedNotification;
+  onTest: (notification: UnifiedNotification) => void;
+}) {
+  return (
+    <div class="w-96 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+      <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
+        <h2 class="text-lg font-semibold text-ink mb-1">
+          Custom Message Builder
+        </h2>
+        <p class="text-xs text-ink-muted">Test markdown rendering</p>
+      </div>
+
+      <div class="flex-1 overflow-auto p-6 space-y-6">
+        <div>
+          <label class="block text-sm font-medium text-ink mb-3">
+            Message Content
+          </label>
+          <div class="border border-edge-muted rounded-lg p-3 bg-surface min-h-64 max-h-96 overflow-auto">
+            <MarkdownShell
+              config={props.markdownEditor}
+              placeholder="Type your markdown message here... (use @ for mentions)"
+              initialValue={PLAYGROUND_INITIAL_VALUE}
+            />
+          </div>
+          <p class="text-xs text-ink-muted mt-2">
+            Full markdown editor with syntax highlighting, code blocks, and
+            formatting
+          </p>
+        </div>
+
+        <div class="pt-4 border-t border-edge-muted">
+          <Button
+            variant="active"
+            onClick={() => props.onTest(props.customNotification)}
+          >
+            🔔 Test Browser Notification
+          </Button>
+        </div>
+
+        <div>
+          <h3 class="text-sm font-medium text-ink mb-3">Live Preview</h3>
+          <div class="p-4 bg-surface-hover rounded-lg border border-edge-muted">
+            <NotificationRenderer
+              notification={props.customNotification}
+              mode="preview"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationList(props: {
+  type: string;
+  notifications: UnifiedNotification[];
+  selectedId: string | undefined;
+  onSelect: (notification: UnifiedNotification) => void;
+}) {
+  return (
+    <div class="w-96 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+      <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
+        <h2 class="text-lg font-semibold text-ink mb-1">
+          {NOTIFICATION_LABEL_BY_TYPE[
+            props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+          ] || props.type}
+        </h2>
+        <p class="text-xs text-ink-muted">
+          {props.notifications.length} notification
+          {props.notifications.length !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <div class="flex-1 overflow-auto">
+        <For each={props.notifications}>
+          {(notification) => (
+            <NotificationItem
+              notification={notification}
+              isSelected={props.selectedId === notification.id}
+              onSelect={() => props.onSelect(notification)}
+            />
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+function NotificationDetail(props: {
+  notification: UnifiedNotification;
+  siblings: UnifiedNotification[];
+  onTest: (notification: UnifiedNotification) => void;
+}) {
+  return (
+    <div class="p-8 max-w-4xl mx-auto">
+      <div class="mb-8 pb-6 border-b border-edge-muted">
+        <div class="flex items-start justify-between gap-4 mb-4">
+          <div class="flex-1">
+            <h2 class="text-3xl font-semibold text-ink mb-2">
+              {NOTIFICATION_LABEL_BY_TYPE[
+                props.notification
+                  .notification_event_type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+              ] || props.notification.notification_event_type}
+            </h2>
+            <p class="text-sm text-ink-muted">
+              {formatDate(props.notification.created_at)}
+            </p>
+          </div>
+          <Button
+            variant="active"
+            onClick={() => props.onTest(props.notification)}
+          >
+            🔔 Test Notification
+          </Button>
+        </div>
+      </div>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">Compact Row</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          One-line variant used in the right-panel notifications card. Hover for
+          the mark-done button; right-click for the context menu.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow notification={props.notification} />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">Notifications Card</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          What the right-panel card looks like when several notifications of
+          this type land on the same entity.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <div class="divide-y divide-ink-muted/8">
+            <For each={props.siblings.slice(0, 5)}>
+              {(n) => <NotificationRow notification={n} />}
+            </For>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">Expanded Row</h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same header as compact, but the content moves below and renders as
+          multi-line markdown aligned under the description.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow
+            notification={props.notification}
+            variant="expanded"
+          />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">
+          Expanded Row · no mark-done
+        </h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same variant with <code>showMarkDone=&#123;false&#125;</code> — the
+          check button is suppressed and the timestamp stays put on hover.
+        </p>
+        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+          <NotificationRow
+            notification={props.notification}
+            variant="expanded"
+            showMarkDone={false}
+          />
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-2">
+          Both variants side by side
+        </h3>
+        <p class="text-xs text-ink-muted mb-4">
+          Same notification in both variants — fonts, colors, indicator, icon,
+          sender, and mark-done affordance are identical; only the content
+          layout differs.
+        </p>
+        <div class="flex flex-col gap-4">
+          <div>
+            <div class="text-[10px] font-mono uppercase text-ink-extra-muted tracking-wider mb-1.5">
+              compact
+            </div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+              <NotificationRow notification={props.notification} />
+            </div>
+          </div>
+          <div>
+            <div class="text-[10px] font-mono uppercase text-ink-extra-muted tracking-wider mb-1.5">
+              expanded
+            </div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
+              <NotificationRow
+                notification={props.notification}
+                variant="expanded"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <h3 class="text-lg font-semibold text-ink mb-4">
+          Browser Notification Format
+        </h3>
+        <BrowserFormat notification={props.notification} />
+      </section>
+
+      <section>
+        <details class="group">
+          <summary class="text-lg font-semibold text-ink mb-4 hover:text-accent">
+            Raw Notification Data ▸
+          </summary>
+          <pre class="bg-surface p-6 rounded-xl border border-edge-muted text-xs overflow-auto mt-4">
+            {JSON.stringify(props.notification, null, 2)}
+          </pre>
+        </details>
+      </section>
+    </div>
+  );
+}
+
+function EmptyState(props: { title: string; description: string }) {
+  return (
+    <div class="h-full flex items-center justify-center text-center p-8">
+      <div>
+        <h2 class="text-2xl font-medium text-ink mb-3">{props.title}</h2>
+        <p class="text-ink-muted max-w-md">{props.description}</p>
+      </div>
+    </div>
+  );
+}
+
+function PlaygroundContent() {
+  const { ws } = createMockWebsocket();
+  const platformNotif = usePlatformNotificationState();
+  const [markdown, setMarkdown] = createSignal(PLAYGROUND_INITIAL_VALUE);
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: 'notifications-playground-markdown',
+    enableMentions: true,
+    users: () => [],
+    onChange: setMarkdown,
+  });
+  markdownEditor.buildHandle();
+
+  const notificationSource = createNotificationSource(ws);
+
+  const allNotifications = createMemo(() => notificationSource.notifications());
+  const notificationsByType = createMemo(() =>
+    groupNotificationsByType(allNotifications())
+  );
+  const typeEntries = createMemo(() =>
+    Array.from(notificationsByType().entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )
+  );
+
+  const [selectedType, setSelectedType] = createSignal<string | null>(null);
+  const [selectedNotification, setSelectedNotification] =
+    createSignal<UnifiedNotification | null>(null);
+  const [customMode, setCustomMode] = createSignal(false);
+
+  const selectedNotifications = createMemo(
+    () => notificationsByType().get(selectedType() || '') || []
+  );
+
+  const customNotification = createMemo((): UnifiedNotification => {
+    /** @ts-ignore */
+    return {
+      id: `custom-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      eventItemId: 'channel-custom',
+      eventItemType: 'channel',
+      sender_id: 'user-custom',
+      notification_event_type: 'channel_message_send',
+      notification_metadata: {
+        sender: 'user-custom',
+        messageContent: markdown(),
+        messageId: 'msg-custom',
+        channelType: 'direct_message',
+        channelName: 'test-channel',
+      },
+      viewed_at: null,
+      done: false,
+    } as UnifiedNotification;
+  });
+
+  createEffect(() => {
+    const notifications = selectedNotifications();
+    if (notifications.length > 0 && selectedType() !== null && !customMode()) {
+      setSelectedNotification(notifications[0]);
+    }
+  });
+
+  createEffect(() => {
+    if (customMode()) {
+      setSelectedNotification(customNotification());
+    }
+  });
+
+  const handleSelectType = (type: string) => {
+    setSelectedType(type);
+    setCustomMode(false);
+  };
+
+  const handleTestNotification = async (notification: UnifiedNotification) => {
+    if (platformNotif === 'not-supported') return;
+
+    const onNotification = (notification: UnifiedNotification) => {
+      const layoutManager = globalSplitManager();
+      if (!layoutManager) {
+        console.warn('no layout manager');
+        return;
+      }
+      maybeHandlePlatformNotification(
+        notification,
+        {
+          showNotification: async (data: PlatformNotificationData) => {
+            const notif = new Notification(data.title, data.options);
+            return {
+              onClick: (cb: any) => {
+                notif.addEventListener('click', cb);
+              },
+              close: () => {
+                notif.close();
+              },
+            };
+          },
+        } as PlatformNotificationState,
+        layoutManager
+      );
+    };
+
+    onNotification(notification);
+  };
+
+  const isLoading = () => notificationSource.isLoading();
+
+  return (
+    <Show
+      when={!isLoading()}
+      fallback={
+        <div class="h-screen flex items-center justify-center bg-surface">
+          <div class="text-center">
+            <div class="text-lg text-ink-muted animate-pulse mb-2">
+              Loading notifications...
+            </div>
+            <div class="text-xs text-ink-extra-muted">Fetching from server</div>
+          </div>
+        </div>
+      }
+    >
+      <div class="h-screen flex bg-surface">
+        {/* Type selector sidebar */}
+        <div class="w-80 border-r border-edge-muted bg-surface flex flex-col shrink-0">
+          <div class="p-6 border-b border-edge-muted bg-surface sticky top-0">
+            <h1 class="text-xl font-semibold text-ink mb-2">
+              Notifications Playground
+            </h1>
+            <div class="flex items-center gap-4 text-xs text-ink-muted">
+              <span>{allNotifications().length} total</span>
+              <span>•</span>
+              <span>{typeEntries().length} types</span>
+            </div>
+            <PermissionButton platformNotif={platformNotif} />
+          </div>
+
+          <div class="border-b border-edge-muted">
+            <button
+              class={`w-full p-4 text-left transition-all ${
+                customMode()
+                  ? 'bg-accent text-ink'
+                  : 'bg-surface hover:bg-hover'
+              }`}
+              onClick={() => {
+                setCustomMode(true);
+                setSelectedType(null);
+                setSelectedNotification(customNotification());
+              }}
+            >
+              <div class="flex items-center justify-between">
+                <span
+                  class={`text-sm font-medium ${customMode() ? 'text-[black]' : 'text-accent'}`}
+                >
+                  Custom Message Test
+                </span>
+                <span
+                  class={`text-xs ${customMode() ? 'text-[black]/70' : 'text-ink-muted'}`}
+                >
+                  Builder
+                </span>
+              </div>
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-auto">
+            <For each={typeEntries()}>
+              {([type, notifications]) => (
+                <TypeButton
+                  type={type}
+                  count={notifications.length}
+                  isSelected={selectedType() === type}
+                  onSelect={() => handleSelectType(type)}
+                />
+              )}
+            </For>
+          </div>
+        </div>
+
+        {/* Middle column: custom builder or notification list */}
+        <Show
+          when={customMode()}
+          fallback={
+            <Show
+              when={selectedType() !== null}
+              fallback={
+                <EmptyState
+                  title="Select a notification type"
+                  description="Choose a type from the left sidebar to see all notifications of that type"
+                />
+              }
+            >
+              <NotificationList
+                type={selectedType()!}
+                notifications={selectedNotifications()}
+                selectedId={selectedNotification()?.id}
+                onSelect={setSelectedNotification}
+              />
+            </Show>
+          }
+        >
+          <CustomBuilder
+            markdownEditor={markdownEditor}
+            customNotification={customNotification()}
+            onTest={handleTestNotification}
+          />
+        </Show>
+
+        {/* Detail view */}
+        <div class="flex-1 overflow-auto bg-surface">
+          <Show
+            when={selectedNotification()}
+            fallback={
+              <EmptyState
+                title="Select a notification"
+                description="Choose a notification from the list to see detailed rendering and format information"
+              />
+            }
+          >
+            {(notification) => (
+              <NotificationDetail
+                notification={notification()}
+                siblings={selectedNotifications()}
+                onTest={handleTestNotification}
+              />
+            )}
+          </Show>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
+export function NotificationsPlayground() {
+  return (
+    <PlatformNotificationProvider>
+      <PlaygroundContent />
+    </PlatformNotificationProvider>
+  );
+}
+
+interface NotificationProps {
+  icon?: string;
+  title: string;
+  body: string;
+  badge?: string;
+  onClose?: () => void;
+}
+
+// SCUFFED THEME: how do we want to handle these colors?
+export const BrowserNotificationPreview: Component<NotificationProps> = (
+  props
+) => {
+  return (
+    <div class="w-full bg-[#1a1a1a] rounded-lg shadow-2xl overflow-hidden">
+      <div class="flex items-start gap-3 p-4">
+        {/* Icon with optional badge */}
+        <div class="relative shrink-0">
+          <div class="size-10 rounded-lg overflow-hidden bg-[oklch(0.278_0.033_256.848)] flex items-center justify-center">
+            <Show
+              when={props.icon}
+              fallback={
+                <div class="size-6 bg-[oklch(0.446_0.03_256.802)] rounded" />
+              }
+            >
+              <img src={props.icon} alt="" class="size-full object-cover" />
+            </Show>
+          </div>
+          <Show when={props.badge}>
+            <div class="absolute -top-1 -left-1 size-5 bg-failure rounded-full flex items-center justify-center">
+              <img src={props.badge} alt="" class="size-3" />
+            </div>
+          </Show>
+        </div>
+
+        {/* Content */}
+        <div class="flex-1 min-w-0">
+          <div class="text-[white] font-medium text-sm mb-1 truncate">
+            {props.title}
+          </div>
+          <div class="text-[oklch(0.707_0.022_261.325)] text-sm line-clamp-2">
+            {props.body}
+          </div>
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={props.onClose}
+          class="shrink-0 text-[oklch(0.551_0.027_264.364)] hover:text-[oklch(0.872_0.01_258.338)] transition-colors"
+        >
+          <svg class="size-4" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fill-rule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+};

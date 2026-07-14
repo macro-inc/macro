@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-# This script detects which services are affected by changes in the cloud-storage workspace
+# This script detects which services are affected by changes in the root Rust workspace.
 # It uses cargo metadata to build a proper dependency graph
 
 # Get changed files from git
-CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E "^(rust/cloud-storage/|infra/|\.github/services-config\.json|\.github/scripts/build-cloud-storage-lambdas(-nix)?\.sh)" || true)
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E "^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/|\.config/|\.sqlx/|crates/|services/|tooling/xtask/|docker/|infra/|\.github/services-config\.json|\.github/workspace-dep-closures\.json|\.github/scripts/build-cloud-storage-lambdas(-nix)?\.sh)" || true)
 
 if [ -z "$CHANGED_FILES" ]; then
-    echo "No cloud-storage files changed"
+    echo "No Rust service or deployment files changed"
     echo "services=[]"
     echo "has_changes=false"
     exit 0
@@ -17,20 +17,19 @@ fi
 echo "Changed files:" >&2
 echo "$CHANGED_FILES" >&2
 
-# Change to cloud-storage directory
-cd rust/cloud-storage
-
 # Get cargo metadata for the entire workspace with dependencies
 METADATA=$(cargo metadata --format-version 1 --no-deps)
+WORKSPACE_ROOT=$(echo "$METADATA" | jq -r '.workspace_root')
 
 # Extract changed packages from the changed files
 CHANGED_PACKAGES=()
 while IFS= read -r file; do
-    # Extract package directory from file path (e.g., cloud-storage/models_bulk_upload/src/lib.rs -> models_bulk_upload)
-    if [[ "$file" =~ ^rust/cloud-storage/([^/]+)/ ]]; then
-        PKG_NAME="${BASH_REMATCH[1]}"
-        # Check if this is actually a package in our workspace
-        if echo "$METADATA" | jq -r --arg name "$PKG_NAME" '.packages[] | select(.name == $name) | .name' | grep -q "$PKG_NAME"; then
+    if [[ "$file" =~ ^(crates/[^/]+|services/[^/]+)/ ]]; then
+        PKG_DIR="${BASH_REMATCH[1]}"
+        PKG_NAME=$(echo "$METADATA" | jq -r \
+          --arg manifest "$WORKSPACE_ROOT/$PKG_DIR/Cargo.toml" \
+          '.packages[] | select(.manifest_path == $manifest) | .name' | head -n1)
+        if [ -n "$PKG_NAME" ]; then
             # Avoid duplicates
             if [[ ! " ${CHANGED_PACKAGES[@]} " =~ " ${PKG_NAME} " ]]; then
                 CHANGED_PACKAGES+=("$PKG_NAME")
@@ -44,16 +43,27 @@ done <<< "$CHANGED_FILES"
 AFFECTED_SERVICES=()
 
 # Get services from the config file
-SERVICES=$(jq -r '.services | keys[]' ../../.github/services-config.json)
+SERVICES=$(jq -r '.services | keys[]' .github/services-config.json)
+
+# Changes to shared build/deploy machinery can affect every deployable service.
+GLOBAL_CHANGE=false
+if echo "$CHANGED_FILES" | grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/|\.config/|\.sqlx/|tooling/xtask/|docker/|infra/[^/]+$|infra/packages/|\.github/services-config\.json|\.github/workspace-dep-closures\.json|\.github/scripts/build-cloud-storage-lambdas(-nix)?\.sh)'; then
+    GLOBAL_CHANGE=true
+fi
 
 for service in $SERVICES; do
     SERVICE_AFFECTED=false
     
     # Get the source paths for this service from config
-    SOURCE_PATHS=$(jq -r --arg svc "$service" '.services[$svc].source_paths[]? // empty' ../../.github/services-config.json)
+    SOURCE_PATHS=$(jq -r --arg svc "$service" '.services[$svc].source_paths[]? // empty' .github/services-config.json)
     
     # Check stack path changes
-    STACK_PATH=$(jq -r --arg svc "$service" '.services[$svc].stack_path // empty' ../../.github/services-config.json)
+    STACK_PATH=$(jq -r --arg svc "$service" '.services[$svc].stack_path // empty' .github/services-config.json)
+
+    if [ "$GLOBAL_CHANGE" = true ]; then
+        SERVICE_AFFECTED=true
+        echo "Service $service affected by shared workspace/deployment changes" >&2
+    fi
     if [ -n "$STACK_PATH" ]; then
         STACK_PATH_PATTERN="${STACK_PATH%/**}"
         if echo "$CHANGED_FILES" | grep -q "^$STACK_PATH_PATTERN"; then
@@ -89,9 +99,15 @@ for service in $SERVICES; do
         # For each source path of the service, extract the package name and check its dependencies
         while IFS= read -r source_path; do
             if [ -n "$source_path" ]; then
-                # Extract package name from source path (remove /** suffix if present and get basename)
+                # Resolve the package from its manifest path instead of assuming
+                # the directory name and Cargo package name are identical.
                 SOURCE_PATH_CLEAN="${source_path%/**}"
-                SOURCE_PKG_NAME=$(basename "$SOURCE_PATH_CLEAN")
+                SOURCE_PKG_NAME=$(echo "$METADATA" | jq -r \
+                  --arg manifest "$WORKSPACE_ROOT/$SOURCE_PATH_CLEAN/Cargo.toml" \
+                  '.packages[] | select(.manifest_path == $manifest) | .name' | head -n1)
+                if [ -z "$SOURCE_PKG_NAME" ]; then
+                    continue
+                fi
                 echo "  Checking if $SOURCE_PKG_NAME depends on changed packages..." >&2
                 
                 # Get all dependencies of this package

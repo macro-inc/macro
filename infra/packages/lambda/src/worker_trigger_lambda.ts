@@ -3,9 +3,10 @@ import * as pulumi from '@pulumi/pulumi';
 import { stack } from '../../shared';
 import { get_coparse_api_vpc } from '../../vpc';
 
-// Path to worker trigger lambda as if we are in the stack package
-const HANDLER_BASE = '../../../rust/cloud-storage';
-const ZIP_LOCATION = `${HANDLER_BASE}/target/lambda/worker-trigger/bootstrap.zip`;
+// Path to the built artifact as if we are in the stack package.
+const LAMBDA_BASE_NAME = 'worker_trigger';
+const REPO_ROOT = '../../..';
+const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 const coparse_api_vpc = get_coparse_api_vpc();
 

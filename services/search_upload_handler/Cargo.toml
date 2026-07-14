@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "search_upload_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+s3_key = { path = "../../crates/s3_key" }
+sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
+  "search",
+] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

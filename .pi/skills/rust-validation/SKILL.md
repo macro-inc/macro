@@ -12,7 +12,7 @@ Do not run these commands after every individual edit. Batch related edits first
 
 ## Working Directory
 
-1. For this repository's main Rust services, run the validation from `rust/cloud-storage`.
+1. For this repository's main Rust services, run the validation from the repository root.
 2. If the user is clearly working in a different Rust subproject, use the nearest ancestor directory with a `justfile` that defines `check`, `clippy`, and `format`.
 3. If there is no appropriate `justfile` or one of the required recipes is missing, stop and tell the user what prevented validation instead of inventing alternate commands.
 

@@ -1,0 +1,36 @@
+[package]
+edition = "2024"
+name = "document_upload_finalizer_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+documents = { path = "../../crates/documents", default-features = false, features = [
+  "markdown_init",
+  "outbound",
+  "ports",
+] }
+lambda_runtime = { workspace = true }
+lexical_client = { path = "../../crates/lexical_client" }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+model = { path = "../../crates/model" }
+s3_key = { path = "../../crates/s3_key" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
+sync_service_client = { path = "../../crates/sync_service_client" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[[bin]]
+name = "document_upload_finalizer_local_worker"
+path = "src/bin/local_worker.rs"

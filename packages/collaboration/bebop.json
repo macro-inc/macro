@@ -1,0 +1,8 @@
+{
+  "include": ["./src/sync-service/generated/schema.bop"],
+  "generators": {
+    "ts": {
+      "outFile": "./src/sync-service/generated/schema.ts"
+    }
+  }
+}

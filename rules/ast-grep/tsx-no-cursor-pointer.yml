@@ -1,0 +1,12 @@
+id: tsx-no-cursor-pointer
+language: tsx
+severity: warning
+message: Don't add cursor-pointer to clickable elements.
+note: |-
+  Rule FE-27 in docs/STYLE_GUIDE.md (also apps/web/AGENTS.md, Styling). The
+  app deliberately does not use pointer cursors on clickable elements.
+files:
+  - apps/web/**
+rule:
+  kind: string_fragment
+  regex: (^|[^-\w])cursor-pointer([^-\w]|$)

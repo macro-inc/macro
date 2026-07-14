@@ -22,7 +22,7 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
-const BASE_PATH = '../../../rust/cloud-storage';
+const REPO_ROOT = '../../..';
 
 type CreateCloudStorageServiceServiceArgs = {
   cloudStorageClusterName: pulumi.Output<string> | string;
@@ -284,8 +284,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: BASE_PATH,
-        dockerfile: 'Dockerfile',
+        imagePath: REPO_ROOT,
+        dockerfile: 'docker/Dockerfile',
         buildArgs: {
           SERVICE_NAME: 'document_storage_service',
         },

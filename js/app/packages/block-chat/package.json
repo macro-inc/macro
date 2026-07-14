@@ -1,8 +1,0 @@
-{
-  "name": "block-chat",
-  "private": true,
-  "scripts": {},
-  "dependencies": {
-    "core": "workspace:*"
-  }
-}

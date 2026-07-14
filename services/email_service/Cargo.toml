@@ -1,0 +1,185 @@
+[package]
+default-run = "email_service"
+edition = "2024"
+name = "email_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "email_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "backfill_contacts"
+path = "src/bin/backfill_contacts/backfill_contacts.rs"
+
+[[bin]]
+name = "backfill_calendar_flags"
+path = "src/bin/backfill_calendar_flags/backfill_calendar_flags.rs"
+
+[[bin]]
+name = "backfill_signal_flags"
+path = "src/bin/backfill_signal_flags/backfill_signal_flags.rs"
+
+[[bin]]
+name = "backfill_gmail_attachments"
+path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
+
+[[bin]]
+name = "backfill_sfs_attachments"
+path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
+
+[[bin]]
+name = "pubsub_workers"
+path = "src/bin/pubsub_workers/pubsub_workers.rs"
+
+[[bin]]
+name = "find_used_sfs_ids"
+path = "src/bin/find_used_sfs_ids/find_used_sfs_ids.rs"
+
+[[bin]]
+name = "find_unused_sfs_ids"
+path = "src/bin/find_unused_sfs_ids/find_unused_sfs_ids.rs"
+
+[[bin]]
+name = "cleanup_unused_sfs"
+path = "src/bin/cleanup_unused_sfs/cleanup_unused_sfs.rs"
+
+[[bin]]
+name = "reverse_sfs_mappings"
+path = "src/bin/reverse_sfs_mappings/reverse_sfs_mappings.rs"
+
+[[bin]]
+name = "email_service_openapi"
+path = "src/openapi.rs"
+
+[[bin]]
+name = "email_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[features]
+attachment_upload = []
+connection_gateway = []
+contacts_sync = []
+default = [
+  "attachment_upload",
+  "connection_gateway",
+  "contacts_sync",
+  "gmail_webhook_auth",
+  "sfs_map",
+  "sfs_delete",
+]
+gmail_webhook_auth = []
+local_auth = ["macro_middleware/local_auth"]
+local_queue = []
+sfs_map = []
+sfs_delete = []
+
+[dependencies]
+ammonia = "4.1.3"
+anyhow = { workspace = true }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+cloudfront_sign = { workspace = true }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+crm = { path = "../../crates/crm" }
+unfurl = { path = "../../crates/unfurl", features = ["outbound"] }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
+doppleganger = { workspace = true }
+doppler-config = { workspace = true }
+ego-tree = { workspace = true }
+email = { path = "../../crates/email", features = ["axum", "gmail_token", "inbound", "outbound"] }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
+entity_access_management = { path = "../../crates/entity_access_management" }
+email_db_client = { path = "../../crates/email_db_client" }
+email_utils = { path = "../../crates/email_utils" }
+filter_ast = { path = "../../crates/filter_ast" }
+frecency = { path = "../../crates/frecency", features = ["postgres"] }
+futures = { workspace = true }
+gmail_client = { path = "../../crates/gmail_client" }
+html-escape = "0.2"
+http-body-util = { workspace = true }
+infer = "0.19.0"
+item_filters = { path = "../../crates/item_filters" }
+lol_html = { workspace = true }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_config = { path = "../../crates/macro_config" }
+macro_db_client = { path = "../../crates/macro_db_client" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
+mailparse = "0.16.1"
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
+  "auth", "cloud_storage"
+] }
+last_online_tracker = { path = "../../crates/last_online_tracker" }
+notification = { path = "../../crates/notification" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+mime_guess = "2.0.5"
+contacts = { path = "../../crates/contacts" }
+model = { path = "../../crates/model" }
+model-entity = { path = "../../crates/model-entity" }
+model_file_type = { path = "../../crates/model_file_type" }
+model_notifications = { path = "../../crates/model_notifications" }
+models_email = { path = "../../crates/models_email" }
+models_opensearch = { path = "../../crates/models_opensearch" }
+models_pagination = { path = "../../crates/models_pagination", features = ["axum"] }
+models_permissions = { path = "../../crates/models_permissions" }
+once_cell = { workspace = true }
+models_properties = { path = "../../crates/models_properties" }
+redis = { workspace = true, features = [
+  "cluster-async",
+  "tokio-rustls-comp",
+] }
+regex = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+s3_client = { path = "../../crates/s3_client" }
+schemars = { workspace = true }
+scraper = { workspace = true }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+sqlx-core = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
+  "email",
+  "gmail",
+  "search",
+  "sfs_delete",
+  "sfs_uploader"
+] }
+sqs_worker = { path = "../../crates/sqs_worker" }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
+strum_macros = { workspace = true }
+system_properties = { path = "../../crates/system_properties" }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = [
+  "compression-gzip",
+] }
+tracing = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+uuid = { workspace = true }
+
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

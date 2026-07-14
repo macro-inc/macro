@@ -585,6 +585,12 @@ const CALL_RECORDS_V2_BODY = {
         type: 'text',
         fields: { keyword: { type: 'keyword', ignore_above: 128 } },
       },
+      // Searchable display name of the call (custom name, falling back to the
+      // channel name). Matched in Name/NameContent mode.
+      name: {
+        type: 'text',
+        fields: { keyword: { type: 'keyword', ignore_above: 128 } },
+      },
       participant_ids: { type: 'keyword', index: true, doc_values: true },
       started_at_seconds: {
         type: 'date',
@@ -597,6 +603,18 @@ const CALL_RECORDS_V2_BODY = {
         format: 'epoch_second',
         index: false,
         doc_values: true,
+      },
+      // Parent-only entity properties (tags, custom). Same nested shape as
+      // DOCUMENT_BODY so property filters match definition_id + value within
+      // the same entry rather than cross-matching across properties.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
       },
       // Child-only fields
       transcript_id: { type: 'keyword', index: false, doc_values: true },

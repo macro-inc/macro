@@ -4,8 +4,9 @@ import { Lambda } from '../../packages/lambda';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const EMAIL_LAMBDA_BASE_NAME = 'email_refresh_handler';
-const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${EMAIL_LAMBDA_BASE_NAME}/bootstrap.zip`;
+const REPO_ROOT = '../../..';
+const HANDLER_BASE = `${REPO_ROOT}/services/${EMAIL_LAMBDA_BASE_NAME}`;
+const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${EMAIL_LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 export type EnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
@@ -92,7 +93,7 @@ export class EmailRefreshHandler extends pulumi.ComponentResource {
       `${EMAIL_LAMBDA_BASE_NAME}-lambda`,
       {
         baseName: EMAIL_LAMBDA_BASE_NAME,
-        handlerBase: CLOUD_STORAGE_BASE,
+        handlerBase: HANDLER_BASE,
         zipLocation: ZIP_LOCATION,
         vpc,
         envVars,

@@ -4,6 +4,9 @@ set positional-arguments
 # single-instance by design; do not derive resource names from the directory.
 export COMPOSE_PROJECT_NAME := "macro"
 
+compose := "docker compose --project-directory . -f docker/docker-compose.yml"
+database_compose := "docker compose -f docker/docker-compose-databases.yml"
+
 # Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
@@ -34,60 +37,60 @@ get_environment CONFIG="lcl":
 # This is used when initializing your databases
 run_dbs *ARGS:
   just create_networks
-  docker compose -f docker-compose-databases.yml up postgres redis --wait {{ ARGS }}
+  {{ database_compose }} up postgres redis --wait {{ ARGS }}
 
 # Spins up main docker-compose
 docker_up *ARGS:
   echo "startup docker compose"
-  docker compose up {{ ARGS }}
+  {{ compose }} up {{ ARGS }}
 
 # Reset and seed deterministic data used by local E2E tests.
 local-e2e-seed:
   just run_dbs -d
-  -just rust/cloud-storage/macro_db_client/drop_db -y -f
-  just rust/cloud-storage/initialize_dbs
-  just rust/cloud-storage/seed_cli/local-e2e-smoke
+  -just crates/macro_db_client/drop_db -y -f
+  just initialize_dbs
+  just tooling/seed_cli/local-e2e-smoke
 
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
 
-# Update the fixed-output js node_modules hash after js/bun.lock changes.
+# Update the fixed-output js node_modules hash after bun.lock changes.
 update-node-modules-hash:
-  scripts/update-node-modules-hash.sh
+  tooling/scripts/update-node-modules-hash.sh
 
-# Verify the fixed-output js node_modules derivation matches js/bun.lock.
+# Verify the fixed-output js node_modules derivation matches bun.lock.
 check-node-modules-nix:
   nix build .#js-node-modules --no-link
 
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
 local-e2e *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
-  cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
+  cd apps/web && LOCAL_E2E=true bunx playwright test {{ ARGS }}
 
 # Start the local stack, seed deterministic data, and run ignored Rust local E2E integration tests.
 local-e2e-rust *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
-  cd rust/cloud-storage && SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture {{ ARGS }}
+  SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture {{ ARGS }}
 
 # Start the local stack once, seed deterministic data, and run Rust + Playwright local E2E tests.
 local-e2e-all *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
-  cd rust/cloud-storage && SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture
-  cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
+  SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture
+  cd apps/web && LOCAL_E2E=true bunx playwright test {{ ARGS }}
 
 # Start the local stack, seed deterministic data, and open Playwright UI mode.
 local-e2e-ui *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
-  cd js/app && LOCAL_E2E=true bunx playwright test --ui {{ ARGS }}
+  cd apps/web && LOCAL_E2E=true bunx playwright test --ui {{ ARGS }}
 
 # Patches .env with local FusionAuth values if the Pulumi stack exists.
 # Requires FusionAuth to be running — starts it temporarily if needed.
@@ -112,7 +115,7 @@ patch_local_fusionauth_env:
   cleanup() {
     if [ "$NEEDS_STOP" = true ]; then
       echo "Stopping temporary FusionAuth..."
-      docker compose stop fusionauth
+      {{ compose }} stop fusionauth
     fi
   }
   trap cleanup EXIT
@@ -120,29 +123,31 @@ patch_local_fusionauth_env:
   if ! curl -s http://localhost:9011/api/status 2>/dev/null | grep -q '"Ok"'; then
     echo "Starting FusionAuth temporarily to read config..."
     NEEDS_STOP=true
-    docker compose up fusionauth -d --wait
+    {{ compose }} up fusionauth -d --wait
   fi
   just infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
 
 # Stop all local services (default project; legacy alias).
 stop-local:
-  docker compose down
+  {{ compose }} down
 
 stop-databases:
-  docker compose -f docker-compose-databases.yml down
+  {{ database_compose }} down
 
 # Import LocalStack recipes
-import 'local_stack.just'
-import 'just/xtask.just'
+import 'tooling/just/local_stack.just'
+import 'tooling/just/xtask.just'
+import 'tooling/just/check.just'
+import 'tooling/just/rust.just'
 
 # Sets up local database
 setup_local_dbs:
   # run dbs detached
   just run_dbs -d
-  just rust/cloud-storage/macro_db_client/create_db
-  just rust/cloud-storage/macro_db_client/migrate_db
+  just crates/macro_db_client/create_db
+  just crates/macro_db_client/migrate_db
   @echo "Local databases initialized"
-  docker compose -f docker-compose-databases.yml stop
+  {{ database_compose }} stop
 
 # Setup FusionAuth: start containers, wait for healthy, run Pulumi config
 # stop container
@@ -173,9 +178,9 @@ setup:
   just setup_localstack
   just setup_local_dbs
   just infra/stacks/fusionauth-instance/setup
-  just rust/cloud-storage/build_dev_service_images
+  just build_dev_service_images
   @echo "Setup complete."
 
 destroy:
   just infra/stacks/fusionauth-instance/destroy
-  docker compose down -v
+  {{ compose }} down -v

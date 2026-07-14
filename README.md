@@ -15,7 +15,7 @@
     ·
     <a href="mailto:contact@macro.com">Feature requests</a>
     ·
-    <a href="mailto:contribute@macro.com">Contribute</a>
+    <a href="CONTRIBUTING.md">Contribute</a>
     ·
     <a href="mailto:teo@macro.com">Hiring</a>
   </p>
@@ -75,6 +75,16 @@ claude mcp add --transport http macro https://mcp-server.macro.com/mcp
  
 See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
 
+## Repository layout
+
+- `apps/` contains the web/desktop application and product documentation site.
+- `services/` contains deployable services, workers, and Lambda handlers.
+- `crates/` contains reusable Rust libraries, models, and clients.
+- `packages/` contains shared JavaScript and TypeScript packages.
+- `docker/`, `tooling/`, `docs/`, and `static_assets/` contain repository support files.
+
+The Cargo and Bun workspaces are rooted at the repository top level. See [Running locally](docs/RUNNING_LOCALLY.md) for setup and development commands.
+
  
 # Security
 
@@ -93,7 +103,7 @@ You can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.ma
 Have an idea, want to contribute, or want to work on Macro?
 
 - Feature requests: [contact@macro.com](mailto:contact@macro.com)
-- Contributions: open a PR, or email [contribute@macro.com](mailto:contribute@macro.com) if you're not sure where to start
+- Contributions: see our [contribution guidelines](CONTRIBUTING.md)
 - Hiring: [teo@macro.com](mailto:teo@macro.com)
 
 <div align="center">

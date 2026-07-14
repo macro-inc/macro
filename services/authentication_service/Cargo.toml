@@ -1,0 +1,147 @@
+[package]
+default-run = "authentication_service"
+edition = "2024"
+name = "authentication_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "authentication_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "generate_keys"
+path = "src/bin/generate_keys.rs"
+
+[[bin]]
+name = "authentication_service_openapi"
+path = "src/openapi.rs"
+
+[[bin]]
+name = "authentication_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[features]
+default = ["rate_limit"]
+local = []
+rate_limit = []
+
+[dependencies]
+analytics_client = { path = "../../crates/analytics_client" }
+anyhow = { workspace = true }
+async-stripe = { workspace = true, default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper-rustls-webpki",
+] }
+async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
+base64 = { workspace = true }
+chrono = { workspace = true }
+comms_db_client = { path = "../../crates/comms_db_client" }
+cookie = { workspace = true }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
+email = { path = "../../crates/email", features = ["http_client"] }
+doppleganger = { workspace = true }
+email_db_client = { path = "../../crates/email_db_client" }
+email_validator = { path = "../../crates/email_validator" }
+entity_access = { path = "../../crates/entity_access" }
+foreign_entity = { path = "../../crates/foreign_entity" }
+fusionauth = { path = "../../crates/fusionauth" }
+futures = { workspace = true }
+github = { path = "../../crates/github", default-features = false, features = [
+  "axum",
+  "inbound",
+  "link",
+  "outbound",
+] }
+http-body-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+last_online_tracker = { path = "../../crates/last_online_tracker" }
+loops_client = { path = "../../crates/loops_client" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_cache_client = { path = "../../crates/macro_cache_client", default-features = false, features = [
+  "auth",
+  "auth_rate_limit",
+  "login_code_rate_limit",
+  "mobile_welcome_email_rate_limit",
+  "verify_email_rate_limit",
+] }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_config = { path = "../../crates/macro_config" }
+macro_db_client = { path = "../../crates/macro_db_client", default-features = false, features = [
+  "account_merge_request",
+  "team",
+] }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
+  "auth",
+  "tracking",
+  "user_permissions",
+] }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+maud = { version = "0.27.0" }
+miniserde = "0.1.45"
+mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_client" }
+mockall = { workspace = true }
+model = { path = "../../crates/model" }
+model-entity = { path = "../../crates/model-entity" }
+model_notifications = { path = "../../crates/model_notifications" }
+model_user = { path = "../../crates/model_user", features = ["axum"] }
+models_team = { path = "../../crates/models_team" }
+native_app_service = { path = "../../crates/native_app_service" }
+non_empty = { path = "../../crates/non_empty" }
+notification = { path = "../../crates/notification" }
+rand = { workspace = true }
+rate_limit = { path = "../../crates/rate_limit" }
+redis = { workspace = true }
+referral = { path = "../../crates/referral" }
+remote_env_var = { path = "../../crates/remote_env_var" }
+reqwest = { workspace = true }
+roles_and_permissions = { path = "../../crates/roles_and_permissions" }
+rsa = { version = "0.9.10", features = ["getrandom"] }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_utils = { path = "../../crates/serde_utils", features = ["urlencode"] }
+ses_client = { path = "../../crates/ses_client" }
+sha1 = "0.10.6"
+sqlx = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
+  "email",
+  "search",
+] }
+strum = { workspace = true }
+teams = { path = "../../crates/teams" }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-cookies = { version = "0.11.0" }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
+user_quota = { path = "../../crates/user_quota" }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+uuid = { workspace = true }
+doppler-config = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+database_env_vars = { path = "../../crates/database_env_vars" }
+
+[dev-dependencies]
+cool_asserts = "2"
+
+[package.metadata.cargo-machete]
+ignored = ["async-stripe"]

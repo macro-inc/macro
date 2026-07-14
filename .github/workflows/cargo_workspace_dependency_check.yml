@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/cargo_workspace_dependency_check.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_workspace_dependency_check.rs
 name: cargo workspace dependency check
 'on':
   pull_request:
@@ -11,12 +11,14 @@ name: cargo workspace dependency check
     branches:
     - main
     paths:
-    - rust/cloud-storage/Cargo.toml
-    - rust/cloud-storage/**/Cargo.toml
-    - rust/cloud-storage/Cargo.lock
-    - rust/cloud-storage/.config/hakari.toml
-    - rust/cloud-storage/workspace-hack/**
-    - rust/cloud-storage/tools/xtask/**
+    - Cargo.toml
+    - crates/**/Cargo.toml
+    - services/**/Cargo.toml
+    - tooling/xtask/**/Cargo.toml
+    - Cargo.lock
+    - '.config/hakari.toml'
+    - crates/workspace-hack/**
+    - tooling/xtask/**
     - '.github/workspace-dep-closures.json'
     - '.github/workflows/cargo_workspace_dependency_check.yml'
 jobs:
@@ -48,12 +50,11 @@ jobs:
       run: cargo install cargo-workspace-dependency-checker@1.0.1
     - name: check
       run: |
-        cd rust/cloud-storage
         # workspace-hack (generated, see xtask) re-declares third-party deps
         # with explicit versions by design — that is how it pins union
         # features. Drop it from the member list so this check only polices
         # human-written crates for duplicate dependencies.
-        sed -i '/^  "workspace-hack",$/d' Cargo.toml
+        sed -i '/^  "crates\/workspace-hack",$/d' Cargo.toml
         cargo-workspace-dependency-checker
   hakari-and-dep-closures:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
@@ -81,7 +82,6 @@ jobs:
         echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
     - name: generated dependency artifacts are up to date
       run: |
-        cd rust/cloud-storage
         cargo run -p xtask --locked -- deps --check
 concurrency:
   group: cargo-workspace-dependency-check-${{ github.ref }}

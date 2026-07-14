@@ -26,7 +26,7 @@ export const SERVICE_DOMAIN_NAME = `static-file-service${stack === 'prod' ? '' :
 export const SERVICE_URL = `https://${SERVICE_DOMAIN_NAME}.${BASE_DOMAIN}`;
 export const STATIC_FILE_BUCKET = `static-file-storage-${stack}`;
 
-const BASE_PATH = '../../../rust/cloud-storage';
+const REPO_ROOT = '../../..';
 
 const NOT_FOUND_FILE = './error_404.html';
 const NOT_FOUND_KEY = 'error_404.html';
@@ -106,8 +106,8 @@ export class StaticFileService extends pulumi.ComponentResource {
         repositoryId: `${SERVICE_NAME}-ecr-${stack}`,
         repositoryName: `${SERVICE_NAME}-${stack}`,
         imageId: `${SERVICE_NAME}-image-${stack}`,
-        imagePath: BASE_PATH,
-        dockerfile: 'Dockerfile',
+        imagePath: REPO_ROOT,
+        dockerfile: 'docker/Dockerfile',
         platform: args.platform,
         buildArgs: {
           SERVICE_NAME: 'static_file_service',
@@ -206,7 +206,7 @@ export class StaticFileService extends pulumi.ComponentResource {
         handler: 'bootstrap',
         runtime: 'provided.al2023',
         code: new pulumi.asset.FileArchive(
-          `${BASE_PATH}/target/lambda/image_optimizer/bootstrap.zip`
+          `${REPO_ROOT}/target/lambda/image_optimizer/bootstrap.zip`
         ),
         timeout: 30,
         memorySize: 1536,

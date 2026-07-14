@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "notification_sandbox"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sns = { workspace = true }
+chrono = { workspace = true }
+either = { workspace = true }
+email_formatting = { path = "../../crates/email_formatting" }
+hmac = { workspace = true }
+inquire = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_env = { path = "../../crates/macro_env" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+model-entity = { path = "../../crates/model-entity" }
+model_notifications = { path = "../../crates/model_notifications" }
+models_pagination = { path = "../../crates/models_pagination" }
+notification = { path = "../../crates/notification" }
+rate_limit = { path = "../../crates/rate_limit", features = ["testing"] }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-comp",
+  "tokio-rustls-comp",
+] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -1,0 +1,42 @@
+lambda_name := file_name(justfile_directory())
+os := os()
+macos_features := if os == "macos" { "--features macos" } else { "" }
+import '../../tooling/just/database.just'
+
+mod ci '../../tooling/just/ci.just'
+
+deploy-dev:
+    just ci::deploy-dev document-text-extractor
+
+# Prepare database
+prepare:
+    DATABASE_URL={{ DATABASE_URL }} sqlx prepare
+
+# Build lambda for deployment
+build compiler="":
+    #!/usr/bin/env bash
+    if [ ! -d "./pdfium-lib/linux" ]; then
+        echo "ERROR: pdfium-lib/linux not found. pdfium binary must be available locally"
+        exit 1
+    fi
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{ lambda_name }} --output-format zip --include ./pdfium-lib/linux
+
+# Run local development server with automatic OS detection
+local:
+    DATABASE_URL={{ DATABASE_URL }} cargo lambda watch {{ macos_features }}
+
+# Run local development server specifically for Linux
+local-linux:
+    DATABASE_URL={{ DATABASE_URL }} cargo lambda watch
+
+# Run local development server specifically for MacOS
+local-mac:
+    DATABASE_URL={{ DATABASE_URL }} cargo lambda watch --features macos
+
+# Invoke lambda function with specified data file
+invoke data_file="sample_input.json":
+    cargo lambda invoke {{ lambda_name }} --data-file {{ data_file }}
+
+# Run tests
+test:
+    DATABASE_URL={{ DATABASE_URL }} cargo test

@@ -1,0 +1,23 @@
+export type {
+  PdfAllowableEdits as AllowableEdits,
+  PdfImage as IImage,
+  PdfPageNumber as IPageNumber,
+  PdfPayloadType as PayloadType,
+  PdfPlaceable as IPlaceable,
+  PdfPlaceableBookmark as IBookmark,
+  PdfPlaceablePayload as IPlaceablePayload,
+  PdfPlaceablePosition as IPlaceablePosition,
+  PdfShape as IShape,
+  PdfSignature as ISignature,
+  PdfSignaturePlaceable as ISignaturePlaceable,
+  PdfTextBox as ITextBox,
+  PdfTextBoxPlaceable as ITextBoxPlaceable,
+  PdfThreadPlaceable as IThreadPlaceable,
+} from '@coparse/document-processing-types';
+export {
+  isPdfThreadPlaceable as isThreadPlaceable,
+  PdfPayloadMode as PayloadMode,
+  PdfPlaceablePositionSchema as PlaceablePositionSchema,
+  PdfPlaceableSchema as IPlaceableSchema,
+  PdfPlaceableServerSchema as IPlaceableServerSchema,
+} from '@coparse/document-processing-types';

@@ -1,6 +1,9 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "root": true,
+  "extends": ["../biome.base.jsonc"],
   "vcs": {
+    "root": "..",
     "clientKind": "git",
     "enabled": true,
     "useIgnoreFile": true,
@@ -12,7 +15,9 @@
       "**/*.tsx",
       "**/*.js",
       "**/*.jsx",
-      "**/openapi.json"
+      "**/openapi.json",
+      // FusionAuth consumes these as external script templates; keep their source formatting stable.
+      "!stacks/fusionauth-instance/**/populate_jwt.js"
     ]
   },
   "formatter": {

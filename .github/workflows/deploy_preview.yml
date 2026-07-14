@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/deploy_preview.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_preview.rs
 name: Deploy Preview
 env:
   PREVIEW_BUCKET: macro-preview-assets-dev
@@ -9,7 +9,17 @@ env:
     - opened
     - synchronize
     paths:
-    - js/app/**
+    - package.json
+    - bun.lock
+    - apps/web/**
+    - packages/**
+    - crates/client/cache-core/**
+    - crates/client/cache-idb/**
+    - crates/client/cache-wasm/**
+    - static_assets/schema.graphql
+    - Cargo.toml
+    - Cargo.lock
+    - rust-toolchain.toml
 jobs:
   deploy:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
@@ -38,7 +48,7 @@ jobs:
         VITE_DD_HASH: ${{ github.sha }}
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-      working-directory: js/app
+      working-directory: apps/web
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
       with:
@@ -55,7 +65,7 @@ jobs:
           --branch "${{ github.head_ref }}")
         echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
         echo "Preview ID: $PREVIEW_ID"
-      working-directory: js/app
+      working-directory: apps/web
     - name: Validate bucket name
       run: |
         if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
@@ -67,7 +77,7 @@ jobs:
         bun scripts/preview/deploy.ts \
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --skip-build
-      working-directory: js/app
+      working-directory: apps/web
     - name: Comment on PR
       run: |
         bun scripts/preview/post-comment.ts \
@@ -76,7 +86,7 @@ jobs:
           --token ${{ secrets.GITHUB_TOKEN }} \
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --sha ${{ github.sha }}
-      working-directory: js/app
+      working-directory: apps/web
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true

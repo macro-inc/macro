@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "graphql_soup"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader"] }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+chrono = { workspace = true }
+document_sub_type = { path = "../document_sub_type" }
+email = { path = "../email", default-features = false, features = [
+  "axum",
+  "inbound",
+  "ports",
+] }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "inbound",
+] }
+filter_ast = { path = "../filter_ast" }
+graphql_common = { path = "../graphql_common" }
+item_filters = { path = "../item_filters" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model_file_type = { path = "../model_file_type" }
+model_user = { path = "../model_user", features = ["axum"] }
+models_pagination = { path = "../models_pagination" }
+models_soup = { path = "../models_soup" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", default-features = false, features = ["ports"] }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
