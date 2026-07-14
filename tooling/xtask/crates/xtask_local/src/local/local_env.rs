@@ -98,6 +98,14 @@ impl InfraEnv {
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
+        // In-network services resolve the gateway through the OVERRIDE_ var;
+        // without it the resolver's Environment::Local default
+        // (http://localhost:8082) points at the calling container itself and
+        // every realtime push silently fails.
+        env.insert(
+            "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
+            "http://connection-gateway:8080".into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
