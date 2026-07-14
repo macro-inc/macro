@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "delete_chat_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["sqs"] }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+

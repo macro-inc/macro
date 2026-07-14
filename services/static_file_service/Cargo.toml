@@ -1,0 +1,63 @@
+[package]
+edition = "2024"
+name = "static_file_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "static_file_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "static_file_service_openapi"
+path = "src/openapi.rs"
+
+[[bin]]
+name = "static_file_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[features]
+dynamodb_client_test = []
+local_auth = []
+tree_trace = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs.workspace = true
+axum = { workspace = true, features = ["tower-log", "ws"] }
+chrono = { workspace = true }
+doppler-config = { workspace = true }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
+  "auth",
+] }
+model = { path = "../../crates/model" }
+s3_key = { path = "../../crates/s3_key" }
+models_sfs = { path = "../../crates/models_sfs" }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true }
+serde_dynamo = { workspace = true }
+serde_json = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["limit", "timeout"] }
+tracing.workspace = true
+tracing-tree = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+uuid.workspace = true
+
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

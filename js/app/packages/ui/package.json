@@ -1,7 +1,0 @@
-{
-  "name": "@app/ui",
-  "type": "module",
-  "private": true,
-  "scripts": {},
-  "devDependencies": {}
-}

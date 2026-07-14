@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/cargo_deny.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_deny.rs
 name: cargo deny check
 'on':
   pull_request:
@@ -11,10 +11,12 @@ name: cargo deny check
     branches:
     - main
     paths:
-    - rust/cloud-storage/Cargo.toml
-    - rust/cloud-storage/**/Cargo.toml
-    - rust/cloud-storage/Cargo.lock
-    - rust/cloud-storage/deny.toml
+    - Cargo.toml
+    - crates/**/Cargo.toml
+    - services/**/Cargo.toml
+    - tooling/xtask/**/Cargo.toml
+    - Cargo.lock
+    - deny.toml
     - '.github/workflows/cargo_deny.yml'
 jobs:
   cargo-deny:
@@ -25,7 +27,7 @@ jobs:
     - name: cargo deny
       uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe
       with:
-        manifest-path: rust/cloud-storage/Cargo.toml
+        manifest-path: Cargo.toml
 concurrency:
   group: cargo-deny-${{ github.ref }}
   cancel-in-progress: true

@@ -89,8 +89,8 @@ runs:
         SERVICE: ${{ inputs.cloud-storage-service-name }}
       run: |
         .github/scripts/build-cloud-storage-lambdas-nix.sh
-        rm -rf rust/cloud-storage/target/lambda
-        tar -xzf lambda-artifacts.tar.gz -C rust/cloud-storage
+        rm -rf target/lambda
+        tar -xzf lambda-artifacts.tar.gz -C .
 
     # setup docker
     - uses: docker/setup-buildx-action@v3

@@ -18,16 +18,16 @@
       isX86_64Linux = system == "x86_64-linux";
       isAarch64Darwin = system == "aarch64-darwin";
 
-      appVersion = (builtins.fromJSON (builtins.readFile ../js/app/packages/app/package.json)).version;
+      appVersion = (builtins.fromJSON (builtins.readFile ../apps/web/package.json)).version;
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
 
       rustToolchain = fenix.packages.${system}.fromToolchainFile {
-        file = ../rust/rust-toolchain.toml;
+        file = ../rust-toolchain.toml;
         sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
       };
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-      jsRoot = ../js;
+      jsRoot = ../.;
       jsSrc = lib.cleanSourceWith {
         src = jsRoot;
         filter =
@@ -36,19 +36,57 @@
             rel = lib.removePrefix ((toString jsRoot) + "/") (toString path);
           in
           !(lib.hasPrefix "node_modules/" rel)
-          && !(lib.hasPrefix "app/node_modules/" rel)
-          && !(lib.hasPrefix "app/packages/app/dist/" rel)
-          && !(lib.hasPrefix "app/tauri/target/" rel)
-          && !(lib.hasPrefix "lexical-core/node_modules/" rel)
-          && !(lib.hasPrefix "lexical-service/node_modules/" rel)
-          && !(lib.hasPrefix "loro-mirror/node_modules/" rel)
+          && !(lib.hasPrefix "apps/web/node_modules/" rel)
+          && !(lib.hasPrefix "apps/web/dist/" rel)
+          && !(lib.hasPrefix "apps/web/tauri/target/" rel)
+          && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
+          && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
+          && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
+          && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
           && !(lib.hasInfix "/node_modules/" rel)
           && !(lib.hasInfix "/target/" rel)
           && !(lib.hasInfix "/dist/" rel)
           && rel != "node_modules"
-          && rel != "app/node_modules"
-          && rel != "app/packages/app/dist"
-          && rel != "app/tauri/target";
+          && rel != "apps/web/node_modules"
+          && rel != "apps/web/dist"
+          && rel != "apps/web/tauri/target"
+          && rel != "apps/web/src/lib/graphql-cache/wasm";
+      };
+
+      rootCargoVendorDir = craneLib.vendorCargoDeps {
+        src = ../.;
+        cargoLock = ../Cargo.lock;
+        outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
+      };
+
+      cacheWasmPackage = craneLib.mkCargoDerivation {
+        pname = "macro-cache-wasm";
+        version = appVersion;
+        src = jsSrc;
+        cargoArtifacts = null;
+        cargoVendorDir = rootCargoVendorDir;
+        nativeBuildInputs = [
+          pkgs.binaryen
+          pkgs.wasm-bindgen-cli
+          pkgs.wasm-pack
+        ];
+        doCheck = false;
+        preBuild = ''
+          export HOME="$TMPDIR"
+          export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
+        '';
+        buildPhaseCargoCommand = ''
+          wasm-pack build crates/client/cache-wasm \
+            --target web \
+            --release \
+            --mode no-install \
+            --out-dir "$PWD/apps/web/src/lib/graphql-cache/wasm"
+        '';
+        installPhaseCommand = ''
+          mkdir -p $out
+          cp -a apps/web/src/lib/graphql-cache/wasm/. $out/
+        '';
+        doInstallCargoArtifacts = false;
       };
 
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
@@ -72,17 +110,22 @@
 
             cp -a ${nodeModules}/. .
 
-            vite_resolve_replacement='      resolve: {
-          alias: [
-            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
-          ],'
-            substituteInPlace app/packages/app/vite.base.ts \
-              --replace-fail "      resolve: {" "$vite_resolve_replacement"
+            # Vite bundles TypeScript config files to a temporary sibling before
+            # loading them. The application config now lives at the app root,
+            # so make that directory writable inside the Nix build sandbox.
+            chmod u+w apps/web
 
-            printf production > app/tauri/src-tauri/.macro-tauri-env
+            substituteInPlace apps/web/vite.base.ts \
+              --replace-fail \
+                "          // NIX_TAURI_ALIAS" \
+                '          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },'
+
+            printf production > apps/web/tauri/src-tauri/.macro-tauri-env
+            mkdir -p apps/web/src/lib/graphql-cache/wasm
+            cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
             (
-              cd app/packages/app
-              MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+              cd apps/web
+              MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
               printf '${appVersion}+${gitRev}\n' > dist/semver.txt
               BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
             )
@@ -92,21 +135,19 @@
 
         installPhase = ''
           runHook preInstall
-          cp -r app/packages/app/dist "$out"
+          cp -r apps/web/dist "$out"
           runHook postInstall
         '';
       };
 
       tauriCargoVendorDir = craneLib.vendorCargoDeps {
-        src = ../js/app/tauri;
-        cargoLock = ../js/app/tauri/Cargo.lock;
+        src = ../apps/web/tauri;
+        cargoLock = ../apps/web/tauri/Cargo.lock;
         outputHashes = {
           "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" =
             "sha256-v0Pn8kiRXaczNrFNjXct7yZUQ50qP68l8ivQDumu7Hw=";
-          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fwebsocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
-            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
-          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
-            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =
+            "sha256-ngH5sltERe8DlP/zjsin9jmlGOZFeABk8SxJ5AnZG18=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
             "sha256-5HamTWAZPtUSWOfP3TgtiqFJvunlPXy9/C0TLHQpXlU=";
           "git+https://github.com/voxelbee/tauri-plugin-virtual-keyboard?branch=main#70e8e8325b5ff7d681ef5f3b996ac083d4fc5a01" =
@@ -118,9 +159,9 @@
         pname = "macro-tauri-desktop";
         version = appVersion;
         binaryName = "app";
-        src = ../js/app/tauri;
-        cargoRoot = ../js/app/tauri;
-        cargoLock = ../js/app/tauri/Cargo.lock;
+        src = ../apps/web/tauri;
+        cargoRoot = ../apps/web/tauri;
+        cargoLock = ../apps/web/tauri/Cargo.lock;
         inherit frontend;
 
         craneArgs.cargoVendorDir = tauriCargoVendorDir;
@@ -133,12 +174,13 @@
             --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
         '';
         craneArgs.preBuild = ''
-          mkdir -p ../packages/app
-          cp ${../js/app/packages/app/package.json} ../packages/app/package.json
-          rm -rf ../packages/app/dist
-          cp -r ${frontend} ../packages/app/dist
+          cp ${../apps/web/package.json} ../package.json
+          rm -rf ../dist
+          cp -r ${frontend} ../dist
         '';
       };
+
+      gioTlsModulePath = "${pkgs.glib-networking}/lib/gio/modules";
 
       wrappedTauriDesktop = pkgs.symlinkJoin {
         name = "macro-tauri-desktop-${appVersion}";
@@ -165,8 +207,10 @@
                 pkgs.gst_all_1.gst-plugins-bad
                 pkgs.gst_all_1.gst-libav
                 pkgs.openssl
+                pkgs.glib-networking
               ]
             } \
+            --prefix GIO_EXTRA_MODULES : "${gioTlsModulePath}" \
             --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
             --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${
               lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
@@ -178,10 +222,10 @@
               ]
             }"
 
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
-          install -Dm0644 ${../js/app/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
+          install -Dm0644 ${../apps/web/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
           install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<EOF
           [Desktop Entry]
           Type=Application
@@ -207,8 +251,10 @@
         buildPhase = ''
           cat > linuxdeploy-wrapper.c <<'EOF'
           #include <dirent.h>
+          #include <errno.h>
           #include <stdio.h>
           #include <stdlib.h>
+          #include <sys/stat.h>
           #include <string.h>
           #include <unistd.h>
 
@@ -247,6 +293,69 @@
             closedir(dir);
           }
 
+          static int install_gio_tls_hook(const char *appdir) {
+            if (appdir == NULL) {
+              fprintf(stderr, "cannot install TLS hook: missing --appdir\n");
+              return 1;
+            }
+
+            size_t appdir_len = strlen(appdir);
+            char *hooks_dir = malloc(appdir_len + strlen("/apprun-hooks") + 1);
+            if (hooks_dir == NULL) {
+              perror("malloc TLS hook directory");
+              return 1;
+            }
+            sprintf(hooks_dir, "%s/apprun-hooks", appdir);
+            if (mkdir(hooks_dir, 0755) != 0 && errno != EEXIST) {
+              perror("mkdir TLS hook directory");
+              free(hooks_dir);
+              return 1;
+            }
+
+            char *hook_path = malloc(strlen(hooks_dir) + strlen("/macro-gio-tls.sh") + 2);
+            if (hook_path == NULL) {
+              perror("malloc TLS hook path");
+              free(hooks_dir);
+              return 1;
+            }
+            sprintf(hook_path, "%s/macro-gio-tls.sh", hooks_dir);
+
+            FILE *hook = fopen(hook_path, "w");
+            if (hook == NULL) {
+              perror("fopen TLS hook");
+              free(hook_path);
+              free(hooks_dir);
+              return 1;
+            }
+
+            int failed = 0;
+            if (fputs("#! /usr/bin/env bash\n"
+                      "export APPDIR=\"''${APPDIR:-\"$(dirname \"$(realpath \"$0\")\")\"}\"\n"
+                      "gio_modules=\"$APPDIR/usr/lib/gio/modules\"\n"
+                      "if [ -d \"$gio_modules\" ]; then\n"
+                      "  case \":''${GIO_EXTRA_MODULES:-}:\" in\n"
+                      "    *:\"$gio_modules\":*) ;;\n"
+                      "    *) export GIO_EXTRA_MODULES=\"$gio_modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}\" ;;\n"
+                      "  esac\n"
+                      "fi\n",
+                      hook) == EOF) {
+              perror("write TLS hook");
+              failed = 1;
+            }
+            if (fclose(hook) != 0) {
+              perror("close TLS hook");
+              failed = 1;
+            }
+            if (!failed && chmod(hook_path, 0755) != 0) {
+              perror("chmod TLS hook");
+              failed = 1;
+            }
+
+            free(hook_path);
+            free(hooks_dir);
+            return failed;
+          }
+
           int main(int argc, char **argv) {
             const char *appdir = NULL;
             for (int i = 1; i < argc; i++) {
@@ -257,6 +366,9 @@
               }
             }
             sanitize_appdir(appdir);
+            if (install_gio_tls_hook(appdir) != 0) {
+              return 1;
+            }
 
             char *slash = strrchr(argv[0], '/');
             if (slash != NULL) {
@@ -347,6 +459,7 @@
         pkgs.gst_all_1.gst-plugins-bad
         pkgs.gst_all_1.gst-libav
         pkgs.openssl
+        pkgs.glib-networking
       ];
       tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;
       tauriRuntimeClosure = pkgs.closureInfo {
@@ -364,6 +477,10 @@
           linux.appimage.files = {
             "/usr/bin/xdg-mime" = "${pkgs.xdg-utils}/bin/xdg-mime";
             "/usr/bin/xdg-open" = "${pkgs.xdg-utils}/bin/xdg-open";
+            "/usr/lib/gio/modules/giomodule.cache" = "${pkgs.glib-networking}/lib/gio/modules/giomodule.cache";
+            "/usr/lib/gio/modules/libgiognomeproxy.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiognomeproxy.so";
+            "/usr/lib/gio/modules/libgiognutls.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiognutls.so";
+            "/usr/lib/gio/modules/libgiolibproxy.so" = "${pkgs.glib-networking}/lib/gio/modules/libgiolibproxy.so";
           };
         };
       };

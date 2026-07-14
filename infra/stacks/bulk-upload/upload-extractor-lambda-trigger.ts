@@ -4,8 +4,9 @@ import { Lambda } from '../../packages/lambda';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const LAMBDA_BASE_NAME = 'upload_extractor_lambda_trigger';
-const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
+const REPO_ROOT = '../../..';
+const HANDLER_BASE = `${REPO_ROOT}/services/${LAMBDA_BASE_NAME}`;
+const ZIP_LOCATION = `${REPO_ROOT}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 export type UploadExtractorLambdaTriggerEnvVars = {
   DYNAMODB_TABLE: pulumi.Output<string> | string;
@@ -83,7 +84,7 @@ export class UploadExtractorLambdaTrigger extends pulumi.ComponentResource {
         `${LAMBDA_BASE_NAME}-lambda`,
         {
           baseName: LAMBDA_BASE_NAME,
-          handlerBase: CLOUD_STORAGE_BASE,
+          handlerBase: HANDLER_BASE,
           zipLocation: ZIP_LOCATION,
           envVars,
           role: role,

@@ -1,0 +1,967 @@
+import type { ListView } from '@app/constants/list-views';
+import { isListViewID } from '@app/constants/list-views';
+import {
+  type FilterContext,
+  type FilterID,
+  NO_ASSIGNEE,
+  NO_STAGE,
+} from '@app/features/next-soup/filters';
+import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+} from '@app/features/next-soup/filters/configs/document-type-query';
+import {
+  defineQueryFilters,
+  type Query,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
+import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
+import {
+  getViewPreset,
+  type PresetContext,
+  VIEW_TAB_PRESETS,
+} from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useDealStages } from '@companies/crm/deal-stages';
+import { CrmStageIcon } from '@companies/crm/StageIcon';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserContext, useUserId } from '@core/context/user';
+import { deepEqual } from '@core/util/compareUtils';
+import CircleDashedIcon from '@phosphor/circle-dashed.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useContacts } from '@queries/contacts/contacts';
+import { batch, createMemo, createSignal, type JSX } from 'solid-js';
+import type {
+  ConsolidatedFilter,
+  FilterValue,
+} from './consolidated-filter-chip';
+import type { SearchableOption } from './searchable-multi-select';
+import { useTagFilter } from './tag-filter';
+import {
+  TASK_STATUS_FILTER_IDS,
+  useTaskStatusFilter,
+} from './task-status-filter';
+import {
+  buildContactLabel,
+  VIEW_FILTER_CATEGORIES,
+} from './unified-filter-dropdown';
+
+// Filter IDs that are set by tabs and should not be shown as removable chips
+const TAB_ONLY_FILTERS = new Set([
+  'inbox',
+  'noise',
+  'explicit-noise',
+  'channels',
+  'file-folder',
+  'shared-entity',
+  'shared-agent',
+  'assigned-to',
+  'no-drafts',
+  'email-drafts',
+  'not-task',
+]);
+
+/**
+ * Hook that provides detection of active filter refinements beyond tab defaults,
+ * and a function to reset filters to the current tab's default state.
+ */
+export function useFilterRefinements() {
+  const {
+    soup,
+    items,
+    queryFilters,
+    assigneeFilter,
+    setAssigneeFilter,
+    ownerFilter,
+    setOwnerFilter,
+    stageFilter,
+    setStageFilter,
+    activeTab,
+  } = useSoupView();
+  const filterData = () => queryFilters.state;
+  const panel = useSplitPanelOrThrow();
+  const user = useUserContext();
+  const contacts = useContacts();
+  const currentUserId = useUserId();
+  const taskStatus = useTaskStatusFilter();
+  const tagFilter = useTagFilter();
+  const dealStages = useDealStages();
+
+  const getPresetContext = (): PresetContext => ({
+    userId: user.userId(),
+    // Filter refinements don't surface admin-gated tabs, so passing
+    // false here is safe — the value only matters where the resolver
+    // gates on it (companies → hidden).
+    isTeamAdmin: false,
+  });
+
+  const currentView = createMemo(() => {
+    const content = panel.handle.content();
+
+    if (content.type !== 'component' || !isListViewID(content.id)) return;
+
+    return content.id;
+  });
+
+  const currentPreset = createMemo(() => {
+    const view = currentView();
+    if (!view) return undefined;
+    const tab = activeTab() ?? VIEW_TAB_PRESETS[view]?.default;
+    if (!tab) return undefined;
+    return getViewPreset(view, tab, getPresetContext());
+  });
+
+  const hasActiveRefinements = createMemo(() => {
+    const preset = currentPreset();
+    if (!preset) return false;
+
+    const expectedIds = new Set([
+      ...(preset.clientFilters.and ?? []),
+      ...(preset.clientFilters.or ?? []),
+    ]);
+
+    const currentIds = new Set(soup.predicates.activeIds() as FilterID[]);
+
+    const hasClientFilterDiff =
+      expectedIds.size !== currentIds.size ||
+      [...expectedIds].some((id) => !currentIds.has(id as FilterID));
+
+    // Check if there are any external filters set (normalize undefined vs {} for comparison)
+    const currentFilterData = filterData();
+    const presetFilters = queryStateFrom(preset.filters);
+    const hasQueryFilterDiff =
+      !deepEqual(currentFilterData.include, presetFilters.include) ||
+      !deepEqual(currentFilterData.exclude, presetFilters.exclude) ||
+      !deepEqual(
+        currentFilterData.documentWhere,
+        presetFilters.documentWhere
+      ) ||
+      currentFilterData.emailView !== presetFilters.emailView;
+
+    const hasSubFilters =
+      assigneeFilter().length > 0 ||
+      ownerFilter().length > 0 ||
+      stageFilter().length > 0;
+
+    return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
+  });
+
+  /**
+   * Human-readable options for the assignee sub-filter, keyed by assignee ID.
+   * Mirrors the same logic used in UnifiedFilterDropdown's assigneeOptions.
+   */
+  const assigneeOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const uid = currentUserId();
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      map.set(NO_ASSIGNEE, {
+        label: 'Unassigned',
+        icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
+      });
+      for (const contact of contacts()) {
+        map.set(contact.id, {
+          label: buildContactLabel(contact, uid),
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        });
+      }
+      return map;
+    }
+  );
+
+  /**
+   * Searchable options for the assignee filter (for use in searchable multi-select).
+   */
+  const assigneeSearchableOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    const noAssigneeOption: SearchableOption = {
+      id: NO_ASSIGNEE,
+      label: 'Unassigned',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    };
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, uid),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === uid) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noAssigneeOption,
+      ...otherContactOptions,
+    ];
+  });
+
+  /**
+   * Owner options for the Customers view's owner sub-filter, keyed by id.
+   */
+  const ownerOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const uid = currentUserId();
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      map.set(NO_ASSIGNEE, {
+        label: 'No owner',
+        icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
+      });
+      for (const contact of contacts()) {
+        map.set(contact.id, {
+          label: buildContactLabel(contact, uid),
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        });
+      }
+      return map;
+    }
+  );
+
+  const ownerSearchableOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    const noOwnerOption: SearchableOption = {
+      id: NO_ASSIGNEE,
+      label: 'No owner',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    };
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, uid),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === uid) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noOwnerOption,
+      ...otherContactOptions,
+    ];
+  });
+
+  /**
+   * Handler for owner filter changes (Customers view). Client-side
+   * predicate only — companies come back from a dedicated capped CRM
+   * request with no property filter support.
+   */
+  const handleOwnerChange = (ids: string[]) => {
+    batch(() => {
+      setOwnerFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-owner')) {
+        soup.predicates.toggle({ and: ['company-owner'] });
+      }
+    });
+  };
+
+  /**
+   * Stage options for the Customers view's stage sub-filter: the team's
+   * active deal-stage set (plus retired legacy stages on the default set)
+   * and a trailing "No stage" row.
+   */
+  const stageSearchableOptions = createMemo((): SearchableOption[] => [
+    ...dealStages.filterStages().map((stage, index) => ({
+      id: stage.id,
+      label: stage.label,
+      icon: () => (
+        <CrmStageIcon optionId={stage.id} index={index} class="size-3.5" />
+      ),
+    })),
+    {
+      id: NO_STAGE,
+      label: 'No stage',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    },
+  ]);
+
+  const stageOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      for (const option of stageSearchableOptions()) {
+        map.set(option.id, { label: option.label, icon: option.icon });
+      }
+      return map;
+    }
+  );
+
+  /**
+   * Handler for stage filter changes (Customers view). Client-side
+   * predicate only, mirroring the owner filter.
+   */
+  const handleStageChange = (ids: string[]) => {
+    batch(() => {
+      setStageFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-stage')) {
+        soup.predicates.toggle({ and: ['company-stage'] });
+      }
+    });
+  };
+
+  /**
+   * Handler for assignee filter changes.
+   */
+  const handleAssigneeChange = (ids: string[]) => {
+    const current = assigneeFilter();
+    const toAdd = ids.filter((id) => !current.includes(id));
+    const toRemove = current.filter((id) => !ids.includes(id));
+
+    // Exclude NO_ASSIGNEE from backend queries - it's handled client-side only
+    const toProps = (list: string[]) =>
+      list
+        .filter((id) => id !== NO_ASSIGNEE)
+        .map((id) => ({
+          propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          type: 'entity' as const,
+          value: id,
+        }));
+
+    batch(() => {
+      setAssigneeFilter(ids);
+
+      // Activate/deactivate the assignee predicate based on selection
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('assignee')) {
+        soup.predicates.toggle({ and: ['assignee'] });
+      }
+
+      const removeProps = toProps(toRemove);
+      const addProps = toProps(toAdd);
+      if (removeProps.length)
+        queryFilters.remove({ include: { properties: removeProps } });
+      if (addProps.length)
+        queryFilters.add({ include: { properties: addProps } });
+    });
+  };
+
+  /**
+   * Get filter categories for the current view
+   */
+  const viewCategories = createMemo(() => {
+    const view = currentView();
+    if (!view) return [];
+    return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
+  });
+
+  /**
+   * Cache for consolidated filter chips, similar to chipCache but for the new format.
+   * We track the view and tab to invalidate when they change, since cached chips
+   * may close over stale values (e.g. group.allOptions, coveredByView, presetFilterIds).
+   */
+  const consolidatedChipCache = new Map<string, ConsolidatedFilter>();
+  let lastCacheViewId: ListView | undefined;
+  let lastCacheTab: string | undefined;
+
+  const getOrCreateConsolidatedChip = (
+    key: string,
+    build: () => ConsolidatedFilter
+  ): ConsolidatedFilter => {
+    let chip = consolidatedChipCache.get(key);
+    if (!chip) {
+      chip = build();
+      consolidatedChipCache.set(key, chip);
+    }
+    return chip;
+  };
+
+  /**
+   * Returns consolidated filters grouped by category.
+   * Multiple values in the same category are shown in a single chip.
+   */
+  const consolidatedFiltersList = createMemo((): ConsolidatedFilter[] => {
+    const view = currentView();
+    const preset = currentPreset();
+    const tab = activeTab();
+
+    // Invalidate cache when view or tab changes, since cached chips
+    // close over render-local values like group.allOptions, coveredByView, presetFilterIds
+    if (view !== lastCacheViewId || tab !== lastCacheTab) {
+      consolidatedChipCache.clear();
+      lastCacheViewId = view;
+      lastCacheTab = tab;
+    }
+
+    const presetFilterIds = new Set([
+      ...(preset?.clientFilters.and ?? []),
+      ...(preset?.clientFilters.or ?? []),
+    ]);
+
+    const filters: ConsolidatedFilter[] = [];
+    const seenKeys = new Set<string>();
+
+    // Group view category filters by category
+    const categoryGroups = new Map<
+      string,
+      {
+        label: string;
+        labelPlural?: string;
+        allOptions: FilterValue[];
+        multiple: boolean;
+      }
+    >();
+
+    for (const category of viewCategories()) {
+      // Status has a dedicated chip below.
+      if (view === 'tasks' && category.id === 'status') continue;
+
+      const activeValues: FilterValue[] = [];
+      const allOptions: FilterValue[] = [];
+
+      for (const option of category.options) {
+        allOptions.push({
+          id: option.id,
+          label: option.label,
+          icon: option.icon,
+        });
+
+        if (
+          soup.predicates.isActive(option.id) &&
+          !TAB_ONLY_FILTERS.has(option.id) &&
+          !presetFilterIds.has(option.id as FilterID)
+        ) {
+          activeValues.push({
+            id: option.id,
+            label: option.label,
+            icon: option.icon,
+          });
+        }
+      }
+
+      if (activeValues.length > 0) {
+        categoryGroups.set(category.id, {
+          label: category.label,
+          labelPlural: category.labelPlural,
+          allOptions,
+          multiple: category.multiple ?? true,
+        });
+      }
+    }
+
+    // Build consolidated chips for each category group
+    for (const [categoryId, group] of categoryGroups) {
+      const key = `category:${categoryId}`;
+      seenKeys.add(key);
+
+      // Helper to get current active values for this category (computed fresh)
+      const getActiveValues = (): FilterValue[] => {
+        const result: FilterValue[] = [];
+        for (const opt of group.allOptions) {
+          if (
+            soup.predicates.isActive(opt.id) &&
+            !TAB_ONLY_FILTERS.has(opt.id) &&
+            !presetFilterIds.has(opt.id as FilterID)
+          ) {
+            result.push(opt);
+          }
+        }
+        return result;
+      };
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => ({
+          key,
+          categoryLabel: group.label,
+          categoryLabelPlural: group.labelPlural,
+          values: getActiveValues, // Accessor - computed fresh each render
+          availableOptions: group.allOptions,
+          multiple: group.multiple,
+          isValueActive: (id) => soup.predicates.isActive(id),
+          onToggleValue: (id) => {
+            const isInboxTypeFilter =
+              currentView() === 'inbox' && categoryId === 'type';
+            const isDocumentTypeFilter =
+              currentView() === 'documents' && categoryId === 'type';
+            const previousDocumentTypeIds = isDocumentTypeFilter
+              ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+              : undefined;
+
+            batch(() => {
+              soup.predicates.toggle({ or: [id as FilterID] });
+
+              if (isInboxTypeFilter) {
+                const activeTypeIds = group.allOptions
+                  .filter((option) => soup.predicates.isActive(option.id))
+                  .map((option) => option.id);
+                queryFilters.replace(getInboxTypeQuery(activeTypeIds) ?? null);
+                return;
+              }
+
+              if (previousDocumentTypeIds) {
+                const previousQuery = buildDocumentTypeQuery(
+                  previousDocumentTypeIds
+                );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
+                if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
+                return;
+              }
+
+              const query = getFilterQuery(id);
+              if (!query) return;
+
+              if (soup.predicates.isActive(id)) {
+                queryFilters.add(query);
+              } else {
+                queryFilters.remove(query);
+              }
+            });
+          },
+          onRemoveAll: () => {
+            // Compute current active values at removal time
+            const currentValues = getActiveValues();
+            const isInboxTypeFilter =
+              currentView() === 'inbox' && categoryId === 'type';
+            const isDocumentTypeFilter =
+              currentView() === 'documents' && categoryId === 'type';
+            const previousDocumentTypeIds = isDocumentTypeFilter
+              ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+              : undefined;
+
+            batch(() => {
+              for (const value of currentValues) {
+                soup.predicates.toggle({ or: [value.id as FilterID] });
+              }
+
+              if (isInboxTypeFilter) {
+                queryFilters.replace(getInboxTypeQuery([]) ?? null);
+                return;
+              }
+
+              if (previousDocumentTypeIds) {
+                const previousQuery = buildDocumentTypeQuery(
+                  previousDocumentTypeIds
+                );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
+                if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
+                return;
+              }
+
+              for (const value of currentValues) {
+                const query = getFilterQuery(value.id);
+                if (query) queryFilters.remove(query);
+              }
+            });
+          },
+        }))
+      );
+    }
+
+    // Dedicated chip: the generic builder would hide the preset-seeded default.
+    const pushTaskStatusChip = () => {
+      if (view !== 'tasks') return;
+      const statusCategory = viewCategories().find((c) => c.id === 'status');
+      if (!statusCategory) return;
+
+      const allOptions: FilterValue[] = statusCategory.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        icon: o.icon,
+      }));
+
+      const getActiveValues = (): FilterValue[] =>
+        allOptions.filter((o) => taskStatus.isActive(o.id as FilterID));
+
+      // No chip when not narrowed (empty, or all selected = no filter).
+      const activeCount = getActiveValues().length;
+      if (activeCount === 0 || activeCount === allOptions.length) return;
+
+      const key = 'status';
+      seenKeys.add(key);
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => ({
+          key,
+          categoryLabel: 'Status',
+          categoryLabelPlural: 'Statuses',
+          values: getActiveValues,
+          availableOptions: allOptions,
+          multiple: true,
+          isValueActive: (id) => taskStatus.isActive(id as FilterID),
+          onToggleValue: (id) => taskStatus.toggle(id as FilterID),
+          onRemoveAll: () => taskStatus.clear(),
+        }))
+      );
+    };
+
+    // Assignee filter (consolidated) - using searchable approach
+    const pushAssigneeConsolidatedChip = () => {
+      const key = 'assignee';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      const ids = assigneeFilter();
+      if (ids.length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      // Compute values as accessor for reactivity, including icons
+      const getValues = (): FilterValue[] =>
+        assigneeFilter().map((id) => {
+          const opt = assigneeOptionsMap().get(id);
+          return {
+            id,
+            label: opt?.label ?? id,
+            icon: opt?.icon,
+          };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Assignee',
+            values: getValues,
+            searchableOptions: assigneeSearchableOptions,
+            activeSearchableIds: assigneeFilter,
+            onSearchableChange: handleAssigneeChange,
+            searchPlaceholder: 'Search assignees...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleAssigneeChange([]),
+          };
+        })
+      );
+    };
+
+    // Tags chip (consolidated, searchable) for the documents/tasks views.
+    const pushTagsConsolidatedChip = () => {
+      if (view !== 'tasks' && view !== 'documents') return;
+      if (!tagFilter.enabled() || !tagFilter.hasTags()) return;
+
+      const key = 'tags';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      if (tagFilter.activeIds().length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        tagFilter.activeIds().map((id) => {
+          const opt = tagFilter.optionsById().get(id);
+          return { id, label: opt?.label ?? id, icon: opt?.icon };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Tags',
+            values: getValues,
+            searchableOptions: tagFilter.options,
+            activeSearchableIds: tagFilter.activeIds,
+            onSearchableChange: tagFilter.onChange,
+            searchPlaceholder: 'Filter by tag...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => tagFilter.onChange([]),
+          };
+        })
+      );
+    };
+
+    // Owner filter (consolidated) for the Customers view.
+    const pushOwnerConsolidatedChip = () => {
+      if (view !== 'companies') return;
+      const key = 'owner';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      const ids = ownerFilter();
+      if (ids.length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        ownerFilter().map((id) => {
+          const opt = ownerOptionsMap().get(id);
+          return {
+            id,
+            label: opt?.label ?? id,
+            icon: opt?.icon,
+          };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Owner',
+            values: getValues,
+            searchableOptions: ownerSearchableOptions,
+            activeSearchableIds: ownerFilter,
+            onSearchableChange: handleOwnerChange,
+            searchPlaceholder: 'Search owners...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleOwnerChange([]),
+          };
+        })
+      );
+    };
+
+    // Stage filter (consolidated) for the Customers view.
+    const pushStageConsolidatedChip = () => {
+      if (view !== 'companies') return;
+      const key = 'stage';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      const ids = stageFilter();
+      if (ids.length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        stageFilter().map((id) => {
+          const opt = stageOptionsMap().get(id);
+          return {
+            id,
+            label: opt?.label ?? id,
+            icon: opt?.icon,
+          };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Stage',
+            values: getValues,
+            searchableOptions: stageSearchableOptions,
+            activeSearchableIds: stageFilter,
+            onSearchableChange: handleStageChange,
+            searchPlaceholder: 'Filter stages...',
+            // Stages read as a pipeline — keep canonical order, don't pin
+            // checked ones to the top.
+            preserveOptionOrder: true,
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleStageChange([]),
+          };
+        })
+      );
+    };
+
+    pushTaskStatusChip();
+    pushAssigneeConsolidatedChip();
+    pushStageConsolidatedChip();
+    pushOwnerConsolidatedChip();
+    pushTagsConsolidatedChip();
+
+    // Evict stale chips
+    for (const key of consolidatedChipCache.keys()) {
+      if (!seenKeys.has(key)) consolidatedChipCache.delete(key);
+    }
+
+    return filters;
+  });
+
+  const getFilterContext = (): FilterContext => ({
+    userId: currentUserId(),
+    assignees: assigneeFilter(),
+  });
+
+  /**
+   * Does at least one item pass the BASE preset's client predicates? Used to
+   * decide whether the empty-state banner should claim items are hidden.
+   * Short-circuits at the first match.
+   *
+   * Note: items() is already server-filtered by current query filters, so if
+   * the user has tightened the server query this may return false even when
+   * items exist. `hasHiddenItems` below compensates by being sticky.
+   */
+  const baseHasItems = createMemo(() => {
+    const preset = currentPreset();
+    if (!preset) return false;
+    const baseAnd = preset.clientFilters.and ?? [];
+    const baseOr = preset.clientFilters.or ?? [];
+    if (baseAnd.length === 0 && baseOr.length === 0) return items().length > 0;
+
+    const ctx = getFilterContext();
+    for (const entity of items()) {
+      let andOk = true;
+      for (const id of baseAnd) {
+        const cfg = soup.predicates.getConfig(id);
+        if (cfg && !cfg.predicate(entity, ctx)) {
+          andOk = false;
+          break;
+        }
+      }
+      if (!andOk) continue;
+      if (baseOr.length > 0) {
+        let orOk = false;
+        for (const id of baseOr) {
+          const cfg = soup.predicates.getConfig(id);
+          if (cfg?.predicate(entity, ctx)) {
+            orOk = true;
+            break;
+          }
+        }
+        if (!orOk) continue;
+      }
+      return true;
+    }
+    return false;
+  });
+
+  /**
+   * Sticky-true while refinements are active so the banner doesn't flicker
+   * off when a server refetch transiently zeroes out items(). Resets on
+   * view/tab change, and snaps to the live state whenever refinements clear.
+   *
+   * Imperfect by design: if the user mounts with refinements already active
+   * and the server returns zero items, this stays false. Getting a true
+   * answer would need a separate base-preset query.
+   */
+  const hasHiddenItems = createMemo<{ key: string; value: boolean }>((prev) => {
+    const key = `${currentView() ?? ''}|${activeTab() ?? ''}`;
+    const refinementsActive = hasActiveRefinements();
+    const itemsExist = baseHasItems();
+
+    if (prev?.key !== key || !refinementsActive) {
+      return { key, value: itemsExist };
+    }
+    return { key, value: prev.value || itemsExist };
+  });
+
+  const hasHiddenItemsValue = () => hasHiddenItems().value;
+
+  const getFilterQuery = (optionId: string) => {
+    const filter = soup.predicates.getConfig(optionId);
+    if (!filter?.query) return undefined;
+    return typeof filter.query === 'function'
+      ? filter.query(getFilterContext())
+      : filter.query;
+  };
+
+  const getInboxTypeQuery = (activeTypeIds: string[]): Query | undefined => {
+    const preset = currentPreset();
+    if (currentView() !== 'inbox' || !preset) return undefined;
+
+    let targetQuery: Query = {};
+    for (const id of activeTypeIds) {
+      const query = getFilterQuery(id);
+      if (!query) continue;
+      targetQuery = mergeQuery(queryStateFrom(targetQuery), query);
+    }
+
+    if (!activeTypeIds.length) return preset.filters;
+
+    return mergeQuery(
+      queryStateFrom(preset.filters),
+      defineQueryFilters({}, { skipTargetsFrom: targetQuery })
+    );
+  };
+
+  const resetToTabDefaults = () => {
+    const preset = currentPreset();
+    if (!preset) return;
+
+    // "Clear all" empties the status filter rather than restoring the default subset.
+    const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
+      TASK_STATUS_FILTER_IDS.includes(id as FilterID)
+    );
+
+    batch(() => {
+      soup.predicates.set(preset.clientFilters);
+      queryFilters.replace(preset.filters ?? null);
+      setAssigneeFilter([]);
+      setOwnerFilter([]);
+      setStageFilter([]);
+      if (presetSeedsStatusSubset) taskStatus.clear();
+    });
+  };
+
+  return {
+    hasActiveRefinements,
+    hasHiddenItems: hasHiddenItemsValue,
+    resetToTabDefaults,
+    currentView,
+    consolidatedFiltersList,
+  };
+}

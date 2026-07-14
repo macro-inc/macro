@@ -1,0 +1,60 @@
+[package]
+default-run = "convert_service"
+edition = "2024"
+name = "convert_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "convert_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[features]
+disable_cleanup = []
+disable_worker = []
+local_queue = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-lambda = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+futures = { workspace = true }
+http-body-util = { workspace = true }
+lambda_client = { path = "../../crates/lambda_client" }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_config = { path = "../../crates/macro_config" }
+macro_db_client = { path = "../../crates/macro_db_client" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
+  "auth",
+] }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+model = { path = "../../crates/model" }
+s3_key = { path = "../../crates/s3_key" }
+nix = { version = "0.29.0", features = ["process", "signal"] }
+remote_env_var = { path = "../../crates/remote_env_var" }
+rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }
+s3_client = { path = "../../crates/s3_client" }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client" }
+sqs_worker = { path = "../../crates/sqs_worker" }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+zip = { workspace = true, features = ["bzip2"] }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -16,7 +16,7 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = 'email-service-pubsub-workers';
-const BASE_PATH = '../../../rust/cloud-storage';
+const REPO_ROOT = '../../..';
 
 type Args = {
   role: aws.iam.Role;
@@ -68,8 +68,8 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: BASE_PATH,
-        dockerfile: 'Dockerfile',
+        imagePath: REPO_ROOT,
+        dockerfile: 'docker/Dockerfile',
         platform,
         tags: this.tags,
         buildArgs: {

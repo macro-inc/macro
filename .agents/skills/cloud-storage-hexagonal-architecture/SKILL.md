@@ -1,11 +1,11 @@
 ---
 name: cloud-storage-hexagonal-architecture
-description: Enforce hexagonal architecture in the Rust cloud-storage backend. Use before modifying rust/cloud-storage crates, especially inbound axum/tool/listener adapters, domain services/ports, outbound adapters, authorization, permissions, database access, or external clients.
+description: Enforce hexagonal architecture in the Rust backend. Use before modifying crates or Rust services, especially inbound axum/tool/listener adapters, domain services/ports, outbound adapters, authorization, permissions, database access, or external clients.
 ---
 
 # Cloud Storage Hexagonal Architecture Guard
 
-Use this skill whenever you add, change, or review Rust code under `rust/cloud-storage/**` that touches a crate with `src/domain`, `src/inbound`, or `src/outbound`.
+Use this skill whenever you add, change, or review Rust code under `crates/**` or `services/**` that touches a crate with `src/domain`, `src/inbound`, or `src/outbound`.
 
 This repository follows the ports-and-adapters / hexagonal style described in _Master Hexagonal Architecture in Rust_ and the `howtocodeit/hexarch` `3-simple-service` branch: domain models + ports + services are the center; inbound and outbound adapters are replaceable shells around that center.
 
@@ -190,7 +190,7 @@ If a step has no answer, stop and design that boundary before writing code.
 
 ## Review checklist
 
-For every diff under `rust/cloud-storage/**`, reject or refactor if any of these are true:
+For every diff under `crates/**` or `services/**`, reject or refactor if any of these are true:
 
 - `src/domain/**` imports `axum`, `http::StatusCode`, `IntoResponse`, `Json`, `Router`, `Request`, `HeaderMap`, SQLx pools/queries, AWS SDK clients, Redis clients, reqwest clients, `crate::inbound`, or `crate::outbound`.
 - `src/inbound/**` contains SQLx queries, transaction handling, repository calls, AWS/Redis/OpenSearch/reqwest calls, or direct calls to outbound implementations.
@@ -202,7 +202,7 @@ For every diff under `rust/cloud-storage/**`, reject or refactor if any of these
 
 ## Useful inspection commands
 
-Set `CRATE` to the crate you are touching, for example `CRATE=rust/cloud-storage/documents`.
+Set `CRATE` to the crate you are touching, for example `CRATE=crates/documents`.
 
 ```bash
 # Domain must not know transport or concrete infrastructure.

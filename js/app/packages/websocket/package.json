@@ -1,7 +1,0 @@
-{
-  "name": "websocket",
-  "private": true,
-  "devDependencies": {
-    "vite-tsconfig-paths": "^5.1.4"
-  }
-}

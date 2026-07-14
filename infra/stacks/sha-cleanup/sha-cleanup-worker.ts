@@ -6,7 +6,7 @@ import { stack } from '../../packages/shared';
 
 const BASE_NAME = `sha-cleaner-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;
-const BASE_PATH = '../../../rust/cloud-storage';
+const REPO_ROOT = '../../..';
 
 type CreateShaCleanupWorkerArgs = {
   containerEnvVars?: { name: string; value: Output<string> | string }[];
@@ -46,10 +46,10 @@ export class ShaWorker extends pulumi.ComponentResource {
       `${BASE_NAME}-image-${stack}`,
       {
         imageTag: 'latest',
-        context: BASE_PATH,
+        context: REPO_ROOT,
         platform: `${platform.family}/${platform.architecture}`,
         repositoryUrl: this.ecr.url,
-        dockerfile: `${BASE_PATH}/Dockerfile.sha-cleanup-worker`,
+        dockerfile: `${REPO_ROOT}/docker/Dockerfile.sha-cleanup-worker`,
       },
       { parent: this }
     );

@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "upload_extractor_lambda_trigger"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["eventbridge", "s3"] }
+dynamodb_client = { path = "../../crates/dynamodb_client" }
+lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+models_bulk_upload = { path = "../../crates/models_bulk_upload" }
+s3_key = { path = "../../crates/s3_key" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqs_client = { path = "../../crates/sqs_client" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }

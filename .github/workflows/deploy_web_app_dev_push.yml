@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/deploy_web_app_dev_push.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_web_app_dev_push.rs
 name: Deploy web app dev on push to main
 on:
   push:
@@ -18,8 +18,7 @@ jobs:
       uses: whutchinson98/diff-checker-action@d25a22ee8f84f5e44abda3027c80c2e6d71f68a6
       with:
         token: ${{ github.token }}
-        diff: |
-          web-app: ./infra/stacks/web-app/** ./js/app/packages/** ./js/app/package.json ./js/package.json ./js/lexical-core/**
+        diff: 'web-app: ./infra/stacks/web-app/** ./package.json ./bun.lock ./apps/web/** ./packages/** ./crates/client/cache-core/** ./crates/client/cache-idb/** ./crates/client/cache-wasm/** ./static_assets/schema.graphql ./Cargo.toml ./Cargo.lock ./rust-toolchain.toml'
   deploy_web_app:
     needs:
     - check-to-deploy

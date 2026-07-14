@@ -5,19 +5,19 @@ description: Build a new AI tool end-to-end — Rust implementation, toolset wir
 
 # Create AI Tool
 
-This skill walks through building a new AI tool from scratch. Before writing any code, read the design guide at `rust/cloud-storage/ai_toolset/TOOL_DESIGN.md` and the framework docs/examples in `rust/cloud-storage/ai_toolset/src/lib.rs`.
+This skill walks through building a new AI tool from scratch. Before writing any code, read the design guide at `crates/ai_toolset/TOOL_DESIGN.md` and the framework docs/examples in `crates/ai_toolset/src/lib.rs`.
 
-**IMPORTANT:** Never modify the `rust/cloud-storage/ai_toolset/` crate. It is the framework — you build tools that use it.
+**IMPORTANT:** Never modify the `crates/ai_toolset/` crate. It is the framework — you build tools that use it.
 
 ## Step 1: Write the tool
 
-Decide which domain crate the tool belongs in. Tools live at `rust/cloud-storage/<crate>/src/inbound/toolset/`.
+Decide which domain crate the tool belongs in. Tools live at `crates/<crate>/src/inbound/toolset/`.
 
 Study an existing tool for patterns:
-- `rust/cloud-storage/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
-- `rust/cloud-storage/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
-- `rust/cloud-storage/soup/src/inbound/toolset/` — tool: `list_entities.rs`
-- `rust/cloud-storage/call/src/inbound/toolset/` — call-related tools
+- `crates/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
+- `crates/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
+- `crates/soup/src/inbound/toolset/` — tool: `list_entities.rs`
+- `crates/call/src/inbound/toolset/` — call-related tools
 
 Each tool is a struct that derives `JsonSchema` and `Deserialize`, with `#[schemars(title = "...", description = "...")]` on the struct and `#[schemars(description = "...")]` on each field. The struct implements `AsyncTool<Context>` from the `ai_toolset` crate.
 
@@ -25,7 +25,7 @@ Create a new file for your tool (e.g. `my_tool.rs`), add it as a `mod` in the to
 
 ## Step 2: Create the tool context
 
-If your tool needs dependencies (DB connections, service clients) that aren't already in an existing context, define a new context struct in the toolset's `mod.rs`. See `rust/cloud-storage/documents/src/inbound/toolset/mod.rs` for the `DocumentToolContext` pattern.
+If your tool needs dependencies (DB connections, service clients) that aren't already in an existing context, define a new context struct in the toolset's `mod.rs`. See `crates/documents/src/inbound/toolset/mod.rs` for the `DocumentToolContext` pattern.
 
 The context must be `Clone` and derivable from the parent `ToolServiceContext` via `FromRef`.
 
@@ -33,20 +33,20 @@ If the tool's dependencies are already available in an existing context (e.g. it
 
 ## Step 3: Add the toolset to `all_tools` in the ai_tools crate
 
-Edit `rust/cloud-storage/ai_tools/src/lib.rs`:
+Edit `crates/ai_tools/src/lib.rs`:
 - Import your toolset function and context type
 - Add `.add_tool::<YourTool, YourContext>()` or `.add_subtoolset::<YourToolContext>(your_toolset())` to the `all_tools()` function
 
 ## Step 4: Add the context to ToolServiceContext
 
-Edit `rust/cloud-storage/ai_tools/src/tool_context.rs`:
+Edit `crates/ai_tools/src/tool_context.rs`:
 - Add any new type aliases for your service implementations (follow the `Tool*` naming pattern)
 - Add your tool context field to the `ToolServiceContext` struct
 - Implement `FromRef<ToolServiceContext>` for your context if needed (or derive it — the struct uses `#[derive(FromRef)]`)
 
 ## Step 5: Wire up env vars and service construction
 
-Edit `rust/cloud-storage/ai_tools/src/build_context.rs`:
+Edit `crates/ai_tools/src/build_context.rs`:
 - Add any new env vars to the `env_var!` or `maybe_env_var!` blocks
 - Construct your service/context in `build_tool_service_context_from_env`
 - Add it to the returned `ToolServiceContext`
@@ -60,7 +60,7 @@ Edit `infra/packages/shared/src/ai_tools.ts`:
 
 ## Step 7: Rust checks
 
-Run from `rust/cloud-storage/`:
+Run from the repository root:
 ```bash
 cargo fmt
 cargo clippy -p ai_tools
@@ -71,25 +71,25 @@ Fix any warnings or errors before proceeding.
 
 ## Step 8: Generate frontend types
 
-Run from `js/app/`:
+Run from `apps/web/`:
 ```bash
 bun gen-tools
 ```
 
-This builds `rust/cloud-storage/ai_tools/src/bin/gen_tool_schemas.rs`, generates `rust/cloud-storage/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `js/app/packages/service-clients/service-cognition/generated/tools/`.
+This builds `crates/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
 
 ## Step 9: Check what frontend UI is needed
 
-Run from `js/app/`:
+Run from `apps/web/`:
 ```bash
 bun check
 ```
 
-This runs `tsc --noEmit` and will report type errors — specifically, the `toolHandlers` map in `js/app/packages/core/component/AI/component/tool/handler.tsx` will be missing your new tool name. The errors tell you exactly what to implement.
+This runs `tsc --noEmit` and will report type errors — specifically, the `toolHandlers` map in `apps/web/src/lib/core/component/AI/component/tool/handler.tsx` will be missing your new tool name. The errors tell you exactly what to implement.
 
 ## Step 10: Read existing tool UI for patterns
 
-The tool UI components live at `js/app/packages/core/component/AI/component/tool/`. Study existing renderers:
+The tool UI components live at `apps/web/src/lib/core/component/AI/component/tool/`. Study existing renderers:
 - `Search.tsx` — search results rendering
 - `ReadContent.tsx` / `ReadMetadata.tsx` — document tool UI
 - `SendEmail.tsx` — email tool UI  
@@ -102,9 +102,9 @@ Each tool needs a handler object implementing `ToolHandler` (from `ToolRenderer.
 
 ## Step 11: Write the tool UI
 
-1. Create a new component file at `js/app/packages/core/component/AI/component/tool/YourTool.tsx`
+1. Create a new component file at `apps/web/src/lib/core/component/AI/component/tool/YourTool.tsx`
 2. Export a handler using `createToolRenderer`
-3. Register it in `js/app/packages/core/component/AI/component/tool/handler.tsx`:
+3. Register it in `apps/web/src/lib/core/component/AI/component/tool/handler.tsx`:
    - Import your handler
    - Add it to the `toolHandlers` map with the key matching your tool's schema title
 
@@ -121,7 +121,7 @@ For tools that return text/string results (not entity lists), render the respons
 
 ## Step 12: Frontend checks
 
-Run from `js/app/`:
+Run from `apps/web/`:
 ```bash
 bun format
 bun check

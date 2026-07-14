@@ -1,0 +1,87 @@
+[package]
+authors = ["you"]
+description = "A Tauri App"
+edition.workspace = true
+license = ""
+name = "app"
+repository = ""
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+name = "app_lib"
+
+[build-dependencies]
+serde_json = "1.0"
+tauri-build = { version = "2.3.1", features = [] }
+
+[features]
+# Automatic OTA bundle updates: check on launch/resume, apply cached bundles at
+# startup. Disabled via `--no-default-features` (just ios-dev,
+# ios-build-no-update) so the embedded bundle / dev server is always served.
+auto_apply_update = []
+default = ["auto_apply_update"]
+
+[dependencies]
+http = "1"
+log = "0.4"
+logger = { path = "../logger" }
+mime_guess = "2"
+rootcause = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+staged_upload_constants = { path = "../staged_upload_constants" }
+tracing-oslog = { version = "0.3" }
+
+nom = "8.0.0"
+reqwest = { workspace = true, features = ["cookies", "stream"] }
+serde_qs = "0.15.0"
+tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
+tauri-plugin-deep-link = "=2.4.5"
+tokio-util = { version = "0.7", features = ["io"] }
+# seanaye/feat/ws-replay-buffer; keep both plugin revs identical, and keep the
+# TauriMessage/ReplayEnvelope types in
+# packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
+tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "06474e4c446600627cf37a11f0c22c27bcf764ca", features = [
+  "unsafe-headers",
+] }
+tauri-plugin-log = { version = "2", features = ["tracing"] }
+tauri-plugin-opener = "2"
+tauri-plugin-safe-area-insets = "0.1.0"
+tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "06474e4c446600627cf37a11f0c22c27bcf764ca" }
+thiserror = "2.0.14"
+tokio = { version = "1.47.1", features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+url = { workspace = true }
+urlencoding = "2.1.3"
+uuid = { version = "1.18.1", features = ["v4"] }
+# system notifications for when the app is open
+tauri-plugin-notification = "2"
+# push notifications for mobile (when app is closed)
+graphql_cache_plugin = { path = "../graphql_cache_plugin" }
+macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
+navigation_plugin = { path = "../navigation_plugin" }
+tauri-plugin-device-info = "1.0.1"
+tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" }
+tauri-plugin-os = "2"
+tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugin-virtual-keyboard", branch = "main" }
+
+
+[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = "26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" }
+tauri-plugin-haptics = "2"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri-plugin-call-kit = { path = "../callkit_plugin" }
+tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
+tauri-plugin-pasteboard = { path = "../pasteboard_plugin" }
+tauri-plugin-photo-library = { path = "../photo_library_plugin" }
+# Used to call NSFileManager from Rust to get the App Group container path.
+# This version is already in the dependency tree via wry/tao.
+objc2 = "0.5"

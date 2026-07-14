@@ -1,0 +1,866 @@
+//! ListEntities tool for browsing workspace items.
+
+use crate::domain::{
+    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
+    ports::SoupService,
+};
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use async_trait::async_trait;
+use email::domain::{models::PreviewView, ports::EmailService};
+use filter_ast::Expr;
+use item_filters::{
+    SharedEmailFilter,
+    ast::{
+        EntityFilterAst, LiteralTree,
+        call::CallLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
+        chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
+        project::ProjectLiteral,
+        properties::{PropertiesLiteral, PropertyMatchValue},
+    },
+};
+use models_pagination::{SimpleSortMethod, TypeEraseCursor};
+use models_properties::DataType;
+use models_properties::service::property_value::PropertyValue;
+use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
+use models_soup::{SoupProperty, document::SoupDocumentSubType, item::SoupItem};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use cowlike::CowLike;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use super::SoupToolContext;
+
+/// Internal limit for results - not exposed to agents
+const RESULT_LIMIT: u16 = 50;
+const MAX_RESULT_LIMIT: u16 = 500;
+
+/// Sort order for the list entities AI tool.
+#[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    /// Sort by most recently viewed.
+    RecentlyViewed,
+    /// Sort by most recently updated.
+    #[default]
+    RecentlyUpdated,
+    /// Sort by most recently created.
+    RecentlyCreated,
+}
+
+impl From<SortBy> for SimpleSortMethod {
+    fn from(sort: SortBy) -> Self {
+        match sort {
+            SortBy::RecentlyViewed => SimpleSortMethod::ViewedAt,
+            SortBy::RecentlyUpdated => SimpleSortMethod::UpdatedAt,
+            SortBy::RecentlyCreated => SimpleSortMethod::CreatedAt,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailPreset {
+    Signal,
+}
+
+impl EmailPreset {
+    fn filter(self) -> Expr<EmailLiteral> {
+        match self {
+            EmailPreset::Signal => Expr::and(
+                Expr::val(EmailLiteral::Importance(true)),
+                Expr::val(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
+            ),
+        }
+    }
+}
+
+/// Entity types that can be returned by the list entities AI tool.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemType {
+    /// Macro document.
+    Document,
+    /// AI chat conversation.
+    AiChat,
+    /// Macro project.
+    Project,
+    /// Email thread.
+    Email,
+    /// Chat channel.
+    Channel,
+    /// Chat channel thread.
+    ChannelThread,
+    /// Call record.
+    Call,
+    /// Foreign entity record.
+    ForeignEntity,
+}
+
+/// Item returned by the list entities AI tool.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum EntityItem {
+    /// Macro document item.
+    #[serde(rename_all = "camelCase")]
+    Document {
+        /// Document id.
+        id: Uuid,
+        /// Document name.
+        name: String,
+        /// The document's file type (e.g. md, pdf, docx), when known.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_type: Option<String>,
+        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sub_type: Option<String>,
+        /// Tags on the document visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
+    /// AI chat item.
+    #[serde(rename_all = "camelCase")]
+    AiChat {
+        /// Chat id.
+        id: Uuid,
+        /// Chat name.
+        name: String,
+        /// Tags on the chat visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
+    /// Project item.
+    #[serde(rename_all = "camelCase")]
+    Project {
+        /// Project id.
+        id: Uuid,
+        /// Project name.
+        name: String,
+        /// Tags on the project visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
+    /// Email thread item.
+    #[serde(rename_all = "camelCase")]
+    Email {
+        /// Email thread id.
+        id: Uuid,
+        /// Email subject, when present.
+        subject: Option<String>,
+        /// Preview text from the thread's latest relevant message.
+        snippet: Option<String>,
+        /// Sender display name, when present.
+        sender_name: Option<String>,
+        /// Sender email address, when present.
+        sender_email: Option<String>,
+        /// Whether the thread currently belongs in the inbox.
+        inbox_visible: bool,
+        /// Whether the thread has been read.
+        is_read: bool,
+        /// Whether the thread contains a draft.
+        is_draft: bool,
+        /// Tags on the thread visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
+    /// Channel item.
+    #[serde(rename_all = "camelCase")]
+    Channel {
+        /// Channel id.
+        id: Uuid,
+        /// Channel name, when present.
+        name: Option<String>,
+    },
+    /// Channel thread item.
+    #[serde(rename_all = "camelCase")]
+    ChannelThread {
+        /// Parent message id for the thread.
+        id: Uuid,
+        /// Channel id containing the thread.
+        channel_id: Uuid,
+    },
+    /// Call record item.
+    #[serde(rename_all = "camelCase")]
+    Call {
+        /// Call id.
+        id: Uuid,
+        /// User or actor that created the call.
+        created_by: String,
+        /// Tags on the call visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
+    /// Foreign entity item.
+    #[serde(rename_all = "camelCase")]
+    ForeignEntity {
+        /// Foreign entity row id.
+        id: Uuid,
+        /// Provider-specific foreign entity id.
+        foreign_entity_id: String,
+        /// Provider/source name for the foreign entity.
+        foreign_entity_source: String,
+        /// Foreign entity metadata.
+        metadata: serde_json::Value,
+    },
+}
+
+impl EntityItem {
+    pub(super) fn from_soup_item(
+        item: SoupItem<SoupPropertiesField>,
+        tag_map: &HashMap<Uuid, AppliedTag>,
+    ) -> Self {
+        match item {
+            SoupItem::Document(doc) => EntityItem::Document {
+                id: doc.id,
+                sub_type: doc.sub_type.as_ref().map(|sub_type| {
+                    match sub_type {
+                        SoupDocumentSubType::Task { .. } => "task",
+                        SoupDocumentSubType::Snippet {} => "snippet",
+                    }
+                    .to_string()
+                }),
+                file_type: doc.file_type,
+                name: doc.name,
+                tags: resolve_applied_tags(&doc.extra.properties, tag_map),
+            },
+            SoupItem::Chat(chat) => EntityItem::AiChat {
+                id: chat.id,
+                name: chat.name,
+                tags: resolve_applied_tags(&chat.extra.properties, tag_map),
+            },
+            SoupItem::Project(project) => EntityItem::Project {
+                id: project.id,
+                name: project.name,
+                tags: resolve_applied_tags(&project.extra.properties, tag_map),
+            },
+            SoupItem::EmailThread(thread) => EntityItem::Email {
+                id: thread.thread.id,
+                subject: thread.thread.name,
+                snippet: thread.thread.snippet,
+                sender_name: thread.thread.sender_name,
+                sender_email: thread.thread.sender_email,
+                inbox_visible: thread.thread.inbox_visible,
+                is_read: thread.thread.is_read,
+                is_draft: thread.thread.is_draft,
+                tags: resolve_applied_tags(&thread.extra.properties, tag_map),
+            },
+            SoupItem::Channel(channel) => EntityItem::Channel {
+                id: channel.channel.channel.id.0,
+                name: channel.channel.channel.name.clone(),
+            },
+            SoupItem::ChannelThread(thread) => EntityItem::ChannelThread {
+                id: thread.id,
+                channel_id: thread.channel_id,
+            },
+            SoupItem::Call(record) => EntityItem::Call {
+                id: record.call_id,
+                created_by: record.created_by,
+                tags: resolve_applied_tags(&record.extra.properties, tag_map),
+            },
+            // `entity_filter_ast` force-filters CrmCompany out — kept
+            // loud here so a contract break is obvious, not silent.
+            SoupItem::CrmCompany(_) => {
+                unreachable!("ListEntities tool does not surface CrmCompany rows")
+            }
+            SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
+                id: foreign_entity.id,
+                foreign_entity_id: foreign_entity.foreign_entity_id,
+                foreign_entity_source: foreign_entity.foreign_entity_source,
+                metadata: foreign_entity.metadata,
+            },
+        }
+    }
+}
+
+/// Resolve an item's tag properties to labels via the caller's tag sets.
+/// Option ids outside the caller's sets are dropped.
+fn resolve_applied_tags(
+    properties: &[SoupProperty],
+    tag_map: &HashMap<Uuid, AppliedTag>,
+) -> Vec<AppliedTag> {
+    let mut tags: Vec<AppliedTag> = Vec::new();
+    for property in properties {
+        if property.definition.data_type != DataType::Tag {
+            continue;
+        }
+        let Some(PropertyValue::SelectOption(option_ids)) = &property.value else {
+            continue;
+        };
+        for option_id in option_ids {
+            if let Some(tag) = tag_map.get(option_id)
+                && !tags.contains(tag)
+            {
+                tags.push(tag.clone());
+            }
+        }
+    }
+    tags
+}
+
+/// True when any item carries a tag property that would need label resolution.
+fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
+    items.iter().any(|EnrichedSoupItem { item, .. }| {
+        let properties = match item {
+            SoupItem::Document(doc) => &doc.extra.properties,
+            SoupItem::Chat(chat) => &chat.extra.properties,
+            SoupItem::Project(project) => &project.extra.properties,
+            SoupItem::EmailThread(thread) => &thread.extra.properties,
+            SoupItem::CrmCompany(company) => &company.extra.properties,
+            SoupItem::Channel(_)
+            | SoupItem::ChannelThread(_)
+            | SoupItem::Call(_)
+            | SoupItem::ForeignEntity(_) => return false,
+        };
+        properties
+            .iter()
+            .any(|p| p.definition.data_type == DataType::Tag)
+    })
+}
+
+/// Response returned by the list entities AI tool.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListEntitiesResponse {
+    /// Items returned for the request.
+    pub items: Vec<EntityItem>,
+    /// Human-readable summary of the returned items.
+    pub summary: String,
+}
+
+/// AI tool request for browsing workspace entities through soup.
+#[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+#[schemars(
+    title = "ListEntities",
+    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
+)]
+pub struct ListEntities {
+    /// Filter returned items to specific item types.
+    #[schemars(
+        description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=[\"document\"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering."
+    )]
+    #[serde(default)]
+    pub include_types: Option<Vec<ItemType>>,
+
+    /// Sort order for returned items.
+    #[schemars(
+        description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results."
+    )]
+    #[serde(default)]
+    pub sort_by: SortBy,
+
+    /// Document entity AST filter.
+    #[schemars(
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "df")]
+    pub document_filter: LiteralTree<DocumentLiteral>,
+
+    /// Project entity AST filter.
+    #[schemars(
+        description = "Full soup AST project filter (pf).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "pf")]
+    pub project_filter: LiteralTree<ProjectLiteral>,
+
+    /// AI chat entity AST filter.
+    #[schemars(
+        description = "Full soup AST AI chat filter (cf).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "cf")]
+    pub chat_filter: LiteralTree<ChatLiteral>,
+
+    /// High-level email filter preset.
+    #[schemars(
+        description = "High-level email filter preset. Use \"signal\" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset=\"signal\". This expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
+    )]
+    #[serde(default)]
+    pub email_preset: Option<EmailPreset>,
+
+    /// Email entity AST filter.
+    #[schemars(
+        description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "ef")]
+    pub email_filter: LiteralTree<EmailLiteral>,
+
+    /// Channel entity AST filter.
+    #[schemars(
+        description = "Full soup AST channel filter (chanf).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "chanf")]
+    pub channel_filter: LiteralTree<ChannelLiteral>,
+
+    /// Channel thread entity AST filter.
+    #[schemars(
+        description = "Full soup AST channel thread filter (cthf).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "cthf")]
+    pub channel_thread_filter: LiteralTree<ChannelThreadLiteral>,
+
+    /// Call entity AST filter.
+    #[schemars(
+        description = "Full soup AST call filter (callf).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "callf")]
+    pub call_filter: LiteralTree<CallLiteral>,
+
+    /// Foreign entity AST filter.
+    #[schemars(
+        description = "Full soup AST foreign entity filter (fef).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "fef")]
+    pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
+
+    /// Entity property AST filter.
+    #[schemars(
+        description = "Full soup AST property filter (propf). Use this for Macro task Status, Assignees, Priority, and other entity properties. For task Status Completed: {\"l\":{\"pd\":\"00000001-0000-0000-0000-000000000002\",\"et\":\"TASK\",\"v\":{\"so\":\"00000001-0000-0000-0002-000000000004\"}}}. For tasks assigned to the current user: {\"l\":{\"pd\":\"00000001-0000-0000-0000-000000000001\",\"et\":\"TASK\",\"v\":{\"er\":\"macro|user@example.com\"}}}. Combine both with &: {\"&\":[statusCompleted, assignedToMe]}. Prefer this over Linear tools for unqualified task requests.",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "propf")]
+    pub properties_filter: LiteralTree<PropertiesLiteral>,
+
+    /// Mailbox view used to hydrate email previews.
+    #[schemars(description = "\
+Which mailbox view to hydrate previews from for email results. Valid values: inbox \
+(default), sent, drafts, starred, all, important, other, or user:<label>.\n\
+\n\
+When the user asks about signal or important emails, use emailView=\"inbox\" together \
+with emailPreset=\"signal\" — do not set emailView=\"important\" in that case. Only \
+override the default when the user explicitly asks for a specific mailbox or label view \
+(e.g. \"sent\", \"drafts\", \"my Foo label\").")]
+    #[serde(default, rename = "emailView")]
+    pub email_view: Option<String>,
+
+    /// Restrict email results to a single connected inbox.
+    #[schemars(description = "\
+Restrict email results to a single connected inbox, given as that inbox's email address. Omit \
+to span every inbox the user can access (their own plus any delegated to them). Only set this \
+when the user scopes the request to a specific mailbox (e.g. \"my work inbox\", \"the shared \
+inbox\"); call ListInboxes first to get the exact address. Only affects email results.")]
+    #[serde(default)]
+    pub inbox: Option<String>,
+
+    /// Filter results to items carrying these tags.
+    #[schemars(description = "\
+Filter results to items carrying the given tags — any of them by default, every one of them \
+with tagsMatch=\"all\". Each entry names a tag by its label, matched case-insensitively \
+against the user's own tags; only set scope (\"personal\" or \"team\") when the user \
+distinguishes between their personal and team tags. An unknown label fails with the list of \
+available tags — call ListTags first when unsure what tags exist. Only taggable items \
+(documents, tasks, projects, emails, AI chats, call records) can match a tag filter. Prefer \
+this over hand-building a propf filter for tags.")]
+    #[serde(default)]
+    pub tags: Option<Vec<TagFilter>>,
+
+    /// How multiple entries in `tags` combine.
+    #[schemars(description = "\
+How multiple entries in tags combine: \"any\" (the default) returns items carrying at least \
+one of the tags, \"all\" returns only items carrying every one of them. With \"all\", a label \
+that exists in both the personal and team sets is ambiguous — set scope on that entry to pick \
+one. Ignored unless tags is set.")]
+    #[serde(default)]
+    pub tags_match: TagMatch,
+
+    /// Maximum number of items to return.
+    #[schemars(description = "Maximum number of items to return. Defaults to 50; max 500.")]
+    #[serde(default)]
+    pub limit: Option<u16>,
+}
+
+impl ListEntities {
+    pub(super) fn entity_filter_ast(
+        &self,
+        tag_filter: Option<Expr<PropertiesLiteral>>,
+    ) -> EntityFilterAst {
+        // A resolved tag filter ANDs with any explicit propf tree.
+        let properties_filter = match (self.properties_filter.clone(), tag_filter) {
+            (Some(existing), Some(tags)) => Some(Arc::new(Expr::and((*existing).clone(), tags))),
+            (None, Some(tags)) => Some(Arc::new(tags)),
+            (existing, None) => existing,
+        };
+
+        let ast = EntityFilterAst {
+            document_filter: self.document_filter.clone(),
+            project_filter: self.project_filter.clone(),
+            chat_filter: self.chat_filter.clone(),
+            // Toolset doesn't (yet) expose CRM scope; the tool surface stays
+            // per-link unless we add explicit fields for it.
+            email_filter: item_filters::ast::EmailFilterAst {
+                tree: match self.email_preset {
+                    Some(preset) => Some(Arc::new(preset.filter())),
+                    None => self.email_filter.clone(),
+                },
+                crm_scope: None,
+            },
+            channel_filter: self.channel_filter.clone(),
+            channel_thread_filter: self.channel_thread_filter.clone(),
+            call_filter: self.call_filter.clone(),
+            // CrmCompany not in the tool surface — force-filter so the
+            // AI never sees one.
+            crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+            foreign_entity_filter: self.foreign_entity_filter.clone(),
+            properties_filter,
+        };
+
+        self.apply_include_types_to_ast(ast)
+    }
+
+    fn tag_filters(&self) -> &[TagFilter] {
+        self.tags.as_deref().unwrap_or_default()
+    }
+
+    fn apply_include_types_to_ast(&self, ast: EntityFilterAst) -> EntityFilterAst {
+        let Some(include_types) = self
+            .effective_include_types()
+            .filter(|types| !types.is_empty())
+        else {
+            return ast;
+        };
+
+        EntityFilterAst {
+            document_filter: if include_types.contains(&ItemType::Document) {
+                ast.document_filter
+            } else {
+                Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))))
+            },
+            project_filter: if include_types.contains(&ItemType::Project) {
+                ast.project_filter
+            } else {
+                Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))))
+            },
+            chat_filter: if include_types.contains(&ItemType::AiChat) {
+                ast.chat_filter
+            } else {
+                Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))))
+            },
+            email_filter: if include_types.contains(&ItemType::Email) {
+                ast.email_filter
+            } else {
+                item_filters::ast::EmailFilterAst {
+                    tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil())))),
+                    crm_scope: None,
+                }
+            },
+            channel_filter: if include_types.contains(&ItemType::Channel) {
+                ast.channel_filter
+            } else {
+                Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))))
+            },
+            channel_thread_filter: if include_types.contains(&ItemType::ChannelThread) {
+                ast.channel_thread_filter
+            } else {
+                Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
+                    Uuid::nil(),
+                ))))
+            },
+            call_filter: if include_types.contains(&ItemType::Call) {
+                ast.call_filter
+            } else {
+                Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))
+            },
+            // Preserve the upstream nil filter — no ItemType::CrmCompany
+            // to toggle against.
+            crm_company_filter: ast.crm_company_filter,
+            foreign_entity_filter: if include_types.contains(&ItemType::ForeignEntity) {
+                ast.foreign_entity_filter
+            } else {
+                Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
+            },
+            properties_filter: ast.properties_filter,
+        }
+    }
+
+    pub(super) fn email_view(&self) -> ToolResult<PreviewView> {
+        self.email_view
+            .as_deref()
+            .map(|view| view.parse::<PreviewView>())
+            .transpose()
+            .map(|view| view.unwrap_or_default())
+            .map_err(|e| ToolCallError {
+                description: format!("Invalid emailView: {e}"),
+                internal_error: anyhow::anyhow!(e),
+            })
+    }
+
+    pub(super) fn effective_include_types(&self) -> Option<Vec<ItemType>> {
+        self.include_types
+            .clone()
+            .or_else(|| self.email_preset.is_some().then_some(vec![ItemType::Email]))
+    }
+}
+
+#[async_trait]
+impl<T, E> AsyncTool<SoupToolContext<T, E>> for ListEntities
+where
+    T: SoupService,
+    E: EmailService,
+{
+    type Output = ListEntitiesResponse;
+
+    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    async fn call(
+        &self,
+        service_context: ServiceContext<SoupToolContext<T, E>>,
+        request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        tracing::info!(params=?self, "List entities");
+
+        let sort_method = SimpleSortMethod::from(self.sort_by);
+
+        // Resolve tag filters against the caller's tag sets before querying,
+        // so an unknown label fails loudly with the available tags.
+        let mut tag_sets: Option<CallerTagSets> = None;
+        let tag_filter_expr = if self.tag_filters().is_empty() {
+            None
+        } else {
+            let sets = fetch_caller_tag_sets(&service_context, &request_context).await?;
+            // In all mode every filter must name exactly one tag — expanding
+            // an unscoped label across scopes would AND both variants in.
+            let resolved = match self.tags_match {
+                TagMatch::Any => {
+                    sets.resolve_filters(self.tag_filters())
+                        .map_err(|e| ToolCallError {
+                            description: e.to_string(),
+                            internal_error: anyhow::anyhow!(e),
+                        })?
+                }
+                TagMatch::All => sets
+                    .resolve_filters_unique(self.tag_filters())
+                    .map_err(|e| ToolCallError {
+                        description: e.to_string(),
+                        internal_error: anyhow::anyhow!(e),
+                    })?,
+            };
+            // Each resolved option becomes its own literal; the match mode
+            // picks how they combine (any = OR, all = AND across the item's
+            // tag properties, which may span definitions).
+            let combine = match self.tags_match {
+                TagMatch::Any => Expr::or,
+                TagMatch::All => Expr::and,
+            };
+            let expr = resolved
+                .into_iter()
+                .map(|option| {
+                    Expr::val(PropertiesLiteral {
+                        property_definition_id: option.definition_id,
+                        entity_type: None,
+                        value: PropertyMatchValue::SelectOption(option.option_id),
+                    })
+                })
+                .reduce(combine);
+            tag_sets = Some(sets);
+            expr
+        };
+
+        let filters = self.entity_filter_ast(tag_filter_expr);
+        let email_preview_view = self.email_view()?;
+        let limit = self
+            .limit
+            .unwrap_or(RESULT_LIMIT)
+            .clamp(1, MAX_RESULT_LIMIT);
+
+        let inboxes = service_context
+            .email_service
+            .get_inboxes_for_macro_id(request_context.user_id.copied())
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to resolve email links: {e}"),
+                internal_error: e.into(),
+            })?;
+
+        // An explicit inbox selector narrows to that one link; it's resolved
+        // against the accessible set so a caller can't scope to an inbox they
+        // don't have (soup trusts link_ids without an independent check).
+        let link_ids: Vec<uuid::Uuid> = match self
+            .inbox
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(inbox) => {
+                let caller_macro_id = request_context.user_id.to_string();
+                let link = email::inbound::toolset::resolve_inbox_selector(
+                    &inboxes,
+                    &caller_macro_id,
+                    Some(inbox),
+                )?;
+                vec![link.id]
+            }
+            None => inboxes.iter().map(|link| link.id).collect(),
+        };
+
+        let result = service_context
+            .service
+            .get_user_soup_with_properties(
+                SoupRequest {
+                    soup_type: SoupType::Expanded,
+                    limit,
+                    cursor: SoupQuery::new_sort_simple(sort_method, filters),
+                    user: request_context.user_id.clone(),
+                    email_preview_view,
+                    link_ids,
+                },
+                None,
+            )
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to list entities: {e}"),
+                internal_error: e.into(),
+            })?;
+
+        let paginated = result.type_erase();
+        let has_more = paginated.next_cursor.is_some();
+
+        // Fetch tag sets lazily: only when a returned item actually carries a
+        // tag property and the filter path didn't already fetch them.
+        if tag_sets.is_none() && any_item_has_tags(&paginated.items) {
+            tag_sets = Some(fetch_caller_tag_sets(&service_context, &request_context).await?);
+        }
+        let tag_map = tag_sets
+            .map(|sets| sets.applied_tag_by_option_id())
+            .unwrap_or_default();
+
+        let items: Vec<EntityItem> = paginated
+            .items
+            .into_iter()
+            .map(|EnrichedSoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
+            .collect();
+
+        // Build summary
+        let summary = build_summary(&items, has_more, &self.effective_include_types());
+
+        Ok(ListEntitiesResponse { items, summary })
+    }
+}
+
+async fn fetch_caller_tag_sets<T, E>(
+    service_context: &ServiceContext<SoupToolContext<T, E>>,
+    request_context: &RequestContext,
+) -> ToolResult<CallerTagSets>
+where
+    T: SoupService,
+    E: EmailService,
+{
+    let definitions = service_context
+        .service
+        .caller_tag_sets(request_context.user_id.copied())
+        .await
+        .map_err(|e| ToolCallError {
+            description: format!("Failed to resolve the user's tags: {e}"),
+            internal_error: e.into(),
+        })?;
+    Ok(CallerTagSets::new(definitions))
+}
+
+pub(super) fn build_summary(
+    items: &[EntityItem],
+    has_more: bool,
+    filter: &Option<Vec<ItemType>>,
+) -> String {
+    if items.is_empty() {
+        return match filter {
+            Some(types) if !types.is_empty() => {
+                "No items found matching the specified types.".to_string()
+            }
+            _ => "No items found in workspace.".to_string(),
+        };
+    }
+
+    // Count by type
+    let mut docs = 0;
+    let mut chats = 0;
+    let mut projects = 0;
+    let mut emails = 0;
+    let mut channels = 0;
+    let mut channel_threads = 0;
+    let mut call_records = 0;
+    let mut foreign_entities = 0;
+
+    for item in items {
+        match item {
+            EntityItem::Document { .. } => docs += 1,
+            EntityItem::AiChat { .. } => chats += 1,
+            EntityItem::Project { .. } => projects += 1,
+            EntityItem::Email { .. } => emails += 1,
+            EntityItem::Channel { .. } => channels += 1,
+            EntityItem::ChannelThread { .. } => channel_threads += 1,
+            EntityItem::Call { .. } => call_records += 1,
+            EntityItem::ForeignEntity { .. } => foreign_entities += 1,
+        }
+    }
+
+    let mut parts = Vec::new();
+    if docs > 0 {
+        parts.push(format!(
+            "{docs} document{}",
+            if docs == 1 { "" } else { "s" }
+        ));
+    }
+    if chats > 0 {
+        parts.push(format!(
+            "{chats} AI conversation{}",
+            if chats == 1 { "" } else { "s" }
+        ));
+    }
+    if projects > 0 {
+        parts.push(format!(
+            "{projects} project{}",
+            if projects == 1 { "" } else { "s" }
+        ));
+    }
+    if emails > 0 {
+        parts.push(format!(
+            "{emails} email{}",
+            if emails == 1 { "" } else { "s" }
+        ));
+    }
+    if channels > 0 {
+        parts.push(format!(
+            "{channels} channel{}",
+            if channels == 1 { "" } else { "s" }
+        ));
+    }
+    if channel_threads > 0 {
+        parts.push(format!(
+            "{channel_threads} channel thread{}",
+            if channel_threads == 1 { "" } else { "s" }
+        ));
+    }
+    if call_records > 0 {
+        parts.push(format!(
+            "{call_records} call record{}",
+            if call_records == 1 { "" } else { "s" }
+        ));
+    }
+    if foreign_entities > 0 {
+        let label = if foreign_entities == 1 {
+            "foreign entity"
+        } else {
+            "foreign entities"
+        };
+        parts.push(format!("{foreign_entities} {label}"));
+    }
+
+    let counts = parts.join(", ");
+    if has_more {
+        format!("Showing {counts}. More items available in workspace.")
+    } else {
+        format!("Found {counts}.")
+    }
+}

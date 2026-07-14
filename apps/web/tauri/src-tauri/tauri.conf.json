@@ -1,0 +1,93 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "macro",
+  "version": "../../package.json",
+  "identifier": "com.macro.app.prod",
+  "build": {
+    "frontendDist": "../../dist",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": {
+      "script": "just dev-tauri",
+      "cwd": "../.."
+    },
+    "beforeBuildCommand": {
+      "script": "just build-tauri",
+      "cwd": "../.."
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Macro",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "backgroundThrottling": "disabled"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [
+            "$APPCACHE/ios-share-staging/**",
+            "$APPCACHE/ios-pasteboard-staging/**",
+            "$APPCACHE/ios-photo-library-staging/**"
+          ],
+          "deny": []
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "iOS": {
+      "minimumSystemVersion": "14.0"
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": [
+            "macro"
+          ],
+          "appLink": false
+        },
+        {
+          "host": "macro.com",
+          "pathPrefix": [
+            "/app"
+          ]
+        },
+        {
+          "host": "dev.macro.com",
+          "pathPrefix": [
+            "/app"
+          ]
+        },
+        {
+          "host": "staging.macro.com",
+          "pathPrefix": [
+            "/app"
+          ]
+        }
+      ],
+      "desktop": {
+        "schemes": [
+          "macro"
+        ]
+      }
+    }
+  }
+}

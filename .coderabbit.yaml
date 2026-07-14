@@ -40,19 +40,19 @@ reviews:
     - "!**/target/**"
     - "!**/node_modules/**"
     - "!**/dist/**"
-    - "!js/app/packages/loro-mirror/**"
-    - "!js/app/packages/service-clients/src/generated/**"
+    - "!packages/loro-mirror/**"
+    - "!apps/web/src/lib/service-clients/**/generated/**"
     - "!**/*.gen.ts"
 
   # Path-specific review instructions
   path_instructions:
-    - path: "rust/**/*.rs"
+    - path: "**/*.rs"
       instructions: |
         Rust review guidelines (from project conventions):
         - New crates must have `#![deny(missing_docs)]` in `lib.rs`.
         - Only look for and report semantic bugs that the typesystem will not catch. This includes incomplete integration, incorrect environment variables, or any other logic error that will compile as valid rust.
 
-    - path: "rust/**/*_db_client/**"
+    - path: "crates/**/*_db_client/**"
       instructions: |
         Database client review guidelines:
         - Verify that any new/changed SQL queries have corresponding `.sqlx` cache updates (`just prepare_db`).
@@ -60,7 +60,7 @@ reviews:
         - Confirm migrations are reversible or have a clear rollback strategy.
         - Check that tests are updated when table structures change.
 
-    - path: "js/app/**/*.{ts,tsx}"
+    - path: "apps/web/**/*.{ts,tsx}"
       instructions: |
         Frontend review guidelines (from project conventions):
         - Never use `any` — use proper types or `unknown` with type guards.
@@ -70,7 +70,7 @@ reviews:
         - Check `solid-primitives` before writing custom reactive utilities.
         - Avoid deprecated SolidJS APIs: `blockSignals`, `blockMemos`, `blockResources`, etc.
         - Primitive UI components should be pure and prefer composition over complex global state/context.
-        - If a Lexical Node is created or modified with breaking changes, the lexical version counter must be incremented (packages/core/component/LexicalMarkdown/version.ts).
+        - If a Lexical Node is created or modified with breaking changes, the lexical version counter must be incremented (`apps/web/src/lib/core/component/LexicalMarkdown/version.ts`).
 
     - path: "infra/**/*.ts"
       instructions: |
@@ -166,9 +166,12 @@ reviews:
       enabled: true
       timeout_ms: 90000
 
-    # AST analysis
+    # AST analysis. rule_dirs points at the same custom rules that CI runs
+    # (sgconfig.yml at the repo root), so bot comments match CI failures.
     ast-grep:
       essential_rules: true
+      rule_dirs:
+        - "rules/ast-grep"
 
     # Disabled: not used in this repo
     ruff:
@@ -242,6 +245,7 @@ knowledge_base:
     filePatterns:
       - "**/CLAUDE.md"
       - "**/AGENTS.md"
+      - "docs/STYLE_GUIDE.md"
       - "**/.cursor/rules/*.mdc"
       - "**/.cursor/commands/*.md"
 

@@ -20,7 +20,7 @@ import {
 } from '../../packages/shared';
 
 const BASE_NAME = 'document-cognition';
-const BASE_PATH = '../../../rust/cloud-storage';
+const REPO_ROOT = '../../..';
 
 export const SERVICE_DOMAIN_NAME = `document-cognition${
   stack === 'prod' ? '' : `-${stack}`
@@ -90,8 +90,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: BASE_PATH,
-        dockerfile: 'Dockerfile',
+        imagePath: REPO_ROOT,
+        dockerfile: 'docker/Dockerfile',
         platform,
         buildArgs: {
           SERVICE_NAME: 'document_cognition_service',
@@ -337,8 +337,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     new DatadogServiceEntity('document-cognition-service', {
       serviceName: 'document-cognition-service',
       owner: 'ehayes',
-      githubUrl: 'https://github.com/macro-inc/macro-api',
-      githubPath: 'cloud-storage/document-cognition-service/src/**/*',
+      githubUrl: 'https://github.com/macro-inc/macro',
+      githubPath: 'services/document_cognition_service/src/**/*',
     });
   }
 

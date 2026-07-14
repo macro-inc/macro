@@ -1,5 +1,5 @@
-# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/preview_fly.rs
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/preview_fly.rs
 name: Fly Preview
 'on':
   pull_request:
@@ -31,15 +31,15 @@ jobs:
         cache: rust
         path: |-
           /nix
-          ${{ github.workspace }}/rust/cloud-storage/target
+          ${{ github.workspace }}/target
           /home/runner/.cache/macro-preview-snapshots
       continue-on-error: true
     - name: Prune stale incremental caches
-      run: rm -rf rust/cloud-storage/target/*/debug/incremental rust/cloud-storage/target/debug/incremental
+      run: rm -rf target/*/debug/incremental target/debug/incremental
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
     - name: Build compose service images (fail fast)
-      run: docker compose -p macro -f docker-compose.yml build search sync_service websocket_service lexical_service ai_editing_worker
+      run: docker compose -p macro -f docker/docker-compose.yml build search sync_service websocket_service lexical_service ai_editing_worker
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup dev shell + web deps
@@ -62,10 +62,8 @@ jobs:
       run: |
         cargo x zigbuild
         sccache --show-stats
-      working-directory: rust/cloud-storage
     - name: Build xtask_local (runs inside the preview VM)
       run: cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local
-      working-directory: rust/cloud-storage
     - name: Build frontend bundle (same-origin)
       run: bun run --bun build
       env:
@@ -73,7 +71,7 @@ jobs:
         NODE_ENV: production
         VITE_LOCAL_SERVERS: ALL
         VITE_LOCAL_BACKEND_ORIGIN: same-origin
-      working-directory: js/app/packages/app
+      working-directory: apps/web
     - name: Bake init snapshot
       run: |
         set -euo pipefail
@@ -113,13 +111,13 @@ jobs:
 
         if echo "$status" | jq -e '.present' >/dev/null; then
           echo "init snapshot cache hit: $status"
-          cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
+          cargo run --quiet --manifest-path Cargo.toml \
             -p xtask_local --features local-stack -- gen-compose
           # The cold path builds the runtime image inside `stack up`; on a
           # hit nothing else does, and the registry mirror needs it in the
           # local daemon (its pull fallback only covers public images —
           # macro-local-runtime:dev is not on Docker Hub).
-          cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
+          cargo run --quiet --manifest-path Cargo.toml \
             -p xtask_local --features local-stack -- runtime-image
         else
           just stack up --infra-only --no-doppler --no-build
@@ -162,23 +160,23 @@ jobs:
         # snapshot-key input, byte-identical to this checkout, so the VM's
         # key matches the snapshot baked above.
         rsync -a --relative --exclude node_modules \
-          docker-compose.yml \
-          docker-compose-databases.yml \
+          docker/docker-compose.yml \
+          docker/docker-compose-databases.yml \
           infra/stacks/fusionauth-instance/docker-compose.yml \
           infra/local/nginx \
           infra/local/opensearch \
           infra/stacks/opensearch/helpers \
-          rust/cloud-storage/macro_db_client/migrations \
+          crates/macro_db_client/migrations \
           "$ctx/repo/"
         # Service binaries only — the target dir also holds gigabytes of
         # build intermediates. `-p` everywhere: preserved mtimes mean files
         # cargo didn't relink produce byte-identical Docker layers, so the
         # registry push/pull skips them (the Dockerfile orders its COPYs
         # stable → volatile for the same reason).
-        find rust/cloud-storage/target/x86_64-unknown-linux-gnu/debug \
+        find target/x86_64-unknown-linux-gnu/debug \
           -maxdepth 1 -type f -executable ! -name '*.d' ! -name '*.so' \
           -exec cp -p {} "$ctx/artifacts/binaries/" \;
-        cp -a js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
+        cp -a apps/web/dist "$ctx/artifacts/frontend-dist"
         # Only the current key's snapshot — the volume store accumulates keys.
         snap_dir=$(jq -r '.dir' "$RUNNER_TEMP/preview-snapshot.json")
         mkdir -p "$ctx/artifacts/snapshots"
@@ -203,7 +201,7 @@ jobs:
           --arg commit "${{ github.sha }}" \
           '{format: 1, snapshot_key: $snapshot_key, runtime_key: $runtime_key, frontend_key: $frontend_key, commit: $commit}' \
           > "$ctx/deployment.json"
-        cp -p rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
+        cp -p target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
         cp -p infra/preview/hot-update.sh "$ctx/bin/hot-update"
         cp -p infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp -p infra/preview/Dockerfile "$ctx/Dockerfile"
@@ -300,7 +298,7 @@ jobs:
         envfile=infra/local/generated/macro/local.generated.env
         [ -f "$envfile" ] || : > "$envfile"
         images=$(docker compose -p macro \
-          -f docker-compose.yml \
+          -f docker/docker-compose.yml \
           -f infra/local/generated/macro/docker-compose.override.yml \
           --env-file "$envfile" \
           config --images | sort -u)

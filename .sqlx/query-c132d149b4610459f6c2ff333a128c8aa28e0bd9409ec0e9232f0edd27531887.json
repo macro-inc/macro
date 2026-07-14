@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES (\n            $1, $2, $3, $4,\n            jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($5::text))\n        )\n        ON CONFLICT (entity_id, entity_type, property_definition_id)\n        DO UPDATE SET\n            values = CASE\n                WHEN entity_properties.values ->> 'type' = 'SelectOption'\n                     AND entity_properties.values -> 'value' @> jsonb_build_array($5::text)\n                    THEN entity_properties.values\n                WHEN entity_properties.values ->> 'type' = 'SelectOption'\n                    THEN jsonb_set(\n                            entity_properties.values,\n                            '{value}',\n                            (entity_properties.values -> 'value') || jsonb_build_array($5::text)\n                        )\n                ELSE jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($5::text))\n            END,\n            updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c132d149b4610459f6c2ff333a128c8aa28e0bd9409ec0e9232f0edd27531887"
+}

@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+FROM rust:latest AS chef
+ENV SQLX_OFFLINE=true
+ENV CARGO_PROFILE_DEV_DEBUG=0
+RUN cargo install cargo-strip
+WORKDIR /app
+
+FROM chef AS builder
+COPY . .
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
+    --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
+    --mount=type=cache,target=/app/target,id=rust-target-dev-release,sharing=locked \
+    cargo build --bin search_processing_service \
+    && cp /app/target/debug/search_processing_service /app/svc
+
+# Runtime image
+FROM debian:trixie-slim AS search_processing_service
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates dumb-init curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/svc /app/svc
+
+RUN mkdir -p /app/pdfium-lib/linux
+COPY ./services/search_processing_service/pdfium-lib/linux/libpdfium.so /app/pdfium-lib/linux/libpdfium.so
+
+RUN chmod +x svc
+
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["dumb-init", "./svc"]

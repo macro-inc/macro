@@ -1,0 +1,358 @@
+use std::collections::HashMap;
+
+use crate::{
+    Result, delegate_methods,
+    search::{
+        builder::{SearchQueryBuilder, SearchQueryConfig},
+        model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
+        properties::build_tag_filter,
+        query::Keys,
+        utils::should_wildcard_field_query_builder,
+    },
+};
+
+use chrono::{DateTime, Utc};
+use models_opensearch::{OpenSearchEntityType, SearchEntityType};
+use opensearch_query_builder::{
+    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
+    QueryType, ToOpenSearchJson,
+};
+
+/// Relation names for the join field. Kept in sync with the upsert path
+/// in `upsert::chat_message`.
+const PARENT_RELATION: &str = "chat";
+const CHILD_RELATION: &str = "message";
+
+/// Minimum prefix length before we emit a `match_phrase_prefix`. Mirrors
+/// the documents threshold — shorter prefixes risk hitting
+/// `max_clause_count` on expansion.
+const MIN_PREFIX_LEN: usize = 3;
+
+/// Cap on messages returned per `has_child` clause inside `inner_hits`.
+/// OpenSearch's default is 3 which would silently drop matches on chats
+/// with many hits.
+const INNER_HITS_PER_TERM: u32 = 100;
+
+/// Cap on terms a `match_phrase_prefix` may expand the last word to.
+const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ChatIndex {
+    pub entity_id: uuid::Uuid,
+    pub user_id: String,
+    pub title: String,
+    pub updated_at_seconds: Option<i64>,
+}
+
+pub(crate) struct ChatSearchConfig;
+
+impl SearchQueryConfig for ChatSearchConfig {
+    const USER_ID_KEY: Option<&'static str> = Some("user_id");
+    const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Chats;
+}
+
+pub(crate) struct ChatQueryBuilder {
+    inner: SearchQueryBuilder<ChatSearchConfig>,
+    /// The role of the chat message
+    role: Vec<String>,
+    tag_option_ids: Vec<String>,
+    match_all_tags: bool,
+}
+
+impl ChatQueryBuilder {
+    pub fn new(terms: Vec<String>) -> Self {
+        Self {
+            inner: SearchQueryBuilder::new(terms),
+            role: Vec::new(),
+            tag_option_ids: Vec::new(),
+            match_all_tags: false,
+        }
+    }
+
+    // Copy function signature from SearchQueryBuilder
+    delegate_methods! {
+        fn match_type(match_type: &str) -> Self;
+        fn page(page: u32) -> Self;
+        fn page_size(page_size: u32) -> Self;
+        fn user_id(user_id: &str) -> Self;
+        fn collapse(collapse: bool) -> Self;
+        fn ids(ids: Vec<String>) -> Self;
+        fn ids_only(ids_only: bool) -> Self;
+    }
+
+    pub fn role(mut self, role: Vec<String>) -> Self {
+        self.role = role;
+        self
+    }
+
+    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
+        self.tag_option_ids = tag_option_ids;
+        self
+    }
+
+    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
+        self.match_all_tags = match_all_tags;
+        self
+    }
+
+    /// Parent/child join query: one `has_child` clause per term, ANDed
+    /// inside `bool.must` so each term must match some message in the
+    /// same chat. Parent metadata filters (user, ids) sit on
+    /// `bool.filter` because they live on the parent doc.
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        if self.inner.ids_only && self.inner.ids.is_empty() {
+            return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
+                ChatSearchConfig::ENTITY_INDEX,
+            ));
+        }
+        if self.inner.terms.is_empty() {
+            return Err(crate::error::OpensearchClientError::NoTermsProvided);
+        }
+
+        let mut bool_query = BoolQueryBuilder::new();
+
+        // Restrict to parent chats in the chats alias.
+        bool_query.filter(QueryType::term(
+            "_index",
+            ChatSearchConfig::ENTITY_INDEX.index_name().to_string(),
+        ));
+        bool_query.filter(QueryType::term(
+            "chat_relation",
+            PARENT_RELATION.to_string(),
+        ));
+
+        // Access control on parent fields (user_id and/or entity_id).
+        bool_query.filter(self.build_parent_filter()?);
+
+        // Tag filter: nested clause(s) matching the parent's
+        // `properties.values`, with no definition_id constraint.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+            bool_query.filter(nested);
+        }
+
+        // One has_child clause per term, ANDed via bool.must. Each
+        // carries its own inner_hits so highlights + message-nav data
+        // come back alongside the parent. Shared `highlight_query`
+        // tags every search term on a returned message regardless of
+        // which has_child clause produced it.
+        //
+        // role is a child-side field — it lives inside each has_child
+        // clause alongside the term query so the same message that
+        // matches the term must also be from one of the requested
+        // roles. Filtering role at the bool level instead would only
+        // require *some* message in the chat to have the role, not
+        // necessarily the message matching the term.
+        let highlight_query =
+            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
+        for (idx, term) in self.inner.terms.iter().enumerate() {
+            let term_query = build_child_content_query(term, &self.inner.match_type);
+            let inner_query = if self.role.is_empty() {
+                term_query
+            } else {
+                let mut combined = BoolQueryBuilder::new();
+                combined.must(term_query);
+                combined.must(should_wildcard_field_query_builder("role", &self.role));
+                combined.build().into()
+            };
+            let inner_hits = InnerHits::new()
+                .name(format!("term_{idx}"))
+                .size(INNER_HITS_PER_TERM)
+                .highlight(inner_hits_content_highlight(&highlight_query));
+            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query).inner_hits(inner_hits);
+            bool_query.must(has_child.into());
+        }
+
+        Ok(bool_query)
+    }
+
+    fn build_parent_filter<'a>(&'a self) -> Result<QueryType<'a>> {
+        let user_key = ChatSearchConfig::USER_ID_KEY.expect("chats config has user_id key");
+
+        if self.inner.ids_only {
+            return Ok(QueryType::terms("entity_id", self.inner.ids.clone()));
+        }
+        let user_query = QueryType::term(user_key.to_string(), self.inner.user_id.clone());
+        if self.inner.ids.is_empty() {
+            return Ok(user_query);
+        }
+        let mut filter = BoolQueryBuilder::new();
+        filter.minimum_should_match(1);
+        filter.should(QueryType::terms("entity_id", self.inner.ids.clone()));
+        filter.should(user_query);
+        Ok(filter.build().into())
+    }
+}
+
+/// Highlight config attached to each `has_child` inner_hits block.
+fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "require_field_match": true,
+        "pre_tags": ["<macro_em>"],
+        "post_tags": ["</macro_em>"],
+        "fields": {
+            "content": {
+                "type": "plain",
+                "number_of_fragments": 1,
+                "fragment_size": 1000,
+                "highlight_query": highlight_query,
+            }
+        }
+    })
+}
+
+/// Combined OR-of-all-terms query used as the inner_hits highlight_query.
+fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_json::Value {
+    let term_queries: Vec<serde_json::Value> = terms
+        .iter()
+        .map(|t| build_child_content_query(t, match_type).to_json())
+        .collect();
+    if term_queries.len() == 1 {
+        return term_queries.into_iter().next().unwrap();
+    }
+    serde_json::json!({
+        "bool": {
+            "should": term_queries,
+            "minimum_should_match": 1,
+        }
+    })
+}
+
+/// Build the per-term query that runs inside `has_child` against `content`.
+fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
+    let exact = match_type == "exact"
+        || term.chars().any(|c| c.is_whitespace())
+        || term.chars().count() < MIN_PREFIX_LEN;
+    if exact {
+        QueryType::MatchPhrase(MatchPhraseQuery::new(
+            "content".to_string(),
+            term.to_string(),
+        ))
+    } else {
+        QueryType::MatchPhrasePrefix(
+            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
+                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct ChatSearchArgs {
+    pub terms: Vec<String>,
+    pub user_id: String,
+    pub chat_ids: Vec<String>,
+    pub page: u32,
+    pub page_size: u32,
+    pub match_type: String,
+    pub role: Vec<String>,
+    pub collapse: bool,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+impl From<ChatSearchArgs> for ChatQueryBuilder {
+    fn from(args: ChatSearchArgs) -> Self {
+        ChatQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.chat_ids)
+            .role(args.role)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .tag_option_ids(args.tag_option_ids)
+            .match_all_tags(args.match_all_tags)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// inner_hits → message-level SearchHits
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+struct MessageInnerHit {
+    #[serde(rename = "_id")]
+    id: String,
+    #[serde(rename = "_score")]
+    score: Option<f64>,
+    #[serde(rename = "_source")]
+    source: MessageSource,
+    #[serde(default)]
+    highlight: Option<HashMap<String, Vec<String>>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MessageSource {
+    chat_message_id: uuid::Uuid,
+    #[serde(default)]
+    role: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct InnerHitsGroup {
+    #[serde(default)]
+    hits: InnerHitsList,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct InnerHitsList {
+    #[serde(default)]
+    hits: Vec<MessageInnerHit>,
+}
+
+/// Walk the `inner_hits` block from a join-shape parent hit and emit
+/// one `SearchHit` per matching child message, carrying that message's
+/// `chat_message_id`, `role`, score, and highlight.
+///
+/// A message matched by multiple `has_child` clauses (multi-term
+/// queries) appears once per term in the response; we dedup by message
+/// `_id` so a single message maps to a single `SearchHit` downstream.
+pub(crate) fn expand_inner_hits_to_search_hits(
+    entity_id: uuid::Uuid,
+    updated_at: Option<DateTime<Utc>>,
+    inner_hits: &serde_json::Value,
+) -> Vec<SearchHit> {
+    let groups: HashMap<String, InnerHitsGroup> = match serde_json::from_value(inner_hits.clone()) {
+        Ok(g) => g,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out: Vec<SearchHit> = Vec::new();
+    for group in groups.into_values() {
+        for msg in group.hits.hits {
+            if !seen.insert(msg.id) {
+                continue;
+            }
+            let highlight: Highlight = msg
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ChatSearchConfig::TITLE_KEY,
+                            content_key: ChatSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default();
+            out.push(SearchHit {
+                entity_id,
+                entity_type: SearchEntityType::Chats,
+                score: msg.score,
+                highlight,
+                goto: Some(SearchGotoContent::Chats(SearchGotoChat {
+                    chat_message_id: msg.source.chat_message_id,
+                    role: msg.source.role.unwrap_or_default(),
+                })),
+                updated_at,
+            });
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod test;

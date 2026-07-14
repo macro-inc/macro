@@ -1,0 +1,269 @@
+use crate::{
+    SQS,
+    search::{
+        call::{CallRecordMessage, RemoveCallRecord},
+        channel::{ChannelMessageUpdate, RemoveChannelMessage},
+        chat::{ChatMessage, RemoveChatMessage},
+        document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
+        email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
+        project::{RemoveProject, UpsertProject},
+    },
+};
+use anyhow::Context;
+use aws_sdk_sqs::{self as sqs, types::SendMessageBatchRequestEntry};
+use futures::StreamExt;
+use strum::Display;
+
+pub mod call;
+pub mod channel;
+pub mod chat;
+pub mod document;
+pub mod email;
+pub mod project;
+
+use crate::{MAX_BATCH_SIZE, PrimaryId};
+
+impl SQS {
+    pub fn search_event_queue(mut self, search_event_queue: &str) -> Self {
+        self.search_event_queue = Some(search_event_queue.to_string());
+        self
+    }
+
+    pub async fn send_message_to_search_event_queue(
+        &self,
+        message: SearchQueueMessage,
+    ) -> anyhow::Result<String> {
+        if let Some(search_event_queue) = &self.search_event_queue {
+            enqueue_search_text_extractor(&self.inner, search_event_queue, message).await
+        } else {
+            Err(anyhow::anyhow!("search_event_queue is not configured"))
+        }
+    }
+
+    pub async fn bulk_send_message_to_search_event_queue(
+        &self,
+        items: Vec<SearchQueueMessage>,
+    ) -> Result<(), anyhow::Error> {
+        if let Some(search_event_queue) = &self.search_event_queue {
+            bulk_enqueue_search_text_extractor(&self.inner, search_event_queue, items).await
+        } else {
+            Err(anyhow::anyhow!("search_event_queue is not configured"))
+        }
+    }
+}
+
+#[derive(serde::Serialize, Debug, Display, strum::EnumString)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum Operation {
+    /// Extract text from a particular source to be processed into OpenSearch
+    ExtractText,
+    /// Updates the metadata for a given item
+    UpdateMetadata,
+    /// Remove an item from the search index
+    Remove,
+    /// Extract text from live collab documents to be processed into OpenSearch
+    ExtractSync,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+pub enum SearchQueueMessage {
+    // Document
+    ExtractDocumentText(SearchExtractorMessage),
+    RemoveDocument(DocumentId),
+    ExtractSync(SearchExtractorMessage),
+    UpdateDocumentProperties(DocumentPropertiesUpdate),
+    UpdateDocumentName(DocumentId),
+    // Chat
+    ChatMessage(ChatMessage),
+    RemoveChatMessage(RemoveChatMessage),
+    // Email
+    ExtractEmailMessage(EmailMessage),
+    RemoveEmailMessage(EmailMessage),
+    ExtractEmailThreadMessage(EmailThreadMessage),
+    RemoveEmailLink(EmailLinkMessage),
+    ExtractEmailThreadBatch(EmailThreadBatchMessage),
+    // Channel
+    ChannelMessageUpdate(ChannelMessageUpdate),
+    RemoveChannelMessage(RemoveChannelMessage),
+    // Call
+    CallRecord(CallRecordMessage),
+    RemoveCallRecord(RemoveCallRecord),
+    // Project
+    UpsertProject(UpsertProject),
+    RemoveProject(RemoveProject),
+
+    // User
+    RemoveUserProfile(String),
+}
+
+impl PrimaryId for SearchQueueMessage {
+    fn id(&self) -> String {
+        match self {
+            SearchQueueMessage::ExtractDocumentText(message) => message.document_id.clone(),
+            SearchQueueMessage::RemoveDocument(message) => message.document_id.clone(),
+            SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
+            SearchQueueMessage::UpdateDocumentProperties(message) => message.document_id.clone(),
+            SearchQueueMessage::UpdateDocumentName(message) => message.document_id.clone(),
+            SearchQueueMessage::ChatMessage(message) => message.message_id.clone(), // needs
+            // to be the message id to ensure it's unique for batch
+            SearchQueueMessage::RemoveChatMessage(message) => message.chat_id.clone(),
+            SearchQueueMessage::ExtractEmailMessage(message)
+            | SearchQueueMessage::RemoveEmailMessage(message) => message.message_id.clone(),
+            SearchQueueMessage::ExtractEmailThreadMessage(message) => message.thread_id.clone(),
+            SearchQueueMessage::ExtractEmailThreadBatch(message) => {
+                message.thread_ids.first().cloned().unwrap_or_default()
+            }
+            SearchQueueMessage::RemoveEmailLink(message) => message.link_id.clone(),
+            SearchQueueMessage::ChannelMessageUpdate(message) => message.message_id.clone(),
+            SearchQueueMessage::RemoveChannelMessage(message) => {
+                format!(
+                    "{}{}",
+                    message.channel_id,
+                    message.message_id.clone().unwrap_or_default()
+                )
+            }
+            SearchQueueMessage::CallRecord(message) => message.call_id.clone(),
+            SearchQueueMessage::RemoveCallRecord(message) => format!(
+                "{}{}",
+                message.channel_id,
+                message.call_id.clone().unwrap_or_default()
+            ),
+            SearchQueueMessage::UpsertProject(message) => message.project_id.clone(),
+            SearchQueueMessage::RemoveProject(message) => message.project_id.clone(),
+
+            SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
+        }
+    }
+}
+
+impl SearchQueueMessage {
+    pub fn operation(&self) -> Operation {
+        match self {
+            // Document
+            SearchQueueMessage::ExtractDocumentText(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveDocument(_) => Operation::Remove,
+            SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
+            SearchQueueMessage::UpdateDocumentProperties(_) => Operation::UpdateMetadata,
+            SearchQueueMessage::UpdateDocumentName(_) => Operation::UpdateMetadata,
+            // Chat
+            SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveChatMessage(_) => Operation::Remove,
+            // Email
+            SearchQueueMessage::ExtractEmailMessage(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveEmailMessage(_) => Operation::Remove,
+            SearchQueueMessage::ExtractEmailThreadMessage(_) => Operation::ExtractText,
+            SearchQueueMessage::ExtractEmailThreadBatch(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveEmailLink(_) => Operation::Remove,
+            // Channels
+            SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveChannelMessage(_) => Operation::Remove,
+            // Calls
+            SearchQueueMessage::CallRecord(_) => Operation::ExtractText,
+            SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
+            // Projects
+            SearchQueueMessage::UpsertProject(_) => Operation::UpdateMetadata,
+            SearchQueueMessage::RemoveProject(_) => Operation::Remove,
+            // Users
+            SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
+        }
+    }
+}
+
+#[tracing::instrument(skip(sqs_client))]
+pub async fn enqueue_search_text_extractor(
+    sqs_client: &sqs::Client,
+    queue_url: &str,
+    message: SearchQueueMessage,
+) -> anyhow::Result<String> {
+    let message_str = serde_json::to_string(&message)?;
+
+    let result = sqs_client
+        .send_message()
+        .queue_url(queue_url)
+        .message_body(message_str)
+        .send()
+        .await?;
+
+    Ok(result
+        .message_id
+        .context("expected a message id")?
+        .to_string())
+}
+
+const MAX_CONCURRENT_BATCHES: usize = 20;
+
+/// Bulk enqueues items to the search text extractor queue
+#[tracing::instrument(skip(sqs_client, items))]
+pub async fn bulk_enqueue_search_text_extractor(
+    sqs_client: &aws_sdk_sqs::Client,
+    queue_url: &str,
+    items: Vec<SearchQueueMessage>,
+) -> anyhow::Result<()> {
+    let mut entries: Vec<SendMessageBatchRequestEntry> = vec![];
+    for item in items {
+        tracing::trace!(item=?item, "enqueueing search text extractor");
+        let message_str = serde_json::to_string(&item)?;
+        let batch_request = SendMessageBatchRequestEntry::builder()
+            .id(item.id())
+            .message_body(message_str)
+            .build()?;
+        entries.push(batch_request);
+    }
+
+    if entries.is_empty() {
+        tracing::warn!("no entries to enqueue");
+        return Ok(());
+    }
+
+    let results: Vec<_> = futures::stream::iter(
+        entries
+            .chunks(MAX_BATCH_SIZE)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>(),
+    )
+    .map(|chunk| {
+        sqs_client
+            .send_message_batch()
+            .set_entries(Some(chunk))
+            .queue_url(queue_url)
+            .send()
+    })
+    .buffer_unordered(MAX_CONCURRENT_BATCHES)
+    .collect()
+    .await;
+
+    for result in results {
+        result?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::document::DocumentId;
+
+    #[test]
+    fn update_document_name_maps_to_update_metadata() {
+        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
+            document_id: "doc-1".to_string(),
+        });
+
+        assert!(matches!(message.operation(), Operation::UpdateMetadata));
+        assert_eq!(message.id(), "doc-1");
+    }
+
+    #[test]
+    fn update_document_name_round_trips() {
+        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
+            document_id: "doc-1".to_string(),
+        });
+
+        let serialized = serde_json::to_string(&message).unwrap();
+        let deserialized: SearchQueueMessage = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(message, deserialized);
+    }
+}

@@ -1,0 +1,39 @@
+[package]
+edition = "2024"
+name = "document_text_extractor"
+publish = false
+version = "0.1.0"
+
+[features]
+local = []
+local-extract = []
+macos = []
+
+[dependencies]
+agent = { path = "../../crates/agent" }
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+aws_lambda_events = { workspace = true, features = [
+  "eventbridge",
+  "s3",
+  "sqs",
+] }
+chrono = { workspace = true }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+mockall = { workspace = true }
+model = { path = "../../crates/model" }
+s3_key = { path = "../../crates/s3_key" }
+pdfium-render = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tiktoken-rs = "0.5.9"
+tokio = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+

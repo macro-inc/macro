@@ -1,0 +1,87 @@
+import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
+import { Popover } from '@kobalte/core/popover';
+import { Button, type ButtonProps, Layer } from '@ui';
+import { createEffect, createSignal, type JSX, splitProps } from 'solid-js';
+
+type EmojiReactionPopoverPlacement = 'top' | 'right' | 'bottom' | 'left';
+
+type EmojiReactionPopoverProps = {
+  open: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onEmojiSelect: (emoji: string) => void;
+  trigger: JSX.Element;
+  triggerProps?: ButtonProps;
+  placement?: EmojiReactionPopoverPlacement;
+};
+
+export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
+  const [local] = splitProps(props, [
+    'open',
+    'onOpenChange',
+    'onEmojiSelect',
+    'trigger',
+    'triggerProps',
+    'placement',
+  ]);
+  const [query, setQuery] = createSignal('');
+
+  // The component outlives the popover content, so reset the search when it
+  // closes or reopening shows a stale filter.
+  createEffect(() => {
+    if (!local.open) {
+      setQuery('');
+    }
+  });
+
+  return (
+    <Popover
+      placement={local.placement ?? 'top'}
+      onOpenChange={local.onOpenChange}
+      open={local.open}
+      overflowPadding={8}
+      slide={true}
+    >
+      <Popover.Trigger as={Button} type="button" {...local.triggerProps}>
+        {local.trigger}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content class="z-modal">
+            <Popover.Arrow class="fill-surface" />
+            <div
+              class="w-64.5 h-78.75 pl-2 pt-2 rounded-md flex flex-col bg-surface shadow-lg ring ring-edge"
+              role="dialog"
+              aria-label="Emoji search"
+            >
+              <div class="flex pr-2 w-full">
+                <div class="flex flex-row items-center text-ink gap-1 border border-edge-muted rounded-md px-2 py-1 text-xs w-full">
+                  <input
+                    value={query()}
+                    onInput={(event) => setQuery(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Escape') return;
+                      event.preventDefault();
+                      local.onOpenChange(false);
+                    }}
+                    placeholder="Search emojis"
+                    role="searchbox"
+                    aria-label="Search emojis"
+                  />
+                </div>
+              </div>
+              <div class="grow overflow-y-auto overflow-x-hidden mt-2">
+                <EmojiSelector
+                  nameFilter={query()}
+                  onEmojiClick={(emoji) => {
+                    local.onEmojiSelect(emoji.emoji);
+                    local.onOpenChange(false);
+                  }}
+                />
+              </div>
+            </div>
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}

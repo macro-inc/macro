@@ -1,0 +1,24 @@
+[package]
+description = "xtask deps: regenerate/verify workspace-hack and the deploy dep-closure map"
+edition = "2024"
+name = "xtask_deps"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_deps"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+guppy = { workspace = true }
+# For the [xtask] extension table in .config/hakari.toml (path-glob
+# traversal excludes); the hakari engine ignores that table.
+toml = "0.5"
+# Pinned engine for the generated dependency artifacts. This version lives in
+# Cargo.lock, so dev machines and CI always run the identical generator —
+# upgrading it is an explicit, reviewed lock change.
+hakari = { version = "0.17.9", features = ["cli-support"] }
+xtask_graph = { path = "../xtask_graph" }
