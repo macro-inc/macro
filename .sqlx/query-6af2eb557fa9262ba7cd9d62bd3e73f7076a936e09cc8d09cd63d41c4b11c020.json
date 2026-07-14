@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)\n        VALUES ($1, $2, 'room', 'creator', $3)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6af2eb557fa9262ba7cd9d62bd3e73f7076a936e09cc8d09cd63d41c4b11c020"
+}

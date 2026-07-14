@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT speaker_id, diarized_speaker_id, content, sequence_num\n        FROM call_transcripts\n        WHERE call_id = $1\n        ORDER BY sequence_num ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "speaker_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "diarized_speaker_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "sequence_num",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "04327e0129e618038fc747e0b2efa8a84f4f2a6a39d30efd9ca47c5fe25168cf"
+}

@@ -32,3 +32,23 @@ local-e2e-smoke:
   FUSIONAUTH_CLIENT_SECRET_KEY="local" \
   FUSIONAUTH_OAUTH_REDIRECT_URI="http://localhost:8080/oauth/redirect" \
   cargo r -- scenario local-e2e-smoke
+
+# Run a scenario subcommand (apply/reset/matrix) against the local stack,
+# e.g. `just scenario apply --file seed/scenarios/team-perms.json`.
+[positional-arguments]
+scenario *ARGS:
+  LOCAL_SEED="true" \
+  DATABASE_URL="${DATABASE_URL:-postgres://user:password@localhost:5432/macrodb}" \
+  LOCAL_AWS_URL="${LOCAL_AWS_URL:-http://localhost:4566}" \
+  DOCUMENT_STORAGE_BUCKET="${DOCUMENT_STORAGE_BUCKET:-doc-storage}" \
+  AWS_ACCESS_KEY_ID="test" \
+  AWS_SECRET_ACCESS_KEY="test" \
+  SQLX_OFFLINE="true" \
+  ENVIRONMENT="local" \
+  FUSIONAUTH_BASE_URL="http://localhost:9011" \
+  FUSIONAUTH_API_KEY_SECRET_KEY="local" \
+  FUSIONAUTH_TENANT_ID="local" \
+  FUSIONAUTH_CLIENT_ID="local" \
+  FUSIONAUTH_CLIENT_SECRET_KEY="local" \
+  FUSIONAUTH_OAUTH_REDIRECT_URI="http://localhost:8080/oauth/redirect" \
+  cargo r -- scenario "$@"

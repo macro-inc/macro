@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT sp.\"publicAccessLevel\" as \"public_access_level?\"\n        FROM \"SharePermission\" sp\n        JOIN \"DocumentPermission\" dp ON dp.\"sharePermissionId\" = sp.id\n        WHERE dp.\"documentId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "public_access_level?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "93f08d1a1cf63b9827e610399e7ac29400323ceae0ed2eafc27e3d9caa5d2bb7"
+}

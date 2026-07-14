@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"Comment\"\n        SET \"deletedAt\" = NOW()\n        WHERE \"id\" = 10001\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d2eea4a2fdebe87e15ad31d83ae7ad53ee171854154d1decaa2ca6ccfe138c7c"
+}

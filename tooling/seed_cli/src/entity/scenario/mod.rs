@@ -1,5 +1,10 @@
 //! Predefined seed scenarios for local development and e2e tests.
 
+pub mod apply;
+pub mod matrix;
+pub mod reset;
+pub mod spec;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, ensure};
@@ -190,11 +195,48 @@ pub struct ScenarioArgs {
     pub command: ScenarioCommand,
 }
 
+/// Arguments for applying a scenario config file.
+#[derive(Debug, Args)]
+pub struct ApplyScenarioArgs {
+    /// Path to the scenario JSON file.
+    #[arg(long)]
+    pub file: String,
+}
+
+/// Arguments for resetting scenario data.
+#[derive(Debug, Args)]
+pub struct ResetScenarioArgs {
+    /// Path to the scenario JSON file whose rows should be deleted.
+    #[arg(long, conflicts_with = "all")]
+    pub file: Option<String>,
+    /// Delete the rows of every scenario (anything carrying the seed marker).
+    #[arg(long)]
+    pub all: bool,
+}
+
+/// Arguments for printing/verifying a scenario's access matrix.
+#[derive(Debug, Args)]
+pub struct MatrixScenarioArgs {
+    /// Path to the scenario JSON file.
+    #[arg(long)]
+    pub file: String,
+    /// Only print the expected matrix; skip the live database check.
+    #[arg(long)]
+    pub expected_only: bool,
+}
+
 /// Available seed scenarios.
 #[derive(Debug, Subcommand)]
 pub enum ScenarioCommand {
     /// Reset and apply the local Playwright smoke-test fixture data.
     LocalE2eSmoke,
+    /// Apply a scenario config file (resets the scenario's own rows first).
+    Apply(ApplyScenarioArgs),
+    /// Delete every row a scenario seeded.
+    Reset(ResetScenarioArgs),
+    /// Print the scenario's expected access matrix and verify it against
+    /// the live database.
+    Matrix(MatrixScenarioArgs),
 }
 
 impl ScenarioArgs {
@@ -204,6 +246,12 @@ impl ScenarioArgs {
             ScenarioCommand::LocalE2eSmoke => {
                 validate_local_e2e_environment(env_vars.database_url.as_ref())
             }
+            ScenarioCommand::Apply(_) | ScenarioCommand::Reset(_) => {
+                validate_scenario_environment(env_vars.database_url.as_ref())
+            }
+            ScenarioCommand::Matrix(_) => {
+                validate_scenario_database_url(env_vars.database_url.as_ref())
+            }
         }
     }
 
@@ -211,8 +259,89 @@ impl ScenarioArgs {
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self.command {
             ScenarioCommand::LocalE2eSmoke => local_e2e_smoke(&ctx).await,
+            ScenarioCommand::Apply(args) => apply_scenario(&ctx, &args).await,
+            ScenarioCommand::Reset(args) => reset_scenario(&ctx, &args).await,
+            ScenarioCommand::Matrix(args) => matrix_scenario(&ctx, &args).await,
         }
     }
+}
+
+fn load_scenario(file: &str) -> anyhow::Result<spec::ScenarioSpec> {
+    let content = std::fs::read_to_string(file)
+        .with_context(|| format!("failed to read scenario file: {file}"))?;
+    spec::ScenarioSpec::parse(&content)
+}
+
+#[tracing::instrument(skip(ctx), err)]
+async fn apply_scenario(ctx: &SeedCliContext, args: &ApplyScenarioArgs) -> anyhow::Result<()> {
+    let scenario = load_scenario(&args.file)?;
+    apply::apply(ctx, &scenario, &seed_path("seed")).await
+}
+
+#[tracing::instrument(skip(ctx), err)]
+async fn reset_scenario(ctx: &SeedCliContext, args: &ResetScenarioArgs) -> anyhow::Result<()> {
+    let marker = if args.all {
+        spec::SEED_MARKER.to_string()
+    } else {
+        let file = args
+            .file
+            .as_deref()
+            .context("pass --file <scenario.json> or --all")?;
+        spec::scenario_marker(&load_scenario(file)?.scenario)
+    };
+
+    println!("Deleting seeded rows with marker {marker}");
+    ctx.db
+        .execute_sql_if_table_exists(
+            "public.contacts_backfill_outbox",
+            &reset::reset_contacts_outbox_statement(&marker),
+        )
+        .await?;
+    ctx.db
+        .execute_statements(&reset::reset_statements(&marker))
+        .await?;
+    println!("Done.");
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx), err)]
+async fn matrix_scenario(ctx: &SeedCliContext, args: &MatrixScenarioArgs) -> anyhow::Result<()> {
+    let scenario = load_scenario(&args.file)?;
+    if args.expected_only {
+        matrix::print_expected(&scenario);
+        return Ok(());
+    }
+    let mismatches = matrix::verify(ctx.db.pool(), &scenario).await?;
+    anyhow::ensure!(mismatches == 0, "{mismatches} matrix cell(s) mismatched");
+    Ok(())
+}
+
+#[allow(clippy::disallowed_methods, reason = "Only used when running locally")]
+fn validate_scenario_environment(database_url: &str) -> anyhow::Result<()> {
+    ensure!(
+        std::env::var("LOCAL_SEED").as_deref() == Ok("true"),
+        "refusing to run scenario seeding without LOCAL_SEED=true"
+    );
+    validate_scenario_database_url(database_url)
+}
+
+/// Like the local-e2e guard, but allows any port so named `run_local`
+/// instances work.
+fn validate_scenario_database_url(database_url: &str) -> anyhow::Result<()> {
+    let parsed = url::Url::parse(database_url).context("DATABASE_URL must be a valid URL")?;
+    let host = parsed.host_str().unwrap_or_default();
+    let username = parsed.username();
+    let database = parsed.path().trim_start_matches('/');
+
+    let is_local_host = matches!(host, "localhost" | "127.0.0.1" | "::1" | "postgres");
+    let is_local_db = username == "user" && database == "macrodb";
+
+    ensure!(
+        is_local_host && is_local_db,
+        "refusing to run scenario seeding against DATABASE_URL host={host:?} user={username:?} database={database:?}; expected the local docker database postgres://user:...@(localhost|127.0.0.1|postgres):<port>/macrodb"
+    );
+
+    Ok(())
 }
 
 #[allow(clippy::disallowed_methods, reason = "Only used when running locally")]

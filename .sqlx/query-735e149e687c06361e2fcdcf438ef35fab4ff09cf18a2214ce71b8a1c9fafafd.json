@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source_id FROM entity_access\n           WHERE entity_id = $1 AND source_type = 'team'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "735e149e687c06361e2fcdcf438ef35fab4ff09cf18a2214ce71b8a1c9fafafd"
+}

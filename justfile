@@ -51,6 +51,12 @@ local-e2e-seed:
   just initialize_dbs
   just tooling/seed_cli/local-e2e-smoke
 
+# Apply a seed scenario (teams/perms/entities) to the local stack, e.g.
+# `just seed-scenario apply --file seed/scenarios/team-perms.json`.
+[positional-arguments]
+seed-scenario *ARGS:
+  just tooling/seed_cli/scenario "$@"
+
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"

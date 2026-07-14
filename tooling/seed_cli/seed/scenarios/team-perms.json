@@ -1,0 +1,121 @@
+{
+  "scenario": "team-perms",
+  "description": "One team (acme: alice owner, bob admin, carol member), dave collaborates via channels without being on the team, eve is an outsider. Exercises owner/user/team/channel/public/project/delegation access edges across every entity type.",
+  "users": {
+    "alice": { "email": "alice@seed.macro.local", "first_name": "Alice" },
+    "bob": { "email": "bob@seed.macro.local", "first_name": "Bob" },
+    "carol": { "email": "carol@seed.macro.local", "first_name": "Carol" },
+    "dave": { "email": "dave@seed.macro.local", "first_name": "Dave" },
+    "eve": { "email": "eve@seed.macro.local", "first_name": "Eve" }
+  },
+  "teams": {
+    "acme": {
+      "name": "Acme",
+      "owner": "alice",
+      "members": { "bob": "admin", "carol": "member" }
+    }
+  },
+  "channels": {
+    "town-square": { "type": "public", "owner": "alice", "members": ["bob", "dave"] },
+    "eng": { "type": "private", "owner": "alice", "members": ["bob", "dave"] },
+    "acme-hq": { "type": "team", "team": "acme" },
+    "dm-alice-dave": { "type": "direct_message", "members": ["alice", "dave"] }
+  },
+  "projects": {
+    "roadmap": {
+      "owner": "alice",
+      "name": "Roadmap",
+      "share": [{ "with": "team:acme", "level": "view" }]
+    }
+  },
+  "documents": {
+    "q3-plan": {
+      "owner": "alice",
+      "name": "Q3 Plan",
+      "file": "md.md",
+      "project": "roadmap"
+    },
+    "design-doc": {
+      "owner": "alice",
+      "name": "Design Doc",
+      "file": "md.md",
+      "share": [
+        { "with": "user:dave", "level": "edit" },
+        { "with": "channel:eng", "level": "view" }
+      ]
+    },
+    "handbook": {
+      "owner": "alice",
+      "name": "Handbook",
+      "file": "pdf.pdf",
+      "public": "view"
+    },
+    "bob-notes": { "owner": "bob", "name": "Bob Notes", "file": "md.md" }
+  },
+  "chats": {
+    "alice-ai": {
+      "owner": "alice",
+      "name": "Alice AI chat",
+      "share": [{ "with": "user:carol", "level": "view" }]
+    }
+  },
+  "calls": {
+    "eng-standup": {
+      "channel": "eng",
+      "created_by": "alice",
+      "share_with_team": true,
+      "participants": ["alice", "bob"],
+      "duration_minutes": 30,
+      "name": "Eng standup",
+      "transcript": [
+        { "speaker": "alice", "text": "Let's review the Q3 plan before we ship the design doc." },
+        { "speaker": "bob", "text": "The tagging work is nearly done, verifying perms today." }
+      ]
+    },
+    "dm-huddle": {
+      "channel": "dm-alice-dave",
+      "created_by": "dave",
+      "participants": ["dave", "alice"],
+      "duration_minutes": 10
+    }
+  },
+  "emails": {
+    "alice-inbox": {
+      "owner": "alice",
+      "delegated_to": ["bob"],
+      "threads": {
+        "welcome": {
+          "subject": "Welcome to Acme",
+          "from": "founders@example.com",
+          "body": "Welcome aboard! Here's everything you need to get started.",
+          "unread": true
+        },
+        "renewal": {
+          "subject": "Contract renewal",
+          "from": "legal@example.com",
+          "body": "The renewal is attached, please review by Friday."
+        }
+      }
+    },
+    "dave-inbox": {
+      "owner": "dave",
+      "threads": {
+        "invoice": {
+          "subject": "Invoice #42",
+          "from": "billing@example.com",
+          "body": "Your invoice for June is attached."
+        }
+      }
+    }
+  },
+  "messages": [
+    {
+      "channel": "eng",
+      "from": "bob",
+      "text": "Design doc is ready for review",
+      "mentions": ["document:design-doc"]
+    },
+    { "channel": "town-square", "from": "alice", "text": "Welcome everyone!" },
+    { "channel": "acme-hq", "from": "carol", "text": "Team sync at 3pm." }
+  ]
+}

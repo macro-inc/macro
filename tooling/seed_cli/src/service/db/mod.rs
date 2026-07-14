@@ -10,6 +10,7 @@ pub use SeedDb as Db;
 #[allow(unused_imports)]
 use mockall::automock;
 
+use chrono::{DateTime, Utc};
 use comms_db_client::channels::create_channel::CreateChannelOptions;
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::create_message::CreateMessageOptions;
@@ -18,7 +19,38 @@ use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
 use model::document::DocumentMetadata;
 use models_email::email::service;
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use uuid::Uuid;
+
+/// Everything needed to seed an archived call record.
+#[derive(Debug)]
+pub struct InsertCallRecordArgs {
+    /// Call record id (same id the live call would have had).
+    pub call_id: Uuid,
+    /// Channel the call happened in.
+    pub channel_id: Uuid,
+    /// LiveKit-style room name.
+    pub room_name: String,
+    /// Creator user id.
+    pub created_by: String,
+    /// Call start time.
+    pub started_at: DateTime<Utc>,
+    /// Call end time.
+    pub ended_at: DateTime<Utc>,
+    /// Pre-derived share permission id.
+    pub share_permission_id: String,
+    /// Whether the creator's team gets view access.
+    pub share_with_team: bool,
+    /// Optional custom display name.
+    pub custom_name: Option<String>,
+    /// The creator's team, when `share_with_team` applies.
+    pub team_id: Option<Uuid>,
+    /// Participants as (user id, joined_at, left_at).
+    pub participants: Vec<(String, DateTime<Utc>, DateTime<Utc>)>,
+    /// Transcript segments as (speaker id, content, started_at, ended_at).
+    pub transcripts: Vec<(String, String, DateTime<Utc>, DateTime<Utc>)>,
+}
 
 /// Wrapper around the database connection pool.
 #[cfg_attr(test, allow(dead_code))]
@@ -222,5 +254,327 @@ impl SeedDb {
         )
         .await?;
         Ok(id)
+    }
+
+    /// Execute a list of standalone SQL statements inside one transaction.
+    ///
+    /// Unlike [`Self::execute_sql_script`] the statements are not split on
+    /// semicolons, so they may contain CTEs with embedded semicolons-free
+    /// bodies of arbitrary complexity.
+    #[tracing::instrument(skip(self, statements), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn execute_statements(&self, statements: &[String]) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
+        for statement in statements {
+            sqlx::query(statement).execute(&mut *transaction).await?;
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Upsert an `entity_access` row, replacing the level on conflict.
+    #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn upsert_entity_access(
+        &self,
+        entity_id: &str,
+        entity_type: entity_access_db_utils::EntityType,
+        source_id: &str,
+        source_type: entity_access_db_utils::EntityAccessSourceType,
+        access_level: AccessLevel,
+        granted_from_project_id: Option<String>,
+    ) -> anyhow::Result<()> {
+        let entity_uuid = macro_uuid::string_to_uuid(entity_id)
+            .map_err(|e| anyhow::anyhow!("entity id {entity_id} is not a uuid: {e:?}"))?;
+        let conflict = if granted_from_project_id.is_some() {
+            r#"(entity_id, entity_type, source_id, source_type, granted_from_project_id)
+               WHERE granted_from_project_id IS NOT NULL"#
+        } else {
+            r#"(entity_id, entity_type, source_id, source_type)
+               WHERE granted_from_project_id IS NULL"#
+        };
+        let query = format!(
+            r#"INSERT INTO entity_access
+                 (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               ON CONFLICT {conflict}
+               DO UPDATE SET access_level = EXCLUDED.access_level"#
+        );
+        sqlx::query(&query)
+            .bind(entity_uuid)
+            .bind(entity_type.as_ref())
+            .bind(source_id)
+            .bind(source_type)
+            .bind(access_level)
+            .bind(granted_from_project_id.as_deref())
+            .execute(&self.inner)
+            .await?;
+        Ok(())
+    }
+
+    /// Grant a channel access to a shareable item: writes the
+    /// `ChannelSharePermission` row (when the item has a share permission)
+    /// and the `entity_access` row, like mention-sharing does.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn upsert_channel_share_permission(
+        &self,
+        item_id: &str,
+        item_type: &str,
+        channel_id: &str,
+        access_level: AccessLevel,
+    ) -> anyhow::Result<()> {
+        match macro_db_client::share_permission::get::get_share_permission_id(
+            &self.inner,
+            item_id,
+            item_type,
+        )
+        .await
+        {
+            Ok(share_permission_id) => {
+                if let Err(e) =
+                    macro_db_client::share_permission::channel_permission::create::insert_channel_share_permission(
+                        &self.inner,
+                        &share_permission_id,
+                        channel_id,
+                        &access_level,
+                    )
+                    .await
+                {
+                    tracing::warn!(error=?e, "channel share permission may already exist, continuing");
+                }
+            }
+            Err(e) => {
+                tracing::debug!(error=?e, item_type, "no share permission for item, skipping channel share row");
+            }
+        }
+
+        self.upsert_entity_access(
+            item_id,
+            entity_access_db_utils::EntityType::from_str(item_type)
+                .map_err(|e| anyhow::anyhow!("invalid entity type {item_type}: {e:?}"))?,
+            channel_id,
+            entity_access_db_utils::EntityAccessSourceType::Channel,
+            access_level,
+            None,
+        )
+        .await
+    }
+
+    /// Insert a project row with a pre-defined id.
+    #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn insert_project(
+        &self,
+        project_id: &str,
+        name: &str,
+        owner_id: &str,
+        parent_id: Option<String>,
+    ) -> anyhow::Result<()> {
+        sqlx::query(
+            r#"INSERT INTO "Project" (id, name, "userId", "parentId", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, NOW(), NOW())"#,
+        )
+        .bind(project_id)
+        .bind(name)
+        .bind(owner_id)
+        .bind(parent_id.as_deref())
+        .execute(&self.inner)
+        .await?;
+        Ok(())
+    }
+
+    /// Insert an AI chat row with a pre-defined id.
+    #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn insert_chat(
+        &self,
+        chat_id: &str,
+        owner_id: &str,
+        name: &str,
+    ) -> anyhow::Result<()> {
+        sqlx::query(
+            r#"INSERT INTO "Chat" (id, "userId", name, "isPersistent") VALUES ($1, $2, $3, true)"#,
+        )
+        .bind(chat_id)
+        .bind(owner_id)
+        .bind(name)
+        .execute(&self.inner)
+        .await?;
+        Ok(())
+    }
+
+    /// Create a public share permission attached to a project.
+    #[tracing::instrument(skip(self, share_permission), err)]
+    pub async fn create_project_public_permission(
+        &self,
+        project_id: &str,
+        share_permission: &SharePermissionV2,
+    ) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
+        macro_db_client::share_permission::create::create_project_permission(
+            &mut transaction,
+            project_id,
+            share_permission,
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Create a public share permission attached to a chat.
+    #[tracing::instrument(skip(self, share_permission), err)]
+    pub async fn create_chat_public_permission(
+        &self,
+        chat_id: &str,
+        share_permission: &SharePermissionV2,
+    ) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
+        macro_db_client::share_permission::create::create_chat_permission(
+            &mut transaction,
+            chat_id,
+            share_permission,
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Insert an archived call record with its share permission, access
+    /// rows, participants, and transcripts — the same rows `create_call` +
+    /// `archive_call` leave behind.
+    #[tracing::instrument(skip(self, args), fields(call_id = %args.call_id), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn insert_call_record(&self, args: InsertCallRecordArgs) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+               VALUES ($1, false, NULL, NOW(), NOW())"#,
+        )
+        .bind(&args.share_permission_id)
+        .execute(transaction.as_mut())
+        .await?;
+
+        macro_db_client::share_permission::channel_permission::create::create_channel_share_permissions(
+            &mut transaction,
+            &args.share_permission_id,
+            &vec![models_permissions::share_permission::channel_share_permission::ChannelSharePermission {
+                channel_id: args.channel_id.to_string(),
+                access_level: AccessLevel::Edit,
+            }],
+        )
+        .await?;
+
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &args.call_id,
+            entity_access_db_utils::EntityType::Call,
+            &args.created_by,
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &args.call_id,
+            entity_access_db_utils::EntityType::Call,
+            &args.channel_id.to_string(),
+            entity_access_db_utils::EntityAccessSourceType::Channel,
+            entity_access_db_utils::AccessLevel::Edit,
+        )
+        .await?;
+        if let Some(team_id) = args.team_id {
+            entity_access_db_utils::insert_entity_access_row(
+                &mut transaction,
+                &args.call_id,
+                entity_access_db_utils::EntityType::Call,
+                &team_id.to_string(),
+                entity_access_db_utils::EntityAccessSourceType::Team,
+                entity_access_db_utils::AccessLevel::View,
+            )
+            .await?;
+        }
+
+        let duration_ms = (args.ended_at - args.started_at).num_milliseconds().max(0);
+        sqlx::query(
+            r#"INSERT INTO call_records
+                 (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms,
+                  share_permission_id, share_with_team, custom_name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
+        )
+        .bind(args.call_id)
+        .bind(args.channel_id)
+        .bind(&args.room_name)
+        .bind(&args.created_by)
+        .bind(args.started_at)
+        .bind(args.ended_at)
+        .bind(duration_ms)
+        .bind(&args.share_permission_id)
+        .bind(args.share_with_team)
+        .bind(&args.custom_name)
+        .execute(transaction.as_mut())
+        .await?;
+
+        for (user_id, joined_at, left_at) in &args.participants {
+            sqlx::query(
+                r#"INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)
+                   VALUES ($1, $2, $3, $4)"#,
+            )
+            .bind(args.call_id)
+            .bind(user_id)
+            .bind(joined_at)
+            .bind(left_at)
+            .execute(transaction.as_mut())
+            .await?;
+        }
+
+        for (index, (speaker_id, content, started_at, ended_at)) in
+            args.transcripts.iter().enumerate()
+        {
+            sqlx::query(
+                r#"INSERT INTO call_record_transcripts
+                     (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            )
+            .bind(args.call_id)
+            .bind(format!("seed-seg-{index}"))
+            .bind(speaker_id)
+            .bind(content)
+            .bind(started_at)
+            .bind(ended_at)
+            .bind(index as i32)
+            .execute(transaction.as_mut())
+            .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Delegate an email link from its owner to another user.
+    #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
+    pub async fn insert_macro_user_link(
+        &self,
+        primary_macro_id: &str,
+        child_macro_id: &str,
+        link_id: uuid::Uuid,
+    ) -> anyhow::Result<()> {
+        sqlx::query(
+            r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+               VALUES ($1, $2, $3)
+               ON CONFLICT DO NOTHING"#,
+        )
+        .bind(primary_macro_id)
+        .bind(child_macro_id)
+        .bind(link_id)
+        .execute(&self.inner)
+        .await?;
+        Ok(())
+    }
+
+    /// Read-only handle to the underlying pool (for the matrix verifier).
+    pub fn pool(&self) -> sqlx::PgPool {
+        self.inner.clone()
     }
 }
