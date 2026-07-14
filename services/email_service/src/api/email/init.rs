@@ -212,18 +212,23 @@ pub async fn handler(
     result
 }
 
-/// A failed `/email/init` otherwise leaves the `in_progress_user_link` row behind — only
-/// the success paths delete it — where it counts toward the `/link/gmail` start cap and can
-/// lock the user out of further attempts. Delete it on any terminal failure except
-/// `SharedInboxConflict`, which is held open on purpose so the `force_share` retry can reuse
-/// the same `link_id`.
+/// Whether a failed `/email/init` should delete its `in_progress_user_link` row. True for
+/// every terminal failure except `SharedInboxConflict`, which is held open on purpose so the
+/// `force_share` retry can reuse the same `link_id`.
+fn should_clean_up_in_progress_link(error: &InitError) -> bool {
+    !matches!(error, InitError::SharedInboxConflict { .. })
+}
+
+/// A failed `/email/init` otherwise leaves the `in_progress_user_link` row behind — only the
+/// success paths delete it — where it counts toward the `/link/gmail` start cap and can lock
+/// the user out of further attempts.
 async fn cleanup_in_progress_link_on_failure(
     db: &sqlx::Pool<sqlx::Postgres>,
     link_id: Option<Uuid>,
     error: &InitError,
 ) {
     if let Some(link_id) = link_id
-        && !matches!(error, InitError::SharedInboxConflict { .. })
+        && should_clean_up_in_progress_link(error)
     {
         macro_db_client::in_progress_user_link::delete_in_progress_user_link(db, &link_id)
             .await

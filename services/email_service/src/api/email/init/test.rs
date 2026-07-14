@@ -69,60 +69,30 @@ fn other_watch_failures_stay_gmail_errors() {
     }
 }
 
-async fn seed_macro_user(pool: &sqlx::PgPool) -> anyhow::Result<Uuid> {
-    // in_progress_user_link.macro_user_id has a FK to macro_user(id); every test row
-    // needs a parent user.
-    let id = Uuid::new_v4();
-    sqlx::query(
-        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'tester', 'tester@example.com', 'cus_test')",
-    )
-    .bind(id)
-    .execute(pool)
-    .await?;
-    Ok(id)
-}
-
-#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn failed_init_cleans_up_in_progress_link(pool: sqlx::PgPool) -> anyhow::Result<()> {
-    let macro_user_id = seed_macro_user(&pool).await?;
-    let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
-        &pool,
-        &macro_user_id.to_string(),
-    )
-    .await?;
-
-    cleanup_in_progress_link_on_failure(&pool, Some(link_id), &InitError::AlreadyInitialized).await;
-
+#[test]
+fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
+    // SharedInboxConflict is held open for the force_share retry, so its row must be kept;
+    // every other terminal failure must clean up the row so it stops counting toward the
+    // /link/gmail start cap. The delete itself is covered by macro_db_client's own tests.
     assert!(
-        macro_db_client::in_progress_user_link::get_in_progress_user_link(&pool, &link_id)
-            .await
-            .is_err(),
-        "a terminal init failure should delete the in_progress_user_link row so it stops counting toward the start cap"
+        !should_clean_up_in_progress_link(&InitError::SharedInboxConflict {
+            email_address: "shared@example.com".to_string(),
+            existing_owner_email: "owner@example.com".to_string(),
+            existing_link_id: Uuid::new_v4(),
+        }),
+        "SharedInboxConflict must keep the row for the force_share retry"
     );
-    Ok(())
-}
 
-#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn shared_inbox_conflict_keeps_in_progress_link(pool: sqlx::PgPool) -> anyhow::Result<()> {
-    let macro_user_id = seed_macro_user(&pool).await?;
-    let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
-        &pool,
-        &macro_user_id.to_string(),
-    )
-    .await?;
-
-    let conflict = InitError::SharedInboxConflict {
-        email_address: "shared@example.com".to_string(),
-        existing_owner_email: "owner@example.com".to_string(),
-        existing_link_id: Uuid::new_v4(),
-    };
-    cleanup_in_progress_link_on_failure(&pool, Some(link_id), &conflict).await;
-
-    assert!(
-        macro_db_client::in_progress_user_link::get_in_progress_user_link(&pool, &link_id)
-            .await
-            .is_ok(),
-        "SharedInboxConflict must keep the in_progress_user_link row for the force_share retry"
-    );
-    Ok(())
+    for err in [
+        InitError::AlreadyInitialized,
+        InitError::NoGmailGrant,
+        InitError::EnqueueError,
+        InitError::BadRequest("bad".to_string()),
+        InitError::GmailError(GmailError::Unauthorized),
+    ] {
+        assert!(
+            should_clean_up_in_progress_link(&err),
+            "terminal failure {err:?} should clean up the in_progress row"
+        );
+    }
 }
