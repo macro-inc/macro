@@ -130,10 +130,25 @@ function ThemeSelectorRow(props: {
   // The editable name of the theme being edited.
   const [themeName, setThemeName] = createSignal('New Theme');
 
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setEditingThemeId(undefined);
+  };
+
+  // Abandon any in-progress edits: resync the live tokens with the active theme
+  // (via resolveActiveThemeId) so a draft/preview doesn't linger, then close.
+  // Shared by every edit-abandoning exit — the pill's edit toggle, the editor's
+  // close button, and picking a different theme.
+  const discardAndCloseEditor = () => {
+    applyTheme(resolveActiveThemeId());
+    closeEditor();
+  };
+
   const chooseTheme = (id: string) => {
     props.onSelect(id);
-    setEditingThemeId(undefined);
-    setEditorOpen(false);
+    // Resync with the (now possibly newly-selected) active theme rather than
+    // leaving the dropdown's draft/preview tokens applied, then close.
+    discardAndCloseEditor();
   };
 
   const startNewTheme = () => {
@@ -164,18 +179,6 @@ function ThemeSelectorRow(props: {
       setThemeName(`${source?.name ?? 'Theme'} copy`);
     }
     setEditorOpen(true);
-  };
-
-  const closeEditor = () => {
-    setEditorOpen(false);
-    setEditingThemeId(undefined);
-  };
-
-  // Toggling the pill's edit button while the editor is open scraps the
-  // in-progress edits: restore the active theme's live tokens and close.
-  const discardAndCloseEditor = () => {
-    applyTheme(resolveActiveThemeId());
-    closeEditor();
   };
 
   // Save the live theme: update the bound custom theme in place, or create a new
@@ -225,7 +228,7 @@ function ThemeSelectorRow(props: {
         <ThemeEditor
           name={themeName()}
           onNameChange={setThemeName}
-          onClose={closeEditor}
+          onClose={discardAndCloseEditor}
           onSave={saveCurrentTheme}
         />
       </Show>
