@@ -50,6 +50,7 @@ import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { MarkdownOutline } from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
@@ -71,6 +72,9 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
+const OutlineWidth = 208;
+const OutlineGap = 24;
+const OutlineMinWidth = NoteTargetWidth + 2 * (OutlineWidth + OutlineGap);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -132,6 +136,14 @@ export function Notebook(props: {
     return Object.keys(comments).length > 0;
   });
   const showComments = () => hasComment() && !history.isOpen();
+  const showOutline = () =>
+    width() >= OutlineMinWidth &&
+    !showComments() &&
+    !history.isOpen() &&
+    !isMobile();
+
+  const outlineLeft = () =>
+    (width() - NoteTargetWidth) / 2 - OutlineWidth - OutlineGap;
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -309,6 +321,19 @@ export function Notebook(props: {
 
   return (
     <div class={containerClasses()} ref={notebookRef}>
+      <Show when={showOutline()}>
+        <div
+          class="pointer-events-none absolute inset-y-0 z-1"
+          style={{ left: `${outlineLeft()}px`, width: `${OutlineWidth}px` }}
+        >
+          <div class="pointer-events-auto sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            <MarkdownOutline
+              editor={() => md.editor}
+              scrollContainer={() => md.scrollContainer}
+            />
+          </div>
+        </div>
+      </Show>
       <div
         class={contentDivClasses()}
         ref={contentRef}
