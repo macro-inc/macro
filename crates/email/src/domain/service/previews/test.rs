@@ -25,7 +25,8 @@ impl FrecencyQueryService for PanicFrecencyService {
 #[tokio::test]
 async fn skips_frecency_lookup_when_not_requested() {
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
-    let scores = get_frecency_scores(&PanicFrecencyService, false, user_id, &[])
+    let ids = [EntityType::EmailThread.with_entity_string("thread-id".to_owned())];
+    let scores = get_frecency_scores(&PanicFrecencyService, false, user_id, &ids)
         .await
         .unwrap();
 
