@@ -121,6 +121,8 @@ export function CreateChannelModal() {
                     setError(undefined);
                   }}
                   placeholder="Channel name"
+                  autocomplete="off"
+                  data-1p-ignore
                   aria-invalid={error() === 'Enter a channel name'}
                   class="h-10 w-full border-none bg-transparent px-0 text-xl font-medium text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
                 />
