@@ -2,13 +2,8 @@
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
  * RPC from the design doc, apps/web/docs/graphql-normalized-cache-plan.md §4).
  *
- * Topologies:
- * - SharedWorker: one engine, many ports. Invalidations fan out over the
- *   ports directly.
- * - Dedicated worker per tab (fallback): one engine per tab over the same
- *   IndexedDB database. Writes are serialized with Web Locks; changed keys
- *   fan out across tabs via BroadcastChannel, and each tab's worker
- *   translates them into locally-affected operation ids.
+ * The browser topology is one SharedWorker engine serving many page ports.
+ * Platforms without SharedWorker support use a storage-free no-op host.
  *
  * Operation ids are strings of the form `"{clientId}:{urqlOperationKey}"` so
  * one shared engine can track operations from many tabs without collisions.
@@ -159,35 +154,6 @@ export type CachePush = {
 };
 
 export type WorkerMessage = CacheResponse | CachePush;
-
-/** Cross-tab broadcast (fallback topology), channel `graphql-cache:{scope}`. */
-export type CacheBroadcast =
-  | {
-      kind: 'changed';
-      keys: string[];
-      /** Random id of the emitting worker, to ignore own broadcasts. */
-      source: string;
-    }
-  | {
-      /** The durable optimistic queue changed in another engine. */
-      kind: 'queue-changed';
-      /** Durable record keys changed by successful settlement. */
-      keys: string[];
-      source: string;
-    }
-  | {
-      /** The shared storage was wiped (identity change silent restart). */
-      kind: 'reset';
-      source: string;
-    };
-
-export function broadcastChannelName(scope: string): string {
-  return `graphql-cache:${scope}`;
-}
-
-export function writeLockName(scope: string): string {
-  return `graphql-cache:write:${scope}`;
-}
 
 export function isCachePush(msg: WorkerMessage): msg is CachePush {
   return 'kind' in msg && msg.kind === 'ops-affected';

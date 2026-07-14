@@ -1,8 +1,6 @@
 /**
- * Browser CacheHost: talks the RPC protocol to the cache worker.
- * Prefers SharedWorker (single engine across tabs); falls back to a
- * dedicated worker per tab (engines converge via IndexedDB + Web Locks +
- * BroadcastChannel — see worker-core.ts).
+ * Browser CacheHost: talks to the single cache engine in a SharedWorker.
+ * Platforms without SharedWorker support receive a storage-free no-op host.
  */
 
 import {
@@ -16,6 +14,7 @@ import {
   type WorkerMessage,
   type WriteResult,
 } from '../protocol';
+import { createNoopCacheHost } from './noop-host';
 import type { CacheHost, CacheReadArgs, CacheWriteArgs } from './types';
 
 type Pending = {
@@ -31,8 +30,6 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
 export interface WorkerHostOptions {
   scope: string;
   hotCapacity?: number;
-  /** Force a topology (tests/diagnostics). */
-  forceDedicatedWorker?: boolean;
   /**
    * Per-request timeout in ms (default 10s). A hung worker rejects the
    * pending call; the exchange degrades rejected reads to the network.
@@ -43,6 +40,10 @@ export interface WorkerHostOptions {
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
+  if (typeof SharedWorker !== 'function') {
+    return createNoopCacheHost('SharedWorker is not supported by this browser');
+  }
+
   const clientId = crypto.randomUUID();
   const pending = new Map<
     number,
@@ -52,9 +53,6 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let nextRequestId = 1;
-
-  const useShared =
-    typeof SharedWorker === 'function' && !options.forceDedicatedWorker;
 
   let post: (msg: CacheRequest) => void;
   let dispose: () => void;
@@ -83,30 +81,25 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   };
 
-  if (useShared) {
-    const worker = new SharedWorker(
+  let worker: SharedWorker;
+  try {
+    worker = new SharedWorker(
       new URL('../worker/cache.shared-worker.ts', import.meta.url),
       { type: 'module', name: `graphql-cache:${options.scope}` }
     );
     worker.port.onmessage = onMessage;
     worker.port.start();
-    post = (msg) => worker.port.postMessage(msg);
-    dispose = () => {
-      // Tell the SharedWorker to drop our port — there is no platform
-      // disconnect event, and stale ports would otherwise accumulate.
-      const notice: CacheNotice = { kind: 'disconnect' };
-      worker.port.postMessage(notice);
-      worker.port.close();
-    };
-  } else {
-    const worker = new Worker(
-      new URL('../worker/cache.worker.ts', import.meta.url),
-      { type: 'module', name: `graphql-cache:${options.scope}` }
-    );
-    worker.onmessage = onMessage;
-    post = (msg) => worker.postMessage(msg);
-    dispose = () => worker.terminate();
+  } catch {
+    return createNoopCacheHost('SharedWorker could not be initialized');
   }
+  post = (msg) => worker.port.postMessage(msg);
+  dispose = () => {
+    // Tell the SharedWorker to drop our port — there is no platform
+    // disconnect event, and stale ports would otherwise accumulate.
+    const notice: CacheNotice = { kind: 'disconnect' };
+    worker.port.postMessage(notice);
+    worker.port.close();
+  };
 
   // Best-effort cleanup when the page goes away (bfcache-safe: a restored
   // page gets a fresh host on next use anyway).

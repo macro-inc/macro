@@ -489,6 +489,17 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
 
+    it('forwards optimistic mutations without cache work when the host is disabled', async () => {
+      const disabledHost: CacheHost = { ...host, disabled: true };
+      const { ops, forwarded } = harness(disabledHost);
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(host.begins).toHaveLength(0);
+      expect(host.claims).toHaveLength(0);
+      expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+    });
+
     it('installs the optimistic layer before forwarding to the network', async () => {
       const { ops, results, forwarded } = harness(host);
       const begin = host.beginOptimisticWrite.bind(host);

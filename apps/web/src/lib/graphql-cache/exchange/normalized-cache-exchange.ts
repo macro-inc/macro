@@ -310,6 +310,10 @@ export function normalizedCacheExchange(
 
       /** Durably queues optimism before allowing the ordered runner to send. */
       async function prepareMutation(op: Operation): Promise<void> {
+        if (host.disabled) {
+          enqueueForward(op);
+          return;
+        }
         // Reconstructed startup retries already have a durable transaction.
         if (queueAttemptOf(op)) {
           enqueueForward(op);
@@ -468,9 +472,11 @@ export function normalizedCacheExchange(
         mergeMap((result) => fromPromise(writeThrough(result)))
       );
 
-      scheduleDrain();
-      if (typeof addEventListener === 'function') {
-        addEventListener('online', () => scheduleDrain());
+      if (!host.disabled) {
+        scheduleDrain();
+        if (typeof addEventListener === 'function') {
+          addEventListener('online', () => scheduleDrain());
+        }
       }
       void unsubscribePush;
       return merge([cacheResults$, mutationPrep$, forwarded$]);

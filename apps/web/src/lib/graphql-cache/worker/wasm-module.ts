@@ -65,8 +65,6 @@ export interface CacheEngine {
     leaseGeneration: string
   ): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
-  refreshOptimisticQueue(): Promise<WriteResult>;
-  externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
   /** Close the IndexedDB connection; call before destroyCache. */

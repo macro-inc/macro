@@ -11,7 +11,7 @@ import { CacheWorkerCore } from './worker-core';
 
 declare const self: SharedWorkerGlobalScope;
 
-const core = new CacheWorkerCore({ multiEngine: false });
+const core = new CacheWorkerCore();
 
 self.onconnect = (event: MessageEvent) => {
   const port = event.ports[0];
