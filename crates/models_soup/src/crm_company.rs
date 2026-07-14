@@ -1,4 +1,3 @@
-use crate::SoupProperty;
 use chrono::{DateTime, Utc};
 use crm::domain::model::{CrmCompanyForSoup, CrmDomain};
 use serde::{Deserialize, Serialize};
@@ -37,7 +36,7 @@ impl From<CrmDomain> for SoupCrmDomain {
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct SoupCrmCompany<T> {
+pub struct SoupCrmCompany<T = ()> {
     /// The id of the company.
     pub id: Uuid,
     /// The id of the team that owns this company record.

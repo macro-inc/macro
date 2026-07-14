@@ -15,11 +15,14 @@ use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// A single item in the Soup feed.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "tag", content = "data")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub enum SoupItem<T> {
+pub enum SoupItem<T = ()> {
     /// Document item.
     Document(SoupDocument<T>),
     /// Chat item.
@@ -195,8 +198,11 @@ impl<T> SoupItem<T> {
         }
     }
 
-    /// maps the soupitem T to soup item U
-    pub(crate) fn map<F: FnOnce(T) -> U, U>(self, f: F) -> SoupItem<U> {
+    /// Maps the extra fields attached to property-bearing Soup variants.
+    pub fn map_extra<U, F>(self, f: F) -> SoupItem<U>
+    where
+        F: FnOnce(T) -> U,
+    {
         match self {
             SoupItem::Document(SoupDocument {
                 id,

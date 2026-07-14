@@ -1,7 +1,8 @@
 use crate::domain::{
     models::{
         FrecencyQueryInner, FrecencySoupItem, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
-        SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType, build_grouped_response,
+        SimpleQueryInner, SoupErr, SoupItemWithProperties, SoupPropertiesField, SoupQuery,
+        SoupRequest, SoupType, build_grouped_response,
     },
     ports::SoupService,
 };
@@ -53,7 +54,6 @@ use models_pagination::{
     CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
     TypeEraseCursor,
 };
-use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
@@ -496,7 +496,7 @@ where
         // whatever membership the extractor resolved.
         let res = self
             .service
-            .get_user_soup(
+            .get_user_soup_with_properties(
                 SoupRequest {
                     soup_type: match params.expand {
                         Some(true) | None => SoupType::Expanded,
@@ -600,14 +600,14 @@ where
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SoupApiItem {
     #[serde(flatten)]
-    item: SoupItem,
+    item: SoupItemWithProperties,
     frecency_score: f64,
     /// Whether the requesting user has favorited this entity.
     is_favorited: bool,
 }
 
 impl SoupApiItem {
-    fn from_frecency_soup_item(item: FrecencySoupItem) -> Self {
+    fn from_frecency_soup_item(item: FrecencySoupItem<SoupPropertiesField>) -> Self {
         let FrecencySoupItem {
             item,
             frecency_score,

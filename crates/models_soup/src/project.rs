@@ -3,13 +3,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// A project as displayed in Soup.
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SoupProject<T> {
+pub struct SoupProject<T = ()> {
     /// The id of the project
     pub id: Uuid,
 

@@ -150,7 +150,7 @@ impl SoupRepo for PgSoupRepo {
     fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, Self::Err>> + Send {
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, Self::Err>> + Send {
         expanded::dynamic::expanded_dynamic_cursor_soup_grouped(
             &self.pool.0,
             GroupedDynamicCursorArgs {
@@ -178,25 +178,28 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     }
 }
 
-/// Fetches and populates properties for a slice of SoupItems.
+/// Fetches properties and attaches them to raw Soup items.
 ///
-/// This helper collects entity references from items that support properties,
-/// fetches their properties in bulk, and assigns them to each item. System
-/// properties are always included, plus the caller's own and team tag properties.
-/// Tasks use `EntityType::Task` while regular documents use `EntityType::Document`.
+/// This helper collects entity references from items that support properties
+/// and performs one bulk lookup. System properties are always included, plus
+/// the caller's own and team tag properties. Tasks use `EntityType::Task` while
+/// regular documents use `EntityType::Document`.
 #[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
     db: &sqlx::PgPool,
     user_id: MacroUserIdStr<'_>,
-    items: &mut [SoupItem],
-) -> Result<(), sqlx::Error> {
+    items: Vec<SoupItem<()>>,
+) -> Result<Vec<SoupItem<SoupPropertiesField>>, sqlx::Error> {
     let entity_refs = items
         .iter()
-        .filter_map(|item| item.to_entity_reference())
+        .filter_map(SoupItem::to_entity_reference)
         .collect::<Vec<_>>();
 
     if entity_refs.is_empty() {
-        return Ok(());
+        return Ok(items
+            .into_iter()
+            .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+            .collect());
     }
 
     let property_ids = SystemPropertyKey::all_system_property_keys();
@@ -210,35 +213,27 @@ pub(crate) async fn populate_properties(
         .await
         .map_err(|e| sqlx::Error::Decode(e.into()))?;
 
-    // `items` may repeat an id (one row per group it belongs to), so use
-    // `.get()` not `.remove()` — every occurrence needs the props.
-    for item in items {
-        let props = match item {
-            SoupItem::Document(x) => properties_map.get(&x.id.to_string()),
-            SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
-            SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
-            SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
-            SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
-            SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
-            // Channels and foreign entities are not in entity_properties.
-            SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => None,
-        };
-        if let Some(props) = props {
-            let soup_props: Vec<SoupProperty> =
-                props.iter().cloned().map(SoupProperty::from).collect();
-            match item {
-                SoupItem::Document(x) => x.properties = soup_props,
-                SoupItem::Project(x) => x.properties = soup_props,
-                SoupItem::EmailThread(x) => x.properties = soup_props,
-                SoupItem::Chat(x) => x.properties = soup_props,
-                SoupItem::CrmCompany(x) => x.properties = soup_props,
-                SoupItem::Call(x) => x.properties = soup_props,
-                SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => {}
+    // Items may repeat an id when grouped, so use `get` rather than `remove`.
+    Ok(items
+        .into_iter()
+        .map(|item| {
+            let properties = match &item {
+                SoupItem::Document(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
+                SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
+                SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => {
+                    None
+                }
             }
-        }
-    }
+            .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
+            .unwrap_or_default();
 
-    Ok(())
+            item.map_extra(|()| SoupPropertiesField::new(properties))
+        })
+        .collect())
 }
 
 /// this defines a macro which maps the soup query types for statically checked soup queries

@@ -4,8 +4,6 @@ use item_filters::CallStatus;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// A participant in a call record, as displayed in Soup.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -24,7 +22,7 @@ pub struct SoupCallRecordParticipant {
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct SoupCallRecord<T> {
+pub struct SoupCallRecord<T = ()> {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.

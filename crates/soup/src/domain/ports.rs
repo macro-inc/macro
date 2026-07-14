@@ -41,8 +41,9 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
-    /// Populates properties for a slice of SoupItems. The user id scopes which
-    /// tag properties are visible (the caller's own and their team's).
+    /// Attaches properties to raw Soup items while preserving their order and
+    /// count. The user id scopes which tag properties are visible (the
+    /// caller's own and their team's).
     fn populate_properties<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -69,9 +70,9 @@ pub trait SoupRepo: Send + Sync + 'static {
 /// 1. The id type is [String] (this should be changed to uuid)
 /// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
 /// 1. The filter type is an [Option] [EntityFilterAst]
-pub type SoupOutput<T> = Either<
-    PaginatedCursor<FrecencySoupItem<SoupPropertiesField>, String, SimpleSortMethod, T>,
-    PaginatedCursor<FrecencySoupItem<SoupPropertiesField>, String, Frecency, T>,
+pub type SoupOutput<T, Extra = ()> = Either<
+    PaginatedCursor<FrecencySoupItem<Extra>, String, SimpleSortMethod, T>,
+    PaginatedCursor<FrecencySoupItem<Extra>, String, Frecency, T>,
 >;
 
 #[cfg(test)]
@@ -79,7 +80,7 @@ mod test;
 
 /// Service abstraction for executing user-facing soup queries.
 pub trait SoupService: Send + Sync + 'static {
-    /// Run a soup query for the authenticated user.
+    /// Run a soup query without loading entity properties.
     ///
     /// `team_receipt` proves the user belongs to a team and may be used by
     /// filters that broaden visibility beyond the user's own mailboxes (e.g.
@@ -89,16 +90,26 @@ pub trait SoupService: Send + Sync + 'static {
         &self,
         req: SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> impl Future<Output = Result<SoupOutput<T>, SoupErr>> + Send
+    ) -> impl Future<Output = Result<SoupOutput<T, ()>, SoupErr>> + Send
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
 
-    /// Run a grouped soup query for the authenticated user.
+    /// Run a soup query and attach entity properties to the returned page.
+    fn get_user_soup_with_properties<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, SoupPropertiesField>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
+
+    /// Run a grouped soup query for the authenticated user with properties.
     fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, SoupErr>> + Send;
+    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr>> + Send;
 
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -116,7 +127,7 @@ where
         &self,
         req: SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<T>, SoupErr>
+    ) -> Result<SoupOutput<T, ()>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -124,10 +135,24 @@ where
         (**self).get_user_soup(req, team_receipt).await
     }
 
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, SoupPropertiesField>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_properties(req, team_receipt)
+            .await
+    }
+
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
+    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
         (**self).get_user_soup_grouped(req).await
     }
 
@@ -154,7 +179,19 @@ impl SoupService for NoOpSoupService {
         &self,
         _req: SoupRequest<T>,
         _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<T>, SoupErr>
+    ) -> Result<SoupOutput<T, ()>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(no_op_soup_err())
+    }
+
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, SoupPropertiesField>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -165,7 +202,7 @@ impl SoupService for NoOpSoupService {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
+    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
         Err(no_op_soup_err())
     }
 

@@ -4,8 +4,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// Sub type of a document with associated properties encoded in each variant.
 /// This ensures type-safety: task properties only exist when the document is a task.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -48,7 +46,7 @@ impl SoupDocumentSubType {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SoupDocument<T> {
+pub struct SoupDocument<T = ()> {
     /// The document id
     pub id: Uuid,
 

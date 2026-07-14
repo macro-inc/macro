@@ -3,13 +3,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::SoupProperty;
-
 /// A chat as displayed in Soup.
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SoupChat<T> {
+pub struct SoupChat<T = ()> {
     /// The chat uuid
     pub id: Uuid,
 

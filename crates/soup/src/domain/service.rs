@@ -2,7 +2,7 @@ use crate::domain::{
     models::{
         AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, GetCrmCompaniesRequest,
         GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
+        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -31,7 +31,7 @@ use frecency::domain::{
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
+    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Paginated, Query, SimpleSortMethod,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
@@ -52,7 +52,7 @@ use uuid::Uuid;
 #[cfg(test)]
 mod tests;
 
-fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem {
+fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem<()> {
     SoupItem::ForeignEntity(SoupForeignEntity {
         id: entity.id,
         foreign_entity_id: entity.foreign_entity_id,
@@ -120,7 +120,7 @@ where
         &self,
         soup_type: SoupType,
         req: SimpleSortRequest<'_>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let res = match soup_type {
             SoupType::Expanded => self
                 .soup_storage
@@ -144,7 +144,7 @@ where
     async fn handle_grouped_soup_request(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
         self.soup_storage
             .expanded_grouped_cursor_soup(req)
             .await
@@ -170,9 +170,9 @@ where
         &self,
         soup_type: SoupType,
         user: MacroUserIdStr<'_>,
-        frecency_items: impl ExactSizeIterator<Item = FrecencySoupItem>,
+        frecency_items: impl ExactSizeIterator<Item = FrecencySoupItem<()>>,
         limit: u16,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let len = frecency_items.len();
         let remainder_to_fetch = (limit as usize).saturating_sub(len);
 
@@ -199,7 +199,7 @@ where
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let from_score = match cursor {
             Query::Sort(_, _) => None,
             Query::Cursor(Cursor {
@@ -272,7 +272,7 @@ where
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let (from_score, filters) = match from_value {
             None => (None, None),
             Some((s, f)) => (Some(s), f),
@@ -323,9 +323,8 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
-        user_id: MacroUserIdStr<'_>,
         req: Option<GetEmailsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         use frecency::domain::models::AggregateFrecency;
 
         let Some(req) = req else {
@@ -336,7 +335,7 @@ where
 
         let mut frecency_scores: Vec<Option<AggregateFrecency>> =
             Vec::with_capacity(email_response.items.len());
-        let mut items: Vec<SoupItem<()>> = email_response
+        let items: Vec<SoupItem<()>> = email_response
             .items
             .into_iter()
             .map(
@@ -361,28 +360,19 @@ where
             )
             .collect();
 
-        self.soup_storage
-            .populate_properties(user_id, &mut items)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        let emails_with_props: Vec<FrecencySoupItem> = items
-            .into_iter()
-            .zip(frecency_scores)
-            .map(|(item, frecency_score)| FrecencySoupItem {
+        Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
+            |(item, frecency_score)| FrecencySoupItem {
                 item,
                 frecency_score,
-            })
-            .collect();
-
-        Ok(Either::Right(emails_with_props.into_iter()))
+            },
+        )))
     }
 
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_comms_request(
         &self,
         req: Option<GetChannelsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -409,7 +399,7 @@ where
     async fn handle_comms_thread_request(
         &self,
         req: Option<GetThreadReplyRowsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -433,7 +423,7 @@ where
     async fn handle_crm_company_request(
         &self,
         req: Option<GetCrmCompaniesRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -448,7 +438,7 @@ where
             limit,
         } = req;
 
-        let mut items: Vec<SoupItem> = self
+        let items: Vec<SoupItem<()>> = self
             .crm_service
             .list_companies_for_soup(
                 &access,
@@ -468,15 +458,6 @@ where
             .map(|company| SoupItem::CrmCompany(SoupCrmCompany::from(company)))
             .collect();
 
-        // Companies are fetched outside the main soup queries (which hydrate
-        // their own items), so attach entity properties here.
-        if !items.is_empty() {
-            self.soup_storage
-                .populate_properties(user_id, &mut items)
-                .await
-                .map_err(anyhow::Error::from)?;
-        }
-
         Ok(Either::Right(items.into_iter().map(|item| {
             FrecencySoupItem {
                 item,
@@ -489,15 +470,14 @@ where
     async fn handle_call_request(
         &self,
         req: Option<GetCallRecordsRequest>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let user_id = req.user_id.clone();
-        let user_id_str = user_id.as_ref().to_string();
+        let user_id_str = req.user_id.as_ref().to_string();
 
-        let mut items: Vec<SoupItem> = self
+        let items: Vec<SoupItem<()>> = self
             .call_record_service
             .get_user_call_records(req)
             .await
@@ -507,15 +487,6 @@ where
                 SoupItem::Call(SoupCallRecord::from_record_for_user(record, &user_id_str))
             })
             .collect();
-
-        // Calls are fetched outside the main soup queries (which hydrate their
-        // own items), so attach entity properties (tags) here, like CRM.
-        if !items.is_empty() {
-            self.soup_storage
-                .populate_properties(user_id, &mut items)
-                .await
-                .map_err(anyhow::Error::from)?;
-        }
 
         Ok(Either::Right(items.into_iter().map(|item| {
             FrecencySoupItem {
@@ -532,7 +503,7 @@ where
         source_ids: Vec<SourceId>,
         limit: u32,
         query: Option<ForeignEntityListQuery>,
-    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+    ) -> Result<impl Iterator<Item = FrecencySoupItem<()>>, SoupErr> {
         let Some(query) = query else {
             return Ok(Either::Left(None.into_iter()));
         };
@@ -547,6 +518,124 @@ where
                     frecency_score: None,
                 }),
         ))
+    }
+
+    async fn populate_frecency_items(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        items: Vec<FrecencySoupItem<()>>,
+    ) -> Result<Vec<FrecencySoupItem<SoupPropertiesField>>, SoupErr> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (items, frecency_scores): (Vec<_>, Vec<_>) = items
+            .into_iter()
+            .map(|item| (item.item, item.frecency_score))
+            .unzip();
+        let items = self
+            .soup_storage
+            .populate_properties(user_id, items)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if items.len() != frecency_scores.len() {
+            return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "property hydration changed the number of Soup items"
+            )));
+        }
+
+        Ok(items
+            .into_iter()
+            .zip(frecency_scores)
+            .map(|(item, frecency_score)| FrecencySoupItem {
+                item,
+                frecency_score,
+            })
+            .collect())
+    }
+
+    async fn populate_page<Cursor>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        page: Paginated<FrecencySoupItem<()>, Cursor>,
+    ) -> Result<Paginated<FrecencySoupItem<SoupPropertiesField>, Cursor>, SoupErr> {
+        let (items, next_cursor) = page.into_parts();
+        let items = self.populate_frecency_items(user_id, items).await?;
+        Ok(Paginated::from_parts(items, next_cursor))
+    }
+
+    async fn populate_output<R>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        output: SoupOutput<R, ()>,
+    ) -> Result<SoupOutput<R, SoupPropertiesField>, SoupErr> {
+        match output {
+            Either::Left(page) => Ok(Either::Left(self.populate_page(user_id, page).await?)),
+            Either::Right(page) => Ok(Either::Right(self.populate_page(user_id, page).await?)),
+        }
+    }
+
+    async fn populate_grouped_items(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        items: Vec<GroupedSoupItem<()>>,
+    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (items, metadata): (Vec<_>, Vec<_>) = items
+            .into_iter()
+            .map(|item| {
+                (
+                    item.item,
+                    (
+                        item.frecency_score,
+                        item.group_key,
+                        item.group_total_count,
+                        item.row_in_group,
+                        item.group_label,
+                        item.group_display_order,
+                    ),
+                )
+            })
+            .unzip();
+        let items = self
+            .soup_storage
+            .populate_properties(user_id, items)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if items.len() != metadata.len() {
+            return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "property hydration changed the number of grouped Soup items"
+            )));
+        }
+
+        Ok(items
+            .into_iter()
+            .zip(metadata)
+            .map(
+                |(
+                    item,
+                    (
+                        frecency_score,
+                        group_key,
+                        group_total_count,
+                        row_in_group,
+                        group_label,
+                        group_display_order,
+                    ),
+                )| GroupedSoupItem {
+                    item,
+                    frecency_score,
+                    group_key,
+                    group_total_count,
+                    row_in_group,
+                    group_label,
+                    group_display_order,
+                },
+            )
+            .collect())
     }
 }
 
@@ -566,7 +655,7 @@ where
         &self,
         req: SoupRequest<R>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<R>, SoupErr>
+    ) -> Result<SoupOutput<R, ()>, SoupErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
         R: Clone + Serialize + Send,
@@ -610,7 +699,7 @@ where
                     },
                 );
 
-                let email_soup_fut = self.handle_email_request(req.user.copied(), email_request);
+                let email_soup_fut = self.handle_email_request(email_request);
 
                 let comms_soup_fut = self.handle_comms_request(comms_request);
 
@@ -669,12 +758,29 @@ where
         }
     }
 
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup_with_properties<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R, SoupPropertiesField>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let user_id = req.user.clone();
+        let output = self.get_user_soup(req, team_receipt).await?;
+        self.populate_output(user_id, output).await
+    }
+
     #[tracing::instrument(err, skip(self, req))]
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
-        self.handle_grouped_soup_request(req).await
+    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
+        let user_id = req.user_id.clone();
+        let items = self.handle_grouped_soup_request(req).await?;
+        self.populate_grouped_items(user_id, items).await
     }
 
     #[tracing::instrument(err, skip(self))]

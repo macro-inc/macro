@@ -754,7 +754,7 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
 /// a [SoupItem] with an associated frecency score
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct FrecencySoupItem<T> {
+pub struct FrecencySoupItem<T = ()> {
     /// the soup item
     pub item: SoupItem<T>,
     /// the frecency score
@@ -800,7 +800,7 @@ pub struct GroupedSoupRequest<T> {
 
 /// A soup item with group metadata attached (returned from grouped queries).
 #[derive(Debug)]
-pub struct GroupedSoupItem<T> {
+pub struct GroupedSoupItem<T = ()> {
     /// The soup item
     pub item: SoupItem<T>,
     /// The frecency score (if available)
@@ -854,9 +854,20 @@ pub enum SoupErr {
     AstErr(#[from] ExpandErr),
 }
 
-/// This struct is a hack to allow returning properties values in soup items.
-/// soup should not depend directly on properties
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Property fields that can be flattened into property-bearing Soup items.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct SoupPropertiesField {
-    properties: Vec<SoupProperty>,
+    /// Properties attached to the entity.
+    pub properties: Vec<SoupProperty>,
+}
+
+/// A Soup item with entity properties attached.
+pub type SoupItemWithProperties = SoupItem<SoupPropertiesField>;
+
+impl SoupPropertiesField {
+    /// Creates an extra field containing the supplied properties.
+    pub fn new(properties: Vec<SoupProperty>) -> Self {
+        Self { properties }
+    }
 }

@@ -56,8 +56,8 @@ where
     }
 }
 
-impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage<E> {
-    fn from(page: PaginatedOpaqueCursor<FrecencySoupItem>) -> Self {
+impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem<()>>> for SoupPage<E> {
+    fn from(page: PaginatedOpaqueCursor<FrecencySoupItem<()>>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
             items: page.items.into_iter().map(GraphqlSoupItem::from).collect(),
@@ -97,8 +97,8 @@ where
     }
 }
 
-impl<E: SoupEntityEdges> From<FrecencySoupItem> for GraphqlSoupItem<E> {
-    fn from(item: FrecencySoupItem) -> Self {
+impl<E: SoupEntityEdges> From<FrecencySoupItem<()>> for GraphqlSoupItem<E> {
+    fn from(item: FrecencySoupItem<()>) -> Self {
         let FrecencySoupItem {
             item,
             frecency_score,
@@ -140,11 +140,11 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     ForeignEntity(GraphqlSoupForeignEntity<E>),
 }
 
-impl<E> From<SoupItem> for GraphqlSoupEntity<E>
+impl<E> From<SoupItem<()>> for GraphqlSoupEntity<E>
 where
     E: SoupEntityEdges,
 {
-    fn from(item: SoupItem) -> Self {
+    fn from(item: SoupItem<()>) -> Self {
         match item {
             SoupItem::Document(item) => {
                 let edges = E::from_entity(
@@ -208,7 +208,7 @@ where
 }
 
 /// GraphQL document entity.
-pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument, E);
+pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument<()>, E);
 
 #[Object(name = "GraphqlSoupDocument")]
 impl<E> GraphqlSoupDocument<E>
@@ -297,7 +297,7 @@ impl GraphqlSoupDocumentSubType {
 }
 
 /// GraphQL chat entity.
-pub struct GraphqlSoupChat<E: SoupEntityEdges>(SoupChat, E);
+pub struct GraphqlSoupChat<E: SoupEntityEdges>(SoupChat<()>, E);
 
 #[Object(name = "GraphqlSoupChat")]
 impl<E> GraphqlSoupChat<E>
@@ -347,7 +347,7 @@ where
 }
 
 /// GraphQL project entity.
-pub struct GraphqlSoupProject<E: SoupEntityEdges>(SoupProject, E);
+pub struct GraphqlSoupProject<E: SoupEntityEdges>(SoupProject<()>, E);
 
 #[Object(name = "GraphqlSoupProject")]
 impl<E> GraphqlSoupProject<E>
@@ -571,7 +571,7 @@ impl GraphqlSoupEmailAttachment {
 }
 
 /// GraphQL email thread entity.
-pub struct GraphqlSoupEmailThread<E: SoupEntityEdges>(SoupEnrichedEmailThreadPreview, E);
+pub struct GraphqlSoupEmailThread<E: SoupEntityEdges>(SoupEnrichedEmailThreadPreview<()>, E);
 
 #[Object(name = "GraphqlSoupEmailThread")]
 impl<E> GraphqlSoupEmailThread<E>
@@ -952,7 +952,7 @@ impl GraphqlSoupCallParticipant {
 }
 
 /// GraphQL call entity.
-pub struct GraphqlSoupCall<E: SoupEntityEdges>(SoupCallRecord, E);
+pub struct GraphqlSoupCall<E: SoupEntityEdges>(SoupCallRecord<()>, E);
 
 #[Object(name = "GraphqlSoupCall")]
 impl<E> GraphqlSoupCall<E>
@@ -1045,7 +1045,7 @@ where
 }
 
 /// GraphQL CRM company entity.
-pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany, E);
+pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E);
 
 #[Object(name = "GraphqlSoupCrmCompany")]
 impl<E> GraphqlSoupCrmCompany<E>

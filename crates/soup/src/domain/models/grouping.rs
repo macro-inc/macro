@@ -50,9 +50,9 @@ pub struct GroupMeta {
 
 /// Result of building a grouped response.
 #[derive(Debug)]
-pub struct GroupedResponse {
+pub struct GroupedResponse<T> {
     /// Items pool keyed by id. Ordering is described by `groups[].item_ids`.
-    pub items: HashMap<Uuid, FrecencySoupItem>,
+    pub items: HashMap<Uuid, FrecencySoupItem<T>>,
     /// Group metadata for each group.
     pub groups: Vec<GroupMeta>,
     /// Page-level cursor for loading more items.
@@ -60,13 +60,13 @@ pub struct GroupedResponse {
 }
 
 /// Build a grouped response from grouped soup items.
-pub fn build_grouped_response(
-    items: Vec<super::GroupedSoupItem>,
+pub fn build_grouped_response<T>(
+    items: Vec<super::GroupedSoupItem<T>>,
     group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
     filters: EntityFilterAst,
-) -> GroupedResponse {
+) -> GroupedResponse<T> {
     struct GroupData {
         total_count: u32,
         item_ids: Vec<Uuid>,
@@ -77,7 +77,7 @@ pub fn build_grouped_response(
     }
 
     let mut group_stats: HashMap<String, GroupData> = HashMap::new();
-    let mut items_pool: HashMap<Uuid, FrecencySoupItem> = HashMap::with_capacity(items.len());
+    let mut items_pool: HashMap<Uuid, FrecencySoupItem<T>> = HashMap::with_capacity(items.len());
     let mut get_cursor_val = SoupItem::sort_on(sort_method);
 
     for grouped_item in items.into_iter() {

@@ -124,8 +124,8 @@ use models_soup::email_thread::{
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::foreign_entity::SoupForeignEntity;
-use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
+use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
@@ -403,11 +403,12 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
-            SoupItem,
+            SoupItemWithProperties,
             SoupApiItem,
-            SoupDocument,
-            SoupChat,
-            SoupProject,
+            SoupDocument<SoupPropertiesField>,
+            SoupChat<SoupPropertiesField>,
+            SoupProject<SoupPropertiesField>,
+            SoupPropertiesField,
             SoupForeignEntity,
             ForeignEntity,
             Favorite,
@@ -417,7 +418,7 @@ use utoipa::OpenApi;
             ReorderFavoritesRequest,
             SoupApiSort,
             SoupPage,
-            SoupEnrichedEmailThreadPreview,
+            SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
             SoupEmailThreadPreview,
             SoupAttachment,
             SoupContact,
@@ -519,7 +520,7 @@ use utoipa::OpenApi;
             call::domain::models::GetBatchCallRecordPreviewResponse,
             call::domain::models::RingStatus,
             call::domain::models::RingStatusResponse,
-            SoupCallRecord,
+            SoupCallRecord<SoupPropertiesField>,
             SoupCallRecordParticipant,
 
             // Webhooks

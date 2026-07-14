@@ -28,7 +28,7 @@ use crate::{
     domain::{
         models::{
             FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
+            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -72,13 +72,29 @@ impl MockSoup {
 impl SoupService for MockSoup {
     async fn get_user_soup<T>(
         &self,
-        req: SoupRequest<T>,
+        _req: SoupRequest<T>,
         _team_receipt: Option<
             entity_access::domain::models::EntityAccessReceipt<
                 entity_access::domain::models::MemberTeamRole,
             >,
         >,
     ) -> Result<SoupOutput<T>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T, SoupPropertiesField>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -113,7 +129,7 @@ impl SoupService for MockSoup {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
+    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 

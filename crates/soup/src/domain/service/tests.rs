@@ -24,9 +24,10 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use item_filters::{
     ChannelThreadFilters, EntityFilters, ForeignEntityFilters,
-    ast::foreign_entity::ForeignEntityLiteral,
+    ast::{EntityFilterAst, foreign_entity::ForeignEntityLiteral},
 };
 use model_entity::EntityType;
+use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
     TypeEraseCursor,
@@ -467,8 +468,8 @@ fn soup_document_with_is_completed(
         updated_at,
         viewed_at: Default::default(),
         sub_type: is_completed.map(|is_completed| SoupDocumentSubType::Task { is_completed }),
-        properties: Default::default(),
         deleted_at: None,
+        extra: (),
     }
 }
 
@@ -971,9 +972,7 @@ async fn it_should_not_query_frecency() {
                     .collect())
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    soup_mock.expect_populate_properties().times(0);
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1007,6 +1006,136 @@ async fn it_should_not_query_frecency() {
     dbg!(&res);
 
     assert_eq!(res.items.len(), 10)
+}
+
+#[tokio::test]
+async fn properties_are_populated_once_after_pagination() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move {
+                Ok((0..100)
+                    .map(|i| soup_document(&format!("document-{i}")))
+                    .map(SoupItem::Document)
+                    .collect())
+            })
+        });
+    soup_mock
+        .expect_populate_properties()
+        .withf(|user_id, items| user_id.as_ref() == "macro|test@example.com" && items.len() == 20)
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup_with_properties(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![Uuid::new_v4()],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilters::default(),
+            ),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .type_erase();
+
+    assert_eq!(res.items.len(), 20);
+    assert!(res.items.into_iter().all(|item| match item.item {
+        SoupItem::Document(document) => document.extra.properties.is_empty(),
+        _ => false,
+    }));
+}
+
+#[tokio::test]
+async fn grouped_properties_are_populated_by_the_service() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|_| {
+            Box::pin(async move {
+                Ok(vec![GroupedSoupItem {
+                    item: SoupItem::Document(soup_document("grouped-document")),
+                    frecency_score: None,
+                    group_key: "document".to_string(),
+                    group_total_count: 1,
+                    row_in_group: 1,
+                    group_label: Some("Documents".to_string()),
+                    group_display_order: Some(1),
+                }])
+            })
+        });
+    soup_mock
+        .expect_populate_properties()
+        .withf(|_, items| items.len() == 1)
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+
+    let service = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    );
+    let items = service
+        .get_user_soup_grouped(GroupedSortRequest {
+            limit: 20,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].group_key, "document");
+    assert_eq!(items[0].group_label.as_deref(), Some("Documents"));
+    assert!(match &items[0].item {
+        SoupItem::Document(document) => document.extra.properties.is_empty(),
+        _ => false,
+    });
 }
 
 #[tokio::test]
@@ -1582,9 +1711,6 @@ async fn cursor_should_return_simple_sort() {
                 .collect();
             Box::pin(async move { Ok(res) })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1716,9 +1842,6 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
                 ))])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1768,9 +1891,6 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
                 ))])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1820,9 +1940,6 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
                 ))])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -1884,9 +2001,6 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
                 ])
             })
         });
-    soup_mock
-        .expect_populate_properties()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
