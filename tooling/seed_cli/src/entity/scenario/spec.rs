@@ -223,6 +223,38 @@ pub struct DocumentSpec {
     pub public: Option<ShareLevel>,
 }
 
+/// A task in the scenario: a markdown document with the task subtype plus
+/// status/assignee properties.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskSpec {
+    /// Owner user key.
+    pub owner: String,
+    /// Display name. Defaults to the key.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Inline markdown body. Defaults to an empty document.
+    #[serde(default)]
+    pub content: Option<String>,
+    /// Project key this task lives in.
+    #[serde(default)]
+    pub project: Option<String>,
+    /// Status option: `not_started` (default), `in_progress`, `in_review`,
+    /// `completed`, or `canceled`.
+    #[serde(default)]
+    pub status: Option<String>,
+    /// Assignee user keys. Defaults to the owner.
+    #[serde(default)]
+    pub assignees: Vec<String>,
+    /// Grant the owner's team comment access, like the app's
+    /// share-with-team toggle on tasks.
+    #[serde(default)]
+    pub share_with_team: bool,
+    /// Access grants on the task.
+    #[serde(default)]
+    pub share: Vec<ShareSpec>,
+}
+
 /// An AI chat in the scenario.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -366,6 +398,9 @@ pub struct ScenarioSpec {
     /// Documents keyed by a short name.
     #[serde(default)]
     pub documents: BTreeMap<String, DocumentSpec>,
+    /// Tasks keyed by a short name.
+    #[serde(default)]
+    pub tasks: BTreeMap<String, TaskSpec>,
     /// AI chats keyed by a short name.
     #[serde(default)]
     pub chats: BTreeMap<String, ChatSpec>,
@@ -460,6 +495,11 @@ impl ScenarioSpec {
     /// The derived document id (text) for a document key.
     pub fn document_id(&self, key: &str) -> String {
         derive_id(&self.scenario, "document", key).to_string()
+    }
+
+    /// The derived task document id (text) for a task key.
+    pub fn task_id(&self, key: &str) -> String {
+        derive_id(&self.scenario, "task", key).to_string()
     }
 
     /// The derived chat id (text) for a chat key.
@@ -742,6 +782,37 @@ impl ScenarioSpec {
                 ));
             }
             check_shares(&mut errors, &format!("document `{key}`"), &document.share);
+        }
+
+        for (key, task) in &self.tasks {
+            user_exists(&mut errors, &format!("task `{key}` owner"), &task.owner);
+            for assignee in &task.assignees {
+                user_exists(&mut errors, &format!("task `{key}` assignee"), assignee);
+            }
+            if let Some(project) = task.project.as_deref()
+                && !self.projects.contains_key(project)
+            {
+                errors.push(format!(
+                    "task `{key}` references unknown project `{project}`"
+                ));
+            }
+            if let Some(status) = task.status.as_deref()
+                && system_properties::StatusOption::try_from(status).is_err()
+            {
+                errors.push(format!(
+                    "task `{key}` has unknown status `{status}` (expected not_started, in_progress, in_review, completed, or canceled)"
+                ));
+            }
+            if task.share_with_team
+                && self.users.contains_key(&task.owner)
+                && self.team_of(&task.owner).is_none()
+            {
+                errors.push(format!(
+                    "task `{key}` sets share_with_team but owner `{}` is not on a team",
+                    task.owner
+                ));
+            }
+            check_shares(&mut errors, &format!("task `{key}`"), &task.share);
         }
 
         for (key, chat) in &self.chats {

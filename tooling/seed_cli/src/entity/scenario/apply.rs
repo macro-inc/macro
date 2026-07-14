@@ -27,6 +27,7 @@ use models_email::email::service::link::{Link, UserProvider};
 use models_email::email::service::message::Message;
 use models_email::email::service::thread::Thread;
 use models_permissions::share_permission::SharePermissionV2;
+use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use super::reset::{reset_contacts_outbox_statement, reset_statements};
@@ -171,6 +172,7 @@ pub async fn apply(
     seed_channels(ctx, spec).await?;
     seed_projects(ctx, spec).await?;
     seed_documents(ctx, spec, seed_dir).await?;
+    seed_tasks(ctx, spec).await?;
     seed_chats(ctx, spec).await?;
     seed_calls(ctx, spec).await?;
     seed_emails(ctx, spec).await?;
@@ -443,6 +445,49 @@ fn share_permission(spec: &ScenarioSpec, owner_key: &str, level: ShareLevel) -> 
     }
 }
 
+/// Native markdown documents live in sync-service, not object storage:
+/// markdown -> loro snapshot (via lexical) -> boot the document's durable
+/// object, then mark the content ready.
+async fn initialize_markdown_content(
+    ctx: &SeedCliContext,
+    key: &str,
+    document_id: &str,
+    markdown: &str,
+) -> anyhow::Result<()> {
+    match ctx.doc_content.as_ref() {
+        Some(clients) => {
+            let snapshot = if markdown.trim().is_empty() {
+                MARKDOWN_GOLDEN_SNAPSHOT.to_vec()
+            } else {
+                clients
+                    .lexical
+                    .markdown_to_loro_snapshot(markdown)
+                    .await
+                    .context("converting markdown via lexical-service")?
+            };
+            // Sync-service refuses to initialize a document that already
+            // has a snapshot (and the local worker has no delete route), so
+            // a re-apply keeps whatever content is already there.
+            if clients.sync.exists(document_id).await.unwrap_or(false) {
+                println!("  `{key}`: sync-service already has content for this id, keeping it");
+            } else {
+                clients
+                    .sync
+                    .initialize_from_snapshot(document_id, &snapshot)
+                    .await
+                    .context("initializing document in sync-service")?;
+            }
+            ctx.db
+                .set_document_content_ready(document_id, "sync_service")
+                .await?;
+        }
+        None => println!(
+            "  `{key}`: SYNC_SERVICE_URL/LEXICAL_SERVICE_URL unset — content left pending, the doc won't open"
+        ),
+    }
+    Ok(())
+}
+
 async fn seed_documents(
     ctx: &SeedCliContext,
     spec: &ScenarioSpec,
@@ -528,33 +573,7 @@ async fn seed_documents(
         };
 
         if let Some(markdown) = markdown {
-            // Native markdown documents live in sync-service, not object
-            // storage: markdown -> loro snapshot (via lexical) -> boot the
-            // document's durable object, then mark the content ready.
-            match ctx.doc_content.as_ref() {
-                Some(clients) => {
-                    let snapshot = if markdown.trim().is_empty() {
-                        MARKDOWN_GOLDEN_SNAPSHOT.to_vec()
-                    } else {
-                        clients
-                            .lexical
-                            .markdown_to_loro_snapshot(&markdown)
-                            .await
-                            .context("converting markdown via lexical-service")?
-                    };
-                    clients
-                        .sync
-                        .initialize_from_snapshot(&document_id, &snapshot)
-                        .await
-                        .context("initializing document in sync-service")?;
-                    ctx.db
-                        .set_document_content_ready(&document_id, "sync_service")
-                        .await?;
-                }
-                None => println!(
-                    "  document `{key}`: SYNC_SERVICE_URL/LEXICAL_SERVICE_URL unset — content left pending, the doc won't open"
-                ),
-            }
+            initialize_markdown_content(ctx, key, &document_id, &markdown).await?;
         } else if let Some(file) = document.file.as_deref() {
             let file_type = file_type.expect("file implies file type");
             let s3_key = format!(
@@ -593,6 +612,122 @@ async fn seed_documents(
         .await?;
 
         println!("  document `{key}` -> {document_id}");
+    }
+    Ok(())
+}
+
+async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result<()> {
+    if spec.tasks.is_empty() {
+        return Ok(());
+    }
+    println!("Seeding {} tasks", spec.tasks.len());
+
+    for (key, task) in &spec.tasks {
+        let document_id = spec.task_id(key);
+        let name = task.name.as_deref().unwrap_or(key);
+        let owner_id = spec.user_id(&task.owner);
+        let owner =
+            MacroUserIdStr::parse_from_str(owner_id.clone().leak()).context("valid owner id")?;
+
+        let project_id = task.project.as_deref().map(|p| spec.project_id(p));
+        let project_name = task.project.as_deref().map(|p| {
+            spec.projects[p]
+                .name
+                .clone()
+                .unwrap_or_else(|| p.to_string())
+        });
+
+        ctx.db
+            .create_document(CreateDocumentArgs {
+                id: Some(&document_id),
+                sha: "sha",
+                document_name: name,
+                user_id: owner.clone(),
+                file_type: Some(FileType::Md),
+                project_id: project_id.as_deref(),
+                project_name: project_name.as_deref(),
+                share_permission: &SharePermissionV2 {
+                    id: String::new(),
+                    owner: owner_id.clone(),
+                    is_public: false,
+                    public_access_level: None,
+                    channel_share_permissions: None,
+                },
+                skip_history: true,
+                email_attachment_id: None,
+                created_at: None,
+                is_task: true,
+            })
+            .await?;
+
+        let markdown = task.content.clone().unwrap_or_default();
+        initialize_markdown_content(ctx, key, &document_id, &markdown).await?;
+
+        let mut rows: Vec<AccessRow> = task.share.iter().map(|s| share_to_row(spec, s)).collect();
+        if task.share_with_team
+            && let Some(team) = spec.team_of(&task.owner)
+        {
+            // Mirrors the app's share-with-team toggle on tasks: the owner's
+            // team gets comment access.
+            rows.push(AccessRow {
+                source_id: spec.team_id(team).to_string(),
+                source_type: EntityAccessSourceType::Team,
+                access_level: AccessLevel::Comment,
+                granted_from_project_id: None,
+            });
+        }
+        if let Some(project) = task.project.as_deref() {
+            rows.extend(inherited_rows(spec, project));
+        }
+        apply_access_rows(ctx, &document_id, EntityType::Document, &rows).await?;
+        apply_channel_share_rows(
+            ctx,
+            spec,
+            &document_id,
+            ShareableItemType::Document,
+            &task.share,
+        )
+        .await?;
+
+        let status = task
+            .status
+            .as_deref()
+            .map(system_properties::StatusOption::try_from)
+            .transpose()
+            .map_err(|e| anyhow::anyhow!("task `{key}`: {e}"))?
+            .unwrap_or(system_properties::StatusOption::NotStarted);
+        properties::outbound::entity_property_queries::upsert_entity_property(
+            &ctx.db.pool(),
+            &document_id,
+            models_properties::EntityType::Document,
+            system_properties::SystemPropertyKey::STATUS_UUID,
+            Some(PropertyValue::SelectOption(vec![status.uuid()])),
+        )
+        .await?;
+
+        let assignees: Vec<&String> = if task.assignees.is_empty() {
+            vec![&task.owner]
+        } else {
+            task.assignees.iter().collect()
+        };
+        let references = assignees
+            .iter()
+            .map(|assignee| models_properties::EntityReference {
+                entity_id: spec.user_id(assignee),
+                entity_type: models_properties::EntityType::User,
+                specific_message_id: None,
+            })
+            .collect();
+        properties::outbound::entity_property_queries::upsert_entity_property(
+            &ctx.db.pool(),
+            &document_id,
+            models_properties::EntityType::Document,
+            system_properties::SystemPropertyKey::ASSIGNEES_UUID,
+            Some(PropertyValue::EntityRef(references)),
+        )
+        .await?;
+
+        println!("  task `{key}` -> {document_id}");
     }
     Ok(())
 }

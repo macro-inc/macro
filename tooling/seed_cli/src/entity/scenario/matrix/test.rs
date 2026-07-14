@@ -186,8 +186,43 @@ fn expected_matrix_row_count_matches_entities() {
     let expected = spec.channels.len()
         + spec.projects.len()
         + spec.documents.len()
+        + spec.tasks.len()
         + spec.chats.len()
         + spec.calls.len()
         + email_threads;
     assert_eq!(rows.len(), expected);
+}
+
+#[test]
+fn task_expectations_cover_team_share_and_inheritance() {
+    let spec = example();
+    let rows = expected_matrix(&spec);
+
+    // ship-tags: alice owns it; the team gets comment via share_with_team;
+    // the project's team view is subsumed by comment; dave/eve see nothing.
+    assert_eq!(
+        level(&rows, "task:ship-tags", "alice"),
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        level(&rows, "task:ship-tags", "bob"),
+        Some(AccessLevel::Comment)
+    );
+    assert_eq!(
+        level(&rows, "task:ship-tags", "carol"),
+        Some(AccessLevel::Comment)
+    );
+    assert_eq!(level(&rows, "task:ship-tags", "dave"), None);
+    assert_eq!(level(&rows, "task:ship-tags", "eve"), None);
+
+    // fix-perms: dave's personal task shared to the eng channel.
+    assert_eq!(
+        level(&rows, "task:fix-perms", "dave"),
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        level(&rows, "task:fix-perms", "alice"),
+        Some(AccessLevel::View)
+    );
+    assert_eq!(level(&rows, "task:fix-perms", "carol"), None);
 }

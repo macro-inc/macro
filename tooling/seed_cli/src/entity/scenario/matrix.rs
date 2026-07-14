@@ -152,6 +152,30 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
         });
     }
 
+    for (task_key, task) in &spec.tasks {
+        let mut access_rows = vec![owner_row(spec, &task.owner)];
+        access_rows.extend(task.share.iter().map(|s| apply::share_to_row(spec, s)));
+        if task.share_with_team
+            && let Some(team) = spec.team_of(&task.owner)
+        {
+            access_rows.push(apply::AccessRow {
+                source_id: spec.team_id(team).to_string(),
+                source_type: entity_access_db_utils::EntityAccessSourceType::Team,
+                access_level: AccessLevel::Comment,
+                granted_from_project_id: None,
+            });
+        }
+        if let Some(project) = task.project.as_deref() {
+            access_rows.extend(apply::inherited_rows(spec, project));
+        }
+        rows.push(ExpectedRow {
+            label: format!("task:{task_key}"),
+            entity_id: spec.task_id(task_key),
+            entity_type: EntityType::Document,
+            levels: levels_from_rows(spec, &access_rows, None),
+        });
+    }
+
     for (chat_key, chat) in &spec.chats {
         let mut access_rows = vec![owner_row(spec, &chat.owner)];
         access_rows.extend(chat.share.iter().map(|s| apply::share_to_row(spec, s)));

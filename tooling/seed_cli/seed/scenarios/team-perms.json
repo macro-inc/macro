@@ -52,6 +52,22 @@
     },
     "bob-notes": { "owner": "bob", "name": "Bob Notes", "file": "md.md" }
   },
+  "tasks": {
+    "ship-tags": {
+      "owner": "alice",
+      "name": "Ship the tagging system",
+      "content": "# Ship the tagging system\n\n- [x] backend\n- [ ] verify perms across entity types\n",
+      "project": "roadmap",
+      "status": "in_progress",
+      "assignees": ["alice", "bob"],
+      "share_with_team": true
+    },
+    "fix-perms": {
+      "owner": "dave",
+      "name": "Fix the perms edge case",
+      "share": [{ "with": "channel:eng", "level": "view" }]
+    }
+  },
   "chats": {
     "alice-ai": {
       "owner": "alice",
