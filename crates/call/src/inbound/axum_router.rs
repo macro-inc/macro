@@ -3,7 +3,7 @@
 //! Two routers are exposed so the consumer can attach different middleware:
 //!
 //! - [`call_router`] — authenticated call operations (get/create, leave/end).
-//!   Requires auth middleware.
+//!   Resolves user authentication from router state.
 //! - [`webhook_router`] — RTC provider webhook ingestion.
 //!   Does **not** require auth middleware (LiveKit signs requests itself).
 
@@ -27,8 +27,8 @@ use entity_access::{
         ChannelAccessLevelExtractor,
     },
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use uuid::Uuid;
 
 use crate::domain::models::{
@@ -46,6 +46,7 @@ use crate::domain::ports::CallService;
 pub struct CallRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
+    authorization: SharedMacroAuthorizationService,
 }
 
 impl<S, Svc> Clone for CallRouterState<S, Svc> {
@@ -53,16 +54,22 @@ impl<S, Svc> Clone for CallRouterState<S, Svc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization: self.authorization.clone(),
         }
     }
 }
 
 impl<S: CallService, Svc: EntityAccessService> CallRouterState<S, Svc> {
-    /// Create a new router state from shared service references.
-    pub fn new(service: Arc<S>, access_service: Arc<Svc>) -> Self {
+    /// Create router state from the call, access, and authorization services.
+    pub fn new(
+        service: Arc<S>,
+        access_service: Arc<Svc>,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             service,
             access_service,
+            authorization,
         }
     }
 }
@@ -70,6 +77,12 @@ impl<S: CallService, Svc: EntityAccessService> CallRouterState<S, Svc> {
 impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
     fn from_ref(state: &CallRouterState<S, Svc>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<S, Svc> FromRef<CallRouterState<S, Svc>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &CallRouterState<S, Svc>) -> Self {
+        state.authorization.clone()
     }
 }
 
@@ -269,7 +282,7 @@ where
 pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
@@ -491,7 +504,7 @@ pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessSer
 #[tracing::instrument(err, skip_all)]
 pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(request): Json<GetBatchCallRecordPreviewRequest>,
 ) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
     if request.call_ids.len() > MAX_BATCH_CALL_IDS {
@@ -526,7 +539,7 @@ pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAc
 pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>(
     State(state): State<CallRouterState<S, Svc>>,
     access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
     let channel_id = access.channel_id;
 

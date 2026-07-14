@@ -1,18 +1,22 @@
 //! Axum router for favorites endpoints.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{FromRef, Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::Deserialize;
 
 use crate::domain::{
@@ -24,6 +28,7 @@ use crate::domain::{
 pub struct FavoritesRouterState<S, AccessSvc> {
     service: Arc<S>,
     access_service: Arc<AccessSvc>,
+    authorization: SharedMacroAuthorizationService,
 }
 
 impl<S, AccessSvc> Clone for FavoritesRouterState<S, AccessSvc> {
@@ -31,7 +36,14 @@ impl<S, AccessSvc> Clone for FavoritesRouterState<S, AccessSvc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization: self.authorization.clone(),
         }
+    }
+}
+
+impl<S, AccessSvc> FromRef<FavoritesRouterState<S, AccessSvc>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &FavoritesRouterState<S, AccessSvc>) -> Self {
+        state.authorization.clone()
     }
 }
 
@@ -41,10 +53,15 @@ where
     AccessSvc: EntityAccessService,
 {
     /// Create router state from shared service references.
-    pub fn new(service: Arc<S>, access_service: Arc<AccessSvc>) -> Self {
+    pub fn new(
+        service: Arc<S>,
+        access_service: Arc<AccessSvc>,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             service,
             access_service,
+            authorization,
         }
     }
 }
@@ -59,7 +76,7 @@ where
 /// "no access" and are rejected.
 async fn ensure_entity_access<AccessSvc>(
     access_service: &AccessSvc,
-    user: &MacroUserExtractor,
+    user_id: &MacroUserIdStr<'_>,
     entity_type: EntityType,
     entity_id: &str,
 ) -> Result<(), FavoritesApiError>
@@ -67,7 +84,7 @@ where
     AccessSvc: EntityAccessService,
 {
     let access = access_service
-        .get_access_level(Some(&user.macro_user_id), entity_id, entity_type)
+        .get_access_level(Some(user_id), entity_id, entity_type)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "favorites: failed to check entity access");
@@ -166,7 +183,7 @@ pub struct ReorderFavoritesRequest {
 #[tracing::instrument(err, skip_all)]
 pub async fn list_favorites_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<FavoritesList>, FavoritesApiError>
 where
     S: FavoritesService,
@@ -194,7 +211,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn add_favorite_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<AddFavoriteRequest>,
 ) -> Result<Json<Favorite>, FavoritesApiError>
 where
@@ -206,7 +223,7 @@ where
     // private-channel type) they were never allowed to see.
     ensure_entity_access(
         state.access_service.as_ref(),
-        &user,
+        &user.macro_user_id,
         req.entity_type,
         &req.entity_id,
     )
@@ -236,7 +253,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn remove_favorite_by_entity_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(params): Path<RemoveFavoriteByEntityParams>,
 ) -> Result<Json<()>, FavoritesApiError>
 where
@@ -268,7 +285,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn reorder_favorites_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<ReorderFavoritesRequest>,
 ) -> Result<Json<()>, FavoritesApiError>
 where

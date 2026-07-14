@@ -1,12 +1,12 @@
 use crate::domain::MemoryService;
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{FromRef, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use serde::Serialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -24,14 +24,43 @@ pub struct MemoryErrorBody {
     pub error: String,
 }
 
-pub fn memory_router<T, S>(service: Arc<T>) -> Router<S>
+/// State for the memory router.
+pub struct MemoryRouterState<T> {
+    /// The memory service implementation.
+    pub service: Arc<T>,
+    /// The authorization service used to authenticate callers.
+    pub authorization: SharedMacroAuthorizationService,
+}
+
+impl<T> Clone for MemoryRouterState<T> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            authorization: self.authorization.clone(),
+        }
+    }
+}
+
+impl<T> FromRef<MemoryRouterState<T>> for Arc<T> {
+    fn from_ref(state: &MemoryRouterState<T>) -> Self {
+        state.service.clone()
+    }
+}
+
+impl<T> FromRef<MemoryRouterState<T>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &MemoryRouterState<T>) -> Self {
+        state.authorization.clone()
+    }
+}
+
+pub fn memory_router<T, S>(state: MemoryRouterState<T>) -> Router<S>
 where
     T: MemoryService + Send + Sync + 'static,
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
         .route("/memory", get(get_memory_handler::<T>))
-        .with_state(service)
+        .with_state(state)
 }
 
 /// Get the authenticated user's latest memory.
@@ -52,7 +81,7 @@ where
 #[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
 pub async fn get_memory_handler<T: MemoryService>(
     State(service): State<Arc<T>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Response {
     match service.get_or_generate_memory(user.macro_user_id).await {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),

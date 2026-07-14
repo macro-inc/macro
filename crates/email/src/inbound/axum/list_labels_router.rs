@@ -1,5 +1,6 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use axum_extra::extract::Cached;
+use macro_authorization::SharedMacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -49,6 +50,7 @@ where
     S: Send + Sync + Clone + 'static,
     T: EmailService,
     EmailRouterState<T>: axum::extract::FromRef<S>,
+    SharedMacroAuthorizationService: axum::extract::FromRef<S>,
 {
     Router::new().route("/", get(list_labels_handler::<T>))
 }

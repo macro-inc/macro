@@ -82,6 +82,7 @@ impl From<EmailErr> for CreateDraftError {
     responses(
         (status = 201, body = CreateDraftResponse),
         (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )

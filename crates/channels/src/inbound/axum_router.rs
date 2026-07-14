@@ -42,9 +42,9 @@ use entity_access::{
     },
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
     Base64Str, BidirectionalCursor, CreatedAt, Cursor, CursorOptionExt, CursorVal,
     CursorWithValAndFilter, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
@@ -57,6 +57,7 @@ use uuid::Uuid;
 pub struct ChannelsRouterState<S, Svc> {
     service: Arc<S>,
     access_service: Arc<Svc>,
+    authorization: SharedMacroAuthorizationService,
 }
 
 impl<S, Svc> Clone for ChannelsRouterState<S, Svc> {
@@ -64,16 +65,22 @@ impl<S, Svc> Clone for ChannelsRouterState<S, Svc> {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization: self.authorization.clone(),
         }
     }
 }
 
 impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
-    /// Create a router state wrapping the channel service and entity access service.
-    pub fn new(service: S, access_service: Svc) -> Self {
+    /// Create state wrapping the channel, entity access, and authorization services.
+    pub fn new(
+        service: S,
+        access_service: Svc,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             service: Arc::new(service),
             access_service: Arc::new(access_service),
+            authorization,
         }
     }
 
@@ -81,10 +88,15 @@ impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
     ///
     /// Used when the channel service must also be shared with other components
     /// (such as the bot trigger dispatcher) that post messages through it.
-    pub fn from_arc(service: Arc<S>, access_service: Svc) -> Self {
+    pub fn from_arc(
+        service: Arc<S>,
+        access_service: Svc,
+        authorization: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             service,
             access_service: Arc::new(access_service),
+            authorization,
         }
     }
 }
@@ -92,6 +104,12 @@ impl<S: ChannelService, Svc: EntityAccessService> ChannelsRouterState<S, Svc> {
 impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for Arc<Svc> {
     fn from_ref(state: &ChannelsRouterState<S, Svc>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<S, Svc> FromRef<ChannelsRouterState<S, Svc>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &ChannelsRouterState<S, Svc>) -> Self {
+        state.authorization.clone()
     }
 }
 
@@ -363,7 +381,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<CreateChannelRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
@@ -395,7 +413,7 @@ pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>
 #[tracing::instrument(err, skip_all)]
 pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<GetOrCreateDmRequest>,
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
@@ -423,7 +441,7 @@ pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessServic
 #[tracing::instrument(err, skip_all)]
 pub async fn get_or_create_private_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<GetOrCreatePrivateRequest>,
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
@@ -747,7 +765,7 @@ pub async fn remove_participants_handler<S: ChannelService, Svc: EntityAccessSer
 pub async fn join_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
     Path(path): Path<ChannelPath>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = path.channel_id;
     state
@@ -844,7 +862,7 @@ fn map_access_error(err: AccessError) -> ChannelsHandlerErr {
 #[tracing::instrument(err, skip_all)]
 pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    macro_user: MacroUserExtractor,
+    macro_user: SharedMacroAuthorizationExtractor,
     Json(req): Json<CreateEntityMentionRequest>,
 ) -> Result<(StatusCode, Json<CreateEntityMentionResponse>), ChannelsHandlerErr> {
     require_document_edit_access(
@@ -900,7 +918,7 @@ pub async fn create_mention_handler<S: ChannelService, Svc: EntityAccessService>
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_mention_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    macro_user: MacroUserExtractor,
+    macro_user: SharedMacroAuthorizationExtractor,
     Path(mention_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DeleteEntityMentionResponse>), ChannelsHandlerErr> {
     let mention = state
@@ -1417,11 +1435,11 @@ pub async fn get_channel_participants_handler<S: ChannelService, Svc: EntityAcce
 #[tracing::instrument(err, skip_all)]
 pub async fn get_batch_channel_preview_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    MacroUserExtractor {
+    SharedMacroAuthorizationExtractor {
         macro_user_id,
         user_context,
         ..
-    }: MacroUserExtractor,
+    }: SharedMacroAuthorizationExtractor,
     Json(req): Json<GetBatchChannelPreviewRequest>,
 ) -> Result<Json<GetBatchChannelPreviewResponse>, ChannelsHandlerErr> {
     let org_id = user_context.organization_id.map(i64::from);
@@ -1458,7 +1476,7 @@ pub async fn get_batch_channel_preview_handler<S: ChannelService, Svc: EntityAcc
 )]
 pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(path): Path<AttachmentReferencesPath>,
 ) -> Result<Json<GetAttachmentReferencesResponse>, ChannelsHandlerErr> {
     let span = tracing::Span::current();
@@ -1498,7 +1516,7 @@ pub async fn get_attachment_references_handler<S: ChannelService, Svc: EntityAcc
 #[tracing::instrument(err, skip_all)]
 pub async fn get_activity_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> Result<Json<Vec<ApiActivity>>, ChannelsHandlerErr> {
     let activities = state
         .service
@@ -1527,7 +1545,7 @@ pub async fn get_activity_handler<S: ChannelService, Svc: EntityAccessService>(
 #[tracing::instrument(err, skip_all)]
 pub async fn post_activity_handler<S: ChannelService, Svc: EntityAccessService>(
     State(state): State<ChannelsRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<PostActivityRequest>,
 ) -> Result<(StatusCode, Json<ApiActivity>), ChannelsHandlerErr> {
     let channel_id = Uuid::parse_str(&req.channel_id)

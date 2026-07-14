@@ -5,8 +5,7 @@
 //! the entity access service (used for team-membership extraction).
 //!
 //! The composition root supplies the concrete services via
-//! [`PropertiesRouterState`] plus the authentication middleware layer applied
-//! to the routes that require an authenticated user.
+//! [`PropertiesRouterState`].
 
 pub mod definitions;
 pub mod entities;
@@ -14,20 +13,18 @@ pub mod extract;
 pub mod options;
 pub mod tags;
 
-use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::{
     Router,
-    extract::{FromRef, Request},
+    extract::FromRef,
     http::StatusCode,
-    response::IntoResponse,
-    routing::{Route, delete, get, post, put},
+    routing::{delete, get, post, put},
 };
 use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractor;
-use tower::{Layer, Service};
+use macro_authorization::SharedMacroAuthorizationService;
 
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
@@ -36,6 +33,7 @@ use crate::domain::service::PropertiesService;
 pub struct PropertiesRouterState<S, A> {
     properties_service: Arc<S>,
     entity_access_service: Arc<A>,
+    authorization_service: SharedMacroAuthorizationService,
 }
 
 impl<S, A> Clone for PropertiesRouterState<S, A> {
@@ -43,16 +41,22 @@ impl<S, A> Clone for PropertiesRouterState<S, A> {
         Self {
             properties_service: self.properties_service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            authorization_service: self.authorization_service.clone(),
         }
     }
 }
 
 impl<S: PropertiesService, A: EntityAccessService> PropertiesRouterState<S, A> {
-    /// Create a router state wrapping the properties service and entity access service.
-    pub fn new(properties_service: Arc<S>, entity_access_service: Arc<A>) -> Self {
+    /// Create a router state wrapping the properties, entity access, and authorization services.
+    pub fn new(
+        properties_service: Arc<S>,
+        entity_access_service: Arc<A>,
+        authorization_service: SharedMacroAuthorizationService,
+    ) -> Self {
         Self {
             properties_service,
             entity_access_service,
+            authorization_service,
         }
     }
 }
@@ -61,6 +65,12 @@ impl<S: PropertiesService, A: EntityAccessService> PropertiesRouterState<S, A> {
 impl<S, A> FromRef<PropertiesRouterState<S, A>> for Arc<A> {
     fn from_ref(state: &PropertiesRouterState<S, A>) -> Self {
         state.entity_access_service.clone()
+    }
+}
+
+impl<S, A> FromRef<PropertiesRouterState<S, A>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &PropertiesRouterState<S, A>) -> Self {
+        state.authorization_service.clone()
     }
 }
 
@@ -88,51 +98,35 @@ pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
 }
 
 /// Creates the properties router.
-///
-/// `ensure_user_exists` is the authentication middleware layer applied to every
-/// route that requires an authenticated user (all except the anonymous-capable
-/// entity property GET and the internal endpoints).
-pub fn router<S, A, L>(ensure_user_exists: L) -> Router<PropertiesRouterState<S, A>>
+pub fn router<S, A>() -> Router<PropertiesRouterState<S, A>>
 where
     S: PropertiesService,
     A: EntityAccessService,
-    L: Layer<Route> + Clone + Send + Sync + 'static,
-    L::Service: Service<Request> + Clone + Send + Sync + 'static,
-    <L::Service as Service<Request>>::Response: IntoResponse + 'static,
-    <L::Service as Service<Request>>::Error: Into<Infallible> + 'static,
-    <L::Service as Service<Request>>::Future: Send + 'static,
 {
     Router::new()
         // Property Definition Management - requires authentication
         .route(
             "/definitions",
             get(definitions::list_properties::<S, A>)
-                .post(definitions::create_property_definition::<S, A>)
-                .layer(ensure_user_exists.clone()),
+                .post(definitions::create_property_definition::<S, A>),
         )
         .route(
             "/definitions/{definition_id}",
-            delete(definitions::delete_property_definition::<S, A>)
-                .layer(ensure_user_exists.clone()),
+            delete(definitions::delete_property_definition::<S, A>),
         )
         // Property Options Management - requires authentication
         .route(
             "/definitions/{definition_id}/options",
-            get(options::get_property_options::<S, A>)
-                .post(options::add_property_option::<S, A>)
-                .layer(ensure_user_exists.clone()),
+            get(options::get_property_options::<S, A>).post(options::add_property_option::<S, A>),
         )
         .route(
             "/definitions/{definition_id}/options/{option_id}",
             delete(options::delete_property_option::<S, A>)
-                .patch(options::update_property_option::<S, A>)
-                .layer(ensure_user_exists.clone()),
+                .patch(options::update_property_option::<S, A>),
         )
         .route(
             "/tags",
-            get(tags::list_tags::<S, A>)
-                .post(tags::ensure_tag_set::<S, A>)
-                .layer(ensure_user_exists.clone()),
+            get(tags::list_tags::<S, A>).post(tags::ensure_tag_set::<S, A>),
         )
         // Entity Property Operations
         // GET allows anonymous access for public entities
@@ -143,22 +137,21 @@ where
         // Bulk entity properties - requires authentication
         .route(
             "/entities/bulk",
-            post(entities::get_bulk_entity_properties::<S, A>).layer(ensure_user_exists.clone()),
+            post(entities::get_bulk_entity_properties::<S, A>),
         )
         // PUT/DELETE require authentication
         .route(
             "/entities/{entity_type}/{entity_id}/{property_id}",
-            put(entities::set_entity_property::<S, A>).layer(ensure_user_exists.clone()),
+            put(entities::set_entity_property::<S, A>),
         )
         // Atomic single-option delta on a multi-select value (merges concurrent edits)
         .route(
             "/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
             post(entities::add_entity_property_option::<S, A>)
-                .delete(entities::remove_entity_property_option::<S, A>)
-                .layer(ensure_user_exists.clone()),
+                .delete(entities::remove_entity_property_option::<S, A>),
         )
         .route(
             "/entity_properties/{entity_property_id}",
-            delete(entities::delete_entity_property::<S, A>).layer(ensure_user_exists),
+            delete(entities::delete_entity_property::<S, A>),
         )
 }

@@ -7,8 +7,8 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
 ]
 default = ["axum", "inbound", "outbound", "ports", "worker"]
@@ -56,8 +56,8 @@ tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
@@ -81,6 +81,7 @@ futures = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+macro_authorization = { path = "../macro_authorization", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 tokio = { workspace = true }

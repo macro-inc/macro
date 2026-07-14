@@ -1,4 +1,4 @@
-///! Tests for the port logic for roles and permissions
+//! Tests for the port logic for roles and permissions
 use super::*;
 
 use macro_user_id::email::ReadEmailParts;
@@ -39,6 +39,17 @@ impl UserRolesAndPermissionsRepository for MockUserRolesAndPermissionsRepository
         Ok(HashSet::new())
     }
 
+    async fn get_user_permissions_for_user_id(
+        &self,
+        user_id: &BorrowedUserIdStr<'_>,
+    ) -> Result<HashSet<Permission>, UserRolesAndPermissionsError> {
+        assert_eq!(user_id.0.as_ref(), "macro|MixedCase@user.com");
+        Ok(HashSet::from([Permission::new(
+            PermissionId::ReadProfessionalFeatures,
+            "professional features".to_string(),
+        )]))
+    }
+
     async fn add_roles_to_user(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -65,6 +76,26 @@ async fn test_get_user_permissions() -> anyhow::Result<()> {
         .await?;
 
     assert_eq!(permissions.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_user_permissions_for_user_id_preserves_casing() -> anyhow::Result<()> {
+    let repository = MockUserRolesAndPermissionsRepository::default();
+    let user_id = BorrowedUserIdStr::try_from("macro|MixedCase@user.com")?;
+
+    let permissions = repository
+        .get_user_permissions_for_user_id(&user_id)
+        .await?;
+
+    assert_eq!(
+        permissions
+            .into_iter()
+            .map(|permission| permission.id)
+            .collect::<HashSet<_>>(),
+        HashSet::from([PermissionId::ReadProfessionalFeatures])
+    );
 
     Ok(())
 }

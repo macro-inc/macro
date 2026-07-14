@@ -3,7 +3,7 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
 
 use super::DocumentRouterState;
@@ -35,7 +35,7 @@ pub async fn create_markdown_handler<
     Svc: EntityAccessService,
 >(
     State(state): State<DocumentRouterState<T, Svc>>,
-    user_context: MacroUserExtractor,
+    user_context: SharedMacroAuthorizationExtractor,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateMarkdownDocumentRequest, Svc>,
 ) -> Result<Json<CreateMarkdownDocumentResponse>, DocumentError> {
     let req = project.into_inner();

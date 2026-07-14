@@ -1,15 +1,15 @@
 use crate::domain::models::messages::ContactsNodes;
 use crate::domain::ports::ContactsService;
-use axum::extract::{FromRequestParts, Json, State};
+use axum::extract::{FromRef, FromRequestParts, Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{RequestPartsExt, Router};
-use axum_extra::extract::Cached;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::MacroUserExtractor;
+use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
-use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -44,12 +44,12 @@ pub struct AddContactRequest {
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(macro_user_id, contacts), fields(user_id = macro_user_id.as_ref()))]
+#[instrument(skip(user, contacts), fields(user_id = user.macro_user_id.as_ref()))]
 pub async fn handler<S: ContactsService>(
     State(contacts): State<Arc<S>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
 ) -> impl IntoResponse {
-    match contacts.query_contacts(macro_user_id).await {
+    match contacts.query_contacts(user.macro_user_id).await {
         Ok(contacts) if !contacts.is_empty() => {
             (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
         }
@@ -69,15 +69,15 @@ pub async fn handler<S: ContactsService>(
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(skip(service, macro_user_id), err)]
+#[instrument(skip(service, user), fields(user_id = user.macro_user_id.as_ref()), err)]
 pub async fn add_contact_handler<S: ContactsService>(
     State(service): State<Arc<S>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(body): Json<AddContactRequest>,
 ) -> Result<StatusCode, StatusCode> {
     service
         .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([macro_user_id, body.user_id]),
+            users: HashSet::from([user.macro_user_id, body.user_id]),
         })
         .await
         .map_err(|e| {
@@ -88,11 +88,12 @@ pub async fn add_contact_handler<S: ContactsService>(
 }
 
 /// Rate limit for adding contacts: 50 requests per user per hour.
-pub struct PerUserAddContactRateLimit(MacroUserExtractor);
+pub struct PerUserAddContactRateLimit(SharedMacroAuthorizationExtractor);
 
 impl<S> RateLimitExtractable<S> for PerUserAddContactRateLimit
 where
-    S: Send + Sync,
+    SharedMacroAuthorizationService: FromRef<S>,
+    S: Send + Sync + 'static,
 {
     fn config() -> RateLimitConfig {
         RateLimitConfig {
@@ -110,51 +111,115 @@ where
 
 impl<S> FromRequestParts<S> for PerUserAddContactRateLimit
 where
-    S: Send + Sync,
+    SharedMacroAuthorizationService: FromRef<S>,
+    S: Send + Sync + 'static,
 {
-    type Rejection = <MacroUserExtractor as FromRequestParts<S>>::Rejection;
+    type Rejection = <SharedMacroAuthorizationExtractor as FromRequestParts<S>>::Rejection;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let Cached(user): Cached<MacroUserExtractor> = parts.extract_with_state(state).await?;
+        let user = parts.extract_with_state(state).await?;
         Ok(Self(user))
     }
 }
 
+/// State shared by contacts handlers and middleware.
+pub struct ContactsRouterState<S, R> {
+    /// The contacts service instance.
+    pub service: Arc<S>,
+    /// The rate limiter service.
+    pub rate_limiter: R,
+    /// The authorization service used to authenticate callers.
+    pub authorization: SharedMacroAuthorizationService,
+}
+
+impl<S, R: Clone> Clone for ContactsRouterState<S, R> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            rate_limiter: self.rate_limiter.clone(),
+            authorization: self.authorization.clone(),
+        }
+    }
+}
+
+impl<S, R> FromRef<ContactsRouterState<S, R>> for Arc<S> {
+    fn from_ref(state: &ContactsRouterState<S, R>) -> Self {
+        state.service.clone()
+    }
+}
+
+impl<S, R> FromRef<ContactsRouterState<S, R>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &ContactsRouterState<S, R>) -> Self {
+        state.authorization.clone()
+    }
+}
+
+// A nominal wrapper avoids overlapping `FromRef` implementations when the
+// service and rate limiter are both generic.
+#[derive(Clone)]
+struct ContactsRateLimiter<R>(R);
+
+impl<S, R: Clone> FromRef<ContactsRouterState<S, R>> for ContactsRateLimiter<R> {
+    fn from_ref(state: &ContactsRouterState<S, R>) -> Self {
+        Self(state.rate_limiter.clone())
+    }
+}
+
+impl<R: RateLimitService> RateLimitService for ContactsRateLimiter<R> {
+    async fn check_rate_limit(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+    ) -> Result<RateLimitResult, rootcause::Report> {
+        self.0.check_rate_limit(key, config).await
+    }
+
+    async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), rootcause::Report> {
+        self.0.rollback_ticket(ticket).await
+    }
+}
+
 /// Builds the contacts API router with rate limiting applied to POST.
-pub fn contacts_router<R: RateLimitService + Clone, S: ContactsService>(
-    rate_limiter: R,
-) -> Router<Arc<S>> {
+pub fn contacts_router<R, S>(state: ContactsRouterState<S, R>) -> Router
+where
+    R: RateLimitService + Clone,
+    S: ContactsService,
+{
     let post_route = Router::new()
         .route("/contacts", axum::routing::post(add_contact_handler))
         .layer(axum::middleware::from_fn_with_state(
-            rate_limiter,
-            rate_limit_middleware::<R, PerUserAddContactRateLimit, R>,
+            state.clone(),
+            rate_limit_middleware::<
+                ContactsRouterState<S, R>,
+                PerUserAddContactRateLimit,
+                ContactsRateLimiter<R>,
+            >,
         ));
 
     Router::new()
         .route("/contacts", get(handler))
         .merge(post_route)
+        .with_state(state)
 }
 
-/// Builds the full API router with JWT auth middleware and rate limiting.
+/// Builds the full API router with authentication and rate limiting.
 pub fn api_router<S: ContactsService>(app_state: AppState<S>) -> Router {
-    contacts_router(app_state.rate_limit_service.clone())
-        .layer(axum::middleware::from_fn_with_state(
-            app_state.jwt_args.clone(),
-            macro_middleware::auth::decode_jwt::handler,
-        ))
-        .with_state(app_state.contacts_service)
+    contacts_router(ContactsRouterState {
+        service: app_state.contacts_service,
+        rate_limiter: app_state.rate_limit_service,
+        authorization: app_state.authorization,
+    })
 }
 
 /// Application state for the contacts HTTP service.
 pub struct AppState<S> {
     /// The port to listen on.
     pub port: usize,
-    /// JWT validation arguments.
-    pub jwt_args: macro_auth::middleware::decode_jwt::JwtValidationArgs,
+    /// The authorization service used to authenticate callers.
+    pub authorization: SharedMacroAuthorizationService,
     /// The contacts service instance.
     pub contacts_service: Arc<S>,
     /// The rate limiter service.

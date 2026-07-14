@@ -2,10 +2,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{Extension, http::StatusCode};
+use axum::http::StatusCode;
 use http_body_util::BodyExt;
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::UserContext;
 use tower::ServiceExt;
 
 use super::{AiProjectionRouterState, ai_projections_router};
@@ -58,14 +61,8 @@ impl AiProjectionService for MockService {
     }
 }
 
-fn test_user_context() -> UserContext {
-    UserContext {
-        user_id: "macro|test@test.com".to_string(),
-        fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
-        permissions: None,
-        organization_id: None,
-    }
-}
+const TEST_TOKEN: &str = "test-token";
+const TEST_USER_ID: &str = "macro|test@test.com";
 
 fn build_router(has_permission: bool) -> axum::Router {
     build_router_with(Arc::new(MockService {
@@ -75,8 +72,12 @@ fn build_router(has_permission: bool) -> axum::Router {
 }
 
 fn build_router_with(service: Arc<MockService>) -> axum::Router {
-    let state = AiProjectionRouterState { service };
-    ai_projections_router(state).layer(Extension(test_user_context()))
+    let authorization = FakeMacroAuthorizationService::always(test_user_context(TEST_USER_ID));
+    let state = AiProjectionRouterState {
+        service,
+        auth: SharedMacroAuthorizationService::new(authorization),
+    };
+    ai_projections_router(state)
 }
 
 fn post_request() -> axum::http::Request<axum::body::Body> {
@@ -94,7 +95,7 @@ fn post_request_with_model(model: Option<&str>) -> axum::http::Request<axum::bod
     if let Some(model) = model {
         body["model"] = serde_json::json!(model);
     }
-    axum::http::Request::builder()
+    bearer(axum::http::Request::builder(), TEST_TOKEN)
         .uri("/ai-projections")
         .method("POST")
         .header("content-type", "application/json")
@@ -155,7 +156,7 @@ async fn upsert_projection_passes_optional_fields_to_the_service() {
     });
     let app = build_router_with(service.clone());
 
-    let request = axum::http::Request::builder()
+    let request = bearer(axum::http::Request::builder(), TEST_TOKEN)
         .uri("/ai-projections")
         .method("POST")
         .header("content-type", "application/json")

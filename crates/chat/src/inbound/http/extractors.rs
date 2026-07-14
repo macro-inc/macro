@@ -1,14 +1,22 @@
 //! Axum extractors for chat inbound handlers.
 
+#[cfg(test)]
+mod test;
+
+use axum::{
+    RequestPartsExt,
+    extract::{FromRef, FromRequestParts},
+    http::request::Parts,
+};
+use macro_authorization::{
+    PermissionedMacroAuthorizationExtractor, PermissionedMacroAuthorizationRejection,
+    SharedMacroAuthorizationService, SharedUserPermissionsService,
+};
+use roles_and_permissions::domain::model::PermissionId;
+
 use crate::domain::models::FREE_MODEL;
 use crate::domain::ports::ModelAccessService;
 use crate::domain::service::ModelAccessServiceImpl;
-use axum::extract::FromRequestParts;
-use axum::http::StatusCode;
-use axum::http::request::Parts;
-use axum::response::IntoResponse;
-use model::user::UserContext;
-use roles_and_permissions::domain::model::PermissionId;
 
 /// Axum extractor resolving the requesting user's model entitlement from their
 /// permissions.
@@ -42,96 +50,22 @@ impl ChatModelAccess {
     }
 }
 
-/// Whether the user holds the professional (paid) entitlement, derived from the
-/// existing roles-and-permissions access API.
-fn is_professional(user: &UserContext) -> bool {
-    user.permissions
-        .as_ref()
-        .is_some_and(|perms| perms.contains(&PermissionId::ReadProfessionalFeatures.to_string()))
-}
+impl<S> FromRequestParts<S> for ChatModelAccess
+where
+    SharedMacroAuthorizationService: FromRef<S>,
+    SharedUserPermissionsService: FromRef<S>,
+    S: Send + Sync + 'static,
+{
+    type Rejection = PermissionedMacroAuthorizationRejection;
 
-/// Error returned when [`ChatModelAccess`] cannot be extracted.
-pub enum ChatModelAccessRejection {
-    /// The `UserContext` extension was missing (middleware not applied).
-    MissingUserContext,
-}
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let authorization: PermissionedMacroAuthorizationExtractor =
+            parts.extract_with_state(state).await?;
 
-impl IntoResponse for ChatModelAccessRejection {
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            Self::MissingUserContext => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "missing user context").into_response()
-            }
-        }
-    }
-}
-
-impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
-    type Rejection = ChatModelAccessRejection;
-
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let user_context = parts
-            .extensions
-            .get::<UserContext>()
-            .ok_or(ChatModelAccessRejection::MissingUserContext)?;
-
-        Ok(ChatModelAccess {
-            professional: is_professional(user_context),
+        Ok(Self {
+            professional: authorization
+                .permissions
+                .contains(&PermissionId::ReadProfessionalFeatures),
         })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    fn access(permissions: &[PermissionId]) -> ChatModelAccess {
-        let professional = permissions.contains(&PermissionId::ReadProfessionalFeatures);
-        ChatModelAccess { professional }
-    }
-
-    fn user(permissions: &[PermissionId]) -> UserContext {
-        UserContext {
-            permissions: Some(permissions.iter().map(ToString::to_string).collect()),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn no_permissions_is_free() {
-        assert!(!is_professional(&UserContext::default()));
-        assert!(!is_professional(&user(&[])));
-    }
-
-    #[test]
-    fn professional_permission_is_professional() {
-        assert!(is_professional(&user(&[
-            PermissionId::ReadProfessionalFeatures
-        ])));
-    }
-
-    #[test]
-    fn free_user_defaults_to_haiku_and_only_has_haiku() {
-        let free = access(&[]);
-        assert_eq!(free.best_model(), FREE_MODEL);
-        assert!(free.has_access(FREE_MODEL));
-        assert!(!free.has_access("anthropic/claude-opus-4-8"));
-    }
-
-    #[test]
-    fn professional_user_defaults_to_smart_and_has_everything() {
-        let pro = access(&[PermissionId::ReadProfessionalFeatures]);
-        assert_eq!(pro.best_model(), "anthropic/claude-opus-4-8");
-        assert!(pro.has_access("anthropic/claude-opus-4-8"));
-        assert!(pro.has_access(FREE_MODEL));
-        assert!(pro.has_access("openai/gpt-5.5"));
-    }
-
-    // Permission strings unrelated to the professional flag don't grant access.
-    #[test]
-    fn unrelated_permissions_stay_free() {
-        let acc = access(&[PermissionId::WriteEmailTool, PermissionId::ReadDocxEditor]);
-        assert!(!acc.professional());
-        assert!(!acc.has_access("anthropic/claude-opus-4-8"));
     }
 }

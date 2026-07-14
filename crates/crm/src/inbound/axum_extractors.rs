@@ -7,6 +7,9 @@
 //! knows nothing about CRM models, so the CRM-typed extractors and the
 //! receipts they produce are the trusted seam that lives here.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -23,7 +26,7 @@ use entity_access::{
     },
     inbound::axum_extractors::ExtractorError,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use uuid::Uuid;
 
 use crate::{
@@ -58,6 +61,7 @@ impl<T, S, Svc> FromRequestParts<S> for CrmCompanyAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -73,10 +77,9 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing company_id path parameter"))?;
         let company_id = extract_company_id(&path_params)?.to_string();
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -129,6 +132,7 @@ impl<T, S, Svc> FromRequestParts<S> for CrmContactAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -144,10 +148,9 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing contact_id path parameter"))?;
         let contact_id = extract_contact_id(&path_params)?.to_string();
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let (permission, team_id) = service
             .get_crm_entity_permission_with_team(
@@ -199,6 +202,7 @@ where
     T: RequiredPermission,
     CrmServiceRef<C>: FromRef<S>,
     Arc<Eas>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     C: CrmService,
     Eas: EntityAccessService,
     S: Send + Sync + 'static,
@@ -216,10 +220,9 @@ where
             .map_err(|_| ExtractorError::BadRequest("missing comment_id path parameter"))?;
         let comment_id = extract_comment_id(&path_params)?;
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<SharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let (crm_entity_type, entity_id) = crm_service
             .get_comment_entity(&comment_id)

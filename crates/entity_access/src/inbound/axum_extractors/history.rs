@@ -8,6 +8,9 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
+use macro_authorization::{
+    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+};
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
 use crate::domain::{
@@ -16,7 +19,6 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Path parameters for history routes.
 #[derive(serde::Deserialize)]
@@ -41,6 +43,7 @@ impl<T, S, Svc> FromRequestParts<S> for HistoryAccessExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -50,10 +53,9 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Internal)?;
+        let OptionalSharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let Path(HistoryParams { item_id, item_type }) =
             <Path<HistoryParams>>::from_request_parts(parts, state)

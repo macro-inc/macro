@@ -12,9 +12,9 @@ use entity_access::inbound::axum_extractors::{
     DocumentAccessExtractor, OptionalMacroUserTeamExtractor,
 };
 use lexical_client::LexicalClient;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use model::document::DocumentBasic;
 use model::response::GenericSuccessResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::{Deserialize, Serialize};
 use task_dedup::{
@@ -103,7 +103,7 @@ pub async fn get_task_duplicates_handler<T: DocumentService, Svc: EntityAccessSe
 #[tracing::instrument(skip(state, user, optional_team, request), fields(user_id=?user.macro_user_id), err)]
 pub async fn task_similarity_search_handler<T: DocumentService, Svc: EntityAccessService>(
     State(state): State<DocumentRouterState<T, Svc>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     optional_team: OptionalMacroUserTeamExtractor<MemberTeamRole, Svc>,
     Json(request): Json<TaskSimilaritySearchRequest>,
 ) -> Result<Json<TaskSimilaritySearchResponse>, DocumentError> {
@@ -137,7 +137,7 @@ pub async fn task_similarity_search_handler<T: DocumentService, Svc: EntityAcces
 pub async fn dismiss_task_duplicates_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
-    user: model_user::axum_extractor::MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Path(Params { document_id }): Path<Params>,
     Json(request): Json<DismissTaskDuplicatesRequest>,
 ) -> Result<Json<GenericSuccessResponse>, DocumentError> {

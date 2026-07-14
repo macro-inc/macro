@@ -3,7 +3,7 @@
 
 use axum::{Json, extract::State};
 use chrono::{DateTime, Utc};
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 
 use crate::domain::{
     ai_projection_service::{AiProjectionService, requires_professional_features},
@@ -98,7 +98,7 @@ impl From<UserAiProjection> for ProjectionStateResponse {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: AiProjectionService>(
     State(state): State<AiProjectionRouterState<T>>,
-    user: MacroUserExtractor,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<UpsertProjectionRequest>,
 ) -> Result<Json<ProjectionStateResponse>, UpsertProjectionError> {
     // Free-tier models are available to everyone; anything else (including

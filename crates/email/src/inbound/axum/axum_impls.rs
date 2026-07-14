@@ -12,8 +12,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
+use macro_authorization::{
+    MacroAuthorizationRejection, SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
 use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
@@ -96,7 +98,7 @@ pub enum EmailLinkErr {
     #[error("No inbox specified; provide the X-Email-Link-Id header")]
     NoInboxSelected,
     #[error(transparent)]
-    UserErr(#[from] UserExtractorErr),
+    UserErr(#[from] MacroAuthorizationRejection),
 }
 
 impl IntoResponse for EmailLinkErr {
@@ -157,6 +159,7 @@ fn parse_link_id_header(parts: &Parts) -> Result<Option<Uuid>, EmailLinkErr> {
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
@@ -164,7 +167,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let header_link_id = parse_link_id_header(parts)?;
-        let Cached(MacroUserExtractor { macro_user_id, .. }) =
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } =
             parts.extract_with_state(state).await?;
         let caller = macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
@@ -192,13 +195,14 @@ impl<U> Clone for MultiEmailLinkExtractor<U> {
 impl<S, U> FromRequestParts<S> for MultiEmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroUserExtractor { macro_user_id, .. }) =
+        let SharedMacroAuthorizationExtractor { macro_user_id, .. } =
             parts.extract_with_state(state).await?;
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
@@ -221,17 +225,18 @@ impl<U> Clone for OptionalEmailLinkExtractor<U> {
 impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
 where
     EmailRouterState<U>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     U: EmailService,
     S: Send + Sync + 'static,
 {
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroUserExtractor {
+        let SharedMacroAuthorizationExtractor {
             macro_user_id,
             user_context,
             ..
-        }) = parts.extract_with_state(state).await?;
+        } = parts.extract_with_state(state).await?;
         let res = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
@@ -302,6 +307,7 @@ impl<S, U, V> FromRequestParts<S> for GmailAccessTokenExtractor<U, V>
 where
     EmailRouterState<U>: FromRef<S>,
     GmailTokenState<V>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     U: EmailService,
     V: GmailTokenProvider,
     S: Send + Sync + 'static,

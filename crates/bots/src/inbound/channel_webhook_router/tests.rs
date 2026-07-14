@@ -4,9 +4,9 @@ use crate::domain::models::{
     CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use axum::{
-    Extension, Router,
+    Router,
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, request},
 };
 use channels::domain::models::PostMessageResponse;
 use entity_access::domain::{
@@ -16,8 +16,11 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, bearer, test_user_context},
+};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model_user::UserContext;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -397,13 +400,17 @@ impl ChannelMessagePoster for TestChannelPoster {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|bot-admin@example.com".to_string(),
-        fusion_user_id: "fusion-user".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+const TEST_TOKEN: &str = "channel-bot-test-token";
+const TEST_USER_ID: &str = "macro|bot-admin@example.com";
+
+fn authorization() -> SharedMacroAuthorizationService {
+    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+        TEST_USER_ID,
+    )))
+}
+
+fn authenticated_request() -> request::Builder {
+    bearer(Request::builder(), TEST_TOKEN)
 }
 
 fn router(
@@ -415,8 +422,8 @@ fn router(
         service,
         poster,
         TestAccessService::new(role),
+        authorization(),
     ))
-    .layer(user_extension())
 }
 
 fn webhook_router(service: TestBotService, poster: TestChannelPoster) -> Router {
@@ -424,6 +431,7 @@ fn webhook_router(service: TestBotService, poster: TestChannelPoster) -> Router 
         service,
         poster,
         TestAccessService::new(EntityParticipantRole::Member),
+        authorization(),
     ))
 }
 
@@ -482,7 +490,7 @@ async fn channel_webhook_router_member_cannot_create_scoped_bot() {
     let service = TestBotService::for_create(scoped_bot_response(bot_id));
     let poster = TestChannelPoster::new();
     let channel_id = Uuid::new_v4();
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots/scoped"))
         .header("content-type", "application/json")
@@ -504,7 +512,7 @@ async fn channel_webhook_router_admin_can_create_scoped_bot() {
     let service = TestBotService::for_create(scoped_bot_response(bot_id));
     let poster = TestChannelPoster::new();
     let channel_id = Uuid::new_v4();
-    let request = Request::builder()
+    let request = authenticated_request()
         .method("POST")
         .uri(format!("/channels/{channel_id}/bots/scoped"))
         .header("content-type", "application/json")

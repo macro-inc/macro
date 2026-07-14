@@ -2,7 +2,11 @@
 
 use std::collections::HashSet;
 
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::{
+    email::Email,
+    lowercased::Lowercase,
+    user_id::{BorrowedUserIdStr, MacroUserIdStr},
+};
 
 use crate::domain::model::{
     Permission, PermissionId, ProductTier, RoleId, SubscriptionStatus, UserRolesAndPermissionsError,
@@ -28,11 +32,18 @@ pub trait UserRolesAndPermissionsRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<HashSet<RoleId>, UserRolesAndPermissionsError>> + Send;
 
-    /// Gets the permissiosn for a MacroUserID
+    /// Gets the permissions for a normalized Macro user ID.
     fn get_user_permissions(
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<HashSet<Permission>, UserRolesAndPermissionsError>> + Send;
+
+    /// Gets the permissions for a validated user ID without changing its casing.
+    fn get_user_permissions_for_user_id(
+        &self,
+        user_id: &BorrowedUserIdStr<'_>,
+    ) -> impl Future<Output = Result<HashSet<Permission>, UserRolesAndPermissionsError>> + Send;
+
     /// Adds roles with the provided ids to a user
     fn add_roles_to_user(
         &self,
@@ -45,6 +56,18 @@ pub trait UserRolesAndPermissionsRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         role_ids: &[RoleId],
     ) -> impl Future<Output = Result<(), UserRolesAndPermissionsError>> + Send;
+}
+
+/// Fetches typed permissions using a validated, original-case user ID.
+///
+/// This narrow port is intended for callers that only need permission
+/// enrichment and must preserve the stored user ID's casing.
+pub trait UserPermissionsService: Clone + Send + Sync + 'static {
+    /// Gets the user's permissions without normalizing the supplied user ID.
+    fn get_user_permissions_for_user_id(
+        &self,
+        user_id: &BorrowedUserIdStr<'_>,
+    ) -> impl Future<Output = Result<HashSet<PermissionId>, UserRolesAndPermissionsError>> + Send;
 }
 
 /// The UserRolesAndPermissionsService defines a set of actions to perform on the users for their roles and permissions

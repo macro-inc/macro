@@ -35,6 +35,25 @@ async fn test_get_user_id_from_email(pool: Pool<Postgres>) -> anyhow::Result<()>
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("users"))
 )]
+async fn permission_lookup_does_not_lowercase_original_user_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let macro_db = MacroDB::new(pool);
+    let original_user_id = BorrowedUserIdStr::try_from("macro|UsEr@user.com")?;
+
+    let permissions = macro_db
+        .get_user_permissions_for_user_id(&original_user_id)
+        .await?;
+
+    assert!(permissions.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
 async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let macro_db = MacroDB::new(pool);
 

@@ -8,6 +8,9 @@ use axum::{
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
+use macro_authorization::{
+    OptionalSharedMacroAuthorizationExtractor, SharedMacroAuthorizationService,
+};
 use serde::de::DeserializeOwned;
 
 use super::{ExtractorError, InternalUser, RequiredPermission};
@@ -18,7 +21,6 @@ use crate::domain::{
     ports::EntityAccessService,
 };
 use model::project::BasicProject;
-use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Validates that the user has at least the required access level to a project.
 ///
@@ -39,6 +41,7 @@ impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
@@ -48,10 +51,9 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Internal)?;
+        let OptionalSharedMacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let project_context: Extension<BasicProject> = parts
             .extract()
@@ -231,6 +233,7 @@ impl<T, S, V, Svc> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V, Svc>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
+    SharedMacroAuthorizationService: FromRef<S>,
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
     V: DeserializeOwned,
@@ -240,10 +243,9 @@ where
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = req
-            .extract_parts()
-            .await
-            .map_err(|_| ExtractorError::Internal)?;
+        let OptionalSharedMacroAuthorizationExtractor { macro_user_id, .. } = req
+            .extract_parts_with_state::<OptionalSharedMacroAuthorizationExtractor, S>(state)
+            .await?;
 
         let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
             req.extract_parts()

@@ -6,3 +6,5 @@ pub mod models;
 pub mod ports;
 /// Authorization service implementation.
 pub mod service;
+/// Shared, type-erased authorization service handle.
+pub mod shared;

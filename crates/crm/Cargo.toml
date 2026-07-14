@@ -18,9 +18,9 @@ ai_tools = [
 ]
 axum = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:macro_uuid",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -58,9 +58,9 @@ system_properties = { path = "../system_properties", optional = true }
 
 # Axum / inbound dependencies
 axum = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
@@ -70,5 +70,7 @@ unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum", "testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros"] }
+tower = { workspace = true, features = ["util"] }

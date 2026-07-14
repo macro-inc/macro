@@ -6,14 +6,14 @@
 use crate::domain::{AiFeature, UsageApiParams, UsageService, UsageSummary};
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{FromRef, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };
 use chrono::{DateTime, Utc};
+use macro_authorization::{SharedMacroAuthorizationExtractor, SharedMacroAuthorizationService};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::MacroUserExtractor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -54,8 +54,31 @@ pub struct ErrorBody {
     pub error: String,
 }
 
+/// State for the admin AI-cost router.
+pub struct AiUsageRouterState<T> {
+    /// The AI usage service implementation.
+    pub service: Arc<T>,
+    /// The authorization service used to authenticate callers.
+    pub auth: SharedMacroAuthorizationService,
+}
+
+impl<T> Clone for AiUsageRouterState<T> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            auth: self.auth.clone(),
+        }
+    }
+}
+
+impl<T> FromRef<AiUsageRouterState<T>> for SharedMacroAuthorizationService {
+    fn from_ref(state: &AiUsageRouterState<T>) -> Self {
+        state.auth.clone()
+    }
+}
+
 /// Build the admin AI-cost router.
-pub fn ai_usage_router<T, S>(service: Arc<T>) -> Router<S>
+pub fn ai_usage_router<T, S>(state: AiUsageRouterState<T>) -> Router<S>
 where
     T: UsageService,
     S: Send + Sync + Clone + 'static,
@@ -63,11 +86,11 @@ where
     Router::new()
         .route("/ai-cost/usage", post(get_usage_handler::<T>))
         .route("/ai-cost/pricing", post(set_pricing_handler::<T>))
-        .with_state(service)
+        .with_state(state)
 }
 
 /// Returns `Some(403)` unless the caller is a Macro admin.
-fn admin_rejection(user: &MacroUserExtractor) -> Option<Response> {
+fn admin_rejection(user: &SharedMacroAuthorizationExtractor) -> Option<Response> {
     if user.macro_user_id.email_str().ends_with(ADMIN_EMAIL_SUFFIX) {
         None
     } else {
@@ -106,10 +129,10 @@ fn internal_error(context: &str) -> Response {
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.macro_user_id))]
 pub async fn get_usage_handler<T: UsageService>(
-    State(service): State<Arc<T>>,
-    user: MacroUserExtractor,
+    State(state): State<AiUsageRouterState<T>>,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<UsageRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {
@@ -141,7 +164,7 @@ pub async fn get_usage_handler<T: UsageService>(
         features: req.features,
     };
 
-    match service.get_usage(params).await {
+    match state.service.get_usage(params).await {
         Ok(summary) => Json(summary).into_response(),
         Err(e) => {
             tracing::error!(error = ?e, "failed to query ai usage");
@@ -162,17 +185,18 @@ pub async fn get_usage_handler<T: UsageService>(
     ),
     tag = "ai_usage"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
+#[tracing::instrument(skip(state, user), fields(user_id = %user.macro_user_id))]
 pub async fn set_pricing_handler<T: UsageService>(
-    State(service): State<Arc<T>>,
-    user: MacroUserExtractor,
+    State(state): State<AiUsageRouterState<T>>,
+    user: SharedMacroAuthorizationExtractor,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
     if let Some(resp) = admin_rejection(&user) {
         return resp;
     }
 
-    match service
+    match state
+        .service
         .set_pricing(req.model, req.price_per_mil_in, req.price_per_mil_out)
         .await
     {

@@ -32,7 +32,6 @@ impl MacroAuthJwtValidator {
 }
 
 impl JwtValidator for MacroAuthJwtValidator {
-    #[tracing::instrument(err, skip(self, jwt))]
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         decode_jwt::handler(&self.jwt_validation_args, jwt)
             .map(identity_from_token)

@@ -15,10 +15,6 @@ path = "src/openapi.rs"
 [dependencies]
 axum = { workspace = true, features = ["tower-log", "ws"] }
 entity_access = { path = "../entity_access" }
-macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-  "auth",
-  "cloud_storage",
-] }
 models_properties = { path = "../models_properties" }
 notification = { path = "../notification" }
 properties = { path = "../properties" }

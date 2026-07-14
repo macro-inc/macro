@@ -11,8 +11,8 @@ use crate::domain::ports::{
     ChannelService,
 };
 use axum::{
-    Extension, Router,
-    http::{Request, StatusCode},
+    Router,
+    http::{HeaderValue, Request, StatusCode, header},
 };
 use entity_access::domain::{
     models::{
@@ -22,13 +22,17 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use http_body_util::BodyExt;
+use macro_authorization::{
+    SharedMacroAuthorizationService,
+    testing::{FakeMacroAuthorizationService, test_user_context},
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model_user::UserContext;
 use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
 use std::sync::{Arc, Mutex};
 use tower::util::ServiceExt;
+use tower_http::set_header::SetRequestHeaderLayer;
 
 // --- Access service implementations for tests ---
 
@@ -670,45 +674,56 @@ impl ChannelService for RecordingMutationService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+const TEST_USER_ID: &str = "macro|test@example.com";
+const TEST_AUTHORIZATION: &str = "Bearer test-token";
+
+fn authorization() -> SharedMacroAuthorizationService {
+    SharedMacroAuthorizationService::new(FakeMacroAuthorizationService::always(test_user_context(
+        TEST_USER_ID,
+    )))
+}
+
+fn credentials_layer() -> SetRequestHeaderLayer<HeaderValue> {
+    SetRequestHeaderLayer::overriding(
+        header::AUTHORIZATION,
+        HeaderValue::from_static(TEST_AUTHORIZATION),
+    )
 }
 
 fn mock_router() -> Router {
     channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension())
+    .layer(credentials_layer())
 }
 
 fn error_router() -> Router {
     channels_router(ChannelsRouterState::new(
         ErrorService,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension())
+    .layer(credentials_layer())
 }
 
 fn denied_router() -> Router {
     channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::deny(),
+        authorization(),
     ))
-    .layer(user_extension())
+    .layer(credentials_layer())
 }
 
 fn not_found_router() -> Router {
     channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::not_found(),
+        authorization(),
     ))
-    .layer(user_extension())
+    .layer(credentials_layer())
 }
 
 #[tokio::test]
@@ -718,8 +733,9 @@ async fn post_message_route_uses_entity_access_and_mutation_service() {
     let router = channels_router(ChannelsRouterState::new(
         mutation_service,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .method("POST")
@@ -893,8 +909,9 @@ async fn participants_returns_data_with_correct_shape() {
     let router = channels_router(ChannelsRouterState::new(
         ParticipantsService,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .uri(format!("/{channel_id}/participants"))
@@ -1128,8 +1145,9 @@ async fn messages_around_omits_previous_cursor_when_no_newer_page() {
             has_more_newer: false,
         },
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1155,8 +1173,9 @@ async fn messages_around_returns_previous_cursor_when_newer_page_exists() {
             has_more_newer: true,
         },
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1180,8 +1199,9 @@ async fn messages_around_returns_404_when_not_found() {
     let router = channels_router(ChannelsRouterState::new(
         NotFoundService,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1299,8 +1319,9 @@ async fn post_messages_empty_body_uses_default_filters() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
 
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1326,8 +1347,9 @@ async fn post_messages_forwards_message_ids_filter() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
 
     let channel_id = Uuid::new_v4();
     let id_a = Uuid::new_v4();
@@ -1354,8 +1376,9 @@ async fn post_messages_forwards_last_activity_filter() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
 
     let channel_id = Uuid::new_v4();
     let body = serde_json::json!({ "last_activity": "2024-06-01T12:00:00Z" }).to_string();
@@ -1387,8 +1410,9 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     let router = channels_router(ChannelsRouterState::new(
         svc.clone(),
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
 
     let channel_id = Uuid::new_v4();
     let body = serde_json::json!({
@@ -1426,8 +1450,9 @@ async fn post_messages_rejects_oversized_filter_list() {
     let router = channels_router(ChannelsRouterState::new(
         MockService,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
 
     let channel_id = Uuid::new_v4();
     let ids: Vec<Uuid> = (0..101).map(|_| Uuid::new_v4()).collect();
@@ -1471,8 +1496,9 @@ async fn thread_replies_returns_404_when_not_found() {
     let router = channels_router(ChannelsRouterState::new(
         NotFoundService,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
     let request = Request::builder()
@@ -1743,8 +1769,9 @@ async fn get_activity_returns_user_activities() {
     let router = channels_router(ChannelsRouterState::new(
         ActivityService::default(),
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let request = Request::builder()
         .uri("/activity")
         .body(axum::body::Body::empty())
@@ -1765,8 +1792,9 @@ async fn post_activity_records_and_returns_activity() {
     let router = channels_router(ChannelsRouterState::new(
         service,
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let channel_id = Uuid::new_v4();
     let request = Request::builder()
         .method("POST")
@@ -1799,8 +1827,9 @@ async fn post_activity_rejects_invalid_channel_id() {
     let router = channels_router(ChannelsRouterState::new(
         ActivityService::default(),
         TestAccessService::allow(),
+        authorization(),
     ))
-    .layer(user_extension());
+    .layer(credentials_layer());
     let request = Request::builder()
         .method("POST")
         .uri("/activity")

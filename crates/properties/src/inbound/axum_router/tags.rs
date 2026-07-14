@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::SharedMacroAuthorizationExtractor;
 use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -105,10 +105,10 @@ impl IntoResponse for TagsError {
 #[tracing::instrument(skip(state, user, team), err)]
 pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    SharedMacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: SharedMacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
     let sets = state
@@ -135,10 +135,10 @@ pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
 #[tracing::instrument(skip(state, user, team), fields(scope = ?request.scope), err)]
 pub async fn ensure_tag_set<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    SharedMacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: SharedMacroAuthorizationExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
