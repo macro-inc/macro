@@ -19,6 +19,26 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
+#[cfg(test)]
+mod test;
+
+async fn get_frecency_scores<U: FrecencyQueryService>(
+    service: &U,
+    include_frecency: bool,
+    user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ids: &[model_entity::Entity<'_>],
+) -> Result<HashMap<AggregateId<'static>, FrecencyData>, frecency::domain::models::FrecencyQueryErr>
+{
+    if include_frecency {
+        service
+            .get_frecencies_by_ids(FrecencyByIdsRequest { user_id, ids })
+            .await
+            .map(|response| response.into_inner())
+    } else {
+        Ok(HashMap::new())
+    }
+}
+
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
@@ -39,6 +59,7 @@ where
             macro_id,
             limit,
             query,
+            include_frecency,
             team_receipt,
             crm_scope,
         } = req;
@@ -75,17 +96,18 @@ where
             .map(|id| EntityType::EmailThread.with_entity_string(id.to_string()))
             .collect();
 
-        let frecency_request = FrecencyByIdsRequest {
-            user_id: macro_id,
-            ids: ids.as_slice(),
-        };
+        let frecency_scores = get_frecency_scores(
+            &self.frecency_service,
+            include_frecency,
+            macro_id,
+            ids.as_slice(),
+        );
 
         let (attachment_map_result, participant_result, labels_result, frecency_scores) = tokio::join!(
             self.email_repo.attachments_by_thread_ids(&thread_ids),
             self.email_repo.contacts_by_thread_ids(&thread_ids),
             self.email_repo.labels_by_thread_ids(&thread_ids),
-            self.frecency_service
-                .get_frecencies_by_ids(frecency_request)
+            frecency_scores,
         );
 
         let mut attachment_map = attachment_map_result
@@ -101,8 +123,7 @@ where
             .into_iter()
             .group_by(|v| v.thread_id);
 
-        let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> =
-            frecency_scores?.into_inner();
+        let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> = frecency_scores?;
 
         Ok(previews
             .into_iter()

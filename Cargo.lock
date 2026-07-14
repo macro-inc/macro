@@ -2861,6 +2861,8 @@ dependencies = [
  "model-entity",
  "model_user",
  "models_pagination",
+ "models_properties",
+ "serde",
  "soup",
  "tokio",
  "uuid",

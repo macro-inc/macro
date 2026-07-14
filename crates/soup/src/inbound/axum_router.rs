@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
-        FrecencyQueryInner, FrecencySoupItem, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
-        SimpleQueryInner, SoupErr, SoupItemWithProperties, SoupPropertiesField, SoupQuery,
-        SoupRequest, SoupType, build_grouped_response,
+        EnrichedSoupItem, FrecencyQueryInner, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
+        SimpleQueryInner, SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
+        build_grouped_response,
     },
     ports::SoupService,
 };
@@ -496,7 +496,7 @@ where
         // whatever membership the extractor resolved.
         let res = self
             .service
-            .get_user_soup_with_properties(
+            .get_user_soup_with_properties_and_frecency(
                 SoupRequest {
                     soup_type: match params.expand {
                         Some(true) | None => SoupType::Expanded,
@@ -607,10 +607,11 @@ pub struct SoupApiItem {
 }
 
 impl SoupApiItem {
-    fn from_frecency_soup_item(item: FrecencySoupItem<SoupPropertiesField>) -> Self {
-        let FrecencySoupItem {
+    fn from_frecency_soup_item(item: EnrichedSoupItem) -> Self {
+        let EnrichedSoupItem {
             item,
             frecency_score,
+            ..
         } = item;
         SoupApiItem {
             item,

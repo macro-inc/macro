@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, FrecencySoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
+    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
     SimpleSortRequest, SoupErr, SoupPropertiesField, SoupRequest,
 };
 use either::Either;
@@ -66,13 +66,13 @@ pub trait SoupRepo: Send + Sync + 'static {
 
 /// type alias which represents the posible outputs of soup
 /// The response is a paginated cursor where
-/// 1. The item type is [FrecencySoupItem]
+/// 1. The item type is the requested raw or enriched Soup representation
 /// 1. The id type is [String] (this should be changed to uuid)
 /// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
 /// 1. The filter type is an [Option] [EntityFilterAst]
-pub type SoupOutput<T, Extra = ()> = Either<
-    PaginatedCursor<FrecencySoupItem<Extra>, String, SimpleSortMethod, T>,
-    PaginatedCursor<FrecencySoupItem<Extra>, String, Frecency, T>,
+pub type SoupOutput<T, Item = SoupItem<()>> = Either<
+    PaginatedCursor<Item, String, SimpleSortMethod, T>,
+    PaginatedCursor<Item, String, Frecency, T>,
 >;
 
 #[cfg(test)]
@@ -80,7 +80,7 @@ mod test;
 
 /// Service abstraction for executing user-facing soup queries.
 pub trait SoupService: Send + Sync + 'static {
-    /// Run a soup query without loading entity properties.
+    /// Run a soup query without loading entity properties or frecency.
     ///
     /// `team_receipt` proves the user belongs to a team and may be used by
     /// filters that broaden visibility beyond the user's own mailboxes (e.g.
@@ -90,7 +90,7 @@ pub trait SoupService: Send + Sync + 'static {
         &self,
         req: SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> impl Future<Output = Result<SoupOutput<T, ()>, SoupErr>> + Send
+    ) -> impl Future<Output = Result<SoupOutput<T>, SoupErr>> + Send
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
@@ -100,7 +100,27 @@ pub trait SoupService: Send + Sync + 'static {
         &self,
         req: SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> impl Future<Output = Result<SoupOutput<T, SoupPropertiesField>, SoupErr>> + Send
+    ) -> impl Future<Output = Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
+
+    /// Run a soup query and attach frecency to the returned page.
+    fn get_user_soup_with_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send;
+
+    /// Run a soup query and attach both properties and frecency to the page.
+    fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>> + Send
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
@@ -127,7 +147,7 @@ where
         &self,
         req: SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<T, ()>, SoupErr>
+    ) -> Result<SoupOutput<T>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -139,13 +159,41 @@ where
         &self,
         req: SoupRequest<T>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<T, SoupPropertiesField>, SoupErr>
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
     {
         (**self)
             .get_user_soup_with_properties(req, team_receipt)
+            .await
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_frecency(req, team_receipt)
+            .await
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_properties_and_frecency(req, team_receipt)
             .await
     }
 
@@ -179,7 +227,7 @@ impl SoupService for NoOpSoupService {
         &self,
         _req: SoupRequest<T>,
         _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<T, ()>, SoupErr>
+    ) -> Result<SoupOutput<T>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -191,7 +239,31 @@ impl SoupService for NoOpSoupService {
         &self,
         _req: SoupRequest<T>,
         _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<SoupOutput<T, SoupPropertiesField>, SoupErr>
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(no_op_soup_err())
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(no_op_soup_err())
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,

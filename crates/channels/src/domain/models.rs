@@ -1140,6 +1140,8 @@ pub struct GetChannelsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     /// Optional result limit.
     pub limit: Option<u32>,
+    /// Whether aggregate frecency should be loaded for the returned channels.
+    pub include_frecency: bool,
     /// Cursor, sort, and channel-level filter.
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
 }

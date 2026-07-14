@@ -16,7 +16,7 @@ use models_soup::{
     project::SoupProject,
 };
 use serde_json::Value;
-use soup::domain::models::FrecencySoupItem;
+use soup::domain::models::EnrichedSoupItem;
 
 /// Extension fields attached to every top-level Soup entity.
 ///
@@ -56,8 +56,19 @@ where
     }
 }
 
-impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<FrecencySoupItem<()>>> for SoupPage<E> {
-    fn from(page: PaginatedOpaqueCursor<FrecencySoupItem<()>>) -> Self {
+impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<SoupItem<()>>> for SoupPage<E> {
+    fn from(page: PaginatedOpaqueCursor<SoupItem<()>>) -> Self {
+        let has_more = page.next_cursor.is_some();
+        Self {
+            items: page.items.into_iter().map(GraphqlSoupItem::from).collect(),
+            next_cursor: page.next_cursor,
+            has_more,
+        }
+    }
+}
+
+impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<EnrichedSoupItem>> for SoupPage<E> {
+    fn from(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
         let has_more = page.next_cursor.is_some();
         Self {
             items: page.items.into_iter().map(GraphqlSoupItem::from).collect(),
@@ -97,13 +108,26 @@ where
     }
 }
 
-impl<E: SoupEntityEdges> From<FrecencySoupItem<()>> for GraphqlSoupItem<E> {
-    fn from(item: FrecencySoupItem<()>) -> Self {
-        let FrecencySoupItem {
+impl<E: SoupEntityEdges> From<SoupItem<()>> for GraphqlSoupItem<E> {
+    fn from(item: SoupItem<()>) -> Self {
+        let entity_ref = item.entity();
+        Self {
+            id: entity_ref.entity_id.into_owned(),
+            entity_type: GraphqlSoupEntityType::from(entity_ref.entity_type),
+            frecency_score: 0.0,
+            entity: GraphqlSoupEntity::from(item),
+        }
+    }
+}
+
+impl<E: SoupEntityEdges> From<EnrichedSoupItem> for GraphqlSoupItem<E> {
+    fn from(item: EnrichedSoupItem) -> Self {
+        let EnrichedSoupItem {
             item,
             frecency_score,
             ..
         } = item;
+        let item = item.map_extra(|_| ());
         let entity_ref = item.entity();
 
         Self {

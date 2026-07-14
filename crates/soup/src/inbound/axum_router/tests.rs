@@ -27,8 +27,9 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem,
+            IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
+            SoupType,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -88,13 +89,45 @@ impl SoupService for MockSoup {
 
     async fn get_user_soup_with_properties<T>(
         &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
         req: SoupRequest<T>,
         _team_receipt: Option<
             entity_access::domain::models::EntityAccessReceipt<
                 entity_access::domain::models::MemberTeamRole,
             >,
         >,
-    ) -> Result<SoupOutput<T, SoupPropertiesField>, SoupErr>
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,

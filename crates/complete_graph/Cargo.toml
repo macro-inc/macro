@@ -29,5 +29,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 macro_user_id = { path = "../macro_user_id" }
 models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
+serde = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

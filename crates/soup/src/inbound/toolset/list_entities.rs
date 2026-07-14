@@ -1,7 +1,7 @@
 //! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
-    models::{FrecencySoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
+    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -305,8 +305,8 @@ fn resolve_applied_tags(
 }
 
 /// True when any item carries a tag property that would need label resolution.
-fn any_item_has_tags(items: &[FrecencySoupItem<SoupPropertiesField>]) -> bool {
-    items.iter().any(|FrecencySoupItem { item, .. }| {
+fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
+    items.iter().any(|EnrichedSoupItem { item, .. }| {
         let properties = match item {
             SoupItem::Document(doc) => &doc.extra.properties,
             SoupItem::Chat(chat) => &chat.extra.properties,
@@ -739,7 +739,7 @@ where
         let items: Vec<EntityItem> = paginated
             .items
             .into_iter()
-            .map(|FrecencySoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
+            .map(|EnrichedSoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
             .collect();
 
         // Build summary
