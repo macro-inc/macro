@@ -2,8 +2,6 @@
 
 use std::future::Future;
 
-use macro_event_topics::Topic;
-
 use crate::domain::models::{EventBrokerError, MacroEvent};
 
 /// Inbound port: the public API for sending events through the broker.
@@ -24,9 +22,9 @@ pub trait MacroEventBroker: Send + Sync + 'static {
 /// port is trivial to mock or stub in tests.
 pub trait EventPublisher: Send + Sync + 'static {
     /// Publish a raw `payload` to `topic`, keyed by `key`.
-    fn publish<T: Topic>(
+    fn publish(
         &self,
-        topic: T,
+        topic: &'static str,
         key: &str,
         payload: &[u8],
     ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;

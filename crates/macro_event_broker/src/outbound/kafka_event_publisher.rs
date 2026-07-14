@@ -10,7 +10,6 @@
 use std::time::Duration;
 
 use macro_env::Environment;
-use macro_event_topics::Topic;
 use rdkafka::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 
@@ -80,14 +79,14 @@ impl KafkaEventPublisher {
 }
 
 impl EventPublisher for KafkaEventPublisher {
-    #[tracing::instrument(err, skip(self, payload), fields(topic = %topic.as_str(), key = %key))]
-    async fn publish<T: Topic>(
+    #[tracing::instrument(err, skip(self, payload), fields(topic = %topic, key = %key))]
+    async fn publish(
         &self,
-        topic: T,
+        topic: &'static str,
         key: &str,
         payload: &[u8],
     ) -> Result<(), EventBrokerError> {
-        let record = FutureRecord::to(topic.as_str()).key(key).payload(payload);
+        let record = FutureRecord::to(topic).key(key).payload(payload);
 
         match &self.producer {
             Producer::Plaintext(producer) => producer.send(record, SEND_TIMEOUT).await,

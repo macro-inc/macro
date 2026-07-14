@@ -22,9 +22,15 @@ impl<P: EventPublisher> MacroEventBrokerService<P> {
 }
 
 impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
-    #[tracing::instrument(err, skip(self, event), fields(topic = %event.topic().as_str(), key = %event.key()))]
+    #[tracing::instrument(
+        err,
+        skip(self, event),
+        fields(topic = tracing::field::Empty, key = %event.key())
+    )]
     async fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
-        let topic = event.topic();
+        let topic = event.topic().as_str();
+        tracing::Span::current().record("topic", tracing::field::display(topic));
+
         let key = event.key();
         let envelope = event.event();
         let payload = serde_json::to_vec(envelope)?;

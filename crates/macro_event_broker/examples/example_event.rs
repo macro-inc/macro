@@ -9,15 +9,15 @@ use serde::{Deserialize, Serialize};
 pub struct ExampleEventPublisher;
 
 impl EventPublisher for ExampleEventPublisher {
-    async fn publish<T: Topic>(
+    async fn publish(
         &self,
-        topic: T,
+        topic: &'static str,
         key: &str,
         payload: &[u8],
     ) -> Result<(), EventBrokerError> {
         println!(
             "publishing topic={} key={} payload={}",
-            topic.as_str(),
+            topic,
             key,
             String::from_utf8_lossy(payload)
         );
