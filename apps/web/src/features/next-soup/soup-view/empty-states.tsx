@@ -1,6 +1,7 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import { runCreateAction } from '@app/features/command/Launcher';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import type { BlockAlias, BlockName } from '@core/block';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
@@ -318,8 +319,13 @@ export function EmptyState(props: {
                   ? {
                       label: fallback.create.label,
                       icon: PlusIcon,
-                      onClick: () =>
-                        runCreateAction(fallback.create!.blockName),
+                      onClick: () => {
+                        if (props.listView === 'channels') {
+                          openNewChannelModal();
+                          return;
+                        }
+                        runCreateAction(fallback.create!.blockName);
+                      },
                     }
                   : undefined
               }

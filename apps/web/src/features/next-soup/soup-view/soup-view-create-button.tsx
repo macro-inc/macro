@@ -4,6 +4,7 @@ import {
   runCreateAction,
 } from '@app/features/command/Launcher';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -123,6 +124,10 @@ export const SoupViewCreateButton = () => {
   });
 
   const handleSelect = (option: CreateOption) => {
+    if (currentView() === 'channels' && option.id === 'channel') {
+      openNewChannelModal();
+      return;
+    }
     if (option.id === 'import-file') {
       openFilePicker({ multiple: true }, async (files) => {
         await handleFileUpload(files, false);
