@@ -398,6 +398,7 @@ services:
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
+      - DSS_INTERNAL_AUTH_KEY=${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}
     networks:
       services:
         aliases:

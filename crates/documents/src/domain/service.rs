@@ -1547,13 +1547,6 @@ impl<
     }
 
     async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
-        self.publish_document_event(&DocumentMacroEvent::interaction(
-            document_id,
-            DocumentInteractionMetadata {
-                document_id: document_id.to_owned(),
-                reason: InteractionReason::Edited,
-            },
-        ));
         self.upload_url_service
             .upload_snapshot(document_id, bytes)
             .await?;

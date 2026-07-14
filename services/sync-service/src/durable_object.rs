@@ -478,7 +478,6 @@ impl DocumentSyncSession {
             let env = self.env.clone();
             self.state.wait_until(async move {
                 report_new_doc_state(&document_id_owned, &snapshot, &env).await;
-                report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin).await;
             });
         }
 
@@ -689,25 +688,23 @@ impl DocumentSyncSession {
                     self.msg_buffer.clone(),
                 )
                 .context("failed to send initial sync message")?;
-
-                // Report the first peer joining an already-initialized
-                // document. Newly-created documents get their own
-                // `FirstJoin` interaction from `initialize_handler` instead;
-                // later peers joining a session that already has peers
-                // don't get an interaction of their own.
-                if is_first_join {
-                    let document_id_owned = document_id.to_string();
-                    let env = self.env.clone();
-                    self.state.wait_until(async move {
-                        report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin)
-                            .await;
-                    });
-                }
             } else {
                 debug!(
                     document_id = document_id,
                     "snapshot not yet available; deferring initial sync until /initialize"
                 );
+            }
+
+            // This is the single source of truth for `FirstJoin`: whenever
+            // the peer count genuinely transitions 0 -> 1, regardless of
+            // whether the document already has content.
+            if is_first_join {
+                let document_id_owned = document_id.to_string();
+                let env = self.env.clone();
+                self.state.wait_until(async move {
+                    report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin)
+                        .await;
+                });
             }
 
             Response::from_websocket(pair.client).context("failed to create websocket response")?
