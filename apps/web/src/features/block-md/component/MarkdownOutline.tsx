@@ -16,6 +16,11 @@ type OutlineHeading = {
 };
 
 const ACTIVE_HEADING_OFFSET = 80;
+const MIN_OUTLINE_HEADINGS = 3;
+
+export function shouldShowOutline(headingCount: number): boolean {
+  return headingCount >= MIN_OUTLINE_HEADINGS;
+}
 
 export function getActiveHeadingIndex(
   headingTops: number[],
@@ -75,16 +80,13 @@ function OutlineItem(props: {
 }
 
 export function MarkdownOutline(props: {
-  discussion: Accessor<HTMLElement | undefined>;
   editor: Accessor<LexicalEditor | undefined>;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
   const [headings, setHeadings] = createSignal<OutlineHeading[]>([]);
   const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
-  const [discussionActive, setDiscussionActive] = createSignal(false);
 
   createEffect(() => {
-    const discussion = props.discussion();
     const editor = props.editor();
     const scrollContainer = props.scrollContainer();
     if (!editor || !scrollContainer) return;
@@ -95,17 +97,6 @@ export function MarkdownOutline(props: {
       const currentHeadings = headings();
       const containerTop = scrollContainer.getBoundingClientRect().top;
       const activeLine = containerTop + ACTIVE_HEADING_OFFSET;
-      const discussionIsActive =
-        (discussion?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY) <=
-          activeLine ||
-        scrollContainer.scrollTop + scrollContainer.clientHeight >=
-          scrollContainer.scrollHeight - 1;
-      setDiscussionActive(discussionIsActive);
-      if (discussionIsActive) {
-        setActiveHeadingKey();
-        return;
-      }
-
       const headingTops = currentHeadings.map(
         (heading) =>
           editor.getElementByKey(heading.key)?.getBoundingClientRect().top ??
@@ -177,20 +168,10 @@ export function MarkdownOutline(props: {
 
     scrollToElement(headingElement);
     setActiveHeadingKey(heading.key);
-    setDiscussionActive(false);
-  };
-
-  const scrollToDiscussion = () => {
-    const discussion = props.discussion();
-    if (!discussion) return;
-
-    scrollToElement(discussion);
-    setActiveHeadingKey();
-    setDiscussionActive(true);
   };
 
   return (
-    <Show when={headings().length > 0 || props.discussion()}>
+    <Show when={shouldShowOutline(headings().length)}>
       <nav
         aria-label="Document outline"
         class="group/outline relative w-3 outline-none"
@@ -205,9 +186,6 @@ export function MarkdownOutline(props: {
               <OutlineDash active={activeHeadingKey() === heading.key} />
             )}
           </For>
-          <Show when={props.discussion()}>
-            <OutlineDash active={discussionActive()} />
-          </Show>
         </div>
         <div class="invisible absolute top-0 left-0 z-1 max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge group-hover/outline:visible group-focus-within/outline:visible">
           <For each={headings()}>
@@ -219,13 +197,6 @@ export function MarkdownOutline(props: {
               />
             )}
           </For>
-          <Show when={props.discussion()}>
-            <OutlineItem
-              active={discussionActive()}
-              label="Discussion"
-              onClick={scrollToDiscussion}
-            />
-          </Show>
         </div>
       </nav>
     </Show>

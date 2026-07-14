@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getActiveHeadingIndex } from './MarkdownOutline';
+import { getActiveHeadingIndex, shouldShowOutline } from './MarkdownOutline';
 
 describe('getActiveHeadingIndex', () => {
   it('selects the first heading before the document reaches it', () => {
@@ -12,5 +12,12 @@ describe('getActiveHeadingIndex', () => {
 
   it('returns no selection when the document has no headings', () => {
     expect(getActiveHeadingIndex([], 150)).toBe(-1);
+  });
+});
+
+describe('shouldShowOutline', () => {
+  it('requires at least three headings', () => {
+    expect(shouldShowOutline(2)).toBe(false);
+    expect(shouldShowOutline(3)).toBe(true);
   });
 });
