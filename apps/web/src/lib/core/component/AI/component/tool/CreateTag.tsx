@@ -15,7 +15,9 @@ const handler = createToolRenderer({
         <Show when={ctx.response?.data.color}>
           {(color) => <TagDot color={color()} />}
         </Show>
-        <span class="truncate text-ink">{ctx.tool.data.label}</span>
+        <span class="truncate text-ink">
+          {ctx.response?.data.label ?? ctx.tool.data.label}
+        </span>
       </div>
     </BaseTool>
   ),
