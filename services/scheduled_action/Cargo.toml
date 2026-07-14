@@ -37,7 +37,8 @@ chrono = { workspace = true}
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 agent = { path = "../../crates/agent" }
 ai_usage = { path = "../../crates/ai_usage" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal", "sync", "time"] }
+tokio-util = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }
 axum = { workspace = true }
@@ -69,3 +70,6 @@ aws-sdk-secretsmanager = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
