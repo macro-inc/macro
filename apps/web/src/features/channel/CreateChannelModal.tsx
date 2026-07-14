@@ -20,7 +20,6 @@ export function openNewChannelModal() {
 }
 
 export function CreateChannelModal() {
-  let nameInputRef: HTMLInputElement | undefined;
   const { replaceOrInsertSplit } = useSplitLayout();
   const { users: recipientOptions } = useCombinedRecipients();
   const createChannelMutation = useCreateChannelMutation();
@@ -81,10 +80,6 @@ export function CreateChannelModal() {
     <Dialog
       open={newChannelModalOpen()}
       onOpenChange={(open) => !open && close()}
-      onOpenAutoFocus={(event) => {
-        event.preventDefault();
-        nameInputRef?.focus();
-      }}
     >
       <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
         <Panel.Body>
@@ -95,6 +90,7 @@ export function CreateChannelModal() {
                 as={Button}
                 size="icon-sm"
                 label="Close"
+                tabIndex={-1}
                 disabled={createChannelMutation.isPending}
               >
                 <XIcon />
@@ -112,7 +108,6 @@ export function CreateChannelModal() {
                   class="size-5 shrink-0 text-ink-placeholder"
                 />
                 <input
-                  ref={nameInputRef}
                   id="new-channel-name"
                   type="text"
                   value={name()}
