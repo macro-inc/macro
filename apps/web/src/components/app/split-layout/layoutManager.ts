@@ -848,6 +848,17 @@ export function createSplitLayout(
   };
 
   function activateSplit(id: SplitId) {
+    // Invariant: an excluded split (the mobile background split) can never
+    // become the active split. Promote it out of exclusion first.
+    const split = findSplitById(id);
+    if (split && isExcluded(split)) {
+      if (import.meta.env.DEV) {
+        console.warn(
+          `activateSplit: refusing to activate excluded split ${id}`
+        );
+      }
+      return;
+    }
     const current = state.activeSplitId;
     setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
