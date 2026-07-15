@@ -1318,6 +1318,11 @@ where
             return Ok(None);
         };
 
+        let enterprise = self
+            .team_repository
+            .get_team_enterprise_status(&team_id)
+            .await?;
+
         // Mirror the seat-cap check from invite_users_to_team — an
         // auto-join must not push the team past its plan's seat cap.
         if let Some(team_plan) = self.team_repository.get_team_plan(&team_id).await? {
@@ -1340,48 +1345,58 @@ where
             return Ok(None);
         };
 
-        if !self
-            .team_repository
-            .get_team_payment_status(&team_id)
-            .await?
-        {
-            // If the team has a subscription id and they are set to not paying continue to error
-            if self
+        let subscription_id = if enterprise {
+            None
+        } else {
+            if !self
                 .team_repository
-                .get_team_subscription_id(&team_id)
+                .get_team_payment_status(&team_id)
                 .await?
-                .is_some()
             {
-                self.rollback_add_user_to_team(&team_id, user_id, "the payment status check")
+                // If the team has a subscription id and they are set to not paying continue to error
+                if self
+                    .team_repository
+                    .get_team_subscription_id(&team_id)
+                    .await?
+                    .is_some()
+                {
+                    self.rollback_add_user_to_team(&team_id, user_id, "the payment status check")
+                        .await;
+                    return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying).into());
+                }
+
+                if let Err(e) = self.backfill_legacy_team_subscription(&team_id).await {
+                    self.rollback_add_user_to_team(
+                        &team_id,
+                        user_id,
+                        "backfilling team subscription",
+                    )
                     .await;
-                return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying).into());
+                    return Err(e.into_join_team_error().into());
+                }
             }
 
-            if let Err(e) = self.backfill_legacy_team_subscription(&team_id).await {
-                self.rollback_add_user_to_team(&team_id, user_id, "backfilling team subscription")
-                    .await;
-                return Err(e.into_join_team_error().into());
-            }
-        }
+            let subscription_id = match self.get_team_subscription(&team_id).await {
+                Ok(subscription_id) => subscription_id,
+                Err(e) => {
+                    self.rollback_add_user_to_team(&team_id, user_id, "getting team subscription")
+                        .await;
+                    return Err(e.into_join_team_error().into());
+                }
+            };
 
-        let subscription_id = match self.get_team_subscription(&team_id).await {
-            Ok(subscription_id) => subscription_id,
-            Err(e) => {
-                self.rollback_add_user_to_team(&team_id, user_id, "getting team subscription")
+            if let Err(e) = self
+                .customer_repository
+                .increment_seat_count(&subscription_id, 1)
+                .await
+            {
+                self.rollback_add_user_to_team(&team_id, user_id, "incrementing seat count")
                     .await;
-                return Err(e.into_join_team_error().into());
+                return Err(JoinTeamError::CustomerError(e).into());
             }
+
+            Some(subscription_id)
         };
-
-        if let Err(e) = self
-            .customer_repository
-            .increment_seat_count(&subscription_id, 1)
-            .await
-        {
-            self.rollback_add_user_to_team(&team_id, user_id, "incrementing seat count")
-                .await;
-            return Err(JoinTeamError::CustomerError(e).into());
-        }
 
         // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
         let roles_to_add = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
@@ -1392,16 +1407,18 @@ where
             .dangerous_upsert_roles_for_user(user_id, roles)
             .await
         {
-            self.customer_repository
-                .decrement_seat_count(&subscription_id, 1)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback customer seat count after adding team member roles failed"
-                    );
-                })
-                .ok();
+            if let Some(subscription_id) = subscription_id.as_ref() {
+                self.customer_repository
+                    .decrement_seat_count(subscription_id, 1)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback customer seat count after adding team member roles failed"
+                        );
+                    })
+                    .ok();
+            }
             self.rollback_add_user_to_team(&team_id, user_id, "adding team member roles")
                 .await;
             return Err(JoinTeamError::AddRolesToUserError(e).into());
@@ -1423,16 +1440,18 @@ where
                     );
                 })
                 .ok();
-            self.customer_repository
-                .decrement_seat_count(&subscription_id, 1)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback customer seat count after adding team member to channels failed"
-                    );
-                })
-                .ok();
+            if let Some(subscription_id) = subscription_id.as_ref() {
+                self.customer_repository
+                    .decrement_seat_count(subscription_id, 1)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback customer seat count after adding team member to channels failed"
+                        );
+                    })
+                    .ok();
+            }
             self.rollback_add_user_to_team(&team_id, user_id, "adding team member to channels")
                 .await;
             return Err(JoinTeamError::TeamError(e).into());
