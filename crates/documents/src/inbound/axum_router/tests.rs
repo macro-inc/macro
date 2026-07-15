@@ -79,9 +79,16 @@ struct CreateDocumentCall {
     email_attachment_id: Option<Uuid>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct UploadSnapshotCall {
+    document_id: String,
+    bytes: Vec<u8>,
+}
+
 #[derive(Default)]
 struct FakeDocumentService {
     create_calls: Mutex<Vec<CreateDocumentCall>>,
+    upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
 }
 
 impl FakeDocumentService {
@@ -91,14 +98,33 @@ impl FakeDocumentService {
             .expect("create calls lock poisoned")
             .clone()
     }
+
+    fn upload_snapshot_calls(&self) -> Vec<UploadSnapshotCall> {
+        self.upload_snapshot_calls
+            .lock()
+            .expect("upload snapshot calls lock poisoned")
+            .clone()
+    }
 }
 
 impl DocumentService for FakeDocumentService {
     async fn internal_get_basic_document(
         &self,
-        _document_id: &str,
+        document_id: &str,
     ) -> Result<DocumentBasic, DocumentError> {
-        panic!("unexpected internal_get_basic_document call")
+        Ok(DocumentBasic {
+            document_id: document_id.to_string(),
+            document_name: "test document".to_string(),
+            owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
+                .expect("test user id should be valid"),
+            file_type: Some("pdf".to_string()),
+            sub_type: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            project_id: None,
+            deleted_at: None,
+        })
     }
 
     async fn get_document(
@@ -241,8 +267,15 @@ impl DocumentService for FakeDocumentService {
         panic!("unexpected get_snapshot call")
     }
 
-    async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
-        panic!("unexpected upload_snapshot call")
+    async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
+        self.upload_snapshot_calls
+            .lock()
+            .expect("upload snapshot calls lock poisoned")
+            .push(UploadSnapshotCall {
+                document_id: document_id.to_string(),
+                bytes,
+            });
+        Ok(())
     }
 
     async fn get_team_share(
@@ -591,6 +624,47 @@ async fn send(router: &Router, request: Request<Body>) -> (StatusCode, Value) {
     let body = serde_json::from_slice(&bytes).expect("response should contain JSON");
 
     (status, body)
+}
+
+async fn send_status(router: &Router, request: Request<Body>) -> StatusCode {
+    router.clone().oneshot(request).await.unwrap().status()
+}
+
+#[tokio::test]
+async fn snapshot_upload_requires_internal_api_key() {
+    let snapshot = b"snapshot bytes";
+    let (router, document_service, authorization_service) = test_router();
+
+    let jwt_request = Request::put("/snapshot-document/snapshot")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::from(snapshot.as_slice()))
+        .expect("request should build");
+    assert_eq!(
+        send_status(&router, jwt_request).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(document_service.upload_snapshot_calls().is_empty());
+    assert!(authorization_service.calls().is_empty());
+
+    let internal_request = Request::put("/snapshot-document/snapshot")
+        .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+        .body(Body::from(snapshot.as_slice()))
+        .expect("request should build");
+    assert_eq!(send_status(&router, internal_request).await, StatusCode::OK);
+    assert_eq!(
+        document_service.upload_snapshot_calls(),
+        [UploadSnapshotCall {
+            document_id: "snapshot-document".to_string(),
+            bytes: snapshot.to_vec(),
+        }]
+    );
+    assert_eq!(
+        authorization_service.calls(),
+        [AuthorizationCall::Internal {
+            provided_key: STANDARD_INTERNAL_KEY.to_string(),
+            claims: InternalIdentityClaims::default(),
+        }]
+    );
 }
 
 #[tokio::test]

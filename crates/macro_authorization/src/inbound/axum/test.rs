@@ -141,6 +141,13 @@ async fn optional_handler(
     }))
 }
 
+async fn internal_handler(
+    extractor: InternalMacroAuthorizationExtractor<FakeAuthorizationService>,
+) -> Json<Value> {
+    let _extractor = extractor.clone();
+    Json(json!({ "authorized": true }))
+}
+
 fn test_router() -> (Router, FakeAuthorizationService) {
     let service = FakeAuthorizationService::default();
     let state = TestState {
@@ -150,6 +157,7 @@ fn test_router() -> (Router, FakeAuthorizationService) {
     let router = Router::new()
         .route("/required", get(required_handler))
         .route("/optional", get(optional_handler))
+        .route("/internal", get(internal_handler))
         .with_state(state);
 
     (router, service)
@@ -179,8 +187,119 @@ fn state_and_extractors_are_clone_without_requiring_service_clone() {
     struct NotClone;
 
     assert_clone_without_service_clone::<MacroAuthorizationState<NotClone>>();
+    assert_clone_without_service_clone::<InternalMacroAuthorizationExtractor<NotClone>>();
     assert_clone_without_service_clone::<MacroAuthorizationExtractor<NotClone>>();
     assert_clone_without_service_clone::<OptionalMacroAuthorizationExtractor<NotClone>>();
+}
+
+#[allow(deprecated)]
+#[tokio::test]
+async fn internal_accepts_standard_and_legacy_api_keys_without_identity_headers() {
+    let (router, service) = test_router();
+
+    for header in [INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_API_KEY_HEADER] {
+        let request = empty_body(request("/internal").header(header, VALID_INTERNAL_KEY));
+        let (status, body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, json!({ "authorized": true }));
+    }
+
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::Internal {
+                provided_key: VALID_INTERNAL_KEY.to_string(),
+                claims: InternalIdentityClaims::default(),
+            },
+            AuthorizationCall::Internal {
+                provided_key: VALID_INTERNAL_KEY.to_string(),
+                claims: InternalIdentityClaims::default(),
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn internal_ignores_identity_headers() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/internal")
+            .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+            .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID)
+            .header(INTERNAL_MACRO_ORGANIZATION_ID_HEADER, "42")
+            .header(INTERNAL_FUSIONAUTH_USER_ID_HEADER, "fusion-user"),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "authorized": true }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Internal {
+            provided_key: VALID_INTERNAL_KEY.to_string(),
+            claims: InternalIdentityClaims::default(),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn internal_rejects_missing_key_and_does_not_fall_back_to_jwt() {
+    let (router, service) = test_router();
+
+    for request in [
+        empty_body(request("/internal")),
+        empty_body(request("/internal").header("authorization", "Bearer valid")),
+    ] {
+        let (status, body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body, json!({ "message": "unauthorized" }));
+    }
+
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn internal_rejects_invalid_api_key() {
+    let (router, service) = test_router();
+    let request = empty_body(request("/internal").header(INTERNAL_API_KEY_HEADER, "invalid"));
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Internal {
+            provided_key: "invalid".to_string(),
+            claims: InternalIdentityClaims::default(),
+        }]
+    );
+}
+
+#[allow(deprecated)]
+#[tokio::test]
+async fn internal_standard_key_takes_precedence_over_legacy_key() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/internal")
+            .header(INTERNAL_API_KEY_HEADER, "invalid-standard-key")
+            .header(LEGACY_DSS_INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Internal {
+            provided_key: "invalid-standard-key".to_string(),
+            claims: InternalIdentityClaims::default(),
+        }]
+    );
 }
 
 #[tokio::test]

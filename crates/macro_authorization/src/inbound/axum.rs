@@ -158,6 +158,53 @@ where
     }
 }
 
+/// Authorizes an internal service request using only its internal API key.
+///
+/// Both the standard and legacy DSS internal API key headers are accepted.
+/// User, FusionAuth, and organization identity headers are deliberately ignored.
+#[non_exhaustive]
+pub struct InternalMacroAuthorizationExtractor<Svc> {
+    _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> Clone for InternalMacroAuthorizationExtractor<Svc> {
+    fn clone(&self) -> Self {
+        Self {
+            _service: PhantomData,
+        }
+    }
+}
+
+impl<S, Svc> FromRequestParts<S> for InternalMacroAuthorizationExtractor<Svc>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = MacroAuthorizationRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let convention =
+            internal_header_convention(&parts.headers).ok_or_else(|| rejection("unauthorized"))?;
+        let provided_key = parts
+            .headers
+            .get(convention.key_header)
+            .and_then(|header| header.to_str().ok())
+            .ok_or_else(|| rejection("unauthorized"))?;
+        let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
+
+        authorization
+            .service
+            .authorize_internal(provided_key, InternalIdentityClaims::default())
+            .await
+            .map_err(internal_authorization_rejection)?;
+
+        Ok(Self {
+            _service: PhantomData,
+        })
+    }
+}
+
 /// Extracts and authorizes credentials when an authenticated user is present.
 ///
 /// Requests without credentials succeed with an empty [`UserContext`]. Any

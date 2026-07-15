@@ -7,19 +7,20 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::MacroAuthorizationService;
+use macro_authorization::{InternalMacroAuthorizationExtractor, MacroAuthorizationService};
 
 use super::{DocumentRouterState, Params};
 use crate::domain::ports::DocumentService;
 
 /// Accepts raw snapshot bytes and stores them in S3.
-#[tracing::instrument(skip(state, body))]
+#[tracing::instrument(skip(state, body, _internal_authorization))]
 pub async fn put_snapshot_handler<
     T: DocumentService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<Auth>,
     Path(Params { document_id }): Path<Params>,
     body: Bytes,
 ) -> impl IntoResponse {
