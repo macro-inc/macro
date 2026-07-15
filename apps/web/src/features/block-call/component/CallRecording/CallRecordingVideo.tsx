@@ -103,7 +103,6 @@ export function CallRecordingVideo(props: {
           'opacity-100': hasVisibleVideo(),
         }}
         controls
-        crossorigin="anonymous"
         poster={posterBlobUrl()}
         src={props.url}
         onError={handlePlaybackError}
