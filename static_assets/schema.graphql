@@ -2486,9 +2486,27 @@ input SetEntityPropertyInput {
 }
 
 """
-Input for `Query.soup`.
+Input for continuing a Soup query.
 """
-input SoupInput {
+input SoupContinuationInput {
+	"""
+	Opaque cursor returned by a previous GraphQL Soup response.
+	"""
+	cursor: String!
+	"""
+	Whether to return expanded Soup items. Defaults to true.
+	"""
+	expand: Boolean
+	"""
+	Email preview view used when hydrating email Soup items.
+	"""
+	emailView: GraphqlEmailView
+}
+
+"""
+Input for starting a Soup query.
+"""
+input SoupInitialInput {
 	"""
 	Maximum number of items to return. Defaults to 20, max 500.
 	"""
@@ -2503,10 +2521,6 @@ input SoupInput {
 	"""
 	sortMethod: GraphqlSimpleSortMethod
 	"""
-	Opaque cursor returned by a previous GraphQL Soup response.
-	"""
-	cursor: String
-	"""
 	Email preview view used when hydrating email Soup items.
 	"""
 	emailView: GraphqlEmailView
@@ -2514,6 +2528,20 @@ input SoupInput {
 	AST-shaped filters applied to each Soup entity type.
 	"""
 	filters: GraphqlEntityFilterAst
+}
+
+"""
+Input for `Query.soup`.
+"""
+input SoupInput @oneOf {
+	"""
+	Start a new Soup query.
+	"""
+	initial: SoupInitialInput
+	"""
+	Continue a Soup query from an opaque cursor.
+	"""
+	continuation: SoupContinuationInput
 }
 
 """

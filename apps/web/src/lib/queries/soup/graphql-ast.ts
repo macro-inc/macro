@@ -16,6 +16,7 @@ import type {
   GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
   GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
+  SoupInitialInput as GraphqlSoupInitialInput,
   SoupInput as GraphqlSoupInput,
 } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
@@ -455,7 +456,7 @@ function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
 
 function mapSortMethod(
   sortMethod: SoupParams['sort_method']
-): GraphqlSoupInput['sortMethod'] {
+): GraphqlSoupInitialInput['sortMethod'] {
   switch (sortMethod) {
     case 'viewed_at':
       return 'VIEWED_AT';
@@ -474,7 +475,7 @@ function mapSortMethod(
 
 function mapEmailView(
   view: AstBody['emailView']
-): GraphqlSoupInput['emailView'] {
+): GraphqlSoupInitialInput['emailView'] {
   switch (view) {
     case 'inbox':
       return 'INBOX';
@@ -529,14 +530,26 @@ export function makeGraphqlSoupInput(args: {
   cursor?: string | null;
 }): GraphqlSoupInput {
   const body = args.body as AstBody;
+  const emailView = mapEmailView(body.emailView);
+
+  if (args.cursor != null) {
+    return {
+      continuation: {
+        cursor: args.cursor,
+        expand: true,
+        emailView,
+      },
+    };
+  }
 
   return {
-    limit: args.params.limit ?? undefined,
-    expand: true,
-    sortMethod: mapSortMethod(args.params.sort_method),
-    cursor: args.cursor,
-    emailView: mapEmailView(body.emailView),
-    filters: makeGraphqlFilters(body),
+    initial: {
+      limit: args.params.limit ?? undefined,
+      expand: true,
+      sortMethod: mapSortMethod(args.params.sort_method),
+      emailView,
+      filters: makeGraphqlFilters(body),
+    },
   };
 }
 

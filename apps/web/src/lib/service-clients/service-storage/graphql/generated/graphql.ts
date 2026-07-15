@@ -681,10 +681,18 @@ export type SetEntityPropertyInput = {
   value?: GraphqlSetPropertyValue | null | undefined;
 };
 
-/** Input for `Query.soup`. */
-export type SoupInput = {
+/** Input for continuing a Soup query. */
+export type SoupContinuationInput = {
   /** Opaque cursor returned by a previous GraphQL Soup response. */
-  cursor?: string | null | undefined;
+  cursor: string;
+  /** Email preview view used when hydrating email Soup items. */
+  emailView?: GraphqlEmailView | null | undefined;
+  /** Whether to return expanded Soup items. Defaults to true. */
+  expand?: boolean | null | undefined;
+};
+
+/** Input for starting a Soup query. */
+export type SoupInitialInput = {
   /** Email preview view used when hydrating email Soup items. */
   emailView?: GraphqlEmailView | null | undefined;
   /** Whether to return expanded Soup items. Defaults to true. */
@@ -699,6 +707,13 @@ export type SoupInput = {
    */
   sortMethod?: GraphqlSimpleSortMethod | null | undefined;
 };
+
+/** Input for `Query.soup`. */
+export type SoupInput =
+  {   /** Continue a Soup query from an opaque cursor. */
+  continuation: SoupContinuationInput; initial?: never; }
+  |  { continuation?: never;   /** Start a new Soup query. */
+  initial: SoupInitialInput; };
 
 export type GroupSoupQueryVariables = Exact<{
   input: GroupedSoupInput;

@@ -22,6 +22,7 @@ import {
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
   type GroupSoupQueryVariables,
+  type SoupInitialInput,
   type SoupInput,
   type SoupQuery,
   SoupDocument as SoupQueryDocument,
@@ -127,6 +128,7 @@ export function getGraphqlSoupClient(): Client {
 }
 
 export type GraphqlSoupInput = SoupInput;
+export type GraphqlSoupInitialInput = SoupInitialInput;
 export type GraphqlGroupedSoupInput = GroupedSoupInput;
 
 export type GraphqlGroupedSoupPage = {

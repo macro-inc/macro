@@ -485,7 +485,7 @@ async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
     let harness = harness();
 
     let _response = harness
-        .execute("{ user { soup(input: {}) { hasMore } } }")
+        .execute("{ user { soup(input: {initial: {}}) { hasMore } } }")
         .await;
 
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
@@ -495,11 +495,25 @@ async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
 }
 
 #[tokio::test]
+async fn soup_input_rejects_initial_and_continuation_together() {
+    let harness = harness();
+
+    let response = harness
+        .execute(
+            r#"{ user { soup(input: {initial: {}, continuation: {cursor: "invalid"}}) { hasMore } } }"#,
+        )
+        .await;
+
+    assert!(!response.errors.is_empty());
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn soup_requests_frecency_only_when_selected() {
     let harness = harness();
 
     let _response = harness
-        .execute("{ user { soup(input: {}) { items { frecencyScore } } } }")
+        .execute("{ user { soup(input: {initial: {}}) { items { frecencyScore } } } }")
         .await;
 
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
@@ -544,7 +558,7 @@ async fn crm_scoped_soup_resolves_team_membership_lazily() {
     // layer resolves the team receipt only for CRM-scoped input.
     let response = harness
         .execute(
-            r#"{ user { soup(input: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}) { hasMore } } }"#,
+            r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { hasMore } } }"#,
         )
         .await;
 

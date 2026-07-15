@@ -14,14 +14,13 @@ fn test_macro_user_id() -> MacroUserIdStr<'static> {
 
 #[test]
 fn maps_email_view_to_soup_request() {
-    let request = SoupInput {
+    let request = SoupInput::Initial(Box::new(SoupInitialInput {
         limit: None,
         expand: None,
         sort_method: None,
-        cursor: None,
         email_view: Some(GraphqlEmailView::Sent),
         filters: None,
-    }
+    }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
 
@@ -30,18 +29,42 @@ fn maps_email_view_to_soup_request() {
 
 #[test]
 fn defaults_email_view_to_inbox() {
-    let request = SoupInput {
+    let request = SoupInput::Initial(Box::new(SoupInitialInput {
         limit: None,
         expand: None,
         sort_method: None,
-        cursor: None,
         email_view: None,
         filters: None,
-    }
+    }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
 
     assert_eq!(request.email_preview_view.to_string(), "inbox");
+}
+
+#[test]
+fn maps_soup_cursor_continuation() {
+    let cursor = Base64Str::encode_json(CursorWithValAndFilter {
+        id: uuid::Uuid::from_u128(1),
+        limit: 25,
+        val: CursorVal {
+            sort_type: SimpleSortMethod::UpdatedAt,
+            last_val: chrono::DateTime::default(),
+        },
+        filter: item_filters::ast::EntityFilterAst::default(),
+    });
+    let request = SoupInput::Continuation(SoupContinuationInput {
+        cursor: cursor.to_string(),
+        expand: Some(false),
+        email_view: Some(GraphqlEmailView::Sent),
+    })
+    .into_request(test_macro_user_id(), vec![])
+    .unwrap();
+
+    assert_eq!(request.limit, 25);
+    assert!(matches!(request.cursor, SoupQuery::Simple(_)));
+    assert_eq!(request.email_preview_view.to_string(), "sent");
+    assert!(matches!(request.soup_type, SoupType::UnExpanded));
 }
 
 #[test]

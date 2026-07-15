@@ -30,20 +30,43 @@ describe('makeGraphqlSoupInput', () => {
     });
 
     expect(input).toMatchObject({
-      limit: 100,
-      expand: true,
-      sortMethod: 'UPDATED_AT',
-      emailView: 'INBOX',
-      filters: {
-        documentFilter: {
-          and: {
-            left: { literal: { notificationDone: false } },
-            right: { literal: { updatedAt: { gte: UPDATED_AT } } },
+      initial: {
+        limit: 100,
+        expand: true,
+        sortMethod: 'UPDATED_AT',
+        emailView: 'INBOX',
+        filters: {
+          documentFilter: {
+            and: {
+              left: { literal: { notificationDone: false } },
+              right: { literal: { updatedAt: { gte: UPDATED_AT } } },
+            },
+          },
+          emailFilter: {
+            tree: { literal: { shared: 'EXCLUDE' } },
           },
         },
-        emailFilter: {
-          tree: { literal: { shared: 'EXCLUDE' } },
-        },
+      },
+    });
+  });
+
+  it('maps cursor requests without resending filters or sort', () => {
+    const input = makeGraphqlSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(
+        queryStateFrom({
+          include: { documentDone: false },
+          emailView: 'sent',
+        })
+      ),
+      cursor: 'opaque-cursor',
+    });
+
+    expect(input).toEqual({
+      continuation: {
+        cursor: 'opaque-cursor',
+        expand: true,
+        emailView: 'SENT',
       },
     });
   });
@@ -104,10 +127,16 @@ describe('makeGraphqlSoupInput', () => {
       },
     });
 
-    expect(input.filters?.propertiesFilter).toEqual({
-      literal: {
-        propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
-        value: { selectOption: '00000000-0000-0000-0000-000000000002' },
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          propertiesFilter: {
+            literal: {
+              propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+              value: { selectOption: '00000000-0000-0000-0000-000000000002' },
+            },
+          },
+        },
       },
     });
   });
@@ -118,8 +147,14 @@ describe('makeGraphqlSoupInput', () => {
       body: { cthf: { l: { Participant: 'user-1' } } } as never,
     });
 
-    expect(input.filters?.channelThreadFilter).toEqual({
-      literal: { participant: 'user-1' },
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          channelThreadFilter: {
+            literal: { participant: 'user-1' },
+          },
+        },
+      },
     });
   });
 
