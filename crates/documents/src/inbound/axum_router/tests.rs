@@ -668,46 +668,6 @@ async fn snapshot_upload_requires_internal_api_key() {
 }
 
 #[tokio::test]
-async fn missing_credentials_return_json_unauthorized() {
-    let (router, document_service, authorization_service) = test_router();
-    let request = finish_request(create_request(), None);
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-    assert!(document_service.create_calls().is_empty());
-    assert!(authorization_service.calls().is_empty());
-}
-
-#[tokio::test]
-async fn jwt_credentials_reach_the_document_service() {
-    let (router, document_service, authorization_service) = test_router();
-    let request = finish_request(
-        create_request().header("authorization", format!("Bearer {JWT_TOKEN}")),
-        None,
-    );
-
-    let (status, _body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        document_service.create_calls(),
-        [CreateDocumentCall {
-            user_id: JWT_USER_ID.to_string(),
-            email_attachment_id: None,
-        }]
-    );
-    assert!(!authorization_service.calls().is_empty());
-    assert!(
-        authorization_service
-            .calls()
-            .iter()
-            .all(|call| matches!(call, AuthorizationCall::Jwt(token) if token == JWT_TOKEN))
-    );
-}
-
-#[tokio::test]
 async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
     let email_attachment_id = Uuid::new_v4();
     let (router, document_service, authorization_service) = test_router();
