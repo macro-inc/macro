@@ -983,9 +983,7 @@ function TeamManagement(props: {
       (member) => member.user_id === currentUserId
     )?.role;
   });
-  const canManageMemberRemovals = createMemo(() =>
-    isTeamAdminOrOwner(currentUserRole())
-  );
+  const canManageMemberRemovals = () => isTeamAdminOrOwner(currentUserRole());
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
@@ -1270,7 +1268,7 @@ function TeamManagement(props: {
         <SettingsSection
           title="Members"
           actions={
-            <Show when={isOwner()}>
+            <Show when={canManageMemberRemovals()}>
               <Button
                 variant="base"
                 size="sm"
