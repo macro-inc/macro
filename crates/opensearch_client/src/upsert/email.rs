@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
@@ -9,9 +7,6 @@ use crate::{
     date_format::{EpochMillis, EpochSeconds},
     error::OpensearchClientError,
 };
-
-#[cfg(test)]
-mod test;
 
 /// The arguments for upserting an email message into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -65,86 +60,18 @@ pub struct UpsertEmailArgs {
     pub properties: Vec<IndexedProperty>,
 }
 
-/// Derived search tokens for an email's address fields. Domains carry their
-/// dot-suffixes with at least two labels plus each label except the TLD
-/// (`x@mail.foo.com` yields `mail.foo.com`, `foo.com`, `mail`, `foo`), so a
-/// bare company name matches as an exact token. Local parts carry their
-/// dot/plus segments (`jane.doe` yields `jane` and `doe` too). Everything is
-/// lowercased; addresses without a non-empty local part and domain are
-/// skipped.
-fn address_search_fields<'a>(
-    addresses: impl IntoIterator<Item = &'a str>,
-) -> (Vec<String>, Vec<String>) {
-    let mut domains = BTreeSet::new();
-    let mut local_parts = BTreeSet::new();
-    for address in addresses {
-        let address = address.trim().to_lowercase();
-        let Some((local, domain)) = address.rsplit_once('@') else {
-            continue;
-        };
-        if local.is_empty() || domain.is_empty() {
-            continue;
-        }
-        local_parts.insert(local.to_string());
-        for segment in local.split(['.', '+']).filter(|s| !s.is_empty()) {
-            local_parts.insert(segment.to_string());
-        }
-        let labels: Vec<&str> = domain.split('.').filter(|l| !l.is_empty()).collect();
-        if labels.len() <= 1 {
-            domains.extend(labels.iter().map(|l| l.to_string()));
-        } else {
-            for start in 0..labels.len() - 1 {
-                domains.insert(labels[start..].join("."));
-            }
-            for label in &labels[..labels.len() - 1] {
-                domains.insert(label.to_string());
-            }
-        }
-    }
-    (
-        domains.into_iter().collect(),
-        local_parts.into_iter().collect(),
-    )
-}
-
-/// Serializes the upsert args and injects the derived `domains` and
-/// `local_parts` fields so every write path indexes them.
-fn to_index_document(args: &UpsertEmailArgs) -> Result<serde_json::Value> {
-    let mut doc =
-        serde_json::to_value(args).map_err(|e| OpensearchClientError::DeserializationFailed {
-            details: e.to_string(),
-            method: Some("to_index_document".to_string()),
-        })?;
-    let addresses = std::iter::once(args.sender.as_str())
-        .chain(args.reply_to.as_deref())
-        .chain(args.recipients.iter().map(String::as_str))
-        .chain(args.cc.iter().map(String::as_str))
-        .chain(args.bcc.iter().map(String::as_str));
-    let (domains, local_parts) = address_search_fields(addresses);
-    let map = doc
-        .as_object_mut()
-        .ok_or_else(|| OpensearchClientError::DeserializationFailed {
-            details: "UpsertEmailArgs did not serialize to an object".to_string(),
-            method: Some("to_index_document".to_string()),
-        })?;
-    map.insert("domains".to_string(), serde_json::json!(domains));
-    map.insert("local_parts".to_string(), serde_json::json!(local_parts));
-    Ok(doc)
-}
-
 #[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_email_message(
     client: &opensearch::OpenSearch,
     args: &UpsertEmailArgs,
 ) -> Result<()> {
     let id = format!("{}:{}", args.thread_id, args.message_id);
-    let doc = to_index_document(args)?;
     let response = client
         .index(opensearch::IndexParts::IndexId(
             SearchIndex::Emails.as_ref(),
             &id,
         ))
-        .body(&doc)
+        .body(args)
         .send()
         .await
         .map_err(|err| OpensearchClientError::DeserializationFailed {
@@ -201,7 +128,12 @@ pub(crate) async fn bulk_upsert_email_messages(
         });
 
         bulk_body.push(action.to_string());
-        bulk_body.push(to_index_document(msg)?.to_string());
+        bulk_body.push(serde_json::to_string(msg).map_err(|e| {
+            OpensearchClientError::DeserializationFailed {
+                details: e.to_string(),
+                method: Some("bulk_upsert_email_messages".to_string()),
+            }
+        })?);
     }
 
     let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());

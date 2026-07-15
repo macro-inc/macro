@@ -19,20 +19,24 @@ impl SearchQueryConfig for EmailSearchConfig {
 }
 
 /// Email-address fields matched explicitly, never as a character prefix.
-/// The raw keyword-indexed addresses plus two token fields extracted at
-/// index time: `local_parts` (`jane.doe@x` indexes `jane.doe`, `jane`,
-/// `doe`) and `domains` (`x@mail.foo.com` indexes `mail.foo.com`,
-/// `foo.com`, `mail`, `foo`). A bare word matches only a whole token, so
-/// `ali` won't match `alice@example.com` and `immipart` won't match
-/// `immipartner.com`.
+/// The raw keyword-indexed addresses plus their `.parts` sub-fields, which
+/// the `email_parts` analyzer splits into positioned segment tokens
+/// (`jane.doe@mail.foo.com` indexes `jane`, `doe`, `mail`, `foo`, `com`).
+/// A bare word matches only a whole segment, so `ali` won't match
+/// `alice@example.com` and `immipart` won't match `immipartner.com`.
+/// Dotted terms like `foo.com` are quoted into phrases and match any
+/// in-order adjacent run of segments.
 const EMAIL_KEYWORD_FIELDS: &[&str] = &[
     "sender",
     "reply_to",
     "recipients",
     "cc",
     "bcc",
-    "local_parts",
-    "domains",
+    "sender.parts",
+    "reply_to.parts",
+    "recipients.parts",
+    "cc.parts",
+    "bcc.parts",
 ];
 
 /// Text-analyzed fields. Matched as a prefix so `scri` matches `script`.
@@ -46,27 +50,28 @@ const EMAIL_TEXT_FIELDS: &[&str] = &[
 ];
 
 /// Builds the simple_query_string over the email-address fields.
-/// Single-word terms become `(term | term@*)` — an exact token match (which
-/// hits the extracted `local_parts` and `domains` tokens) OR an
-/// exact-local-part match on the raw address. The `term@*` pattern is
-/// redundant with `local_parts` on freshly indexed docs but still carries
-/// docs indexed before that field existed and not yet backfilled. This deliberately does NOT use a trailing
-/// `*` on the bare term, so partial local-parts don't leak across addresses
-/// (e.g. `ali` won't match `alice@example.com` via this group).
-/// Email-like terms (containing `@`) and multi-word terms (quoted phrases
-/// from `split_search_terms`) are wrapped in quotes to force phrase matching.
-/// Without the quotes, `default_operator: "AND"` would turn `(reply test)`
-/// into `reply AND test` and match each token independently anywhere in the
-/// field instead of as an adjacent phrase. The standard analyzer also
-/// tokenizes `alice@example.com` into `[alice, example, com]`, so phrase
-/// matching is what keeps the address from matching across unrelated tokens.
+/// Single-word terms become `(term | term@*)` — an exact segment-token match
+/// on the `.parts` sub-fields OR an exact-local-part match on the raw
+/// address. The `term@*` pattern is redundant with `.parts` once the index
+/// carries the sub-fields but keeps the query compatible with an index that
+/// predates them. This deliberately does NOT use a trailing `*` on the bare
+/// term, so partial segments don't leak across addresses (e.g. `ali` won't
+/// match `alice@example.com` via this group).
+/// Terms containing `@`, `.`, or spaces (quoted phrases from
+/// `split_search_terms`) are wrapped in quotes to force phrase matching. On
+/// the `.parts` sub-fields the `email_parts` analyzer splits such terms into
+/// segment tokens, so the phrase requires an in-order adjacent run —
+/// `mail.foo.com`, `foo.com`, and full addresses all match `x@mail.foo.com`,
+/// but reordered or gapped segments don't. Without the quotes,
+/// `default_operator: "AND"` would match each segment independently anywhere
+/// in the field.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
 fn build_keyword_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains('@') || term.contains(' ') {
+            if term.contains('@') || term.contains('.') || term.contains(' ') {
                 format!("\"{}\"", term)
             } else {
                 format!("({} | {}@*)", term, term.to_lowercase())
