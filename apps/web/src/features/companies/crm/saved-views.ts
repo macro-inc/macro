@@ -100,9 +100,7 @@ export function usePersonalCrmViews() {
     )
   );
 
-  const defaultView = createMemo(() =>
-    views().find((view) => view.config.isDefault)
-  );
+  const defaultView = () => views().find((view) => view.config.isDefault);
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: CRM_SAVED_VIEWS_QUERY_KEY });
@@ -204,11 +202,9 @@ export function useTeamCrmViews() {
     (config().teamViews ?? []).filter((view) => isCrmViewConfig(view.config))
   );
 
-  const defaultViewId = createMemo(() => config().defaultTeamViewId);
+  const defaultViewId = () => config().defaultTeamViewId;
 
-  const defaultView = createMemo(() =>
-    views().find((view) => view.id === defaultViewId())
-  );
+  const defaultView = () => views().find((view) => view.id === defaultViewId());
 
   const setDefault = (id: string | undefined) => {
     update.mutate((current) => ({ ...current, defaultTeamViewId: id }), {
