@@ -127,6 +127,7 @@ tower = { version = "0.5", default-features = false, features = ["balance", "buf
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1" }
+triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
@@ -253,6 +254,7 @@ tower = { version = "0.5", default-features = false, features = ["balance", "buf
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1" }
+triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
