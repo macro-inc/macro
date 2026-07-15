@@ -128,6 +128,10 @@ export function Notebook(props: {
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
   let contentRef!: HTMLDivElement;
+  // Escape the notebook's isolated stacking context so the menu covers editor
+  // handles, while remaining inside the block so app chrome still covers it.
+  const outlinePortalMount = () =>
+    notebookRef.closest<HTMLElement>('.portal-scope') ?? notebookRef;
 
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
@@ -333,7 +337,7 @@ export function Notebook(props: {
           <MarkdownOutline
             editor={() => md.editor}
             outline={outline}
-            portalMount={() => notebookRef}
+            portalMount={outlinePortalMount}
             scrollContainer={() => md.scrollContainer}
           />
         </div>
