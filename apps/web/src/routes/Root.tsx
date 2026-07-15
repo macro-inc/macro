@@ -57,6 +57,7 @@ import {
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -193,6 +194,18 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   );
 }
 
+/**
+ * An expired or invalid session is not a connectivity problem: clear the login
+ * marker (cookie + localStorage fallback) so future cold opens route to the
+ * login screen instead of the offline fallback, then send the user there.
+ */
+function SessionExpiredRedirect() {
+  const { value, ...options } = getLoginCookieOptions(false);
+  updateCookie('login', value, options);
+  syncLoginStorage(false);
+  return <Navigate href={`/welcome${window.location.search}`} />;
+}
+
 function BasePathComponent() {
   const analytics = useAnalytics();
 
@@ -236,6 +249,14 @@ function BasePathComponent() {
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
       <Match
+        when={thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')}
+      >
+        <SessionExpiredRedirect />
+      </Match>
+      <Match when={userInfoQuery.data?.authenticated}>
+        <Navigate href={redirectPath} />
+      </Match>
+      <Match
         when={
           userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
         }
@@ -246,9 +267,6 @@ function BasePathComponent() {
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
         <Navigate href={`/welcome${window.location.search}`} />
-      </Match>
-      <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
       </Match>
     </Switch>
   );
