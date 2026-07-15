@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::models::{
     AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-    SimpleSortRequest, SoupErr, SoupPropertiesField, SoupRequest,
+    SimpleSortRequest, SoupErr, SoupPropertiesField, SoupRequest, grouping::ItemGroupingInfo,
 };
 use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -61,7 +61,7 @@ pub trait SoupRepo: Send + Sync + 'static {
     fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<impl Iterator<Item = ItemGroupingInfo>, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup

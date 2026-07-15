@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
-        GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+        GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
+        SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -180,7 +180,7 @@ where
     async fn handle_grouped_soup_request(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo>, SoupErr> {
         self.soup_storage
             .expanded_grouped_cursor_soup(req)
             .await

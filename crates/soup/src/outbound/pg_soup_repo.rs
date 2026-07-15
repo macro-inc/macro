@@ -2,7 +2,7 @@ use crate::{
     domain::{
         models::{
             AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, SimpleSortQuery,
-            SimpleSortRequest, SoupPropertiesField,
+            SimpleSortRequest, SoupPropertiesField, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -147,10 +147,10 @@ impl SoupRepo for PgSoupRepo {
         .map_err(|e| sqlx::Error::Decode(e.into()))
     }
 
-    fn expanded_grouped_cursor_soup<'a>(
+    async fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, Self::Err>> + Send {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo>, Self::Err> {
         expanded::dynamic::expanded_dynamic_cursor_soup_grouped(
             &self.pool.0,
             GroupedDynamicCursorArgs {
@@ -161,6 +161,7 @@ impl SoupRepo for PgSoupRepo {
                 grouping: req.grouping,
             },
         )
+        .await
     }
 }
 

@@ -767,25 +767,6 @@ pub struct GroupedSoupRequest<T> {
     pub grouping: Option<GroupingConfig>,
 }
 
-/// A soup item with group metadata attached (returned from grouped queries).
-#[derive(Debug)]
-pub struct GroupedSoupItem<T = ()> {
-    /// The soup item
-    pub item: SoupItem<T>,
-    /// The frecency score (if available)
-    pub frecency_score: Option<AggregateFrecency>,
-    /// Which group this item belongs to
-    pub group_key: String,
-    /// Total items in this group (computed via window function)
-    pub group_total_count: u32,
-    /// This item's position within the group (1-indexed)
-    pub row_in_group: u32,
-    /// Label for this group (from property_options or computed)
-    pub group_label: Option<String>,
-    /// Display order for this group
-    pub group_display_order: Option<i32>,
-}
-
 /// Errors returned while building or executing soup queries.
 #[derive(Debug, Error)]
 pub enum SoupErr {
