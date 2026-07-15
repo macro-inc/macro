@@ -35,7 +35,10 @@ pub struct JsonBodyWithPinType {
     pub pin_type: String,
 }
 
-/// Validates the user has access to pin the particular item.
+/// Validates an authenticated user has access to pin the particular item.
+///
+/// Type parameter `T` specifies the required access level, `Svc` is the entity access service,
+/// `V` is the request body, and `Auth` is the authorization service.
 #[derive(Debug)]
 pub struct PinAccessLevelExtractor<T: RequiredPermission, Svc, V, Auth> {
     /// The entity access receipt

@@ -32,7 +32,9 @@ pub struct HistoryParams {
 
 /// Validates the user has access to view the history of a particular item.
 ///
-/// Extracts both item_id and item_type from the path parameters.
+/// Extracts both `item_id` and `item_type` from the path parameters. Type parameter `T` specifies
+/// the required access level, `Svc` is the entity access service, and `Auth` is the authorization
+/// service.
 #[derive(Debug)]
 pub struct HistoryAccessExtractor<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt
