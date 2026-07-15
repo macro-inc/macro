@@ -275,6 +275,14 @@ function notificationsMutationSuccessCallback<T>(
   _: T,
   _params: NotificationsMutationParams
 ) {
+  // A fetch that is still in flight when the server write lands read its
+  // pages before that write, so letting it resolve would replace the cache
+  // with a pre-write snapshot. Discard it without reverting cache data; the
+  // query stays stale and refetches fresh on the next trigger.
+  queryClient.cancelQueries(
+    { queryKey: notificationKeys.user._def },
+    { revert: false }
+  );
   queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
     refetchType: 'none',
@@ -286,9 +294,13 @@ function createNotificationsMutateFn(
   updaterFn: NotificationsUpdater
 ): NotificationsOnMutateFn {
   return async (params) => {
-    await queryClient.cancelQueries({
-      queryKey: notificationKeys.user._def,
-    });
+    // revert: false — reverting would restore the pre-fetch snapshot and wipe
+    // writes that landed while that fetch was in flight (websocket inserts,
+    // other optimistic marks).
+    await queryClient.cancelQueries(
+      { queryKey: notificationKeys.user._def },
+      { revert: false }
+    );
 
     const previousData = queryClient.getQueriesData<
       NotificationData<UserNotificationsPageParam>
