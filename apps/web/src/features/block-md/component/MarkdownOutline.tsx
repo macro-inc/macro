@@ -130,6 +130,7 @@ function OutlineItem(props: {
 export function MarkdownOutline(props: {
   editor: Accessor<LexicalEditor | undefined>;
   outline: MarkdownOutlineState;
+  portalMount: Accessor<HTMLElement | undefined>;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
   const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
@@ -217,7 +218,7 @@ export function MarkdownOutline(props: {
   return (
     <>
       <div ref={outlineAnchor} class="h-px w-3" />
-      <Portal>
+      <Portal mount={props.portalMount()}>
         <div
           class="fixed z-item-options-menu w-3 -translate-y-1/2"
           style={{
@@ -244,6 +245,7 @@ export function MarkdownOutline(props: {
             gutter={-12}
             openDelay={0}
             placement="right"
+            portalMount={props.portalMount()}
             trigger={
               <div
                 aria-hidden="true"

@@ -71,6 +71,8 @@ type HoverCardComponentProps = {
    * can dismiss the card via a close callback).
    */
   open?: boolean;
+  /** Element that should receive the portaled hover-card content. */
+  portalMount?: HTMLElement;
   /** Placement of the hover card */
   placement?: HoverCardRootProps['placement'];
 };
@@ -216,7 +218,7 @@ export function HoverCard(props: HoverCardComponentProps) {
         {props.trigger}
       </KobalteHoverCard.Trigger>
 
-      <KobalteHoverCard.Portal>
+      <KobalteHoverCard.Portal mount={props.portalMount}>
         <KobalteHoverCard.Content
           ref={(el) => {
             contentEl = el;
