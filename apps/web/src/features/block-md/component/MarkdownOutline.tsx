@@ -6,8 +6,8 @@ import {
   createSignal,
   For,
   onCleanup,
-  Show,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 
 type OutlineHeading = {
   key: string;
@@ -17,9 +17,13 @@ type OutlineHeading = {
 
 const ACTIVE_HEADING_OFFSET = 80;
 const MIN_OUTLINE_HEADINGS = 3;
+export const MARKDOWN_OUTLINE_WIDTH = 40;
 
-export function shouldShowOutline(headingCount: number): boolean {
-  return headingCount >= MIN_OUTLINE_HEADINGS;
+export function shouldShowOutline(
+  headingCount: number,
+  enabled: boolean
+): boolean {
+  return enabled && headingCount >= MIN_OUTLINE_HEADINGS;
 }
 
 export function getActiveHeadingIndex(
@@ -47,6 +51,49 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
     )
   );
 }
+
+export function useMarkdownOutline(props: {
+  editor: Accessor<LexicalEditor | undefined>;
+  enabled: Accessor<boolean>;
+}) {
+  const [headings, setHeadings] = createSignal<OutlineHeading[]>([]);
+
+  createEffect(() => {
+    const editor = props.editor();
+    if (!editor) {
+      setHeadings([]);
+      return;
+    }
+
+    const refreshHeadings = () => {
+      const nextHeadings = editor.getEditorState().read(() =>
+        $getRoot()
+          .getChildren()
+          .filter($isHeadingNode)
+          .map((node) => ({
+            key: node.getKey(),
+            level: Number(node.getTag().slice(1)),
+            text: node.getTextContent().trim(),
+          }))
+          .filter((heading) => heading.text.length > 0)
+      );
+
+      setHeadings((current) =>
+        headingsEqual(current, nextHeadings) ? current : nextHeadings
+      );
+    };
+
+    refreshHeadings();
+    onCleanup(editor.registerUpdateListener(refreshHeadings));
+  });
+
+  return {
+    headings,
+    show: () => shouldShowOutline(headings().length, props.enabled()),
+  };
+}
+
+type MarkdownOutlineState = ReturnType<typeof useMarkdownOutline>;
 
 function OutlineDash(props: { active: boolean }) {
   return (
@@ -81,20 +128,36 @@ function OutlineItem(props: {
 
 export function MarkdownOutline(props: {
   editor: Accessor<LexicalEditor | undefined>;
+  outline: MarkdownOutlineState;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
-  const [headings, setHeadings] = createSignal<OutlineHeading[]>([]);
   const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
+  const [outlinePosition, setOutlinePosition] = createSignal({
+    left: -9999,
+    top: -9999,
+  });
+  let outlineAnchor: HTMLDivElement | undefined;
+
+  const syncOutlinePosition = () => {
+    const anchorRect = outlineAnchor?.getBoundingClientRect();
+    const scrollRect = props.scrollContainer()?.getBoundingClientRect();
+    if (!anchorRect || !scrollRect) return;
+
+    setOutlinePosition({
+      left: anchorRect.left,
+      top: scrollRect.top + scrollRect.height / 2,
+    });
+  };
 
   createEffect(() => {
     const editor = props.editor();
     const scrollContainer = props.scrollContainer();
+    const currentHeadings = props.outline.headings();
     if (!editor || !scrollContainer) return;
 
     let frame: number | undefined;
 
     const syncActiveHeading = () => {
-      const currentHeadings = headings();
       const containerTop = scrollContainer.getBoundingClientRect().top;
       const activeLine = containerTop + ACTIVE_HEADING_OFFSET;
       const headingTops = currentHeadings.map(
@@ -106,42 +169,22 @@ export function MarkdownOutline(props: {
       setActiveHeadingKey(currentHeadings[activeIndex]?.key);
     };
 
-    const queueActiveHeadingSync = () => {
+    const queueViewportSync = () => {
       if (frame !== undefined) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(syncActiveHeading);
+      frame = requestAnimationFrame(() => {
+        syncActiveHeading();
+        syncOutlinePosition();
+      });
     };
-
-    const refreshHeadings = () => {
-      const nextHeadings = editor.getEditorState().read(() =>
-        $getRoot()
-          .getChildren()
-          .filter($isHeadingNode)
-          .map((node) => ({
-            key: node.getKey(),
-            level: Number(node.getTag().slice(1)),
-            text: node.getTextContent().trim(),
-          }))
-          .filter((heading) => heading.text.length > 0)
-      );
-
-      setHeadings((current) =>
-        headingsEqual(current, nextHeadings) ? current : nextHeadings
-      );
-      queueActiveHeadingSync();
-    };
-
-    refreshHeadings();
-    const unregisterUpdateListener =
-      editor.registerUpdateListener(refreshHeadings);
-    scrollContainer.addEventListener('scroll', queueActiveHeadingSync, {
+    queueViewportSync();
+    scrollContainer.addEventListener('scroll', queueViewportSync, {
       passive: true,
     });
-    window.addEventListener('resize', queueActiveHeadingSync);
+    window.addEventListener('resize', queueViewportSync);
 
     onCleanup(() => {
-      unregisterUpdateListener();
-      scrollContainer.removeEventListener('scroll', queueActiveHeadingSync);
-      window.removeEventListener('resize', queueActiveHeadingSync);
+      scrollContainer.removeEventListener('scroll', queueViewportSync);
+      window.removeEventListener('resize', queueViewportSync);
       if (frame !== undefined) cancelAnimationFrame(frame);
     });
   });
@@ -171,34 +214,41 @@ export function MarkdownOutline(props: {
   };
 
   return (
-    <Show when={shouldShowOutline(headings().length)}>
-      <nav
-        aria-label="Document outline"
-        class="group/outline relative w-3 outline-none"
-        tabIndex={0}
-      >
-        <div
-          aria-hidden="true"
-          class="flex w-3 flex-col items-start gap-1 py-1"
+    <>
+      <div ref={outlineAnchor} class="h-px w-3" />
+      <Portal>
+        <nav
+          aria-label="Document outline"
+          class="group/outline fixed z-item-options-menu w-3 -translate-y-1/2 outline-none"
+          style={{
+            left: `${outlinePosition().left}px`,
+            top: `${outlinePosition().top}px`,
+          }}
+          tabIndex={0}
         >
-          <For each={headings()}>
-            {(heading) => (
-              <OutlineDash active={activeHeadingKey() === heading.key} />
-            )}
-          </For>
-        </div>
-        <div class="invisible absolute top-0 left-0 z-1 max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge group-hover/outline:visible group-focus-within/outline:visible">
-          <For each={headings()}>
-            {(heading) => (
-              <OutlineItem
-                active={activeHeadingKey() === heading.key}
-                label={heading.text}
-                onClick={() => scrollToHeading(heading)}
-              />
-            )}
-          </For>
-        </div>
-      </nav>
-    </Show>
+          <div
+            aria-hidden="true"
+            class="flex w-3 flex-col items-start gap-2 py-1"
+          >
+            <For each={props.outline.headings()}>
+              {(heading) => (
+                <OutlineDash active={activeHeadingKey() === heading.key} />
+              )}
+            </For>
+          </div>
+          <div class="invisible absolute top-1/2 left-0 max-h-[calc(100vh-6rem)] w-52 -translate-y-1/2 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge group-hover/outline:visible group-focus-within/outline:visible">
+            <For each={props.outline.headings()}>
+              {(heading) => (
+                <OutlineItem
+                  active={activeHeadingKey() === heading.key}
+                  label={heading.text}
+                  onClick={() => scrollToHeading(heading)}
+                />
+              )}
+            </For>
+          </div>
+        </nav>
+      </Portal>
+    </>
   );
 }

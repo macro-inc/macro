@@ -50,7 +50,11 @@ import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { MarkdownOutline } from './MarkdownOutline';
+import {
+  MARKDOWN_OUTLINE_WIDTH,
+  MarkdownOutline,
+  useMarkdownOutline,
+} from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
@@ -72,9 +76,9 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
-const OutlineWidth = 208;
 const OutlineEdgeInset = 16;
-const OutlineMinWidth = NoteTargetWidth + 2 * (OutlineWidth + OutlineEdgeInset);
+const OutlineMinWidth =
+  NoteTargetWidth + 2 * (MARKDOWN_OUTLINE_WIDTH + OutlineEdgeInset);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -129,6 +133,11 @@ export function Notebook(props: {
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
+  const outline = useMarkdownOutline({
+    editor: () => md.editor,
+    enabled: () =>
+      width() >= OutlineMinWidth && !history.isOpen() && !isMobile(),
+  });
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -136,11 +145,6 @@ export function Notebook(props: {
     return Object.keys(comments).length > 0;
   });
   const showComments = () => hasComment() && !history.isOpen();
-  const showOutline = () =>
-    width() >= OutlineMinWidth &&
-    !showComments() &&
-    !history.isOpen() &&
-    !isMobile();
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -318,20 +322,19 @@ export function Notebook(props: {
 
   return (
     <div class={containerClasses()} ref={notebookRef}>
-      <Show when={showOutline()}>
+      <Show when={outline.show()}>
         <div
           class="pointer-events-none absolute inset-y-0 z-1"
           style={{
             left: `${OutlineEdgeInset}px`,
-            width: `${OutlineWidth}px`,
+            width: `${MARKDOWN_OUTLINE_WIDTH}px`,
           }}
         >
-          <div class="pointer-events-auto sticky top-6">
-            <MarkdownOutline
-              editor={() => md.editor}
-              scrollContainer={() => md.scrollContainer}
-            />
-          </div>
+          <MarkdownOutline
+            editor={() => md.editor}
+            outline={outline}
+            scrollContainer={() => md.scrollContainer}
+          />
         </div>
       </Show>
       <div

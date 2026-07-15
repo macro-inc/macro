@@ -16,8 +16,9 @@ describe('getActiveHeadingIndex', () => {
 });
 
 describe('shouldShowOutline', () => {
-  it('requires at least three headings', () => {
-    expect(shouldShowOutline(2)).toBe(false);
-    expect(shouldShowOutline(3)).toBe(true);
+  it('requires layout eligibility and at least three headings', () => {
+    expect(shouldShowOutline(2, true)).toBe(false);
+    expect(shouldShowOutline(3, false)).toBe(false);
+    expect(shouldShowOutline(3, true)).toBe(true);
   });
 });
