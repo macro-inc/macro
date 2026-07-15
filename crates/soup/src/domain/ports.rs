@@ -139,7 +139,7 @@ pub trait SoupService: Send + Sync + 'static {
         req: GroupedSortRequest<'_>,
     ) -> impl Future<
         Output = Result<
-            impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>> + Send,
+            impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send,
             SoupErr,
         >,
     > + Send;
@@ -213,8 +213,7 @@ where
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>> + Send, SoupErr>
-    {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         (**self).get_user_soup_grouped(req).await
     }
 
@@ -288,9 +287,8 @@ impl SoupService for NoOpSoupService {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>> + Send, SoupErr>
-    {
-        Err::<std::vec::IntoIter<ItemGroupingInfo<String, SoupPropertiesField>>, _>(no_op_soup_err())
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(no_op_soup_err())
     }
 
     async fn caller_tag_sets<'a>(

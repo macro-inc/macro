@@ -699,7 +699,7 @@ where
         &self,
         user_id: MacroUserIdStr<'_>,
         items: impl Iterator<Item = ItemGroupingInfo> + Send,
-    ) -> Result<impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>>, SoupErr> {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>>, SoupErr> {
         let (items, metadata): (Vec<_>, Vec<_>) = items
             .map(|item| {
                 (
@@ -920,8 +920,7 @@ where
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>> + Send, SoupErr>
-    {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         let user_id = req.user_id.clone();
         let items = self.handle_grouped_soup_request(req).await?;
         self.populate_grouped_items(user_id, items).await

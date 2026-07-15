@@ -119,7 +119,6 @@ impl SoupService for CountingSoupService {
     ) -> Result<
         impl Iterator<
             Item = soup::domain::models::grouping::ItemGroupingInfo<
-                String,
                 soup::domain::models::SoupPropertiesField,
             >,
         > + Send,

@@ -162,11 +162,10 @@ impl SoupService for MockSoup {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>> + Send, SoupErr>
-    {
-        Err::<std::vec::IntoIter<ItemGroupingInfo<String, SoupPropertiesField>>, _>(
-            SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")),
-        )
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(SoupErr::SoupDbErr(
+            anyhow::anyhow!("Not implemented"),
+        ))
     }
 
     async fn caller_tag_sets<'a>(

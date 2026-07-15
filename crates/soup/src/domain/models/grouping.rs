@@ -65,7 +65,7 @@ pub struct GroupedResponse {
 
 /// Build a grouped response from grouped soup items.
 pub fn build_grouped_response(
-    items: impl IntoIterator<Item = ItemGroupingInfo<String, SoupPropertiesField>>,
+    items: impl IntoIterator<Item = ItemGroupingInfo<SoupPropertiesField>>,
     group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
@@ -229,7 +229,7 @@ impl<Bin, T> NestedSoupGroups<T, Bin> {
 
 /// A Soup item paired with the metadata needed to place it into a group.
 #[derive(Debug)]
-pub struct ItemGroupingInfo<Bin = String, T = ()> {
+pub struct ItemGroupingInfo<T = (), Bin = String> {
     /// The key of the bin containing the item.
     pub key: Bin,
     /// The total number of items in the bin across all pages.
@@ -240,11 +240,11 @@ pub struct ItemGroupingInfo<Bin = String, T = ()> {
     pub item: SoupItem<T>,
 }
 
-impl<Bin, T> FromIterator<ItemGroupingInfo<Bin, T>> for NestedSoupGroups<T, Bin>
+impl<Bin, T> FromIterator<ItemGroupingInfo<T, Bin>> for NestedSoupGroups<T, Bin>
 where
     Bin: Eq + std::hash::Hash,
 {
-    fn from_iter<I: IntoIterator<Item = ItemGroupingInfo<Bin, T>>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = ItemGroupingInfo<T, Bin>>>(iter: I) -> Self {
         let mut out = IndexMap::new();
 
         for item in iter {
