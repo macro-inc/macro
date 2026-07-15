@@ -23,6 +23,7 @@ fn expand_document_name_highlight_yields_name_hit_without_goto() {
             owner_id: "alice".to_string(),
             file_type: "md".to_string(),
             updated_at_seconds: Some(1_779_000_000),
+            updated_at_millis: None,
         }),
         highlight: Some(HashMap::from([(
             "document_name".to_string(),
@@ -928,6 +929,7 @@ fn doc_hit_with_chunks(
             owner_id: "alice".to_string(),
             file_type: "md".to_string(),
             updated_at_seconds: Some(updated_at_seconds),
+            updated_at_millis: None,
         }),
         highlight: None,
         inner_hits: Some(serde_json::json!({ "term_0": { "hits": { "hits": chunks } } })),

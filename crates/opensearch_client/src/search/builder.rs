@@ -47,21 +47,30 @@ macro_rules! delegate_methods {
 /// Sort mode for the channel content endpoint.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChannelSortMode {
-    /// Sort by sent_at_seconds/updated_at_seconds, entity_id as tiebreaker.
+    /// Sort by sent_at/updated_at (millis, falling back to seconds), entity_id
+    /// as tiebreaker.
     #[default]
     Message,
     /// Sort by thread_id, message_id as tiebreaker.
     Thread,
 }
 
-/// Creates sort vec to sort by sent_at_seconds (preferred) or updated_at_seconds (fallback)
-/// with entity_id as a tiebreaker. Items without a timestamp are pushed to the end.
+/// Creates sort vec to sort by sent_at (preferred) or updated_at (fallback)
+/// with entity_id as a tiebreaker. Items without a timestamp are pushed to the
+/// end. Prefers the millisecond-resolution `*_millis` fields and falls back to
+/// the second-resolution `*_seconds` fields, so docs indexed before the
+/// millis backfill still sort correctly. `.toEpochMilli()` normalizes both to
+/// milliseconds either way.
 pub(crate) fn updated_at_sort<'a>() -> Vec<SortType<'a>> {
     vec![
         SortType::ScriptSort(ScriptSort::new(
             Script::new(
-                r#"if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
+                r#"if (doc.containsKey('sent_at_millis') && doc['sent_at_millis'].size() > 0) {
+                    return doc['sent_at_millis'].value.toInstant().toEpochMilli();
+                } else if (doc.containsKey('sent_at_seconds') && doc['sent_at_seconds'].size() > 0) {
                     return doc['sent_at_seconds'].value.toInstant().toEpochMilli();
+                } else if (doc.containsKey('updated_at_millis') && doc['updated_at_millis'].size() > 0) {
+                    return doc['updated_at_millis'].value.toInstant().toEpochMilli();
                 } else if (doc.containsKey('updated_at_seconds') && doc['updated_at_seconds'].size() > 0) {
                     return doc['updated_at_seconds'].value.toInstant().toEpochMilli();
                 } else {

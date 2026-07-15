@@ -95,6 +95,8 @@ pub(crate) struct ProjectIndex {
     #[serde(default)]
     pub parent_project_id: Option<String>,
     pub updated_at_seconds: Option<i64>,
+    #[serde(default)]
+    pub updated_at_millis: Option<i64>,
 }
 
 #[derive(Debug)]

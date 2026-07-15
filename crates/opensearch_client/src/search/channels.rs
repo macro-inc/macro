@@ -10,10 +10,11 @@ use crate::{
             exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::{Keys, TermCombine},
+        utils::millis_or_seconds,
     },
 };
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use models_opensearch::{OpenSearchEntityType, SearchEntityType, SearchIndex};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_query_builder::*;
@@ -31,6 +32,10 @@ pub(crate) struct ChannelMessageIndex {
     pub mentions: Vec<String>,
     pub created_at_seconds: i64,
     pub updated_at_seconds: i64,
+    #[serde(default)]
+    pub created_at_millis: Option<i64>,
+    #[serde(default)]
+    pub updated_at_millis: Option<i64>,
 }
 
 #[derive(Default)]
@@ -307,10 +312,12 @@ fn channel_hit_to_search_hit(hit: Hit<ChannelMessageIndex>) -> SearchHit {
             channel_message_id: a.message_id,
             thread_id: (a.thread_id != a.message_id).then_some(a.thread_id),
             sender_id: a.sender_id,
-            created_at: DateTime::from_timestamp(a.created_at_seconds, 0).unwrap_or_default(),
-            updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0).unwrap_or_default(),
+            created_at: millis_or_seconds(a.created_at_millis, a.created_at_seconds)
+                .unwrap_or_default(),
+            updated_at: millis_or_seconds(a.updated_at_millis, a.updated_at_seconds)
+                .unwrap_or_default(),
         })),
-        updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0),
+        updated_at: millis_or_seconds(a.updated_at_millis, a.updated_at_seconds),
     }
 }
 

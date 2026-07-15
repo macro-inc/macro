@@ -10,6 +10,9 @@ import type { Client } from '@opensearch-project/opensearch';
  * @param includeNonNull A boolean indicating whether to overwrite existing non-null values in newField.
  *                       If false (default), only updates documents where newField doesn't exist.
  *                       If true, updates all documents regardless of existing newField values.
+ * @param valueExpr A painless expression producing the value to assign to newField.
+ *                  Defaults to a verbatim copy (`ctx._source.<oldField>`). Pass a
+ *                  transform (e.g. `ctx._source.<oldField> * 1000L`) to derive newField.
  * @returns A Promise that resolves to the number of documents updated.
  */
 export async function copyFieldData(
@@ -18,11 +21,12 @@ export async function copyFieldData(
   oldField: string,
   newField: string,
   dryRun: boolean,
-  includeNonNull: boolean = false
+  includeNonNull: boolean = false,
+  valueExpr: string = `ctx._source.${oldField}`
 ): Promise<number> {
   const script = {
-    // If the oldField exists and is not null, copy the value to the new field
-    source: `if (ctx._source.containsKey('${oldField}') && ctx._source.${oldField} != null) { ctx._source.${newField} = ctx._source.${oldField}; }`,
+    // If the oldField exists and is not null, assign the derived value to the new field
+    source: `if (ctx._source.containsKey('${oldField}') && ctx._source.${oldField} != null) { ctx._source.${newField} = ${valueExpr}; }`,
     lang: 'painless',
   };
 

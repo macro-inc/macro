@@ -4,7 +4,11 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::{EpochMillis, EpochSeconds},
+    error::OpensearchClientError,
+};
 
 /// Relation name for parent docs in the join field.
 const PARENT_RELATION: &str = "document";
@@ -39,6 +43,8 @@ pub struct UpsertDocumentArgs {
     pub content: String,
     /// The updated at time of the document
     pub updated_at_seconds: EpochSeconds,
+    /// The updated at time of the document, in milliseconds
+    pub updated_at_millis: EpochMillis,
     /// The sub type of the document (e.g. task)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<String>,
@@ -64,6 +70,7 @@ fn parent_doc_body(any_chunk: &UpsertDocumentArgs) -> serde_json::Value {
         "owner_id": &any_chunk.owner_id,
         "file_type": &any_chunk.file_type,
         "updated_at_seconds": any_chunk.updated_at_seconds,
+        "updated_at_millis": any_chunk.updated_at_millis,
         "document_relation": PARENT_RELATION,
     });
     if let Some(sub_type) = &any_chunk.sub_type {
