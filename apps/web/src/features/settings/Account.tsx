@@ -422,15 +422,12 @@ export function Account() {
       <Show when={isMobile()}>
         <SettingsSection>
           <SettingsCard>
-            <SettingsRow
-              label="Log out"
-              description="Sign out of your account on this device."
-            >
+            <div class="px-6 py-3.5">
               <Button variant="base" depth={3} onClick={() => logout()}>
                 <SignOutIcon class="size-4" />
                 Log out
               </Button>
-            </SettingsRow>
+            </div>
           </SettingsCard>
         </SettingsSection>
       </Show>
