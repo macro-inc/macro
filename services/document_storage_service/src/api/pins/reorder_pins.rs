@@ -1,11 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
-    Extension,
     extract::{self, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use model::user::UserContext;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     pin::request::ReorderPinRequest,
     response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse},
@@ -22,18 +21,18 @@ use model::{
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, req), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user, req), fields(user_id=?user.macro_user_id))]
 pub async fn reorder_pins_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<Vec<ReorderPinRequest>>,
 ) -> impl IntoResponse {
-    match macro_db_client::pins::reorder_pins(ctx.db.clone(), user_context.user_id.as_str(), req)
+    match macro_db_client::pins::reorder_pins(ctx.db.clone(), user.macro_user_id.as_ref(), req)
         .await
     {
         Ok(_) => (),
         Err(err) => {
-            tracing::error!(error=?err, user_id=?user_context.user_id, "failed to reorder pins");
+            tracing::error!(error=?err, user_id=?user.macro_user_id, "failed to reorder pins");
             return GenericResponse::builder()
                 .message("failed to reorder pins")
                 .is_error(true)

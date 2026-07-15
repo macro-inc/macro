@@ -61,11 +61,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                         macro_middleware::auth::ensure_user_exists::handler,
                     ))
                     .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
+                        state,
                         middleware::check_user_document_count::handler_upload_folder,
                     )),
             ),
@@ -73,17 +69,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/upload_extract",
             post(upload_folder::upload_extract_folder_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state,
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    )), // TODO: get item count from front end and/or handle during the extract step
-                        // .layer(axum::middleware::from_fn(
-                        //     middleware::check_user_document_count::handler_upload_folder,
-                        // )),
+                ServiceBuilder::new().layer(axum::middleware::from_fn(
+                    macro_middleware::auth::ensure_user_exists::handler,
+                )), // TODO: get item count from front end and/or handle during the extract step
+                    // .layer(axum::middleware::from_fn(
+                    //     middleware::check_user_document_count::handler_upload_folder,
+                    // )),
             ),
         )
         .route(
