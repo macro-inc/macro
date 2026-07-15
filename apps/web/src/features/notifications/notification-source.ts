@@ -298,14 +298,21 @@ export function createNotificationSource(
     optimisticInsertNotification(parsedNotification);
   });
 
-  // Skip empty batches: entity-level read markers fire regardless of whether
-  // the entity has notifications, and an empty mutation still runs the
-  // onMutate cancel — which can kill the initial notification fetch.
+  // Skip empty batches: entity-level read markers fire on mount regardless
+  // of whether the entity has notifications, and an empty batch would still
+  // POST a no-op mutation.
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {
     if (notifications.length === 0) return;
-    await markNotificationsAsDoneMutation.mutateAsync({
-      notificationIds: notifications.map((n) => n.id),
-    });
+    const ids = notifications.map((n) => n.id);
+    setDoneOverride(ids, true);
+    try {
+      await markNotificationsAsDoneMutation.mutateAsync({
+        notificationIds: ids,
+      });
+    } catch (err) {
+      setDoneOverride(ids, false);
+      throw err;
+    }
   };
 
   const bulkMarkAsRead = async (notifications: UnifiedNotification[]) => {

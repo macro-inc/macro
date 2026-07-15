@@ -224,10 +224,6 @@ export async function executeMarkNotificationsDone(
   notificationIds: string[]
 ): Promise<void> {
   setDoneOverride(notificationIds, true);
-  await queryClient.cancelQueries(
-    { queryKey: notificationKeys.user._def },
-    { revert: false }
-  );
   try {
     await bulkMarkNotificationsAsDone(notificationIds);
   } catch (err) {
@@ -250,10 +246,6 @@ export async function executeMarkNotificationsUndone(
   notificationIds: string[]
 ): Promise<void> {
   setDoneOverride(notificationIds, false);
-  await queryClient.cancelQueries(
-    { queryKey: notificationKeys.user._def },
-    { revert: false }
-  );
   try {
     await bulkMarkNotificationsAsUndone(notificationIds);
   } catch (err) {

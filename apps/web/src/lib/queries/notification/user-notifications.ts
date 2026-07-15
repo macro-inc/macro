@@ -364,44 +364,16 @@ function notificationsMutationSuccessCallback<T>(
 }
 
 /**
- * Discards any fetch still in flight when the server write commits (it read
- * its pages pre-write, so letting it resolve would replace the cache with a
- * pre-write snapshot) and re-applies the mutation's patch. The re-apply
- * matters beyond the data: a non-reverting cancel transitions the query to
- * error status, and the manual write flips it back to success — the cancel is
- * awaited so its error dispatch cannot land after the write. The query stays
- * stale and refetches fresh on the next trigger.
+ * Creates an optimistic update handler that snapshots previous data for
+ * rollback. In-flight fetches are deliberately left alone: seen/done
+ * overrides and unconfirmed-insert preservation make a completing stale
+ * snapshot harmless, so refetches always run to completion and freshness is
+ * never sacrificed for write consistency.
  */
-function createNotificationsReassertFn(updaterFn: NotificationsUpdater) {
-  return async (_: unknown, params: NotificationsMutationParams) => {
-    await queryClient.cancelQueries(
-      { queryKey: notificationKeys.user._def },
-      { revert: false }
-    );
-    queryClient.setQueriesData(
-      { queryKey: notificationKeys.user._def },
-      (input) =>
-        updaterFn(
-          input as Maybe<NotificationData<UserNotificationsPageParam>>,
-          params
-        )
-    );
-  };
-}
-
-/** Creates an optimistic update handler that snapshots previous data for rollback. */
 function createNotificationsMutateFn(
   updaterFn: NotificationsUpdater
 ): NotificationsOnMutateFn {
   return async (params) => {
-    // revert: false — reverting would restore the pre-fetch snapshot and wipe
-    // writes that landed while that fetch was in flight (websocket inserts,
-    // other optimistic marks).
-    await queryClient.cancelQueries(
-      { queryKey: notificationKeys.user._def },
-      { revert: false }
-    );
-
     const previousData = queryClient.getQueriesData<
       NotificationData<UserNotificationsPageParam>
     >({
@@ -484,7 +456,6 @@ export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
     }),
   {
     onMutate: createNotificationsMutateFn(mapNotificationsAsSeen),
-    onSuccess: createNotificationsReassertFn(mapNotificationsAsSeen),
     onError: notificationsMutationErrorFn,
   }
 );
@@ -519,7 +490,6 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
       retireUnconfirmedInserts(params.notificationIds);
       return await markNotificationsAsDoneMutateFn(params);
     },
-    onSuccess: createNotificationsReassertFn(filterOutDoneNotifications),
     onError: notificationsMutationErrorFn,
   }
 );
