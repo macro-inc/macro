@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use async_graphql::{ServerError, http::GraphiQLSource};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
@@ -9,7 +9,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use complete_graph::GraphqlSoupRequestParts;
-use model_user::axum_extractor::OptionalMacroUserExtractor;
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new().route("/soup/graphql", get(graphiql).post(handler))
@@ -25,7 +25,11 @@ async fn handler(State(state): State<ApiContext>, req: Request) -> Response {
     // Authentication stays eager: it gates execution for non-introspection
     // queries and primes the `Cached` entry that resolvers extract lazily.
     let auth =
-        match Cached::<OptionalMacroUserExtractor>::from_request_parts(&mut parts, &state).await {
+        match Cached::<OptionalMacroAuthorizationExtractor<AuthorizationService>>::from_request_parts(
+            &mut parts, &state,
+        )
+        .await
+        {
             Ok(Cached(auth)) => auth,
             Err(err) => return err.into_response(),
         };

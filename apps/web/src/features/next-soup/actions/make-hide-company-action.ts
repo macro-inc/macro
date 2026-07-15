@@ -5,17 +5,16 @@ import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';
 
 type MakeHideCompanyOptions = {
-  // Admin/owner-only on the FE; the backend independently enforces
+  // Available to all team members; the backend enforces
   // EditAccessLevel on PUT /crm/companies/{id}/hidden.
-  isTeamAdmin: () => boolean;
   setHidden: (companyId: string, hidden: boolean) => Promise<unknown>;
 };
 
 export const makeHideCompanyAction = (options: MakeHideCompanyOptions) => {
-  const { isTeamAdmin, setHidden } = options;
+  const { setHidden } = options;
 
   const canExecute = (entity: EntityData): boolean =>
-    entity.type === 'crm_company' && isTeamAdmin();
+    entity.type === 'crm_company';
 
   const previewPanel = useMaybePreviewPanel();
 

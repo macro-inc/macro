@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::{
     api::{context::ApiContext, documents::utils},
     model::{
@@ -16,11 +16,11 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt},
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},
-    user::UserContext,
 };
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
@@ -48,11 +48,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, document_context, _access, project), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user, document_context, _access, project), fields(user_id=?user.macro_user_id))]
 pub async fn save_document_handler(
-    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     project: ProjectBodyAccessLevelExtractor<

@@ -6,6 +6,7 @@ import {
   type SplitContent,
   SplitEvent,
 } from '../layoutManager';
+import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -296,6 +297,63 @@ describe('layoutManager', () => {
           'current',
         ]);
         expect(manager.activeSplitId()).toBe(inserted?.id);
+
+        dispose();
+      });
+    });
+  });
+
+  describe('activation invariant', () => {
+    it('refuses to activate an excluded split', () => {
+      createRoot((dispose) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'foreground' },
+          { type: 'md', id: 'background' },
+        ]);
+
+        const [fg, bg] = manager.splits();
+        manager.activateSplit(fg.id);
+        manager.setExclusionFilter((split) => split.id === bg.id);
+
+        manager.activateSplit(bg.id);
+        expect(manager.activeSplitId()).toBe(fg.id);
+
+        manager.setExclusionFilter(undefined);
+        manager.activateSplit(bg.id);
+        expect(manager.activeSplitId()).toBe(bg.id);
+
+        warn.mockRestore();
+        dispose();
+      });
+    });
+
+    it('keeps the promoted split active through mobile forward navigation and swipe back', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'list' },
+        ]);
+        const originalId = manager.splits()[0].id;
+        manager.activateSplit(originalId);
+
+        const swipeLayout = createMobileSwipeLayout(manager);
+
+        // Forward navigation goes through the interceptor; with no animation
+        // trigger registered it completes synchronously.
+        manager.openWithSplit(
+          { type: 'md', id: 'detail' },
+          { referredFrom: null }
+        );
+
+        const detailId = swipeLayout.fgIsSlotA()
+          ? swipeLayout.slotASplitId()
+          : swipeLayout.slotBSplitId();
+        expect(detailId).toBeDefined();
+        expect(detailId).not.toBe(originalId);
+        expect(manager.activeSplitId()).toBe(detailId);
+
+        swipeLayout.swipeBack();
+        expect(manager.activeSplitId()).toBe(originalId);
 
         dispose();
       });

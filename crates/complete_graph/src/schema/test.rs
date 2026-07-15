@@ -16,6 +16,7 @@ use macro_user_id::{
 };
 use model_user::UserContext;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use models_soup::{document::SoupDocument, item::SoupItem};
 use uuid::Uuid;
 
 use super::*;
@@ -24,6 +25,28 @@ use super::*;
 struct CountingSoupService {
     raw_calls: Arc<AtomicUsize>,
     frecency_calls: Arc<AtomicUsize>,
+    grouped_calls: Arc<AtomicUsize>,
+}
+
+fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
+    SoupItem::Document(SoupDocument {
+        id,
+        document_version_id: 1,
+        owner_id: MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap(),
+        name: format!("Document {id}"),
+        file_type: None,
+        sha: None,
+        project_id: None,
+        branched_from_id: None,
+        branched_from_version_id: None,
+        document_family_id: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: Default::default(),
+        sub_type: None,
+        deleted_at: None,
+        extra: soup::domain::models::SoupPropertiesField::default(),
+    })
 }
 
 fn test_soup_err() -> soup::domain::models::SoupErr {
@@ -94,10 +117,29 @@ impl SoupService for CountingSoupService {
         &self,
         _req: soup::domain::models::GroupedSortRequest<'_>,
     ) -> Result<
-        Vec<soup::domain::models::GroupedSoupItem<soup::domain::models::SoupPropertiesField>>,
+        impl Iterator<
+            Item = soup::domain::models::grouping::ItemGroupingInfo<
+                soup::domain::models::SoupPropertiesField,
+            >,
+        > + Send,
         soup::domain::models::SoupErr,
     > {
-        Err(test_soup_err())
+        self.grouped_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(vec![
+            soup::domain::models::grouping::ItemGroupingInfo {
+                key: "document".to_string(),
+                total_group_count: 2,
+                index_in_group: 1,
+                item: grouped_document(Uuid::from_u128(1)),
+            },
+            soup::domain::models::grouping::ItemGroupingInfo {
+                key: "document".to_string(),
+                total_group_count: 2,
+                index_in_group: 2,
+                item: grouped_document(Uuid::from_u128(2)),
+            },
+        ]
+        .into_iter())
     }
 
     async fn caller_tag_sets<'a>(
@@ -377,6 +419,7 @@ struct TestHarness {
     team_calls: Arc<AtomicUsize>,
     raw_soup_calls: Arc<AtomicUsize>,
     frecency_soup_calls: Arc<AtomicUsize>,
+    grouped_soup_calls: Arc<AtomicUsize>,
 }
 
 fn harness() -> TestHarness {
@@ -387,6 +430,7 @@ fn harness() -> TestHarness {
     let team_calls = Arc::clone(&entity_access.team_calls);
     let raw_soup_calls = Arc::clone(&soup.raw_calls);
     let frecency_soup_calls = Arc::clone(&soup.frecency_calls);
+    let grouped_soup_calls = Arc::clone(&soup.grouped_calls);
     TestHarness {
         schema: build_schema_with_service(soup),
         state: TestState {
@@ -397,6 +441,7 @@ fn harness() -> TestHarness {
         team_calls,
         raw_soup_calls,
         frecency_soup_calls,
+        grouped_soup_calls,
     }
 }
 
@@ -459,6 +504,26 @@ async fn soup_requests_frecency_only_when_selected() {
 
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn group_soup_nests_items_in_bins_and_preserves_database_order() {
+    let harness = harness();
+
+    let response = harness
+        .execute(
+            "{ user { groupSoup(input: {groupBy: {field: ENTITY_TYPE}}) { bins { key totalCount items { id entityType } } } } }",
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.to_string(),
+        r#"{user: {groupSoup: {bins: [{key: "document", totalCount: 2, items: [{id: "00000000-0000-0000-0000-000000000001", entityType: DOCUMENT}, {id: "00000000-0000-0000-0000-000000000002", entityType: DOCUMENT}]}]}}}"#
+    );
+    assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

@@ -27,7 +27,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::GroupedSoupItem;
+use crate::domain::models::grouping::ItemGroupingInfo;
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
@@ -1435,6 +1435,7 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
+    #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
@@ -1618,35 +1619,20 @@ pub struct GroupedDynamicCursorArgs<'a> {
 }
 
 /// Group metadata fields extracted from grouped query rows.
+#[derive(FromRow)]
 struct GroupFields {
     group_key: String,
     group_total_count: i64,
     row_in_group: i64,
 }
 
-impl GroupFields {
-    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-        Ok(GroupFields {
-            group_key: row.try_get("group_key")?,
-            group_total_count: row.try_get("group_total_count")?,
-            row_in_group: row.try_get("row_in_group")?,
-        })
-    }
-}
-
 /// Grouped row: reuses SoupRow for item data, adds group metadata.
+#[derive(FromRow)]
 struct GroupedSoupRow {
+    #[sqlx(flatten)]
     item: SoupRow,
+    #[sqlx(flatten)]
     group: GroupFields,
-}
-
-impl<'a> FromRow<'a, PgRow> for GroupedSoupRow {
-    fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
-        Ok(GroupedSoupRow {
-            item: SoupRow::from_row(row)?,
-            group: GroupFields::from_row(row)?,
-        })
-    }
 }
 
 /// Per-group limit for initial grouped queries.
@@ -1882,7 +1868,7 @@ fn build_grouped_query<'a>(
 pub async fn expanded_dynamic_cursor_soup_grouped(
     db: &PgPool,
     args: GroupedDynamicCursorArgs<'_>,
-) -> Result<Vec<GroupedSoupItem<()>>, sqlx::Error> {
+) -> Result<std::vec::IntoIter<ItemGroupingInfo>, sqlx::Error> {
     let GroupedDynamicCursorArgs {
         user_id,
         limit,
@@ -1904,7 +1890,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     // $9 is bound unconditionally (NULL when not in single-group mode) so $10 stays aligned.
     let mut query = query_builder
-        .build()
+        .build_query_as::<'_, GroupedSoupRow>()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
         .bind(query_limit)
@@ -1925,34 +1911,22 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .try_map(|row| GroupedSoupRow::from_row(&row))
         .fetch_all(db)
         .await?;
 
-    // Convert rows to (SoupItem, GroupFields) pairs and unzip
-    let (soup_items, groups): (Vec<SoupItem<()>>, Vec<GroupFields>) = rows
+    let items = rows
         .into_iter()
         .map(|row| {
-            let item = row.item.into_soup_item()?;
-            Ok((item, row.group))
+            Ok(ItemGroupingInfo {
+                item: row.item.into_soup_item()?,
+                key: row.group.group_key,
+                total_group_count: usize::try_from(row.group.group_total_count)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                index_in_group: usize::try_from(row.group.row_in_group)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            })
         })
-        .collect::<Result<Vec<_>, sqlx::Error>>()?
-        .into_iter()
-        .unzip();
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
-    let items = soup_items
-        .into_iter()
-        .zip(groups)
-        .map(|(item, group)| GroupedSoupItem {
-            item,
-            frecency_score: None,
-            group_key: group.group_key,
-            group_total_count: group.group_total_count as u32,
-            row_in_group: group.row_in_group as u32,
-            group_label: None,
-            group_display_order: None,
-        })
-        .collect();
-
-    Ok(items)
+    Ok(items.into_iter())
 }

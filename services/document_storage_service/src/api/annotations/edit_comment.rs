@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::CommentNotifContext, service::conn_gateway::update_live_comment_state,
+    api::annotations::CommentNotifContext, api::context::AuthorizationService,
+    service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::annotations::edit_comment::edit_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -18,7 +20,6 @@ use model::{
         edit::{EditCommentRequest, EditCommentResponse},
     },
     response::ErrorResponse,
-    user::UserContext,
 };
 use model_notifications::NotificationDocumentSubType;
 use notification::domain::service::NotificationIngress;
@@ -50,10 +51,11 @@ pub async fn edit_comment_handler(
     State(db): State<PgPool>,
     State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    Extension(UserContext { user_id, .. }): Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { comment_id }): Path<Params>,
     Json(req): Json<EditCommentRequest>,
 ) -> Result<Response, Response> {
+    let user_id = user.macro_user_id.to_string();
     // TODO: check if the user has comment access to the document
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {

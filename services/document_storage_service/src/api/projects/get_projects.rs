@@ -1,13 +1,13 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 use axum::extract::State;
 use futures::stream::{FuturesUnordered, StreamExt};
 
-use axum::{Extension, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse};
+use macro_authorization::MacroAuthorizationExtractor;
 use model::project::PendingProject;
 use model::project::response::GetProjectsResponse;
 use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
-use model::user::UserContext;
 use models_bulk_upload::ProjectDocumentStatus;
 
 type PendingProjectsResponse = TypedSuccessResponse<Vec<PendingProject>>;
@@ -23,27 +23,25 @@ type PendingProjectsResponse = TypedSuccessResponse<Vec<PendingProject>>;
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
 pub async fn get_projects_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> impl IntoResponse {
     tracing::trace!("get_projects_handler");
-    let projects = match macro_db_client::projects::get_projects(
-        ctx.db.clone(),
-        &user_context.user_id,
-    )
-    .await
-    {
-        Ok(projects) => projects,
-        Err(e) => {
-            tracing::error!(error=?e, "error getting projects");
-            return GenericResponse::builder()
-                .message("unable to get projects")
-                .is_error(true)
-                .send(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let projects =
+        match macro_db_client::projects::get_projects(ctx.db.clone(), user.macro_user_id.as_ref())
+            .await
+        {
+            Ok(projects) => projects,
+            Err(e) => {
+                tracing::error!(error=?e, "error getting projects");
+                return GenericResponse::builder()
+                    .message("unable to get projects")
+                    .is_error(true)
+                    .send(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
 
     GenericResponse::builder()
         .data(&projects)
@@ -61,15 +59,15 @@ pub async fn get_projects_handler(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
 pub async fn get_pending_projects_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> impl IntoResponse {
     tracing::trace!("get_pending_projects_handler");
     let projects = match macro_db_client::projects::get_pending_root_projects(
         ctx.db.clone(),
-        &user_context.user_id,
+        user.macro_user_id.as_ref(),
     )
     .await
     {

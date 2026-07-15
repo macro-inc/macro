@@ -66,6 +66,8 @@ export type TeamCrmConfig = {
    */
   closedStageIds?: string[];
   teamViews?: TeamCrmSavedView[];
+  /** Team view applied by default when a member opens the Customers view. */
+  defaultTeamViewId?: string;
 };
 
 export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {
@@ -254,6 +256,18 @@ export function useCrmPermissions() {
       roleSatisfies(role(), permissions().deleteRecords)
     ),
   };
+}
+
+/**
+ * True once the current-team query resolves to no team (null) or a team
+ * with CRM disabled — the companies views swap in an explanatory empty
+ * state and keep bottom chrome like the AI bar. Stays false while the
+ * query loads so enabled teams don't flash the empty state.
+ */
+export function useCrmUnavailable(): Accessor<boolean> {
+  const teamQuery = useCurrentTeamQuery();
+  return () =>
+    teamQuery.data === null || teamQuery.data?.team.crm_enabled === false;
 }
 
 /**

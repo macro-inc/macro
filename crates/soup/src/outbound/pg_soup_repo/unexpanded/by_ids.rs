@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// If a user has access to a project that contains other items, those "child" items will NOT
 /// be included in the results unless the user has been explicitly granted permissions on them.
 /// This ensures that only directly authorized items are returned, not those with implicit
-/// (inherited) access. Results are sorted to match the input entity order.
+/// (inherited) access. Result order is unspecified.
 #[tracing::instrument(err, skip(db, entities))]
 pub async fn unexpanded_soup_by_ids<'a>(
     db: &PgPool,

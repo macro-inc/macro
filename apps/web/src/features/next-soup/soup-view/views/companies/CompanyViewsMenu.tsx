@@ -1,6 +1,6 @@
-import type { Query } from '@app/features/next-soup/filters/filter-store';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
+import { useApplyCrmView } from '@app/features/next-soup/soup-view/views/companies/use-apply-crm-view';
 import {
   CRM_LIST_COLUMN_LABELS,
   type CrmListColumnId,
@@ -17,12 +17,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import FloppyDiskIcon from '@phosphor/floppy-disk.svg';
 import LinkIcon from '@phosphor/link.svg';
+import PushPinIcon from '@phosphor/push-pin.svg';
 import SlidersIcon from '@phosphor/sliders-horizontal.svg';
 import StackIcon from '@phosphor/stack.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Button, cn, Dropdown, SegmentedControl, Tooltip } from '@ui';
-import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 
 /** Copy a view's share link, with a toast either way. */
@@ -34,13 +35,16 @@ const copyShareLink = (config: CrmViewConfig) => {
 };
 
 /**
- * Saved-view row: the name applies the view; trailing hover actions copy
- * its share link or delete it.
+ * Saved-view row: the name applies the view; trailing hover actions pin it
+ * as the default, copy its share link, or delete it. The pin stays visible
+ * on the current default.
  */
 const SavedViewRow = (props: {
   name: string;
+  isDefault?: boolean;
   onApply: () => void;
   onCopyLink: () => void;
+  onSetDefault?: () => void;
   onDelete?: () => void;
 }) => (
   <div class="group rounded-lg w-full flex items-center gap-0.5 pl-2 pr-1 hover:bg-ink/5">
@@ -51,6 +55,28 @@ const SavedViewRow = (props: {
     >
       {props.name}
     </button>
+    <Show when={props.isDefault && !props.onSetDefault}>
+      <PushPinIcon class="size-3.5 shrink-0 text-ink-muted" />
+    </Show>
+    <Show when={props.onSetDefault}>
+      {(onSetDefault) => (
+        <Tooltip label={props.isDefault ? 'Remove default' : 'Set as default'}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label={props.isDefault ? 'Remove default' : 'Set as default'}
+            class={cn(
+              'size-6 shrink-0 rounded-md p-1 text-ink-muted',
+              !props.isDefault &&
+                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+            )}
+            onClick={() => onSetDefault()()}
+          >
+            <PushPinIcon class="size-3.5" />
+          </Button>
+        </Tooltip>
+      )}
+    </Show>
     <Tooltip label="Copy link">
       <Button
         variant="ghost"
@@ -95,15 +121,10 @@ export function CompanyViewsMenu() {
     soup,
     queryFilters,
     searchText,
-    setSearchText,
     stageFilter,
-    setStageFilter,
     ownerFilter,
-    setOwnerFilter,
     activeTab,
-    setActiveTab,
     viewMode,
-    setViewMode,
   } = useSoupView();
   const personal = usePersonalCrmViews();
   const team = useTeamCrmViews();
@@ -134,36 +155,10 @@ export function CompanyViewsMenu() {
     activeTab: activeTab(),
   });
 
-  // Mirrors the init/applyTabPreset path: replace filters + predicates
-  // atomically, then re-derive the stage/owner predicate active state from
-  // the saved sub-filter selections (same rule as handleStageChange /
-  // handleOwnerChange in unified-filter-dropdown).
+  const applyCrmView = useApplyCrmView();
+
   const applyView = (config: CrmViewConfig) => {
-    batch(() => {
-      queryFilters.replace((config.filters as Query | undefined) ?? null);
-      soup.predicates.set(config.clientFilters ?? {});
-      setSearchText(config.searchText ?? '');
-      // `groupBy: null` records an explicit "no grouping"; the grouping
-      // store expresses that as `undefined` (same as the init path).
-      soup.grouping.setActiveGroupId(config.groupBy ?? undefined);
-      soup.sort.setAll(
-        (config.sort?.length ? config.sort : ['updated_at']) as Parameters<
-          typeof soup.sort.setAll
-        >[0]
-      );
-      const stages = config.stageFilter ?? [];
-      setStageFilter(stages);
-      if (stages.length > 0 !== soup.predicates.isActive('company-stage')) {
-        soup.predicates.toggle({ and: ['company-stage'] });
-      }
-      const owners = config.ownerFilter ?? [];
-      setOwnerFilter(owners);
-      if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
-        soup.predicates.toggle({ and: ['company-owner'] });
-      }
-      setViewMode(config.viewMode ?? 'board');
-      if (config.activeTab !== undefined) setActiveTab(config.activeTab);
-    });
+    applyCrmView(config);
     setOpen(false);
   };
 
@@ -210,8 +205,14 @@ export function CompanyViewsMenu() {
             {(view) => (
               <SavedViewRow
                 name={view.name}
+                isDefault={view.config.isDefault === true}
                 onApply={() => applyView(view.config)}
                 onCopyLink={() => copyShareLink(view.config)}
+                onSetDefault={() =>
+                  personal.setDefault.mutate({
+                    id: view.config.isDefault ? undefined : view.id,
+                  })
+                }
                 onDelete={() => personal.remove.mutate({ id: view.id })}
               />
             )}
@@ -227,8 +228,17 @@ export function CompanyViewsMenu() {
             {(view) => (
               <SavedViewRow
                 name={view.name}
+                isDefault={view.id === team.defaultViewId()}
                 onApply={() => applyView(view.config as CrmViewConfig)}
                 onCopyLink={() => copyShareLink(view.config as CrmViewConfig)}
+                onSetDefault={
+                  canEditCrm()
+                    ? () =>
+                        team.setDefault(
+                          view.id === team.defaultViewId() ? undefined : view.id
+                        )
+                    : undefined
+                }
                 onDelete={
                   canDeleteTeamView(view.createdBy)
                     ? () => team.remove(view.id)

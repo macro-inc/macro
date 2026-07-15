@@ -1,4 +1,4 @@
-use async_graphql::{ID, Json, Object, ObjectType, Union};
+use async_graphql::{ID, Json, Object, ObjectType, SimpleObject, Union};
 use graphql_common::GraphqlSoupEntityType;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
@@ -16,7 +16,7 @@ use models_soup::{
     project::SoupProject,
 };
 use serde_json::Value;
-use soup::domain::models::EnrichedSoupItem;
+use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
 use uuid::Uuid;
 
 /// Extension fields attached to every top-level Soup entity.
@@ -36,35 +36,14 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 }
 
 /// Page returned by `Query.soup`.
+#[derive(SimpleObject)]
 pub struct SoupPage<E: SoupEntityEdges> {
-    /// The items.
-    items: Vec<GraphqlSoupItem<E>>,
-    /// The next cursor.
-    next_cursor: Option<String>,
-    /// Whether the result has more.
-    has_more: bool,
-}
-
-/// Page returned by `Query.soup`.
-#[Object(name = "SoupPage")]
-impl<E> SoupPage<E>
-where
-    E: SoupEntityEdges,
-{
     /// Items in the current page.
-    async fn items(&self) -> &[GraphqlSoupItem<E>] {
-        &self.items
-    }
-
+    items: Vec<GraphqlSoupItem<E>>,
     /// Opaque cursor for the next page, if one exists.
-    async fn next_cursor(&self) -> Option<&str> {
-        self.next_cursor.as_deref()
-    }
-
+    next_cursor: Option<String>,
     /// Whether more items are available after this page.
-    async fn has_more(&self) -> bool {
-        self.has_more
-    }
+    has_more: bool,
 }
 
 impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<SoupItem<()>>> for SoupPage<E> {
@@ -87,6 +66,42 @@ impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<EnrichedSoupItem>> for SoupP
             has_more,
         }
     }
+}
+
+/// GraphQL representation of grouped Soup items.
+#[derive(SimpleObject)]
+pub struct GroupedSoup<E: SoupEntityEdges> {
+    /// Bins containing the grouped Soup items.
+    bins: Vec<GraphqlSoupBin<E>>,
+}
+
+impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for GroupedSoup<E> {
+    fn from(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
+        Self {
+            bins: groups
+                .into_bins()
+                .map(|(key, bin)| GraphqlSoupBin {
+                    key,
+                    total_count: bin.group_total_size(),
+                    items: bin
+                        .into_items()
+                        .map(|item| GraphqlSoupItem::from(item.map_extra(|_| ())))
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// GraphQL representation of a Soup group bin.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupBin<E: SoupEntityEdges> {
+    /// The grouping key.
+    key: String,
+    /// Total number of items in this group across all pages.
+    total_count: usize,
+    /// Items in this bin, ordered by their index within the group.
+    items: Vec<GraphqlSoupItem<E>>,
 }
 
 /// GraphQL Soup item envelope.
@@ -320,7 +335,8 @@ where
     }
 }
 
-/// GraphQL document subtype details.
+/// GraphQL representation of the soup document sub type.
+#[derive(SimpleObject)]
 pub struct GraphqlSoupDocumentSubType {
     /// The kind.
     kind: &'static str,
@@ -340,20 +356,6 @@ impl From<&SoupDocumentSubType> for GraphqlSoupDocumentSubType {
                 is_completed: None,
             },
         }
-    }
-}
-
-/// GraphQL representation of the soup document sub type.
-#[Object]
-impl GraphqlSoupDocumentSubType {
-    /// The kind.
-    async fn kind(&self) -> &str {
-        self.kind
-    }
-
-    /// Whether the task is completed.
-    async fn is_completed(&self) -> Option<bool> {
-        self.is_completed
     }
 }
 
@@ -474,7 +476,8 @@ where
     }
 }
 
-/// GraphQL email participant/contact.
+/// GraphQL representation of the soup email participant.
+#[derive(SimpleObject)]
 pub struct GraphqlSoupEmailParticipant {
     /// The unique identifier.
     id: ID,
@@ -500,36 +503,8 @@ impl From<&SoupContact> for GraphqlSoupEmailParticipant {
     }
 }
 
-/// GraphQL representation of the soup email participant.
-#[Object]
-impl GraphqlSoupEmailParticipant {
-    /// The unique identifier.
-    async fn id(&self) -> &ID {
-        &self.id
-    }
-
-    /// The identifier of the link.
-    async fn link_id(&self) -> &ID {
-        &self.link_id
-    }
-
-    /// The name.
-    async fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
-
-    /// The email.
-    async fn email(&self) -> Option<&str> {
-        self.email.as_deref()
-    }
-
-    /// The sfs photo url.
-    async fn sfs_photo_url(&self) -> Option<&str> {
-        self.sfs_photo_url.as_deref()
-    }
-}
-
-/// GraphQL email label.
+/// GraphQL representation of the soup email label.
+#[derive(SimpleObject)]
 pub struct GraphqlSoupEmailLabel {
     /// The unique identifier.
     id: ID,
@@ -546,6 +521,7 @@ pub struct GraphqlSoupEmailLabel {
     /// The label list visibility.
     label_list_visibility: &'static str,
     /// The type.
+    #[graphql(name = "type")]
     type_: &'static str,
 }
 
@@ -574,51 +550,8 @@ impl From<&SoupLabel> for GraphqlSoupEmailLabel {
     }
 }
 
-/// GraphQL representation of the soup email label.
-#[Object]
-impl GraphqlSoupEmailLabel {
-    /// The unique identifier.
-    async fn id(&self) -> &ID {
-        &self.id
-    }
-
-    /// The identifier of the link.
-    async fn link_id(&self) -> &ID {
-        &self.link_id
-    }
-
-    /// The identifier of the provider label.
-    async fn provider_label_id(&self) -> &str {
-        &self.provider_label_id
-    }
-
-    /// The name.
-    async fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// The created timestamp in RFC 3339 format.
-    async fn created_at(&self) -> &str {
-        &self.created_at
-    }
-
-    /// The message list visibility.
-    async fn message_list_visibility(&self) -> &'static str {
-        self.message_list_visibility
-    }
-
-    /// The label list visibility.
-    async fn label_list_visibility(&self) -> &'static str {
-        self.label_list_visibility
-    }
-
-    /// The type.
-    async fn type_(&self) -> &'static str {
-        self.type_
-    }
-}
-
-/// GraphQL email attachment.
+/// GraphQL representation of the soup email attachment.
+#[derive(SimpleObject)]
 pub struct GraphqlSoupEmailAttachment {
     /// The unique identifier.
     id: ID,
@@ -650,50 +583,6 @@ impl From<&SoupAttachment> for GraphqlSoupEmailAttachment {
             content_id: value.content_id.clone(),
             created_at: value.created_at.to_rfc3339(),
         }
-    }
-}
-
-/// GraphQL representation of the soup email attachment.
-#[Object]
-impl GraphqlSoupEmailAttachment {
-    /// The unique identifier.
-    async fn id(&self) -> &ID {
-        &self.id
-    }
-
-    /// The identifier of the message.
-    async fn message_id(&self) -> &ID {
-        &self.message_id
-    }
-
-    /// The identifier of the provider attachment.
-    async fn provider_attachment_id(&self) -> Option<&str> {
-        self.provider_attachment_id.as_deref()
-    }
-
-    /// The filename.
-    async fn filename(&self) -> Option<&str> {
-        self.filename.as_deref()
-    }
-
-    /// The mime type.
-    async fn mime_type(&self) -> Option<&str> {
-        self.mime_type.as_deref()
-    }
-
-    /// The size bytes.
-    async fn size_bytes(&self) -> Option<i64> {
-        self.size_bytes
-    }
-
-    /// The identifier of the content.
-    async fn content_id(&self) -> Option<&str> {
-        self.content_id.as_deref()
-    }
-
-    /// The created timestamp in RFC 3339 format.
-    async fn created_at(&self) -> &str {
-        &self.created_at
     }
 }
 
@@ -1120,7 +1009,8 @@ where
     }
 }
 
-/// GraphQL call participant.
+/// GraphQL representation of the soup call participant.
+#[derive(SimpleObject)]
 pub struct GraphqlSoupCallParticipant {
     /// The identifier of the user.
     user_id: String,
@@ -1137,25 +1027,6 @@ impl From<&SoupCallRecordParticipant> for GraphqlSoupCallParticipant {
             joined_at: value.joined_at.to_rfc3339(),
             left_at: value.left_at.map(|ts| ts.to_rfc3339()),
         }
-    }
-}
-
-/// GraphQL representation of the soup call participant.
-#[Object]
-impl GraphqlSoupCallParticipant {
-    /// The identifier of the user.
-    async fn user_id(&self) -> &str {
-        &self.user_id
-    }
-
-    /// The joined timestamp in RFC 3339 format.
-    async fn joined_at(&self) -> &str {
-        &self.joined_at
-    }
-
-    /// The left timestamp in RFC 3339 format.
-    async fn left_at(&self) -> Option<&str> {
-        self.left_at.as_deref()
     }
 }
 

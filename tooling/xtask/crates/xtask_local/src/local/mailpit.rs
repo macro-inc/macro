@@ -4,7 +4,12 @@
 
 use super::instance::{Instance, Port};
 
-/// The Mailpit web UI URL (host-facing).
-pub fn ui_url(instance: &Instance) -> String {
+/// The directly published Mailpit web UI used by attached `run_local`.
+pub fn direct_ui_url(instance: &Instance) -> String {
     format!("http://localhost:{}", instance.port(Port::MailpitUi))
+}
+
+/// The single-origin Mailpit route used by headless stacks and previews.
+pub fn proxy_ui_url(instance: &Instance) -> String {
+    format!("{}/mailpit/", super::proxy::url(instance))
 }

@@ -1,7 +1,9 @@
 use anyhow::Context;
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use opensearch_client::{
-    OpensearchClient, date_format::EpochSeconds, upsert::channel_message::UpsertChannelMessageArgs,
+    OpensearchClient,
+    date_format::{EpochMillis, EpochSeconds},
+    upsert::channel_message::UpsertChannelMessageArgs,
 };
 use sqlx::{Pool, Postgres};
 use sqs_client::search::channel::{ChannelMessageUpdate, RemoveChannelMessage};
@@ -60,6 +62,18 @@ pub async fn process_channel_message_update(
         )?,
         updated_at_seconds: EpochSeconds::new(
             channel_message_info.channel_message.updated_at.timestamp(),
+        )?,
+        created_at_millis: EpochMillis::new(
+            channel_message_info
+                .channel_message
+                .created_at
+                .timestamp_millis(),
+        )?,
+        updated_at_millis: EpochMillis::new(
+            channel_message_info
+                .channel_message
+                .updated_at
+                .timestamp_millis(),
         )?,
     };
 

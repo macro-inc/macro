@@ -69,6 +69,9 @@ use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+};
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
@@ -247,8 +250,12 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
+/// Type alias for the authorization service.
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+
 /// Type alias for the documents router state.
-pub(crate) type DocumentsState = DocumentRouterState<DocumentService, EntityAccessService>;
+pub(crate) type DocumentsState =
+    DocumentRouterState<DocumentService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the legacy channel list service.
 pub(crate) type DssChannelListService =
@@ -386,6 +393,7 @@ pub(crate) struct ApiContext {
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
+    pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,

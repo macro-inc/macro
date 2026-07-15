@@ -863,6 +863,46 @@ input GraphqlForeignEntityLiteral @oneOf {
 }
 
 """
+Grouping modes supported by grouped Soup.
+"""
+enum GraphqlGroupByField {
+	"""
+	Group into date buckets.
+	"""
+	DATE
+	"""
+	Group by Soup entity type.
+	"""
+	ENTITY_TYPE
+	"""
+	Group by containing project.
+	"""
+	PROJECT
+	"""
+	Group by a property value.
+	"""
+	PROPERTY
+}
+
+"""
+GraphQL representation of a field used to group Soup items.
+"""
+input GraphqlGroupByInput {
+	"""
+	The kind of grouping to perform.
+	"""
+	field: GraphqlGroupByField!
+	"""
+	Property definition to group by when `field` is `PROPERTY`.
+	"""
+	propertyDefinitionId: ID
+	"""
+	Optional property entity type restriction.
+	"""
+	entityType: GraphqlPropertyEntityType
+}
+
+"""
 A link property value.
 """
 type GraphqlLinkPropertyValue {
@@ -1267,6 +1307,24 @@ enum GraphqlSimpleSortMethod {
 	Sort by viewed timestamp, falling back to updated timestamp.
 	"""
 	VIEWED_UPDATED
+}
+
+"""
+GraphQL representation of a Soup group bin.
+"""
+type GraphqlSoupBin {
+	"""
+	The grouping key.
+	"""
+	key: String!
+	"""
+	Total number of items in this group across all pages.
+	"""
+	totalCount: Int!
+	"""
+	Items in this bin, ordered by their index within the group.
+	"""
+	items: [GraphqlSoupItem!]!
 }
 
 """
@@ -2313,9 +2371,45 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	Fetch Soup items nested into grouping bins.
+	"""
+	groupSoup(input: GroupedSoupInput!): GroupedSoup!
+	"""
 	Fetch a page of Soup items using the existing Soup filter AST format.
 	"""
 	soup(input: SoupInput!): SoupPage!
+}
+
+"""
+GraphQL representation of grouped Soup items.
+"""
+type GroupedSoup {
+	"""
+	Bins containing the grouped Soup items.
+	"""
+	bins: [GraphqlSoupBin!]!
+}
+
+"""
+Input for `Query.groupSoup`.
+"""
+input GroupedSoupInput {
+	"""
+	The field used to divide Soup items into bins.
+	"""
+	groupBy: GraphqlGroupByInput!
+	"""
+	Maximum number of items to return per bin. Defaults to 20, max 500.
+	"""
+	limit: Int
+	"""
+	Sort order within each bin. Defaults to `VIEWED_UPDATED`.
+	"""
+	sortMethod: GraphqlSimpleSortMethod
+	"""
+	AST-shaped filters applied to each Soup entity type.
+	"""
+	filters: GraphqlEntityFilterAst
 }
 
 """

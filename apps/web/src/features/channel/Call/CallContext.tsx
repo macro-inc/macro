@@ -24,6 +24,7 @@ import {
   type CallSessionDisconnectOptions,
   createCallSessionController,
 } from './CallSessionController';
+import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
   getKrisp,
   getLivekit,
@@ -93,6 +94,18 @@ type NativeAudioProcessingSupportedConstraints =
   MediaTrackSupportedConstraints & {
     voiceIsolation?: boolean;
   };
+
+type AudioDeviceSwitchRequest = {
+  room: Room;
+  deviceId: string;
+};
+
+function audioDeviceSwitchRequestsAreEqual(
+  left: AudioDeviceSwitchRequest,
+  right: AudioDeviceSwitchRequest
+): boolean {
+  return left.room === right.room && left.deviceId === right.deviceId;
+}
 
 function supportedNativeAudioProcessingConstraints(): NativeAudioProcessingSupportedConstraints | null {
   return (
@@ -927,39 +940,94 @@ function createCallState() {
     }
   }
 
-  async function switchAudioInput(deviceId: string) {
-    const r = room();
-    if (!r) return;
-    try {
-      await r.switchActiveDevice('audioinput', deviceId);
-      setStore('activeAudioInputDeviceId', deviceId);
+  function isCurrentLivekitRoom(targetRoom: Room): boolean {
+    return (
+      room() === targetRoom &&
+      targetRoom.state !== LK_CONNECTION_STATE.Disconnected
+    );
+  }
 
-      // If the mic is live, cycle mute/unmute as a nudge for devices where
-      // switchActiveDevice's internal track restart doesn't take. Note this
-      // is NOT a republish: setMicrophoneEnabled(true, opts) ignores the
-      // capture options when the muted publication survives
-      // (stopMicTrackOnMute is false), so the device change itself always
-      // comes from switchActiveDevice above.
-      if (!store.isAudioMuted) {
-        await r.localParticipant.setMicrophoneEnabled(false);
-        await r.localParticipant.setMicrophoneEnabled(
-          true,
-          currentMicrophoneCaptureOptions(deviceId)
-        );
-        // The mic track may have changed — re-apply the selected audio processing.
-        await ensureNoiseSuppressionOnMicTrack(r);
-      }
+  async function applyAudioInputSwitch({
+    room: targetRoom,
+    deviceId,
+  }: AudioDeviceSwitchRequest): Promise<void> {
+    if (!isCurrentLivekitRoom(targetRoom)) return;
+
+    const activeDeviceId = targetRoom.getActiveDevice('audioinput');
+    if (
+      activeDeviceId === deviceId ||
+      (!activeDeviceId && store.activeAudioInputDeviceId === deviceId)
+    ) {
+      return;
+    }
+
+    await targetRoom.switchActiveDevice('audioinput', deviceId);
+    if (!isCurrentLivekitRoom(targetRoom)) return;
+
+    setStore('activeAudioInputDeviceId', deviceId);
+
+    const microphonePublication =
+      targetRoom.localParticipant.getTrackPublication(
+        LK_TRACK_SOURCE.Microphone
+      );
+    const microphoneTrack = microphonePublication?.track as
+      | LocalTrack
+      | undefined;
+    if (
+      !store.isAudioMuted &&
+      !microphonePublication?.isMuted &&
+      isLiveLocalTrack(microphoneTrack)
+    ) {
+      await ensureNoiseSuppressionOnMicTrack(targetRoom);
+    }
+  }
+
+  async function applyAudioOutputSwitch({
+    room: targetRoom,
+    deviceId,
+  }: AudioDeviceSwitchRequest): Promise<void> {
+    if (!isCurrentLivekitRoom(targetRoom)) return;
+
+    const activeDeviceId = targetRoom.getActiveDevice('audiooutput');
+    if (
+      activeDeviceId === deviceId ||
+      (!activeDeviceId && store.activeAudioOutputDeviceId === deviceId)
+    ) {
+      return;
+    }
+
+    await targetRoom.switchActiveDevice('audiooutput', deviceId);
+    if (!isCurrentLivekitRoom(targetRoom)) return;
+
+    setStore('activeAudioOutputDeviceId', deviceId);
+  }
+
+  const enqueueAudioInputSwitch = createLatestAsyncRequestQueue(
+    applyAudioInputSwitch,
+    audioDeviceSwitchRequestsAreEqual
+  );
+  const enqueueAudioOutputSwitch = createLatestAsyncRequestQueue(
+    applyAudioOutputSwitch,
+    audioDeviceSwitchRequestsAreEqual
+  );
+
+  async function switchAudioInput(deviceId: string): Promise<void> {
+    const targetRoom = room();
+    if (!targetRoom) return;
+
+    try {
+      await enqueueAudioInputSwitch({ room: targetRoom, deviceId });
     } catch (e) {
       console.error('failed to switch audio input device', e);
     }
   }
 
-  async function switchAudioOutput(deviceId: string) {
-    const r = room();
-    if (!r) return;
+  async function switchAudioOutput(deviceId: string): Promise<void> {
+    const targetRoom = room();
+    if (!targetRoom) return;
+
     try {
-      await r.switchActiveDevice('audiooutput', deviceId);
-      setStore('activeAudioOutputDeviceId', deviceId);
+      await enqueueAudioOutputSwitch({ room: targetRoom, deviceId });
     } catch (e) {
       console.error('failed to switch audio output device', e);
     }

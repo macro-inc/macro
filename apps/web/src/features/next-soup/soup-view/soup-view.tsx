@@ -44,7 +44,11 @@ import {
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
-import { CompanyDisplayMenu } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+import {
+  CompanyDisplayMenu,
+  CompanyViewsMenu,
+} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
@@ -60,6 +64,7 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
+import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -399,6 +404,15 @@ export const SoupView = (props: SoupViewProps) => {
   const initialCrmView =
     contentId === 'companies' ? props.initialCrmView : undefined;
 
+  // A default saved view only applies to a fresh Customers entry: restored
+  // (back/forward) entries keep what the user was looking at, and share
+  // links carry their own state.
+  const applyDefaultCrmView =
+    contentId === 'companies' &&
+    initialCrmView === undefined &&
+    persistedFilters === undefined &&
+    persistedPredicates === undefined;
+
   // We handle the restore of the persistence here instead of within the context
   // because the context is no longer recreated for each soup view because we
   // moved it within the `SplitPanel`.
@@ -578,6 +592,12 @@ export const SoupView = (props: SoupViewProps) => {
     () => activeListView() === 'companies' && soupView.viewMode() === 'board'
   );
 
+  // When CRM is unavailable (no team / disabled) the board renders the
+  // empty state instead of columns, so board-only chrome tweaks (like
+  // hiding the AI bar) shouldn't apply.
+  const crmUnavailable = useCrmUnavailable();
+  const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -683,6 +703,7 @@ export const SoupView = (props: SoupViewProps) => {
                   !narrowSearchExpanded() && isComponentListView('companies')
                 }
               >
+                <CompanyViewsMenu />
                 <CompanyDisplayMenu />
               </Show>
               <Show
@@ -757,6 +778,9 @@ export const SoupView = (props: SoupViewProps) => {
           </Show>
         </div>
         <SoupFiltersBar variant={props.filterBarVariant} />
+        <Show when={applyDefaultCrmView}>
+          <CrmDefaultViewLoader />
+        </Show>
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
@@ -778,7 +802,7 @@ export const SoupView = (props: SoupViewProps) => {
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isMobile() &&
             !isNewInboxEnabled() &&
-            !isBoardMode()
+            !isBoardRendered()
           }
         >
           <SoupChatInput />
@@ -1236,7 +1260,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        class="size-full no-select-children"
+        class="size-full"
         ref={(el) => {
           setSoupViewRef(el);
           attachHotkeys(el);
@@ -1258,7 +1282,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             <SoupViewFileDropzone>
               <div
                 class={cn(
-                  '@container/u-list size-full unified-list-root flex flex-col relative',
+                  '@container/u-list size-full unified-list-root flex flex-col relative no-select-children',
                   paneVisible() && 'border-r border-edge-muted'
                 )}
               >

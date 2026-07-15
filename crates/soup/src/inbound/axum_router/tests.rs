@@ -27,9 +27,9 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem,
-            IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
-            SoupType,
+            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
+            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+            grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -162,8 +162,10 @@ impl SoupService for MockSoup {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
-        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(SoupErr::SoupDbErr(
+            anyhow::anyhow!("Not implemented"),
+        ))
     }
 
     async fn caller_tag_sets<'a>(
@@ -1791,6 +1793,27 @@ fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
             serde_json::to_string(other).unwrap()
         ),
     }
+}
+
+#[test]
+fn ast_endpoint_crm_ef_merge_tolerates_shared_arc() {
+    // The soup service clones the request filters before AST expansion
+    // (`get_user_soup_internal`), so the `ef` Arc reaches the CRM
+    // AND-merge with refcount > 1. The merge must clone, not error.
+    let js = json!({
+        "ef": { "l": { "Importance": true } },
+        "ecd": ["acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let _extra_ref = api.email_filter.clone();
+    let ast = api
+        .into_entity_ast()
+        .expect("shared ef Arc must not fail the merge");
+    let tree = ast.email_filter.tree.as_ref().expect("tree set");
+    assert!(
+        matches!(tree.as_ref(), filter_ast::Expr::And(_, _)),
+        "expected And at root after CRM AND-merge"
+    );
 }
 
 #[test]

@@ -146,6 +146,16 @@ function HistorySectionContent() {
       sidePanel?.setOpenSectionIds(['history']);
     }
   });
+
+  // Discover whether history exists (to choose between the empty state and
+  // the scrubber) once the user actually expands this accordion section —
+  // nothing inside the section can trigger the load itself, since the
+  // scrubber and "Show activity" toggle only render once sessions exist.
+  createEffect(() => {
+    if (sidePanel?.openSectionIds().includes('history')) {
+      history.requestLoad();
+    }
+  });
   const isShowingSessions = () => history.isOpen() || showSessions();
 
   const totalEdits = createMemo(() => {

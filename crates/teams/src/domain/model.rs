@@ -238,6 +238,83 @@ pub struct TeamCheckoutSessionRequest {
     pub team_plan: TeamPlan,
 }
 
+/// Email domains of generic (free / consumer) email providers.
+///
+/// Teams may not enable automatic domain joining for these domains — a
+/// match on e.g. `gmail.com` would auto-join complete strangers to the
+/// team. Entries must be lowercase and sorted (verified by test) so
+/// [`is_generic_email_domain`] can binary search.
+pub const GENERIC_EMAIL_DOMAINS: &[&str] = &[
+    "126.com",
+    "163.com",
+    "aol.com",
+    "att.net",
+    "bellsouth.net",
+    "btinternet.com",
+    "charter.net",
+    "comcast.net",
+    "cox.net",
+    "daum.net",
+    "duck.com",
+    "earthlink.net",
+    "fastmail.com",
+    "free.fr",
+    "gmail.com",
+    "gmx.com",
+    "gmx.de",
+    "gmx.net",
+    "googlemail.com",
+    "hey.com",
+    "hotmail.co.uk",
+    "hotmail.com",
+    "hotmail.fr",
+    "icloud.com",
+    "laposte.net",
+    "live.com",
+    "mac.com",
+    "mail.com",
+    "mail.ru",
+    "me.com",
+    "msn.com",
+    "naver.com",
+    "orange.fr",
+    "outlook.com",
+    "pm.me",
+    "proton.me",
+    "protonmail.com",
+    "qq.com",
+    "rediffmail.com",
+    "rocketmail.com",
+    "sbcglobal.net",
+    "seznam.cz",
+    "sina.com",
+    "sky.com",
+    "t-online.de",
+    "tuta.com",
+    "tutanota.com",
+    "verizon.net",
+    "wanadoo.fr",
+    "web.de",
+    "yahoo.co.in",
+    "yahoo.co.uk",
+    "yahoo.com",
+    "yahoo.fr",
+    "yandex.com",
+    "yandex.ru",
+    "ymail.com",
+    "zoho.com",
+];
+
+/// Returns true when the email domain belongs to a generic (free /
+/// consumer) email provider that may not be used for automatic team
+/// joining. Matching is case-insensitive.
+pub fn is_generic_email_domain(domain: &str) -> bool {
+    let domain = domain.to_ascii_lowercase();
+    GENERIC_EMAIL_DOMAINS
+        .binary_search(&domain.as_str())
+        .is_ok()
+}
+
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -250,10 +327,14 @@ pub struct Team {
     /// Whether the CRM is enabled for this team (from `team_crm_settings`;
     /// `false` when no row exists).
     pub(crate) crm_enabled: bool,
+    /// The email domain new users are automatically joined to this team
+    /// with, when automatic domain joining is enabled (None otherwise).
+    pub(crate) auto_join_domain: Option<String>,
 }
 
 impl Team {
-    /// Creates a new Team
+    /// Creates a new Team. New teams start without an auto-join domain;
+    /// it is toggled on later via the auto-join domain endpoint.
     pub fn new(
         id: uuid::Uuid,
         name: String,
@@ -267,6 +348,7 @@ impl Team {
             slug,
             owner_id,
             crm_enabled,
+            auto_join_domain: None,
         }
     }
 }
@@ -295,6 +377,11 @@ impl Team {
     /// Whether the CRM is enabled for this team
     pub fn crm_enabled(&self) -> bool {
         self.crm_enabled
+    }
+
+    /// The team's auto-join domain, when automatic domain joining is enabled
+    pub fn auto_join_domain(&self) -> Option<&str> {
+        self.auto_join_domain.as_deref()
     }
 }
 
@@ -543,6 +630,28 @@ pub enum JoinTeamError {
     #[error("Underlying user roles and permissions error")]
     /// Underlying user roles and permissions error
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
+}
+
+/// Errors for toggling a team's auto-join domain
+#[derive(Debug, thiserror::Error)]
+pub enum ToggleAutoJoinDomainError {
+    /// The team owner's email domain is a generic email provider domain
+    #[error("The domain {0} is a generic email domain and cannot be used for auto-join")]
+    GenericDomainNotAllowed(String),
+    /// Underlying team error
+    #[error("Underlying team error {0}")]
+    TeamError(#[from] TeamError),
+}
+
+/// Errors for automatically joining a team by email domain
+#[derive(Debug, thiserror::Error)]
+pub enum TryJoinTeamByDomainError {
+    /// Underlying team error
+    #[error("Underlying team error {0}")]
+    TeamError(#[from] TeamError),
+    /// Underlying join team error
+    #[error("Underlying join team error {0}")]
+    JoinTeamError(#[from] JoinTeamError),
 }
 
 /// Errors for revoking permissions for team members

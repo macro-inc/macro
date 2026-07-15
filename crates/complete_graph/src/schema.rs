@@ -18,7 +18,9 @@ use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, NoOpEntityPropertyReader, NoOpEntityPropertyWriter,
     PropertiesMutationRoot,
 };
-use graphql_soup::{SoupInput, SoupPage, resolve_soup};
+use graphql_soup::{
+    GroupedSoup, GroupedSoupInput, SoupInput, SoupPage, resolve_grouped_soup, resolve_soup,
+};
 use model_user::axum_extractor::MacroUserExtractor;
 use soup::domain::ports::{NoOpSoupService, SoupService};
 
@@ -188,6 +190,15 @@ where
         let Cached(MacroUserExtractor { macro_user_id, .. }) =
             extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
         Ok(async_graphql::ID(macro_user_id.to_string()))
+    }
+
+    /// Fetch Soup items nested into grouping bins.
+    async fn group_soup(
+        &self,
+        ctx: &Context<'_>,
+        input: GroupedSoupInput,
+    ) -> async_graphql::Result<GroupedSoup<SoupEdges<NR, PR, ER>>> {
+        resolve_grouped_soup::<S, St, SoupEdges<NR, PR, ER>>(&self.service, ctx, input).await
     }
 
     /// Fetch a page of Soup items using the existing Soup filter AST format.

@@ -31,3 +31,11 @@ destroy_local *ARGS:
 # Stop an instance's containers, keeping volumes (xtask).
 stop_local *ARGS:
   {{ xtask }} stop-local "$@"
+
+# Headless stack orchestration for previews, agents, and CI.
+#   just stack up                      # full stack; static frontend served by the proxy
+#   just stack update                  # rebuild + reload only what changed (the `r` hotkey)
+#   just stack status --json           # machine-readable state
+#   just stack down                    # reclaim everything
+stack *ARGS:
+  {{ xtask }} stack "$@"

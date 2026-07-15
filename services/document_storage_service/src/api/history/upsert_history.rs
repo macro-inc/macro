@@ -1,14 +1,13 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::extract::State;
-use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::HistoryAccessExtractor;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 
 #[derive(serde::Deserialize)]
@@ -33,11 +32,15 @@ pub struct Params {
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, history_access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user, history_access), fields(user_id=?user.macro_user_id))]
 pub async fn upsert_history_handler(
-    history_access: HistoryAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    history_access: HistoryAccessExtractor<
+        ViewAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { item_type, item_id }): Path<Params>,
 ) -> impl IntoResponse {
     let access_level = match history_access.entity_access_receipt.entity_permission() {
@@ -80,24 +83,13 @@ pub async fn upsert_history_handler(
         }
     }
 
-    let user_id = user_context.user_id.as_str();
-
-    // If a user id is present in the UserContext, add the item to the user's history
-    if !user_id.is_empty()
-        && let Err(e) = {
-            match MacroUserIdStr::parse_from_str(&user_context.user_id) {
-                Ok(id) => {
-                    macro_db_client::history::upsert_user_history(
-                        &mut transaction,
-                        id,
-                        item_id.as_str(),
-                        item_type.as_str(),
-                    )
-                    .await
-                }
-                Err(e) => Err(anyhow::Error::from(e)),
-            }
-        }
+    if let Err(e) = macro_db_client::history::upsert_user_history(
+        &mut transaction,
+        user.macro_user_id.clone(),
+        item_id.as_str(),
+        item_type.as_str(),
+    )
+    .await
     {
         tracing::error!(error=?e, "unable to upsert history");
         return GenericResponse::builder()
@@ -107,26 +99,19 @@ pub async fn upsert_history_handler(
     }
 
     // If the item is a document, track the document view
-    if item_type == "document" {
-        let user_id_option = if user_id.is_empty() {
-            None
-        } else {
-            Some(user_id)
-        };
-
-        if let Err(e) = macro_db_client::document::track_document::track_document(
+    if item_type == "document"
+        && let Err(e) = macro_db_client::document::track_document::track_document(
             &mut transaction,
             item_id.as_str(),
-            user_id_option,
+            Some(user.macro_user_id.as_ref()),
         )
         .await
-        {
-            tracing::error!(error=?e, "unable to track document view");
-            return GenericResponse::builder()
-                .message("unable to track document view")
-                .is_error(true)
-                .send(StatusCode::INTERNAL_SERVER_ERROR);
-        }
+    {
+        tracing::error!(error=?e, "unable to track document view");
+        return GenericResponse::builder()
+            .message("unable to track document view")
+            .is_error(true)
+            .send(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     if let Err(e) = transaction.commit().await {

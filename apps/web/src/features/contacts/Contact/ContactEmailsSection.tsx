@@ -5,6 +5,7 @@ import { ListEntity, ListLayoutProvider } from '@entity';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { createSignal, For, Show } from 'solid-js';
 import {
+  type EmailSignalView,
   type EmailView,
   useContactEmailsQuery,
 } from './use-contact-emails-query';
@@ -12,7 +13,8 @@ import {
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
   const email = () => props.contact?.email;
   const [view, setView] = createSignal<EmailView>('team');
-  const emailsQuery = useContactEmailsQuery(email, view);
+  const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
+  const emailsQuery = useContactEmailsQuery(email, view, signalView);
   const emails = () => emailsQuery.data?.entities ?? [];
 
   const [listRef, setListRef] = createSignal<HTMLElement>();
@@ -29,14 +31,24 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
     <div class="flex flex-col gap-2">
       <div class="flex items-center justify-between gap-2">
         <h2 class="text-sm font-medium text-ink-muted">Emails</h2>
-        <TabsInset
-          list={[
-            { value: 'team', label: 'Team' },
-            { value: 'me', label: 'Me' },
-          ]}
-          value={view()}
-          onChange={(v) => setView(v as EmailView)}
-        />
+        <div class="flex items-center gap-2.5">
+          <TabsInset
+            list={[
+              { value: 'signal', label: 'Signal' },
+              { value: 'all', label: 'All' },
+            ]}
+            value={signalView()}
+            onChange={(v) => setSignalView(v as EmailSignalView)}
+          />
+          <TabsInset
+            list={[
+              { value: 'team', label: 'Team' },
+              { value: 'me', label: 'Me' },
+            ]}
+            value={view()}
+            onChange={(v) => setView(v as EmailView)}
+          />
+        </div>
       </div>
       <Show
         when={props.contact && !emailsQuery.isLoading}
@@ -48,33 +60,35 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
           when={emails().length > 0}
           fallback={
             <div class="rounded-lg border border-dashed border-edge-muted p-6 text-center text-sm text-ink-muted">
-              {view() === 'me'
-                ? 'No emails with this contact in your inbox.'
-                : 'No emails with this contact yet.'}
+              {`No ${signalView() === 'signal' ? 'signal emails' : 'emails'} with this contact ${view() === 'me' ? 'in your inbox' : 'yet'}.`}
             </div>
           }
         >
-          <ListLayoutProvider ref={listRef}>
-            <div ref={setListRef} class="flex flex-col">
-              <For each={emails()}>
-                {(entity) => (
-                  <ListEntity
-                    entity={entity}
-                    timestamp={entity.updatedAt}
-                    onClick={() => openEntityInSplitFromUnifiedList(entity, {})}
-                  />
-                )}
-              </For>
-            </div>
-          </ListLayoutProvider>
-          <Show when={emailsQuery.hasNextPage}>
-            <div ref={setSentinelRef} class="h-px" />
-          </Show>
-          <Show when={emailsQuery.isFetchingNextPage}>
-            <div class="p-3 text-center text-xs text-ink-muted">
-              Loading more…
-            </div>
-          </Show>
+          <div class="max-h-96 overflow-y-auto">
+            <ListLayoutProvider ref={listRef}>
+              <div ref={setListRef} class="flex flex-col">
+                <For each={emails()}>
+                  {(entity) => (
+                    <ListEntity
+                      entity={entity}
+                      timestamp={entity.updatedAt}
+                      onClick={() =>
+                        openEntityInSplitFromUnifiedList(entity, {})
+                      }
+                    />
+                  )}
+                </For>
+              </div>
+            </ListLayoutProvider>
+            <Show when={emailsQuery.hasNextPage}>
+              <div ref={setSentinelRef} class="h-px" />
+            </Show>
+            <Show when={emailsQuery.isFetchingNextPage}>
+              <div class="p-3 text-center text-xs text-ink-muted">
+                Loading more…
+              </div>
+            </Show>
+          </div>
         </Show>
       </Show>
     </div>

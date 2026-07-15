@@ -29,7 +29,8 @@ use crate::domain::{
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -281,6 +282,30 @@ where
             .map_err(GetTeamSubscriptionError::Team)?;
 
         Ok(())
+    }
+
+    /// Best-effort rollback of a direct team add (from
+    /// `try_join_team_by_domain`): removes the membership again and undoes
+    /// the team seat count bump. Failures are logged and swallowed, like
+    /// the other join rollbacks.
+    async fn rollback_add_user_to_team(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        failed_step: &str,
+    ) {
+        self.team_repository
+            .remove_user_from_team(team_id, user_id)
+            .await
+            .inspect_err(|rollback_err| {
+                tracing::error!(
+                    error = ?rollback_err,
+                    %team_id,
+                    %user_id,
+                    "unable to rollback auto-joined team member after {failed_step} failed"
+                );
+            })
+            .ok();
     }
 
     /// Sends an invite notification for a team invite
@@ -1235,5 +1260,166 @@ where
                 backfill_failed: 0,
             })
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn toggle_auto_join_domain(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        self.team_repository.toggle_auto_join_domain(&team_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn try_join_team_by_domain(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError> {
+        let Some(team_id) = self.team_repository.get_team_id_by_domain(user_id).await? else {
+            return Ok(None);
+        };
+
+        // Mirror the seat-cap check from invite_users_to_team — an
+        // auto-join must not push the team past its plan's seat cap.
+        if let Some(team_plan) = self.team_repository.get_team_plan(&team_id).await? {
+            let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
+            if seat_count + 1 > team_plan.seat_cap() {
+                tracing::info!(%team_id, %user_id, "skipping team auto-join: team is at its seat cap");
+                return Ok(None);
+            }
+        }
+
+        // Add the user to the team directly (no invite), then run the same
+        // billing / roles / channels side effects as join_team, rolling
+        // the membership back if any of them fail.
+        let Some(team_member) = self
+            .team_repository
+            .add_user_to_team(&team_id, user_id)
+            .await?
+        else {
+            tracing::info!(%team_id, %user_id, "skipping team auto-join: user is already a member");
+            return Ok(None);
+        };
+
+        if !self
+            .team_repository
+            .get_team_payment_status(&team_id)
+            .await?
+        {
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+                .is_some()
+            {
+                self.rollback_add_user_to_team(&team_id, user_id, "the payment status check")
+                    .await;
+                return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying).into());
+            }
+
+            if let Err(e) = self.backfill_legacy_team_subscription(&team_id).await {
+                self.rollback_add_user_to_team(&team_id, user_id, "backfilling team subscription")
+                    .await;
+                return Err(e.into_join_team_error().into());
+            }
+        }
+
+        let subscription_id = match self.get_team_subscription(&team_id).await {
+            Ok(subscription_id) => subscription_id,
+            Err(e) => {
+                self.rollback_add_user_to_team(&team_id, user_id, "getting team subscription")
+                    .await;
+                return Err(e.into_join_team_error().into());
+            }
+        };
+
+        if let Err(e) = self
+            .customer_repository
+            .increment_seat_count(&subscription_id, 1)
+            .await
+        {
+            self.rollback_add_user_to_team(&team_id, user_id, "incrementing seat count")
+                .await;
+            return Err(JoinTeamError::CustomerError(e).into());
+        }
+
+        // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
+        let roles_to_add = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
+        let roles = non_empty::NonEmpty::new(roles_to_add.as_slice()).unwrap();
+
+        if let Err(e) = self
+            .user_roles_and_permissions_service
+            .dangerous_upsert_roles_for_user(user_id, roles)
+            .await
+        {
+            self.customer_repository
+                .decrement_seat_count(&subscription_id, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback customer seat count after adding team member roles failed"
+                    );
+                })
+                .ok();
+            self.rollback_add_user_to_team(&team_id, user_id, "adding team member roles")
+                .await;
+            return Err(JoinTeamError::AddRolesToUserError(e).into());
+        }
+
+        if let Err(e) = self
+            .team_channels_repository
+            .add_team_member_to_channels(&team_id, user_id)
+            .await
+        {
+            let roles = non_empty::NonEmpty::new(roles_to_add.as_slice()).unwrap();
+            self.user_roles_and_permissions_service
+                .dangerous_remove_roles_from_user(user_id, &roles)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback team member roles after adding team member to channels failed"
+                    );
+                })
+                .ok();
+            self.customer_repository
+                .decrement_seat_count(&subscription_id, 1)
+                .await
+                .inspect_err(|rollback_err| {
+                    tracing::error!(
+                        error=?rollback_err,
+                        "unable to rollback customer seat count after adding team member to channels failed"
+                    );
+                })
+                .ok();
+            self.rollback_add_user_to_team(&team_id, user_id, "adding team member to channels")
+                .await;
+            return Err(JoinTeamError::TeamError(e).into());
+        }
+
+        // Best-effort: ask the email service to seed CRM tables from this
+        // user's historical sent mail, same as join_team.
+        if let Err(e) = self
+            .crm_enqueuer
+            .enqueue_populate_crm_for_user(user_id)
+            .await
+        {
+            tracing::error!(
+                error = ?e,
+                team_id = %team_id,
+                macro_id = %user_id,
+                "Failed to enqueue PopulateCrmForUser after team auto-join; CRM tables will not be seeded from sent-mail history (per-message fan-out will still cover future sends)"
+            );
+        }
+
+        // NOTE: no TeamJoined analytics event here — that event is tied to
+        // the team invite that was accepted, and a domain auto-join has none.
+
+        Ok(Some(team_member))
     }
 }

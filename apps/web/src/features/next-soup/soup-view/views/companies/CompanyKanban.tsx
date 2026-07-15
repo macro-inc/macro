@@ -1,13 +1,17 @@
 import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
+import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import {
   useClosedStageIds,
   useCrmPermissions,
+  useCrmUnavailable,
 } from '@companies/crm/team-crm-config';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -58,7 +62,7 @@ type StageColumn = {
  * previews the company to the side instead of replacing the split.
  */
 export function CompanyKanban() {
-  const { source, soup, stageFilter } = useSoupView();
+  const { source, soup, stageFilter, searchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const saveMutation = useBulkSaveEntityPropertiesMutation();
   const orchestrator = useGlobalBlockOrchestrator();
@@ -66,6 +70,16 @@ export function CompanyKanban() {
   const { stages, filterStages, stageProperty, resolveStage } = useDealStages();
   const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
   const closedStageIds = useClosedStageIds(stages);
+
+  // Mirror the list view's no-team / CRM-disabled empty states.
+  const crmUnavailable = useCrmUnavailable();
+  const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
+    useFilterRefinements();
+
+  // Debug: force the board to render its empty state regardless of content.
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const stageColumns = createMemo((): StageColumn[] => {
     // Candidates in canonical pipeline order: the filterable set (active
@@ -93,6 +107,15 @@ export function CompanyKanban() {
   const { paneVisible, selectedEntity } = usePreviewPaneVisiblity();
 
   const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
+
+  // Mirror the list view's empty states: beyond CRM-unavailable, an empty
+  // board ("No customers yet" / no search or filter matches) shows the
+  // panel instead of a row of empty columns. Fetches keep the board
+  // mounted so the empty state doesn't flash during refetches.
+  const showEmptyState = () =>
+    crmUnavailable() ||
+    (!source.isFetching() && companies().length === 0) ||
+    forceEmptyState();
 
   const columns = createMemo(() => {
     const buckets = new Map<string, EntityData[]>(
@@ -180,152 +203,166 @@ export function CompanyKanban() {
   };
 
   return (
-    <Resize.Zone direction="horizontal" gutter={0}>
-      <Resize.Panel id="company-kanban" minSize={200}>
-        {/* Relative wrapper anchors the horizontal scrollbar to the board's
+    <Show
+      when={!showEmptyState()}
+      fallback={
+        <EmptyState
+          listView="companies"
+          search={!!searchText()}
+          hasRefinementsFromBase={hasActiveRefinements()}
+          hasHiddenItems={hasHiddenItems()}
+          onClearFilters={resetToTabDefaults}
+        />
+      }
+    >
+      <Resize.Zone direction="horizontal" gutter={0}>
+        <Resize.Panel id="company-kanban" minSize={200}>
+          {/* Relative wrapper anchors the horizontal scrollbar to the board's
             bottom edge when the split is too narrow for all columns. */}
-        <div
-          class={cn(
-            'relative size-full min-w-0',
-            paneVisible() && 'border-r border-edge-muted'
-          )}
-        >
           <div
-            ref={setScrollRef}
-            class="size-full overflow-x-auto overflow-y-hidden scrollbar-hidden"
-          >
-            <div class="flex h-full gap-3 p-3">
-              <For each={columns()}>
-                {(column, columnIndex) => (
-                  <div
-                    class={cn(
-                      // Fallback sizing until the board is measured; after
-                      // that the snapping columnWidth() takes over.
-                      'flex h-full min-w-56 flex-1 flex-col rounded-lg border border-edge-muted bg-surface',
-                      dropTarget() === column.key &&
-                        draggedId() &&
-                        'border-accent/50 bg-accent/5'
-                    )}
-                    style={
-                      columnWidth() !== undefined
-                        ? { width: `${columnWidth()}px`, flex: 'none' }
-                        : undefined
-                    }
-                    onDragOver={(e) => {
-                      if (!draggedId()) return;
-                      e.preventDefault();
-                      setDropTarget(column.key);
-                    }}
-                    onDragLeave={(e) => {
-                      if (
-                        e.relatedTarget instanceof Node &&
-                        e.currentTarget.contains(e.relatedTarget)
-                      ) {
-                        return;
-                      }
-                      if (dropTarget() === column.key) setDropTarget(undefined);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const id =
-                        draggedId() ?? e.dataTransfer?.getData('text/plain');
-                      setDropTarget(undefined);
-                      setDraggedId(undefined);
-                      if (id) moveToStage(id, column.key);
-                    }}
-                  >
-                    <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
-                      <Show
-                        when={column.key !== NO_STAGE_KEY}
-                        fallback={
-                          <CircleDashed class="size-3.5 text-ink-extra-muted" />
-                        }
-                      >
-                        <CrmStageIcon
-                          optionId={column.key}
-                          index={columnIndex()}
-                          class="size-3.5"
-                        />
-                      </Show>
-                      <span class="truncate">{column.label}</span>
-                    </div>
-                    <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
-                      <For each={column.entities}>
-                        {(entity) => (
-                          // The context-menu trigger is h-full (sized for list
-                          // rows); an auto-height wrapper resolves that to the
-                          // card's content height instead of the column's.
-                          <div class="shrink-0">
-                            <SoupEntityContextMenu entity={entity}>
-                              <CompanyKanbanCard
-                                entity={entity}
-                                draggable={canDragFrom(column.key)}
-                                dragging={draggedId() === entity.id}
-                                onDragStart={(e) => {
-                                  e.dataTransfer?.setData(
-                                    'text/plain',
-                                    entity.id
-                                  );
-                                  if (e.dataTransfer) {
-                                    e.dataTransfer.effectAllowed = 'move';
-                                  }
-                                  setDraggedId(entity.id);
-                                }}
-                                onDragEnd={() => {
-                                  setDraggedId(undefined);
-                                  setDropTarget(undefined);
-                                }}
-                                onClick={(e) => openCompany(entity, e)}
-                              />
-                            </SoupEntityContextMenu>
-                          </div>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-          {/* watchContent: columns mount after the initial measurement, so
-              overflow must be re-detected as they load in. */}
-          <CustomScrollbar
-            scrollContainer={scrollRef}
-            horizontal
-            revealZone={48}
-            gutterSize={20}
-            watchContent
-          />
-        </div>
-      </Resize.Panel>
-      <Show when={paneVisible()}>
-        <Resize.Panel
-          id="soup-preview"
-          minSize={500}
-          target={{ kind: 'percent', percent: 70 }}
-        >
-          <Show
-            when={selectedEntity()}
-            fallback={
-              <EmptyStatePanel
-                graphic={EmptyStatePreviewIcon}
-                title="Nothing selected"
-                description="Select a card from the board to preview it here"
-                centered
-              />
-            }
-          >
-            {(entity) => (
-              <PreviewPanel
-                selectedEntity={entity()}
-                orchestrator={orchestrator}
-                splitPanelContext={panel}
-              />
+            class={cn(
+              'relative size-full min-w-0',
+              paneVisible() && 'border-r border-edge-muted'
             )}
-          </Show>
+          >
+            <div
+              ref={setScrollRef}
+              class="size-full overflow-x-auto overflow-y-hidden scrollbar-hidden"
+            >
+              <div class="flex h-full gap-3 p-3">
+                <For each={columns()}>
+                  {(column, columnIndex) => (
+                    <div
+                      class={cn(
+                        // Fallback sizing until the board is measured; after
+                        // that the snapping columnWidth() takes over.
+                        'flex h-full min-w-56 flex-1 flex-col rounded-lg border border-edge-muted bg-surface',
+                        dropTarget() === column.key &&
+                          draggedId() &&
+                          'border-accent/50 bg-accent/5'
+                      )}
+                      style={
+                        columnWidth() !== undefined
+                          ? { width: `${columnWidth()}px`, flex: 'none' }
+                          : undefined
+                      }
+                      onDragOver={(e) => {
+                        if (!draggedId()) return;
+                        e.preventDefault();
+                        setDropTarget(column.key);
+                      }}
+                      onDragLeave={(e) => {
+                        if (
+                          e.relatedTarget instanceof Node &&
+                          e.currentTarget.contains(e.relatedTarget)
+                        ) {
+                          return;
+                        }
+                        if (dropTarget() === column.key)
+                          setDropTarget(undefined);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const id =
+                          draggedId() ?? e.dataTransfer?.getData('text/plain');
+                        setDropTarget(undefined);
+                        setDraggedId(undefined);
+                        if (id) moveToStage(id, column.key);
+                      }}
+                    >
+                      <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
+                        <Show
+                          when={column.key !== NO_STAGE_KEY}
+                          fallback={
+                            <CircleDashed class="size-3.5 text-ink-extra-muted" />
+                          }
+                        >
+                          <CrmStageIcon
+                            optionId={column.key}
+                            index={columnIndex()}
+                            class="size-3.5"
+                          />
+                        </Show>
+                        <span class="truncate">{column.label}</span>
+                      </div>
+                      <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
+                        <For each={column.entities}>
+                          {(entity) => (
+                            // The context-menu trigger is h-full (sized for list
+                            // rows); an auto-height wrapper resolves that to the
+                            // card's content height instead of the column's.
+                            <div class="shrink-0">
+                              <SoupEntityContextMenu entity={entity}>
+                                <CompanyKanbanCard
+                                  entity={entity}
+                                  draggable={canDragFrom(column.key)}
+                                  dragging={draggedId() === entity.id}
+                                  onDragStart={(e) => {
+                                    e.dataTransfer?.setData(
+                                      'text/plain',
+                                      entity.id
+                                    );
+                                    if (e.dataTransfer) {
+                                      e.dataTransfer.effectAllowed = 'move';
+                                    }
+                                    setDraggedId(entity.id);
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedId(undefined);
+                                    setDropTarget(undefined);
+                                  }}
+                                  onClick={(e) => openCompany(entity, e)}
+                                />
+                              </SoupEntityContextMenu>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+            {/* watchContent: columns mount after the initial measurement, so
+              overflow must be re-detected as they load in. */}
+            <CustomScrollbar
+              scrollContainer={scrollRef}
+              horizontal
+              revealZone={48}
+              gutterSize={20}
+              watchContent
+            />
+          </div>
         </Resize.Panel>
-      </Show>
-    </Resize.Zone>
+        <Show when={paneVisible()}>
+          <Resize.Panel
+            id="soup-preview"
+            minSize={500}
+            target={{ kind: 'percent', percent: 70 }}
+          >
+            <Show
+              when={selectedEntity()}
+              fallback={
+                <EmptyStatePanel
+                  graphic={EmptyStatePreviewIcon}
+                  title="Nothing selected"
+                  description="Select a card from the board to preview it here"
+                  centered
+                />
+              }
+            >
+              {(entity) => (
+                <PreviewPanel
+                  selectedEntity={entity()}
+                  orchestrator={orchestrator}
+                  splitPanelContext={panel}
+                />
+              )}
+            </Show>
+          </Resize.Panel>
+        </Show>
+      </Resize.Zone>
+    </Show>
   );
 }
 

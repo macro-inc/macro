@@ -39,7 +39,7 @@ Put the following here:
 
 Axum handlers, AI tools, Kafka/listener handlers, lambda handlers, and CLI entrypoints are adapters. Keep them thin:
 
-- Extract authentication/identity from transport (`MacroUserExtractor`, JWT, signed internal header, request context).
+- Extract authentication/identity from transport (`MacroAuthorizationExtractor`, `OptionalMacroAuthorizationExtractor`, JWT, signed internal header, request context).
 - Parse path/query/body/header data and perform transport/syntax validation.
 - Convert transport DTOs into domain request/command types.
 - Call exactly the appropriate domain service/port method.

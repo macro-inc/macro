@@ -6,8 +6,7 @@ use rmcp::{
         Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
     },
 };
-use roles_and_permissions::domain::model::PermissionId;
-use sqlx::PgPool;
+use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use std::sync::Arc;
 
 /// MCP server handler that extracts authenticated user identity from HTTP
@@ -16,28 +15,31 @@ use std::sync::Arc;
     dead_code,
     reason = "fields used via ServerHandler trait impl dispatched by rmcp"
 )]
-pub struct AuthenticatedToolService<Context> {
+pub struct AuthenticatedToolService<Context, RolesService> {
     toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
-    db: PgPool,
+    user_roles_and_permissions_service: RolesService,
     /// Base URL of the Macro web app used to build links to Macro items in MCP
     /// responses (e.g. `https://macro.com`). Comes from the `APP_BASE_URL`
     /// environment variable.
     item_base_url: String,
 }
 
-impl<Context> AuthenticatedToolService<Context> {
+impl<Context, RolesService> AuthenticatedToolService<Context, RolesService>
+where
+    RolesService: UserRolesAndPermissionsService,
+{
     /// Creates a new authenticated tool service.
     pub fn new(
         toolset: Arc<AsyncToolCollection<Context>>,
         context: Context,
-        db: PgPool,
+        user_roles_and_permissions_service: RolesService,
         item_base_url: String,
     ) -> Self {
         Self {
             toolset,
             context,
-            db,
+            user_roles_and_permissions_service,
             item_base_url,
         }
     }
@@ -71,17 +73,16 @@ impl<Context> AuthenticatedToolService<Context> {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), rmcp::ErrorData> {
-        let permissions = macro_db_client::user::get_permissions::get_user_permissions(
-            &self.db,
-            user_id.0.as_ref(),
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to check user permissions for MCP access");
-            rmcp::ErrorData::internal_error("failed to check permissions", None)
-        })?;
+        let roles = self
+            .user_roles_and_permissions_service
+            .get_user_roles(user_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "failed to check user subscription roles for MCP access");
+                rmcp::ErrorData::internal_error("failed to check subscription", None)
+            })?;
 
-        let is_paid = permissions.contains(&PermissionId::WriteProAi.to_string());
+        let is_paid = roles.iter().any(|role| role.is_paid_subscription());
 
         if !is_paid {
             return Err(rmcp::ErrorData::new(
@@ -98,9 +99,10 @@ impl<Context> AuthenticatedToolService<Context> {
 #[cfg(test)]
 mod test;
 
-impl<Context> ServerHandler for AuthenticatedToolService<Context>
+impl<Context, RolesService> ServerHandler for AuthenticatedToolService<Context, RolesService>
 where
     Context: Clone + Send + Sync + 'static,
+    RolesService: UserRolesAndPermissionsService,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());

@@ -73,6 +73,7 @@ function dispatchUnsupportedMediaError(video: HTMLVideoElement): void {
 }
 
 beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: vi.fn(() => posterBlobUrl),
@@ -84,6 +85,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -100,6 +102,8 @@ describe('CallRecordingVideo', () => {
       <CallRecordingVideo url={recordingUrl} posterUrl={posterUrl} />
     ));
     const video = getVideo(container);
+
+    expect(video.load).toHaveBeenCalledOnce();
 
     await waitFor(() =>
       expect(video.getAttribute('poster')).toBe(posterBlobUrl)
@@ -122,6 +126,7 @@ describe('CallRecordingVideo', () => {
     expect(fallbackLink.hasAttribute('download')).toBe(true);
 
     expect(video.hasAttribute('controls')).toBe(true);
+    expect(video.getAttribute('preload')).toBe('metadata');
     expect(video.getAttribute('crossorigin')).toBe('anonymous');
     expect(video.getAttribute('poster')).toBe(posterBlobUrl);
     expect(video.getAttribute('src')).toBe(recordingUrl);

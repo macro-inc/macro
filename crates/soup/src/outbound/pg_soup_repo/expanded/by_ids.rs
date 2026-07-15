@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// permissions through project hierarchy. If a user has access to a project that contains
 /// the requested items, those items WILL be included in the results even if the user doesn't
 /// have explicit permissions on them. Project items themselves are excluded from results -
-/// only documents and chats are returned. Results are sorted to match the input entity order.
+/// only documents and chats are returned. Result order is unspecified.
 #[tracing::instrument(err, skip(db, entities))]
 pub async fn expanded_soup_by_ids<'a>(
     db: &PgPool,

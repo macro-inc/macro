@@ -39,12 +39,13 @@ import {
   useDeleteTeamMutation,
   usePatchTeamMutation,
   useTeamQuery,
+  useToggleAutoJoinDomainMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -856,6 +857,7 @@ function TeamManagement(props: {
   const patchTeamMutation = usePatchTeamMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
+  const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const requiresUpgrade = useRequiresPaidUpgrade();
   const { showPaywall } = usePaywallState();
 
@@ -983,12 +985,28 @@ function TeamManagement(props: {
       (member) => member.user_id === currentUserId
     )?.role;
   });
-  const canManageMemberRemovals = () => isTeamAdminOrOwner(currentUserRole());
+  const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
+  const canManageMemberRemovals = () => isAdminOrOwner();
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
     return props.ownerId === currentUserId;
   });
+
+  // The team's auto-join domain doubles as the toggle state: a string means
+  // auto-join is on for that domain, null/undefined means it's off.
+  const autoJoinDomain = () => teamQuery.data?.team.auto_join_domain ?? null;
+  const autoJoinDescription = () => {
+    const domain = autoJoinDomain();
+    return domain
+      ? `New sign-ups with an @${domain} email automatically join this team.`
+      : "Automatically add new sign-ups whose email matches the team owner's domain.";
+  };
+
+  const handleToggleAutoJoin = () => {
+    if (!props.teamId || toggleAutoJoinMutation.isPending) return;
+    toggleAutoJoinMutation.mutate({ teamId: props.teamId });
+  };
 
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
@@ -1242,6 +1260,23 @@ function TeamManagement(props: {
                 </div>
               </Show>
             </SettingsRow>
+
+            <Show when={isAdminOrOwner()}>
+              <SettingsRow
+                label="Auto-join on domain"
+                description={autoJoinDescription()}
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={!!autoJoinDomain()}
+                  disabled={
+                    toggleAutoJoinMutation.isPending || teamQuery.isLoading
+                  }
+                  onChange={handleToggleAutoJoin}
+                />
+              </SettingsRow>
+            </Show>
           </SettingsCard>
         </SettingsSection>
 

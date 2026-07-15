@@ -2,6 +2,26 @@ use std::collections::HashSet;
 
 use thiserror::Error;
 
+/// Identity claims presented by an internally authenticated caller.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct InternalIdentityClaims {
+    /// The acting user's Macro identifier, when the caller acts on a user's behalf.
+    pub user_id: Option<String>,
+    /// The acting user's FusionAuth identifier.
+    pub fusion_user_id: Option<String>,
+    /// The acting user's organization.
+    pub organization_id: Option<i32>,
+}
+
+/// Configuration enabling internal service-to-service authorization.
+#[derive(Clone)]
+pub struct InternalAuthConfig {
+    /// The shared secret internal callers must present.
+    pub api_key: String,
+    /// Identity assumed for internal callers that supply no acting user.
+    pub default_user_id: Option<String>,
+}
+
 /// An identity whose credential has already passed cryptographic validation.
 ///
 /// Validation adapters construct this value without exposing token claim types

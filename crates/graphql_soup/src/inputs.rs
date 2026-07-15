@@ -5,8 +5,8 @@ use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use graphql_common::{
-    GraphqlPropertiesExpr, IntoFilterExpr, filter_expr_input, optional_tree, parse_id,
-    parse_macro_user_id,
+    GraphqlPropertiesExpr, GraphqlPropertyEntityType, IntoFilterExpr, filter_expr_input,
+    optional_tree, parse_id, parse_macro_user_id,
 };
 use item_filters::{
     CallStatus, SharedEmailFilter,
@@ -21,12 +21,14 @@ use item_filters::{
         email::{Email, EmailLiteral},
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
+        properties::PropertyEntityType,
     },
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use model_file_type::FileType;
-use models_pagination::{Base64Str, CursorWithValAndFilter, SimpleSortMethod};
-use soup::domain::models::{SoupQuery, SoupRequest, SoupType};
+use models_grouping::{GroupByField, GroupingConfig};
+use models_pagination::{Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod};
+use soup::domain::models::{GroupedSortRequest, SoupQuery, SoupRequest, SoupType};
 use uuid::Uuid;
 
 /// Input for `Query.soup`.
@@ -45,6 +47,123 @@ pub struct SoupInput {
     email_view: Option<GraphqlEmailView>,
     /// AST-shaped filters applied to each Soup entity type.
     filters: Option<GraphqlEntityFilterAst>,
+}
+
+/// Input for `Query.groupSoup`.
+#[derive(async_graphql::InputObject)]
+pub struct GroupedSoupInput {
+    /// The field used to divide Soup items into bins.
+    group_by: GraphqlGroupByInput,
+    /// Maximum number of items to return per bin. Defaults to 20, max 500.
+    limit: Option<u16>,
+    /// Sort order within each bin. Defaults to `VIEWED_UPDATED`.
+    sort_method: Option<GraphqlSimpleSortMethod>,
+    /// AST-shaped filters applied to each Soup entity type.
+    filters: Option<GraphqlEntityFilterAst>,
+}
+
+impl GroupedSoupInput {
+    /// Convert this value into the grouped Soup domain request.
+    pub(crate) fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> async_graphql::Result<GroupedSortRequest<'static>> {
+        let filters = self
+            .filters
+            .map(GraphqlEntityFilterAst::into_ast)
+            .transpose()?
+            .unwrap_or_default();
+        let sort_method = self
+            .sort_method
+            .map(SimpleSortMethod::from)
+            .unwrap_or(SimpleSortMethod::ViewedUpdated);
+        let limit = self.limit.unwrap_or(20).min(500);
+
+        Ok(GroupedSortRequest {
+            limit,
+            cursor: Query::Sort(sort_method, filters),
+            user_id: macro_user_id,
+            grouping: GroupingConfig {
+                field: self.group_by.into_group_by_field()?,
+                group_key: None,
+                per_group_limit: Some(u32::from(limit)),
+            },
+        })
+    }
+}
+
+/// GraphQL representation of a field used to group Soup items.
+#[derive(async_graphql::InputObject)]
+struct GraphqlGroupByInput {
+    /// The kind of grouping to perform.
+    field: GraphqlGroupByField,
+    /// Property definition to group by when `field` is `PROPERTY`.
+    property_definition_id: Option<ID>,
+    /// Optional property entity type restriction.
+    entity_type: Option<GraphqlPropertyEntityType>,
+}
+
+impl GraphqlGroupByInput {
+    /// Convert this input into the grouping domain model.
+    fn into_group_by_field(self) -> async_graphql::Result<GroupByField> {
+        match self.field {
+            GraphqlGroupByField::Date => self.without_property_options(GroupByField::Date),
+            GraphqlGroupByField::EntityType => {
+                self.without_property_options(GroupByField::EntityType)
+            }
+            GraphqlGroupByField::Project => self.without_property_options(GroupByField::Project),
+            GraphqlGroupByField::Property => {
+                let property_definition_id = self.property_definition_id.ok_or_else(|| {
+                    async_graphql::Error::new(
+                        "propertyDefinitionId is required when grouping by PROPERTY",
+                    )
+                })?;
+                let property_definition_id =
+                    parse_id(property_definition_id, "propertyDefinitionId")?;
+                let entity_type = self
+                    .entity_type
+                    .map(PropertyEntityType::try_from)
+                    .transpose()
+                    .map_err(|_| {
+                        async_graphql::Error::new(
+                            "CALL_RECORD is not supported for property grouping",
+                        )
+                    })?
+                    .map(|entity_type| entity_type.to_string());
+
+                Ok(GroupByField::Property {
+                    property_definition_id,
+                    entity_type,
+                })
+            }
+        }
+    }
+
+    /// Reject property-only options for non-property grouping modes.
+    fn without_property_options(
+        self,
+        group_by: GroupByField,
+    ) -> async_graphql::Result<GroupByField> {
+        if self.property_definition_id.is_some() || self.entity_type.is_some() {
+            return Err(async_graphql::Error::new(
+                "propertyDefinitionId and entityType require PROPERTY grouping",
+            ));
+        }
+        Ok(group_by)
+    }
+}
+
+/// Grouping modes supported by grouped Soup.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlGroupByField {
+    /// Group into date buckets.
+    Date,
+    /// Group by Soup entity type.
+    EntityType,
+    /// Group by containing project.
+    Project,
+    /// Group by a property value.
+    Property,
 }
 
 impl SoupInput {

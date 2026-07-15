@@ -1,7 +1,11 @@
 use models_opensearch::SearchIndex;
 
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+use crate::{
+    Result,
+    date_format::{EpochMillis, EpochSeconds},
+    error::OpensearchClientError,
+};
 
 /// The arguments for upserting a project into the opensearch index.
 ///
@@ -22,6 +26,10 @@ pub struct UpsertProjectArgs {
     pub created_at_seconds: EpochSeconds,
     /// The updated at time of the project
     pub updated_at_seconds: EpochSeconds,
+    /// The created at time of the project, in milliseconds
+    pub created_at_millis: EpochMillis,
+    /// The updated at time of the project, in milliseconds
+    pub updated_at_millis: EpochMillis,
     /// Entity properties (tags, custom) used for search filtering.
     pub properties: Vec<IndexedProperty>,
 }

@@ -7,8 +7,12 @@ import {
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
-const BACKFILL_VERSION = 1;
+// Bump when a default backfill input changes so persisted opaque cursors
+// cannot retain the previous server-side filters.
+const BACKFILL_VERSION = 2;
 const PAGE_LIMIT = 250;
+// The email-content DataLoader rejects operations with more than 20 threads.
+const EMAIL_CONTENT_PAGE_LIMIT = 20;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
@@ -19,7 +23,7 @@ export type SoupBackfillParams = {
   checkpointId: string;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: Omit<GraphqlSoupInput, 'cursor'>;
-  /** Delay between successful pages. Defaults to five seconds. */
+  /** Delay between successful pages. Defaults to two seconds. */
   pageDelayMs?: number;
 };
 
@@ -31,6 +35,7 @@ export const ALL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
     },
@@ -38,13 +43,14 @@ export const ALL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
 };
 
 /**
- * Fetches email threads while excluding every other entity variant with an
- * impossible id filter.
+ * Fetches email threads and their newest content message while excluding every
+ * other entity variant with an impossible id filter.
  */
 export const EMAIL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
-  checkpointId: 'email-all',
+  // This namespace must not reuse checkpoints from the old metadata-only pass.
+  checkpointId: 'email-content-all',
   input: {
-    limit: PAGE_LIMIT,
+    limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
@@ -359,7 +365,7 @@ export function useSoupBackfill(
   });
 }
 
-/** Backfills only email threads using an independent persisted checkpoint. */
+/** Backfills email thread metadata and content with an independent checkpoint. */
 export function useEmailSoupBackfill(userId: Accessor<string | undefined>) {
   return useSoupBackfill(userId, () => EMAIL_SOUP_BACKFILL_PARAMS);
 }

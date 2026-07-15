@@ -9,6 +9,7 @@ import {
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
+import { isImageAttachment } from '@core/component/AI/util/attachment';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -194,7 +195,8 @@ export function ChatInput(props: ChatInputComponentProps) {
     });
 
   const hasAttachments = () =>
-    attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
+    attachments.attached().some(isImageAttachment) ||
+    uploadQueue.uploading().length > 0;
 
   const LeftButton = () => (
     <Button

@@ -1,18 +1,16 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::extract::State;
 use axum::response::Response;
 use axum::{
-    Extension,
     extract::Path,
     http::StatusCode,
     response::{IntoResponse, Json},
 };
 use entity_access::domain::ports::EntityAccessService as EntityAccessServiceTrait;
 use entity_access::inbound::axum_extractors::ProjectAccessLevelExtractor;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::GenericErrorResponse;
-use model::user::UserContext;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::{AccessLevel, OwnerAccessLevel};
@@ -38,11 +36,15 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, id, _access), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, user, id, _access), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn get_project_permissions_handler(
     State(ctx): State<ApiContext>,
-    _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
-    user_context: Extension<UserContext>,
+    _access: ProjectAccessLevelExtractor<
+        OwnerAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     get_project_permission_v2(&ctx.db, &id).await
@@ -87,30 +89,15 @@ async fn get_project_permission_v2(
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
 pub async fn get_project_access_level_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
 ) -> impl IntoResponse {
-    let user_id = match MacroUserIdStr::parse_from_str(&user_context.user_id) {
-        Ok(user_id) => user_id,
-        Err(e) => {
-            tracing::error!(error=?e, "failed to parse user id");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericErrorResponse {
-                    error: true,
-                    message: "failed to get user access level".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-
     let user_access_level: Option<AccessLevel> = match ctx
         .entity_access_service
-        .get_access_level(Some(&user_id), &id, EntityType::Project)
+        .get_access_level(Some(&user.macro_user_id), &id, EntityType::Project)
         .await
     {
         Ok(user_access_level) => user_access_level,

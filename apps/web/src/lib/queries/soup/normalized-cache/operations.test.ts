@@ -122,11 +122,14 @@ function mockSearchResult(type: string, id: string): UnifiedSearchResponseItem {
         type: 'chat',
         chat_id: id,
       } as unknown as UnifiedSearchResponseItem;
-    case 'channel':
+    case 'channelMessage': {
+      const [channelId, messageId] = id.split(':');
       return {
-        type: 'channel',
-        channel_id: id,
+        type: 'channelMessage',
+        channel_id: channelId,
+        message_id: messageId,
       } as unknown as UnifiedSearchResponseItem;
+    }
     case 'project':
       return { type: 'project', id } as unknown as UnifiedSearchResponseItem;
     default:
@@ -338,11 +341,11 @@ describe('removeSearchEntities', () => {
           mockSearchResult('document', 'doc-1'),
           mockSearchResult('chat', 'chat-1'),
         ],
-        [mockSearchResult('channel', 'ch-1')],
+        [mockSearchResult('channelMessage', 'ch-1:msg-1')],
       ])
     );
 
-    removeSearchEntities(new Set(['doc-1', 'ch-1']));
+    removeSearchEntities(new Set(['doc-1', 'ch-1:msg-1']));
 
     const cached = getSearchQuery()!;
     expect(cached.pages[0].results).toHaveLength(1);

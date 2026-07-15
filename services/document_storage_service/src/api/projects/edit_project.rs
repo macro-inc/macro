@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use anyhow::Context;
 use axum::{
     Extension,
@@ -12,6 +12,7 @@ use entity_access::inbound::axum_extractors::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{GenericErrorResponse, SuccessResponse};
 use model::{project::BasicProject, response::GenericSuccessResponse};
 use model::{project::request::PatchProjectRequestV2, response::ErrorResponse, user::UserContext};
@@ -40,7 +41,7 @@ pub struct Params {
     )]
 #[allow(unused, reason = "used to generate OpenAPI documentation")]
 pub async fn edit_project_handler_v2(
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
     Json(req): Json<PatchProjectRequestV2>,
 ) -> impl IntoResponse {
@@ -48,11 +49,11 @@ pub async fn edit_project_handler_v2(
 }
 
 /// Edits a project.
-#[tracing::instrument(skip(ctx, user_context, project, id, access), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, user, project, id, access), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn edit_project_handler(
-    access: ProjectAccessLevelExtractor<EditAccessLevel, EntityAccessService>,
+    access: ProjectAccessLevelExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     project_context: Extension<BasicProject>,
     Path(Params { id }): Path<Params>,
     project: ProjectBodyAccessLevelExtractor<
@@ -78,19 +79,26 @@ pub async fn edit_project_handler(
         _ => AccessLevel::Edit,
     };
 
-    edit_project_v2(&ctx, user_context, project_context, access_level, id, req)
-        .await
-        .map_err(|(status_code, message)| {
-            tracing::error!(error=?message, "unable to create project");
-            (
-                status_code,
-                Json(GenericErrorResponse {
-                    error: true,
-                    message,
-                }),
-            )
-                .into_response()
-        })?;
+    edit_project_v2(
+        &ctx,
+        user.user_context,
+        project_context,
+        access_level,
+        id,
+        req,
+    )
+    .await
+    .map_err(|(status_code, message)| {
+        tracing::error!(error=?message, "unable to create project");
+        (
+            status_code,
+            Json(GenericErrorResponse {
+                error: true,
+                message,
+            }),
+        )
+            .into_response()
+    })?;
 
     return Ok((
         StatusCode::OK,
@@ -104,7 +112,7 @@ pub async fn edit_project_handler(
 
 async fn edit_project_v2(
     ctx: &ApiContext,
-    user_context: Extension<UserContext>,
+    user_context: UserContext,
     project_context: Extension<BasicProject>,
     users_access_level: AccessLevel,
     id: String,

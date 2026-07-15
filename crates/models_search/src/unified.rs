@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::call_record::CallRecordSearchResponseItemWithMetadata;
-use crate::channel::ChannelSearchResponseItemWithMetadata;
+use crate::channel::ChannelMessageSearchResponseItem;
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
@@ -209,7 +209,7 @@ pub enum UnifiedSearchResponseItem {
     Document(DocumentSearchResponseItemWithMetadata),
     Chat(ChatSearchResponseItemWithMetadata),
     Email(EmailSearchResponseItemWithMetadata),
-    Channel(ChannelSearchResponseItemWithMetadata),
+    ChannelMessage(ChannelMessageSearchResponseItem),
     Project(ProjectSearchResponseItemWithMetadata),
     Call(CallRecordSearchResponseItemWithMetadata),
     Company(crate::crm_company::CrmCompanySearchResponseItem),
@@ -221,7 +221,7 @@ impl UnifiedSearchResponseItem {
             Self::Document(item) => item.extra.id,
             Self::Chat(item) => item.extra.id,
             Self::Email(item) => item.extra.id,
-            Self::Channel(item) => item.extra.id,
+            Self::ChannelMessage(item) => item.channel_id,
             Self::Project(item) => item.extra.id,
             Self::Call(item) => item.extra.id,
             Self::Company(item) => item.id,
@@ -233,18 +233,7 @@ impl UnifiedSearchResponseItem {
             Self::Document(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Chat(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Email(item) => Some(item.updated_at),
-            Self::Channel(item) => {
-                // Get the max updated_at from channel_message_search_results
-                let max_result_updated_at = item
-                    .extra
-                    .channel_message_search_results
-                    .iter()
-                    .filter_map(|r| r.updated_at)
-                    .max();
-
-                // Use max from results, or fall back to metadata.updated_at
-                max_result_updated_at.or_else(|| item.metadata.as_ref().map(|m| m.updated_at))
-            }
+            Self::ChannelMessage(item) => Some(item.updated_at),
             Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Call(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Company(item) => Some(item.updated_at),

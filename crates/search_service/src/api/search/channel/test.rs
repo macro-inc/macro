@@ -505,6 +505,153 @@ fn test_channel_history_null_viewed_at() {
 }
 
 #[test]
+fn test_construct_channel_message_items_one_item_per_hit_in_hit_order() {
+    let channel_a: Uuid = "550e8400-e29b-41d4-a716-446655440000".parse().unwrap();
+    let channel_b: Uuid = "550e8400-e29b-41d4-a716-446655440001".parse().unwrap();
+    let msg1: Uuid = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+    let msg2: Uuid = "22222222-2222-2222-2222-222222222222".parse().unwrap();
+    let msg3: Uuid = "33333333-3333-3333-3333-333333333333".parse().unwrap();
+
+    // Hits arrive in global recency order, channel A's messages straddling
+    // channel B's — the per-message items must preserve that order rather
+    // than regroup by channel.
+    let search_results = vec![
+        create_test_channel_response(
+            &channel_a.to_string(),
+            &msg1.to_string(),
+            "user1",
+            Some(vec!["newest".to_string()]),
+        ),
+        create_test_channel_response(
+            &channel_b.to_string(),
+            &msg2.to_string(),
+            "user2",
+            Some(vec!["middle".to_string()]),
+        ),
+        create_test_channel_response(
+            &channel_a.to_string(),
+            &msg3.to_string(),
+            "user3",
+            Some(vec!["oldest".to_string()]),
+        ),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    for channel_id in [channel_a, channel_b] {
+        channel_histories.insert(
+            channel_id,
+            create_channel_history(channel_id.to_string().as_str()),
+        );
+    }
+
+    let states = active_states_for(&search_results);
+    let items = construct_channel_message_items(search_results, channel_histories, states);
+
+    assert_eq!(items.len(), 3);
+    assert_eq!(
+        items
+            .iter()
+            .map(|i| (i.channel_id, i.message_id))
+            .collect::<Vec<_>>(),
+        vec![(channel_a, msg1), (channel_b, msg2), (channel_a, msg3)]
+    );
+    assert_eq!(items[0].sender_id, "user1");
+    assert_eq!(items[0].owner_id.as_deref(), Some("user1"));
+    assert_eq!(items[0].channel_type, "public");
+    assert_eq!(items[0].id, channel_a);
+    assert_eq!(
+        items[0].created_at,
+        DateTime::from_timestamp(1234567890, 0).unwrap()
+    );
+    assert_eq!(
+        items[0].updated_at,
+        DateTime::from_timestamp(1234567891, 0).unwrap()
+    );
+}
+
+#[test]
+fn test_construct_channel_message_items_drops_missing_history() {
+    let known_channel: Uuid = "550e8400-e29b-41d4-a716-446655440002".parse().unwrap();
+    let unknown_channel: Uuid = "550e8400-e29b-41d4-a716-446655440003".parse().unwrap();
+
+    let search_results = vec![
+        create_test_channel_response(
+            &known_channel.to_string(),
+            "11111111-1111-1111-1111-111111111111",
+            "user1",
+            Some(vec!["hit".to_string()]),
+        ),
+        create_test_channel_response(
+            &unknown_channel.to_string(),
+            "22222222-2222-2222-2222-222222222222",
+            "user2",
+            Some(vec!["hit".to_string()]),
+        ),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        known_channel,
+        create_channel_history(known_channel.to_string().as_str()),
+    );
+
+    let states = active_states_for(&search_results);
+    let items = construct_channel_message_items(search_results, channel_histories, states);
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].channel_id, known_channel);
+}
+
+#[test]
+fn test_construct_channel_message_items_filters_orphans_and_propagates_deleted_at() {
+    let channel_uuid: Uuid = "550e8400-e29b-41d4-a716-446655440004".parse().unwrap();
+    let active_message_id: Uuid = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+    let deleted_message_id: Uuid = "22222222-2222-2222-2222-222222222222".parse().unwrap();
+    let orphan_message_id: Uuid = "33333333-3333-3333-3333-333333333333".parse().unwrap();
+
+    let search_results = vec![
+        create_test_channel_response(
+            &channel_uuid.to_string(),
+            &active_message_id.to_string(),
+            "user1",
+            Some(vec!["active".to_string()]),
+        ),
+        create_test_channel_response(
+            &channel_uuid.to_string(),
+            &deleted_message_id.to_string(),
+            "user2",
+            Some(vec!["deleted".to_string()]),
+        ),
+        create_test_channel_response(
+            &channel_uuid.to_string(),
+            &orphan_message_id.to_string(),
+            "user3",
+            Some(vec!["orphan".to_string()]),
+        ),
+    ];
+
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        channel_uuid,
+        create_channel_history(channel_uuid.to_string().as_str()),
+    );
+
+    let deleted_at = DateTime::from_timestamp(1700000000, 0).unwrap();
+    let mut states: HashMap<Uuid, Option<DateTime<Utc>>> = HashMap::new();
+    states.insert(active_message_id, None);
+    states.insert(deleted_message_id, Some(deleted_at));
+    // orphan_message_id intentionally omitted to simulate a hard-deleted row.
+
+    let items = construct_channel_message_items(search_results, channel_histories, states);
+
+    assert_eq!(items.len(), 2, "orphan hit should be filtered out");
+    assert_eq!(items[0].message_id, active_message_id);
+    assert_eq!(items[0].deleted_at, None);
+    assert_eq!(items[1].message_id, deleted_message_id);
+    assert_eq!(items[1].deleted_at, Some(deleted_at));
+}
+
+#[test]
 fn test_sort_stability() {
     let channel_ids: Vec<Uuid> = [
         "550e8400-e29b-41d4-a716-446655440003",

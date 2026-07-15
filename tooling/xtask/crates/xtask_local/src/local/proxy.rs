@@ -22,29 +22,38 @@ pub fn url(instance: &Instance) -> String {
 /// Write the instance Caddyfile and return its path. Both local and dev route
 /// the frontend through this single origin to the local service containers; the
 /// only difference is the static-file block (dev has no local LocalStack).
-pub fn write_caddyfile(instance: &Instance, mode: Mode) -> Result<PathBuf> {
+/// With `static_frontend` the proxy also serves the built app bundle at `/app`,
+/// making it the one origin for the whole product.
+pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> Result<PathBuf> {
     let path = caddyfile_path(instance);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("creating proxy dir {}", dir.display()))?;
     }
-    std::fs::write(&path, caddyfile(mode))
+    std::fs::write(&path, caddyfile(mode, static_frontend))
         .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
 /// Assemble the Caddyfile: the listener head, the generated per-service routes
 /// (from the inventory), the special non-inventory routes, the mode's
-/// static-file block, then the tail. Service routes are identical across modes
-/// (they hit the local containers); only the static-file block differs.
-fn caddyfile(mode: Mode) -> String {
+/// static-file block, the optional static-frontend block, then the tail.
+/// Service routes are identical across modes (they hit the local containers);
+/// only the static-file and frontend blocks differ.
+fn caddyfile(mode: Mode, static_frontend: bool) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
     } else {
         STATIC_FILE_DEV
     };
+    let mailpit_block = if static_frontend && mode.spec().runs_local_infra {
+        MAILPIT_ROUTE
+    } else {
+        ""
+    };
+    let frontend_block = if static_frontend { FRONTEND_STATIC } else { "" };
     format!(
-        "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{static_block}{CADDY_TAIL}",
+        "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}",
         routes = service_routes()
     )
 }
@@ -112,6 +121,14 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
         uri strip_prefix /sync
         reverse_proxy sync-service:8787
     }
+"#;
+
+const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WEBROOT), so no prefix strip —
+    # this is how a headless/preview stack reads its passwordless login codes.
+    handle /mailpit/* {
+        reverse_proxy mailpit:8025
+    }
+    redir /mailpit /mailpit/ 308
 
 "#;
 
@@ -130,6 +147,20 @@ const STATIC_FILE_LOCAL: &str = r#"    route /static-file/* {
 /// static-file-service (which is pointed at dev S3).
 const STATIC_FILE_DEV: &str = r#"    handle_path /static-file/* {
         reverse_proxy static-file-service:8080
+    }
+"#;
+
+/// Headless mode: the proxy serves the built app bundle (mounted at
+/// `/srv/frontend` — see `gen_compose::add_proxy_service`). The bundle is built
+/// with `base: /app`, so URL space `/app/*` maps onto the dist root after the
+/// prefix strip; unknown paths fall back to `index.html` (SPA routing). Caddy
+/// sorts `redir` before `handle_path`, so the exact-path redirects win first.
+const FRONTEND_STATIC: &str = r#"    redir / /app/ 302
+    redir /app /app/ 308
+    handle_path /app/* {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
     }
 "#;
 

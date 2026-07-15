@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-    SimpleSortRequest, SoupErr, SoupPropertiesField, SoupRequest,
+    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
+    SoupErr, SoupPropertiesField, SoupRequest, grouping::ItemGroupingInfo,
 };
 use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -13,10 +13,18 @@ use models_soup::item::SoupItem;
 use serde::Serialize;
 
 /// Repository abstraction for loading soup items from storage.
-#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+#[cfg_attr(
+    test,
+    mockall::automock(
+        type Err = anyhow::Error;
+        type GroupedItems = std::vec::IntoIter<ItemGroupingInfo>;
+    )
+)]
 pub trait SoupRepo: Send + Sync + 'static {
     /// Error returned by repository operations.
     type Err;
+    /// Iterator returned by grouped Soup queries.
+    type GroupedItems: Iterator<Item = ItemGroupingInfo> + Send;
     /// Fetch expanded soup items for a simple sorted cursor query.
     fn expanded_generic_cursor_soup<'a>(
         &self,
@@ -61,7 +69,7 @@ pub trait SoupRepo: Send + Sync + 'static {
     fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<()>>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Self::GroupedItems, Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup
@@ -129,7 +137,12 @@ pub trait SoupService: Send + Sync + 'static {
     fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> impl Future<Output = Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr>> + Send;
+    ) -> impl Future<
+        Output = Result<
+            impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send,
+            SoupErr,
+        >,
+    > + Send;
 
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
@@ -200,7 +213,7 @@ where
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         (**self).get_user_soup_grouped(req).await
     }
 
@@ -274,8 +287,8 @@ impl SoupService for NoOpSoupService {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
-        Err(no_op_soup_err())
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(no_op_soup_err())
     }
 
     async fn caller_tag_sets<'a>(

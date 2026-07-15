@@ -14,11 +14,11 @@ mod objects;
 mod resolvers;
 
 pub use graphql_common::{GraphqlSoupEntityType, GraphqlSoupRequestParts};
-pub use inputs::{GraphqlSimpleSortMethod, SoupInput};
+pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use objects::{
-    GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelThread, GraphqlSoupChat,
+    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelThread, GraphqlSoupChat,
     GraphqlSoupCrmCompany, GraphqlSoupDocument, GraphqlSoupDocumentSubType, GraphqlSoupEmailThread,
-    GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupItem, GraphqlSoupProject,
+    GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupItem, GraphqlSoupProject, GroupedSoup,
     SoupEntityEdges, SoupPage,
 };
-pub use resolvers::resolve_soup;
+pub use resolvers::{resolve_grouped_soup, resolve_soup};
