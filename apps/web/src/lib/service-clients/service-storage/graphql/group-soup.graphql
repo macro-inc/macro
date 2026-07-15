@@ -5,6 +5,7 @@ query GroupSoup($input: GroupedSoupInput!) {
 			bins {
 				key
 				totalCount
+				nextCursor
 				items {
 					...SoupItemFields
 				}

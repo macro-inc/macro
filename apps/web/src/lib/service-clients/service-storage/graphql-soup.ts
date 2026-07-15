@@ -134,6 +134,7 @@ export type GraphqlGroupedSoupPage = {
   groups: Array<{
     key: string;
     totalCount: number;
+    nextCursor: string | null;
     itemIds: string[];
   }>;
 };
@@ -591,6 +592,7 @@ export function mapGraphqlGroupedSoupPage(
     return {
       key: bin.key,
       totalCount: bin.totalCount,
+      nextCursor: bin.nextCursor ?? null,
       itemIds,
     };
   });

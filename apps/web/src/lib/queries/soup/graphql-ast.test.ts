@@ -4,6 +4,7 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { describe, expect, it } from 'vitest';
 import {
+  makeGraphqlGroupedSoupContinuationInput,
   makeGraphqlGroupedSoupInput,
   makeGraphqlSoupInput,
 } from './graphql-ast';
@@ -59,15 +60,33 @@ describe('makeGraphqlSoupInput', () => {
     });
 
     expect(input).toMatchObject({
-      groupBy: {
-        field: 'PROPERTY',
-        propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
-        entityType: 'TASK',
+      initial: {
+        groupBy: {
+          field: 'PROPERTY',
+          propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+          entityType: 'TASK',
+        },
+        limit: 100,
+        sortMethod: 'UPDATED_AT',
+        filters: {
+          documentFilter: { literal: { notificationDone: false } },
+        },
       },
-      limit: 100,
-      sortMethod: 'UPDATED_AT',
-      filters: {
-        documentFilter: { literal: { notificationDone: false } },
+    });
+  });
+
+  it('maps grouped cursor continuations to GraphQL input', () => {
+    expect(
+      makeGraphqlGroupedSoupContinuationInput({
+        groupBy: { type: 'entity_type' },
+        groupKey: 'document',
+        cursor: 'opaque-cursor',
+      })
+    ).toEqual({
+      continuation: {
+        groupBy: { field: 'ENTITY_TYPE' },
+        groupKey: 'document',
+        cursor: 'opaque-cursor',
       },
     });
   });

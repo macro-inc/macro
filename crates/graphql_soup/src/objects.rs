@@ -83,6 +83,7 @@ impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for Grouped
                 .map(|(key, bin)| GraphqlSoupBin {
                     key,
                     total_count: bin.group_total_size(),
+                    next_cursor: bin.next_cursor().map(ToOwned::to_owned),
                     items: bin
                         .into_items()
                         .map(|item| GraphqlSoupItem::from(item.map_extra(|_| ())))
@@ -100,6 +101,8 @@ pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     key: String,
     /// Total number of items in this group across all pages.
     total_count: usize,
+    /// Opaque cursor for the next page in this bin, if one exists.
+    next_cursor: Option<String>,
     /// Items in this bin, ordered by their index within the group.
     items: Vec<GraphqlSoupItem<E>>,
 }

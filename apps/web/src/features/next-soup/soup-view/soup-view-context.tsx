@@ -815,6 +815,7 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
+    transport: resolveTransport,
     queryOptions: () => {
       const view = activeListView();
       return {

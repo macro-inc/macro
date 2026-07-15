@@ -50,8 +50,17 @@ pub struct SoupInput {
 }
 
 /// Input for `Query.groupSoup`.
+#[derive(async_graphql::OneofObject)]
+pub enum GroupedSoupInput {
+    /// Start a new grouped Soup query.
+    Initial(Box<GroupedSoupInitialInput>),
+    /// Continue one bin from a cursor returned by a previous grouped query.
+    Continuation(GroupedSoupContinuationInput),
+}
+
+/// Input for starting a grouped Soup query.
 #[derive(async_graphql::InputObject)]
-pub struct GroupedSoupInput {
+pub struct GroupedSoupInitialInput {
     /// The field used to divide Soup items into bins.
     group_by: GraphqlGroupByInput,
     /// Maximum number of items to return per bin. Defaults to 20, max 500.
@@ -62,9 +71,33 @@ pub struct GroupedSoupInput {
     filters: Option<GraphqlEntityFilterAst>,
 }
 
+/// Input for continuing a single grouped Soup bin.
+#[derive(async_graphql::InputObject)]
+pub struct GroupedSoupContinuationInput {
+    /// The field used to divide Soup items into bins.
+    group_by: GraphqlGroupByInput,
+    /// The grouping key of the bin to continue.
+    group_key: String,
+    /// Opaque cursor returned for the bin by a previous grouped query.
+    cursor: String,
+}
+
 impl GroupedSoupInput {
     /// Convert this value into the grouped Soup domain request.
     pub(crate) fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> async_graphql::Result<GroupedSortRequest<'static>> {
+        match self {
+            Self::Initial(input) => input.into_request(macro_user_id),
+            Self::Continuation(input) => input.into_request(macro_user_id),
+        }
+    }
+}
+
+impl GroupedSoupInitialInput {
+    /// Convert an initial input into the grouped Soup domain request.
+    fn into_request(
         self,
         macro_user_id: MacroUserIdStr<'static>,
     ) -> async_graphql::Result<GroupedSortRequest<'static>> {
@@ -87,6 +120,32 @@ impl GroupedSoupInput {
                 field: self.group_by.into_group_by_field()?,
                 group_key: None,
                 per_group_limit: Some(u32::from(limit)),
+            },
+        })
+    }
+}
+
+impl GroupedSoupContinuationInput {
+    /// Decode a bin cursor into the grouped Soup domain request.
+    fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> async_graphql::Result<GroupedSortRequest<'static>> {
+        let cursor = Base64Str::<
+            CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
+        >::new_from_string(self.cursor)
+        .decode_json()
+        .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
+        let limit = u16::try_from(cursor.limit).unwrap_or(500).min(500);
+
+        Ok(GroupedSortRequest {
+            limit,
+            cursor: Query::Cursor(cursor),
+            user_id: macro_user_id,
+            grouping: GroupingConfig {
+                field: self.group_by.into_group_by_field()?,
+                group_key: Some(self.group_key),
+                per_group_limit: None,
             },
         })
     }

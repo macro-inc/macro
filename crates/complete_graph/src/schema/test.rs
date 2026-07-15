@@ -128,13 +128,13 @@ impl SoupService for CountingSoupService {
         Ok(vec![
             soup::domain::models::grouping::ItemGroupingInfo {
                 key: "document".to_string(),
-                total_group_count: 2,
+                total_group_count: 3,
                 index_in_group: 1,
                 item: grouped_document(Uuid::from_u128(1)),
             },
             soup::domain::models::grouping::ItemGroupingInfo {
                 key: "document".to_string(),
-                total_group_count: 2,
+                total_group_count: 3,
                 index_in_group: 2,
                 item: grouped_document(Uuid::from_u128(2)),
             },
@@ -512,16 +512,25 @@ async fn group_soup_nests_items_in_bins_and_preserves_database_order() {
 
     let response = harness
         .execute(
-            "{ user { groupSoup(input: {groupBy: {field: ENTITY_TYPE}}) { bins { key totalCount items { id entityType } } } } }",
+            "{ user { groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount nextCursor items { id entityType } } } } }",
         )
         .await;
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data.to_string(),
-        r#"{user: {groupSoup: {bins: [{key: "document", totalCount: 2, items: [{id: "00000000-0000-0000-0000-000000000001", entityType: DOCUMENT}, {id: "00000000-0000-0000-0000-000000000002", entityType: DOCUMENT}]}]}}}"#
+    let data = response.data.into_json().unwrap();
+    let bin = &data["user"]["groupSoup"]["bins"][0];
+    assert_eq!(bin["key"], "document");
+    assert_eq!(bin["totalCount"], 3);
+    let cursor = bin["nextCursor"].as_str().unwrap();
+    assert_eq!(bin["items"].as_array().unwrap().len(), 2);
+
+    let continuation = format!(
+        "{{ user {{ groupSoup(input: {{continuation: {{groupBy: {{field: ENTITY_TYPE}}, groupKey: \"document\", cursor: \"{cursor}\"}}}}) {{ bins {{ key }} }} }} }}"
     );
-    assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 1);
+    let response = harness.execute(&continuation).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+
+    assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 2);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
 }

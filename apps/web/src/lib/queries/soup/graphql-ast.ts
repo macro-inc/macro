@@ -11,6 +11,8 @@ import type {
   GraphqlEmailValue as GraphqlEmailValueInput,
   GraphqlEntityFilterAst as GraphqlEntityFilterAstInput,
   GraphqlForeignEntityLiteral as GraphqlForeignEntityLiteralInput,
+  GraphqlGroupByInput,
+  GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
   GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
@@ -538,13 +540,8 @@ export function makeGraphqlSoupInput(args: {
   };
 }
 
-/** Maps the existing grouped Soup request shape to its GraphQL input. */
-export function makeGraphqlGroupedSoupInput(args: {
-  params: SoupParams;
-  body: SoupAstBody;
-  groupBy: GroupByField;
-}): GraphqlGroupedSoupInput {
-  const groupBy = match(args.groupBy)
+function makeGraphqlGroupByInput(groupBy: GroupByField): GraphqlGroupByInput {
+  return match(groupBy)
     .with({ type: 'date' }, () => ({ field: 'DATE' as const }))
     .with({ type: 'entity_type' }, () => ({
       field: 'ENTITY_TYPE' as const,
@@ -556,11 +553,34 @@ export function makeGraphqlGroupedSoupInput(args: {
       entityType: field.entityType,
     }))
     .exhaustive();
+}
 
+/** Maps the existing grouped Soup request shape to its GraphQL input. */
+export function makeGraphqlGroupedSoupInput(args: {
+  params: SoupParams;
+  body: SoupAstBody;
+  groupBy: GroupByField;
+}): GraphqlGroupedSoupInput {
   return {
-    groupBy,
-    limit: args.params.limit ?? undefined,
-    sortMethod: mapSortMethod(args.params.sort_method),
-    filters: makeGraphqlFilters(args.body as AstBody),
+    initial: {
+      groupBy: makeGraphqlGroupByInput(args.groupBy),
+      limit: args.params.limit ?? undefined,
+      sortMethod: mapSortMethod(args.params.sort_method),
+      filters: makeGraphqlFilters(args.body as AstBody),
+    },
   };
+}
+
+/** Builds the GraphQL input for continuing one grouped Soup bin. */
+export function makeGraphqlGroupedSoupContinuationInput(args: {
+  groupBy: GroupByField;
+  groupKey: string;
+  cursor: string;
+}): GraphqlGroupedSoupInput {
+  const continuation: GraphqlGroupedSoupContinuationInput = {
+    groupBy: makeGraphqlGroupByInput(args.groupBy),
+    groupKey: args.groupKey,
+    cursor: args.cursor,
+  };
+  return { continuation };
 }

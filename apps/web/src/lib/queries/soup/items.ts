@@ -214,9 +214,7 @@ export const useSoupAstItemsQuery = (
                   displayOrder: resolved?.displayOrder ?? null,
                   totalCount: group.totalCount,
                   itemIds: group.itemIds,
-                  // The GraphQL grouped query returns one bounded page per bin
-                  // and does not expose per-bin cursors.
-                  nextCursor: null,
+                  nextCursor: group.nextCursor,
                 };
               }),
             };
