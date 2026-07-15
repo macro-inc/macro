@@ -481,6 +481,18 @@ const EMAIL_BODY = {
         type: 'text',
         analyzer: 'standard',
       },
+      // Address tokens extracted at index time (see opensearch_client
+      // upsert/email.rs address_search_fields): lowercased domains with
+      // their dot-suffixes and local parts with their dot/plus segments,
+      // so bare search terms can match either side of an address.
+      domains: {
+        type: 'text',
+        analyzer: 'standard',
+      },
+      local_parts: {
+        type: 'text',
+        analyzer: 'standard',
+      },
       labels: {
         type: 'keyword',
         index: false,

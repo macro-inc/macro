@@ -18,12 +18,25 @@ impl SearchQueryConfig for EmailSearchConfig {
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }
 
-/// Keyword-indexed email-address fields. Matched explicitly: a bare word
-/// only matches an address with that exact local-part (`alice` → `alice@*`),
-/// not addresses that merely start with the characters.
-const EMAIL_KEYWORD_FIELDS: &[&str] = &["sender", "reply_to", "recipients", "cc", "bcc"];
+/// Email-address fields matched explicitly, never as a character prefix:
+/// the raw keyword-indexed addresses plus `local_parts`, the local-part
+/// tokens extracted at index time (`jane.doe@x` indexes
+/// `jane.doe`, `jane`, `doe`). A bare word matches only a
+/// whole token (`alice` → `alice@*` or the `alice` token), so `ali` won't
+/// match `alice@example.com` via this group.
+const EMAIL_KEYWORD_FIELDS: &[&str] = &[
+    "sender",
+    "reply_to",
+    "recipients",
+    "cc",
+    "bcc",
+    "local_parts",
+];
 
 /// Text-analyzed fields. Matched as a prefix so `scri` matches `script`.
+/// `domains` holds the address domains extracted at index time with their
+/// dot-suffixes (`x@mail.foo.com` indexes `mail.foo.com`, `foo.com`), so a
+/// bare company name like `foo` prefix-matches mail from that domain.
 const EMAIL_TEXT_FIELDS: &[&str] = &[
     "subject",
     "content",
@@ -31,11 +44,15 @@ const EMAIL_TEXT_FIELDS: &[&str] = &[
     "recipient_names",
     "cc_names",
     "bcc_names",
+    "domains",
 ];
 
-/// Builds the simple_query_string over the keyword email-address fields.
-/// Single-word terms become `(term | term@*)` — an exact token match OR a
-/// local-part match on the address. This deliberately does NOT use a trailing
+/// Builds the simple_query_string over the email-address fields.
+/// Single-word terms become `(term | term@*)` — an exact token match (which
+/// hits the extracted `local_parts` tokens) OR an exact-local-part match on
+/// the raw address. The `term@*` pattern is redundant with `local_parts` on
+/// freshly indexed docs but still carries docs indexed before that field
+/// existed and not yet backfilled. This deliberately does NOT use a trailing
 /// `*` on the bare term, so partial local-parts don't leak across addresses
 /// (e.g. `ali` won't match `alice@example.com` via this group).
 /// Email-like terms (containing `@`) and multi-word terms (quoted phrases

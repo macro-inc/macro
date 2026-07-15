@@ -187,6 +187,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     assert!(keyword_fields.contains(&serde_json::json!("recipients")));
     assert!(keyword_fields.contains(&serde_json::json!("cc")));
     assert!(keyword_fields.contains(&serde_json::json!("bcc")));
+    assert!(keyword_fields.contains(&serde_json::json!("local_parts")));
     assert!(!keyword_fields.contains(&serde_json::json!("subject")));
 
     let text_sqs = should
@@ -205,6 +206,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     assert!(text_fields.contains(&serde_json::json!("content")));
     assert!(text_fields.contains(&serde_json::json!("sender_name")));
     assert!(text_fields.contains(&serde_json::json!("recipient_names")));
+    assert!(text_fields.contains(&serde_json::json!("domains")));
     assert!(!text_fields.contains(&serde_json::json!("sender")));
 
     Ok(())
@@ -282,14 +284,14 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                             {
                                 "simple_query_string": {
                                     "default_operator": "AND",
-                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "local_parts"],
                                     "query": "(test | test@*)"
                                 }
                             },
                             {
                                 "simple_query_string": {
                                     "default_operator": "AND",
-                                    "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                                    "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names", "domains"],
                                     "query": "(test)"
                                 }
                             }
