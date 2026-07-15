@@ -12,6 +12,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use macro_user_id::email::Email;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
@@ -762,6 +763,18 @@ fn track_stripe_subscription(
                 ..MetaUserData::default()
             };
             let event_id = Some(subscription_id.as_str());
+            // PostHog distinct id must be the "macro|{email}" id the app
+            // identifies with; a bare email lands events on orphaned person
+            // profiles disconnected from product usage. This only links to the
+            // right person when the Stripe customer email matches the Macro
+            // account email — if a customer's billing email diverges from
+            // their login email, the event lands on an orphaned profile.
+            let posthog_distinct_id = MacroUserIdStr::try_from_email(&data.email)
+                .map(String::from)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(error = ?e, "failed to build macro user id for PostHog; falling back to email");
+                    data.email.clone()
+                });
 
             tracing::info!(
                 status = %data.status,
@@ -792,7 +805,7 @@ fn track_stripe_subscription(
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta purchase event"));
 
                     let _ = client
-                        .track_posthog(&data.email, "subscription_created", &event)
+                        .track_posthog(&posthog_distinct_id, "subscription_created", &event)
                         .await
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_created event"));
                 }
@@ -817,7 +830,7 @@ fn track_stripe_subscription(
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta cancel event"));
 
                     let _ = client
-                        .track_posthog(&data.email, "subscription_canceled", &event)
+                        .track_posthog(&posthog_distinct_id, "subscription_canceled", &event)
                         .await
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_canceled event"));
                 }
