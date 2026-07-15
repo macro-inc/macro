@@ -43,6 +43,12 @@ type TagMenuItem = {
 
 type CreateStep = 'color' | 'scope';
 
+type PendingTagCreate = {
+  scope: TagScope;
+  value: string;
+  color: string;
+};
+
 const TAG_COLOR_OPTIONS = [
   { color: '#E5484D', name: 'Red' },
   { color: '#E54D2E', name: 'Tomato' },
@@ -115,6 +121,8 @@ export function TagsMenu(props: {
   const [createDraftLabel, setCreateDraftLabel] = createSignal('');
   const [selectedColorIndex, setSelectedColorIndex] = createSignal(0);
   const [selectedScopeIndex, setSelectedScopeIndex] = createSignal(0);
+  const [pendingCreate, setPendingCreate] =
+    createSignal<PendingTagCreate | null>(null);
 
   const items = createMemo<TagMenuItem[]>(() => {
     const query = props.menu.searchTerm().trim().toLowerCase();
@@ -215,6 +223,14 @@ export function TagsMenu(props: {
   const createTag = async (scope: TagScope) => {
     const value = createDraftLabel().trim();
     if (!value) return;
+    if (pendingCreate()) return;
+
+    const creation: PendingTagCreate = {
+      scope,
+      value,
+      color: selectedColor(),
+    };
+    setPendingCreate(creation);
 
     try {
       const provisioned = await ensureTagSet.mutateAsync({ scope });
@@ -227,20 +243,33 @@ export function TagsMenu(props: {
           option: {
             value,
             display_order: nextDisplayOrder(provisioned.options),
-            color: selectedColor(),
+            color: creation.color,
           },
         },
       });
       invalidateTags();
+      if (
+        pendingCreate() !== creation ||
+        !props.menu.isOpen() ||
+        createStep() !== 'scope' ||
+        scopeOptions()[selectedScopeIndex()]?.scope !== scope ||
+        createDraftLabel().trim() !== value
+      ) {
+        return;
+      }
       selectItem({
         optionId: created.id,
         propertyDefinitionId: created.property_definition_id,
         scope,
         name: value,
-        color: created.color ?? selectedColor(),
+        color: created.color ?? creation.color,
       });
     } catch (error) {
       console.error('Failed to create tag', error);
+    } finally {
+      if (pendingCreate() === creation) {
+        setPendingCreate(null);
+      }
     }
   };
 
