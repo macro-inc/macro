@@ -68,7 +68,7 @@ pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
         identity::APPLICATION_ID,
     );
     let script = format!(
-        "for i in $(seq 1 120); do curl -fsS -H 'Authorization: {key}' {url} >/dev/null 2>&1 && exit 0; sleep 2; done; \
+        "for i in $(seq 1 120); do curl -fsS --max-time 3 -H 'Authorization: {key}' {url} >/dev/null 2>&1 && exit 0; sleep 2; done; \
          echo 'timed out waiting for the FusionAuth kickstart'; exit 1",
         key = identity::FUSIONAUTH_API_KEY,
     );
