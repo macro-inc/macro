@@ -27,7 +27,14 @@ just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
 
 - `apply` deletes the scenario's own rows first and re-seeds, so it always
   converges on the config. Every seeded id is derived from
-  `(scenario, kind, key)` and starts with the `5eed` marker.
+  `(scenario, kind, key)` and starts with the `5eed` marker — rows created
+  through the app (random ids) are never touched, though content living
+  inside a seeded container dies with it on re-apply (e.g. messages you sent
+  in a seeded channel, which is recreated).
+- `just seed-scenario-fresh <file>` (repo root) is the pristine-world
+  variant: it drops the local database entirely, re-runs migrations, and
+  applies the scenario — everything goes, organic data included. Open the
+  printed persona links afterwards to log back in.
 - `matrix` computes the expected access level for every (user, entity) pair
   from the config and verifies it against the live database using the real
   `entity_access` service; it exits non-zero on any mismatch.

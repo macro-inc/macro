@@ -57,6 +57,17 @@ local-e2e-seed:
 seed-scenario *ARGS:
   @just tooling/seed_cli/scenario "$@"
 
+# Pristine-world variant: drop the local database entirely, re-run migrations,
+# then apply the scenario. Destroys ALL local data, organic included — use it
+# to start a feature-testing session from a known state.
+# e.g. `just seed-scenario-fresh seed/scenarios/team-perms.json`
+[positional-arguments]
+seed-scenario-fresh FILE:
+  just run_dbs -d
+  -just crates/macro_db_client/drop_db -y -f
+  just initialize_dbs
+  @just tooling/seed_cli/scenario apply --file "$1"
+
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
