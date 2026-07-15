@@ -10,10 +10,6 @@ import {
   useContacts,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
-import type {
-  EntityIndexCursor,
-  IndexedEntityBucket,
-} from '@graphql-cache/index';
 import { createQuerySignal } from '@graphql-cache/solid/create-query-signal';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
@@ -42,25 +38,13 @@ import {
 import type { QuickAccessSourceProps } from './context';
 import {
   graphqlEntityToQuickAccessItem,
-  indexedEntityToQuickAccessItem,
   userToQuickAccessItem,
 } from './graphql-items';
+import { loadIndexedQuickAccessItems } from './indexed-items';
 import type { Bucket, QuickAccessContextValue, QuickAccessItem } from './types';
 
 const QUICK_ACCESS_LIMIT = 500;
 const INDEX_REFRESH_DEBOUNCE_MS = 100;
-const INDEXED_QUICK_ACCESS_BUCKETS: IndexedEntityBucket[] = [
-  'channel',
-  'dm',
-  'document',
-  'note',
-  'task',
-  'snippet',
-  'chat',
-  'project',
-  'email',
-  'crm_company',
-];
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 function makeQuickAccessInput(snippetsEnabled: boolean): SoupInput {
@@ -152,21 +136,11 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     if (!cacheHost) return;
     const requestVersion = ++indexRequestVersion;
     try {
-      const items: QuickAccessItem[] = [];
-      let cursor: EntityIndexCursor | undefined;
-      do {
-        const page = await cacheHost.queryIndexedItems({
-          buckets: INDEXED_QUICK_ACCESS_BUCKETS,
-          cursor,
-          limit: QUICK_ACCESS_LIMIT,
-        });
-        if (requestVersion !== indexRequestVersion) return;
-        for (const item of page.items) {
-          const mapped = indexedEntityToQuickAccessItem(item);
-          if (mapped) items.push(mapped);
-        }
-        cursor = page.hasMore ? (page.nextCursor ?? undefined) : undefined;
-      } while (cursor !== undefined);
+      const items = await loadIndexedQuickAccessItems(
+        cacheHost,
+        () => requestVersion === indexRequestVersion
+      );
+      if (!items) return;
       setIndexedItems(items);
     } catch (error) {
       console.warn('quick access indexed cache read failed', error);

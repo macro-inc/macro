@@ -27,7 +27,10 @@ export function useEntityMention(
   const { searchTerm, buckets } = options;
   const quickAccess = useQuickAccess();
 
-  const entitiesList = quickAccess.useList(
+  // GraphQL Quick Access resolves every opaque index cursor before replacing
+  // this list, so fuzzy matching runs over the full cached entity corpus. The
+  // mentions controller applies its display limit only after this search.
+  const fullEntityCorpus = quickAccess.useList(
     ...(buckets as [EntityBucket, ...EntityBucket[]])
   );
 
@@ -40,13 +43,13 @@ export function useEntityMention(
 
   const entities = createLazyMemo(() => {
     const term = searchTerm();
-    if (!term) return entitiesList();
-    return entitySearch(entitiesList(), term).map(({ item }) => item);
+    if (!term) return fullEntityCorpus();
+    return entitySearch(fullEntityCorpus(), term).map(({ item }) => item);
   });
 
   return {
     searchedEntities: entities,
-    allEntities: entitiesList,
+    allEntities: fullEntityCorpus,
   };
 }
 
