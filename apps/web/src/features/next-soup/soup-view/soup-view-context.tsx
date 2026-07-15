@@ -655,10 +655,9 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   // Reading `.data` on a query with no data yet suspends the nearest
-  // <Suspense> (SplitPanel's, which wraps the whole view — chrome included)
-  // until the fetch settles. Branch on the loading state first so a cold
-  // initial soup call leaves the view shell rendered and only the list
-  // region waits on data.
+  // <Suspense> until the fetch settles. Branch on the loading state first
+  // so a cold initial soup call leaves the view shell rendered and only
+  // the list region waits on data.
   const itemsQueryData = () =>
     itemsQuery.isLoading ? undefined : itemsQuery.data;
 
