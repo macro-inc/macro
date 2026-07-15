@@ -36,6 +36,8 @@ enum Cmd {
     KafkaProvision(InstanceArgs),
     /// Preflight checks (docker, toolchain, ports, env sources, images).
     DoctorLocal(InstanceArgs),
+    /// Show an instance's endpoints and container states without starting anything.
+    StatusLocal(InstanceArgs),
     /// Stop an instance's containers (keep volumes).
     StopLocal(InstanceArgs),
     /// Drop, recreate, and migrate the instance database.
@@ -174,6 +176,10 @@ fn run(cli: Cli) -> Result<()> {
             super::kafka::provision(&instance)
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
+        Cmd::StatusLocal(a) => {
+            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            super::status::run(&instance)
+        }
         Cmd::StopLocal(a) => super::stop(&a),
         Cmd::ResetLocal(a) => super::reset(&a),
         Cmd::DestroyLocal(a) => super::destroy(&a),

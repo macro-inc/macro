@@ -1,7 +1,7 @@
 //! xtask-owned local & dev orchestration.
 //!
 //! `just run_local`, `just run_dev`, and the supporting
-//! `doctor`/`validate`/`stop`/`reset`/`destroy` recipes all delegate here.
+//! `doctor`/`validate`/`status`/`stop`/`reset`/`destroy` recipes all delegate here.
 //! This module owns: building Linux service binaries on the host (zigbuild),
 //! the minimal runtime image, the typed service inventory, per-instance
 //! isolation, environment layering, generated docker-compose overrides, local
@@ -37,6 +37,7 @@ pub mod resources;
 pub mod snapshot;
 pub mod stack;
 pub mod stage;
+pub mod status;
 pub mod summary;
 pub mod validate;
 
