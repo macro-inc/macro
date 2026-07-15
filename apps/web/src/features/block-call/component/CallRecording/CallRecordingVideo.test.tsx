@@ -93,7 +93,7 @@ afterAll(() => {
 });
 
 describe('CallRecordingVideo', () => {
-  it('shows an unsupported-format fallback without requiring CORS for playback', async () => {
+  it('shows an unsupported-format fallback while preserving native video attributes', async () => {
     mockPosterFetch();
 
     const { container } = render(() => (
@@ -122,7 +122,7 @@ describe('CallRecordingVideo', () => {
     expect(fallbackLink.hasAttribute('download')).toBe(true);
 
     expect(video.hasAttribute('controls')).toBe(true);
-    expect(video.hasAttribute('crossorigin')).toBe(false);
+    expect(video.getAttribute('crossorigin')).toBe('anonymous');
     expect(video.getAttribute('poster')).toBe(posterBlobUrl);
     expect(video.getAttribute('src')).toBe(recordingUrl);
 
