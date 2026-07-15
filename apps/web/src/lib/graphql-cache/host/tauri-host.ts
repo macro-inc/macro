@@ -9,23 +9,30 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type {
-  ClaimedMutation,
-  MutationClaim,
-  OptimisticWriteResult,
-  ReadResult,
-  WriteResult,
+import {
+  type ClaimedMutation,
+  type IndexedEntityPage,
+  type MutationClaim,
+  normalizeIndexedEntityLimit,
+  type OptimisticWriteResult,
+  type QueryIndexedItemsArgs,
+  type ReadResult,
+  type WriteResult,
 } from '../protocol';
 import type { CacheHost, CacheReadArgs, CacheWriteArgs } from './types';
 
 /** Keep in sync with `OPS_AFFECTED_EVENT` in graphql_cache_plugin. */
 const OPS_AFFECTED_EVENT = 'graphql-cache://ops-affected';
+/** Keep in sync with `ENTITY_INDEX_CHANGED_EVENT` in the native plugin. */
+const ENTITY_INDEX_CHANGED_EVENT = 'graphql-cache://entity-index-changed';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
   opIds: string[];
   keys: string[];
 };
+
+type EntityIndexChangedPayload = Record<string, never>;
 
 export interface TauriHostOptions {
   scope: string;
@@ -35,6 +42,8 @@ export interface TauriHostOptions {
    * IPC call rejects; the exchange degrades rejected reads to the network.
    */
   requestTimeoutMs?: number;
+  /** Reports an asynchronous durable-storage initialization failure. */
+  onInitializationError?: (error: Error) => void;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
@@ -42,6 +51,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
+  const indexSubscribers = new Set<() => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
@@ -87,10 +97,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     return undefined;
   });
 
-  const ready = request('graphql_cache_init', {
+  const unlistenIndex: Promise<UnlistenFn | undefined> =
+    listen<EntityIndexChangedPayload>(ENTITY_INDEX_CHANGED_EVENT, () => {
+      for (const cb of indexSubscribers) cb();
+    }).catch((error) => {
+      console.warn('graphql cache entity-index listener failed', error);
+      return undefined;
+    });
+
+  const ready = request<void>('graphql_cache_init', {
     scope: options.scope,
     hotCapacity: options.hotCapacity,
   });
+  void (async () => {
+    try {
+      await ready;
+    } catch (error) {
+      options.onInitializationError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  })();
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
@@ -105,6 +132,21 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
       });
+    },
+
+    async queryIndexedItems(
+      args: QueryIndexedItemsArgs
+    ): Promise<IndexedEntityPage> {
+      const limit = normalizeIndexedEntityLimit(args.limit);
+      await ready;
+      return await request<IndexedEntityPage>(
+        'graphql_cache_query_indexed_items',
+        {
+          buckets: args.buckets ?? [],
+          cursor: args.cursor,
+          limit,
+        }
+      );
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
@@ -219,9 +261,16 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
+    onEntityIndexChanged(cb: () => void): () => void {
+      indexSubscribers.add(cb);
+      return () => indexSubscribers.delete(cb);
+    },
+
     dispose() {
       affectedSubscribers.clear();
+      indexSubscribers.clear();
       void unlisten.then((fn) => fn?.());
+      void unlistenIndex.then((fn) => fn?.());
     },
   };
 }

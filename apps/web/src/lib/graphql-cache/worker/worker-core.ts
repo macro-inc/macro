@@ -7,6 +7,7 @@ import type {
   CachePush,
   CacheRequest,
   CacheResponse,
+  IndexedEntityPage,
   OptimisticWriteResult,
   ReadResult,
   WriteResult,
@@ -69,6 +70,15 @@ export class CacheWorkerCore {
         );
         return result;
       }
+      case 'query-indexed-items': {
+        const engine = this.requireEngine();
+        const result: IndexedEntityPage = await engine.queryIndexedItems(
+          request.buckets,
+          request.cursor,
+          request.limit
+        );
+        return result;
+      }
       case 'write': {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
@@ -79,7 +89,7 @@ export class CacheWorkerCore {
           request.data,
           request.identity
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
       }
       case 'begin-optimistic-write': {
@@ -92,7 +102,7 @@ export class CacheWorkerCore {
           request.data,
           request.createdAtMs
         );
-        this.fanOut(result);
+        this.fanOut(result, false);
         return result;
       }
       case 'claim-next-mutation': {
@@ -126,7 +136,7 @@ export class CacheWorkerCore {
           request.variables,
           request.data
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
       }
       case 'rollback-optimistic-write': {
@@ -136,13 +146,13 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration
         );
-        this.fanOut(result);
+        this.fanOut(result, false);
         return result;
       }
       case 'invalidate': {
         const engine = this.requireEngine();
         const affectedOps = await engine.invalidateKeys(request.keys);
-        this.fanOut({ changed: request.keys, affectedOps, reset: false });
+        this.fanOut({ changed: request.keys, affectedOps, reset: false }, true);
         return affectedOps;
       }
       case 'teardown': {
@@ -151,6 +161,7 @@ export class CacheWorkerCore {
       }
       case 'clear': {
         await this.requireEngine().clear();
+        this.push({ kind: 'entity-index-changed' });
         return null;
       }
       default: {
@@ -180,7 +191,7 @@ export class CacheWorkerCore {
   }
 
   /** Notifies every page connected to this shared engine. */
-  private fanOut(result: WriteResult): void {
+  private fanOut(result: WriteResult, indexChanged: boolean): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -188,10 +199,12 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
+    if (indexChanged && result.changed.length > 0) {
+      this.push({ kind: 'entity-index-changed' });
+    }
   }
 
   private push(msg: CachePush): void {
-    if (msg.opIds.length === 0) return;
     for (const port of this.ports) {
       port.postMessage(msg);
     }

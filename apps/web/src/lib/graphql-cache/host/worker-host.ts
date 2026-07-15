@@ -7,9 +7,12 @@ import {
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
+  type IndexedEntityPage,
   isCachePush,
   type MutationClaim,
+  normalizeIndexedEntityLimit,
   type OptimisticWriteResult,
+  type QueryIndexedItemsArgs,
   type ReadResult,
   type WorkerMessage,
   type WriteResult,
@@ -35,6 +38,8 @@ export interface WorkerHostOptions {
    * pending call; the exchange degrades rejected reads to the network.
    */
   requestTimeoutMs?: number;
+  /** Reports an asynchronous durable-storage initialization failure. */
+  onInitializationError?: (error: Error) => void;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
@@ -50,6 +55,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     Pending & { timer: ReturnType<typeof setTimeout> }
   >();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
+  const indexSubscribers = new Set<() => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let nextRequestId = 1;
@@ -60,6 +66,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const onMessage = (event: MessageEvent<WorkerMessage>) => {
     const msg = event.data;
     if (isCachePush(msg)) {
+      if (msg.kind === 'entity-index-changed') {
+        for (const cb of indexSubscribers) cb();
+        return;
+      }
       const prefix = `${clientId}:`;
       const opKeys = msg.opIds
         .filter((id) => id.startsWith(prefix))
@@ -127,6 +137,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     scope: options.scope,
     hotCapacity: options.hotCapacity,
   });
+  void (async () => {
+    try {
+      await ready;
+    } catch (error) {
+      options.onInitializationError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  })();
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
@@ -142,6 +161,19 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
       })) as ReadResult;
+    },
+
+    async queryIndexedItems(
+      args: QueryIndexedItemsArgs
+    ): Promise<IndexedEntityPage> {
+      const limit = normalizeIndexedEntityLimit(args.limit);
+      await ready;
+      return (await request({
+        kind: 'query-indexed-items',
+        buckets: args.buckets ?? [],
+        cursor: args.cursor,
+        limit,
+      })) as IndexedEntityPage;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
@@ -254,6 +286,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    dispose,
+    onEntityIndexChanged(cb: () => void): () => void {
+      indexSubscribers.add(cb);
+      return () => indexSubscribers.delete(cb);
+    },
+
+    dispose() {
+      affectedSubscribers.clear();
+      indexSubscribers.clear();
+      dispose();
+    },
   };
 }

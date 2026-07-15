@@ -11,6 +11,54 @@
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Soup entity buckets persisted by the normalized-cache secondary index. */
+export type IndexedEntityBucket =
+  | 'document'
+  | 'note'
+  | 'task'
+  | 'snippet'
+  | 'chat'
+  | 'project'
+  | 'email'
+  | 'channel'
+  | 'dm'
+  | 'crm_company';
+
+/** Opaque exclusive cursor for deterministic indexed pagination. */
+export type EntityIndexCursor = string;
+
+/** Cache-only indexed entity snapshot. Normalized record links are omitted. */
+export type IndexedEntityItem = {
+  id: string;
+  bucket: IndexedEntityBucket;
+  sortTimestamp: number;
+  entity: Record<string, unknown>;
+};
+
+/** One deterministic page from the normalized-record secondary index. */
+export type IndexedEntityPage = {
+  items: IndexedEntityItem[];
+  nextCursor: EntityIndexCursor | null;
+  hasMore: boolean;
+};
+
+export const MAX_INDEXED_ENTITY_PAGE_SIZE = 500;
+
+export type QueryIndexedItemsArgs = {
+  /** Empty or omitted means every indexed entity bucket. */
+  buckets?: IndexedEntityBucket[];
+  cursor?: EntityIndexCursor;
+  limit: number;
+};
+
+/** Validates and clamps an indexed page size before crossing a host boundary. */
+export function normalizeIndexedEntityLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 0) {
+    throw new RangeError('indexed entity limit must be a non-negative integer');
+  }
+  return Math.min(limit, MAX_INDEXED_ENTITY_PAGE_SIZE);
+}
+
 export type WriteResult = {
   /** Entity keys whose records changed. */
   changed: string[];
@@ -117,6 +165,12 @@ export type CacheRequest = { id: number } & (
       leaseOwner: string;
       leaseGeneration: string;
     }
+  | {
+      kind: 'query-indexed-items';
+      buckets: IndexedEntityBucket[];
+      cursor?: EntityIndexCursor;
+      limit: number;
+    }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
   | { kind: 'invalidate'; keys: string[] }
@@ -146,15 +200,22 @@ export function isCacheNotice(
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush = {
-  kind: 'ops-affected';
-  opIds: string[];
-  /** Changed entity keys, for diagnostics/advanced consumers. */
-  keys: string[];
-};
+export type CachePush =
+  | {
+      kind: 'ops-affected';
+      opIds: string[];
+      /** Changed entity keys, for diagnostics/advanced consumers. */
+      keys: string[];
+    }
+  | {
+      kind: 'entity-index-changed';
+    };
 
 export type WorkerMessage = CacheResponse | CachePush;
 
 export function isCachePush(msg: WorkerMessage): msg is CachePush {
-  return 'kind' in msg && msg.kind === 'ops-affected';
+  return (
+    'kind' in msg &&
+    (msg.kind === 'ops-affected' || msg.kind === 'entity-index-changed')
+  );
 }

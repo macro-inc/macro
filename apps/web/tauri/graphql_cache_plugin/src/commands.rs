@@ -12,7 +12,12 @@
 use crate::engine::{
     ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
 };
-use crate::{CacheState, InitializedCache, emit_ops_affected};
+use crate::{
+    CacheState, InitializedCache, emit_entity_index_changed, emit_ops_affected,
+};
+use cache_core::entity_index::{
+    EntityBucket, EntityIndexCursor, EntityIndexQuery, IndexedEntityPage,
+};
 use cache_sqlite::SqliteStorage;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -80,6 +85,23 @@ pub async fn graphql_cache_read(
         .await
 }
 
+/// Lists durable normalized entities through the secondary index.
+#[tauri::command]
+pub async fn graphql_cache_query_indexed_items(
+    state: State<'_, CacheState>,
+    buckets: Vec<EntityBucket>,
+    cursor: Option<EntityIndexCursor>,
+    limit: u32,
+) -> Result<IndexedEntityPage, String> {
+    engine_handle(&state)?
+        .query_indexed_items(EntityIndexQuery {
+            buckets,
+            cursor,
+            limit: limit as usize,
+        })
+        .await
+}
+
 /// Normalizes and stores a network response; broadcasts affected operations
 /// to every webview.
 #[tauri::command]
@@ -104,6 +126,7 @@ pub async fn graphql_cache_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_entity_index_changed(&app);
     Ok(result)
 }
 
@@ -193,6 +216,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_entity_index_changed(&app);
     Ok(result)
 }
 
@@ -222,6 +246,7 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
 ) -> Result<Vec<String>, String> {
     let affected = engine_handle(&state)?.invalidate(keys.clone()).await?;
     emit_ops_affected(&app, &affected, &keys);
+    emit_entity_index_changed(&app);
     Ok(affected)
 }
 
@@ -236,6 +261,11 @@ pub async fn graphql_cache_teardown(
 
 /// Wipes all cached state (logout).
 #[tauri::command]
-pub async fn graphql_cache_clear(state: State<'_, CacheState>) -> Result<(), String> {
-    engine_handle(&state)?.clear().await
+pub async fn graphql_cache_clear<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+) -> Result<(), String> {
+    engine_handle(&state)?.clear().await?;
+    emit_entity_index_changed(&app);
+    Ok(())
 }

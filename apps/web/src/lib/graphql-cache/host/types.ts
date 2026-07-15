@@ -7,8 +7,10 @@
 
 import type {
   ClaimedMutation,
+  IndexedEntityPage,
   MutationClaim,
   OptimisticWriteResult,
+  QueryIndexedItemsArgs,
   ReadResult,
   WriteResult,
 } from '../protocol';
@@ -34,6 +36,8 @@ export interface CacheHost {
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
+  /** Lists durable normalized entities through the secondary index. */
+  queryIndexedItems(args: QueryIndexedItemsArgs): Promise<IndexedEntityPage>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
   beginOptimisticWrite(args: CacheWriteArgs): Promise<OptimisticWriteResult>;
@@ -74,6 +78,9 @@ export interface CacheHost {
    * Only keys belonging to this client are delivered. Returns unsubscribe.
    */
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
+
+  /** Subscribes to durable record changes that can alter indexed lists. */
+  onEntityIndexChanged(cb: () => void): () => void;
 
   dispose(): void;
 }

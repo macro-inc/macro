@@ -1,4 +1,5 @@
 use super::*;
+use cache_core::entity_index::EntityBucket;
 use pollster::block_on;
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
@@ -76,6 +77,72 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn indexed_query_returns_native_cache_entities() {
+    let handle = spawn_handle();
+    let query = r#"query Soup($input: SoupInput!) {
+        user {
+            id
+            soup(input: $input) {
+                items {
+                    id
+                    entity {
+                        __typename
+                        ... on GraphqlSoupDocument {
+                            id name fileType createdAt updatedAt viewedAt deletedAt
+                            subType { kind isCompleted }
+                        }
+                    }
+                }
+                nextCursor
+                hasMore
+            }
+        }
+    }"#;
+    let data = serde_json::json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "items": [{
+                    "id": "item-1",
+                    "entity": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "doc-1",
+                        "name": "A note",
+                        "fileType": "md",
+                        "createdAt": "1970-01-01T00:00:01Z",
+                        "updatedAt": "1970-01-01T00:00:02Z",
+                        "viewedAt": "1970-01-01T00:00:03Z",
+                        "deletedAt": null,
+                        "subType": null
+                    }
+                }],
+                "nextCursor": null,
+                "hasMore": false
+            }
+        }
+    });
+    block_on(handle.write(
+        None,
+        query.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        data,
+        None,
+    ))
+    .unwrap();
+
+    let page = block_on(handle.query_indexed_items(EntityIndexQuery {
+        buckets: vec![EntityBucket::Note],
+        cursor: None,
+        limit: 10,
+    }))
+    .unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].id, "doc-1");
+    assert_eq!(page.items[0].bucket, EntityBucket::Note);
 }
 
 #[test]

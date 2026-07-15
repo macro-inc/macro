@@ -18,7 +18,16 @@ export type {
   CachePush,
   CacheRequest,
   CacheResponse,
+  EntityIndexCursor,
+  IndexedEntityBucket,
+  IndexedEntityItem,
+  IndexedEntityPage,
   OptimisticWriteResult,
+  QueryIndexedItemsArgs,
   ReadResult,
   WriteResult,
+} from './protocol';
+export {
+  MAX_INDEXED_ENTITY_PAGE_SIZE,
+  normalizeIndexedEntityLimit,
 } from './protocol';

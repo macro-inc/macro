@@ -6,6 +6,7 @@
 //! from a multi-threaded runtime), unbounded on wasm — wasm futures aren't
 //! `Send`.
 
+use crate::entity_index::{EntityIndexEntry, EntityIndexQuery, record_index_metadata};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -37,6 +38,14 @@ pub trait Storage: MaybeSend {
         &mut self,
         keys: &[EntityKey],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Lists indexed entities in `sort_timestamp DESC, entity_key ASC`
+    /// order. The cursor is exclusive and an empty bucket list means all
+    /// indexed buckets.
+    fn query_entity_index(
+        &self,
+        query: &EntityIndexQuery,
+    ) -> impl Future<Output = Result<Vec<EntityIndexEntry>, Self::Error>> + MaybeSend;
 
     /// Atomically appends a mutation and its optimistic layer to the queue.
     fn enqueue_mutation(
@@ -136,6 +145,43 @@ impl Storage for InMemoryStorage {
             self.records.remove(k);
         }
         Ok(())
+    }
+
+    async fn query_entity_index(
+        &self,
+        query: &EntityIndexQuery,
+    ) -> Result<Vec<EntityIndexEntry>, Self::Error> {
+        let buckets: std::collections::HashSet<_> = query.buckets.iter().copied().collect();
+        let mut entries: Vec<_> = self
+            .records
+            .iter()
+            .filter_map(|(entity_key, record)| {
+                let metadata = record_index_metadata(entity_key, record)?;
+                if !buckets.is_empty() && !buckets.contains(&metadata.bucket) {
+                    return None;
+                }
+                Some(EntityIndexEntry {
+                    entity_key: entity_key.clone(),
+                    bucket: metadata.bucket,
+                    sort_timestamp: metadata.sort_timestamp,
+                })
+            })
+            .filter(|entry| {
+                query.cursor.as_ref().is_none_or(|cursor| {
+                    entry.sort_timestamp < cursor.sort_timestamp
+                        || (entry.sort_timestamp == cursor.sort_timestamp
+                            && entry.entity_key > cursor.entity_key)
+                })
+            })
+            .collect();
+        entries.sort_by(|left, right| {
+            right
+                .sort_timestamp
+                .cmp(&left.sort_timestamp)
+                .then_with(|| left.entity_key.cmp(&right.entity_key))
+        });
+        entries.truncate(query.bounded_storage_limit());
+        Ok(entries)
     }
 
     async fn enqueue_mutation(

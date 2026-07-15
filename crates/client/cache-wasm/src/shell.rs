@@ -1,6 +1,7 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
 use cache_core::engine::{Engine, ReadResult};
+use cache_core::entity_index::{EntityBucket, EntityIndexCursor, EntityIndexQuery};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
@@ -180,6 +181,28 @@ fn parse_variables(
     serde_wasm_bindgen::from_value(variables).map_err(err_js)
 }
 
+fn parse_index_query(
+    buckets: JsValue,
+    cursor: JsValue,
+    limit: u32,
+) -> Result<EntityIndexQuery, JsValue> {
+    let buckets = if buckets.is_undefined() || buckets.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value::<Vec<EntityBucket>>(buckets).map_err(err_js)?
+    };
+    let cursor = if cursor.is_undefined() || cursor.is_null() {
+        None
+    } else {
+        Some(serde_wasm_bindgen::from_value::<EntityIndexCursor>(cursor).map_err(err_js)?)
+    };
+    Ok(EntityIndexQuery {
+        buckets,
+        cursor,
+        limit: limit as usize,
+    })
+}
+
 #[wasm_bindgen]
 impl CacheEngine {
     /// Attempts a cache read. Resolves to `{kind:"hit",data}` or
@@ -207,6 +230,23 @@ impl CacheEngine {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
             })
+        })
+    }
+
+    /// Lists durable normalized entities through the secondary index.
+    #[wasm_bindgen(js_name = queryIndexedItems)]
+    pub fn query_indexed_items(
+        &self,
+        buckets: JsValue,
+        cursor: JsValue,
+        limit: u32,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let query = parse_index_query(buckets, cursor, limit)?;
+            let mut engine = engine.lock().await;
+            let page = engine.query_indexed_items(&query).await.map_err(err_js)?;
+            to_js(&page)
         })
     }
 

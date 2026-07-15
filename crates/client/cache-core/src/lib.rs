@@ -7,6 +7,7 @@ pub mod denormalize;
 pub mod deps;
 pub mod document;
 pub mod engine;
+pub mod entity_index;
 pub mod meta;
 pub mod normalize;
 pub mod queue;

@@ -1,7 +1,9 @@
-import type {
-  OptimisticWriteResult,
-  ReadResult,
-  WriteResult,
+import {
+  normalizeIndexedEntityLimit,
+  type OptimisticWriteResult,
+  type QueryIndexedItemsArgs,
+  type ReadResult,
+  type WriteResult,
 } from '../protocol';
 import type { CacheHost } from './types';
 
@@ -25,6 +27,10 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
+    async queryIndexedItems(args: QueryIndexedItemsArgs) {
+      normalizeIndexedEntityLimit(args.limit);
+      return { items: [], nextCursor: null, hasMore: false };
+    },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
     },
@@ -47,6 +53,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async teardown(): Promise<void> {},
     async clear(): Promise<void> {},
     onOpsAffected() {
+      return () => undefined;
+    },
+    onEntityIndexChanged() {
       return () => undefined;
     },
     dispose() {},

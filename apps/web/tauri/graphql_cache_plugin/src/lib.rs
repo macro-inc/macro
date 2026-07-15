@@ -7,9 +7,9 @@
 //! instance across all webviews/windows, never webview storage.
 //! Webviews talk to it through the commands in [`commands`] (registered
 //! app-level in `src-tauri`, like the bundle updater plugin) and receive
-//! change notifications via the [`OPS_AFFECTED_EVENT`] broadcast event,
-//! mirroring the worker `ops-affected` push: each webview's `CacheHost`
-//! filters op ids by its own client prefix.
+//! operation and entity-index change notifications via broadcast events.
+//! These mirror worker pushes; each webview's `CacheHost` filters operation
+//! ids by its own client prefix.
 //!
 //! Design doc: `apps/web/docs/graphql-normalized-cache-plan.md`.
 
@@ -32,6 +32,10 @@ pub use engine::{
 /// the engine).
 pub const OPS_AFFECTED_EVENT: &str = "graphql-cache://ops-affected";
 
+/// Broadcast event emitted when durable record changes can alter indexed
+/// entity lists.
+pub const ENTITY_INDEX_CHANGED_EVENT: &str = "graphql-cache://entity-index-changed";
+
 /// Payload of [`OPS_AFFECTED_EVENT`] — mirrors the worker `CachePush`
 /// message in `apps/web/src/lib/graphql-cache/protocol.ts`.
 #[derive(Clone, Debug, Serialize)]
@@ -42,6 +46,11 @@ pub struct OpsAffectedEvent {
     /// Changed entity keys, for diagnostics/advanced consumers.
     pub keys: Vec<String>,
 }
+
+/// Payload of [`ENTITY_INDEX_CHANGED_EVENT`].
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityIndexChangedEvent {}
 
 struct InitializedCache {
     scope: String,
@@ -65,5 +74,11 @@ fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[
         },
     )
     .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
+    .ok();
+}
+
+fn emit_entity_index_changed<R: Runtime>(app: &AppHandle<R>) {
+    app.emit(ENTITY_INDEX_CHANGED_EVENT, EntityIndexChangedEvent {})
+    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache index event"))
     .ok();
 }

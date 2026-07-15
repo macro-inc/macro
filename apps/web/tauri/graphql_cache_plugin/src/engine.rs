@@ -13,6 +13,7 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{Engine, ReadResult, WriteResult};
+use cache_core::entity_index::{EntityIndexQuery, IndexedEntityPage};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
@@ -198,6 +199,20 @@ impl EngineHandle {
                 ReadResult::Hit { data } => ReadResultWire::Hit { data },
                 ReadResult::Miss => ReadResultWire::Miss,
             })
+            .map_err(|e| e.to_string())
+    }
+
+    /// Lists durable normalized entities through the secondary index.
+    pub async fn query_indexed_items(
+        &self,
+        query: EntityIndexQuery,
+    ) -> Result<IndexedEntityPage, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .query_indexed_items(&query)
+            .await
             .map_err(|e| e.to_string())
     }
 

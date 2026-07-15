@@ -5,6 +5,9 @@
 use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormalize};
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
+use crate::entity_index::{
+    EntityIndexCursor, EntityIndexQuery, IndexedEntityPage, indexed_entity_item,
+};
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
@@ -35,6 +38,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
         id: OptimisticTransactionId,
         detail: String,
     },
+    #[error("indexed record `{0}` is missing or has no string id")]
+    InvalidIndexedRecord(EntityKey),
     #[error("storage: {0}")]
     Storage(#[source] S),
 }
@@ -352,6 +357,72 @@ impl<S: Storage> Engine<S> {
             self.deps.set_op_deps(op_id, deps);
         }
         Ok(outcome)
+    }
+
+    /// Lists decoded normalized entities through the durable secondary index.
+    ///
+    /// This is a cache-only durable read. An empty bucket list includes every
+    /// indexed bucket, and the cursor is exclusive. Optimistic layers are not
+    /// applied because their bucket/order projection is not indexed. Record
+    /// links are omitted from snapshots; callers receive scalar and embedded
+    /// fields only.
+    pub async fn query_indexed_items(
+        &mut self,
+        query: &EntityIndexQuery,
+    ) -> Result<IndexedEntityPage, EngineError<S::Error>> {
+        let page_limit = query.bounded_limit();
+        if page_limit == 0 {
+            return Ok(IndexedEntityPage {
+                items: Vec::new(),
+                next_cursor: None,
+                has_more: false,
+            });
+        }
+
+        let storage_query = EntityIndexQuery {
+            buckets: query.buckets.clone(),
+            cursor: query.cursor.clone(),
+            limit: page_limit.saturating_add(1),
+        };
+        let mut entries = self
+            .storage
+            .query_entity_index(&storage_query)
+            .await
+            .map_err(EngineError::Storage)?;
+        let has_more = entries.len() > page_limit;
+        entries.truncate(page_limit);
+        let next_cursor = has_more.then(|| {
+            let last = entries
+                .last()
+                .expect("a page with more entries contains a last item");
+            EntityIndexCursor {
+                sort_timestamp: last.sort_timestamp,
+                entity_key: last.entity_key.clone(),
+            }
+        });
+
+        let keys: BTreeSet<_> = entries
+            .iter()
+            .map(|entry| entry.entity_key.clone())
+            .collect();
+        let bases = self.load_bases(&keys).await?;
+        let items = entries
+            .into_iter()
+            .map(|entry| {
+                let entity_key = entry.entity_key.clone();
+                let record = bases
+                    .get(&entity_key)
+                    .ok_or_else(|| EngineError::InvalidIndexedRecord(entity_key.clone()))?;
+                indexed_entity_item(entry, record)
+                    .ok_or(EngineError::InvalidIndexedRecord(entity_key))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(IndexedEntityPage {
+            items,
+            next_cursor,
+            has_more,
+        })
     }
 
     /// Normalizes and stores a network response. Returns changed records and

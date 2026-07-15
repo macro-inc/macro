@@ -26,6 +26,9 @@ describe('createWorkerCacheHost', () => {
     await expect(
       host.writeQuery({ query: '{ x }', data: { x: 1 } })
     ).resolves.toEqual({ changed: [], affectedOps: [], reset: false });
+    await expect(
+      host.queryIndexedItems({ buckets: ['note'], limit: 20 })
+    ).resolves.toEqual({ items: [], nextCursor: null, hasMore: false });
   });
 
   it('falls back to no-op when SharedWorker initialization throws', () => {

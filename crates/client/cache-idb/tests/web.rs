@@ -4,7 +4,9 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use cache_core::codec::cache_database_name;
 use cache_core::engine::{Engine, ReadResult};
+use cache_core::entity_index::{EntityBucket, EntityIndexCursor, EntityIndexQuery};
 use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
     PersistedOptimisticLayer, StoredMutation,
@@ -12,6 +14,8 @@ use cache_core::queue::{
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
 use cache_idb::IdbStorage;
+use idb::{Factory, TransactionMode};
+use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -25,6 +29,33 @@ fn record(name: &str) -> Record {
 
 fn key(s: &str) -> EntityKey {
     EntityKey(s.to_string())
+}
+
+fn indexed_document(viewed_at: &str, file_type: Option<&str>, subtype: Option<&str>) -> Record {
+    let mut record = record("Document");
+    record.fields.insert(
+        "__typename".into(),
+        CacheValue::String("GraphqlSoupDocument".into()),
+    );
+    record
+        .fields
+        .insert("viewedAt".into(), CacheValue::String(viewed_at.into()));
+    if let Some(file_type) = file_type {
+        record
+            .fields
+            .insert("fileType".into(), CacheValue::String(file_type.into()));
+    }
+    if let Some(subtype) = subtype {
+        record.fields.insert(
+            "subType".into(),
+            CacheValue::Object(
+                [("kind".into(), CacheValue::String(subtype.into()))]
+                    .into_iter()
+                    .collect(),
+            ),
+        );
+    }
+    record
 }
 
 fn queued(name: &str) -> NewQueuedMutation {
@@ -71,6 +102,120 @@ async fn put_get_delete_roundtrip() {
 
     s.clear().await.unwrap();
     assert!(s.get_batch(&[key("B:2")]).await.unwrap()[0].is_none());
+}
+
+#[wasm_bindgen_test]
+async fn persists_quick_access_index_metadata() {
+    let scope = "test-index-metadata";
+    IdbStorage::destroy(scope).await.unwrap();
+    let mut storage = IdbStorage::open(scope).await.unwrap();
+    let entity_key = key("GraphqlSoupDocument:doc-1");
+    let task_key = key("GraphqlSoupDocument:task-1");
+    let note_key = key("GraphqlSoupDocument:note-1");
+    storage
+        .put_batch(vec![
+            (
+                entity_key.clone(),
+                indexed_document("1970-01-01T00:00:03Z", None, None),
+            ),
+            (
+                task_key.clone(),
+                indexed_document("1970-01-01T00:00:03Z", Some("md"), Some("task")),
+            ),
+            (
+                note_key.clone(),
+                indexed_document("1970-01-01T00:00:02Z", Some("md"), None),
+            ),
+        ])
+        .await
+        .unwrap();
+
+    let all = storage
+        .query_entity_index(&EntityIndexQuery {
+            buckets: Vec::new(),
+            cursor: None,
+            limit: 2,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        all.iter()
+            .map(|entry| entry.entity_key.clone())
+            .collect::<Vec<_>>(),
+        vec![entity_key.clone(), task_key.clone()]
+    );
+    let selected = storage
+        .query_entity_index(&EntityIndexQuery {
+            buckets: vec![EntityBucket::Task, EntityBucket::Note],
+            cursor: Some(EntityIndexCursor {
+                sort_timestamp: all[0].sort_timestamp,
+                entity_key: all[0].entity_key.clone(),
+            }),
+            limit: 3,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        selected
+            .iter()
+            .map(|entry| entry.entity_key.clone())
+            .collect::<Vec<_>>(),
+        vec![task_key, note_key]
+    );
+
+    let factory = Factory::new().unwrap();
+    let database = factory
+        .open(&cache_database_name(scope), Some(2))
+        .unwrap()
+        .await
+        .unwrap();
+    let transaction = database
+        .transaction(&["records"], TransactionMode::ReadOnly)
+        .unwrap();
+    let records = transaction.object_store("records").unwrap();
+    assert_eq!(
+        records
+            .index("records_by_sort")
+            .unwrap()
+            .count(None)
+            .unwrap()
+            .await
+            .unwrap(),
+        3
+    );
+    assert_eq!(
+        records
+            .index("records_by_bucket_sort")
+            .unwrap()
+            .count(None)
+            .unwrap()
+            .await
+            .unwrap(),
+        3
+    );
+
+    let envelope = records
+        .get(JsValue::from_str(&entity_key.0))
+        .unwrap()
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        js_sys::Reflect::get(&envelope, &JsValue::from_str("bucket"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("document")
+    );
+    assert_eq!(
+        js_sys::Reflect::get(&envelope, &JsValue::from_str("sortTimestamp"))
+            .unwrap()
+            .as_f64(),
+        Some(3_000.0)
+    );
+    transaction.commit().unwrap().await.unwrap();
+    database.close();
+    storage.close();
 }
 
 #[wasm_bindgen_test]

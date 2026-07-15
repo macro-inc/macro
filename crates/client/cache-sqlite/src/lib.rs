@@ -16,13 +16,16 @@
 use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
+use cache_core::entity_index::{
+    EntityBucket, EntityIndexEntry, EntityIndexQuery, ParseEntityBucketError, record_index_metadata,
+};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
 };
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
@@ -39,6 +42,9 @@ pub enum SqliteStorageError {
     /// Durable queue metadata violated an invariant.
     #[error("invalid mutation queue state: {0}")]
     QueueInvariant(String),
+    /// Persisted record metadata contained an unknown bucket.
+    #[error(transparent)]
+    InvalidEntityBucket(#[from] ParseEntityBucketError),
 }
 
 /// [`Storage`] backend over a SQLite database (Tauri native host).
@@ -47,6 +53,31 @@ pub struct SqliteStorage {
     /// `Sync` so borrowing futures are `Send`. Never contended in practice —
     /// the engine serializes storage access.
     conn: Mutex<Connection>,
+}
+
+fn ensure_record_index_schema(conn: &Connection) -> Result<(), SqliteStorageError> {
+    let mut columns = conn.prepare("PRAGMA table_info(records)")?;
+    let column_names = columns
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+    drop(columns);
+
+    if !column_names.iter().any(|name| name == "bucket") {
+        conn.execute("ALTER TABLE records ADD COLUMN bucket TEXT", [])?;
+    }
+    if !column_names.iter().any(|name| name == "sort_timestamp") {
+        conn.execute("ALTER TABLE records ADD COLUMN sort_timestamp INTEGER", [])?;
+    }
+
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS records_by_sort
+             ON records(sort_timestamp DESC, key ASC)
+             WHERE bucket IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS records_by_bucket_sort
+             ON records(bucket, sort_timestamp DESC, key ASC)
+             WHERE bucket IS NOT NULL;",
+    )?;
+    Ok(())
 }
 
 impl SqliteStorage {
@@ -73,7 +104,9 @@ impl SqliteStorage {
              );
              CREATE TABLE IF NOT EXISTS records (
                  key TEXT PRIMARY KEY,
-                 value BLOB NOT NULL
+                 value BLOB NOT NULL,
+                 bucket TEXT,
+                 sort_timestamp INTEGER
              );
              CREATE TABLE IF NOT EXISTS mutation_queue (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +129,7 @@ impl SqliteStorage {
                  FOREIGN KEY(mutation_id) REFERENCES mutation_queue(id) ON DELETE CASCADE
              );",
         )?;
+        ensure_record_index_schema(&conn)?;
 
         let expected_namespace = cache_namespace(scope);
         let stored_scope: Option<String> = conn
@@ -244,11 +278,20 @@ impl Storage for SqliteStorage {
         let tx = conn.transaction()?;
         {
             let mut stmt = tx.prepare_cached(
-                "INSERT INTO records (key, value) VALUES (?1, ?2)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                "INSERT INTO records (key, value, bucket, sort_timestamp) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(key) DO UPDATE SET
+                     value = excluded.value,
+                     bucket = excluded.bucket,
+                     sort_timestamp = excluded.sort_timestamp",
             )?;
             for (key, record) in &entries {
-                stmt.execute(params![key.0, encode_record(record)])?;
+                let metadata = record_index_metadata(key, record);
+                stmt.execute(params![
+                    key.0,
+                    encode_record(record),
+                    metadata.map(|value| value.bucket.as_str()),
+                    metadata.map(|value| value.sort_timestamp),
+                ])?;
             }
         }
         tx.commit()?;
@@ -266,6 +309,60 @@ impl Storage for SqliteStorage {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    async fn query_entity_index(
+        &self,
+        query: &EntityIndexQuery,
+    ) -> Result<Vec<EntityIndexEntry>, Self::Error> {
+        let mut sql = String::from(
+            "SELECT key, bucket, sort_timestamp FROM records WHERE bucket IS NOT NULL",
+        );
+        let mut values = Vec::<rusqlite::types::Value>::new();
+
+        if !query.buckets.is_empty() {
+            sql.push_str(" AND bucket IN (");
+            sql.push_str(&vec!["?"; query.buckets.len()].join(", "));
+            sql.push(')');
+            values.extend(
+                query
+                    .buckets
+                    .iter()
+                    .map(|bucket| bucket.as_str().to_string().into()),
+            );
+        }
+        if let Some(cursor) = &query.cursor {
+            sql.push_str(" AND (sort_timestamp < ? OR (sort_timestamp = ? AND key > ?))");
+            values.push(cursor.sort_timestamp.into());
+            values.push(cursor.sort_timestamp.into());
+            values.push(cursor.entity_key.0.clone().into());
+        }
+        sql.push_str(" ORDER BY sort_timestamp DESC, key ASC LIMIT ?");
+        values.push(
+            i64::try_from(query.bounded_storage_limit())
+                .unwrap_or(i64::MAX)
+                .into(),
+        );
+
+        let conn = self.conn();
+        let mut statement = conn.prepare(&sql)?;
+        let rows = statement.query_map(params_from_iter(values.iter()), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
+        let mut entries = Vec::new();
+        for row in rows {
+            let (entity_key, bucket, sort_timestamp) = row?;
+            entries.push(EntityIndexEntry {
+                entity_key: EntityKey(entity_key),
+                bucket: bucket.parse::<EntityBucket>()?,
+                sort_timestamp,
+            });
+        }
+        Ok(entries)
     }
 
     async fn enqueue_mutation(
@@ -467,11 +564,20 @@ impl Storage for SqliteStorage {
         }
         {
             let mut stmt = tx.prepare_cached(
-                "INSERT INTO records (key, value) VALUES (?1, ?2)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                "INSERT INTO records (key, value, bucket, sort_timestamp) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(key) DO UPDATE SET
+                     value = excluded.value,
+                     bucket = excluded.bucket,
+                     sort_timestamp = excluded.sort_timestamp",
             )?;
             for (key, record) in &entries {
-                stmt.execute(params![key.0, encode_record(record)])?;
+                let metadata = record_index_metadata(key, record);
+                stmt.execute(params![
+                    key.0,
+                    encode_record(record),
+                    metadata.map(|value| value.bucket.as_str()),
+                    metadata.map(|value| value.sort_timestamp),
+                ])?;
             }
         }
         tx.execute("DELETE FROM mutation_queue WHERE id = ?1", params![sql_id])?;
