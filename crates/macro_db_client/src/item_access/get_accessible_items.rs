@@ -5,7 +5,8 @@ use model::item::UserAccessibleItem;
 use sqlx::{Pool, Postgres};
 
 /// Gets all accessible items for a user by querying entity_access with the user's source IDs
-/// (user ID, team memberships, and channel participations).
+/// (user ID, team memberships, and channel participations). Soft-deleted items and grants
+/// whose item row no longer exists are excluded.
 #[tracing::instrument(skip(db))]
 #[cfg_attr(
     not(test),
@@ -22,7 +23,35 @@ pub async fn get_user_accessible_items(
     item_type_filter: Option<String>,
     exclude_owned: bool,
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
-    let results = sqlx::query!(
+    match item_type_filter.as_deref() {
+        Some("document") => accessible_documents(db, user_id, exclude_owned).await,
+        Some("chat") => accessible_chats(db, user_id, exclude_owned).await,
+        Some("project") => accessible_projects(db, user_id, exclude_owned).await,
+        Some(_) => Ok(vec![]),
+        None => {
+            let mut items = accessible_documents(db, user_id, exclude_owned).await?;
+            items.extend(accessible_chats(db, user_id, exclude_owned).await?);
+            items.extend(accessible_projects(db, user_id, exclude_owned).await?);
+            Ok(items)
+        }
+    }
+}
+
+fn to_items(ids: Vec<String>, item_type: &str) -> Vec<UserAccessibleItem> {
+    ids.into_iter()
+        .map(|item_id| UserAccessibleItem {
+            item_id,
+            item_type: item_type.to_string(),
+        })
+        .collect()
+}
+
+async fn accessible_documents(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    exclude_owned: bool,
+) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let ids = sqlx::query_scalar!(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
@@ -32,45 +61,88 @@ pub async fn get_user_accessible_items(
                 WHERE t.user_id = $1
             UNION ALL
             SELECT $1
-        ),
-        -- Get all entities the user has access to via entity_access
-        UserAccessibleEntities AS (
-            SELECT DISTINCT
-                ea.entity_id,
-                ea.entity_type
-            FROM entity_access ea
-            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-            AND ($2::text IS NULL OR ea.entity_type = $2)
-        ),
-        -- Filter out deleted items and optionally exclude owned
-        FilteredItems AS (
-            SELECT uae.entity_id::text as item_id, uae.entity_type as item_type
-            FROM UserAccessibleEntities uae
-            LEFT JOIN "Document" d ON uae.entity_type = 'document' AND uae.entity_id::text = d.id
-            LEFT JOIN "Chat" c ON uae.entity_type = 'chat' AND uae.entity_id::text = c.id
-            LEFT JOIN "Project" p ON uae.entity_type = 'project' AND uae.entity_id::text = p.id
-            WHERE
-                (uae.entity_type = 'document' AND d."deletedAt" IS NULL
-                    AND ($3 = false OR d.owner != $1)) OR
-                (uae.entity_type = 'chat' AND c."deletedAt" IS NULL
-                    AND ($3 = false OR c."userId" != $1)) OR
-                (uae.entity_type = 'project' AND p."deletedAt" IS NULL
-                    AND ($3 = false OR p."userId" != $1))
         )
-        SELECT item_id as "item_id!", item_type as "item_type!" FROM FilteredItems
+        SELECT DISTINCT ea.entity_id::text as "item_id!"
+        FROM entity_access ea
+        JOIN user_source_ids us ON us.source_id = ea.source_id
+        JOIN "Document" d ON d.id = ea.entity_id::text
+        WHERE ea.entity_type = 'document'
+            AND d."deletedAt" IS NULL
+            AND (NOT $2 OR d.owner != $1)
         "#,
         user_id,
-        item_type_filter,
         exclude_owned
     )
-    .map(|r| UserAccessibleItem {
-        item_id: r.item_id,
-        item_type: r.item_type,
-    })
     .fetch_all(db)
     .await?;
 
-    Ok(results)
+    Ok(to_items(ids, "document"))
+}
+
+async fn accessible_chats(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    exclude_owned: bool,
+) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            UNION ALL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
+            UNION ALL
+            SELECT $1
+        )
+        SELECT DISTINCT ea.entity_id::text as "item_id!"
+        FROM entity_access ea
+        JOIN user_source_ids us ON us.source_id = ea.source_id
+        JOIN "Chat" c ON c.id = ea.entity_id::text
+        WHERE ea.entity_type = 'chat'
+            AND c."deletedAt" IS NULL
+            AND (NOT $2 OR c."userId" != $1)
+        "#,
+        user_id,
+        exclude_owned
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(to_items(ids, "chat"))
+}
+
+async fn accessible_projects(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    exclude_owned: bool,
+) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            UNION ALL
+            SELECT t.team_id::text FROM team_user t
+                WHERE t.user_id = $1
+            UNION ALL
+            SELECT $1
+        )
+        SELECT DISTINCT ea.entity_id::text as "item_id!"
+        FROM entity_access ea
+        JOIN user_source_ids us ON us.source_id = ea.source_id
+        JOIN "Project" p ON p.id = ea.entity_id::text
+        WHERE ea.entity_type = 'project'
+            AND p."deletedAt" IS NULL
+            AND (NOT $2 OR p."userId" != $1)
+        "#,
+        user_id,
+        exclude_owned
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(to_items(ids, "project"))
 }
 
 #[cfg(test)]
