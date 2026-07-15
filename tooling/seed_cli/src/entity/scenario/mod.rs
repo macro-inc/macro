@@ -230,14 +230,12 @@ fn validate_local_e2e_database_url(database_url: &str) -> anyhow::Result<()> {
     let host = parsed.host_str().unwrap_or_default();
     let username = parsed.username();
     let database = parsed.path().trim_start_matches('/');
-    let port = parsed.port_or_known_default();
-
     let is_local_host = matches!(host, "localhost" | "127.0.0.1" | "::1" | "postgres");
-    let is_local_compose_db = username == "user" && database == "macrodb" && port == Some(5432);
+    let is_local_compose_db = username == "user" && database == "macrodb";
 
     ensure!(
         is_local_host && is_local_compose_db,
-        "refusing to run local-e2e-smoke seed against DATABASE_URL host={host:?} user={username:?} database={database:?}; expected local docker database postgres://user:...@(localhost|127.0.0.1|postgres):5432/macrodb"
+        "refusing to run local-e2e-smoke seed against DATABASE_URL host={host:?} user={username:?} database={database:?}; expected a local database postgres://user:...@(localhost|127.0.0.1|postgres):<port>/macrodb"
     );
 
     Ok(())
@@ -250,6 +248,8 @@ mod tests {
     #[test]
     fn local_e2e_database_url_accepts_localhost_compose_db() {
         validate_local_e2e_database_url("postgres://user:password@localhost:5432/macrodb").unwrap();
+        validate_local_e2e_database_url("postgres://user:password@localhost:31000/macrodb")
+            .unwrap();
         validate_local_e2e_database_url("postgres://user:password@127.0.0.1:5432/macrodb").unwrap();
         validate_local_e2e_database_url("postgres://user:password@postgres:5432/macrodb").unwrap();
     }

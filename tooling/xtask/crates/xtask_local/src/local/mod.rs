@@ -19,6 +19,7 @@ pub mod cli;
 pub mod db;
 pub mod docker;
 pub mod doctor;
+pub mod e2e;
 pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;

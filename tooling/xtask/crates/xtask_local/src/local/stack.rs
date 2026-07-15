@@ -150,7 +150,7 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
 
 /// `cargo x stack up` — bring the whole stack up and return, leaving only
 /// Docker containers running.
-pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
+pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     let stage = Stage::from_env_cli(args.run.verbose);
     let instance = Instance::derive(
         args.run.instance.instance.as_deref(),
@@ -252,7 +252,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
                 serde_json::to_string(&summary_json(mode, &instance, false))?
             );
         }
-        return Ok(());
+        return Ok(instance);
     }
     super::bring_up_app(&stage, mode, &instance, &env)?;
 
@@ -294,7 +294,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
             serde_json::to_string(&summary_json(mode, &instance, static_frontend))?
         );
     }
-    Ok(())
+    Ok(instance)
 }
 
 /// `cargo x stack update` — the `r` hotkey as a one-shot verb: rebuild the
