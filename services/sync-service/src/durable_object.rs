@@ -1112,7 +1112,11 @@ pub fn is_origin_allowed(origin: &str) -> bool {
     if ALLOWED_ORIGINS.contains(&origin) {
         return true;
     }
-    if let Some(port) = origin.strip_prefix("http://localhost:")
+    // `localhost` and `*.localhost` (loopback-reserved; local dev uses
+    // per-persona hostnames so each seeded user gets its own cookie jar).
+    if let Some(rest) = origin.strip_prefix("http://")
+        && let Some((host, port)) = rest.rsplit_once(':')
+        && (host == "localhost" || host.ends_with(".localhost"))
         && let Ok(port) = port.parse::<u16>()
     {
         return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);
