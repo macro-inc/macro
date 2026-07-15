@@ -90,27 +90,7 @@ impl<B> OnResponse<B> for CustomOnResponse {
                 response_headers,
                 "finished processing request"
             ),
-            Level::INFO => tracing::info!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
-            Level::DEBUG => tracing::debug!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
-            Level::TRACE => tracing::trace!(
-                parent: span,
-                %latency,
-                status = response.status().as_u16(),
-                response_headers,
-                "finished processing request"
-            ),
+            _ => (), // we don't want to log all request finished for non warning/error results
         }
     }
 }
