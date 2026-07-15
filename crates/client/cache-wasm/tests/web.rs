@@ -151,6 +151,7 @@ async fn optimistic_write_round_trip() {
         Some("SetEntityProperty".into()),
         js(mutation_vars.clone()),
         js(serde_json::json!({ "setEntityProperty": { "id": "prop-1", "displayName": "Stage" } })),
+        123.0,
     ))
     .await
     .unwrap();
@@ -177,9 +178,18 @@ async fn optimistic_write_round_trip() {
         serde_json::json!("Stage")
     );
 
+    let claimed = JsFuture::from(engine.claim_next_mutation("runner".into(), 10.0, 1_000.0))
+        .await
+        .unwrap();
+    let claimed: serde_json::Value = serde_wasm_bindgen::from_value(claimed).unwrap();
+    assert_eq!(claimed["transactionId"], txn);
+    let generation = claimed["leaseGeneration"].as_str().unwrap().to_string();
+
     // Commit with the real response; the layer flushes durably.
     let commit = JsFuture::from(engine.commit_optimistic_write(
         txn.clone(),
+        "runner".into(),
+        generation.clone(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_vars.clone()),
@@ -195,10 +205,16 @@ async fn optimistic_write_round_trip() {
     assert_eq!(commit["affectedOps"], serde_json::json!(["tab1:1"]));
 
     // Settled transactions reject further commits/rollbacks.
-    let err = JsFuture::from(engine.rollback_optimistic_write(txn)).await;
+    let err =
+        JsFuture::from(engine.rollback_optimistic_write(txn, "runner".into(), generation)).await;
     assert!(err.is_err());
     // Malformed ids reject too.
-    let err = JsFuture::from(engine.rollback_optimistic_write("not-a-number".into())).await;
+    let err = JsFuture::from(engine.rollback_optimistic_write(
+        "not-a-number".into(),
+        "runner".into(),
+        "1".into(),
+    ))
+    .await;
     assert!(err.is_err());
 
     JsFuture::from(engine.close()).await.unwrap();

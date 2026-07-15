@@ -2367,6 +2367,7 @@ dependencies = [
  "axum",
  "channels",
  "chrono",
+ "cloudfront_sign",
  "connection",
  "entity_access",
  "entity_access_db_utils",
@@ -2394,6 +2395,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -2848,12 +2850,14 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apollo-compiler",
  "async-graphql",
  "axum",
  "axum-extra",
  "email",
  "entity_access",
  "graphql_common",
+ "graphql_email",
  "graphql_notification",
  "graphql_properties",
  "graphql_soup",
@@ -5075,6 +5079,7 @@ dependencies = [
  "bot_id",
  "cached",
  "cool_asserts",
+ "futures",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
@@ -5952,6 +5957,21 @@ dependencies = [
  "model-entity",
  "models_properties",
  "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_email"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "email",
+ "entity_access",
+ "macro_user_id",
+ "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -16145,6 +16165,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-core",
+ "triomphe",
  "tungstenite 0.28.0",
  "typenum",
  "url",

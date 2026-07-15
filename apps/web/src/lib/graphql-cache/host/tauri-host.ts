@@ -10,6 +10,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
+  ClaimedMutation,
+  MutationClaim,
   OptimisticWriteResult,
   ReadResult,
   WriteResult,
@@ -129,12 +131,42 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           operationName: args.operationName,
           variables: args.variables,
           data: args.data,
+          createdAtMs: Date.now(),
         }
       );
     },
 
+    async claimNextMutation(
+      owner: string,
+      nowMs: number,
+      leaseExpiresAtMs: number
+    ): Promise<ClaimedMutation | undefined> {
+      await ready;
+      return await request<ClaimedMutation | undefined>(
+        'graphql_cache_claim_next_mutation',
+        { owner, nowMs, leaseExpiresAtMs }
+      );
+    },
+
+    async deferOptimisticWrite(
+      transactionId: string,
+      claim: MutationClaim,
+      nextAttemptAtMs: number,
+      error: string
+    ): Promise<void> {
+      await ready;
+      await request('graphql_cache_defer_optimistic_write', {
+        transactionId,
+        leaseOwner: claim.owner,
+        leaseGeneration: claim.generation,
+        nextAttemptAtMs,
+        error,
+      });
+    },
+
     async commitOptimisticWrite(
       transactionId: string,
+      claim: MutationClaim,
       args: CacheWriteArgs
     ): Promise<WriteResult> {
       await ready;
@@ -142,6 +174,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache_commit_optimistic_write',
         {
           transactionId,
+          leaseOwner: claim.owner,
+          leaseGeneration: claim.generation,
           query: args.query,
           operationName: args.operationName,
           variables: args.variables,
@@ -150,11 +184,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
-    async rollbackOptimisticWrite(transactionId: string): Promise<WriteResult> {
+    async rollbackOptimisticWrite(
+      transactionId: string,
+      claim: MutationClaim
+    ): Promise<WriteResult> {
       await ready;
       return await request<WriteResult>(
         'graphql_cache_rollback_optimistic_write',
-        { transactionId }
+        {
+          transactionId,
+          leaseOwner: claim.owner,
+          leaseGeneration: claim.generation,
+        }
       );
     },
 

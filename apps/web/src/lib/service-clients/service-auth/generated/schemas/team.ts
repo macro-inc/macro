@@ -4,11 +4,15 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
 
 /**
  * The Team struct
  */
 export interface Team {
+  /** The email domain new users are automatically joined to this team
+with, when automatic domain joining is enabled (None otherwise). */
+  auto_join_domain?: TeamAutoJoinDomain;
   /** Whether the CRM is enabled for this team (from `team_crm_settings`;
 `false` when no row exists). */
   crm_enabled: boolean;

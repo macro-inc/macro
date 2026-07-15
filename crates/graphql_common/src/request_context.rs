@@ -11,6 +11,7 @@ use axum::{extract::FromRequestParts, http::request::Parts};
 /// wrapped in `axum_extra::extract::Cached`, which memoizes inside the parts'
 /// extensions exactly like the REST routes do.
 pub struct GraphqlSoupRequestParts {
+    /// Mutable HTTP request parts shared by lazy resolver extractors.
     parts: tokio::sync::Mutex<Parts>,
 }
 

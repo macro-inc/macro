@@ -53,8 +53,11 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
 
 /// Entity property writer backed by the properties and entity access services.
 pub struct PropertiesEntityPropertyWriter<P, A> {
+    /// Domain service used to write properties.
     properties_service: Arc<P>,
+    /// Access service used to authorize writes.
     entity_access_service: Arc<A>,
+    /// Authenticated user performing the write.
     user_id: MacroUserIdStr<'static>,
 }
 
@@ -109,23 +112,32 @@ where
     }
 }
 
+/// Input for assigning or updating an entity property.
 #[derive(async_graphql::InputObject)]
 struct SetEntityPropertyInput {
+    /// Type of entity receiving the property.
     entity_type: GraphqlPropertyEntityType,
+    /// Identifier of the entity receiving the property.
     entity_id: String,
+    /// Identifier of the property definition to assign.
     property_definition_id: ID,
     /// Omit or pass null to attach the property without a value.
     value: Option<GraphqlSetPropertyValue>,
 }
 
+/// Input identifying an entity referenced by a property value.
 #[derive(async_graphql::InputObject)]
 struct GraphqlEntityReferenceInput {
+    /// Type of the referenced entity.
     entity_type: GraphqlPropertyEntityType,
+    /// Identifier of the referenced entity.
     entity_id: String,
+    /// Specific message when the reference targets a thread message.
     specific_message_id: Option<ID>,
 }
 
 impl GraphqlEntityReferenceInput {
+    /// Convert the GraphQL reference into its properties-domain model.
     fn try_into_model(self) -> async_graphql::Result<EntityReference> {
         Ok(EntityReference {
             entity_type: self.entity_type.into(),
@@ -138,21 +150,33 @@ impl GraphqlEntityReferenceInput {
     }
 }
 
+/// A typed value accepted when setting an entity property.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlSetPropertyValue {
+    /// A Boolean value.
     Boolean(bool),
+    /// An RFC 3339 date-time value.
     Date(String),
+    /// A numeric value.
     Number(f64),
+    /// A string value.
     String(String),
+    /// A single selected option identifier.
     SelectOption(ID),
+    /// Multiple selected option identifiers.
     MultiSelectOption(Vec<ID>),
+    /// A single entity reference.
     EntityReference(GraphqlEntityReferenceInput),
+    /// Multiple entity references.
     MultiEntityReference(Vec<GraphqlEntityReferenceInput>),
+    /// A single URL value.
     Link(String),
+    /// Multiple URL values.
     MultiLink(Vec<String>),
 }
 
 impl GraphqlSetPropertyValue {
+    /// Convert the GraphQL value into its properties-domain request model.
     fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
         Ok(match self {
             Self::Boolean(value) => SetPropertyValue::Boolean { value },
@@ -191,6 +215,7 @@ impl GraphqlSetPropertyValue {
     }
 }
 
+/// Mutations for assigning and updating entity properties.
 #[Object]
 impl<T> PropertiesMutationRoot<T>
 where

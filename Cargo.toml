@@ -19,6 +19,7 @@ members = [
   "crates/favorites",
   "crates/foreign_entity",
   "crates/graphql_common",
+  "crates/graphql_email",
   "crates/graphql_notification",
   "crates/graphql_properties",
   "crates/graphql_soup",

@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
+import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import { authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
@@ -33,6 +34,9 @@ export function useLogout() {
       hasTrialed: false,
     });
 
+    // Queued mutations are user intent; never allow them to replay under a
+    // subsequent account sharing this anonymous device cache scope.
+    await clearRegisteredCaches();
     await authServiceClient.logout();
     analytics.track('sign_out');
     analytics.reset();

@@ -9,5 +9,6 @@ pub mod document;
 pub mod engine;
 pub mod meta;
 pub mod normalize;
+pub mod queue;
 pub mod store;
 pub mod value;

@@ -585,13 +585,19 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   // We can't invalidate/refetch while mounted because any query state change
   // triggers SolidQuery's createClientSubscriber → Resource.refetch() → Suspense
   // DOM detach, which resets scroll position.
-  onCleanup(() => {
-    if (draftSavedThreadIds.has(props.threadID)) {
-      draftSavedThreadIds.delete(props.threadID);
-      queryClient.removeQueries({
-        queryKey: emailKeys.threadMessages(props.threadID).queryKey,
-      });
-    }
+  // `props.threadID` chains through the email block's non-keyed
+  // `<Show when={threadId()}>` accessor, which is already stale during
+  // disposal; capture it while mounted instead of reading it in the cleanup.
+  createEffect(() => {
+    const threadID = props.threadID;
+    onCleanup(() => {
+      if (draftSavedThreadIds.has(threadID)) {
+        draftSavedThreadIds.delete(threadID);
+        queryClient.removeQueries({
+          queryKey: emailKeys.threadMessages(threadID).queryKey,
+        });
+      }
+    });
   });
 
   return (

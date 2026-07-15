@@ -18,8 +18,11 @@ use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{
-        ai_call_summarizer::AiCallSummarizer, livekit_rtc_client::LivekitRtcClient,
-        pg_call_repo::PgCallRepo, pg_voice_repo::PgVoiceRepo,
+        ai_call_summarizer::AiCallSummarizer,
+        livekit_rtc_client::LivekitRtcClient,
+        pg_call_repo::PgCallRepo,
+        pg_voice_repo::PgVoiceRepo,
+        s3_recording_storage::{RecordingCloudFrontConfig, S3RecordingStorage},
     },
 };
 use channels::{
@@ -515,10 +518,25 @@ async fn main() -> anyhow::Result<()> {
         _ => None,
     };
     let recording_storage = match &egress_config {
-        Some(config) => Some(
-            call::outbound::s3_recording_storage::S3RecordingStorage::new(config.bucket.clone())
-                .await,
-        ),
+        Some(egress_config) => {
+            let cloudfront_config = RecordingCloudFrontConfig {
+                distribution_url: config
+                    .document_storage_service_cloudfront_distribution_url
+                    .as_ref()
+                    .to_string(),
+                signer_public_key_id: config
+                    .document_storage_service_cloudfront_signer_public_key_id
+                    .as_ref()
+                    .to_string(),
+                signer_private_key: config
+                    .document_storage_service_cloudfront_signer_private_key
+                    .as_ref()
+                    .to_string(),
+                presigned_url_expiry_seconds: config
+                    .document_storage_service_presigned_url_expiry_seconds,
+            };
+            Some(S3RecordingStorage::new(egress_config.bucket.clone(), cloudfront_config).await)
+        }
         None => None,
     };
     let mut call_service_builder = CallServiceImpl::<_, _, _, _, _, _, AiCallSummarizer>::new(

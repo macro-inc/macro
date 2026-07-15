@@ -199,6 +199,7 @@ impl From<DbThreadRow> for ThreadRow {
 }
 
 /// DB row for a message record.
+#[derive(sqlx::FromRow)]
 pub struct DbMessageRow {
     pub id: uuid::Uuid,
     pub provider_id: Option<String>,

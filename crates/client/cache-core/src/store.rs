@@ -6,9 +6,13 @@
 //! from a multi-threaded runtime), unbounded on wasm — wasm futures aren't
 //! `Send`.
 
+use crate::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
+    QueuedMutation,
+};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 
 /// Async KV over normalized records. Batch-oriented by design: the engine
@@ -34,7 +38,54 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Drops everything (logout / corruption rebuild).
+    /// Atomically appends a mutation and its optimistic layer to the queue.
+    fn enqueue_mutation(
+        &mut self,
+        entry: NewQueuedMutation,
+    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend;
+
+    /// Loads the complete mutation queue in ascending id order.
+    fn load_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+
+    /// Claims the oldest mutation when it is runnable and not actively leased.
+    /// Later mutations are never skipped.
+    fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> impl Future<Output = Result<Option<ClaimedMutation>, Self::Error>> + MaybeSend;
+
+    /// Retains a retryable mutation and its optimistic layer, releases its
+    /// lease, and records the next eligible attempt time. Returns `false`
+    /// when the claim is stale.
+    fn defer_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Atomically writes the real response records and removes the mutation
+    /// plus optimistic layer. Returns `false` when the claim is stale.
+    fn complete_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey, Record)>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Atomically removes a permanently failed mutation and its optimistic
+    /// layer. Returns `false` when the claim is stale.
+    fn discard_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Drops records, queued mutations, and optimistic layers (logout or
+    /// identity mismatch).
     fn clear(&mut self) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 }
 
@@ -42,6 +93,14 @@ pub trait Storage: MaybeSend {
 #[derive(Debug, Default)]
 pub struct InMemoryStorage {
     records: HashMap<EntityKey, Record>,
+    mutations: BTreeMap<
+        MutationId,
+        (
+            crate::queue::StoredMutation,
+            crate::queue::PersistedOptimisticLayer,
+        ),
+    >,
+    next_mutation_id: MutationId,
 }
 
 impl InMemoryStorage {
@@ -79,8 +138,124 @@ impl Storage for InMemoryStorage {
         Ok(())
     }
 
+    async fn enqueue_mutation(
+        &mut self,
+        entry: NewQueuedMutation,
+    ) -> Result<MutationId, Self::Error> {
+        self.next_mutation_id += 1;
+        let id = self.next_mutation_id;
+        self.mutations
+            .insert(id, (entry.mutation, entry.optimistic));
+        Ok(id)
+    }
+
+    async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        Ok(self
+            .mutations
+            .iter()
+            .map(|(id, (mutation, optimistic))| QueuedMutation {
+                id: *id,
+                mutation: mutation.clone(),
+                optimistic: optimistic.clone(),
+            })
+            .collect())
+    }
+
+    async fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, Self::Error> {
+        let Some((&id, (mutation, optimistic))) = self.mutations.iter_mut().next() else {
+            return Ok(None);
+        };
+        if mutation
+            .next_attempt_at_ms
+            .is_some_and(|next| next > request.now_ms)
+            || mutation
+                .lease_expires_at_ms
+                .is_some_and(|expiry| expiry > request.now_ms)
+        {
+            return Ok(None);
+        }
+
+        mutation.attempt_count = mutation.attempt_count.saturating_add(1);
+        mutation.lease_generation = mutation.lease_generation.saturating_add(1);
+        mutation.lease_owner = Some(request.owner);
+        mutation.lease_expires_at_ms = Some(request.lease_expires_at_ms);
+        mutation.next_attempt_at_ms = None;
+        let generation = mutation.lease_generation;
+        Ok(Some(ClaimedMutation {
+            queued: QueuedMutation {
+                id,
+                mutation: mutation.clone(),
+                optimistic: optimistic.clone(),
+            },
+            lease_generation: generation,
+        }))
+    }
+
+    async fn defer_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<bool, Self::Error> {
+        let Some((mutation, _)) = self.mutations.get_mut(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(mutation, &claim) {
+            return Ok(false);
+        }
+        mutation.next_attempt_at_ms = Some(next_attempt_at_ms);
+        mutation.last_error = Some(error);
+        mutation.lease_owner = None;
+        mutation.lease_expires_at_ms = None;
+        Ok(true)
+    }
+
+    async fn complete_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey, Record)>,
+    ) -> Result<bool, Self::Error> {
+        let Some((mutation, _)) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(mutation, &claim) {
+            return Ok(false);
+        }
+        for (key, record) in entries {
+            self.records.insert(key, record);
+        }
+        self.mutations.remove(&id);
+        Ok(true)
+    }
+
+    async fn discard_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+    ) -> Result<bool, Self::Error> {
+        let Some((mutation, _)) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(mutation, &claim) {
+            return Ok(false);
+        }
+        self.mutations.remove(&id);
+        Ok(true)
+    }
+
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.records.clear();
+        self.mutations.clear();
         Ok(())
     }
+}
+
+fn claim_matches(mutation: &crate::queue::StoredMutation, claim: &MutationClaimToken) -> bool {
+    mutation.lease_owner.as_deref() == Some(&claim.owner)
+        && mutation.lease_generation == claim.generation
 }

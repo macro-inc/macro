@@ -1,6 +1,7 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
 use cache_core::engine::{Engine, ReadResult};
+use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
 use serde::Serialize;
@@ -67,11 +68,56 @@ struct JsOptimisticWriteResult {
     reset: bool,
 }
 
-/// Transaction ids cross the boundary as strings (JS numbers lose precision
-/// past 2^53; ids are opaque to the host anyway).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsClaimedMutation {
+    transaction_id: String,
+    lease_generation: String,
+    query: String,
+    operation_name: Option<String>,
+    variables: serde_json::Value,
+    identity: Option<String>,
+    attempt_count: u32,
+}
+
+impl TryFrom<ClaimedMutation> for JsClaimedMutation {
+    type Error = JsValue;
+
+    fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let request = claimed.queued.mutation.request;
+        Ok(Self {
+            transaction_id: claimed.queued.id.to_string(),
+            lease_generation: claimed.lease_generation.to_string(),
+            query: request.query,
+            operation_name: request.operation_name,
+            variables: serde_json::from_str(&request.variables_json).map_err(err_js)?,
+            identity: request.identity,
+            attempt_count: claimed.queued.mutation.attempt_count,
+        })
+    }
+}
+
+/// Queue ids and lease generations cross the boundary as strings because JS
+/// numbers lose precision past 2^53.
+fn parse_u64(value: &str, label: &str) -> Result<u64, JsValue> {
+    value
+        .parse::<u64>()
+        .map_err(|_| err_js(format!("invalid {label} `{value}`")))
+}
+
 fn parse_transaction_id(id: &str) -> Result<u64, JsValue> {
-    id.parse::<u64>()
-        .map_err(|_| err_js(format!("invalid optimistic transaction id `{id}`")))
+    parse_u64(id, "optimistic transaction id")
+}
+
+fn parse_timestamp(value: f64, label: &str) -> Result<i64, JsValue> {
+    if !value.is_finite()
+        || value.fract() != 0.0
+        || value < i64::MIN as f64
+        || value >= i64::MAX as f64
+    {
+        return Err(err_js(format!("invalid {label} `{value}`")));
+    }
+    Ok(value as i64)
 }
 
 #[wasm_bindgen]
@@ -206,10 +252,9 @@ impl CacheEngine {
         })
     }
 
-    /// Installs an in-memory optimistic layer from a mutation's optimistic
-    /// response; persists nothing. Resolves to `{transactionId: string,
-    /// changed: string[], affectedOps: string[], reset: false}` where
-    /// `changed`/`affectedOps` reflect *visible* (composed-view) changes.
+    /// Durably queues a mutation and its optimistic response. Resolves to
+    /// `{transactionId: string, changed: string[], affectedOps: string[],
+    /// reset: false}` where changes reflect the composed view.
     #[wasm_bindgen(js_name = beginOptimisticWrite)]
     pub fn begin_optimistic_write(
         &self,
@@ -218,16 +263,25 @@ impl CacheEngine {
         operation_name: Option<String>,
         variables: JsValue,
         data: JsValue,
+        created_at_ms: f64,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
             let (transaction, result) = engine
-                .begin_optimistic_write(origin, &query, operation_name.as_deref(), &vars, &data)
+                .begin_optimistic_write(
+                    origin,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                    created_at_ms,
+                )
                 .await
                 .map_err(err_js)?;
             to_js(&JsOptimisticWriteResult {
@@ -239,15 +293,74 @@ impl CacheEngine {
         })
     }
 
-    /// Atomically replaces a pending optimistic layer with the real network
-    /// response and flushes any contiguous settled layers durably. Resolves
-    /// to a write result whose `changed` keys are the *durably* changed
-    /// records (cross-instance broadcast) and whose `affectedOps` reflect
-    /// visible changes. Rejects on unknown/settled transaction ids.
+    /// Claims the oldest runnable queued mutation.
+    #[wasm_bindgen(js_name = claimNextMutation)]
+    pub fn claim_next_mutation(
+        &self,
+        owner: String,
+        now_ms: f64,
+        lease_expires_at_ms: f64,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let request = MutationClaimRequest {
+                owner,
+                now_ms: parse_timestamp(now_ms, "claim timestamp")?,
+                lease_expires_at_ms: parse_timestamp(
+                    lease_expires_at_ms,
+                    "lease expiration timestamp",
+                )?,
+            };
+            let claimed = engine
+                .lock()
+                .await
+                .claim_next_mutation(request)
+                .await
+                .map_err(err_js)?;
+            to_js(&claimed.map(JsClaimedMutation::try_from).transpose()?)
+        })
+    }
+
+    /// Retains a retryable mutation and releases its queue lease.
+    #[wasm_bindgen(js_name = deferOptimisticWrite)]
+    pub fn defer_optimistic_write(
+        &self,
+        transaction_id: String,
+        lease_owner: String,
+        lease_generation: String,
+        next_attempt_at_ms: f64,
+        error: String,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let transaction = parse_transaction_id(&transaction_id)?;
+            let claim = MutationClaimToken {
+                owner: lease_owner,
+                generation: parse_u64(&lease_generation, "lease generation")?,
+            };
+            engine
+                .lock()
+                .await
+                .defer_optimistic_write(
+                    transaction,
+                    claim,
+                    parse_timestamp(next_attempt_at_ms, "next attempt timestamp")?,
+                    error,
+                )
+                .await
+                .map_err(err_js)?;
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Atomically replaces a claimed optimistic layer with the real network
+    /// response and removes it from the durable queue.
     #[wasm_bindgen(js_name = commitOptimisticWrite)]
     pub fn commit_optimistic_write(
         &self,
         transaction_id: String,
+        lease_owner: String,
+        lease_generation: String,
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
@@ -257,12 +370,17 @@ impl CacheEngine {
         let ops = self.ops.clone();
         future_to_promise(async move {
             let transaction = parse_transaction_id(&transaction_id)?;
+            let claim = MutationClaimToken {
+                owner: lease_owner,
+                generation: parse_u64(&lease_generation, "lease generation")?,
+            };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let mut engine = engine.lock().await;
             let result = engine
                 .commit_optimistic_write(
                     transaction,
+                    claim,
                     &query,
                     operation_name.as_deref(),
                     &vars,
@@ -278,18 +396,26 @@ impl CacheEngine {
         })
     }
 
-    /// Removes a pending optimistic layer's contribution (mutation failed)
-    /// and flushes any now-contiguous settled layers. Result semantics match
-    /// [`commitOptimisticWrite`](Self::commit_optimistic_write).
+    /// Permanently fails a claimed mutation and removes its optimistic
+    /// contribution.
     #[wasm_bindgen(js_name = rollbackOptimisticWrite)]
-    pub fn rollback_optimistic_write(&self, transaction_id: String) -> js_sys::Promise {
+    pub fn rollback_optimistic_write(
+        &self,
+        transaction_id: String,
+        lease_owner: String,
+        lease_generation: String,
+    ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
             let transaction = parse_transaction_id(&transaction_id)?;
+            let claim = MutationClaimToken {
+                owner: lease_owner,
+                generation: parse_u64(&lease_generation, "lease generation")?,
+            };
             let mut engine = engine.lock().await;
             let result = engine
-                .rollback_optimistic_write(transaction)
+                .rollback_optimistic_write(transaction, claim)
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
@@ -312,6 +438,27 @@ impl CacheEngine {
             let mut engine = engine.lock().await;
             let affected = engine.invalidate_keys(keys.iter());
             to_js(&ops.borrow().names(affected))
+        })
+    }
+
+    /// Reloads optimistic layers after another engine changes the durable
+    /// queue and returns locally affected operations.
+    #[wasm_bindgen(js_name = refreshOptimisticQueue)]
+    pub fn refresh_optimistic_queue(&self) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let result = engine
+                .lock()
+                .await
+                .refresh_optimistic_queue()
+                .await
+                .map_err(err_js)?;
+            to_js(&JsWriteResult {
+                changed: result.changed.into_iter().map(|key| key.0).collect(),
+                affected_ops: ops.borrow().names(result.affected_ops),
+                reset: result.reset,
+            })
         })
     }
 

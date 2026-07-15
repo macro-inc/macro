@@ -21,7 +21,7 @@ import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
-import { type Component, type JSXElement, Match, Show, Switch } from 'solid-js';
+import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
@@ -79,8 +79,13 @@ export function EmptyState(props: {
   const { openSettings } = useSettingsState();
 
   // CRM is disabled by default per team; the companies list has a dedicated
-  // empty state that points admins to the toggle in Settings › CRM.
+  // empty state that points admins to the toggle in Settings › CRM. A user
+  // with no team at all (data resolves to null) is pointed to team settings
+  // instead, since CRM can only be enabled on a team. Branches wait for the
+  // query to resolve so enabled teams don't flash the disabled copy.
+  const teamResolved = () => teamQuery.data !== undefined;
   const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
+  const hasNoTeam = () => teamQuery.data === null;
 
   const onConnectEmail = () => {
     void startAddInbox();
@@ -239,9 +244,22 @@ export function EmptyState(props: {
       </Match>
 
       <Match when={props.listView === 'companies'}>
-        <Show
-          when={crmEnabled()}
-          fallback={
+        <Switch>
+          {/* Render nothing until the team query resolves — showing a wrong
+              panel for a moment is worse than a brief blank. */}
+          <Match when={!teamResolved()}>{null}</Match>
+          <Match when={hasNoTeam()}>
+            <EmptyStatePanel
+              graphic={EmptyStateCompaniesGraphic}
+              title="Join a team to enable CRM"
+              description="Create or join a team in Settings > Team."
+              primaryAction={{
+                label: 'Open team settings',
+                onClick: () => openSettings('Team'),
+              }}
+            />
+          </Match>
+          <Match when={!crmEnabled()}>
             <EmptyStatePanel
               graphic={EmptyStateCompaniesGraphic}
               title="CRM is disabled"
@@ -259,14 +277,15 @@ export function EmptyState(props: {
                   : undefined
               }
             />
-          }
-        >
-          <EmptyStatePanel
-            graphic={EmptyStateCompaniesGraphic}
-            title="No customers yet"
-            description="Customers your team emails will appear here."
-          />
-        </Show>
+          </Match>
+          <Match when={true}>
+            <EmptyStatePanel
+              graphic={EmptyStateCompaniesGraphic}
+              title="No customers yet"
+              description="Customers your team emails will appear here."
+            />
+          </Match>
+        </Switch>
       </Match>
 
       <Match

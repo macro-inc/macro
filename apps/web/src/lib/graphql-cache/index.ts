@@ -15,7 +15,6 @@ export type {
 } from './host/types';
 export { createWorkerCacheHost } from './host/worker-host';
 export type {
-  CacheBroadcast,
   CachePush,
   CacheRequest,
   CacheResponse,

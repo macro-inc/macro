@@ -39,12 +39,13 @@ import {
   useDeleteTeamMutation,
   usePatchTeamMutation,
   useTeamQuery,
+  useToggleAutoJoinDomainMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -65,6 +66,10 @@ import {
   SettingsRow,
   SettingsSection,
 } from './primitives';
+import {
+  canRemoveTeamMember,
+  isTeamAdminOrOwner,
+} from './teamMemberPermissions';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
 
 function useRequiresPaidUpgrade() {
@@ -303,6 +308,8 @@ function MemberRow(props: {
   member: TeamMember;
   isOwner: boolean;
   isCurrentUser: boolean;
+  canManageRemovals: boolean;
+  canRemove: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
@@ -346,9 +353,9 @@ function MemberRow(props: {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
-        <Show when={props.isOwner}>
+        <Show when={props.canManageRemovals}>
           <Show
-            when={!props.isCurrentUser && !isMemberOwner()}
+            when={props.canRemove}
             fallback={
               <Tooltip
                 label={
@@ -850,6 +857,7 @@ function TeamManagement(props: {
   const patchTeamMutation = usePatchTeamMutation();
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
+  const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const requiresUpgrade = useRequiresPaidUpgrade();
   const { showPaywall } = usePaywallState();
 
@@ -969,11 +977,36 @@ function TeamManagement(props: {
     );
   });
 
+  const currentUserRole = createMemo(() => {
+    const currentUserId = userId();
+    if (!currentUserId) return undefined;
+
+    return teamQuery.data?.members.find(
+      (member) => member.user_id === currentUserId
+    )?.role;
+  });
+  const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
+  const canManageMemberRemovals = () => isAdminOrOwner();
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
     return props.ownerId === currentUserId;
   });
+
+  // The team's auto-join domain doubles as the toggle state: a string means
+  // auto-join is on for that domain, null/undefined means it's off.
+  const autoJoinDomain = () => teamQuery.data?.team.auto_join_domain ?? null;
+  const autoJoinDescription = () => {
+    const domain = autoJoinDomain();
+    return domain
+      ? `New sign-ups with an @${domain} email automatically join this team.`
+      : "Automatically add new sign-ups whose email matches the team owner's domain.";
+  };
+
+  const handleToggleAutoJoin = () => {
+    if (!props.teamId || toggleAutoJoinMutation.isPending) return;
+    toggleAutoJoinMutation.mutate({ teamId: props.teamId });
+  };
 
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
@@ -1227,6 +1260,23 @@ function TeamManagement(props: {
                 </div>
               </Show>
             </SettingsRow>
+
+            <Show when={isAdminOrOwner()}>
+              <SettingsRow
+                label="Auto-join on domain"
+                description={autoJoinDescription()}
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={!!autoJoinDomain()}
+                  disabled={
+                    toggleAutoJoinMutation.isPending || teamQuery.isLoading
+                  }
+                  onChange={handleToggleAutoJoin}
+                />
+              </SettingsRow>
+            </Show>
           </SettingsCard>
         </SettingsSection>
 
@@ -1253,7 +1303,7 @@ function TeamManagement(props: {
         <SettingsSection
           title="Members"
           actions={
-            <Show when={isOwner()}>
+            <Show when={canManageMemberRemovals()}>
               <Button
                 variant="base"
                 size="sm"
@@ -1321,6 +1371,12 @@ function TeamManagement(props: {
                       member={member}
                       isOwner={isOwner()}
                       isCurrentUser={member.user_id === userId()}
+                      canManageRemovals={canManageMemberRemovals()}
+                      canRemove={canRemoveTeamMember(
+                        userId(),
+                        currentUserRole(),
+                        member
+                      )}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;

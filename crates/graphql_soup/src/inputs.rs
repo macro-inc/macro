@@ -48,6 +48,7 @@ pub struct SoupInput {
 }
 
 impl SoupInput {
+    /// Convert this value into the request representation.
     pub(crate) fn into_request(
         self,
         macro_user_id: MacroUserIdStr<'static>,
@@ -94,18 +95,27 @@ impl SoupInput {
     }
 }
 
+/// GraphQL input representing the email view.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum GraphqlEmailView {
+    /// The inbox option.
     Inbox,
+    /// The drafts option.
     Drafts,
+    /// The sent option.
     Sent,
+    /// The all option.
     All,
+    /// The starred option.
     Starred,
+    /// The important option.
     Important,
+    /// The other option.
     Other,
 }
 
 impl GraphqlEmailView {
+    /// Return the corresponding email preview view name.
     fn as_preview_view_str(self) -> &'static str {
         match self {
             Self::Inbox => "inbox",
@@ -122,19 +132,30 @@ impl GraphqlEmailView {
 /// GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 #[derive(async_graphql::InputObject)]
 struct GraphqlEntityFilterAst {
+    /// The document filter to apply.
     document_filter: Option<GraphqlDocumentExpr>,
+    /// The project filter to apply.
     project_filter: Option<GraphqlProjectExpr>,
+    /// The chat filter to apply.
     chat_filter: Option<GraphqlChatExpr>,
+    /// The email filter to apply.
     email_filter: Option<GraphqlEmailFilterAst>,
+    /// The channel filter to apply.
     channel_filter: Option<GraphqlChannelExpr>,
+    /// The channel thread filter to apply.
     channel_thread_filter: Option<GraphqlChannelThreadExpr>,
+    /// The call filter to apply.
     call_filter: Option<GraphqlCallExpr>,
+    /// The crm company filter to apply.
     crm_company_filter: Option<GraphqlCrmCompanyExpr>,
+    /// The foreign entity filter to apply.
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
+    /// The properties filter to apply.
     properties_filter: Option<GraphqlPropertiesExpr>,
 }
 
 impl GraphqlEntityFilterAst {
+    /// Convert this value into the ast representation.
     fn into_ast(self) -> async_graphql::Result<EntityFilterAst> {
         Ok(EntityFilterAst {
             document_filter: optional_tree(self.document_filter)?,
@@ -218,13 +239,17 @@ filter_expr_input!(
     ForeignEntityLiteral,
     "ForeignEntityFilterExpr"
 );
+/// GraphQL input representing the email filter ast.
 #[derive(async_graphql::InputObject)]
 struct GraphqlEmailFilterAst {
+    /// The tree.
     tree: Option<GraphqlEmailExpr>,
+    /// The crm scope.
     crm_scope: Option<GraphqlCrmScope>,
 }
 
 impl GraphqlEmailFilterAst {
+    /// Convert this value into the ast representation.
     fn into_ast(self) -> async_graphql::Result<EmailFilterAst> {
         Ok(EmailFilterAst {
             tree: optional_tree(self.tree)?,
@@ -233,13 +258,17 @@ impl GraphqlEmailFilterAst {
     }
 }
 
+/// GraphQL input representing the crm scope.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlCrmScope {
+    /// The domains option.
     Domains(Vec<String>),
+    /// The addresses option.
     Addresses(Vec<String>),
 }
 
 impl GraphqlCrmScope {
+    /// Convert this value into the ast representation.
     fn into_ast(self) -> async_graphql::Result<CrmScope> {
         match self {
             Self::Domains(domains) if domains.is_empty() => Err(async_graphql::Error::new(
@@ -254,15 +283,21 @@ impl GraphqlCrmScope {
     }
 }
 
+/// GraphQL input representing the date literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlDateLiteral {
+    /// The gt option.
     Gt(String),
+    /// The lt option.
     Lt(String),
+    /// The gte option.
     Gte(String),
+    /// The lte option.
     Lte(String),
 }
 
 impl GraphqlDateLiteral {
+    /// Parse an email address from a GraphQL string value.
     fn parse(value: String) -> async_graphql::Result<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(&value)
             .map(|dt| dt.with_timezone(&Utc))
@@ -271,6 +306,7 @@ impl GraphqlDateLiteral {
             })
     }
 
+    /// Convert this value into the ast representation.
     fn into_ast(self) -> async_graphql::Result<DateLiteral> {
         Ok(match self {
             Self::Gt(value) => DateLiteral::GreaterThan(Self::parse(value)?),
@@ -281,24 +317,39 @@ impl GraphqlDateLiteral {
     }
 }
 
+/// GraphQL input representing the document literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlDocumentLiteral {
+    /// The file type option.
     FileType(String),
+    /// The id option.
     Id(ID),
+    /// The project id option.
     ProjectId(ID),
+    /// The owner option.
     Owner(String),
+    /// The importance option.
     Importance(bool),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
+    /// The include cbm atm nc option.
     IncludeCbmAtmNc(bool),
+    /// The sub type option.
     SubType(GraphqlDocumentSubType),
+    /// The file assoc option.
     FileAssoc(String),
+    /// The is email attachment option.
     IsEmailAttachment(bool),
+    /// The created at option.
     CreatedAt(GraphqlDateLiteral),
+    /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<DocumentLiteral>> {
         let literal = match self {
             Self::FileAssoc(value) => {
@@ -332,9 +383,12 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
     }
 }
 
+/// GraphQL input representing the document sub type.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum GraphqlDocumentSubType {
+    /// The task option.
     Task,
+    /// The snippet option.
     Snippet,
 }
 
@@ -347,19 +401,29 @@ impl From<GraphqlDocumentSubType> for DocumentSubType {
     }
 }
 
+/// GraphQL input representing the project literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlProjectLiteral {
+    /// The project id option.
     ProjectId(ID),
+    /// The project id self option.
     ProjectIdSelf(ID),
+    /// The owner option.
     Owner(String),
+    /// The importance option.
     Importance(bool),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
+    /// The created at option.
     CreatedAt(GraphqlDateLiteral),
+    /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<ProjectLiteral>> {
         let literal = match self {
             Self::ProjectId(id) => ProjectLiteral::ProjectId(parse_id(id, "projectId")?),
@@ -377,20 +441,31 @@ impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
     }
 }
 
+/// GraphQL input representing the chat literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlChatLiteral {
+    /// The project id option.
     ProjectId(ID),
+    /// The role option.
     Role(GraphqlChatRole),
+    /// The chat id option.
     ChatId(ID),
+    /// The owner option.
     Owner(String),
+    /// The importance option.
     Importance(bool),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
+    /// The created at option.
     CreatedAt(GraphqlDateLiteral),
+    /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<ChatLiteral>> {
         let literal = match self {
             Self::ProjectId(id) => ChatLiteral::ProjectId(parse_id(id, "projectId")?),
@@ -407,10 +482,14 @@ impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
     }
 }
 
+/// GraphQL input representing the chat role.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum GraphqlChatRole {
+    /// The user option.
     User,
+    /// The system option.
     System,
+    /// The assistant option.
     Assistant,
 }
 
@@ -424,25 +503,41 @@ impl From<GraphqlChatRole> for ChatRole {
     }
 }
 
+/// GraphQL input representing the email literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlEmailLiteral {
+    /// The sender option.
     Sender(GraphqlEmailValue),
+    /// The cc option.
     Cc(GraphqlEmailValue),
+    /// The bcc option.
     Bcc(GraphqlEmailValue),
+    /// The recipient option.
     Recipient(GraphqlEmailValue),
+    /// The thread id option.
     ThreadId(ID),
+    /// The owner option.
     Owner(ID),
+    /// The project id option.
     ProjectId(String),
+    /// The importance option.
     Importance(bool),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
+    /// The shared option.
     Shared(GraphqlSharedEmailFilter),
+    /// The calendar only option.
     CalendarOnly(bool),
+    /// The created at option.
     CreatedAt(GraphqlDateLiteral),
+    /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<EmailLiteral>> {
         let literal = match self {
             Self::Sender(value) => EmailLiteral::Sender(value.into_ast()?),
@@ -464,14 +559,19 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
     }
 }
 
+/// GraphQL input representing the email value.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlEmailValue {
+    /// The partial option.
     Partial(String),
+    /// The complete option.
     Complete(String),
+    /// The domain option.
     Domain(String),
 }
 
 impl GraphqlEmailValue {
+    /// Convert this value into the ast representation.
     fn into_ast(self) -> async_graphql::Result<Email> {
         Ok(match self {
             Self::Partial(value) => Email::Partial(value),
@@ -489,10 +589,14 @@ impl GraphqlEmailValue {
     }
 }
 
+/// GraphQL input representing the shared email filter.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum GraphqlSharedEmailFilter {
+    /// The exclude option.
     Exclude,
+    /// The include option.
     Include,
+    /// The only option.
     Only,
 }
 
@@ -506,21 +610,33 @@ impl From<GraphqlSharedEmailFilter> for SharedEmailFilter {
     }
 }
 
+/// GraphQL input representing the channel literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlChannelLiteral {
+    /// The thread id option.
     ThreadId(ID),
+    /// The mention option.
     Mention(String),
+    /// The organization id option.
     OrganizationId(i64),
+    /// The team id option.
     TeamId(ID),
+    /// The channel id option.
     ChannelId(ID),
+    /// The sender option.
     Sender(String),
+    /// The channel type option.
     ChannelType(GraphqlChannelTypeFilter),
+    /// The importance option.
     Importance(bool),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<ChannelLiteral>> {
         let literal = match self {
             Self::ThreadId(id) => ChannelLiteral::ThreadId(parse_id(id, "threadId")?),
@@ -540,11 +656,16 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
     }
 }
 
+/// GraphQL input representing the channel type filter.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum GraphqlChannelTypeFilter {
+    /// The public option.
     Public,
+    /// The private option.
     Private,
+    /// The direct message option.
     DirectMessage,
+    /// The team option.
     Team,
 }
 
@@ -559,17 +680,25 @@ impl From<GraphqlChannelTypeFilter> for ChannelTypeFilter {
     }
 }
 
+/// GraphQL input representing the channel thread literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlChannelThreadLiteral {
+    /// The thread id option.
     ThreadId(ID),
+    /// The channel id option.
     ChannelId(ID),
+    /// The root sender option.
     RootSender(String),
+    /// The participant option.
     Participant(String),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<ChannelThreadLiteral>> {
         let literal = match self {
             Self::ThreadId(id) => ChannelThreadLiteral::ThreadId(parse_id(id, "threadId")?),
@@ -587,16 +716,23 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
     }
 }
 
+/// GraphQL input representing the call literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlCallLiteral {
+    /// The call id option.
     CallId(ID),
+    /// The channel id option.
     ChannelId(ID),
+    /// The speaker option.
     Speaker(String),
+    /// The status option.
     Status(GraphqlCallStatus),
+    /// The attended option.
     Attended(bool),
 }
 
 impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<CallLiteral>> {
         let literal = match self {
             Self::CallId(id) => CallLiteral::CallId(parse_id(id, "callId")?),
@@ -611,10 +747,14 @@ impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
     }
 }
 
+/// GraphQL input representing the call status.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum GraphqlCallStatus {
+    /// The attended option.
     Attended,
+    /// The missed option.
     Missed,
+    /// The unattended option.
     Unattended,
 }
 
@@ -628,13 +768,17 @@ impl From<GraphqlCallStatus> for CallStatus {
     }
 }
 
+/// GraphQL input representing the crm company literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlCrmCompanyLiteral {
+    /// The id option.
     Id(ID),
+    /// The hidden option.
     Hidden(bool),
 }
 
 impl IntoFilterExpr<CrmCompanyLiteral> for GraphqlCrmCompanyLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<CrmCompanyLiteral>> {
         let literal = match self {
             Self::Id(id) => CrmCompanyLiteral::Id(parse_id(id, "id")?),
@@ -644,17 +788,25 @@ impl IntoFilterExpr<CrmCompanyLiteral> for GraphqlCrmCompanyLiteral {
     }
 }
 
+/// GraphQL input representing the foreign entity literal.
 #[derive(async_graphql::OneofObject)]
 enum GraphqlForeignEntityLiteral {
+    /// The id option.
     Id(ID),
+    /// The foreign entity id option.
     ForeignEntityId(String),
+    /// The foreign entity source option.
     ForeignEntitySource(String),
+    /// The includes me option.
     IncludesMe(bool),
+    /// The notification done option.
     NotificationDone(bool),
+    /// The notification seen option.
     NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
+    /// Convert this value into the expr representation.
     fn into_expr(self) -> async_graphql::Result<Expr<ForeignEntityLiteral>> {
         let literal = match self {
             Self::Id(id) => ForeignEntityLiteral::Id(parse_id(id, "id")?),

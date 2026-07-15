@@ -147,6 +147,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
+    complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;

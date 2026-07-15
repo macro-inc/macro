@@ -1187,11 +1187,10 @@ impl ApiEntityFilterAst {
 
         let (email_tree, crm_scope) = match (email_filter, crm) {
             (Some(existing), Some((crm_tree, scope))) => {
-                // The Arc was freshly constructed by serde when this
-                // request body deserialized, and has not been cloned
-                // since — refcount is 1, so `try_unwrap` always succeeds.
-                let existing_owned = Arc::try_unwrap(existing)
-                    .map_err(|_| report!("internal: email_filter Arc was unexpectedly shared"))?;
+                // Callers may hold other clones of this Arc (the soup
+                // service clones the request filters before expansion),
+                // so fall back to cloning the tree when it's shared.
+                let existing_owned = Arc::unwrap_or_clone(existing);
                 (
                     Some(Arc::new(Expr::and(existing_owned, crm_tree))),
                     Some(scope),

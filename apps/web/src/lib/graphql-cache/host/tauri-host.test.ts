@@ -99,19 +99,29 @@ describe('createTauriCacheHost', () => {
     });
     expect(begun).toEqual(optimistic);
 
-    await host.commitOptimisticWrite('1', {
+    const claim = { owner: 'runner', generation: '2' };
+    await host.commitOptimisticWrite('1', claim, {
       query: 'mutation { m }',
       data: { m: 2 },
     });
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_commit_optimistic_write',
-      expect.objectContaining({ transactionId: '1', data: { m: 2 } })
+      expect.objectContaining({
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+        data: { m: 2 },
+      })
     );
 
-    await host.rollbackOptimisticWrite('1');
+    await host.rollbackOptimisticWrite('1', claim);
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_rollback_optimistic_write',
-      { transactionId: '1' }
+      {
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+      }
     );
   });
 

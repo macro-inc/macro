@@ -49,3 +49,37 @@ fn team_checkout_error_preserves_customer_storage_error() {
     let error = TeamCheckoutError::from(customer_storage_error());
     assert_preserves_customer_storage_error(error);
 }
+
+#[test]
+fn generic_email_domains_are_lowercase_and_sorted() {
+    // is_generic_email_domain binary searches the list, which is only
+    // correct when the entries are sorted (and lowercase, since lookups
+    // are lowercased).
+    assert!(GENERIC_EMAIL_DOMAINS.is_sorted());
+    assert!(
+        GENERIC_EMAIL_DOMAINS
+            .iter()
+            .all(|domain| *domain == domain.to_ascii_lowercase())
+    );
+}
+
+#[test]
+fn is_generic_email_domain_matches_generic_providers() {
+    assert!(is_generic_email_domain("gmail.com"));
+    assert!(is_generic_email_domain("hotmail.co.uk"));
+    assert!(is_generic_email_domain("zoho.com"));
+    assert!(is_generic_email_domain("126.com"));
+}
+
+#[test]
+fn is_generic_email_domain_is_case_insensitive() {
+    assert!(is_generic_email_domain("GMAIL.COM"));
+    assert!(is_generic_email_domain("Outlook.Com"));
+}
+
+#[test]
+fn is_generic_email_domain_allows_company_domains() {
+    assert!(!is_generic_email_domain("macro.com"));
+    assert!(!is_generic_email_domain("example.org"));
+    assert!(!is_generic_email_domain("gmail.com.evil.com"));
+}
