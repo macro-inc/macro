@@ -14,6 +14,36 @@ fn assert_preserves_customer_storage_error(error: impl std::fmt::Display) {
     );
 }
 
+fn team_with_enterprise_status(enterprise: bool) -> Team {
+    Team::new(
+        uuid::Uuid::nil(),
+        "Test Team".to_string(),
+        "TEST_TEAM".to_string(),
+        MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
+        false,
+        enterprise,
+    )
+}
+
+#[test]
+fn team_enterprise_accessor_preserves_constructor_value() {
+    for enterprise in [false, true] {
+        assert_eq!(
+            team_with_enterprise_status(enterprise).enterprise(),
+            enterprise
+        );
+    }
+}
+
+#[test]
+fn serialized_team_preserves_enterprise_value() {
+    for enterprise in [false, true] {
+        let serialized = serde_json::to_value(team_with_enterprise_status(enterprise)).unwrap();
+
+        assert_eq!(serialized["enterprise"], enterprise);
+    }
+}
+
 #[test]
 fn invite_users_to_team_error_preserves_customer_storage_error() {
     let error = InviteUsersToTeamError::from(customer_storage_error());

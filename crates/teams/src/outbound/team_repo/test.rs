@@ -148,6 +148,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(result.name, "team1");
     assert_eq!(result.slug, "MACRO");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
+    assert!(!result.enterprise());
 
     // Create team with too large a name
     let err = team_repo
@@ -1291,14 +1292,47 @@ async fn test_patch_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_get_team_by_id_includes_slug(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool);
+async fn test_get_team_by_id_hydrates_enterprise_status(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    sqlx::query!("UPDATE team SET enterprise = TRUE WHERE id = $1", &team_id)
+        .execute(&pool)
+        .await?;
 
     let team = team_repo.get_team_by_id(&team_id).await?.team;
 
     assert_eq!(team.name(), "team1");
     assert_eq!(team.slug(), "MACRO");
+    assert!(team.enterprise());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_user_teams_hydrates_enterprise_status(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+
+    sqlx::query!("UPDATE team SET enterprise = TRUE WHERE id = $1", &team_id)
+        .execute(&pool)
+        .await?;
+
+    let teams = team_repo.get_user_teams(&user_id).await?;
+    let team = teams
+        .iter()
+        .find(|team| team.id() == &team_id)
+        .expect("updated team should be returned for the user");
+
+    assert!(team.enterprise());
 
     Ok(())
 }
