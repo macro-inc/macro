@@ -60,6 +60,7 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
+import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -578,6 +579,12 @@ export const SoupView = (props: SoupViewProps) => {
     () => activeListView() === 'companies' && soupView.viewMode() === 'board'
   );
 
+  // When CRM is unavailable (no team / disabled) the board renders the
+  // empty state instead of columns, so board-only chrome tweaks (like
+  // hiding the AI bar) shouldn't apply.
+  const crmUnavailable = useCrmUnavailable();
+  const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -778,7 +785,7 @@ export const SoupView = (props: SoupViewProps) => {
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isMobile() &&
             !isNewInboxEnabled() &&
-            !isBoardMode()
+            !isBoardRendered()
           }
         >
           <SoupChatInput />
