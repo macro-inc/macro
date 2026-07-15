@@ -48,7 +48,7 @@ fn schema_types_and_fields_have_descriptions() {
 
     let mut missing = Vec::new();
     for (name, graphql_type) in &schema.types {
-        if graphql_type.is_built_in() || matches!(graphql_type, ExtendedType::Scalar(_)) {
+        if graphql_type.is_built_in() {
             continue;
         }
         if graphql_type.description().is_none() {
