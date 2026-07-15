@@ -12,6 +12,23 @@ use crate::entity::{channel, channel_message, document};
 const LOCAL_E2E_MANIFEST_JSON: &str = include_str!("../../../seed/local_e2e/manifest.json");
 const LOCAL_E2E_RESET_SQL: &str = include_str!("../../../seed/local_e2e/reset.sql");
 const LOCAL_E2E_USERS_JSON: &str = include_str!("../../../seed/local_e2e/users.json");
+const LOCAL_E2E_SCROLL_MESSAGES_SQL: &str = r#"
+INSERT INTO comms_messages (id, channel_id, sender_id, content, created_at, updated_at)
+SELECT
+    md5('local-e2e-scroll-' || message_number)::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    CASE
+        WHEN message_number % 2 = 0 THEN 'macro|bob@example.com'
+        ELSE 'macro|charlie@example.com'
+    END,
+    CASE
+        WHEN message_number % 7 = 0 THEN repeat('Variable-height scroll fixture message ' || message_number || '. ', 12)
+        ELSE 'Scroll fixture message ' || message_number
+    END,
+    now() + (message_number || ' milliseconds')::interval,
+    now() + (message_number || ' milliseconds')::interval
+FROM generate_series(1, 60) AS message_number;
+"#;
 
 #[derive(Debug, Deserialize)]
 struct LocalE2eManifest {
@@ -344,6 +361,11 @@ async fn local_e2e_smoke(ctx: &SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("seeding local e2e smoke channel messages");
     let channel_messages_path = seed_path("seed/channel_messages.json");
     channel_message::seed_from_file_ref(ctx, &channel_messages_path).await?;
+
+    tracing::info!("seeding local e2e channel scroll fixture");
+    ctx.db
+        .execute_sql_script(LOCAL_E2E_SCROLL_MESSAGES_SQL)
+        .await?;
 
     println!("Local e2e smoke seed data ready for {local_e2e_user_id}");
     Ok(())
