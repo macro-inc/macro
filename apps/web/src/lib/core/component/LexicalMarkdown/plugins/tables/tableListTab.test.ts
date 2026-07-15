@@ -1,11 +1,7 @@
 import { $isListItemNode } from '@lexical/list';
 import { $isTableCellNode } from '@lexical/table';
 import { $findMatchingParent } from '@lexical/utils';
-import {
-  $getSelection,
-  $isRangeSelection,
-  type LexicalEditor,
-} from 'lexical';
+import { $getSelection, $isRangeSelection, type LexicalEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import {
   $createListCell,

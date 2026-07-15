@@ -1,11 +1,7 @@
 import { $isListItemNode } from '@lexical/list';
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $findMatchingParent } from '@lexical/utils';
-import {
-  $getSelection,
-  $isRangeSelection,
-  type LexicalEditor,
-} from 'lexical';
+import { $getSelection, $isRangeSelection, type LexicalEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import {
   $createListCell,
@@ -44,10 +40,7 @@ function readAnchorCellPosition(
     const table = $getTable();
     const rows = table.getChildren().filter($isTableRowNode);
     const row = rows.indexOf(rowNode);
-    const column = rowNode
-      .getChildren()
-      .filter($isTableCellNode)
-      .indexOf(cell);
+    const column = rowNode.getChildren().filter($isTableCellNode).indexOf(cell);
     return { row, column };
   });
 }

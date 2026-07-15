@@ -134,7 +134,10 @@ export function coordGrid(
   columns: number
 ): Array<Array<() => TableCellNode>> {
   return Array.from({ length: rows }, (_, r) =>
-    Array.from({ length: columns }, (_, c) => () => $createTextCell(`${r},${c}`))
+    Array.from(
+      { length: columns },
+      (_, c) => () => $createTextCell(`${r},${c}`)
+    )
   );
 }
 
