@@ -847,84 +847,110 @@ where
             .map_err(JoinTeamError::TeamError)?;
 
         let team_member = accepted_invite.member.clone();
-
-        if !self
+        let enterprise = match self
             .team_repository
-            .get_team_payment_status(&team_member.team_id)
-            .await?
+            .get_team_enterprise_status(&team_member.team_id)
+            .await
         {
-            // If the team has a subscription id and they are set to not paying continue to error
-            if self
-                .team_repository
-                .get_team_subscription_id(&accepted_invite.member.team_id)
-                .await?
-                .is_some()
-            {
+            Ok(enterprise) => enterprise,
+            Err(error) => {
                 self.team_repository
                     .rollback_accept_team_invite(&accepted_invite)
                     .await
                     .inspect_err(|rollback_err| {
                         tracing::error!(
                             error=?rollback_err,
-                            "unable to rollback accepted team invite after getting team subscription failed"
+                            "unable to rollback accepted team invite after getting enterprise status failed"
                         );
                     })
                     .ok();
-                return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
-            }
-
-            if let Err(e) = self
-                .backfill_legacy_team_subscription(&accepted_invite.member.team_id)
-                .await
-            {
-                self.team_repository
-                    .rollback_accept_team_invite(&accepted_invite)
-                    .await
-                    .inspect_err(|rollback_err| {
-                        tracing::error!(
-                            error=?rollback_err,
-                            "unable to rollback accepted team invite after backfilling team subscription failed"
-                        );
-                    })
-                    .ok();
-                return Err(e.into_join_team_error());
-            }
-        }
-
-        let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
-            Ok(subscription_id) => subscription_id,
-            Err(e) => {
-                self.team_repository
-                    .rollback_accept_team_invite(&accepted_invite)
-                    .await
-                    .inspect_err(|rollback_err| {
-                        tracing::error!(
-                            error=?rollback_err,
-                            "unable to rollback accepted team invite after getting team subscription failed"
-                        );
-                    })
-                    .ok();
-                return Err(e.into_join_team_error());
+                return Err(JoinTeamError::TeamError(error));
             }
         };
 
-        if let Err(e) = self
-            .customer_repository
-            .increment_seat_count(&subscription_id, 1)
-            .await
-        {
-            self.team_repository
-                .rollback_accept_team_invite(&accepted_invite)
+        let subscription_id = if enterprise {
+            None
+        } else {
+            if !self
+                .team_repository
+                .get_team_payment_status(&team_member.team_id)
+                .await?
+            {
+                // If the team has a subscription id and they are set to not paying continue to error
+                if self
+                    .team_repository
+                    .get_team_subscription_id(&accepted_invite.member.team_id)
+                    .await?
+                    .is_some()
+                {
+                    self.team_repository
+                        .rollback_accept_team_invite(&accepted_invite)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback accepted team invite after getting team subscription failed"
+                            );
+                        })
+                        .ok();
+                    return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+                }
+
+                if let Err(e) = self
+                    .backfill_legacy_team_subscription(&accepted_invite.member.team_id)
+                    .await
+                {
+                    self.team_repository
+                        .rollback_accept_team_invite(&accepted_invite)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback accepted team invite after backfilling team subscription failed"
+                            );
+                        })
+                        .ok();
+                    return Err(e.into_join_team_error());
+                }
+            }
+
+            let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
+                Ok(subscription_id) => subscription_id,
+                Err(e) => {
+                    self.team_repository
+                        .rollback_accept_team_invite(&accepted_invite)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback accepted team invite after getting team subscription failed"
+                            );
+                        })
+                        .ok();
+                    return Err(e.into_join_team_error());
+                }
+            };
+
+            if let Err(e) = self
+                .customer_repository
+                .increment_seat_count(&subscription_id, 1)
                 .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback accepted team invite after incrementing seat count failed"
-                    );
-                })
-                .ok();
-            return Err(JoinTeamError::CustomerError(e));
-        }
+            {
+                self.team_repository
+                    .rollback_accept_team_invite(&accepted_invite)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback accepted team invite after incrementing seat count failed"
+                        );
+                    })
+                    .ok();
+                return Err(JoinTeamError::CustomerError(e));
+            }
+
+            Some(subscription_id)
+        };
 
         // subscribe the user to professional features from the TeamSubscriber role and the role associated with their tier
         let roles_to_add = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
@@ -935,16 +961,18 @@ where
             .dangerous_upsert_roles_for_user(user_id, roles)
             .await
         {
-            self.customer_repository
-                .decrement_seat_count(&subscription_id, 1)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback customer seat count after adding team member roles failed"
-                    );
-                })
-                .ok();
+            if let Some(subscription_id) = subscription_id.as_ref() {
+                self.customer_repository
+                    .decrement_seat_count(subscription_id, 1)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback customer seat count after adding team member roles failed"
+                        );
+                    })
+                    .ok();
+            }
             self.team_repository
                 .rollback_accept_team_invite(&accepted_invite)
                 .await
@@ -974,16 +1002,18 @@ where
                     );
                 })
                 .ok();
-            self.customer_repository
-                .decrement_seat_count(&subscription_id, 1)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback customer seat count after adding team member to channels failed"
-                    );
-                })
-                .ok();
+            if let Some(subscription_id) = subscription_id.as_ref() {
+                self.customer_repository
+                    .decrement_seat_count(subscription_id, 1)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback customer seat count after adding team member to channels failed"
+                        );
+                    })
+                    .ok();
+            }
             self.team_repository
                 .rollback_accept_team_invite(&accepted_invite)
                 .await
