@@ -225,7 +225,7 @@ mod tests {
             load_latest_email_message::<ContentReader>(
                 ctx,
                 EmailContentKey {
-                    thread_id: Uuid::from_u128(2).to_string(),
+                    thread_id: Uuid::from_u128(2),
                 },
             )
             .await
@@ -242,8 +242,10 @@ mod tests {
         ) -> HashMap<EmailContentKey, EmailContentLoad> {
             keys.into_iter()
                 .map(|key| {
-                    let thread_id = Uuid::parse_str(&key.thread_id).unwrap();
-                    (key, EmailContentLoad::Found(Box::new(message(thread_id))))
+                    (
+                        key,
+                        EmailContentLoad::Found(Box::new(message(key.thread_id))),
+                    )
                 })
                 .collect()
         }

@@ -153,7 +153,7 @@ mod tests {
 
     fn key(index: usize) -> EmailContentKey {
         EmailContentKey {
-            thread_id: format!("00000000-0000-0000-0000-{index:012}"),
+            thread_id: Uuid::from_u128(index as u128),
         }
     }
 
@@ -165,10 +165,7 @@ mod tests {
         let first = key(1);
         let second = key(2);
 
-        let loaded = loader
-            .load_many(vec![first.clone(), second.clone()])
-            .await
-            .unwrap();
+        let loaded = loader.load_many(vec![first, second]).await.unwrap();
 
         assert_eq!(reader.calls.load(Ordering::SeqCst), 1);
         assert!(matches!(

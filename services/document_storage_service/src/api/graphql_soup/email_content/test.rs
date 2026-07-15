@@ -150,7 +150,7 @@ impl EmailContentService for RecordingContentService {
 
 fn key(index: usize) -> EmailContentKey {
     EmailContentKey {
-        thread_id: format!("00000000-0000-0000-0000-{index:012}"),
+        thread_id: Uuid::from_u128(index as u128),
     }
 }
 
@@ -162,9 +162,7 @@ async fn authorized_keys_reach_the_email_domain() {
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
     let requested = key(1);
 
-    let loaded = service
-        .get_email_content(&user_id, vec![requested.clone()])
-        .await;
+    let loaded = service.get_email_content(&user_id, vec![requested]).await;
 
     assert_eq!(content.calls.load(Ordering::SeqCst), 1);
     assert!(matches!(
@@ -183,9 +181,7 @@ async fn unauthorized_keys_do_not_reach_the_email_domain() {
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
     let requested = key(1);
 
-    let loaded = service
-        .get_email_content(&user_id, vec![requested.clone()])
-        .await;
+    let loaded = service.get_email_content(&user_id, vec![requested]).await;
 
     assert_eq!(content.calls.load(Ordering::SeqCst), 0);
     assert!(matches!(
