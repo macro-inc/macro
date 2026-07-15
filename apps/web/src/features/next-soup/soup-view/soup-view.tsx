@@ -1243,7 +1243,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        class="size-full no-select-children"
+        class="size-full"
         ref={(el) => {
           setSoupViewRef(el);
           attachHotkeys(el);
@@ -1265,7 +1265,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             <SoupViewFileDropzone>
               <div
                 class={cn(
-                  '@container/u-list size-full unified-list-root flex flex-col relative',
+                  '@container/u-list size-full unified-list-root flex flex-col relative no-select-children',
                   paneVisible() && 'border-r border-edge-muted'
                 )}
               >
