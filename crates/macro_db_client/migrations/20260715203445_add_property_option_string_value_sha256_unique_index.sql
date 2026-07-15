@@ -7,5 +7,5 @@
 -- sha256 of the value instead, which has no length limit. The old constraint
 -- stays in place until this index is built (dropped in the next migration).
 CREATE UNIQUE INDEX CONCURRENTLY unique_property_options_string_value_sha256
-ON property_options (property_definition_id, sha256(convert_to(string_value, 'UTF8')))
+ON property_options (property_definition_id, digest(string_value, 'sha256'))
 WHERE string_value IS NOT NULL;
