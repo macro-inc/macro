@@ -486,6 +486,7 @@ describe('normalizedCacheExchange', () => {
       expect(host.begins).toHaveLength(0);
       expect(host.claims).toEqual(['restored-1']);
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+      expect(forwarded[0]?.context.fetch).toBeTypeOf('function');
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
 
@@ -516,6 +517,44 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
       expect(results).toHaveLength(1);
       expect(results[0]?.data).toEqual({ from: 'network' });
+    });
+
+    it('bounds queued network attempts to one minute', async () => {
+      const timeoutSignal = new AbortController().signal;
+      const existingSignal = new AbortController().signal;
+      const combinedSignal = new AbortController().signal;
+      const timeout = vi
+        .spyOn(AbortSignal, 'timeout')
+        .mockReturnValue(timeoutSignal);
+      const any = vi.spyOn(AbortSignal, 'any').mockReturnValue(combinedSignal);
+      const operationFetch = vi.fn().mockResolvedValue(new Response());
+      try {
+        const mutation = makeMutationOp(1, optimistic);
+        const mutationWithFetch = makeOperation(mutation.kind, mutation, {
+          ...mutation.context,
+          fetch: operationFetch,
+        } as never);
+        const { ops } = harness(host, (op) => {
+          if (op.kind === 'mutation') {
+            void op.context.fetch?.('http://test', {
+              signal: existingSignal,
+            });
+          }
+          return {};
+        });
+        ops.next(mutationWithFetch);
+        await tick();
+
+        expect(timeout).toHaveBeenCalledWith(60_000);
+        expect(any).toHaveBeenCalledWith([existingSignal, timeoutSignal]);
+        expect(operationFetch).toHaveBeenCalledWith(
+          'http://test',
+          expect.objectContaining({ signal: combinedSignal })
+        );
+      } finally {
+        timeout.mockRestore();
+        any.mockRestore();
+      }
     });
 
     it('commits with the network result on success and never emits a synthetic result', async () => {

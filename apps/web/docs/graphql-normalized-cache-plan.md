@@ -65,8 +65,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
     opaque session tag compared against the binding stored in the same
     database (`__meta:identity`), so compare-and-wipe is atomic with the
     triggering write (no stale-in-flight-write races). A mismatch wipes and
-    rebinds (“silent restart”), all active operations re-execute, and other
-    engine instances get a `reset` broadcast. Eager path: clear on logout.
+    rebinds (“silent restart”) and all active operations re-execute. Eager
+    path: clear on logout.
     Discard on schema/format mismatch (cache is disposable, rebuild from
     network).
 
@@ -81,7 +81,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
 13. **Durable optimistic mutations** — optimistic GraphQL mutations are
     persisted with their replay request, restored across restarts, and applied
     strictly in enqueue order. Retryability is decided by an exchange callback;
-    retryable failures retain their optimistic layer.
+    retryable failures retain their optimistic layer. Each queued network
+    attempt has a one-minute timeout, comfortably inside its five-minute lease.
 
 ### Open questions
 

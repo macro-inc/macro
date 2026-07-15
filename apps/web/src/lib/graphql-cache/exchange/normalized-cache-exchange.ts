@@ -65,6 +65,7 @@ import { optimisticContextOf } from './optimistic';
  * carries its own transaction.
  */
 const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
+const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
 
@@ -130,6 +131,23 @@ function replayDocument(query: string, name?: string): DocumentNode {
 
 function retryDelayMs(attemptCount: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
+}
+
+/** Applies a hard network bound well inside the durable queue lease. */
+function withQueueRequestTimeout(op: Operation): Operation {
+  const operationFetch = op.context.fetch ?? globalThis.fetch;
+  return makeOperation(op.kind, op, {
+    ...op.context,
+    fetch: (input, init) => {
+      const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
+      return operationFetch(input, {
+        ...init,
+        signal: init?.signal
+          ? AbortSignal.any([init.signal, timeoutSignal])
+          : timeoutSignal,
+      });
+    },
+  });
 }
 
 function cacheResult(
@@ -241,10 +259,12 @@ export function normalizedCacheExchange(
           const live = liveQueuedOps.get(claimed.transactionId);
           if (live) {
             enqueueForward(
-              makeOperation(live.kind, live, {
-                ...live.context,
-                [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
-              })
+              withQueueRequestTimeout(
+                makeOperation(live.kind, live, {
+                  ...live.context,
+                  [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
+                })
+              )
             );
           } else {
             try {
@@ -316,7 +336,7 @@ export function normalizedCacheExchange(
         }
         // Reconstructed startup retries already have a durable transaction.
         if (queueAttemptOf(op)) {
-          enqueueForward(op);
+          enqueueForward(withQueueRequestTimeout(op));
           return;
         }
         const optimistic = optimisticContextOf(op);
