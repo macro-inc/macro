@@ -158,10 +158,11 @@ where
     }
 }
 
-/// Authorizes an internal service request using only its internal API key.
+/// Authorizes an internal service request using its internal API key.
 ///
 /// Both the standard and legacy DSS internal API key headers are accepted.
-/// User, FusionAuth, and organization identity headers are deliberately ignored.
+/// Acting-user identity headers are forwarded to the authorization service so
+/// it can construct a user context, but only the internal API key is required.
 #[non_exhaustive]
 pub struct InternalMacroAuthorizationExtractor<Svc> {
     _service: PhantomData<fn() -> Svc>,
@@ -186,18 +187,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let convention =
             internal_header_convention(&parts.headers).ok_or_else(|| rejection("unauthorized"))?;
-        let provided_key = parts
-            .headers
-            .get(convention.key_header)
-            .and_then(|header| header.to_str().ok())
-            .ok_or_else(|| rejection("unauthorized"))?;
-        let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
 
-        authorization
-            .service
-            .authorize_internal(provided_key, InternalIdentityClaims::default())
-            .await
-            .map_err(internal_authorization_rejection)?;
+        authorize_internal_request::<S, Svc>(parts, state, convention).await?;
 
         Ok(Self {
             _service: PhantomData,

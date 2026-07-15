@@ -221,7 +221,7 @@ async fn internal_accepts_standard_and_legacy_api_keys_without_identity_headers(
 }
 
 #[tokio::test]
-async fn internal_ignores_identity_headers() {
+async fn internal_forwards_identity_headers_to_create_user_context() {
     let (router, service) = test_router();
     let request = empty_body(
         request("/internal")
@@ -239,7 +239,11 @@ async fn internal_ignores_identity_headers() {
         service.calls(),
         [AuthorizationCall::Internal {
             provided_key: VALID_INTERNAL_KEY.to_string(),
-            claims: InternalIdentityClaims::default(),
+            claims: InternalIdentityClaims {
+                user_id: Some(STANDARD_INTERNAL_USER_ID.to_string()),
+                fusion_user_id: Some("fusion-user".to_string()),
+                organization_id: Some(42),
+            },
         }]
     );
 }
