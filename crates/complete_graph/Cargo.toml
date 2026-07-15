@@ -1,8 +1,8 @@
 [package]
-name = "complete_graph"
-version = "0.1.0"
 edition = "2024"
+name = "complete_graph"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -25,6 +25,7 @@ graphql_soup = { path = "../graphql_soup" }
 model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", features = ["axum"] }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

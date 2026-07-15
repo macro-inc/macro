@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use async_graphql::dataloader::{DataLoader, Loader};
 use email::domain::models::ParsedMessage;
 use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
 
 pub(crate) const MAX_EMAIL_CONTENT_KEYS: usize = 20;
 
@@ -18,10 +19,10 @@ pub enum EmailContentLoad {
 }
 
 /// A request for the newest non-draft content message belonging to an email thread.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct EmailContentKey {
     /// Email thread ID.
-    pub thread_id: String,
+    pub thread_id: Uuid,
 }
 
 /// Reader used by the Soup email-content GraphQL edge.

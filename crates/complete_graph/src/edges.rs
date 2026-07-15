@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{borrow::Cow, marker::PhantomData};
 
 use async_graphql::{Context, Object};
 use graphql_email::{
@@ -9,8 +9,9 @@ use graphql_notification::{
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
+use uuid::Uuid;
 
-/// Zero-sized marker tying an edge to its configured reader types.
+/// The types of the edge readers for soup
 type EdgeReaders<NR, PR, ER> = PhantomData<fn() -> (NR, PR, ER)>;
 
 /// Notification, property, and email-content fields attached to Soup entities.
@@ -48,9 +49,9 @@ where
         }
     }
 
-    fn email_thread_edges(&self) -> Self::EmailThreadEdges {
+    fn email_thread_edges(thread_id: Uuid) -> Self::EmailThreadEdges {
         SoupEmailThreadEdges {
-            thread_id: self.entity.entity_id.to_string(),
+            thread_id,
             _reader: PhantomData,
         }
     }
@@ -80,9 +81,9 @@ where
 
 /// Email-content fields attached only to Soup email-thread entities.
 pub struct SoupEmailThreadEdges<ER> {
-    /// Identifier of the email thread whose content is being resolved.
-    thread_id: String,
-    /// Associates the edge with its configured email-content reader.
+    /// The uuid of the email thread
+    thread_id: Uuid,
+    /// marker for the reader type
     _reader: PhantomData<fn() -> ER>,
 }
 
@@ -109,7 +110,7 @@ where
         load_latest_email_message::<ER>(
             ctx,
             EmailContentKey {
-                thread_id: self.thread_id.clone(),
+                thread_id: self.thread_id,
             },
         )
         .await

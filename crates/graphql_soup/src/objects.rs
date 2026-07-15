@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use async_graphql::{ID, Json, Object, ObjectType, Union};
 use graphql_common::GraphqlSoupEntityType;
 use models_pagination::PaginatedOpaqueCursor;
@@ -17,20 +19,22 @@ use models_soup::{
 };
 use serde_json::Value;
 use soup::domain::models::EnrichedSoupItem;
+use uuid::Uuid;
 
 /// Extension fields attached to every top-level Soup entity.
 ///
 /// The concrete edge object is supplied by the schema composition crate and
 /// flattened into each Soup entity's GraphQL fields.
 pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
+    /// Construct the common/global edge object for a Soup entity.
+    /// This is for edges that apply to all soup entities, e.g. notifications
+    fn from_entity(entity: model_entity::Entity<'static>) -> Self;
+
     /// Additional fields attached only to email-thread entities.
     type EmailThreadEdges: ObjectType + Clone + Send + Sync + 'static;
 
-    /// Construct the edge object for a Soup entity.
-    fn from_entity(entity: model_entity::Entity<'static>) -> Self;
-
     /// Construct the email-thread-specific edge object.
-    fn email_thread_edges(&self) -> Self::EmailThreadEdges;
+    fn email_thread_edges(email_thread_id: Uuid) -> Self::EmailThreadEdges;
 }
 
 /// Page returned by `Query.soup`.
@@ -845,7 +849,7 @@ where
     /// the email thread edge
     #[graphql(flatten)]
     async fn email_thread_edges(&self) -> E::EmailThreadEdges {
-        self.1.email_thread_edges()
+        E::email_thread_edges(self.0.thread.id)
     }
 }
 
