@@ -30,14 +30,20 @@ fn args_with_addresses() -> UpsertEmailArgs {
 fn address_search_fields_extracts_domains_and_local_parts() {
     let (domains, local_parts) =
         address_search_fields(["riley@lawfirm.example", "dana@corp.example"]);
-    assert_eq!(domains, vec!["corp.example", "lawfirm.example"]);
+    assert_eq!(
+        domains,
+        vec!["corp", "corp.example", "lawfirm", "lawfirm.example"]
+    );
     assert_eq!(local_parts, vec!["dana", "riley"]);
 }
 
 #[test]
 fn address_search_fields_expands_subdomain_suffixes() {
     let (domains, _) = address_search_fields(["x@mail.lawfirm.example"]);
-    assert_eq!(domains, vec!["lawfirm.example", "mail.lawfirm.example"]);
+    assert_eq!(
+        domains,
+        vec!["lawfirm", "lawfirm.example", "mail", "mail.lawfirm.example"]
+    );
 }
 
 #[test]
@@ -53,7 +59,7 @@ fn address_search_fields_splits_local_part_segments() {
 #[test]
 fn address_search_fields_lowercases() {
     let (domains, local_parts) = address_search_fields(["Riley@LawFirm.Example"]);
-    assert_eq!(domains, vec!["lawfirm.example"]);
+    assert_eq!(domains, vec!["lawfirm", "lawfirm.example"]);
     assert_eq!(local_parts, vec!["riley"]);
 }
 
@@ -77,10 +83,15 @@ fn to_index_document_injects_derived_fields() -> anyhow::Result<()> {
     assert_eq!(
         doc["domains"],
         serde_json::json!([
+            "corp",
             "corp.example",
+            "lawfirm",
             "lawfirm.example",
+            "mail",
             "mail.lawfirm.example",
+            "mailbox",
             "mailbox.example",
+            "partner",
             "partner.example"
         ])
     );

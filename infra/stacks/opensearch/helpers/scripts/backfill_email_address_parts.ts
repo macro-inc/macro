@@ -5,8 +5,9 @@ import { EMAIL_INDEX, IS_DRY_RUN } from '../constants';
 import { checkIndexExists } from '../utils/check_index_exists';
 
 // Mirrors opensearch_client upsert/email.rs address_search_fields: lowercased
-// domains with their dot-suffixes (at least two labels) and local parts with
-// their dot/plus segments, deduped and sorted.
+// domains with their dot-suffixes (at least two labels) plus each label
+// except the TLD, and local parts with their dot/plus segments, deduped and
+// sorted.
 const PAINLESS_SOURCE = `
 List addrs = new ArrayList();
 if (ctx._source.sender != null) { addrs.add(ctx._source.sender); }
@@ -44,6 +45,7 @@ for (int ai = 0; ai < addrs.size(); ai++) {
         sb.append(labels[lj]);
       }
       domains.add(sb.toString());
+      domains.add(labels[start]);
     }
   }
 }

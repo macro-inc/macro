@@ -66,9 +66,10 @@ pub struct UpsertEmailArgs {
 }
 
 /// Derived search tokens for an email's address fields. Domains carry their
-/// dot-suffixes with at least two labels (`x@mail.foo.com` yields
-/// `mail.foo.com` and `foo.com`), local parts carry their dot/plus segments
-/// (`jane.doe` yields `jane` and `doe` too). Everything is
+/// dot-suffixes with at least two labels plus each label except the TLD
+/// (`x@mail.foo.com` yields `mail.foo.com`, `foo.com`, `mail`, `foo`), so a
+/// bare company name matches as an exact token. Local parts carry their
+/// dot/plus segments (`jane.doe` yields `jane` and `doe` too). Everything is
 /// lowercased; addresses without a non-empty local part and domain are
 /// skipped.
 fn address_search_fields<'a>(
@@ -94,6 +95,9 @@ fn address_search_fields<'a>(
         } else {
             for start in 0..labels.len() - 1 {
                 domains.insert(labels[start..].join("."));
+            }
+            for label in &labels[..labels.len() - 1] {
+                domains.insert(label.to_string());
             }
         }
     }

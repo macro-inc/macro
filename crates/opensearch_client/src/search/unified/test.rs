@@ -674,14 +674,14 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         {
                           "simple_query_string": {
                             "default_operator": "AND",
-                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "local_parts"],
+                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "local_parts", "domains"],
                             "query": "(test | test@*)"
                           }
                         },
                         {
                           "simple_query_string": {
                             "default_operator": "AND",
-                            "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names", "domains"],
+                            "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
                             "query": "(test)"
                           }
                         }
