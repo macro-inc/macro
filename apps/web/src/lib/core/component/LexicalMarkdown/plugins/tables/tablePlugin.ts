@@ -9,6 +9,7 @@ import { mergeRegister } from '@lexical/utils';
 import type { LexicalEditor } from 'lexical';
 import { registerTableListTab } from './tableListTab';
 import { registerTableSelectAll } from './tableSelectAll';
+import { registerTableTabInsertRow } from './tableTabInsertRow';
 
 interface TablePluginProps {
   // When `false` (default `true`), merged cell support (colspan and rowspan) will be disabled and all
@@ -34,6 +35,12 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
 
     // Let list items claim Tab for indentation before cell navigation
     (props.hasTabHandler ?? true) ? registerTableListTab(editor) : () => {},
+
+    // Tab in the bottom-right cell grows the table with a new row (registered
+    // after tableListTab so list indentation still wins when it applies)
+    (props.hasTabHandler ?? true)
+      ? registerTableTabInsertRow(editor)
+      : () => {},
 
     // Ctrl/Cmd+A inside a table selects the table before the document
     registerTableSelectAll(editor),

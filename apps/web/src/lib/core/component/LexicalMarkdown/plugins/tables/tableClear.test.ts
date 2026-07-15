@@ -1,25 +1,8 @@
-import { registerRichText } from '@lexical/rich-text';
+import { $createTableSelection } from '@lexical/table';
 import {
-  $createTableCellNode,
-  $createTableNode,
-  $createTableRowNode,
-  $createTableSelection,
-  $isTableCellNode,
-  $isTableNode,
-  $isTableRowNode,
-  TableCellHeaderStates,
-  type TableCellNode,
-  type TableNode,
-} from '@lexical/table';
-import { SupportedNodeTypes } from '@macro-inc/lexical-core/node-list';
-import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
   $isParagraphNode,
   $setSelection,
   CUT_COMMAND,
-  createEditor,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   type LexicalCommand,
@@ -33,7 +16,14 @@ vi.mock('../../utils', () => ({
   setEditorStateFromMarkdown: vi.fn(),
 }));
 
-import { tablePlugin } from './tablePlugin';
+import {
+  $getCell,
+  $getTable,
+  buildTable,
+  createTableTestEditor,
+  readCellTexts,
+  textGrid,
+} from './tableTestUtils';
 
 // jsdom implements neither ClipboardEvent nor execCommand; the cut path only
 // needs `instanceof ClipboardEvent` checks to fail so it takes the null branch.
@@ -49,76 +39,7 @@ if (typeof document.execCommand !== 'function') {
 }
 
 function createTableEditor(): LexicalEditor {
-  const editor = createEditor({
-    namespace: 'table-clear-test',
-    nodes: SupportedNodeTypes,
-    onError: (error) => {
-      throw error;
-    },
-  });
-  tablePlugin({
-    hasCellMerge: true,
-    hasCellBackgroundColor: true,
-    hasTabHandler: true,
-  })(editor);
-  registerRichText(editor);
-  const rootElement = document.createElement('div');
-  rootElement.contentEditable = 'true';
-  document.body.appendChild(rootElement);
-  editor.setRootElement(rootElement);
-  return editor;
-}
-
-function $createCell(text: string): TableCellNode {
-  const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
-  const paragraph = $createParagraphNode();
-  paragraph.append($createTextNode(text));
-  cell.append(paragraph);
-  return cell;
-}
-
-async function buildTable(editor: LexicalEditor, grid: string[][]) {
-  await new Promise<void>((resolve) => {
-    editor.update(
-      () => {
-        const table = $createTableNode();
-        for (const rowTexts of grid) {
-          const row = $createTableRowNode();
-          row.append(...rowTexts.map($createCell));
-          table.append(row);
-        }
-        $getRoot().clear().append(table);
-      },
-      { onUpdate: () => resolve() }
-    );
-  });
-}
-
-function $getTable(): TableNode {
-  const table = $getRoot()
-    .getChildren()
-    .find((node) => $isTableNode(node));
-  if (!table || !$isTableNode(table)) throw new Error('no table');
-  return table;
-}
-
-function $getCell(row: number, column: number): TableCellNode {
-  const rowNode = $getTable().getChildren().filter($isTableRowNode)[row];
-  return rowNode.getChildren().filter($isTableCellNode)[column];
-}
-
-function readCellTexts(editor: LexicalEditor): string[][] {
-  return editor.getEditorState().read(() =>
-    $getTable()
-      .getChildren()
-      .filter($isTableRowNode)
-      .map((row) =>
-        row
-          .getChildren()
-          .filter($isTableCellNode)
-          .map((cell) => cell.getTextContent())
-      )
-  );
+  return createTableTestEditor();
 }
 
 /** Selects the rectangle of cells and dispatches `command`. */
@@ -156,7 +77,7 @@ const GRID = [
 describe('table cell clearing', () => {
   it('clears the selected cells on cut', async () => {
     const editor = createTableEditor();
-    await buildTable(editor, GRID);
+    await buildTable(editor, textGrid(GRID));
 
     await selectAndDispatch(
       editor,
@@ -175,7 +96,7 @@ describe('table cell clearing', () => {
 
   it('clears the selected cells on Delete', async () => {
     const editor = createTableEditor();
-    await buildTable(editor, GRID);
+    await buildTable(editor, textGrid(GRID));
 
     await selectAndDispatch(
       editor,
@@ -194,7 +115,7 @@ describe('table cell clearing', () => {
 
   it('clears the selected cells on Backspace', async () => {
     const editor = createTableEditor();
-    await buildTable(editor, GRID);
+    await buildTable(editor, textGrid(GRID));
 
     await selectAndDispatch(
       editor,
@@ -213,7 +134,7 @@ describe('table cell clearing', () => {
 
   it('leaves each cleared cell with a childless paragraph (no empty TextNode)', async () => {
     const editor = createTableEditor();
-    await buildTable(editor, GRID);
+    await buildTable(editor, textGrid(GRID));
 
     await selectAndDispatch(
       editor,

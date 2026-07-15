@@ -1,29 +1,17 @@
-import { registerRichText } from '@lexical/rich-text';
 import {
-  $createTableCellNode,
-  $createTableNode,
-  $createTableRowNode,
   $getTableCellNodeFromLexicalNode,
-  $isTableCellNode,
-  $isTableNode,
-  $isTableRowNode,
   $isTableSelection,
-  TableCellHeaderStates,
   type TableCellNode,
 } from '@lexical/table';
-import { SupportedNodeTypes } from '@macro-inc/lexical-core/node-list';
-import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-  $getSelection,
-  createEditor,
-  type LexicalEditor,
-} from 'lexical';
+import { $getSelection, type LexicalEditor } from 'lexical';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { tablePlugin } from './tablePlugin';
-import { tableTouchSelectionPlugin } from './tableTouchSelection';
+import {
+  $getCell,
+  buildTable,
+  coordGrid,
+  createTableTestEditor,
+} from './tableTestUtils';
 
 // jsdom implements neither PointerEvent nor elementsFromPoint. The plugin
 // only reads pointerType/pointerId/isPrimary/coordinates from events, and
@@ -55,61 +43,11 @@ let elementsUnderPointer: Element[] = [];
 document.elementsFromPoint = () => elementsUnderPointer;
 
 function createTestEditor(): LexicalEditor {
-  const editor = createEditor({
-    namespace: 'table-touch-selection-test',
-    nodes: SupportedNodeTypes,
-    onError: (error) => {
-      throw error;
-    },
-  });
-  tablePlugin({
-    hasCellMerge: true,
-    hasCellBackgroundColor: true,
-    hasTabHandler: true,
-  })(editor);
-  tableTouchSelectionPlugin()(editor);
-  registerRichText(editor);
-  const rootElement = document.createElement('div');
-  rootElement.contentEditable = 'true';
-  document.body.appendChild(rootElement);
-  editor.setRootElement(rootElement);
-  return editor;
-}
-
-async function buildTable(
-  editor: LexicalEditor,
-  rows: number,
-  columns: number
-) {
-  await new Promise<void>((resolve) => {
-    editor.update(
-      () => {
-        const table = $createTableNode();
-        for (let r = 0; r < rows; r++) {
-          const row = $createTableRowNode();
-          for (let c = 0; c < columns; c++) {
-            const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
-            const paragraph = $createParagraphNode();
-            paragraph.append($createTextNode(`${r},${c}`));
-            cell.append(paragraph);
-            row.append(cell);
-          }
-          table.append(row);
-        }
-        $getRoot().clear().append(table);
-      },
-      { onUpdate: () => resolve() }
-    );
-  });
+  return createTableTestEditor({ touchSelection: true });
 }
 
 function getCellNode(editor: LexicalEditor, row: number, column: number) {
-  return editor.getEditorState().read(() => {
-    const table = $getRoot().getFirstChild();
-    if (!$isTableNode(table)) throw new Error('no table');
-    const rowNode = table.getChildren().filter($isTableRowNode)[row];
-    return rowNode.getChildren().filter($isTableCellNode)[column];
-  });
+  return editor.getEditorState().read(() => $getCell(row, column));
 }
 
 function getCellElement(
@@ -168,7 +106,7 @@ describe('table touch selection', () => {
 
   it('selects the pressed cell after a long press', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 3, 3);
+    await buildTable(editor, coordGrid(3, 3));
     const cellElem = getCellElement(editor, 1, 1);
 
     cellElem.dispatchEvent(touchEvent('pointerdown'));
@@ -184,7 +122,7 @@ describe('table touch selection', () => {
 
   it('extends the selection while swiping across cells', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 3, 3);
+    await buildTable(editor, coordGrid(3, 3));
 
     getCellElement(editor, 0, 0).dispatchEvent(touchEvent('pointerdown'));
     vi.advanceTimersByTime(500);
@@ -203,7 +141,7 @@ describe('table touch selection', () => {
 
   it('keeps the selection after the finger lifts', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 2, 2);
+    await buildTable(editor, coordGrid(2, 2));
 
     getCellElement(editor, 0, 0).dispatchEvent(touchEvent('pointerdown'));
     vi.advanceTimersByTime(500);
@@ -224,7 +162,7 @@ describe('table touch selection', () => {
 
   it('does nothing when the finger drifts before the long press fires', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 2, 2);
+    await buildTable(editor, coordGrid(2, 2));
 
     getCellElement(editor, 0, 0).dispatchEvent(
       touchEvent('pointerdown', { clientX: 0, clientY: 0 })
@@ -240,7 +178,7 @@ describe('table touch selection', () => {
 
   it('does nothing on a quick tap', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 2, 2);
+    await buildTable(editor, coordGrid(2, 2));
 
     getCellElement(editor, 0, 0).dispatchEvent(touchEvent('pointerdown'));
     document.dispatchEvent(touchEvent('pointerup'));
@@ -252,7 +190,7 @@ describe('table touch selection', () => {
 
   it('ignores mouse pointers', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 2, 2);
+    await buildTable(editor, coordGrid(2, 2));
 
     getCellElement(editor, 0, 0).dispatchEvent(
       new PolyfillPointerEvent('pointerdown', {
@@ -270,7 +208,7 @@ describe('table touch selection', () => {
 
   it('blocks scrolling only while selecting', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 2, 2);
+    await buildTable(editor, coordGrid(2, 2));
     const cellElem = getCellElement(editor, 0, 0);
 
     cellElem.dispatchEvent(touchEvent('pointerdown'));
@@ -295,7 +233,7 @@ describe('table touch selection', () => {
 
   it('suppresses the long-press context menu during the gesture', async () => {
     const editor = createTestEditor();
-    await buildTable(editor, 2, 2);
+    await buildTable(editor, coordGrid(2, 2));
     const cellElem = getCellElement(editor, 0, 0);
 
     cellElem.dispatchEvent(touchEvent('pointerdown'));
