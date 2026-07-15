@@ -129,9 +129,13 @@ export function createNotificationSource(
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
+  // Gate on data presence, not isSuccess: a failed or cancelled background
+  // refetch flips status to error while the cached pages remain, and blanking
+  // every unread surface over a transient refetch is worse than showing the
+  // cached state.
   const notifications = createMemo(() => {
-    if (!notificationsQuery.isSuccess) return [];
     const raw = notificationsQuery.data;
+    if (!raw) return [];
     const overrides = doneOverrides();
     if (overrides.size === 0) return raw;
     return raw.map((n) => {
@@ -147,8 +151,8 @@ export function createNotificationSource(
   // pre-mutation value and a stale fetch could flip it back before the
   // API lands.
   createEffect(() => {
-    if (!notificationsQuery.isSuccess) return;
     const raw = notificationsQuery.data;
+    if (!raw) return;
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
     const presentIds = new Set(raw.map((n) => n.id));
@@ -173,7 +177,7 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
-    if (!notificationsQuery.isSuccess) return;
+    if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
     }
