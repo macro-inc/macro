@@ -49,7 +49,7 @@ local-e2e-smoke:
 # (tooling/xtask/crates/xtask_local/src/local/identity.rs).
 [positional-arguments]
 scenario *ARGS:
-  LOCAL_SEED="true" \
+  @LOCAL_SEED="true" \
   DATABASE_URL="${DATABASE_URL:-postgres://user:password@localhost:5432/macrodb}" \
   LOCAL_AWS_URL="${LOCAL_AWS_URL:-http://localhost:4566}" \
   DOCUMENT_STORAGE_BUCKET="${DOCUMENT_STORAGE_BUCKET:-doc-storage}" \
@@ -67,4 +67,4 @@ scenario *ARGS:
   LEXICAL_SERVICE_URL="${LEXICAL_SERVICE_URL:-http://localhost:8096}" \
   INTERNAL_API_SECRET_KEY="${INTERNAL_API_SECRET_KEY:-local}" \
   FRONTEND_PORT="${FRONTEND_PORT:-3000}" \
-  cargo r -- scenario "$@"
+  cargo r -q -- scenario "$@"

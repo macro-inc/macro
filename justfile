@@ -55,7 +55,7 @@ local-e2e-seed:
 # `just seed-scenario apply --file seed/scenarios/team-perms.json`.
 [positional-arguments]
 seed-scenario *ARGS:
-  just tooling/seed_cli/scenario "$@"
+  @just tooling/seed_cli/scenario "$@"
 
 # Start only the services needed by the local E2E suites. Avoid unrelated
 # local services with extra env/dependency requirements blocking E2E.
