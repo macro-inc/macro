@@ -425,6 +425,78 @@
           }
         }
       },
+      "ChannelMessageSearchResponseItem": {
+        "type": "object",
+        "description": "A single channel-message content hit in the unified search response.\nOne item per matching message, timestamped by the message itself, so the\nunified sort interleaves channel messages with other entity types by\ntheir own recency.",
+        "required": [
+          "id",
+          "channel_type",
+          "channel_id",
+          "message_id",
+          "sender_id",
+          "created_at",
+          "updated_at",
+          "highlight"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the channel the message belongs to"
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The type of channel"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the channel message was created"
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the channel message was deleted, if it has been"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the channel message"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized id field shared by all item types; the channel id."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel message id"
+          },
+          "owner_id": {
+            "type": ["string", "null"],
+            "description": "we don't store this for channels atm but keeping it here for consistency"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "The sender id"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel message thread id"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the channel message was last updated"
+          }
+        }
+      },
       "ChannelMetadata": {
         "type": "object",
         "description": "Metadata for a channel fetched from the database",
@@ -3858,7 +3930,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/ChannelSearchResponseItemWithMetadata"
+                "$ref": "#/components/schemas/ChannelMessageSearchResponseItem"
               },
               {
                 "type": "object",
@@ -3866,7 +3938,7 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["channel"]
+                    "enum": ["channelMessage"]
                   }
                 }
               }

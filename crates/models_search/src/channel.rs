@@ -83,6 +83,39 @@ pub struct ChannelSearchResponseItemWithMetadata {
     pub extra: ChannelSearchResponseItem,
 }
 
+/// A single channel-message content hit in the unified search response.
+/// One item per matching message, timestamped by the message itself, so the
+/// unified sort interleaves channel messages with other entity types by
+/// their own recency.
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct ChannelMessageSearchResponseItem {
+    /// Standardized id field shared by all item types; the channel id.
+    pub id: uuid::Uuid,
+    /// we don't store this for channels atm but keeping it here for consistency
+    pub owner_id: Option<String>,
+    /// The type of channel
+    pub channel_type: String,
+    /// The id of the channel the message belongs to
+    pub channel_id: uuid::Uuid,
+    /// The channel message id
+    pub message_id: uuid::Uuid,
+    /// The channel message thread id
+    pub thread_id: Option<uuid::Uuid>,
+    /// The sender id
+    pub sender_id: String,
+    /// When the channel message was created
+    pub created_at: DateTime<Utc>,
+    /// When the channel message was last updated
+    pub updated_at: DateTime<Utc>,
+    /// When the channel message was deleted, if it has been
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// The highlights for the channel message
+    pub highlight: SearchHighlight,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
+}
+
 /// Metadata associated with Channel Search
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelSearchMetadata {
