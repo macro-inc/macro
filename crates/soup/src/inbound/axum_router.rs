@@ -1190,7 +1190,7 @@ impl ApiEntityFilterAst {
                 // Callers may hold other clones of this Arc (the soup
                 // service clones the request filters before expansion),
                 // so fall back to cloning the tree when it's shared.
-                let existing_owned = Arc::try_unwrap(existing).unwrap_or_else(|arc| (*arc).clone());
+                let existing_owned = Arc::unwrap_or_clone(existing);
                 (
                     Some(Arc::new(Expr::and(existing_owned, crm_tree))),
                     Some(scope),
