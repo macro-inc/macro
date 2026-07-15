@@ -1,8 +1,8 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, GroupedSoupItem, SimpleSortQuery,
-            SimpleSortRequest, SoupPropertiesField, grouping::ItemGroupingInfo,
+            AdvancedSortParams, GroupedSortRequest, ItemGroupingInfo, SimpleSortQuery,
+            SimpleSortRequest, SoupPropertiesField,
         },
         ports::SoupRepo,
     },
@@ -35,6 +35,7 @@ impl PgSoupRepo {
 
 impl SoupRepo for PgSoupRepo {
     type Err = sqlx::Error;
+    type GroupedItems = std::vec::IntoIter<ItemGroupingInfo>;
 
     fn expanded_generic_cursor_soup<'a>(
         &self,
@@ -150,7 +151,7 @@ impl SoupRepo for PgSoupRepo {
     async fn expanded_grouped_cursor_soup<'a>(
         &self,
         req: GroupedSortRequest<'a>,
-    ) -> Result<impl Iterator<Item = ItemGroupingInfo>, Self::Err> {
+    ) -> Result<Self::GroupedItems, Self::Err> {
         expanded::dynamic::expanded_dynamic_cursor_soup_grouped(
             &self.pool.0,
             GroupedDynamicCursorArgs {

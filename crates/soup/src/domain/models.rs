@@ -1,4 +1,9 @@
-pub(crate) mod grouping;
+pub mod grouping;
+
+pub use grouping::{
+    BinData, GroupMeta, GroupedResponse, ItemGroupingInfo, NestedSoupGroups,
+    build_grouped_response, entity_type_labels, resolve_group_label_and_order,
+};
 
 use call::domain::models::GetCallRecordsRequest;
 use channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest};

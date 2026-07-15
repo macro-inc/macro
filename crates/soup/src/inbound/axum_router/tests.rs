@@ -27,9 +27,9 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem,
-            IntoSoupReqAst, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
-            SoupType,
+            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
+            ItemGroupingInfo, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
+            SoupRequest, SoupType,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -162,8 +162,11 @@ impl SoupService for MockSoup {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
-        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<String, SoupPropertiesField>> + Send, SoupErr>
+    {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<String, SoupPropertiesField>>, _>(
+            SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")),
+        )
     }
 
     async fn caller_tag_sets<'a>(

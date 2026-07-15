@@ -25,6 +25,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model_file_type = { path = "../model_file_type" }
 model_user = { path = "../model_user", features = ["axum"] }
+models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
 serde = { workspace = true }

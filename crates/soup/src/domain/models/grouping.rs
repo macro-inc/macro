@@ -1,5 +1,8 @@
 //! Grouping utilities for soup queries.
 
+#[cfg(test)]
+mod test;
+
 use super::{EnrichedSoupItem, SoupPropertiesField};
 use item_filters::ast::EntityFilterAst;
 use models_grouping::{GroupByField, date_bucket_label, date_bucket_order};
@@ -61,7 +64,7 @@ pub struct GroupedResponse {
 
 /// Build a grouped response from grouped soup items.
 pub fn build_grouped_response(
-    items: Vec<super::GroupedSoupItem<SoupPropertiesField>>,
+    items: impl IntoIterator<Item = ItemGroupingInfo<String, SoupPropertiesField>>,
     group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
@@ -77,22 +80,20 @@ pub fn build_grouped_response(
     }
 
     let mut group_stats: HashMap<String, GroupData> = HashMap::new();
-    let mut items_pool: HashMap<Uuid, EnrichedSoupItem> = HashMap::with_capacity(items.len());
+    let items = items.into_iter();
+    let mut items_pool: HashMap<Uuid, EnrichedSoupItem> =
+        HashMap::with_capacity(items.size_hint().0);
     let mut get_cursor_val = SoupItem::sort_on(sort_method);
 
-    for grouped_item in items.into_iter() {
-        let key = grouped_item.group_key.clone();
+    for grouped_item in items {
+        let key = grouped_item.key.clone();
         let item_id = grouped_item.item.id();
         let cursor_val = get_cursor_val(&grouped_item.item);
 
         let entry = group_stats.entry(key.clone()).or_insert_with(|| {
-            let (label, display_order) =
-                match (&grouped_item.group_label, grouped_item.group_display_order) {
-                    (Some(l), d) => (l.clone(), d),
-                    (None, _) => resolve_group_label_and_order(&key, group_by),
-                };
+            let (label, display_order) = resolve_group_label_and_order(&key, group_by);
             GroupData {
-                total_count: grouped_item.group_total_count,
+                total_count: grouped_item.total_group_count.min(u32::MAX as usize) as u32,
                 item_ids: Vec::new(),
                 last_item_id: None,
                 last_cursor_val: None,
@@ -110,7 +111,7 @@ pub fn build_grouped_response(
             .entry(item_id)
             .or_insert_with(|| EnrichedSoupItem {
                 item: grouped_item.item,
-                frecency_score: grouped_item.frecency_score,
+                frecency_score: None,
             });
     }
 
@@ -197,29 +198,56 @@ pub mod entity_type_labels {
     }
 }
 
-struct BinData<T = ()> {
+/// Items and metadata belonging to one nested Soup group.
+pub struct BinData<T = ()> {
     data: BTreeMap<usize, SoupItem<T>>,
     group_total_size: usize,
 }
 
-struct NestedSoupGroups<Bin, T = ()>(BTreeMap<Bin, BinData<T>>);
+impl<T> BinData<T> {
+    /// The total number of items in this group across all pages.
+    pub fn group_total_size(&self) -> usize {
+        self.group_total_size
+    }
 
-pub(crate) struct ItemGroupingInfo<Bin = String> {
-    pub key: Bin,
-    pub total_group_count: usize,
-    pub index_in_group: usize,
-    pub item: SoupItem,
+    /// Consume the bin and return its items in their group order.
+    pub fn into_items(self) -> impl Iterator<Item = SoupItem<T>> {
+        self.data.into_values()
+    }
 }
 
-impl<Bin> FromIterator<ItemGroupingInfo<Bin>> for NestedSoupGroups<Bin>
+/// Soup items nested into bins keyed by their grouping value.
+pub struct NestedSoupGroups<Bin, T = ()>(BTreeMap<Bin, BinData<T>>);
+
+impl<Bin, T> NestedSoupGroups<Bin, T> {
+    /// Consume the nested groups and iterate over their bins.
+    pub fn into_bins(self) -> impl Iterator<Item = (Bin, BinData<T>)> {
+        self.0.into_iter()
+    }
+}
+
+/// A Soup item paired with the metadata needed to place it into a group.
+#[derive(Debug)]
+pub struct ItemGroupingInfo<Bin = String, T = ()> {
+    /// The key of the bin containing the item.
+    pub key: Bin,
+    /// The total number of items in the bin across all pages.
+    pub total_group_count: usize,
+    /// The item's position within its bin.
+    pub index_in_group: usize,
+    /// The Soup item.
+    pub item: SoupItem<T>,
+}
+
+impl<Bin, T> FromIterator<ItemGroupingInfo<Bin, T>> for NestedSoupGroups<Bin, T>
 where
-    Bin: std::hash::Hash + Ord,
+    Bin: Ord,
 {
-    fn from_iter<T: IntoIterator<Item = ItemGroupingInfo<Bin>>>(iter: T) -> Self {
+    fn from_iter<I: IntoIterator<Item = ItemGroupingInfo<Bin, T>>>(iter: I) -> Self {
         let mut out = BTreeMap::new();
-        for item in iter.into_iter() {
+        for item in iter {
             let entry = out.entry(item.key).or_insert_with(|| BinData {
-                data: Default::default(),
+                data: BTreeMap::new(),
                 group_total_size: item.total_group_count,
             });
             entry.data.insert(item.index_in_group, item.item);

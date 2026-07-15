@@ -16,7 +16,7 @@ use models_soup::{
     project::SoupProject,
 };
 use serde_json::Value;
-use soup::domain::models::EnrichedSoupItem;
+use soup::domain::models::{EnrichedSoupItem, NestedSoupGroups, SoupPropertiesField};
 use uuid::Uuid;
 
 /// Extension fields attached to every top-level Soup entity.
@@ -86,6 +86,74 @@ impl<E: SoupEntityEdges> From<PaginatedOpaqueCursor<EnrichedSoupItem>> for SoupP
             next_cursor: page.next_cursor,
             has_more,
         }
+    }
+}
+
+/// Grouped Soup items nested into bins.
+pub struct GroupedSoup<E: SoupEntityEdges> {
+    /// The grouped bins.
+    bins: Vec<GraphqlSoupBin<E>>,
+}
+
+/// GraphQL representation of grouped Soup items.
+#[Object(name = "GroupedSoup")]
+impl<E> GroupedSoup<E>
+where
+    E: SoupEntityEdges,
+{
+    /// Bins containing the grouped Soup items.
+    async fn bins(&self) -> &[GraphqlSoupBin<E>] {
+        &self.bins
+    }
+}
+
+impl<E: SoupEntityEdges> From<NestedSoupGroups<String, SoupPropertiesField>> for GroupedSoup<E> {
+    fn from(groups: NestedSoupGroups<String, SoupPropertiesField>) -> Self {
+        Self {
+            bins: groups
+                .into_bins()
+                .map(|(key, bin)| GraphqlSoupBin {
+                    key,
+                    total_count: bin.group_total_size(),
+                    items: bin
+                        .into_items()
+                        .map(|item| GraphqlSoupItem::from(item.map_extra(|_| ())))
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One bin in a grouped Soup response.
+pub struct GraphqlSoupBin<E: SoupEntityEdges> {
+    /// The grouping key.
+    key: String,
+    /// Total items in the group across all pages.
+    total_count: usize,
+    /// Items returned for this group.
+    items: Vec<GraphqlSoupItem<E>>,
+}
+
+/// GraphQL representation of a Soup group bin.
+#[Object(name = "GraphqlSoupBin")]
+impl<E> GraphqlSoupBin<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The grouping key.
+    async fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Total number of items in this group across all pages.
+    async fn total_count(&self) -> usize {
+        self.total_count
+    }
+
+    /// Items in this bin, ordered by their index within the group.
+    async fn items(&self) -> &[GraphqlSoupItem<E>] {
+        &self.items
     }
 }
 

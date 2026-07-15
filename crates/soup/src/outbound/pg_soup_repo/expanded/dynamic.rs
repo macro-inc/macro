@@ -27,7 +27,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::grouping::ItemGroupingInfo;
+use crate::domain::models::ItemGroupingInfo;
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
@@ -1868,7 +1868,7 @@ fn build_grouped_query<'a>(
 pub async fn expanded_dynamic_cursor_soup_grouped(
     db: &PgPool,
     args: GroupedDynamicCursorArgs<'_>,
-) -> Result<impl Iterator<Item = ItemGroupingInfo>, sqlx::Error> {
+) -> Result<std::vec::IntoIter<ItemGroupingInfo>, sqlx::Error> {
     let GroupedDynamicCursorArgs {
         user_id,
         limit,
@@ -1914,15 +1914,19 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .fetch_all(db)
         .await?;
 
-    let items = rows.into_iter().filter_map(|row| {
-        let item = row.item.into_soup_item().ok()?;
-        Some(ItemGroupingInfo {
-            item,
-            key: row.group.group_key,
-            total_group_count: row.group.group_total_count as usize,
-            index_in_group: row.group.row_in_group as usize,
+    let items = rows
+        .into_iter()
+        .map(|row| {
+            Ok(ItemGroupingInfo {
+                item: row.item.into_soup_item()?,
+                key: row.group.group_key,
+                total_group_count: usize::try_from(row.group.group_total_count)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                index_in_group: usize::try_from(row.group.row_in_group)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+            })
         })
-    });
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
-    Ok(items)
+    Ok(items.into_iter())
 }
