@@ -472,6 +472,9 @@ export function SidebarActiveCallWidget(props: {
                 };
                 const dismissLabel = () =>
                   `Dismiss ${displayName(channel())} call`;
+                const openCall = () => {
+                  void openChannelCallTab(call.channelId);
+                };
 
                 return (
                   <div class="w-full">
@@ -493,7 +496,10 @@ export function SidebarActiveCallWidget(props: {
                             onMouseDown={(e) => {
                               if (e.button !== 0) return;
                               e.preventDefault();
-                              void openChannelCallTab(call.channelId);
+                            }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openCall();
                             }}
                           >
                             <ChannelCallBadge
@@ -517,7 +523,11 @@ export function SidebarActiveCallWidget(props: {
                             if (e.button !== 0) return;
                             e.preventDefault();
                             e.stopPropagation();
-                            void openChannelCallTab(call.channelId);
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openCall();
                           }}
                         >
                           <PhoneIcon class="size-3" />
