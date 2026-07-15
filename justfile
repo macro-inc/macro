@@ -54,6 +54,7 @@ local-e2e-seed:
 # Apply a seed scenario (teams/perms/entities) to the local stack, e.g.
 # `just seed-scenario apply --file seed/scenarios/team-perms.json`.
 # Add --force to drop and re-migrate the local database first (pristine world).
+# `just seed-scenario status` reports what's applied and re-prints login links.
 [positional-arguments]
 seed-scenario *ARGS:
   @just tooling/seed_cli/scenario "$@"

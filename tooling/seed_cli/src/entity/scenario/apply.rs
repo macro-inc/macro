@@ -179,10 +179,16 @@ pub async fn apply(
     seed_emails(ctx, spec).await?;
     seed_messages(ctx, spec).await?;
 
+    println!("\nScenario `{}` applied.", spec.scenario);
+    print_login_links(spec);
+    Ok(())
+}
+
+/// Print one login link per persona.
+pub(super) fn print_login_links(spec: &ScenarioSpec) {
     let frontend_port = crate::config::FrontendPort::new()
         .map(|port| port.to_string())
         .unwrap_or_else(|| "3000".to_string());
-    println!("\nScenario `{}` applied.", spec.scenario);
     for (key, user) in &spec.users {
         // Per-persona hostnames get separate cookie jars, so each of these
         // can hold its own live session in ordinary tabs of one browser.
@@ -198,7 +204,6 @@ pub async fn apply(
             println!("  {key}: log in as {}", user.email);
         }
     }
-    Ok(())
 }
 
 async fn seed_users(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result<()> {

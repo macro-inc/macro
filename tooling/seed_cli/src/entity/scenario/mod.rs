@@ -4,6 +4,7 @@ pub mod apply;
 pub mod matrix;
 pub mod reset;
 pub mod spec;
+pub mod status;
 
 use std::path::{Path, PathBuf};
 
@@ -218,6 +219,15 @@ pub struct ResetScenarioArgs {
     pub all: bool,
 }
 
+/// Arguments for reporting a scenario's applied state.
+#[derive(Debug, Args)]
+pub struct StatusScenarioArgs {
+    /// Path to a scenario JSON file. Omit to discover every applied
+    /// scenario by its id marker.
+    #[arg(long)]
+    pub file: Option<String>,
+}
+
 /// Arguments for printing/verifying a scenario's access matrix.
 #[derive(Debug, Args)]
 pub struct MatrixScenarioArgs {
@@ -241,6 +251,9 @@ pub enum ScenarioCommand {
     /// Print the scenario's expected access matrix and verify it against
     /// the live database.
     Matrix(MatrixScenarioArgs),
+    /// Report which of a scenario's rows are present and re-print the
+    /// persona login links (read-only).
+    Status(StatusScenarioArgs),
 }
 
 impl ScenarioArgs {
@@ -253,7 +266,7 @@ impl ScenarioArgs {
             ScenarioCommand::Apply(_) | ScenarioCommand::Reset(_) => {
                 validate_scenario_environment(env_vars.database_url.as_ref())
             }
-            ScenarioCommand::Matrix(_) => {
+            ScenarioCommand::Matrix(_) | ScenarioCommand::Status(_) => {
                 validate_scenario_database_url(env_vars.database_url.as_ref())
             }
         }
@@ -266,11 +279,13 @@ impl ScenarioArgs {
             ScenarioCommand::Apply(args) => apply_scenario(&ctx, &args).await,
             ScenarioCommand::Reset(args) => reset_scenario(&ctx, &args).await,
             ScenarioCommand::Matrix(args) => matrix_scenario(&ctx, &args).await,
+            ScenarioCommand::Status(args) => status_scenario(&ctx, &args).await,
         }
     }
 
     /// Run destructive pre-connection setup (`apply --force` drops and
     /// re-migrates the database) before the CLI opens its connection pool.
+    #[allow(clippy::disallowed_methods, reason = "seed-only dynamic SQL")]
     pub async fn pre_connect(&self, database_url: &str) -> anyhow::Result<()> {
         let ScenarioCommand::Apply(args) = &self.command else {
             return Ok(());
@@ -374,6 +389,17 @@ async fn matrix_scenario(ctx: &SeedCliContext, args: &MatrixScenarioArgs) -> any
     let mismatches = matrix::verify(ctx.db.pool(), &scenario).await?;
     anyhow::ensure!(mismatches == 0, "{mismatches} matrix cell(s) mismatched");
     Ok(())
+}
+
+#[tracing::instrument(skip(ctx), err)]
+async fn status_scenario(ctx: &SeedCliContext, args: &StatusScenarioArgs) -> anyhow::Result<()> {
+    match args.file.as_deref() {
+        Some(file) => {
+            let scenario = load_scenario(file)?;
+            status::report(ctx, &scenario).await
+        }
+        None => status::discover(ctx, &seed_path("seed").join("scenarios")).await,
+    }
 }
 
 #[allow(clippy::disallowed_methods, reason = "Only used when running locally")]

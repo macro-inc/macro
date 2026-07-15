@@ -43,6 +43,12 @@ impl SeedAuth {
         Ok(result)
     }
 
+    /// Whether a FusionAuth account exists for `email`. Read-only; also
+    /// returns false when FusionAuth is unreachable.
+    pub async fn user_exists(&self, email: &str) -> anyhow::Result<bool> {
+        Ok(self.inner.get_user_id_by_email(email).await.is_ok())
+    }
+
     /// Ensure a FusionAuth user exists and is registered to the application,
     /// so the account can log in through the real passwordless flow.
     /// Returns whether the user was created (false = already existed).

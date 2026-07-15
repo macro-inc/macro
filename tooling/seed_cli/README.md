@@ -22,6 +22,7 @@ assignee properties (and an optional share-with-team grant). See
 # From the repository root (postgres + localstack must be up):
 just seed-scenario apply --file seed/scenarios/team-perms.json
 just seed-scenario matrix --file seed/scenarios/team-perms.json
+just seed-scenario status --file seed/scenarios/team-perms.json  # or no --file
 just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
 ```
 
@@ -37,6 +38,13 @@ just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
 - `matrix` computes the expected access level for every (user, entity) pair
   from the config and verifies it against the live database using the real
   `entity_access` service; it exits non-zero on any mismatch.
+- `status` is read-only: with `--file` it reports which of the scenario's
+  rows are present (per kind, with missing keys), whether the FusionAuth
+  accounts and sync-service content exist, and re-prints the persona login
+  links. Without `--file` it discovers every applied scenario by its id
+  marker and reports on the ones matching a file in `seed/scenarios/`.
+  Scenarios with distinct names (and distinct user emails) coexist in one
+  database — ids are namespaced by a hash of the scenario name.
 - `reset` deletes exactly the rows carrying the scenario's id marker, plus
   (with `--file`) the scenario's user accounts by email. `reset --all` cannot
   know emails, so accounts created through the signup webhook survive it.
