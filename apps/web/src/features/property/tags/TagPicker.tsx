@@ -335,10 +335,10 @@ function TagPickerBody(props: {
     createLabel().length >= 2 && !exactTagMatchExists();
   const showClearAllRow = () =>
     selectedIds().size > 0 && !search().trim() && !createStep();
-  const itemIndexOffset = () => (showClearAllRow() ? 1 : 0);
-  const itemIndex = (item: TagOptionItem) =>
-    filteredItems().indexOf(item) + itemIndexOffset();
-  const createRowIndex = () => filteredItems().length + itemIndexOffset();
+  const itemIndex = (item: TagOptionItem) => filteredItems().indexOf(item);
+  const createRowIndex = () => filteredItems().length;
+  const clearAllRowIndex = () =>
+    filteredItems().length + (showCreateRow() ? 1 : 0);
   const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
     { scope: 'user', label: 'Personal' },
@@ -435,20 +435,22 @@ function TagPickerBody(props: {
 
   const dropdown = useDropdownSearch({
     itemCount: () =>
-      filteredItems().length + (showCreateRow() ? 1 : 0) + itemIndexOffset(),
+      filteredItems().length +
+      (showCreateRow() ? 1 : 0) +
+      (showClearAllRow() ? 1 : 0),
     onSelect: (index, event) => {
-      if (showClearAllRow() && index === 0) {
-        setSelectedIds(new Set<string>());
-        void saveAndClose();
-        return;
-      }
-
       if (showCreateRow() && index === createRowIndex()) {
         beginCreate();
         return;
       }
 
-      const item = filteredItems()[index - itemIndexOffset()];
+      if (showClearAllRow() && index === clearAllRowIndex()) {
+        setSelectedIds(new Set<string>());
+        void saveAndClose();
+        return;
+      }
+
+      const item = filteredItems()[index];
       if (!item) return;
 
       toggleSelected(item.option.id);
@@ -535,28 +537,6 @@ function TagPickerBody(props: {
                         </div>
                       }
                     >
-                      <Show when={showClearAllRow()}>
-                        <DropdownSelectableRow
-                          isSelected={dropdown.selectedIndex() === 0}
-                          onClick={() => {
-                            setSelectedIds(new Set<string>());
-                            void saveAndClose();
-                          }}
-                          onMouseEnter={() => {
-                            if (!dropdown.keyboardMode()) {
-                              dropdown.setSelectedIndex(0);
-                            }
-                          }}
-                        >
-                          <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
-                          <div class="min-w-0 flex-1 text-left">
-                            <p class="truncate text-ink-muted">
-                              Clear all tags
-                            </p>
-                          </div>
-                        </DropdownSelectableRow>
-                        <div class="my-1 border-t border-edge-muted" />
-                      </Show>
                       <For each={selectedAtOpenItems()}>
                         {(item) => (
                           <TagPickerRow
@@ -628,6 +608,32 @@ function TagPickerBody(props: {
                             }
                           }}
                         />
+                      </Show>
+                      <Show when={showClearAllRow()}>
+                        <div class="my-1 border-t border-edge-muted" />
+                        <div data-tag-index={clearAllRowIndex()}>
+                          <DropdownSelectableRow
+                            isSelected={
+                              dropdown.selectedIndex() === clearAllRowIndex()
+                            }
+                            onClick={() => {
+                              setSelectedIds(new Set<string>());
+                              void saveAndClose();
+                            }}
+                            onMouseEnter={() => {
+                              if (!dropdown.keyboardMode()) {
+                                dropdown.setSelectedIndex(clearAllRowIndex());
+                              }
+                            }}
+                          >
+                            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                            <div class="min-w-0 flex-1 text-left">
+                              <p class="truncate text-ink-muted">
+                                Clear all tags
+                              </p>
+                            </div>
+                          </DropdownSelectableRow>
+                        </div>
                       </Show>
                     </Show>
                   </div>
