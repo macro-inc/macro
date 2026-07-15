@@ -11,6 +11,7 @@ import type {
   GraphqlEmailValue as GraphqlEmailValueInput,
   GraphqlEntityFilterAst as GraphqlEntityFilterAstInput,
   GraphqlForeignEntityLiteral as GraphqlForeignEntityLiteralInput,
+  GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
   GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
   SoupInput as GraphqlSoupInput,
@@ -33,6 +34,7 @@ type GraphqlExprInput<TLiteral> =
   | { not: GraphqlExprInput<TLiteral> }
   | { literal: TLiteral };
 
+import type { GroupByField } from './grouped/types';
 import type { SoupAstBody, SoupParams } from './items';
 
 type RestAst =
@@ -485,12 +487,7 @@ function mapEmailView(
   }
 }
 
-export function makeGraphqlSoupInput(args: {
-  params: SoupParams;
-  body: SoupAstBody;
-  cursor?: string | null;
-}): GraphqlSoupInput {
-  const body = args.body as AstBody;
+function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   const filters: GraphqlEntityFilterAstInput = {};
 
   if (body.df)
@@ -521,12 +518,49 @@ export function makeGraphqlSoupInput(args: {
     filters.propertiesFilter = compileExpr(body.propf, mapPropertiesLiteral);
   }
 
+  return filters;
+}
+
+export function makeGraphqlSoupInput(args: {
+  params: SoupParams;
+  body: SoupAstBody;
+  cursor?: string | null;
+}): GraphqlSoupInput {
+  const body = args.body as AstBody;
+
   return {
     limit: args.params.limit ?? undefined,
     expand: true,
     sortMethod: mapSortMethod(args.params.sort_method),
     cursor: args.cursor,
     emailView: mapEmailView(body.emailView),
-    filters,
+    filters: makeGraphqlFilters(body),
+  };
+}
+
+/** Maps the existing grouped Soup request shape to its GraphQL input. */
+export function makeGraphqlGroupedSoupInput(args: {
+  params: SoupParams;
+  body: SoupAstBody;
+  groupBy: GroupByField;
+}): GraphqlGroupedSoupInput {
+  const groupBy = match(args.groupBy)
+    .with({ type: 'date' }, () => ({ field: 'DATE' as const }))
+    .with({ type: 'entity_type' }, () => ({
+      field: 'ENTITY_TYPE' as const,
+    }))
+    .with({ type: 'project' }, () => ({ field: 'PROJECT' as const }))
+    .with({ type: 'property' }, (field) => ({
+      field: 'PROPERTY' as const,
+      propertyDefinitionId: field.propertyDefinitionId,
+      entityType: field.entityType,
+    }))
+    .exhaustive();
+
+  return {
+    groupBy,
+    limit: args.params.limit ?? undefined,
+    sortMethod: mapSortMethod(args.params.sort_method),
+    filters: makeGraphqlFilters(args.body as AstBody),
   };
 }

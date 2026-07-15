@@ -3,7 +3,10 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { describe, expect, it } from 'vitest';
-import { makeGraphqlSoupInput } from './graphql-ast';
+import {
+  makeGraphqlGroupedSoupInput,
+  makeGraphqlSoupInput,
+} from './graphql-ast';
 
 const UPDATED_AT = '2026-01-01T00:00:00.000Z';
 
@@ -40,6 +43,31 @@ describe('makeGraphqlSoupInput', () => {
         emailFilter: {
           tree: { literal: { shared: 'EXCLUDE' } },
         },
+      },
+    });
+  });
+
+  it('maps grouped requests to GraphQL input', () => {
+    const input = makeGraphqlGroupedSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(queryStateFrom({ include: { documentDone: false } })),
+      groupBy: {
+        type: 'property',
+        propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+        entityType: 'TASK',
+      },
+    });
+
+    expect(input).toMatchObject({
+      groupBy: {
+        field: 'PROPERTY',
+        propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+        entityType: 'TASK',
+      },
+      limit: 100,
+      sortMethod: 'UPDATED_AT',
+      filters: {
+        documentFilter: { literal: { notificationDone: false } },
       },
     });
   });

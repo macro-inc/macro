@@ -3,6 +3,15 @@ query Soup($input: SoupInput!) {
 		id
 		soup(input: $input) {
 			items {
+				...SoupItemFields
+			}
+			nextCursor
+			hasMore
+		}
+	}
+}
+
+fragment SoupItemFields on GraphqlSoupItem {
 				id
 				entityType
 				frecencyScore
@@ -258,11 +267,6 @@ query Soup($input: SoupInput!) {
 						}
 					}
 				}
-			}
-			nextCursor
-			hasMore
-		}
-	}
 }
 
 fragment SoupPropertyFields on GraphqlProperty {
