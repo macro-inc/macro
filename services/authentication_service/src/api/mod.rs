@@ -8,6 +8,7 @@ use native_app_service::inbound::RouterState;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tower::ServiceBuilder;
+use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -53,7 +54,8 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
         .layer(cors)
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .layer(CompressionLayer::new());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
