@@ -8,7 +8,7 @@ use models_pagination::{
 };
 use models_soup::item::SoupItem;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// Resolve label and display order for a group key based on the grouping field.
@@ -194,5 +194,36 @@ pub mod entity_type_labels {
             "call" => 5,
             _ => 6,
         }
+    }
+}
+
+struct BinData<T = ()> {
+    data: BTreeMap<usize, SoupItem<T>>,
+    group_total_size: usize,
+}
+
+struct NestedSoupGroups<Bin, T = ()>(BTreeMap<Bin, BinData<T>>);
+
+pub(crate) struct ItemGroupingInfo<Bin = String> {
+    pub key: Bin,
+    pub total_group_count: usize,
+    pub index_in_group: usize,
+    pub item: SoupItem,
+}
+
+impl<Bin> FromIterator<ItemGroupingInfo<Bin>> for NestedSoupGroups<Bin>
+where
+    Bin: std::hash::Hash + Ord,
+{
+    fn from_iter<T: IntoIterator<Item = ItemGroupingInfo<Bin>>>(iter: T) -> Self {
+        let mut out = BTreeMap::new();
+        for item in iter.into_iter() {
+            let entry = out.entry(item.key).or_insert_with(|| BinData {
+                data: Default::default(),
+                group_total_size: item.total_group_count,
+            });
+            entry.data.insert(item.index_in_group, item.item);
+        }
+        NestedSoupGroups(out)
     }
 }

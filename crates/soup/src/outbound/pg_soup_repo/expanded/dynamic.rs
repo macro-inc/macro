@@ -27,7 +27,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::GroupedSoupItem;
+use crate::domain::models::grouping::ItemGroupingInfo;
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
@@ -1435,6 +1435,7 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
+    #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
@@ -1867,7 +1868,7 @@ fn build_grouped_query<'a>(
 pub async fn expanded_dynamic_cursor_soup_grouped(
     db: &PgPool,
     args: GroupedDynamicCursorArgs<'_>,
-) -> Result<Vec<GroupedSoupItem<()>>, sqlx::Error> {
+) -> Result<impl Iterator<Item = ItemGroupingInfo>, sqlx::Error> {
     let GroupedDynamicCursorArgs {
         user_id,
         limit,
@@ -1913,30 +1914,15 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .fetch_all(db)
         .await?;
 
-    // Convert rows to (SoupItem, GroupFields) pairs and unzip
-    let (soup_items, groups): (Vec<SoupItem<()>>, Vec<GroupFields>) = rows
-        .into_iter()
-        .map(|row| {
-            let item = row.item.into_soup_item()?;
-            Ok((item, row.group))
-        })
-        .collect::<Result<Vec<_>, sqlx::Error>>()?
-        .into_iter()
-        .unzip();
-
-    let items = soup_items
-        .into_iter()
-        .zip(groups)
-        .map(|(item, group)| GroupedSoupItem {
+    let items = rows.into_iter().filter_map(|row| {
+        let item = row.item.into_soup_item().ok()?;
+        Some(ItemGroupingInfo {
             item,
-            frecency_score: None,
-            group_key: group.group_key,
-            group_total_count: group.group_total_count as u32,
-            row_in_group: group.row_in_group as u32,
-            group_label: None,
-            group_display_order: None,
+            key: row.group.group_key,
+            total_group_count: row.group.group_total_count as usize,
+            index_in_group: row.group.row_in_group as usize,
         })
-        .collect();
+    });
 
     Ok(items)
 }

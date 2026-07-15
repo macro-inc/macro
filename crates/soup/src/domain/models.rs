@@ -1,9 +1,4 @@
-mod grouping;
-
-pub use grouping::{
-    GroupMeta, GroupedResponse, build_grouped_response, entity_type_labels,
-    resolve_group_label_and_order,
-};
+pub(crate) mod grouping;
 
 use call::domain::models::GetCallRecordsRequest;
 use channels::domain::models::{GetChannelsRequest, GetThreadReplyRowsRequest};
