@@ -61,6 +61,9 @@ struct MockTeamRepository {
     backfilled_subscription_id: Arc<Mutex<Option<stripe::SubscriptionId>>>,
     stripe_customer_id: Option<stripe::CustomerId>,
     team_payment_status: bool,
+    enterprise: bool,
+    enterprise_status_lookup_calls: Arc<Mutex<usize>>,
+    fail_enterprise_status_lookup: bool,
     team_members: Vec<TeamMember<'static>>,
     accepted_invite: Option<AcceptedTeamInvite<'static>>,
     removed_member: Option<TeamMember<'static>>,
@@ -98,6 +101,9 @@ impl MockTeamRepository {
             backfilled_subscription_id: Arc::new(Mutex::new(None)),
             stripe_customer_id: None,
             team_payment_status: true,
+            enterprise: false,
+            enterprise_status_lookup_calls: Arc::new(Mutex::new(0)),
+            fail_enterprise_status_lookup: false,
             team_members: Vec::new(),
             accepted_invite: None,
             removed_member: None,
@@ -135,6 +141,11 @@ impl MockTeamRepository {
         self
     }
 
+    fn with_enterprise(mut self, enterprise: bool) -> Self {
+        self.enterprise = enterprise;
+        self
+    }
+
     fn with_team_members(mut self, members: Vec<TeamMember<'static>>) -> Self {
         self.team_members = members;
         self
@@ -169,6 +180,24 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<bool, TeamError>> + Send {
         let team_payment_status = self.team_payment_status;
         async move { Ok(team_payment_status) }
+    }
+
+    fn get_team_enterprise_status(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        *self.enterprise_status_lookup_calls.lock().unwrap() += 1;
+        let enterprise = self.enterprise;
+        let fail = self.fail_enterprise_status_lookup;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "enterprise status lookup failed"
+                )))
+            } else {
+                Ok(enterprise)
+            }
+        }
     }
 
     fn has_user_trialed(

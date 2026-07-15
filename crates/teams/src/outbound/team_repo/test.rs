@@ -136,6 +136,35 @@ async fn test_get_team_payment_status(pool: Pool<Postgres>) -> anyhow::Result<()
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_enterprise_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let enterprise = team_repo.get_team_enterprise_status(&team_id).await?;
+    assert!(!enterprise);
+
+    sqlx::query!("UPDATE team SET enterprise = TRUE WHERE id = $1", &team_id)
+        .execute(&pool)
+        .await?;
+
+    let enterprise = team_repo.get_team_enterprise_status(&team_id).await?;
+    assert!(enterprise);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let error = team_repo
+        .get_team_enterprise_status(&missing_team_id)
+        .await
+        .expect_err("a missing team should return an error");
+
+    assert!(matches!(error, TeamError::TeamDoesNotExist));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
