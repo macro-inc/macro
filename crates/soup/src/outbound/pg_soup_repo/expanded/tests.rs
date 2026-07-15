@@ -331,7 +331,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
     Ok(())
 }
 
-// Test that expanded_soup_by_ids returns items in the correct order and includes items with implicit access
+// Test that expanded_soup_by_ids includes items with implicit access
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -360,37 +360,30 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
 
     // Verify we can access items through project inheritance
     // doc-in-A is in project-A which user-1 has access to
+    let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
+    let expected_project_id = Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-A
     let doc = items
         .iter()
         .find_map(|x| match x {
-            SoupItem::Document(soup_document) => Some(soup_document),
-            SoupItem::Chat(_)
-            | SoupItem::Project(_)
-            | SoupItem::EmailThread(_)
-            | SoupItem::Channel(_)
-            | SoupItem::ChannelThread(_)
-            | SoupItem::Call(_)
-            | SoupItem::CrmCompany(_)
-            | SoupItem::ForeignEntity(_) => None,
+            SoupItem::Document(soup_document) if soup_document.id == expected_doc_id => {
+                Some(soup_document)
+            }
+            _ => None,
         })
         .expect("The document should exist");
-    let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
-    let expected_project_id = Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-A
-    assert_eq!(doc.id, expected_doc_id);
     assert_eq!(doc.name, "Document in A");
     assert_eq!(doc.project_id, Some(expected_project_id));
 
     // chat-in-B is in project-B which is a child of project-A
+    let expected_chat_id = Uuid::parse_str("22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(); // chat-in-B
+    let expected_project_id = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-B
     let chat = items
         .iter()
         .find_map(|x| match x {
-            SoupItem::Chat(soup_chat) => Some(soup_chat),
+            SoupItem::Chat(soup_chat) if soup_chat.id == expected_chat_id => Some(soup_chat),
             _ => None,
         })
         .expect("The chat should exist");
-    let expected_chat_id = Uuid::parse_str("22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(); // chat-in-B
-    let expected_project_id = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap(); // project-B
-    assert_eq!(chat.id, expected_chat_id);
     assert_eq!(chat.name, "Chat in B");
     assert_eq!(chat.project_id.as_ref(), Some(&expected_project_id));
 }

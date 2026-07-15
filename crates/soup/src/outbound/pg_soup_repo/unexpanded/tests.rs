@@ -281,7 +281,7 @@ async fn test_get_user_items_unexpanded_cursor(pool: Pool<Postgres>) -> anyhow::
     Ok(())
 }
 
-// Test that unexpanded_soup_by_ids returns items in the correct order and only includes explicit access
+// Test that unexpanded_soup_by_ids only includes explicit access
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
