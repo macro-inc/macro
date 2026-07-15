@@ -1,12 +1,11 @@
 use crate::{
-    api::context::ApiContext, model::response::instructions::GetInstructionsDocumentResponse,
+    api::context::{ApiContext, AuthorizationService},
+    model::response::instructions::GetInstructionsDocumentResponse,
 };
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::cowlike::CowLike;
-use model::{
-    response::{GenericErrorResponse, GenericResponse},
-    user::axum_extractor::MacroUserExtractor,
-};
+use model::response::{GenericErrorResponse, GenericResponse};
 
 /// Gets the instructions document for the current user
 #[utoipa::path(
@@ -22,7 +21,7 @@ use model::{
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=%user_context.macro_user_id))]
 pub async fn get_instructions_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> impl IntoResponse {
     match macro_db_client::instructions::get::get_instructions_document(
         &ctx.db,

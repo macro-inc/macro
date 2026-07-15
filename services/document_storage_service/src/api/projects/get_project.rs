@@ -12,7 +12,6 @@ use model::project::response::{
     GetProjectContentResponse, GetProjectResponse, GetProjectResponseData,
 };
 use model::response::{ErrorResponse, GenericErrorResponse, GenericResponse};
-use model::user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
@@ -41,7 +40,7 @@ pub struct Params {
 pub async fn get_project_content_handler(
     access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
     State(db): State<PgPool>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {
     let access_level = match access.entity_access_receipt.entity_permission() {

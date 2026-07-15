@@ -18,7 +18,6 @@ use model::{
         UploadFolderResponseData, UploadFolderWithIdsResponse,
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl, TypedSuccessResponse},
-    user::axum_extractor::MacroUserExtractor,
 };
 use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, S3ObjectInfo,
@@ -122,7 +121,7 @@ pub async fn upload_extract_folder_handler(
 #[tracing::instrument(skip(ctx, user_context, req), fields(user_id=%user_context.macro_user_id))]
 pub async fn upload_folder_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
     internal_context: Option<Extension<InternalFlag>>,
     extract::Json(req): extract::Json<UploadFolderRequest>,
 ) -> impl IntoResponse {
