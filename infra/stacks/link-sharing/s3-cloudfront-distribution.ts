@@ -18,9 +18,14 @@ const BASE_NAME = 'cf-dist-s3-sign';
 
 export const getCloudfrontDistribution = ({
   bucket,
+  callRecordingOrigin,
   privateKeySecretName,
 }: {
   bucket: pulumi.Output<GetStorageBucketResult>;
+  callRecordingOrigin: {
+    bucketId: pulumi.Output<string>;
+    bucketRegionalDomainName: pulumi.Output<string>;
+  };
   privateKeySecretName: string;
 }) => {
   /* KEY PAIR GENERATION INFO
@@ -213,11 +218,30 @@ export const getCloudfrontDistribution = ({
         originRequestPolicyId,
         responseHeadersPolicyId,
       },
+      orderedCacheBehaviors: [
+        {
+          pathPattern: '/calls/*',
+          allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+          cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+          compress: true,
+          targetOriginId: callRecordingOrigin.bucketId,
+          viewerProtocolPolicy: 'https-only',
+          trustedKeyGroups: [cloudFrontKeyGroup.id],
+          cachePolicyId: cachePolicy.id,
+          originRequestPolicyId,
+          responseHeadersPolicyId,
+        },
+      ],
       enabled: true,
       origins: [
         {
           domainName: bucketRegionalDomainName,
           originId: bucket.id,
+          originAccessControlId: originAccessControl.id,
+        },
+        {
+          domainName: callRecordingOrigin.bucketRegionalDomainName,
+          originId: callRecordingOrigin.bucketId,
           originAccessControlId: originAccessControl.id,
         },
       ],
