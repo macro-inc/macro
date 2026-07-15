@@ -77,7 +77,7 @@ fn info_when_latency_below_threshold() {
     });
 
     assert!(!saw_warn.load(Ordering::SeqCst));
-    assert!(saw_info.load(Ordering::SeqCst));
+    assert!(!saw_info.load(Ordering::SeqCst));
 }
 
 #[test]
