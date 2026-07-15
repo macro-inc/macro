@@ -38,46 +38,53 @@ fn soup_response_schema_exposes_frontend_fields() {
     }
 }
 
-#[tokio::test]
-async fn schema_types_and_fields_have_descriptions() {
-    let response = crate::build_schema()
-        .execute(
-            "{ __schema { types { kind name description fields { name description } inputFields { name description } enumValues { name description } } } }",
-        )
-        .await;
-    assert!(
-        response.errors.is_empty(),
-        "introspection failed: {:?}",
-        response.errors
-    );
+#[test]
+fn schema_types_and_fields_have_descriptions() {
+    use apollo_compiler::schema::ExtendedType;
 
-    let data = response
-        .data
-        .into_json()
-        .expect("introspection data is JSON");
-    let types = data["__schema"]["types"]
-        .as_array()
-        .expect("introspection returns schema types");
+    let schema =
+        apollo_compiler::Schema::parse_and_validate(crate::build_schema().sdl(), "schema.graphql")
+            .expect("generated SDL is valid");
 
     let mut missing = Vec::new();
-    for graphql_type in types {
-        let name = graphql_type["name"].as_str().expect("type has a name");
-        let kind = graphql_type["kind"].as_str().expect("type has a kind");
-        if name.starts_with("__") || kind == "SCALAR" {
+    for (name, graphql_type) in &schema.types {
+        if graphql_type.is_built_in() || matches!(graphql_type, ExtendedType::Scalar(_)) {
             continue;
         }
-        if graphql_type["description"].as_str().is_none() {
+        if graphql_type.description().is_none() {
             missing.push(format!("type {name}"));
         }
-        for collection in ["fields", "inputFields", "enumValues"] {
-            let Some(items) = graphql_type[collection].as_array() else {
-                continue;
-            };
-            for item in items {
-                if item["description"].as_str().is_none() {
-                    missing.push(format!("{name}.{}", item["name"]));
-                }
-            }
+
+        match graphql_type {
+            ExtendedType::Object(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.fields
+                    .iter()
+                    .map(|(name, field)| (name, field.description.is_none())),
+            ),
+            ExtendedType::Interface(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.fields
+                    .iter()
+                    .map(|(name, field)| (name, field.description.is_none())),
+            ),
+            ExtendedType::InputObject(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.fields
+                    .iter()
+                    .map(|(name, field)| (name, field.description.is_none())),
+            ),
+            ExtendedType::Enum(ty) => collect_undocumented(
+                &mut missing,
+                name,
+                ty.values
+                    .iter()
+                    .map(|(name, value)| (name, value.description.is_none())),
+            ),
+            ExtendedType::Scalar(_) | ExtendedType::Union(_) => {}
         }
     }
 
@@ -86,6 +93,18 @@ async fn schema_types_and_fields_have_descriptions() {
         "GraphQL schema items missing descriptions: {}",
         missing.join(", ")
     );
+}
+
+fn collect_undocumented<'a>(
+    missing: &mut Vec<String>,
+    type_name: &str,
+    items: impl Iterator<Item = (&'a apollo_compiler::Name, bool)>,
+) {
+    for (name, is_undocumented) in items {
+        if is_undocumented {
+            missing.push(format!("{type_name}.{name}"));
+        }
+    }
 }
 
 #[test]
