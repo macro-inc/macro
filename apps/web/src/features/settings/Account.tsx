@@ -423,7 +423,12 @@ export function Account() {
         <SettingsSection>
           <SettingsCard>
             <div class="px-6 py-3.5">
-              <Button variant="base" depth={3} onClick={() => logout()}>
+              <Button
+                fullWidth
+                variant="base"
+                depth={3}
+                onClick={() => logout()}
+              >
                 <SignOutIcon class="size-4" />
                 Log out
               </Button>
