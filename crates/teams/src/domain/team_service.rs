@@ -606,32 +606,43 @@ where
             .clone()
             .into_owned();
 
+        let enterprise = self
+            .team_repository
+            .get_team_enterprise_status(&team_id)
+            .await?;
+
         let removed_member = self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
             .await?;
 
-        let subscription_id = match self.get_team_subscription(&team_id).await {
-            Ok(subscription_id) => subscription_id,
-            Err(e) => {
-                self.team_repository
-                    .rollback_remove_user_from_team(&removed_member)
-                    .await
-                    .inspect_err(|rollback_err| {
-                        tracing::error!(
-                            error=?rollback_err,
-                            "unable to rollback removed team member after getting team subscription failed"
-                        );
-                    })
-                    .ok();
-                return Err(e.into_remove_user_from_team_error());
-            }
+        let subscription_id = if enterprise {
+            None
+        } else {
+            let subscription_id = match self.get_team_subscription(&team_id).await {
+                Ok(subscription_id) => subscription_id,
+                Err(e) => {
+                    self.team_repository
+                        .rollback_remove_user_from_team(&removed_member)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback removed team member after getting team subscription failed"
+                            );
+                        })
+                        .ok();
+                    return Err(e.into_remove_user_from_team_error());
+                }
+            };
+            Some(subscription_id)
         };
 
-        if let Err(e) = self
-            .customer_repository
-            .decrement_seat_count(&subscription_id, 1)
-            .await
+        if let Some(subscription_id) = subscription_id.as_ref()
+            && let Err(e) = self
+                .customer_repository
+                .decrement_seat_count(subscription_id, 1)
+                .await
         {
             self.team_repository
                 .rollback_remove_user_from_team(&removed_member)
@@ -651,16 +662,18 @@ where
             .remove_team_member_from_channels(&team_id, user_id)
             .await
         {
-            self.customer_repository
-                .increment_seat_count(&subscription_id, 1)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback customer seat count after removing team member from channels failed"
-                    );
-                })
-                .ok();
+            if let Some(subscription_id) = subscription_id.as_ref() {
+                self.customer_repository
+                    .increment_seat_count(subscription_id, 1)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback customer seat count after removing team member from channels failed"
+                        );
+                    })
+                    .ok();
+            }
             self.team_repository
                 .rollback_remove_user_from_team(&removed_member)
                 .await
@@ -692,16 +705,18 @@ where
                     );
                 })
                 .ok();
-            self.customer_repository
-                .increment_seat_count(&subscription_id, 1)
-                .await
-                .inspect_err(|rollback_err| {
-                    tracing::error!(
-                        error=?rollback_err,
-                        "unable to rollback customer seat count after removing team member roles failed"
-                    );
-                })
-                .ok();
+            if let Some(subscription_id) = subscription_id.as_ref() {
+                self.customer_repository
+                    .increment_seat_count(subscription_id, 1)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback customer seat count after removing team member roles failed"
+                        );
+                    })
+                    .ok();
+            }
             self.team_repository
                 .rollback_remove_user_from_team(&removed_member)
                 .await

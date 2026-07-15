@@ -982,6 +982,35 @@ fn make_enterprise_domain_join_team_repository(
     team_repository
 }
 
+fn make_enterprise_remove_user_repository(
+    team_id: uuid::Uuid,
+    user_id: &MacroUserIdStr<'_>,
+    role: TeamRole,
+) -> MockTeamRepository {
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let team = Team::new(
+        team_id,
+        "Enterprise Team".to_string(),
+        "ENTERPRISE_TEAM".to_string(),
+        owner_id.into_owned(),
+        false,
+        true,
+    );
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Enterprise Team", mark_sent_calls)
+            .with_enterprise(true)
+            .with_team(team);
+    team_repository.team_payment_status = false;
+    team_repository.stripe_customer_id = Some("cus_enterprise_sentinel".parse().unwrap());
+    team_repository.removed_member = Some(TeamMember {
+        team_id,
+        user_id: user_id.clone().into_owned(),
+        role,
+    });
+    team_repository
+}
+
 fn assert_no_enterprise_join_team_billing_calls(
     team_repository: &MockTeamRepository,
     customer_repository: &MockCustomerRepository,
@@ -1043,6 +1072,14 @@ fn assert_no_enterprise_join_team_billing_calls(
             .unwrap()
             .is_empty()
     );
+}
+
+fn assert_no_enterprise_remove_user_billing_calls(
+    team_repository: &MockTeamRepository,
+    customer_repository: &MockCustomerRepository,
+) {
+    assert_no_enterprise_join_team_billing_calls(team_repository, customer_repository);
+    assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 0);
 }
 
 fn build_service(
@@ -1894,10 +1931,11 @@ async fn test_get_team_reports_crm_enabled() {
     assert!(team.team.crm_enabled());
 }
 
-/// CrmEnqueuer that records which users had a populate enqueued.
+/// CrmEnqueuer that records which users had a populate or depopulate enqueued.
 #[derive(Clone, Default)]
 struct RecordingCrmEnqueuer {
     populated: Arc<Mutex<Vec<String>>>,
+    depopulated: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
 }
 
 impl CrmEnqueuer for RecordingCrmEnqueuer {
@@ -1916,9 +1954,13 @@ impl CrmEnqueuer for RecordingCrmEnqueuer {
 
     async fn enqueue_depopulate_crm_for_user(
         &self,
-        _: &uuid::Uuid,
-        _: &MacroUserIdStr<'_>,
+        team_id: &uuid::Uuid,
+        macro_id: &MacroUserIdStr<'_>,
     ) -> Result<(), Self::Err> {
+        self.depopulated
+            .lock()
+            .unwrap()
+            .push((*team_id, macro_id.as_ref().to_string()));
         Ok(())
     }
 }
@@ -3486,6 +3528,234 @@ async fn try_join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail(
         vec![(team_id, user_id.as_ref().to_string())]
     );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
+    assert!(events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_effects() {
+    let team_id = uuid::Uuid::from_u128(91);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let team_repository =
+        make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Admin);
+    let customer_repository = MockCustomerRepository::default();
+    let channels_repository = MockTeamChannelsRepository::default();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let crm_enqueuer = RecordingCrmEnqueuer::default();
+    let events = Arc::new(Mutex::new(Vec::new()));
+
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repository.clone(),
+        customer_repository.clone(),
+        channels_repository.clone(),
+        roles_service.clone(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        crm_enqueuer.clone(),
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(events.clone()),
+    );
+
+    service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *team_repository
+            .enterprise_status_lookup_calls
+            .lock()
+            .unwrap(),
+        1
+    );
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
+    assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_eq!(
+        *channels_repository.remove_calls.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert_eq!(
+        *roles_service.remove_calls.lock().unwrap(),
+        vec![(
+            member_id.as_ref().to_string(),
+            vec![RoleId::TeamSubscriber, RoleId::SubOpus]
+        )]
+    );
+    assert_eq!(
+        *crm_enqueuer.depopulated.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert_eq!(
+        *events.lock().unwrap(),
+        vec![TeamAnalyticsEvent::TeamLeft {
+            team_id,
+            member_id: member_id.clone().into_owned(),
+            removed_by_id: owner_id.into_owned(),
+            role: TeamRole::Admin,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_removal_fails() {
+    let team_id = uuid::Uuid::from_u128(92);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let team_repository =
+        make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Member);
+    let customer_repository = MockCustomerRepository::default();
+    let channels_repository = MockTeamChannelsRepository {
+        fail_remove: true,
+        ..Default::default()
+    };
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let crm_enqueuer = RecordingCrmEnqueuer::default();
+    let events = Arc::new(Mutex::new(Vec::new()));
+
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repository.clone(),
+        customer_repository.clone(),
+        channels_repository.clone(),
+        roles_service.clone(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        crm_enqueuer.clone(),
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(events.clone()),
+    );
+
+    let error = service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, RemoveUserFromTeamError::TeamError(_)));
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
+    assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_eq!(
+        *channels_repository.remove_calls.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(roles_service.remove_calls.lock().unwrap().is_empty());
+    assert!(crm_enqueuer.depopulated.lock().unwrap().is_empty());
+    assert!(events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn remove_user_from_team_enterprise_rolls_back_membership_and_channels_when_role_removal_fails()
+ {
+    let team_id = uuid::Uuid::from_u128(93);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let team_repository =
+        make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Member);
+    let customer_repository = MockCustomerRepository::default();
+    let channels_repository = MockTeamChannelsRepository::default();
+    let roles_service = MockUserRolesAndPermissionsService {
+        fail_remove: true,
+        ..Default::default()
+    };
+    let crm_enqueuer = RecordingCrmEnqueuer::default();
+    let events = Arc::new(Mutex::new(Vec::new()));
+
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repository.clone(),
+        customer_repository.clone(),
+        channels_repository.clone(),
+        roles_service.clone(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        crm_enqueuer.clone(),
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(events.clone()),
+    );
+
+    let error = service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        RemoveUserFromTeamError::RemoveRolesFromUserError(_)
+    ));
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
+    assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_eq!(
+        *channels_repository.remove_calls.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert_eq!(
+        *channels_repository.add_calls.lock().unwrap(),
+        vec![(team_id, member_id.as_ref().to_string())]
+    );
+    assert_eq!(roles_service.remove_calls.lock().unwrap().len(), 1);
+    assert!(crm_enqueuer.depopulated.lock().unwrap().is_empty());
+    assert!(events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn remove_user_from_team_enterprise_status_read_precedes_membership_removal() {
+    let team_id = uuid::Uuid::from_u128(94);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut team_repository =
+        make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Member);
+    team_repository.fail_enterprise_status_lookup = true;
+    let customer_repository = MockCustomerRepository::default();
+    let channels_repository = MockTeamChannelsRepository::default();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let crm_enqueuer = RecordingCrmEnqueuer::default();
+    let events = Arc::new(Mutex::new(Vec::new()));
+
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repository.clone(),
+        customer_repository.clone(),
+        channels_repository.clone(),
+        roles_service.clone(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        crm_enqueuer.clone(),
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(events.clone()),
+    );
+
+    let error = service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
+            &member_id,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        RemoveUserFromTeamError::TeamError(TeamError::StorageLayerError(_))
+    ));
+    assert_eq!(
+        *team_repository
+            .enterprise_status_lookup_calls
+            .lock()
+            .unwrap(),
+        1
+    );
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
+    assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert!(channels_repository.remove_calls.lock().unwrap().is_empty());
+    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(roles_service.remove_calls.lock().unwrap().is_empty());
+    assert!(crm_enqueuer.depopulated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
 }
 
