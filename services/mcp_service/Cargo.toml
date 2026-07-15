@@ -37,7 +37,6 @@ http = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 mcp_auth_proxy = { path = "../mcp_auth_proxy" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_db_client = { path = "../../crates/macro_db_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_config = { path = "../../crates/macro_config" }
