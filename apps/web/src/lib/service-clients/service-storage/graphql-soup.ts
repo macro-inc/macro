@@ -8,6 +8,7 @@ import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import {
+  type CacheHost,
   createTauriCacheHost,
   createWorkerCacheHost,
 } from '@graphql-cache/index';
@@ -78,6 +79,7 @@ export function graphqlCacheEnabled(): boolean {
 }
 
 let cachedClient: Client | undefined;
+let cachedCacheHost: CacheHost | undefined;
 
 /**
  * Resolves the urql client, lazily assembling the cached client on first
@@ -90,13 +92,25 @@ let cachedClient: Client | undefined;
 export function getGraphqlSoupClient(): Client {
   if (!graphqlCacheEnabled()) return graphqlSoupClient;
   cachedClient ??= (() => {
+    let host: CacheHost | undefined;
+    let unregisterHost: () => void = () => undefined;
+    const onInitializationError = (error: Error) => {
+      if (!host || cachedCacheHost !== host) return;
+      unregisterHost();
+      host.dispose();
+      cachedCacheHost = undefined;
+      cachedClient = graphqlSoupClient;
+      console.warn(
+        'graphql cache async init failed; using uncached client',
+        error
+      );
+    };
     try {
       const scope = getOrCreateCacheScope();
-      const host = isTauri()
-        ? createTauriCacheHost({ scope })
-        : createWorkerCacheHost({ scope });
-      registerCacheHost(host);
-      return createClient({
+      host = isTauri()
+        ? createTauriCacheHost({ scope, onInitializationError })
+        : createWorkerCacheHost({ scope, onInitializationError });
+      const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
           normalizedCacheExchange(host, {
@@ -113,12 +127,24 @@ export function getGraphqlSoupClient(): Client {
         ],
         fetch: dssGraphqlFetch,
       });
+      cachedCacheHost = host;
+      unregisterHost = registerCacheHost(host);
+      return client;
     } catch (error) {
+      host?.dispose();
+      cachedCacheHost = undefined;
       console.warn('graphql cache init failed; using uncached client', error);
       return graphqlSoupClient;
     }
   })();
   return cachedClient;
+}
+
+/** Returns the cache host backing the flagged GraphQL Soup client. */
+export function getGraphqlSoupCacheHost(): CacheHost | undefined {
+  if (!graphqlCacheEnabled()) return undefined;
+  getGraphqlSoupClient();
+  return cachedCacheHost;
 }
 
 export type GraphqlSoupInput = SoupInput;

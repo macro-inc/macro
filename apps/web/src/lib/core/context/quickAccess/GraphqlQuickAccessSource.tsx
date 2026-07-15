@@ -10,6 +10,10 @@ import {
   useContacts,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
+import type {
+  EntityIndexCursor,
+  IndexedEntityBucket,
+} from '@graphql-cache/index';
 import { createQuerySignal } from '@graphql-cache/solid/create-query-signal';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
@@ -23,6 +27,7 @@ import {
   type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import {
+  getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
@@ -37,11 +42,25 @@ import {
 import type { QuickAccessSourceProps } from './context';
 import {
   graphqlEntityToQuickAccessItem,
+  indexedEntityToQuickAccessItem,
   userToQuickAccessItem,
 } from './graphql-items';
 import type { Bucket, QuickAccessContextValue, QuickAccessItem } from './types';
 
 const QUICK_ACCESS_LIMIT = 500;
+const INDEX_REFRESH_DEBOUNCE_MS = 100;
+const INDEXED_QUICK_ACCESS_BUCKETS: IndexedEntityBucket[] = [
+  'channel',
+  'dm',
+  'document',
+  'note',
+  'task',
+  'snippet',
+  'chat',
+  'project',
+  'email',
+  'crm_company',
+];
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 function makeQuickAccessInput(snippetsEnabled: boolean): SoupInput {
@@ -121,6 +140,58 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
   const { query: crmCompaniesQuery, companies: crmCompanies } =
     useQuickAccessCrmCompaniesQuery();
   const { query: snippetsQuery, snippets } = useQuickAccessSnippetsQuery();
+  const cacheHost = getGraphqlSoupCacheHost();
+  const [indexedItems, setIndexedItems] = createSignal<QuickAccessItem[]>([]);
+  const [indexedLoaded, setIndexedLoaded] = createSignal(
+    cacheHost === undefined
+  );
+  let indexRequestVersion = 0;
+  let indexRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const loadIndexedItems = async () => {
+    if (!cacheHost) return;
+    const requestVersion = ++indexRequestVersion;
+    try {
+      const items: QuickAccessItem[] = [];
+      let cursor: EntityIndexCursor | undefined;
+      do {
+        const page = await cacheHost.queryIndexedItems({
+          buckets: INDEXED_QUICK_ACCESS_BUCKETS,
+          cursor,
+          limit: QUICK_ACCESS_LIMIT,
+        });
+        if (requestVersion !== indexRequestVersion) return;
+        for (const item of page.items) {
+          const mapped = indexedEntityToQuickAccessItem(item);
+          if (mapped) items.push(mapped);
+        }
+        cursor = page.hasMore ? (page.nextCursor ?? undefined) : undefined;
+      } while (cursor !== undefined);
+      setIndexedItems(items);
+    } catch (error) {
+      console.warn('quick access indexed cache read failed', error);
+    } finally {
+      if (requestVersion === indexRequestVersion) setIndexedLoaded(true);
+    }
+  };
+
+  const scheduleIndexedRefresh = () => {
+    if (indexRefreshTimer !== undefined) clearTimeout(indexRefreshTimer);
+    indexRefreshTimer = setTimeout(() => {
+      indexRefreshTimer = undefined;
+      void loadIndexedItems();
+    }, INDEX_REFRESH_DEBOUNCE_MS);
+  };
+
+  void loadIndexedItems();
+  const unsubscribeIndexChanges = cacheHost?.onEntityIndexChanged(
+    scheduleIndexedRefresh
+  );
+  onCleanup(() => {
+    unsubscribeIndexChanges?.();
+    if (indexRefreshTimer !== undefined) clearTimeout(indexRefreshTimer);
+    indexRequestVersion++;
+  });
 
   const input = createMemo(() => makeQuickAccessInput(snippetsFlag().enabled));
   const [refreshVersion, setRefreshVersion] = createSignal(0);
@@ -152,16 +223,20 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
   const allItems = createLazyMemo<QuickAccessItem[]>(() => {
     const nextItemsById = new Map<string, QuickAccessItem>();
 
-    const addItem = (item: QuickAccessItem) => {
+    const addItem = (item: QuickAccessItem, replaceOnTie = false) => {
       const current = nextItemsById.get(item.id);
-      if (!current || item.sortTimestamp > current.sortTimestamp) {
+      if (
+        !current ||
+        item.sortTimestamp > current.sortTimestamp ||
+        (replaceOnTie && item.sortTimestamp === current.sortTimestamp)
+      ) {
         nextItemsById.set(item.id, item);
       }
     };
 
-    for (const entity of graphqlEntities()) {
-      const item = graphqlEntityToQuickAccessItem(entity);
-      if (!item) continue;
+    const instructionsId = instructionsIdQuery.data;
+    for (const item of indexedItems()) {
+      if (item.id === instructionsId) continue;
       if (item.bucket === 'crm_company' && !crmFlag().enabled) continue;
       if (item.bucket === 'snippet' && !snippetsFlag().enabled) continue;
       addItem(item);
@@ -170,15 +245,23 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     if (crmFlag().enabled) {
       for (const company of crmCompanies()) {
         const item = graphqlEntityToQuickAccessItem(company);
-        if (item) addItem(item);
+        if (item) addItem(item, true);
       }
     }
 
     if (snippetsFlag().enabled) {
       for (const snippet of snippets()) {
         const item = graphqlEntityToQuickAccessItem(snippet);
-        if (item) addItem(item);
+        if (item) addItem(item, true);
       }
+    }
+
+    for (const entity of graphqlEntities()) {
+      const item = graphqlEntityToQuickAccessItem(entity);
+      if (!item) continue;
+      if (item.bucket === 'crm_company' && !crmFlag().enabled) continue;
+      if (item.bucket === 'snippet' && !snippetsFlag().enabled) continue;
+      addItem(item, true);
     }
 
     for (const contact of contacts()) {
@@ -187,7 +270,7 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     }
 
     const sortedItems = [...nextItemsById.values()].sort(
-      (a, b) => b.sortTimestamp - a.sortTimestamp
+      (a, b) => b.sortTimestamp - a.sortTimestamp || a.id.localeCompare(b.id)
     );
 
     itemsById.clear();
@@ -222,13 +305,17 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
 
   const refresh = () => {
     setRefreshVersion((version) => version + 1);
+    void loadIndexedItems();
     void crmCompaniesQuery.refetch();
     void snippetsQuery.refetch();
   };
 
   return {
     useList,
-    isLoading: () => retainedQueryData() === undefined && query.fetching(),
+    isLoading: () =>
+      retainedQueryData() === undefined &&
+      indexedItems().length === 0 &&
+      (!indexedLoaded() || query.fetching()),
     refresh,
     getById,
   };
