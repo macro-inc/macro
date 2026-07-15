@@ -1618,35 +1618,20 @@ pub struct GroupedDynamicCursorArgs<'a> {
 }
 
 /// Group metadata fields extracted from grouped query rows.
+#[derive(FromRow)]
 struct GroupFields {
     group_key: String,
     group_total_count: i64,
     row_in_group: i64,
 }
 
-impl GroupFields {
-    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-        Ok(GroupFields {
-            group_key: row.try_get("group_key")?,
-            group_total_count: row.try_get("group_total_count")?,
-            row_in_group: row.try_get("row_in_group")?,
-        })
-    }
-}
-
 /// Grouped row: reuses SoupRow for item data, adds group metadata.
+#[derive(FromRow)]
 struct GroupedSoupRow {
+    #[sqlx(flatten)]
     item: SoupRow,
+    #[sqlx(flatten)]
     group: GroupFields,
-}
-
-impl<'a> FromRow<'a, PgRow> for GroupedSoupRow {
-    fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
-        Ok(GroupedSoupRow {
-            item: SoupRow::from_row(row)?,
-            group: GroupFields::from_row(row)?,
-        })
-    }
 }
 
 /// Per-group limit for initial grouped queries.
@@ -1904,7 +1889,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     // $9 is bound unconditionally (NULL when not in single-group mode) so $10 stays aligned.
     let mut query = query_builder
-        .build()
+        .build_query_as::<'_, GroupedSoupRow>()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
         .bind(query_limit)
@@ -1925,7 +1910,6 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .try_map(|row| GroupedSoupRow::from_row(&row))
         .fetch_all(db)
         .await?;
 
