@@ -201,6 +201,10 @@ pub struct ApplyScenarioArgs {
     /// Path to the scenario JSON file.
     #[arg(long)]
     pub file: String,
+    /// Drop the local database entirely and re-run migrations before
+    /// seeding. Destroys ALL local data, organic included.
+    #[arg(long, short = 'f')]
+    pub force: bool,
 }
 
 /// Arguments for resetting scenario data.
@@ -263,6 +267,56 @@ impl ScenarioArgs {
             ScenarioCommand::Reset(args) => reset_scenario(&ctx, &args).await,
             ScenarioCommand::Matrix(args) => matrix_scenario(&ctx, &args).await,
         }
+    }
+
+    /// Run destructive pre-connection setup (`apply --force` drops and
+    /// re-migrates the database) before the CLI opens its connection pool.
+    pub async fn pre_connect(&self, database_url: &str) -> anyhow::Result<()> {
+        let ScenarioCommand::Apply(args) = &self.command else {
+            return Ok(());
+        };
+        if !args.force {
+            return Ok(());
+        }
+
+        use sqlx::migrate::MigrateDatabase;
+
+        if !sqlx::Postgres::database_exists(database_url)
+            .await
+            .unwrap_or(false)
+        {
+            sqlx::Postgres::create_database(database_url)
+                .await
+                .context("creating database")?;
+        }
+
+        // Reset the schema rather than dropping the database: the running
+        // services hold connection pools that reconnect instantly, which
+        // makes DROP DATABASE lose its termination race. Dropping the
+        // schema wipes every table (and the migrations ledger) while the
+        // connections survive.
+        println!("--force: resetting the local database schema");
+        let pool = sqlx::PgPool::connect(database_url)
+            .await
+            .context("connecting for schema reset")?;
+        for statement in [
+            "DROP SCHEMA public CASCADE",
+            "CREATE SCHEMA public",
+            "GRANT ALL ON SCHEMA public TO PUBLIC",
+        ] {
+            sqlx::query(statement)
+                .execute(&pool)
+                .await
+                .with_context(|| format!("running `{statement}`"))?;
+        }
+
+        println!("--force: running migrations");
+        macro_db_migrator::MACRO_DB_MIGRATIONS
+            .run(&pool)
+            .await
+            .context("running migrations")?;
+        pool.close().await;
+        Ok(())
     }
 }
 
