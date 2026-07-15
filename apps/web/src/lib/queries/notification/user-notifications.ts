@@ -275,18 +275,36 @@ function notificationsMutationSuccessCallback<T>(
   _: T,
   _params: NotificationsMutationParams
 ) {
-  // A fetch that is still in flight when the server write lands read its
-  // pages before that write, so letting it resolve would replace the cache
-  // with a pre-write snapshot. Discard it without reverting cache data; the
-  // query stays stale and refetches fresh on the next trigger.
-  queryClient.cancelQueries(
-    { queryKey: notificationKeys.user._def },
-    { revert: false }
-  );
   queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
     refetchType: 'none',
   });
+}
+
+/**
+ * Discards any fetch still in flight when the server write commits (it read
+ * its pages pre-write, so letting it resolve would replace the cache with a
+ * pre-write snapshot) and re-applies the mutation's patch. The re-apply
+ * matters beyond the data: a non-reverting cancel transitions the query to
+ * error status, and the manual write flips it back to success — the cancel is
+ * awaited so its error dispatch cannot land after the write. The query stays
+ * stale and refetches fresh on the next trigger.
+ */
+function createNotificationsReassertFn(updaterFn: NotificationsUpdater) {
+  return async (_: unknown, params: NotificationsMutationParams) => {
+    await queryClient.cancelQueries(
+      { queryKey: notificationKeys.user._def },
+      { revert: false }
+    );
+    queryClient.setQueriesData(
+      { queryKey: notificationKeys.user._def },
+      (input) =>
+        updaterFn(
+          input as Maybe<NotificationData<UserNotificationsPageParam>>,
+          params
+        )
+    );
+  };
 }
 
 /** Creates an optimistic update handler that snapshots previous data for rollback. */
@@ -384,6 +402,7 @@ export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
     }),
   {
     onMutate: createNotificationsMutateFn(mapNotificationsAsSeen),
+    onSuccess: createNotificationsReassertFn(mapNotificationsAsSeen),
     onError: notificationsMutationErrorFn,
   }
 );
@@ -411,6 +430,7 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
     }),
   {
     onMutate: createNotificationsMutateFn(filterOutDoneNotifications),
+    onSuccess: createNotificationsReassertFn(filterOutDoneNotifications),
     onError: notificationsMutationErrorFn,
   }
 );
