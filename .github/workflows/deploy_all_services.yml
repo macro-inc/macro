@@ -249,7 +249,7 @@ jobs:
     - warm-lambdas
     - build-service-binaries
     - build-lambda-artifacts
-    if: ${{ always() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ !cancelled() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     name: Run Database Migrations
     runs-on: db-migrator
     steps:
@@ -270,7 +270,7 @@ jobs:
     - build-service-binaries
     - build-lambda-artifacts
     - migrate-db
-    if: ${{ always() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     name: Deploy ${{ matrix.service }}
     runs-on: namespace-profile-linux-small
     env:

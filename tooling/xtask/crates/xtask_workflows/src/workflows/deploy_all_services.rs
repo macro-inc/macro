@@ -277,7 +277,7 @@ fn migrate_db() -> Job {
             "build-lambda-artifacts".to_string(),
         ])
         .cond(Expression::new(
-            "${{ always() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
+            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
         ))
         .runs_on(DB_MIGRATOR_RUNNER)
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
@@ -309,7 +309,7 @@ fn deploy_services() -> Job {
             "migrate-db".to_string(),
         ])
         .cond(Expression::new(
-            "${{ always() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
+            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
         ))
         .runs_on(runners::Runner::Small.to_string())
         .add_env(("PULUMI_HOME", "/pulumi"))
