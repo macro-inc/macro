@@ -241,11 +241,6 @@ function ChannelGroupItem(props: {
     if (!manager) return;
     const notification = latestNotification();
     openNotification(notification, manager, newSplit);
-    // Opening a group acknowledges it. Mount-driven per-message marking only
-    // reaches rows the virtualizer renders, so notifications for messages
-    // above the viewport would otherwise keep the group alive after the
-    // click (macro-1620).
-    notificationSource.bulkMarkAsRead(props.group.notifications);
   };
 
   const openInCurrentSplit = () => {
@@ -391,7 +386,6 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
 }
 
 function ChannelGroupDropdownItem(props: { group: ChannelGroup }) {
-  const notificationSource = useGlobalNotificationSource();
   const senderName = useSenderName(props.group.latestSenderId);
   const count = () => props.group.notifications.length;
   const displayName = () => {
@@ -405,9 +399,7 @@ function ChannelGroupDropdownItem(props: { group: ChannelGroup }) {
       class="min-h-8 gap-2 px-2.5 text-[13px]"
       onSelect={() => {
         const manager = globalSplitManager();
-        if (!manager) return;
-        openNotification(latestNotification(), manager, false);
-        notificationSource.bulkMarkAsRead(props.group.notifications);
+        if (manager) openNotification(latestNotification(), manager, false);
       }}
     >
       <Show

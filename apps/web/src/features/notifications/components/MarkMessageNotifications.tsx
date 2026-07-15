@@ -5,7 +5,7 @@ import {
 } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
 import type { JSXElement } from 'solid-js';
-import { createEffect } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 
 const MAX_MARK_ATTEMPTS = 3;
 
@@ -25,8 +25,9 @@ export function MarkMessageNotifications(props: {
 
   // Not a one-shot latch: a stale refetch can land after the optimistic write
   // and flip the notification back to unviewed while this row stays mounted,
-  // so re-mark whenever the cache regresses, bounded per mount.
-  let inFlight = false;
+  // so re-mark whenever the cache regresses, bounded per mount. inFlight is a
+  // signal so a regression that lands mid-mark re-runs the effect on settle.
+  const [inFlight, setInFlight] = createSignal(false);
   let attempts = 0;
 
   createEffect(() => {
@@ -34,15 +35,15 @@ export function MarkMessageNotifications(props: {
     if (
       !existing ||
       existing.viewed_at ||
-      inFlight ||
+      inFlight() ||
       attempts >= MAX_MARK_ATTEMPTS
     ) {
       return;
     }
-    inFlight = true;
     attempts += 1;
+    setInFlight(true);
     notificationSource.markAsRead(existing).finally(() => {
-      inFlight = false;
+      setInFlight(false);
     });
   });
 
