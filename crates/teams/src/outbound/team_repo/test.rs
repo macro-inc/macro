@@ -1625,3 +1625,40 @@ async fn test_get_team_id_by_domain_prefers_oldest_team(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+
+    let seat_count_before = team_repo.get_team_seat_count(&team_id).await?;
+
+    let member = team_repo
+        .add_user_to_team(&team_id, &user_id)
+        .await?
+        .expect("user should have been added");
+
+    assert_eq!(member.team_id, team_id);
+    assert_eq!(member.user_id.as_ref(), user_id.as_ref());
+    assert_eq!(member.role, TeamRole::Member);
+
+    let role = team_repo.get_team_role(&team_id, &user_id).await?;
+    assert_eq!(role, Some(TeamRole::Member));
+
+    let seat_count = team_repo.get_team_seat_count(&team_id).await?;
+    assert_eq!(seat_count, seat_count_before + 1);
+
+    // Adding again is a no-op: no member returned, no extra seat counted.
+    let member = team_repo.add_user_to_team(&team_id, &user_id).await?;
+    assert!(member.is_none());
+
+    let seat_count = team_repo.get_team_seat_count(&team_id).await?;
+    assert_eq!(seat_count, seat_count_before + 1);
+
+    Ok(())
+}

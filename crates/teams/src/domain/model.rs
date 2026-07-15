@@ -649,9 +649,6 @@ pub enum TryJoinTeamByDomainError {
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),
-    /// Underlying invite users to team error
-    #[error("Underlying invite users to team error {0}")]
-    InviteUsersToTeamError(#[from] InviteUsersToTeamError),
     /// Underlying join team error
     #[error("Underlying join team error {0}")]
     JoinTeamError(#[from] JoinTeamError),

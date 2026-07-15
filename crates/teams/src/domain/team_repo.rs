@@ -286,6 +286,19 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, TeamError>> + Send;
+
+    /// Adds the user directly to the team as a member (no invite involved),
+    /// bumping the team's seat count. Returns None when the user is already
+    /// on the team.
+    ///
+    /// NOTE: this only touches team membership — billing, roles, and
+    /// channel membership are handled by the service (see
+    /// `TeamService::try_join_team_by_domain`).
+    fn add_user_to_team(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send;
 }
 
 /// The TeamMembersService defines read-only team membership queries.
@@ -454,7 +467,9 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send;
 
     /// Automatically joins the user to the team whose auto-join domain
-    /// matches the user's email domain, if such a team exists.
+    /// matches the user's email domain, if such a team exists. The user is
+    /// added to the team directly (no invite), with the same billing /
+    /// roles / channel side effects as `join_team`.
     ///
     /// Returns the new team member, or None when no team matched or the
     /// user could not be joined (already a member, team at its seat cap,

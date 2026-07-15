@@ -1463,6 +1463,42 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn add_user_to_team(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, TeamError> {
+        let mut transaction = self.pool.begin().await?;
+
+        let inserted = sqlx::query!(
+            r#"
+            INSERT INTO team_user (team_id, user_id, team_role)
+            VALUES ($1, $2, 'member')
+            ON CONFLICT DO NOTHING
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        // Already a member — nothing was added, so don't touch the seat count.
+        if inserted.rows_affected() == 0 {
+            return Ok(None);
+        }
+
+        TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, 1).await?;
+
+        transaction.commit().await?;
+
+        Ok(Some(TeamMember {
+            team_id: *team_id,
+            user_id: user_id.clone().into_owned(),
+            role: TeamRole::Member,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_id_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,

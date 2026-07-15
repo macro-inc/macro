@@ -44,7 +44,7 @@ use crate::domain::{
         AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
         TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError,
+        ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
     },
     team_repo::{TeamChannelsRepository, TeamRepository},
 };
@@ -79,6 +79,8 @@ struct MockTeamRepository {
     team_id_for_domain: Option<uuid::Uuid>,
     team_plan: Option<TeamPlan>,
     seat_count: i32,
+    add_user_to_team_result: Option<TeamMember<'static>>,
+    remove_user_calls: Arc<Mutex<usize>>,
 }
 
 impl MockTeamRepository {
@@ -122,6 +124,8 @@ impl MockTeamRepository {
             team_id_for_domain: None,
             team_plan: None,
             seat_count: 0,
+            add_user_to_team_result: None,
+            remove_user_calls: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -257,6 +261,7 @@ impl TeamRepository for MockTeamRepository {
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send {
+        *self.remove_user_calls.lock().unwrap() += 1;
         let removed_member = self.removed_member.clone();
         async move { removed_member.ok_or(RemoveUserFromTeamError::UserNotInTeam) }
     }
@@ -501,6 +506,15 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, TeamError>> + Send {
         let team_id = self.team_id_for_domain;
         async move { Ok(team_id) }
+    }
+
+    fn add_user_to_team(
+        &self,
+        _: &uuid::Uuid,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send {
+        let member = self.add_user_to_team_result.clone();
+        async move { Ok(member) }
     }
 }
 
@@ -2537,35 +2551,28 @@ async fn test_try_join_team_by_domain_no_matching_team_returns_none() {
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_joins_matching_team() {
+async fn test_try_join_team_by_domain_adds_member_directly() {
     let team_id = uuid::Uuid::from_u128(77);
-    let invite_id = uuid::Uuid::from_u128(770);
-    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let mut team_repo = MockTeamRepository::new(
-        vec![make_invite("member@example.com", invite_id, team_id)],
-        "Test Team",
-        mark_sent_calls,
-    )
-    .with_team(Team::new(
-        team_id,
-        "Test Team".to_string(),
-        "TEST_TEAM".to_string(),
-        owner_id.clone().into_owned(),
-        false,
-    ));
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
     team_repo.team_id_for_domain = Some(team_id);
-    team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
+    team_repo.add_user_to_team_result = Some(make_team_member(
+        team_id,
+        "macro|member@example.com",
+        TeamRole::Member,
+    ));
     team_repo.team_subscription_id = Some(subscription_id.clone());
+    let remove_user_calls = team_repo.remove_user_calls.clone();
 
     let customer_repo = MockCustomerRepository {
         subscription_id: subscription_id.clone(),
         ..Default::default()
     };
     let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
 
     let channels_repo = MockTeamChannelsRepository::default();
     let add_channel_calls = channels_repo.add_calls.clone();
@@ -2590,35 +2597,30 @@ async fn test_try_join_team_by_domain_joins_matching_team() {
 
     assert_eq!(member.team_id, team_id);
     assert_eq!(member.user_id.as_ref(), user_id.as_ref());
+    assert_eq!(member.role, TeamRole::Member);
     assert_eq!(
         *increment_calls.lock().unwrap(),
         vec![(subscription_id.to_string(), 1)]
     );
+    assert!(decrement_calls.lock().unwrap().is_empty());
     assert_eq!(
         *add_channel_calls.lock().unwrap(),
         vec![(team_id, user_id.as_ref().to_string())]
     );
     assert_eq!(upsert_role_calls.lock().unwrap().len(), 1);
+    assert_eq!(*remove_user_calls.lock().unwrap(), 0);
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_returns_none_when_no_invite_created() {
+async fn test_try_join_team_by_domain_returns_none_when_already_member() {
     let team_id = uuid::Uuid::from_u128(78);
-    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    // No invites are returned: the user is already on the team (or was
-    // invited too recently).
-    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
-        .with_team(Team::new(
-            team_id,
-            "Test Team".to_string(),
-            "TEST_TEAM".to_string(),
-            owner_id.clone().into_owned(),
-            false,
-        ));
+    // add_user_to_team returns None: the user is already on the team.
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
     team_repo.team_id_for_domain = Some(team_id);
+    team_repo.add_user_to_team_result = None;
 
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
@@ -2642,27 +2644,18 @@ async fn test_try_join_team_by_domain_returns_none_when_no_invite_created() {
 #[tokio::test]
 async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
     let team_id = uuid::Uuid::from_u128(79);
-    let invite_id = uuid::Uuid::from_u128(790);
-    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    // The mock would hand out an invite and accept it, so a None result
-    // proves the seat-cap check short-circuited before inviting.
-    let mut team_repo = MockTeamRepository::new(
-        vec![make_invite("member@example.com", invite_id, team_id)],
-        "Test Team",
-        mark_sent_calls,
-    )
-    .with_team(Team::new(
-        team_id,
-        "Test Team".to_string(),
-        "TEST_TEAM".to_string(),
-        owner_id.clone().into_owned(),
-        false,
-    ));
+    // The mock would add the member, so a None result proves the seat-cap
+    // check short-circuited before the membership insert.
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
     team_repo.team_id_for_domain = Some(team_id);
-    team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
+    team_repo.add_user_to_team_result = Some(make_team_member(
+        team_id,
+        "macro|member@example.com",
+        TeamRole::Member,
+    ));
     team_repo.team_plan = Some(TeamPlan::Idea);
     team_repo.seat_count = TeamPlan::Idea.seat_cap();
 
@@ -2683,4 +2676,65 @@ async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
 
     assert!(member.is_none());
     assert!(increment_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
+    let team_id = uuid::Uuid::from_u128(80);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let member = make_team_member(team_id, "macro|member@example.com", TeamRole::Member);
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.team_id_for_domain = Some(team_id);
+    team_repo.add_user_to_team_result = Some(member.clone());
+    // The rollback removes the freshly added member again.
+    team_repo.removed_member = Some(member);
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let remove_user_calls = team_repo.remove_user_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        ..Default::default()
+    };
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+
+    let roles_service = MockUserRolesAndPermissionsService {
+        fail_upsert: true,
+        ..Default::default()
+    };
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        MockTeamChannelsRepository::default(),
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let err = service
+        .try_join_team_by_domain(&user_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(matches!(
+        err,
+        TryJoinTeamByDomainError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
+    ));
+    // The seat increment happened, was rolled back, and the membership
+    // itself was removed again.
+    assert_eq!(
+        *increment_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(
+        *decrement_calls.lock().unwrap(),
+        vec![(subscription_id.to_string(), 1)]
+    );
+    assert_eq!(*remove_user_calls.lock().unwrap(), 1);
 }
