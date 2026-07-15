@@ -23,29 +23,38 @@ impl JwtValidator for FakeJwtValidator {
 
 const INTERNAL_API_KEY: &str = "secret-key";
 
+fn internal_auth_config(default_user_id: Option<&str>) -> InternalAuthConfig {
+    InternalAuthConfig {
+        api_key: INTERNAL_API_KEY.to_string(),
+        default_user_id: default_user_id.map(str::to_string),
+    }
+}
+
 fn service_with_internal_auth(
     default_user_id: Option<&str>,
 ) -> MacroAuthorizationServiceImpl<FakeJwtValidator> {
-    MacroAuthorizationServiceImpl::new(FakeJwtValidator {
-        result: Err(MacroAuthorizationError::InvalidCredentials),
-    })
-    .with_internal_auth(InternalAuthConfig {
-        api_key: INTERNAL_API_KEY.to_string(),
-        default_user_id: default_user_id.map(str::to_string),
-    })
+    MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Err(MacroAuthorizationError::InvalidCredentials),
+        },
+        internal_auth_config(default_user_id),
+    )
 }
 
 #[tokio::test]
 async fn authorize_constructs_user_context_from_validated_identity() {
     let permissions = HashSet::from(["documents:read".to_string(), "documents:write".to_string()]);
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
-        result: Ok(ValidatedIdentity {
-            user_id: "macro|user@example.com".to_string(),
-            fusion_user_id: "fusion-user-id".to_string(),
-            organization_id: Some(42),
-            permissions: Some(permissions.clone()),
-        }),
-    });
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Ok(ValidatedIdentity {
+                user_id: "macro|user@example.com".to_string(),
+                fusion_user_id: "fusion-user-id".to_string(),
+                organization_id: Some(42),
+                permissions: Some(permissions.clone()),
+            }),
+        },
+        internal_auth_config(None),
+    );
 
     let context = service.authorize("valid-jwt").await.unwrap();
 
@@ -53,23 +62,6 @@ async fn authorize_constructs_user_context_from_validated_identity() {
     assert_eq!(context.fusion_user_id, "fusion-user-id");
     assert_eq!(context.organization_id, Some(42));
     assert_eq!(context.permissions, Some(permissions));
-}
-
-#[tokio::test]
-async fn authorize_internal_rejects_when_internal_auth_is_not_configured() {
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
-        result: Err(MacroAuthorizationError::InvalidCredentials),
-    });
-
-    let error = service
-        .authorize_internal(INTERNAL_API_KEY, InternalIdentityClaims::default())
-        .await
-        .unwrap_err();
-
-    assert_eq!(
-        error.current_context(),
-        &MacroAuthorizationError::InvalidCredentials
-    );
 }
 
 #[tokio::test]
@@ -140,9 +132,12 @@ async fn authorize_internal_returns_none_without_an_identity() {
 
 #[tokio::test]
 async fn authorize_propagates_expired_credentials() {
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
-        result: Err(MacroAuthorizationError::CredentialsExpired),
-    });
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Err(MacroAuthorizationError::CredentialsExpired),
+        },
+        internal_auth_config(None),
+    );
 
     let error = service.authorize("expired-jwt").await.unwrap_err();
 
@@ -154,9 +149,12 @@ async fn authorize_propagates_expired_credentials() {
 
 #[tokio::test]
 async fn authorize_propagates_invalid_credentials() {
-    let service = MacroAuthorizationServiceImpl::new(FakeJwtValidator {
-        result: Err(MacroAuthorizationError::InvalidCredentials),
-    });
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Err(MacroAuthorizationError::InvalidCredentials),
+        },
+        internal_auth_config(None),
+    );
 
     let error = service.authorize("invalid-jwt").await.unwrap_err();
 

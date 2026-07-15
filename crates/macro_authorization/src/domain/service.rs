@@ -14,22 +14,16 @@ use super::{
 #[derive(Clone)]
 pub struct MacroAuthorizationServiceImpl<V> {
     validator: V,
-    internal_auth: Option<InternalAuthConfig>,
+    internal_auth: InternalAuthConfig,
 }
 
 impl<V> MacroAuthorizationServiceImpl<V> {
-    /// Create an authorization service using the supplied validator.
-    pub fn new(validator: V) -> Self {
+    /// Create an authorization service using the supplied validator and required internal authorization configuration.
+    pub fn new(validator: V, internal_auth: InternalAuthConfig) -> Self {
         Self {
             validator,
-            internal_auth: None,
+            internal_auth,
         }
-    }
-
-    /// Enable internal service-to-service authorization using the supplied configuration.
-    pub fn with_internal_auth(mut self, config: InternalAuthConfig) -> Self {
-        self.internal_auth = Some(config);
-        self
     }
 }
 
@@ -53,15 +47,17 @@ where
         provided_key: &str,
         claims: InternalIdentityClaims,
     ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
-        let Some(config) = &self.internal_auth else {
-            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
-        };
-
-        if !constant_time_eq(provided_key.as_bytes(), config.api_key.as_bytes()) {
+        if !constant_time_eq(
+            provided_key.as_bytes(),
+            self.internal_auth.api_key.as_bytes(),
+        ) {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
-        let Some(user_id) = claims.user_id.or_else(|| config.default_user_id.clone()) else {
+        let Some(user_id) = claims
+            .user_id
+            .or_else(|| self.internal_auth.default_user_id.clone())
+        else {
             return Ok(None);
         };
 

@@ -244,13 +244,13 @@ async fn main() -> anyhow::Result<()> {
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
-    let authorization_state = MacroAuthorizationState::new(Arc::new(
-        AuthorizationService::new(MacroAuthJwtValidator::new(jwt_validation_args.clone()))
-            .with_internal_auth(InternalAuthConfig {
-                api_key: dss_auth_key.as_ref().to_string(),
-                default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
-            }),
-    ));
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_validation_args.clone()),
+        InternalAuthConfig {
+            api_key: dss_auth_key.as_ref().to_string(),
+            default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
+        },
+    )));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
