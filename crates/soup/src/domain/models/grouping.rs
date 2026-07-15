@@ -200,18 +200,12 @@ pub mod entity_type_labels {
 }
 
 /// Items and metadata belonging to one nested Soup group.
-pub struct BinData<T = (), Bin = String> {
-    data: IndexMap<usize, SoupItem<T>>,
+pub struct BinData<T = ()> {
+    data: Vec<SoupItem<T>>,
     group_total_size: usize,
-    key: Bin,
 }
 
-impl<T, Bin> BinData<T, Bin> {
-    /// The key identifying this bin.
-    pub fn key(&self) -> &Bin {
-        &self.key
-    }
-
+impl<T> BinData<T> {
     /// The total number of items in this group across all pages.
     pub fn group_total_size(&self) -> usize {
         self.group_total_size
@@ -219,17 +213,17 @@ impl<T, Bin> BinData<T, Bin> {
 
     /// Consume the bin and return its items in their group order.
     pub fn into_items(self) -> impl Iterator<Item = SoupItem<T>> {
-        self.data.into_values()
+        self.data.into_iter()
     }
 }
 
 /// Soup items nested into bins keyed by their grouping value.
-pub struct NestedSoupGroups<T = (), Bin = String>(IndexMap<Bin, BinData<T, Bin>>);
+pub struct NestedSoupGroups<T = (), Bin = String>(IndexMap<Bin, BinData<T>>);
 
 impl<Bin, T> NestedSoupGroups<T, Bin> {
     /// Consume the nested groups and iterate over their bins.
-    pub fn into_bins(self) -> impl Iterator<Item = BinData<T, Bin>> {
-        self.0.into_values()
+    pub fn into_bins(self) -> impl Iterator<Item = (Bin, BinData<T>)> {
+        self.0.into_iter()
     }
 }
 
@@ -248,18 +242,23 @@ pub struct ItemGroupingInfo<Bin = String, T = ()> {
 
 impl<Bin, T> FromIterator<ItemGroupingInfo<Bin, T>> for NestedSoupGroups<T, Bin>
 where
-    Bin: Eq + std::hash::Hash + Clone,
+    Bin: Eq + std::hash::Hash,
 {
     fn from_iter<I: IntoIterator<Item = ItemGroupingInfo<Bin, T>>>(iter: I) -> Self {
         let mut out = IndexMap::new();
 
         for item in iter {
-            let entry = out.entry(item.key.clone()).or_insert_with(|| BinData {
-                data: IndexMap::new(),
-                group_total_size: item.total_group_count,
-                key: item.key,
+            let ItemGroupingInfo {
+                key,
+                total_group_count,
+                item,
+                ..
+            } = item;
+            let entry = out.entry(key).or_insert_with(|| BinData {
+                data: Vec::new(),
+                group_total_size: total_group_count,
             });
-            entry.data.insert(item.index_in_group, item.item);
+            entry.data.push(item);
         }
         NestedSoupGroups(out)
     }

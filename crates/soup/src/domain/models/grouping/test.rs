@@ -48,8 +48,8 @@ fn nested_groups_preserve_bin_and_item_insertion_order() {
     .collect();
 
     let mut bins = groups.into_bins();
-    let project_bin = bins.next().unwrap();
-    assert_eq!(project_bin.key(), "project");
+    let (project_key, project_bin) = bins.next().unwrap();
+    assert_eq!(project_key, "project");
     assert_eq!(project_bin.group_total_size(), 2);
     assert_eq!(
         project_bin
@@ -59,8 +59,8 @@ fn nested_groups_preserve_bin_and_item_insertion_order() {
         vec![Uuid::from_u128(2), Uuid::from_u128(1)]
     );
 
-    let document_bin = bins.next().unwrap();
-    assert_eq!(document_bin.key(), "document");
+    let (document_key, document_bin) = bins.next().unwrap();
+    assert_eq!(document_key, "document");
     assert_eq!(
         document_bin
             .into_items()

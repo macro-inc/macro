@@ -112,8 +112,8 @@ impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for Grouped
         Self {
             bins: groups
                 .into_bins()
-                .map(|bin| GraphqlSoupBin {
-                    key: bin.key().clone(),
+                .map(|(key, bin)| GraphqlSoupBin {
+                    key,
                     total_count: bin.group_total_size(),
                     items: bin
                         .into_items()
