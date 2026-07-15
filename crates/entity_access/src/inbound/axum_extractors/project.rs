@@ -289,7 +289,6 @@ where
 /// authorization instead of request extensions. Type parameter `T` specifies
 /// the required project access level, `V` is the request body, `Svc` is the
 /// entity access service, and `Auth` is the authorization service.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub enum ProjectBodyAccessLevelExtractorV2<T: RequiredPermission, V, Svc, Auth> {
     /// A project was found in the body and access was validated.
