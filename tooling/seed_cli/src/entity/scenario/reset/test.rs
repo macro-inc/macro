@@ -28,6 +28,7 @@ fn covers_every_seeded_table() {
         "\"EmailThreadPermission\"",
         "entity_access",
         "entity_properties",
+        "notification",
         "comms_entity_mentions",
         "comms_activity",
         "comms_channels",

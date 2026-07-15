@@ -524,8 +524,11 @@ async fn initialize_markdown_content(
             };
             // Sync-service refuses to initialize a document that already
             // has a snapshot (and the local worker has no delete route), so
-            // a re-apply keeps whatever content is already there.
-            if clients.sync.exists(document_id).await.unwrap_or(false) {
+            // a re-apply keeps whatever content is already there. Probe via
+            // the raw content route rather than `exists`: a stray websocket
+            // connect instantiates an EMPTY durable object, which exists but
+            // still needs initializing.
+            if clients.sync.get_raw(document_id).await.is_ok() {
                 println!("  `{key}`: sync-service already has content for this id, keeping it");
             } else {
                 clients
