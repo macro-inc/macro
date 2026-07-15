@@ -16,6 +16,7 @@ import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
+  batch,
   createMemo,
   createSignal,
   type JSXElement,
@@ -603,6 +604,13 @@ export function createSplitLayout(
         );
       }
     }
+    if (import.meta.env.DEV) {
+      console.log('[split-layout] captured entry state', {
+        splitId: split.id,
+        state,
+        searchFilters: state['search.filters'],
+      });
+    }
     const next = { ...currentItem, state } as SplitContent;
     split.history.replaceCurrent(next);
     // Mirror onto SplitState.content so live reads see the captured state.
@@ -758,12 +766,14 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
 
-    captureCurrentEntryState(split);
+    batch(() => {
+      captureCurrentEntryState(split);
 
-    const prev = split.history.back();
-    if (!prev) return;
+      const prev = split.history.back();
+      if (!prev) return;
 
-    reattach(split, prev, undefined, 'history-back');
+      reattach(split, prev, undefined, 'history-back');
+    });
   }
 
   function forward(id: SplitId) {
@@ -773,12 +783,14 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
 
-    captureCurrentEntryState(split);
+    batch(() => {
+      captureCurrentEntryState(split);
 
-    const next = split.history.forward();
-    if (!next) return;
+      const next = split.history.forward();
+      if (!next) return;
 
-    reattach(split, next, undefined, 'history-forward');
+      reattach(split, next, undefined, 'history-forward');
+    });
   }
 
   function removeFromHistory(
@@ -813,14 +825,21 @@ export function createSplitLayout(
     const content = attachAliasContext(next);
 
     const split = state.splits[i];
-    captureCurrentEntryState(split);
-    if (mergeHistory) {
-      split.history.merge(content);
-    } else {
-      split.history.push(content);
-    }
+    batch(() => {
+      captureCurrentEntryState(split);
+      if (mergeHistory) {
+        split.history.merge(content);
+      } else {
+        split.history.push(content);
+      }
 
-    reattach(split, content, referredFrom, mergeHistory ? 'replace' : 'fresh');
+      reattach(
+        split,
+        content,
+        referredFrom,
+        mergeHistory ? 'replace' : 'fresh'
+      );
+    });
   }
 
   function reset(id: SplitId) {
