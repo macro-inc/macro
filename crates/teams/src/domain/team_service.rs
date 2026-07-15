@@ -29,7 +29,8 @@ use crate::domain::{
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -1235,5 +1236,72 @@ where
                 backfill_failed: 0,
             })
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn toggle_auto_join_domain(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        self.team_repository.toggle_auto_join_domain(&team_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn try_join_team_by_domain(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError> {
+        let Some(team_id) = self.team_repository.get_team_id_by_domain(user_id).await? else {
+            return Ok(None);
+        };
+
+        // Mirror the seat-cap check from invite_users_to_team — an
+        // auto-join must not push the team past its plan's seat cap.
+        if let Some(team_plan) = self.team_repository.get_team_plan(&team_id).await? {
+            let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
+            if seat_count + 1 > team_plan.seat_cap() {
+                tracing::info!(%team_id, %user_id, "skipping team auto-join: team is at its seat cap");
+                return Ok(None);
+            }
+        }
+
+        // Route the join through a regular team invite (from the team
+        // owner) so accepting it reuses the full join_team flow: payment
+        // checks, customer subscription seat count, role grants, channel
+        // membership, CRM backfill, and their rollbacks.
+        let team_owner_id = self
+            .team_repository
+            .get_team_by_id(&team_id)
+            .await
+            .map_err(TryJoinTeamByDomainError::TeamError)?
+            .team
+            .owner_id;
+
+        let user_email = [user_id.email_part().lowercase()];
+        let invites =
+            non_empty::NonEmpty::new(user_email.as_slice()).expect("one email is non-empty");
+
+        let invited = self
+            .team_repository
+            .invite_users_to_team(&team_id, &team_owner_id, invites)
+            .await?;
+
+        // No invite comes back when the user is already on the team (or an
+        // existing invite was re-sent too recently) — nothing to join.
+        let Some(invite) = invited.first() else {
+            tracing::info!(%team_id, %user_id, "skipping team auto-join: no joinable invite");
+            return Ok(None);
+        };
+
+        let member = self.join_team(&invite.team_invite_id, user_id).await?;
+
+        Ok(Some(TeamMember {
+            team_id: member.team_id,
+            user_id: member.user_id.clone().into_owned(),
+            role: member.role,
+        }))
     }
 }

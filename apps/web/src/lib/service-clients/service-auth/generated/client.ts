@@ -56,6 +56,7 @@ import type {
   Team,
   TeamInvitesResponse,
   TeamWithMembers,
+  ToggleAutoJoinDomainResponse,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -2243,6 +2244,86 @@ export const patchTeam = async (
     status: res.status,
     headers: res.headers,
   } as patchTeamResponse;
+};
+
+/**
+ * @summary Toggles automatic domain joining for the team. When the team has no
+auto-join domain, sets it to the team owner's email domain — rejected
+with a 400 when that domain is a generic email provider domain (e.g.
+gmail.com). When one is already set, removes it. New users whose email
+domain matches a team's auto-join domain are added to that team on
+signup. Requires the caller to be an Admin or Owner of the team.
+ */
+export type toggleTeamAutoJoinDomainResponse200 = {
+  data: ToggleAutoJoinDomainResponse;
+  status: 200;
+};
+
+export type toggleTeamAutoJoinDomainResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type toggleTeamAutoJoinDomainResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type toggleTeamAutoJoinDomainResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type toggleTeamAutoJoinDomainResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type toggleTeamAutoJoinDomainResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type toggleTeamAutoJoinDomainResponseSuccess =
+  toggleTeamAutoJoinDomainResponse200 & {
+    headers: Headers;
+  };
+export type toggleTeamAutoJoinDomainResponseError = (
+  | toggleTeamAutoJoinDomainResponse400
+  | toggleTeamAutoJoinDomainResponse401
+  | toggleTeamAutoJoinDomainResponse403
+  | toggleTeamAutoJoinDomainResponse404
+  | toggleTeamAutoJoinDomainResponse500
+) & {
+  headers: Headers;
+};
+
+export type toggleTeamAutoJoinDomainResponse =
+  | toggleTeamAutoJoinDomainResponseSuccess
+  | toggleTeamAutoJoinDomainResponseError;
+
+export const getToggleTeamAutoJoinDomainUrl = () => {
+  return `/team/auto-join-domain/toggle`;
+};
+
+export const toggleTeamAutoJoinDomain = async (
+  options?: RequestInit
+): Promise<toggleTeamAutoJoinDomainResponse> => {
+  const res = await fetch(getToggleTeamAutoJoinDomainUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: toggleTeamAutoJoinDomainResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as toggleTeamAutoJoinDomainResponse;
 };
 
 /**
