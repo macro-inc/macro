@@ -1,13 +1,13 @@
 use channel_sender::ChannelSender;
 use either::Either;
 use nom::{
-    Finish, IResult, Parser,
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_till1, take_while1},
     character::complete::anychar,
     combinator::{eof, peek, recognize, verify},
-    multi::{many_till, many0},
+    multi::{many0, many_till},
     sequence::{delimited, preceded},
+    Finish, IResult, Parser,
 };
 use serde::Deserialize;
 use std::{
@@ -127,6 +127,18 @@ impl<'de> XmlTaggedParsed<'de> for ParsedGroupMention<'de> {
     const TAG_NAME: &'static str = "m-group-mention";
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ParsedTagMention<'a> {
+    #[serde(borrow)]
+    pub name: Cow<'a, str>,
+}
+
+impl<'de> XmlTaggedParsed<'de> for ParsedTagMention<'de> {
+    const TAG_NAME: &'static str = "m-tag";
+}
+
 #[derive(Debug)]
 pub enum XmlTag<'de> {
     Link(ParsedLink<'de>),
@@ -135,6 +147,7 @@ pub enum XmlTag<'de> {
     Contact(ParsedContactMention<'de>),
     Date(ParsedDateMention<'de>),
     Group(ParsedGroupMention<'de>),
+    Tag(ParsedTagMention<'de>),
 }
 
 fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
@@ -145,6 +158,7 @@ fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
         ParsedContactMention::parse.map(XmlTag::Contact),
         ParsedDateMention::parse.map(XmlTag::Date),
         ParsedGroupMention::parse.map(XmlTag::Group),
+        ParsedTagMention::parse.map(XmlTag::Tag),
     ))
     .parse(s)
 }
@@ -157,6 +171,7 @@ fn is_recognized_tag_name(name: &str) -> bool {
         ParsedContactMention::TAG_NAME,
         ParsedDateMention::TAG_NAME,
         ParsedGroupMention::TAG_NAME,
+        ParsedTagMention::TAG_NAME,
     ]
     .iter()
     .any(|recognized| recognized.eq_ignore_ascii_case(name))
@@ -233,6 +248,7 @@ pub trait XmlFormatter: Sized {
     ) -> std::fmt::Result;
     fn format_date(date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
     fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_tag(tag: &ParsedTagMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
 
     fn format_xml_text(text: ParsedXmlText<'_>) -> ReformattedXmlText<Self> {
         use std::fmt::Display;
@@ -288,6 +304,13 @@ pub trait XmlFormatter: Sized {
                         Adapter(|f: &mut Formatter<'_>| Self::format_group(&g, f))
                     )
                 }
+                TextSegment::Xml(XmlTag::Tag(t)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_tag(&t, f))
+                    )
+                }
                 TextSegment::Plain(s) => {
                     write!(
                         acc,
@@ -339,6 +362,10 @@ impl XmlFormatter for PlainTextFormatter {
     fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "@{}", group.group_alias)
     }
+
+    fn format_tag(tag: &ParsedTagMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", tag.name)
+    }
 }
 
 /// xml formatter which completely removes the inner text of all xml tags
@@ -373,6 +400,10 @@ impl XmlFormatter for NullXmlFormatter {
     }
 
     fn format_group(_group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_tag(_tag: &ParsedTagMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "")
     }
 }

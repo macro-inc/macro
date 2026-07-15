@@ -1,4 +1,5 @@
 import { Popover } from '@kobalte/core/popover';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
@@ -332,7 +333,12 @@ function TagPickerBody(props: {
   };
   const showCreateRow = () =>
     createLabel().length >= 2 && !exactTagMatchExists();
-  const createRowIndex = () => filteredItems().length;
+  const showClearAllRow = () =>
+    selectedIds().size > 0 && !search().trim() && !createStep();
+  const itemIndexOffset = () => (showClearAllRow() ? 1 : 0);
+  const itemIndex = (item: TagOptionItem) =>
+    filteredItems().indexOf(item) + itemIndexOffset();
+  const createRowIndex = () => filteredItems().length + itemIndexOffset();
   const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
     { scope: 'user', label: 'Personal' },
@@ -428,14 +434,21 @@ function TagPickerBody(props: {
   };
 
   const dropdown = useDropdownSearch({
-    itemCount: () => filteredItems().length + (showCreateRow() ? 1 : 0),
+    itemCount: () =>
+      filteredItems().length + (showCreateRow() ? 1 : 0) + itemIndexOffset(),
     onSelect: (index, event) => {
+      if (showClearAllRow() && index === 0) {
+        setSelectedIds(new Set<string>());
+        void saveAndClose();
+        return;
+      }
+
       if (showCreateRow() && index === createRowIndex()) {
         beginCreate();
         return;
       }
 
-      const item = filteredItems()[index];
+      const item = filteredItems()[index - itemIndexOffset()];
       if (!item) return;
 
       toggleSelected(item.option.id);
@@ -509,7 +522,11 @@ function TagPickerBody(props: {
                     style={{ 'max-height': `${MAX_LIST_HEIGHT}px` }}
                   >
                     <Show
-                      when={filteredItems().length > 0 || showCreateRow()}
+                      when={
+                        showClearAllRow() ||
+                        filteredItems().length > 0 ||
+                        showCreateRow()
+                      }
                       fallback={
                         <div class="px-2 py-4 text-center text-ink-muted">
                           {initialTagState().items.length === 0
@@ -518,16 +535,37 @@ function TagPickerBody(props: {
                         </div>
                       }
                     >
+                      <Show when={showClearAllRow()}>
+                        <DropdownSelectableRow
+                          isSelected={dropdown.selectedIndex() === 0}
+                          onClick={() => {
+                            setSelectedIds(new Set<string>());
+                            void saveAndClose();
+                          }}
+                          onMouseEnter={() => {
+                            if (!dropdown.keyboardMode()) {
+                              dropdown.setSelectedIndex(0);
+                            }
+                          }}
+                        >
+                          <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                          <div class="min-w-0 flex-1 text-left">
+                            <p class="truncate text-ink-muted">
+                              Clear all tags
+                            </p>
+                          </div>
+                        </DropdownSelectableRow>
+                        <div class="my-1 border-t border-edge-muted" />
+                      </Show>
                       <For each={selectedAtOpenItems()}>
                         {(item) => (
                           <TagPickerRow
                             item={item}
-                            index={filteredItems().indexOf(item)}
+                            index={itemIndex(item)}
                             teamName={teamName()}
                             checked={isSelected(item.option.id)}
                             selected={
-                              dropdown.selectedIndex() ===
-                              filteredItems().indexOf(item)
+                              dropdown.selectedIndex() === itemIndex(item)
                             }
                             onSelect={(event) => {
                               toggleSelected(item.option.id);
@@ -535,9 +573,7 @@ function TagPickerBody(props: {
                             }}
                             onMouseEnter={() => {
                               if (!dropdown.keyboardMode()) {
-                                dropdown.setSelectedIndex(
-                                  filteredItems().indexOf(item)
-                                );
+                                dropdown.setSelectedIndex(itemIndex(item));
                               }
                             }}
                           />
@@ -558,12 +594,11 @@ function TagPickerBody(props: {
                             {(item) => (
                               <TagPickerRow
                                 item={item}
-                                index={filteredItems().indexOf(item)}
+                                index={itemIndex(item)}
                                 teamName={teamName()}
                                 checked={isSelected(item.option.id)}
                                 selected={
-                                  dropdown.selectedIndex() ===
-                                  filteredItems().indexOf(item)
+                                  dropdown.selectedIndex() === itemIndex(item)
                                 }
                                 onSelect={(event) => {
                                   toggleSelected(item.option.id);
@@ -571,9 +606,7 @@ function TagPickerBody(props: {
                                 }}
                                 onMouseEnter={() => {
                                   if (!dropdown.keyboardMode()) {
-                                    dropdown.setSelectedIndex(
-                                      filteredItems().indexOf(item)
-                                    );
+                                    dropdown.setSelectedIndex(itemIndex(item));
                                   }
                                 }}
                               />

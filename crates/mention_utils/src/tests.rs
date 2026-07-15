@@ -2,8 +2,8 @@ use cool_asserts::assert_matches;
 
 use crate::parse::{
     NullXmlFormatter, ParsedContactMention, ParsedDateMention, ParsedDocumentMention,
-    ParsedGroupMention, ParsedLink, ParsedUserMention, ParsedXmlText, PlainTextFormatter,
-    TextSegment, XmlFormatter, XmlTag,
+    ParsedGroupMention, ParsedLink, ParsedTagMention, ParsedUserMention, ParsedXmlText,
+    PlainTextFormatter, TextSegment, XmlFormatter, XmlTag,
 };
 
 // =============================================================================
@@ -155,6 +155,24 @@ fn user_mention_renders_email() {
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = PlainTextFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "rithy@macro.com");
+}
+
+#[test]
+fn tag_mention_renders_name() {
+    let input = r##"Ship <m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch","color":"#0091FF"}</m-tag>"##;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(parsed.0, [
+        TextSegment::Plain("Ship "),
+        TextSegment::Xml(XmlTag::Tag(ParsedTagMention { name })),
+    ] => {
+        assert_eq!(name.as_ref(), "Launch");
+    });
+
+    let rendered = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(rendered, "Ship #Launch");
+
+    let stripped = NullXmlFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(stripped, "Ship ");
 }
 
 // =============================================================================

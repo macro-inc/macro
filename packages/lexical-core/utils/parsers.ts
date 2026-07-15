@@ -59,6 +59,17 @@ export function parsePullRequestMentions(text: string): string {
   });
 }
 
+export function parseTagMentions(text: string): string {
+  return text.replace(/<m-tag>(.*?)<\/m-tag>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.name ? `#${data.name}` : '';
+    } catch {
+      return '';
+    }
+  });
+}
+
 export function parseLinks(text: string): string {
   return text.replace(/<m-link>(.*?)<\/m-link>/g, (_, json) => {
     try {
@@ -131,11 +142,13 @@ export function markdownToPlainText(markdown: string): string {
   return parseLinks(
     parseDocumentCards(
       parseSnapshots(
-        parsePullRequestMentions(
-          parseDocumentMentions(
-            parseGroupMentions(
-              parseDateMentions(
-                parseContactMentions(parseUserMentions(markdown))
+        parseTagMentions(
+          parsePullRequestMentions(
+            parseDocumentMentions(
+              parseGroupMentions(
+                parseDateMentions(
+                  parseContactMentions(parseUserMentions(markdown))
+                )
               )
             )
           )
@@ -311,6 +324,9 @@ export function markdownToEmbeddingText(markdown: string): string {
     text,
     'm-group-mention',
     (data) => `@${data.groupAlias || ''}`
+  );
+  text = replaceJsonTag(text, 'm-tag', (data) =>
+    data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
