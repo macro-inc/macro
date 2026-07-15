@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
-        GroupedSortRequest, IntoSoupReqAst, ItemGroupingInfo, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+        GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
+        SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };

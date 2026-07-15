@@ -66,6 +66,7 @@ foreign_entity = { path = "../foreign_entity", default-features = false, feature
   "ports",
 ] }
 frecency = { path = "../frecency" }
+indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }

@@ -13262,6 +13262,7 @@ dependencies = [
  "frecency",
  "futures",
  "http-body-util",
+ "indexmap 2.14.0",
  "item_filters",
  "macro_db_migrator",
  "macro_user_id",

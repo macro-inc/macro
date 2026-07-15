@@ -14,7 +14,7 @@ use entity_access::{
 use graphql_common::extract_part;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::TypeEraseCursor;
-use soup::domain::{models::NestedSoupGroups, ports::SoupService};
+use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},

@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
-        EnrichedSoupItem, FrecencyQueryInner, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
-        SimpleQueryInner, SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
-        build_grouped_response,
+        EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner,
+        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
+        grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
 };

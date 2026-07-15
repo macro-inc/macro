@@ -16,7 +16,7 @@ use models_soup::{
     project::SoupProject,
 };
 use serde_json::Value;
-use soup::domain::models::{EnrichedSoupItem, NestedSoupGroups, SoupPropertiesField};
+use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
 use uuid::Uuid;
 
 /// Extension fields attached to every top-level Soup entity.
@@ -107,13 +107,13 @@ where
     }
 }
 
-impl<E: SoupEntityEdges> From<NestedSoupGroups<String, SoupPropertiesField>> for GroupedSoup<E> {
-    fn from(groups: NestedSoupGroups<String, SoupPropertiesField>) -> Self {
+impl<E: SoupEntityEdges> From<NestedSoupGroups<SoupPropertiesField>> for GroupedSoup<E> {
+    fn from(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
         Self {
             bins: groups
                 .into_bins()
-                .map(|(key, bin)| GraphqlSoupBin {
-                    key,
+                .map(|bin| GraphqlSoupBin {
+                    key: bin.key().clone(),
                     total_count: bin.group_total_size(),
                     items: bin
                         .into_items()

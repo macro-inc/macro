@@ -23,8 +23,8 @@ fn project(id: u128) -> SoupItem {
 }
 
 #[test]
-fn nested_groups_order_items_by_their_group_index() {
-    let groups: NestedSoupGroups<String> = vec![
+fn nested_groups_preserve_bin_and_item_insertion_order() {
+    let groups: NestedSoupGroups = vec![
         ItemGroupingInfo {
             key: "project".to_string(),
             total_group_count: 2,
@@ -37,16 +37,38 @@ fn nested_groups_order_items_by_their_group_index() {
             index_in_group: 1,
             item: project(1),
         },
+        ItemGroupingInfo {
+            key: "document".to_string(),
+            total_group_count: 1,
+            index_in_group: 1,
+            item: project(3),
+        },
     ]
     .into_iter()
     .collect();
 
-    let (_, bin) = groups.into_bins().next().unwrap();
-    assert_eq!(bin.group_total_size(), 2);
+    let mut bins = groups.into_bins();
+    let project_bin = bins.next().unwrap();
+    assert_eq!(project_bin.key(), "project");
+    assert_eq!(project_bin.group_total_size(), 2);
     assert_eq!(
-        bin.into_items().map(|item| item.id()).collect::<Vec<_>>(),
-        vec![Uuid::from_u128(1), Uuid::from_u128(2)]
+        project_bin
+            .into_items()
+            .map(|item| item.id())
+            .collect::<Vec<_>>(),
+        vec![Uuid::from_u128(2), Uuid::from_u128(1)]
     );
+
+    let document_bin = bins.next().unwrap();
+    assert_eq!(document_bin.key(), "document");
+    assert_eq!(
+        document_bin
+            .into_items()
+            .map(|item| item.id())
+            .collect::<Vec<_>>(),
+        vec![Uuid::from_u128(3)]
+    );
+    assert!(bins.next().is_none());
 }
 
 #[test]

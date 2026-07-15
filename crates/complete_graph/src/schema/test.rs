@@ -118,7 +118,7 @@ impl SoupService for CountingSoupService {
         _req: soup::domain::models::GroupedSortRequest<'_>,
     ) -> Result<
         impl Iterator<
-            Item = soup::domain::models::ItemGroupingInfo<
+            Item = soup::domain::models::grouping::ItemGroupingInfo<
                 String,
                 soup::domain::models::SoupPropertiesField,
             >,
@@ -127,17 +127,17 @@ impl SoupService for CountingSoupService {
     > {
         self.grouped_calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![
-            soup::domain::models::ItemGroupingInfo {
-                key: "document".to_string(),
-                total_group_count: 2,
-                index_in_group: 2,
-                item: grouped_document(Uuid::from_u128(2)),
-            },
-            soup::domain::models::ItemGroupingInfo {
+            soup::domain::models::grouping::ItemGroupingInfo {
                 key: "document".to_string(),
                 total_group_count: 2,
                 index_in_group: 1,
                 item: grouped_document(Uuid::from_u128(1)),
+            },
+            soup::domain::models::grouping::ItemGroupingInfo {
+                key: "document".to_string(),
+                total_group_count: 2,
+                index_in_group: 2,
+                item: grouped_document(Uuid::from_u128(2)),
             },
         ]
         .into_iter())
@@ -508,7 +508,7 @@ async fn soup_requests_frecency_only_when_selected() {
 }
 
 #[tokio::test]
-async fn group_soup_nests_items_in_bins_and_orders_them_by_group_index() {
+async fn group_soup_nests_items_in_bins_and_preserves_database_order() {
     let harness = harness();
 
     let response = harness

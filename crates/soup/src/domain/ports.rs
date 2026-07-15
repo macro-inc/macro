@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::domain::models::{
-    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, ItemGroupingInfo,
-    SimpleSortRequest, SoupErr, SoupPropertiesField, SoupRequest,
+    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
+    SoupErr, SoupPropertiesField, SoupRequest, grouping::ItemGroupingInfo,
 };
 use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};

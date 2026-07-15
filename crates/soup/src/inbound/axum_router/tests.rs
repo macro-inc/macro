@@ -28,8 +28,8 @@ use crate::{
     domain::{
         models::{
             EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            ItemGroupingInfo, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
-            SoupRequest, SoupType,
+            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+            grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
