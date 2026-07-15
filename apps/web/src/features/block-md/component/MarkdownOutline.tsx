@@ -1,3 +1,4 @@
+import { HoverCard } from '@core/component/HoverCard';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $getRoot, type LexicalEditor } from 'lexical';
 import {
@@ -217,37 +218,50 @@ export function MarkdownOutline(props: {
     <>
       <div ref={outlineAnchor} class="h-px w-3" />
       <Portal>
-        <nav
-          aria-label="Document outline"
-          class="group/outline fixed z-item-options-menu w-3 -translate-y-1/2 outline-none"
+        <div
+          class="fixed z-item-options-menu w-3 -translate-y-1/2"
           style={{
             left: `${outlinePosition().left}px`,
             top: `${outlinePosition().top}px`,
           }}
-          tabIndex={0}
         >
-          <div
-            aria-hidden="true"
-            class="flex w-3 flex-col items-start gap-2 py-1"
-          >
-            <For each={props.outline.headings()}>
-              {(heading) => (
-                <OutlineDash active={activeHeadingKey() === heading.key} />
-              )}
-            </For>
-          </div>
-          <div class="invisible absolute top-1/2 left-0 max-h-[calc(100vh-6rem)] w-52 -translate-y-1/2 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge group-hover/outline:visible group-focus-within/outline:visible">
-            <For each={props.outline.headings()}>
-              {(heading) => (
-                <OutlineItem
-                  active={activeHeadingKey() === heading.key}
-                  label={heading.text}
-                  onClick={() => scrollToHeading(heading)}
-                />
-              )}
-            </For>
-          </div>
-        </nav>
+          <HoverCard
+            closeDelay={0}
+            content={
+              <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge">
+                <For each={props.outline.headings()}>
+                  {(heading) => (
+                    <OutlineItem
+                      active={activeHeadingKey() === heading.key}
+                      label={heading.text}
+                      onClick={() => scrollToHeading(heading)}
+                    />
+                  )}
+                </For>
+              </div>
+            }
+            contentZIndexClass="z-item-options-menu"
+            gutter={-12}
+            openDelay={0}
+            placement="right"
+            trigger={
+              <div
+                aria-hidden="true"
+                class="flex w-3 flex-col items-start gap-2 py-1"
+              >
+                <For each={props.outline.headings()}>
+                  {(heading) => (
+                    <OutlineDash active={activeHeadingKey() === heading.key} />
+                  )}
+                </For>
+              </div>
+            }
+            triggerAriaLabel="Document outline"
+            triggerAs="nav"
+            triggerClass="w-3 outline-none"
+            triggerTabIndex={0}
+          />
+        </div>
       </Portal>
     </>
   );
