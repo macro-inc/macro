@@ -10,6 +10,7 @@ use graphql_notification::{
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
 
+/// Zero-sized marker tying an edge to its configured reader types.
 type EdgeReaders<NR, PR, ER> = PhantomData<fn() -> (NR, PR, ER)>;
 
 /// Notification, property, and email-content fields attached to Soup entities.
@@ -79,7 +80,9 @@ where
 
 /// Email-content fields attached only to Soup email-thread entities.
 pub struct SoupEmailThreadEdges<ER> {
+    /// Identifier of the email thread whose content is being resolved.
     thread_id: String,
+    /// Associates the edge with its configured email-content reader.
     _reader: PhantomData<fn() -> ER>,
 }
 

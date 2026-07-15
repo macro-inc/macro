@@ -842,6 +842,7 @@ where
         self.1.clone()
     }
 
+    /// the email thread edge
     #[graphql(flatten)]
     async fn email_thread_edges(&self) -> E::EmailThreadEdges {
         self.1.email_thread_edges()
