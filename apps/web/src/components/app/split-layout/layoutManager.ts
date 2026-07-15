@@ -604,13 +604,6 @@ export function createSplitLayout(
         );
       }
     }
-    if (import.meta.env.DEV) {
-      console.log('[split-layout] captured entry state', {
-        splitId: split.id,
-        state,
-        searchFilters: state['search.filters'],
-      });
-    }
     const next = { ...currentItem, state } as SplitContent;
     split.history.replaceCurrent(next);
     // Mirror onto SplitState.content so live reads see the captured state.
