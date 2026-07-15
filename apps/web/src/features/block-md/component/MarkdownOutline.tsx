@@ -8,7 +8,6 @@ import {
   For,
   onCleanup,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 
 type OutlineHeading = {
   key: string;
@@ -130,26 +129,24 @@ function OutlineItem(props: {
 export function MarkdownOutline(props: {
   editor: Accessor<LexicalEditor | undefined>;
   outline: MarkdownOutlineState;
-  portalMount: Accessor<HTMLElement | undefined>;
+  portalMount: Accessor<HTMLElement>;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
   const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
-  const [outlinePosition, setOutlinePosition] = createSignal({
-    left: -9999,
-    top: -9999,
+  const [viewportCenter, setViewportCenter] = createSignal(0);
+
+  createEffect(() => {
+    const scrollContainer = props.scrollContainer();
+    if (!scrollContainer) return;
+
+    const syncViewportCenter = () => {
+      setViewportCenter(scrollContainer.clientHeight / 2);
+    };
+    const resizeObserver = new ResizeObserver(syncViewportCenter);
+    syncViewportCenter();
+    resizeObserver.observe(scrollContainer);
+    onCleanup(() => resizeObserver.disconnect());
   });
-  let outlineAnchor: HTMLDivElement | undefined;
-
-  const syncOutlinePosition = () => {
-    const anchorRect = outlineAnchor?.getBoundingClientRect();
-    const scrollRect = props.scrollContainer()?.getBoundingClientRect();
-    if (!anchorRect || !scrollRect) return;
-
-    setOutlinePosition({
-      left: anchorRect.left,
-      top: scrollRect.top + scrollRect.height / 2,
-    });
-  };
 
   createEffect(() => {
     const editor = props.editor();
@@ -175,18 +172,14 @@ export function MarkdownOutline(props: {
       if (frame !== undefined) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         syncActiveHeading();
-        syncOutlinePosition();
       });
     };
     queueViewportSync();
     scrollContainer.addEventListener('scroll', queueViewportSync, {
       passive: true,
     });
-    window.addEventListener('resize', queueViewportSync);
-
     onCleanup(() => {
       scrollContainer.removeEventListener('scroll', queueViewportSync);
-      window.removeEventListener('resize', queueViewportSync);
       if (frame !== undefined) cancelAnimationFrame(frame);
     });
   });
@@ -216,55 +209,47 @@ export function MarkdownOutline(props: {
   };
 
   return (
-    <>
-      <div ref={outlineAnchor} class="h-px w-3" />
-      <Portal mount={props.portalMount()}>
-        <div
-          class="fixed z-item-options-menu w-3 -translate-y-1/2"
-          style={{
-            left: `${outlinePosition().left}px`,
-            top: `${outlinePosition().top}px`,
-          }}
-        >
-          <HoverCard
-            closeDelay={0}
-            content={
-              <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge">
-                <For each={props.outline.headings()}>
-                  {(heading) => (
-                    <OutlineItem
-                      active={activeHeadingKey() === heading.key}
-                      label={heading.text}
-                      onClick={() => scrollToHeading(heading)}
-                    />
-                  )}
-                </For>
-              </div>
-            }
-            contentZIndexClass="z-item-options-menu"
-            gutter={-12}
-            openDelay={0}
-            placement="right"
-            portalMount={props.portalMount()}
-            trigger={
-              <div
-                aria-hidden="true"
-                class="flex w-3 flex-col items-start gap-2 py-1"
-              >
-                <For each={props.outline.headings()}>
-                  {(heading) => (
-                    <OutlineDash active={activeHeadingKey() === heading.key} />
-                  )}
-                </For>
-              </div>
-            }
-            triggerAriaLabel="Document outline"
-            triggerAs="nav"
-            triggerClass="w-3 outline-none"
-            triggerTabIndex={0}
-          />
-        </div>
-      </Portal>
-    </>
+    <div
+      class="pointer-events-auto sticky z-1 w-3 -translate-y-1/2"
+      style={{ top: `${viewportCenter()}px` }}
+    >
+      <HoverCard
+        closeDelay={0}
+        content={
+          <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl bg-surface p-2 shadow-menu ring ring-edge">
+            <For each={props.outline.headings()}>
+              {(heading) => (
+                <OutlineItem
+                  active={activeHeadingKey() === heading.key}
+                  label={heading.text}
+                  onClick={() => scrollToHeading(heading)}
+                />
+              )}
+            </For>
+          </div>
+        }
+        contentZIndexClass="z-item-options-menu"
+        gutter={-12}
+        openDelay={0}
+        placement="right"
+        portalMount={props.portalMount()}
+        trigger={
+          <div
+            aria-hidden="true"
+            class="flex w-3 flex-col items-start gap-2 py-1"
+          >
+            <For each={props.outline.headings()}>
+              {(heading) => (
+                <OutlineDash active={activeHeadingKey() === heading.key} />
+              )}
+            </For>
+          </div>
+        }
+        triggerAriaLabel="Document outline"
+        triggerAs="nav"
+        triggerClass="w-3 outline-none"
+        triggerTabIndex={0}
+      />
+    </div>
   );
 }

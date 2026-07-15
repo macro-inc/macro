@@ -136,10 +136,7 @@ export function Notebook(props: {
   const outline = useMarkdownOutline({
     editor: () => md.editor,
     enabled: () =>
-      !!blockElement() &&
-      width() >= OutlineMinWidth &&
-      !history.isOpen() &&
-      !isMobile(),
+      width() >= OutlineMinWidth && !history.isOpen() && !isMobile(),
   });
 
   const comments = commentsStore.get;
@@ -336,7 +333,7 @@ export function Notebook(props: {
           <MarkdownOutline
             editor={() => md.editor}
             outline={outline}
-            portalMount={blockElement}
+            portalMount={() => notebookRef}
             scrollContainer={() => md.scrollContainer}
           />
         </div>
