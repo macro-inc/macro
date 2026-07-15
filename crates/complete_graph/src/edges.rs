@@ -1,4 +1,4 @@
-use std::{borrow::Cow, marker::PhantomData};
+use std::marker::PhantomData;
 
 use async_graphql::{Context, Object};
 use graphql_email::{
@@ -90,7 +90,7 @@ pub struct SoupEmailThreadEdges<ER> {
 impl<ER> Clone for SoupEmailThreadEdges<ER> {
     fn clone(&self) -> Self {
         Self {
-            thread_id: self.thread_id.clone(),
+            thread_id: self.thread_id,
             _reader: PhantomData,
         }
     }

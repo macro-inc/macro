@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use async_graphql::{ID, Json, Object, ObjectType, Union};
 use graphql_common::GraphqlSoupEntityType;
 use models_pagination::PaginatedOpaqueCursor;

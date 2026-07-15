@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
-use email::domain::models::ParsedMessage;
+use email::domain::{models::ParsedMessage, ports::EmailContentService};
+use entity_access::domain::{models::AccessError, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -48,6 +49,103 @@ impl SoupEmailContentEdgeReader for NoOpSoupEmailContentEdgeReader {
         keys.into_iter()
             .map(|key| (key, EmailContentLoad::Missing))
             .collect()
+    }
+}
+
+/// GraphQL email-content reader backed by the email domain service and the
+/// canonical entity-access service.
+pub struct EmailServiceEmailContentReader<S, A> {
+    email_service: Arc<S>,
+    entity_access_service: Arc<A>,
+}
+
+impl<S, A> EmailServiceEmailContentReader<S, A> {
+    /// Create an email-content reader from services supplied by the application
+    /// composition root.
+    pub fn new(email_service: Arc<S>, entity_access_service: Arc<A>) -> Self {
+        Self {
+            email_service,
+            entity_access_service,
+        }
+    }
+}
+
+impl<S, A> SoupEmailContentEdgeReader for EmailServiceEmailContentReader<S, A>
+where
+    S: EmailContentService,
+    A: EntityAccessService,
+{
+    async fn get_email_content(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        keys: Vec<EmailContentKey>,
+    ) -> HashMap<EmailContentKey, EmailContentLoad> {
+        let thread_ids = keys
+            .iter()
+            .map(|key| key.thread_id.to_string())
+            .collect::<Vec<_>>();
+        let mut receipts = self
+            .entity_access_service
+            .generate_email_thread_view_access_receipts(user_id, None, &thread_ids)
+            .await;
+
+        let mut loads = HashMap::with_capacity(keys.len());
+        let mut authorized = Vec::with_capacity(keys.len());
+        let mut authorized_keys = HashMap::with_capacity(keys.len());
+
+        for key in keys {
+            match receipts
+                .remove(&key.thread_id.to_string())
+                .unwrap_or(Err(AccessError::Internal))
+            {
+                Ok(receipt) => {
+                    authorized.push(receipt);
+                    authorized_keys.insert(key.thread_id, key);
+                }
+                Err(
+                    AccessError::Unauthorized
+                    | AccessError::UnauthorizedWithMessage(_)
+                    | AccessError::NotFound(_),
+                ) => {
+                    loads.insert(key, EmailContentLoad::Missing);
+                }
+                Err(error) => {
+                    tracing::error!(thread_id = %key.thread_id, error = ?error, "email content access check failed");
+                    loads.insert(key, EmailContentLoad::Failed);
+                }
+            }
+        }
+
+        if authorized.is_empty() {
+            return loads;
+        }
+
+        match self
+            .email_service
+            .get_latest_messages_parsed(authorized)
+            .await
+        {
+            Ok(mut messages) => {
+                for (thread_id, key) in authorized_keys {
+                    let load = messages
+                        .remove(&thread_id)
+                        .map_or(EmailContentLoad::Missing, |message| {
+                            EmailContentLoad::Found(Box::new(message))
+                        });
+                    loads.insert(key, load);
+                }
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "bulk email content load failed");
+                loads.extend(
+                    authorized_keys
+                        .into_values()
+                        .map(|key| (key, EmailContentLoad::Failed)),
+                );
+            }
+        }
+
+        loads
     }
 }
 
@@ -123,71 +221,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
-
-    use macro_user_id::user_id::MacroUserIdStr;
-
-    use super::*;
-
-    #[derive(Clone, Default)]
-    struct RecordingReader {
-        calls: Arc<AtomicUsize>,
-    }
-
-    impl SoupEmailContentEdgeReader for RecordingReader {
-        async fn get_email_content(
-            &self,
-            _user_id: &MacroUserIdStr<'static>,
-            keys: Vec<EmailContentKey>,
-        ) -> HashMap<EmailContentKey, EmailContentLoad> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            keys.into_iter()
-                .map(|key| (key, EmailContentLoad::Missing))
-                .collect()
-        }
-    }
-
-    fn key(index: usize) -> EmailContentKey {
-        EmailContentKey {
-            thread_id: Uuid::from_u128(index as u128),
-        }
-    }
-
-    #[tokio::test]
-    async fn batches_distinct_threads_in_one_reader_call() {
-        let reader = RecordingReader::default();
-        let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-        let loader = email_content_loader(user_id, reader.clone());
-        let first = key(1);
-        let second = key(2);
-
-        let loaded = loader.load_many(vec![first, second]).await.unwrap();
-
-        assert_eq!(reader.calls.load(Ordering::SeqCst), 1);
-        assert!(matches!(
-            loaded.get(&first),
-            Some(EmailContentLoad::Missing)
-        ));
-        assert!(matches!(
-            loaded.get(&second),
-            Some(EmailContentLoad::Missing)
-        ));
-    }
-
-    #[tokio::test]
-    async fn rejects_oversized_batches_without_calling_the_reader() {
-        let reader = RecordingReader::default();
-        let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-        let loader = EmailContentLoader::new(user_id, reader.clone());
-        let keys = (0..=MAX_EMAIL_CONTENT_KEYS).map(key).collect::<Vec<_>>();
-
-        let error = loader.load(&keys).await.unwrap_err();
-
-        assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
-        assert!(error.to_string().contains("at most 20 threads"));
-    }
-}
+mod test;

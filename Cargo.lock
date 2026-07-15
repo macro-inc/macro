@@ -5966,6 +5966,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "email",
+ "entity_access",
  "macro_user_id",
  "tokio",
  "tracing",
