@@ -5,12 +5,9 @@ use std::{marker::PhantomData, sync::Arc};
 
 use ::axum::{
     Json,
-    extract::{FromRef, FromRequestParts},
-    http::{HeaderMap, StatusCode, request::Parts},
+    extract::{FromRef, FromRequestParts, Query},
+    http::{HeaderMap, StatusCode, header, request::Parts},
 };
-#[cfg(not(feature = "local_auth"))]
-use ::axum::{extract::Query, http::header};
-#[cfg(not(feature = "local_auth"))]
 use macro_auth::headers::AccessTokenExtractor;
 #[cfg(feature = "local_auth")]
 use macro_env_var::maybe_env_vars;
@@ -18,7 +15,6 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
 use rootcause::Report;
-#[cfg(not(feature = "local_auth"))]
 use serde::Deserialize;
 
 use crate::{InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService};
@@ -68,7 +64,6 @@ maybe_env_vars! {
     struct LocalFusionUserId;
 }
 
-#[cfg(not(feature = "local_auth"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct AuthorizationQuery {
@@ -264,26 +259,25 @@ where
     }
 
     #[cfg(feature = "local_auth")]
-    return authorization_outcome(Some(local_user_context()), false);
-
-    #[cfg(not(feature = "local_auth"))]
-    {
-        let Some(token) = extract_token(parts, state).await? else {
-            return Ok(AuthorizationOutcome {
-                identity: None,
-                is_internal_access: false,
-            });
-        };
-
-        let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
-        let user_context = authorization
-            .service
-            .authorize(&token)
-            .await
-            .map_err(authorization_rejection)?;
-
-        authorization_outcome(Some(user_context), false)
+    if let Some(user_context) = local_user_context() {
+        return authorization_outcome(Some(user_context), false);
     }
+
+    let Some(token) = extract_token(parts, state).await? else {
+        return Ok(AuthorizationOutcome {
+            identity: None,
+            is_internal_access: false,
+        });
+    };
+
+    let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
+    let user_context = authorization
+        .service
+        .authorize(&token)
+        .await
+        .map_err(authorization_rejection)?;
+
+    authorization_outcome(Some(user_context), false)
 }
 
 async fn authorize_internal_request<S, Svc>(
@@ -365,20 +359,17 @@ fn header_string(headers: &HeaderMap, name: Option<&str>) -> Option<String> {
 }
 
 #[cfg(feature = "local_auth")]
-fn local_user_context() -> UserContext {
-    UserContext {
-        user_id: LocalUserId::new()
-            .map(|user_id| user_id.to_string())
-            .unwrap_or_else(|| "macro|orguser@org.com".to_string()),
+fn local_user_context() -> Option<UserContext> {
+    Some(UserContext {
+        user_id: LocalUserId::new()?.to_string(),
         fusion_user_id: LocalFusionUserId::new()
             .map(|fusion_user_id| fusion_user_id.to_string())
             .unwrap_or_else(|| "set me!".to_string()),
         organization_id: Some(1),
         permissions: None,
-    }
+    })
 }
 
-#[cfg(not(feature = "local_auth"))]
 async fn extract_token<S>(
     parts: &mut Parts,
     state: &S,
@@ -404,7 +395,6 @@ where
     }
 }
 
-#[cfg(not(feature = "local_auth"))]
 fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAuthorizationRejection {
     let message = match error.current_context() {
         MacroAuthorizationError::CredentialsExpired => "jwt expired",
