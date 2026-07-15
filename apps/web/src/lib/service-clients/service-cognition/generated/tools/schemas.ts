@@ -378,62 +378,29 @@ export const SearchToolResponse = z.object({
             z.intersection(
               z.object({
                 channel_id: z.string().uuid(),
-                channel_message_search_results: z.array(
-                  z.object({
-                    created_at: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                    deleted_at: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                    highlight: z.object({
-                      bcc: z.array(z.string()).optional(),
-                      cc: z.array(z.string()).optional(),
-                      content: z.array(z.string()).optional(),
-                      name: z.union([z.string(), z.null()]).optional(),
-                      recipients: z.array(z.string()).optional(),
-                      sender: z.union([z.string(), z.null()]).optional(),
-                      user_id: z.union([z.string(), z.null()]).optional(),
-                    }),
-                    message_id: z
-                      .union([z.string().uuid(), z.null()])
-                      .optional(),
-                    score: z.union([z.number(), z.null()]).optional(),
-                    sender_id: z.union([z.string(), z.null()]).optional(),
-                    thread_id: z
-                      .union([z.string().uuid(), z.null()])
-                      .optional(),
-                    updated_at: z
-                      .union([z.string().datetime({ offset: true }), z.null()])
-                      .optional(),
-                  })
-                ),
                 channel_type: z.string(),
-                id: z.string().uuid(),
-                metadata: z
-                  .union([
-                    z.object({
-                      created_at: z.string().datetime({ offset: true }),
-                      interacted_at: z
-                        .union([
-                          z.string().datetime({ offset: true }),
-                          z.null(),
-                        ])
-                        .optional(),
-                      updated_at: z.string().datetime({ offset: true }),
-                      viewed_at: z
-                        .union([
-                          z.string().datetime({ offset: true }),
-                          z.null(),
-                        ])
-                        .optional(),
-                    }),
-                    z.null(),
-                  ])
+                created_at: z.string().datetime({ offset: true }),
+                deleted_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
                   .optional(),
+                highlight: z.object({
+                  bcc: z.array(z.string()).optional(),
+                  cc: z.array(z.string()).optional(),
+                  content: z.array(z.string()).optional(),
+                  name: z.union([z.string(), z.null()]).optional(),
+                  recipients: z.array(z.string()).optional(),
+                  sender: z.union([z.string(), z.null()]).optional(),
+                  user_id: z.union([z.string(), z.null()]).optional(),
+                }),
+                id: z.string().uuid(),
+                message_id: z.string().uuid(),
                 owner_id: z.union([z.string(), z.null()]).optional(),
+                score: z.union([z.number(), z.null()]).optional(),
+                sender_id: z.string(),
+                thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+                updated_at: z.string().datetime({ offset: true }),
               }),
-              z.object({ type: z.literal('channel') })
+              z.object({ type: z.literal('channelMessage') })
             ),
             z.intersection(
               z.object({

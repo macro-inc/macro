@@ -417,8 +417,8 @@ export type TaggedSearchResult1 =
   | (EmailSearchResponseItemWithMetadata & {
       type: 'email';
     })
-  | (ChannelSearchResponseItemWithMetadata & {
-      type: 'channel';
+  | (ChannelMessageSearchResponseItem & {
+      type: 'channelMessage';
     })
   | (ProjectSearchResponseItemWithMetadata & {
       type: 'project';
@@ -688,85 +688,57 @@ export interface CallRecordSummary {
   status?: ToolCallStatus | null;
 }
 /**
- * Metadata for a channel fetched from the database
+ * A single channel-message content hit in the unified search response.
+ * One item per matching message, timestamped by the message itself, so the
+ * unified sort interleaves channel messages with other entity types by
+ * their own recency.
  */
-export interface ChannelMetadata {
-  created_at: string;
-  interacted_at?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update each chat message record for the chat
- * every time the chat updates (specifically for updated_at and viewed_at and interacted_at)
- */
-export interface ChannelSearchResponseItemWithMetadata {
+export interface ChannelMessageSearchResponseItem {
   /**
-   * The id of the channel
+   * The id of the channel the message belongs to
    */
   channel_id: string;
-  /**
-   * The search results for the channel
-   * This may be empty if the search result match was not on content
-   */
-  channel_message_search_results: ChannelSearchResult[];
   /**
    * The type of channel
    */
   channel_type: string;
   /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  /**
-   * Metadata from the database. None if the channel doesn't exist in the database.
-   */
-  metadata?: ChannelMetadata | null;
-  /**
-   * we don't store this for channels atm but keeping it here for consistency
-   */
-  owner_id?: string | null;
-}
-/**
- * A channel message match for a given channel id
- */
-export interface ChannelSearchResult {
-  /**
    * When the channel message was created
-   * This is only prsent if the search result is on the message content
    */
-  created_at?: string | null;
+  created_at: string;
   /**
    * When the channel message was deleted, if it has been
    */
   deleted_at?: string | null;
   highlight: SearchHighlight;
   /**
-   * The channel message id
-   * This is only prsent if the search result is on the message content
+   * Standardized id field shared by all item types; the channel id.
    */
-  message_id?: string | null;
+  id: string;
+  /**
+   * The channel message id
+   */
+  message_id: string;
+  /**
+   * we don't store this for channels atm but keeping it here for consistency
+   */
+  owner_id?: string | null;
   /**
    * The score of the result
    */
   score?: number | null;
   /**
    * The sender id
-   * This is only prsent if the search result is on the message content
    */
-  sender_id?: string | null;
+  sender_id: string;
   /**
    * The channel message thread id
    */
   thread_id?: string | null;
   /**
    * When the channel message was last updated
-   * This is only prsent if the search result is on the message content
    */
-  updated_at?: string | null;
+  updated_at: string;
 }
 /**
  * A single message in the tool response.
