@@ -3118,6 +3118,7 @@ dependencies = [
  "doppler-config",
  "http-body-util",
  "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_config",
  "macro_cors",
