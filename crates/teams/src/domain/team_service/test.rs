@@ -58,9 +58,12 @@ struct MockTeamRepository {
     mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>>,
     team_for_get_by_id: Option<Team>,
     team_subscription_id: Option<stripe::SubscriptionId>,
+    team_subscription_id_lookup_calls: Arc<Mutex<usize>>,
     backfilled_subscription_id: Arc<Mutex<Option<stripe::SubscriptionId>>>,
     stripe_customer_id: Option<stripe::CustomerId>,
+    stripe_customer_id_lookup_calls: Arc<Mutex<usize>>,
     team_payment_status: bool,
+    team_payment_status_lookup_calls: Arc<Mutex<usize>>,
     enterprise: bool,
     enterprise_status_lookup_calls: Arc<Mutex<usize>>,
     fail_enterprise_status_lookup: bool,
@@ -79,6 +82,8 @@ struct MockTeamRepository {
     payment_update_calls: Arc<Mutex<Vec<(uuid::Uuid, bool)>>>,
     fail_github_installation_move: bool,
     fail_invite_users_to_team: bool,
+    invite_users_to_team_calls: Arc<Mutex<usize>>,
+    get_team_by_id_calls: Arc<Mutex<usize>>,
     team_id_for_domain: Option<uuid::Uuid>,
     team_plan: Option<TeamPlan>,
     seat_count: i32,
@@ -98,9 +103,12 @@ impl MockTeamRepository {
             mark_sent_calls,
             team_for_get_by_id: None,
             team_subscription_id: None,
+            team_subscription_id_lookup_calls: Arc::new(Mutex::new(0)),
             backfilled_subscription_id: Arc::new(Mutex::new(None)),
             stripe_customer_id: None,
+            stripe_customer_id_lookup_calls: Arc::new(Mutex::new(0)),
             team_payment_status: true,
+            team_payment_status_lookup_calls: Arc::new(Mutex::new(0)),
             enterprise: false,
             enterprise_status_lookup_calls: Arc::new(Mutex::new(0)),
             fail_enterprise_status_lookup: false,
@@ -128,6 +136,8 @@ impl MockTeamRepository {
             payment_update_calls: Arc::new(Mutex::new(Vec::new())),
             fail_github_installation_move: false,
             fail_invite_users_to_team: false,
+            invite_users_to_team_calls: Arc::new(Mutex::new(0)),
+            get_team_by_id_calls: Arc::new(Mutex::new(0)),
             team_id_for_domain: None,
             team_plan: None,
             seat_count: 0,
@@ -157,6 +167,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<stripe::CustomerId>, TeamError>> + Send {
+        *self.stripe_customer_id_lookup_calls.lock().unwrap() += 1;
         let customer_id = self.stripe_customer_id.clone();
         async move { Ok(customer_id) }
     }
@@ -165,6 +176,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send {
+        *self.team_subscription_id_lookup_calls.lock().unwrap() += 1;
         let subscription_id = self
             .backfilled_subscription_id
             .lock()
@@ -178,6 +190,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        *self.team_payment_status_lookup_calls.lock().unwrap() += 1;
         let team_payment_status = self.team_payment_status;
         async move { Ok(team_payment_status) }
     }
@@ -244,6 +257,7 @@ impl TeamRepository for MockTeamRepository {
         _: &MacroUserIdStr<'_>,
         _: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send {
+        *self.invite_users_to_team_calls.lock().unwrap() += 1;
         let invites = self.invites_to_return.clone();
         let fail = self.fail_invite_users_to_team;
         async move {
@@ -417,6 +431,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<TeamWithMembers, TeamError>> + Send {
+        *self.get_team_by_id_calls.lock().unwrap() += 1;
         let team = self.team_for_get_by_id.clone();
         async move {
             let team = team.ok_or(TeamError::TeamDoesNotExist)?;
@@ -556,6 +571,7 @@ struct MockCustomerRepository {
     increment_calls: Arc<Mutex<Vec<(String, u64)>>>,
     decrement_calls: Arc<Mutex<Vec<(String, u64)>>>,
     convert_calls: Arc<Mutex<Vec<(String, uuid::Uuid, String)>>>,
+    subscription_lookup_calls: Arc<Mutex<usize>>,
     fail_increment: bool,
     fail_decrement: bool,
     no_active_subscription: bool,
@@ -568,6 +584,7 @@ impl Default for MockCustomerRepository {
             increment_calls: Arc::new(Mutex::new(Vec::new())),
             decrement_calls: Arc::new(Mutex::new(Vec::new())),
             convert_calls: Arc::new(Mutex::new(Vec::new())),
+            subscription_lookup_calls: Arc::new(Mutex::new(0)),
             fail_increment: false,
             fail_decrement: false,
             no_active_subscription: false,
@@ -594,6 +611,7 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         _: &stripe::CustomerId,
     ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send {
+        *self.subscription_lookup_calls.lock().unwrap() += 1;
         let no_active_subscription = self.no_active_subscription;
         let subscription_id = self.subscription_id.clone();
         async move {
@@ -1310,6 +1328,203 @@ async fn test_is_user_premium_without_active_subscription() {
     let service = build_service_for_premium_check(Some("cus_test".parse().unwrap()), true);
 
     assert!(service.is_user_premium(&user_id).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_effects() {
+    let team_id = uuid::Uuid::from_u128(6000);
+    let invite_id = uuid::Uuid::from_u128(6001);
+    let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(
+        vec![make_invite("member@example.com", invite_id, team_id)],
+        "Enterprise Team",
+        mark_sent_calls.clone(),
+    )
+    .with_enterprise(true);
+    team_repo.team_payment_status = false;
+    team_repo.team_subscription_id = Some("sub_enterprise_sentinel".parse().unwrap());
+    team_repo.stripe_customer_id = Some("cus_enterprise_sentinel".parse().unwrap());
+    team_repo.team_plan = Some(TeamPlan::Idea);
+    team_repo.seat_count = TeamPlan::Idea.seat_cap() - 1;
+
+    let enterprise_status_lookup_calls = team_repo.enterprise_status_lookup_calls.clone();
+    let payment_status_lookup_calls = team_repo.team_payment_status_lookup_calls.clone();
+    let subscription_id_lookup_calls = team_repo.team_subscription_id_lookup_calls.clone();
+    let stripe_customer_id_lookup_calls = team_repo.stripe_customer_id_lookup_calls.clone();
+    let get_team_by_id_calls = team_repo.get_team_by_id_calls.clone();
+    let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
+    let subscription_update_calls = team_repo.subscription_update_calls.clone();
+    let payment_update_calls = team_repo.payment_update_calls.clone();
+
+    let customer_repo = MockCustomerRepository::default();
+    let customer_subscription_lookup_calls = customer_repo.subscription_lookup_calls.clone();
+    let convert_calls = customer_repo.convert_calls.clone();
+    let increment_calls = customer_repo.increment_calls.clone();
+    let decrement_calls = customer_repo.decrement_calls.clone();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let analytics_events = Arc::new(Mutex::new(Vec::new()));
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repo,
+        customer_repo,
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(analytics_events.clone()),
+    );
+
+    let invite_emails = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &invited_by);
+
+    let result = service
+        .invite_users_to_team(receipt, invites)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].team_invite_id, invite_id);
+    assert_eq!(*enterprise_status_lookup_calls.lock().unwrap(), 1);
+    assert_eq!(*payment_status_lookup_calls.lock().unwrap(), 0);
+    assert_eq!(*subscription_id_lookup_calls.lock().unwrap(), 0);
+    assert_eq!(*stripe_customer_id_lookup_calls.lock().unwrap(), 0);
+    assert_eq!(*get_team_by_id_calls.lock().unwrap(), 0);
+    assert_eq!(*customer_subscription_lookup_calls.lock().unwrap(), 0);
+    assert!(convert_calls.lock().unwrap().is_empty());
+    assert!(subscription_update_calls.lock().unwrap().is_empty());
+    assert!(payment_update_calls.lock().unwrap().is_empty());
+    assert!(increment_calls.lock().unwrap().is_empty());
+    assert!(decrement_calls.lock().unwrap().is_empty());
+
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 1);
+    assert_eq!(notification_ingress.call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(*mark_sent_calls.lock().unwrap(), vec![vec![invite_id]]);
+
+    let events = analytics_events.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    match &events[0] {
+        TeamAnalyticsEvent::TeamInvited {
+            team_id: event_team_id,
+            team_invite_id,
+            inviter_id,
+            team_name,
+        } => {
+            assert_eq!(*event_team_id, team_id);
+            assert_eq!(*team_invite_id, invite_id);
+            assert_eq!(inviter_id.as_ref(), invited_by.as_ref());
+            assert_eq!(team_name.as_deref(), Some("Enterprise Team"));
+        }
+        event => panic!("unexpected event: {event:?}"),
+    }
+}
+
+#[tokio::test]
+async fn invite_users_to_team_enterprise_enforces_team_plan_seat_cap() {
+    let team_id = uuid::Uuid::from_u128(6010);
+    let invite_id = uuid::Uuid::from_u128(6011);
+    let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(
+        vec![make_invite("member@example.com", invite_id, team_id)],
+        "Enterprise Team",
+        mark_sent_calls.clone(),
+    )
+    .with_enterprise(true);
+    team_repo.team_payment_status = false;
+    team_repo.team_subscription_id = Some("sub_enterprise_sentinel".parse().unwrap());
+    team_repo.team_plan = Some(TeamPlan::Idea);
+    team_repo.seat_count = TeamPlan::Idea.seat_cap();
+
+    let payment_status_lookup_calls = team_repo.team_payment_status_lookup_calls.clone();
+    let subscription_id_lookup_calls = team_repo.team_subscription_id_lookup_calls.clone();
+    let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let analytics_events = Arc::new(Mutex::new(Vec::new()));
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(analytics_events.clone()),
+    );
+
+    let invite_emails = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &invited_by);
+
+    let error = service
+        .invite_users_to_team(receipt, invites)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, InviteUsersToTeamError::NotEnoughOpenSeats));
+    assert_eq!(*payment_status_lookup_calls.lock().unwrap(), 0);
+    assert_eq!(*subscription_id_lookup_calls.lock().unwrap(), 0);
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
+    assert_eq!(notification_ingress.call_count.load(Ordering::SeqCst), 0);
+    assert!(mark_sent_calls.lock().unwrap().is_empty());
+    assert!(analytics_events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invite_users_to_team_enterprise_status_lookup_failure_precedes_persistence() {
+    let team_id = uuid::Uuid::from_u128(6020);
+    let invite_id = uuid::Uuid::from_u128(6021);
+    let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(
+        vec![make_invite("member@example.com", invite_id, team_id)],
+        "Enterprise Team",
+        mark_sent_calls,
+    );
+    team_repo.fail_enterprise_status_lookup = true;
+
+    let enterprise_status_lookup_calls = team_repo.enterprise_status_lookup_calls.clone();
+    let payment_status_lookup_calls = team_repo.team_payment_status_lookup_calls.clone();
+    let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invite_emails = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &invited_by);
+
+    let error = service
+        .invite_users_to_team(receipt, invites)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        InviteUsersToTeamError::TeamError(TeamError::StorageLayerError(_))
+    ));
+    assert_eq!(*enterprise_status_lookup_calls.lock().unwrap(), 1);
+    assert_eq!(*payment_status_lookup_calls.lock().unwrap(), 0);
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
 }
 
 /// When one notification fails, only the successful invite IDs are passed to

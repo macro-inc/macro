@@ -476,10 +476,16 @@ where
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 
-        if !self
+        let enterprise = self
             .team_repository
-            .get_team_payment_status(&team_id)
-            .await?
+            .get_team_enterprise_status(&team_id)
+            .await?;
+
+        if !enterprise
+            && !self
+                .team_repository
+                .get_team_payment_status(&team_id)
+                .await?
         {
             // If the team has a subscription id and they are set to not paying continue to error
             if self
