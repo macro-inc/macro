@@ -29,6 +29,8 @@ export type SidePanelContextType = {
   toggle: () => void;
   /** Set which section IDs are expanded in the accordion. */
   setOpenSectionIds: (ids: string[]) => void;
+  /** Which section IDs are currently expanded in the accordion. */
+  openSectionIds: Accessor<string[]>;
   /**
    * True when the layout is mobile or narrower than the split threshold.
    * In this mode the side panel renders as a full-screen overlay rather than

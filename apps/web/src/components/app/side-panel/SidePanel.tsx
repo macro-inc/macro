@@ -110,6 +110,7 @@ function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
     toggle,
     isNarrow,
     setOpenSectionIds: setOpenIds,
+    openSectionIds: openIds,
   };
 
   return (
@@ -363,6 +364,7 @@ function useSidePanel() {
     isNarrow: ctx.isNarrow,
     hasSections: ctx.hasSections,
     setOpenSectionIds: ctx.setOpenSectionIds,
+    openSectionIds: ctx.openSectionIds,
   };
 }
 
