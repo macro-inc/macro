@@ -57,6 +57,12 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
     .unwrap()
 }
 
+fn claim(handle: &EngineHandle) -> ClaimedMutationWire {
+    block_on(handle.claim_next_mutation("runner".to_string(), 10, 1_000))
+        .unwrap()
+        .expect("queue head")
+}
+
 #[test]
 fn write_then_read_round_trips() {
     let handle = spawn_handle();
@@ -112,6 +118,7 @@ fn optimistic_layer_commits_durably() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        0,
     ))
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
@@ -122,8 +129,11 @@ fn optimistic_layer_commits_durably() {
     };
     assert_eq!(data, soup_data(true));
 
+    let claimed = claim(&handle);
     let committed = block_on(handle.commit_optimistic_write(
         optimistic.transaction_id,
+        "runner".to_string(),
+        claimed.lease_generation,
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),
@@ -149,10 +159,17 @@ fn rollback_drops_optimistic_contribution() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        0,
     ))
     .unwrap();
 
-    block_on(handle.rollback_optimistic_write(optimistic.transaction_id)).unwrap();
+    let claimed = claim(&handle);
+    block_on(handle.rollback_optimistic_write(
+        optimistic.transaction_id,
+        "runner".to_string(),
+        claimed.lease_generation,
+    ))
+    .unwrap();
     let ReadResultWire::Hit { data } = read(&handle, None) else {
         panic!("expected hit");
     };
@@ -180,6 +197,11 @@ fn clear_wipes_everything() {
 #[test]
 fn bad_transaction_id_is_an_error() {
     let handle = spawn_handle();
-    let error = block_on(handle.rollback_optimistic_write("not-a-number".to_string())).unwrap_err();
+    let error = block_on(handle.rollback_optimistic_write(
+        "not-a-number".to_string(),
+        "runner".to_string(),
+        "1".to_string(),
+    ))
+    .unwrap_err();
     assert!(error.contains("invalid optimistic transaction id"));
 }

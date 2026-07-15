@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 
 use crate::domain::model::{
     CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError, RemoveTeamInviteError,
-    RemoveUserFromTeamError,
+    RemoveUserFromTeamError, TeamError, ToggleAutoJoinDomainError,
 };
 
 use super::invite_to_team::InviteToTeamError;
@@ -97,4 +97,38 @@ async fn remove_team_owner_validation_response_is_preserved() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body_text, r#"{"message":"cannot remove owner"}"#);
+}
+
+#[tokio::test]
+async fn toggle_auto_join_domain_generic_domain_response_is_bad_request() {
+    let (status, body_text, _) = response_parts(
+        ToggleAutoJoinDomainError::GenericDomainNotAllowed("gmail.com".to_string()),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body_text.contains("gmail.com"));
+}
+
+#[tokio::test]
+async fn toggle_auto_join_domain_storage_error_response_is_obfuscated() {
+    let (status, body_text, body_json) = response_parts(ToggleAutoJoinDomainError::TeamError(
+        TeamError::StorageLayerError(anyhow::anyhow!(CUSTOMER_ERROR_SENTINEL)),
+    ))
+    .await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body_text, r#"{"message":"internal server error"}"#);
+    assert_eq!(body_json, json!({ "message": "internal server error" }));
+}
+
+#[tokio::test]
+async fn toggle_auto_join_domain_missing_team_response_is_not_found() {
+    let (status, body_text, _) = response_parts(ToggleAutoJoinDomainError::TeamError(
+        TeamError::TeamDoesNotExist,
+    ))
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body_text, r#"{"message":"team does not exist"}"#);
 }

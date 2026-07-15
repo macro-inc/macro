@@ -722,7 +722,7 @@ async fn init_user(
         .into_response())
 }
 
-/// Rejects a connect when this Gmail identity already has 3+ recent backfill jobs in
+/// Rejects a connect when this Gmail identity already has 10+ recent backfill jobs in
 /// the last 24h (`@macro.com` is exempt). Enforced before the link and Gmail watch are
 /// created so a rejected connect never has to tear down a half-provisioned inbox.
 async fn enforce_backfill_rate_limit(
@@ -737,7 +737,7 @@ async fn enforce_backfill_rate_limit(
     .await
     .context("Failed to fetch recent backfill jobs")?;
 
-    if recent_jobs.len() >= 3 && !email_address.ends_with("@macro.com") {
+    if recent_jobs.len() >= 10 && !email_address.ends_with("@macro.com") {
         return Err(InitError::TooManyJobs);
     }
 

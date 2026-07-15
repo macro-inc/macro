@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
@@ -16,11 +17,8 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import type {
-  HotkeyRegistrationOptions,
-  ValidHotkey,
-} from '@core/hotkey/types';
+import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import {
   createCanvasFileFromJsonString,
@@ -30,6 +28,8 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { AnimatedChannelIcon } from '@icon/wide-channel';
+import WideChannel from '@icon/wide-channel.svg';
 import { AnimatedChatIcon } from '@icon/wide-chat';
 import WideChat from '@icon/wide-chat.svg';
 import { AnimatedDiagramIcon } from '@icon/wide-diagram';
@@ -55,7 +55,6 @@ import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
-  type Component,
   createEffect,
   createSignal,
   For,
@@ -65,6 +64,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
+import type { CreatableBlock } from './types';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -280,12 +280,7 @@ export function runCreateAction(
   }
 }
 
-export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
-  label: string;
-  blockName: BlockName | BlockAlias;
-  altHotkeyToken?: HotkeyToken;
-  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
-};
+export type { CreatableBlock } from './types';
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
@@ -375,6 +370,21 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'm',
     keyDownHandler: () => {
       runCreateAction('channel', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Channel',
+    icon: WideChannel,
+    animatedIcon: AnimatedChannelIcon,
+    description: 'Create channel',
+    keywords: ['new', 'make', 'add', 'channel', 'group', 'conversation'],
+    blockName: 'channel',
+    hotkeyToken: TOKENS.create.channel,
+    hotkey: 'g',
+    keyDownHandler: () => {
+      openNewChannelModal();
+      setCreateMenuOpen(false, false);
       return true;
     },
   },

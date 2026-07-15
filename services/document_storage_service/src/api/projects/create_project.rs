@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -7,10 +7,10 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::{
     project::{Project, request::CreateProjectRequest, response::CreateProjectResponse},
     response::{GenericErrorResponse, GenericResponse},
-    user::axum_extractor::MacroUserExtractor,
 };
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
@@ -34,7 +34,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[tracing::instrument(skip(ctx, user_context, project), fields(user_id=?user_context.macro_user_id))]
 pub async fn create_project_handler(
     State(ctx): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
     project: ProjectBodyAccessLevelExtractor<
         EditAccessLevel,
         CreateProjectRequest,
@@ -65,7 +65,7 @@ pub async fn create_project_handler(
 
 async fn create_project_v2(
     ctx: ApiContext,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
     req: CreateProjectRequest,
 ) -> Result<Project, (StatusCode, String)> {
     if req.name.graphemes(true).count() > 100 {

@@ -1,9 +1,10 @@
-//! Optimistic mutation layer tests: begin/read/commit/rollback, out-of-order
-//! settlement, layer composition, durable isolation, and lifecycle resets.
+//! Durable optimistic mutation tests: enqueue/read/claim/retry/commit/fail,
+//! strict ordering, and lifecycle resets.
 
 use cache_core::engine::{Engine, EngineError, ReadResult};
-use cache_core::store::InMemoryStorage;
-use cache_core::value::EntityKey;
+use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::{CacheValue, EntityKey};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -110,7 +111,6 @@ fn mutation_response(display_name: &str, value: &str) -> Json {
     })
 }
 
-/// Reads the property object out of a soup query hit.
 fn property_of(data: &Json) -> &Json {
     &data["user"]["soup"]["items"][0]["entity"]["properties"][0]
 }
@@ -142,494 +142,257 @@ async fn read_hit(engine: &mut Engine<InMemoryStorage>, op: Option<u64>) -> Json
     }
 }
 
-/// The durable (storage) value of the property record's displayName, read
-/// directly from the underlying store — bypassing optimistic layers.
-async fn durable_display_name(engine: &Engine<InMemoryStorage>) -> Option<String> {
-    use cache_core::store::Storage;
-    use cache_core::value::CacheValue;
+async fn claim_head(
+    engine: &mut Engine<InMemoryStorage>,
+    owner: &str,
+    now_ms: i64,
+) -> (u64, MutationClaimToken) {
+    let claimed = engine
+        .claim_next_mutation(MutationClaimRequest {
+            owner: owner.into(),
+            now_ms,
+            lease_expires_at_ms: now_ms + 1_000,
+        })
+        .await
+        .unwrap()
+        .expect("queue head");
+    let id = claimed.queued.id;
+    (
+        id,
+        MutationClaimToken {
+            owner: owner.into(),
+            generation: claimed.lease_generation,
+        },
+    )
+}
+
+async fn durable_value(engine: &Engine<InMemoryStorage>) -> Option<String> {
     let records = engine
         .storage()
         .get_batch(&[EntityKey(PROPERTY_KEY.to_string())])
         .await
         .unwrap();
-    records
-        .into_iter()
-        .next()
-        .flatten()
-        .and_then(|record| match record.fields.get("displayName") {
-            Some(CacheValue::String(s)) => Some(s.clone()),
-            _ => None,
-        })
+    let record = records.into_iter().next().flatten()?;
+    let CacheValue::Object(value) = record.fields.get("value")? else {
+        return None;
+    };
+    match value.get("value") {
+        Some(CacheValue::String(value)) => Some(value.clone()),
+        _ => None,
+    }
 }
 
 #[test]
-fn network_mutation_without_layer_writes_through() {
+fn begin_persists_mutation_and_optimistic_layer() {
     block_on(async {
         let mut engine = engine_with_base("Status", "todo").await;
-        // Register op 1 on the soup query.
         read_hit(&mut engine, Some(1)).await;
-
-        // A plain (non-optimistic) mutation response normalizes into the
-        // same records and notifies dependents.
-        let write = engine
-            .write_query(
+        let (transaction, result) = engine
+            .begin_optimistic_write(
                 None,
                 MUTATION,
                 Some("SetEntityProperty"),
-                &mutation_vars("done"),
-                &mutation_response("Status", "done"),
-                None,
+                &mutation_vars("doing"),
+                &mutation_response("Status", "doing"),
+                123,
             )
             .await
             .unwrap();
-        assert!(write.changed.contains(&EntityKey(PROPERTY_KEY.to_string())));
-        assert!(write.affected_ops.contains(&1));
-        // Mutation root fields are transient: nothing lands on ROOT_QUERY.
-        assert!(!write.changed.iter().any(|k| k.is_root()));
 
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("done"));
+        assert!(result.affected_ops.contains(&1));
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].id, transaction);
+        assert_eq!(queued[0].mutation.created_at_ms, 123);
         assert_eq!(
-            durable_display_name(&engine).await.as_deref(),
-            Some("Status")
+            queued[0].mutation.request.operation_name.as_deref(),
+            Some("SetEntityProperty")
+        );
+
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
+        assert_eq!(durable_value(&engine).await.as_deref(), Some("todo"));
+    });
+}
+
+#[test]
+fn claimed_success_atomically_commits_real_response() {
+    block_on(async {
+        let mut engine = engine_with_base("Status", "todo").await;
+        read_hit(&mut engine, Some(1)).await;
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("doing"),
+                &mutation_response("Status", "doing"),
+                0,
+            )
+            .await
+            .unwrap();
+        let (claimed_id, claim) = claim_head(&mut engine, "runner", 10).await;
+        assert_eq!(claimed_id, transaction);
+
+        let result = engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("doing"),
+                &mutation_response("Status (server)", "done"),
+            )
+            .await
+            .unwrap();
+        assert!(result.changed.contains(&EntityKey(PROPERTY_KEY.into())));
+        assert!(result.affected_ops.contains(&1));
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(durable_value(&engine).await.as_deref(), Some("done"));
+
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["displayName"], json!("Status (server)"));
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("done"));
+    });
+}
+
+#[test]
+fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
+    block_on(async {
+        let mut engine = engine_with_base("Status", "todo").await;
+        let (first, _) = engine
+            .begin_optimistic_write(
+                None,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("a"),
+                &mutation_response("Status", "a"),
+                0,
+            )
+            .await
+            .unwrap();
+        let (second, _) = engine
+            .begin_optimistic_write(
+                None,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("b"),
+                &mutation_response("Status", "b"),
+                1,
+            )
+            .await
+            .unwrap();
+        assert!(first < second);
+
+        let (_, claim) = claim_head(&mut engine, "runner", 10).await;
+        engine
+            .defer_optimistic_write(first, claim, 100, "offline".into())
+            .await
+            .unwrap();
+        assert!(
+            engine
+                .claim_next_mutation(MutationClaimRequest {
+                    owner: "runner".into(),
+                    now_ms: 99,
+                    lease_expires_at_ms: 200,
+                })
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+        assert_eq!(
+            engine.storage().load_mutation_queue().await.unwrap().len(),
+            2
         );
     });
 }
 
 #[test]
-fn reads_reject_mutation_documents() {
+fn permanent_failure_rolls_back_only_the_claimed_head() {
     block_on(async {
-        let mut engine = Engine::new(InMemoryStorage::new());
-        let err = engine
-            .read_query(
+        let mut engine = engine_with_base("Status", "todo").await;
+        let (first, _) = engine
+            .begin_optimistic_write(
                 None,
                 MUTATION,
                 Some("SetEntityProperty"),
-                &mutation_vars("x"),
+                &mutation_vars("a"),
+                &mutation_response("Status", "a"),
+                0,
+            )
+            .await
+            .unwrap();
+        engine
+            .begin_optimistic_write(
+                None,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("b"),
+                &mutation_response("Status", "b"),
+                1,
+            )
+            .await
+            .unwrap();
+        let (_, claim) = claim_head(&mut engine, "runner", 10).await;
+        let result = engine
+            .rollback_optimistic_write(first, claim)
+            .await
+            .unwrap();
+        // The later layer masks the failed head, so the visible view is stable.
+        assert!(result.affected_ops.is_empty());
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+        assert_eq!(
+            engine.storage().load_mutation_queue().await.unwrap().len(),
+            1
+        );
+    });
+}
+
+#[test]
+fn stale_claim_cannot_settle_mutation() {
+    block_on(async {
+        let mut engine = engine_with_base("Status", "todo").await;
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("doing"),
+                &mutation_response("Status", "doing"),
+                0,
+            )
+            .await
+            .unwrap();
+        let error = engine
+            .rollback_optimistic_write(
+                transaction,
+                MutationClaimToken {
+                    owner: "wrong".into(),
+                    generation: 1,
+                },
             )
             .await
             .unwrap_err();
-        assert!(matches!(err, EngineError::Document(_)));
-    });
-}
-
-#[test]
-fn begin_composes_over_base_without_persisting() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        let (txn, begin) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-            )
-            .await
-            .unwrap();
-        assert!(txn > 0);
-        assert!(begin.changed.contains(&EntityKey(PROPERTY_KEY.to_string())));
-        assert!(begin.affected_ops.contains(&1));
-        assert!(!begin.reset);
-
-        // Reads see the optimistic value; durable state is untouched.
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
-        use cache_core::store::Storage;
-        use cache_core::value::CacheValue;
-        let stored = engine
-            .storage()
-            .get_batch(&[EntityKey(PROPERTY_KEY.to_string())])
-            .await
-            .unwrap();
-        let stored = stored.into_iter().next().flatten().unwrap();
-        let Some(CacheValue::Object(value)) = stored.fields.get("value") else {
-            panic!("stored value shape");
-        };
-        assert_eq!(value.get("value"), Some(&CacheValue::String("todo".into())));
-    });
-}
-
-#[test]
-fn begin_with_identical_data_notifies_nobody() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        // Optimistic response identical to the cached data → the effective
-        // view is unchanged, nobody re-executes.
-        let (_, begin) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("todo"),
-                &mutation_response("Status", "todo"),
-            )
-            .await
-            .unwrap();
-        assert!(begin.changed.is_empty());
-        assert!(begin.affected_ops.is_empty());
-    });
-}
-
-#[test]
-fn commit_replaces_layer_and_flushes_durably() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        let (txn, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-            )
-            .await
-            .unwrap();
-
-        // The network result differs from the optimistic response.
-        let commit = engine
-            .commit_optimistic_write(
-                txn,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status (renamed)", "doing"),
-            )
-            .await
-            .unwrap();
-        // Durable flush happened (single layer = contiguous prefix).
-        assert!(
-            commit
-                .changed
-                .contains(&EntityKey(PROPERTY_KEY.to_string()))
-        );
-        // displayName's visible value changed with the real response.
-        assert!(commit.affected_ops.contains(&1));
-
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["displayName"], json!("Status (renamed)"));
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
+        assert!(matches!(error, EngineError::StaleMutationClaim(id) if id == transaction));
         assert_eq!(
-            durable_display_name(&engine).await.as_deref(),
-            Some("Status (renamed)")
-        );
-
-        // Settled transactions are gone: settling again is an error.
-        assert!(matches!(
-            engine.rollback_optimistic_write(txn).await,
-            Err(EngineError::UnknownTransaction(_))
-        ));
-    });
-}
-
-#[test]
-fn commit_matching_optimistic_response_is_silent() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        let (txn, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-            )
-            .await
-            .unwrap();
-        let commit = engine
-            .commit_optimistic_write(
-                txn,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-            )
-            .await
-            .unwrap();
-        // Visible data did not change (real == optimistic) → no local
-        // notifications; durable keys still broadcast for other instances.
-        assert!(commit.affected_ops.is_empty());
-        assert!(
-            commit
-                .changed
-                .contains(&EntityKey(PROPERTY_KEY.to_string()))
+            engine.storage().load_mutation_queue().await.unwrap().len(),
+            1
         );
     });
 }
 
 #[test]
-fn rollback_restores_base_view() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        let (txn, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-            )
-            .await
-            .unwrap();
-        let rollback = engine.rollback_optimistic_write(txn).await.unwrap();
-        assert!(rollback.affected_ops.contains(&1));
-        // Nothing was ever durable, nothing flushed.
-        assert!(rollback.changed.is_empty());
-
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("todo"));
-        assert_eq!(
-            durable_display_name(&engine).await.as_deref(),
-            Some("Status")
-        );
-    });
-}
-
-#[test]
-fn out_of_order_settlement_preserves_later_layer() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        // A then B target the same field.
-        let (txn_a, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("a"),
-                &mutation_response("Status", "a"),
-            )
-            .await
-            .unwrap();
-        let (txn_b, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("b"),
-                &mutation_response("Status", "b"),
-            )
-            .await
-            .unwrap();
-        assert_ne!(txn_a, txn_b);
-
-        // B settles first: nothing flushes (A still pending ahead of it),
-        // and B's real value stays visible over A's pending layer.
-        let commit_b = engine
-            .commit_optimistic_write(
-                txn_b,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("b"),
-                &mutation_response("Status", "b!"),
-            )
-            .await
-            .unwrap();
-        assert!(commit_b.changed.is_empty(), "no durable flush yet");
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b!"));
-        assert_eq!(
-            durable_display_name(&engine).await.as_deref(),
-            Some("Status")
-        );
-
-        // A settles second: settling the earlier layer must not clobber the
-        // later one. The visible value stays B's; the flush persists both in
-        // order (B's response wins the shared field).
-        let commit_a = engine
-            .commit_optimistic_write(
-                txn_a,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("a"),
-                &mutation_response("Status", "a!"),
-            )
-            .await
-            .unwrap();
-        assert!(commit_a.affected_ops.is_empty(), "visible data unchanged");
-        assert!(
-            commit_a
-                .changed
-                .contains(&EntityKey(PROPERTY_KEY.to_string()))
-        );
-
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b!"));
-    });
-}
-
-#[test]
-fn rollback_of_earlier_layer_keeps_later_success() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        let (txn_a, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("a"),
-                &mutation_response("Status", "a"),
-            )
-            .await
-            .unwrap();
-        let (txn_b, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("b"),
-                &mutation_response("Status", "b"),
-            )
-            .await
-            .unwrap();
-
-        // B succeeds first; A then fails. The failed tombstone unblocks the
-        // prefix and B's real response is what persists.
-        engine
-            .commit_optimistic_write(
-                txn_b,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("b"),
-                &mutation_response("Status", "b!"),
-            )
-            .await
-            .unwrap();
-        let rollback = engine.rollback_optimistic_write(txn_a).await.unwrap();
-        // A's contribution was masked by B → visible data unchanged.
-        assert!(rollback.affected_ops.is_empty());
-        // The flush persisted B's committed layer.
-        assert!(
-            rollback
-                .changed
-                .contains(&EntityKey(PROPERTY_KEY.to_string()))
-        );
-
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b!"));
-    });
-}
-
-#[test]
-fn different_fields_on_same_record_compose() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        read_hit(&mut engine, Some(1)).await;
-
-        // Layer A renames; layer B (pending) changes the value.
-        let (txn_a, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("todo"),
-                &mutation_response("Stage", "todo"),
-            )
-            .await
-            .unwrap();
-        let (_txn_b, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Stage", "doing"),
-            )
-            .await
-            .unwrap();
-
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["displayName"], json!("Stage"));
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
-
-        // A commits while B remains pending: B's pending layer stays
-        // visible over the committed base.
-        engine
-            .commit_optimistic_write(
-                txn_a,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("todo"),
-                &mutation_response("Stage", "todo"),
-            )
-            .await
-            .unwrap();
-        let data = read_hit(&mut engine, Some(1)).await;
-        assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
-        assert_eq!(
-            durable_display_name(&engine).await.as_deref(),
-            Some("Stage")
-        );
-    });
-}
-
-#[test]
-fn unknown_transaction_ids_error() {
-    block_on(async {
-        let mut engine = Engine::new(InMemoryStorage::new());
-        assert!(matches!(
-            engine.rollback_optimistic_write(42).await,
-            Err(EngineError::UnknownTransaction(42))
-        ));
-        assert!(matches!(
-            engine
-                .commit_optimistic_write(
-                    7,
-                    MUTATION,
-                    Some("SetEntityProperty"),
-                    &mutation_vars("x"),
-                    &mutation_response("Status", "x"),
-                )
-                .await,
-            Err(EngineError::UnknownTransaction(7))
-        ));
-    });
-}
-
-#[test]
-fn clear_discards_pending_layers() {
-    block_on(async {
-        let mut engine = engine_with_base("Status", "todo").await;
-        let (txn, _) = engine
-            .begin_optimistic_write(
-                None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-            )
-            .await
-            .unwrap();
-
-        engine.clear().await.unwrap();
-        let read = engine
-            .read_query(None, QUERY, Some("Soup"), &query_vars())
-            .await
-            .unwrap();
-        assert!(matches!(read, ReadResult::Miss));
-        // The layer is gone; settling it later is an error, never a write.
-        assert!(matches!(
-            engine.rollback_optimistic_write(txn).await,
-            Err(EngineError::UnknownTransaction(_))
-        ));
-    });
-}
-
-#[test]
-fn identity_reset_discards_pending_layers() {
+fn clear_and_identity_reset_drop_durable_queue() {
     block_on(async {
         let mut engine = engine_with_base("Status", "todo").await;
         engine
@@ -643,21 +406,19 @@ fn identity_reset_discards_pending_layers() {
             )
             .await
             .unwrap();
-
-        let (txn, _) = engine
+        engine
             .begin_optimistic_write(
                 None,
                 MUTATION,
                 Some("SetEntityProperty"),
                 &mutation_vars("doing"),
                 &mutation_response("Status", "doing"),
+                0,
             )
             .await
             .unwrap();
 
-        // A response for another user silently wipes the cache — including
-        // the pending optimistic layer.
-        let write = engine
+        let reset = engine
             .write_query(
                 None,
                 QUERY,
@@ -673,18 +434,24 @@ fn identity_reset_discards_pending_layers() {
             )
             .await
             .unwrap();
-        assert!(write.reset);
-        assert!(matches!(
+        assert!(reset.reset);
+        assert!(
             engine
-                .commit_optimistic_write(
-                    txn,
-                    MUTATION,
-                    Some("SetEntityProperty"),
-                    &mutation_vars("doing"),
-                    &mutation_response("Status", "doing"),
-                )
-                .await,
-            Err(EngineError::UnknownTransaction(_))
-        ));
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        engine.clear().await.unwrap();
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
     });
 }

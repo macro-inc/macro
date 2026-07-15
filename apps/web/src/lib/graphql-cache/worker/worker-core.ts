@@ -1,22 +1,15 @@
 /**
- * Topology-agnostic worker core: owns the wasm engine, serves the RPC
- * protocol on one or more ports, and fans out invalidations.
- *
- * Used by both entries:
- * - cache.shared-worker.ts (SharedWorker, many ports, one engine)
- * - cache.worker.ts (dedicated worker per tab + BroadcastChannel + Web Locks)
+ * SharedWorker core: owns the browser's single wasm engine, serves the RPC
+ * protocol to page ports, and fans out invalidations.
  */
 
-import {
-  broadcastChannelName,
-  type CacheBroadcast,
-  type CachePush,
-  type CacheRequest,
-  type CacheResponse,
-  type OptimisticWriteResult,
-  type ReadResult,
-  type WriteResult,
-  writeLockName,
+import type {
+  CachePush,
+  CacheRequest,
+  CacheResponse,
+  OptimisticWriteResult,
+  ReadResult,
+  WriteResult,
 } from '../protocol';
 import { type CacheEngine, loadCacheWasm } from './wasm-module';
 
@@ -31,18 +24,6 @@ export class CacheWorkerCore {
   /** Serializes engine calls (defense in depth; the engine also locks). */
   private queue: Promise<unknown> = Promise.resolve();
   private readonly ports = new Set<PortLike>();
-  private broadcast: BroadcastChannel | undefined;
-  private readonly workerId = crypto.randomUUID();
-
-  constructor(
-    private readonly options: {
-      /**
-       * Fallback topology (dedicated worker per tab): serialize writes via
-       * Web Locks and exchange changed keys over BroadcastChannel.
-       */
-      multiEngine: boolean;
-    }
-  ) {}
 
   addPort(port: PortLike): void {
     this.ports.add(port);
@@ -90,57 +71,70 @@ export class CacheWorkerCore {
       }
       case 'write': {
         const engine = this.requireEngine();
-        const result = await this.durableWrite(
-          async () =>
-            await engine.writeQuery(
-              request.originOpId,
-              request.query,
-              request.operationName,
-              request.variables,
-              request.data,
-              request.identity
-            )
+        const result = await engine.writeQuery(
+          request.originOpId,
+          request.query,
+          request.operationName,
+          request.variables,
+          request.data,
+          request.identity
         );
         this.fanOut(result);
         return result;
       }
       case 'begin-optimistic-write': {
         const engine = this.requireEngine();
-        // Memory-only: no write lock needed, and never broadcast — the
-        // layer is local to this engine (per tab in the fallback topology;
-        // shared by all attached clients under a SharedWorker).
         const result: OptimisticWriteResult = await engine.beginOptimisticWrite(
           request.originOpId,
           request.query,
           request.operationName,
           request.variables,
-          request.data
+          request.data,
+          request.createdAtMs
         );
-        this.fanOut(result, { broadcast: false });
+        this.fanOut(result);
         return result;
+      }
+      case 'claim-next-mutation': {
+        const engine = this.requireEngine();
+        return await engine.claimNextMutation(
+          request.owner,
+          request.nowMs,
+          request.leaseExpiresAtMs
+        );
+      }
+      case 'defer-optimistic-write': {
+        const engine = this.requireEngine();
+        await engine.deferOptimisticWrite(
+          request.transactionId,
+          request.leaseOwner,
+          request.leaseGeneration,
+          request.nextAttemptAtMs,
+          request.error
+        );
+        return null;
       }
       case 'commit-optimistic-write': {
         const engine = this.requireEngine();
         // Committing can flush settled layers into durable storage.
-        const result = await this.durableWrite(
-          async () =>
-            await engine.commitOptimisticWrite(
-              request.transactionId,
-              request.query,
-              request.operationName,
-              request.variables,
-              request.data
-            )
+        const result = await engine.commitOptimisticWrite(
+          request.transactionId,
+          request.leaseOwner,
+          request.leaseGeneration,
+          request.query,
+          request.operationName,
+          request.variables,
+          request.data
         );
         this.fanOut(result);
         return result;
       }
       case 'rollback-optimistic-write': {
         const engine = this.requireEngine();
-        // Rolling back can unblock a settled suffix and flush it durably.
-        const result = await this.durableWrite(
-          async () =>
-            await engine.rollbackOptimisticWrite(request.transactionId)
+        const result = await engine.rollbackOptimisticWrite(
+          request.transactionId,
+          request.leaseOwner,
+          request.leaseGeneration
         );
         this.fanOut(result);
         return result;
@@ -181,67 +175,18 @@ export class CacheWorkerCore {
     this.initPromise = (async () => {
       const wasm = await loadCacheWasm();
       this.engine = await wasm.openCache(scope, hotCapacity);
-      if (this.options.multiEngine) {
-        this.broadcast = new BroadcastChannel(broadcastChannelName(scope));
-        this.broadcast.onmessage = (event: MessageEvent<CacheBroadcast>) => {
-          void this.onBroadcast(event.data);
-        };
-      }
     })();
     await this.initPromise;
   }
 
-  /** Broadcasts from other tabs' engines sharing our storage. */
-  private async onBroadcast(msg: CacheBroadcast): Promise<void> {
-    if (msg.source === this.workerId) return;
-    const engine = this.engine;
-    if (!engine) return;
-    if (msg.kind === 'reset') {
-      // Another engine wiped the shared storage (identity change): drop
-      // local in-memory state and re-execute everything we track.
-      const affectedOps = await this.enqueue(() => engine.externalReset());
-      this.push({ kind: 'ops-affected', opIds: affectedOps, keys: [] });
-      return;
-    }
-    const affectedOps = await this.enqueue(() =>
-      engine.invalidateKeys(msg.keys)
-    );
-    this.push({ kind: 'ops-affected', opIds: affectedOps, keys: msg.keys });
-  }
-
-  /**
-   * Runs a durable engine write, serialized via Web Locks in the
-   * multi-engine (dedicated worker per tab) topology.
-   */
-  private async durableWrite<T>(write: () => Promise<T>): Promise<T> {
-    return this.options.multiEngine && this.scope
-      ? await navigator.locks.request(writeLockName(this.scope), write)
-      : await write();
-  }
-
-  /**
-   * After a local change: notify connected clients + other tabs. Optimistic
-   * begins pass `broadcast: false` — their changes are visible only through
-   * this engine, so other instances must not be told to invalidate.
-   */
-  private fanOut(result: WriteResult, opts?: { broadcast?: boolean }): void {
+  /** Notifies every page connected to this shared engine. */
+  private fanOut(result: WriteResult): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
         opIds: result.affectedOps,
         keys: result.changed,
       });
-    }
-    if (
-      opts?.broadcast !== false &&
-      this.options.multiEngine &&
-      this.broadcast &&
-      (result.changed.length > 0 || result.reset)
-    ) {
-      const msg: CacheBroadcast = result.reset
-        ? { kind: 'reset', source: this.workerId }
-        : { kind: 'changed', keys: result.changed, source: this.workerId };
-      this.broadcast.postMessage(msg);
     }
   }
 

@@ -39,6 +39,7 @@ type HistoryContextValue = {
   open: () => void;
   enter: (at?: Date) => void;
   exit: () => void;
+  requestLoad: () => void;
   sessions: Accessor<readonly HistorySession[]>;
   loading: { sessions: Accessor<boolean>; doc: Accessor<boolean> };
   checkoutAt: (ms: number) => SerializedEditorState | null;
@@ -65,6 +66,8 @@ export function HistoryProvider(props: {
   const [diffSession, setDiffSession] = createSignal<HistorySession | null>(
     null
   );
+  const [shouldLoad, setShouldLoad] = createSignal(false);
+  const requestLoad = () => setShouldLoad(true);
 
   const open = () => setIsOpen(true);
 
@@ -95,7 +98,7 @@ export function HistoryProvider(props: {
   // local scrubbing from it. The full snapshot (not updates) is required so
   // getAllChanges() carries the per-change timestamp metadata.
   const [historyDoc] = createResource(
-    () => (isOpen() ? props.documentId() : undefined),
+    () => (isOpen() || shouldLoad() ? props.documentId() : undefined),
     async (documentId) => {
       const result = await syncServiceClient.getSnapshot({ documentId });
       if (result.isErr()) throw new Error(String(result.error));
@@ -107,7 +110,7 @@ export function HistoryProvider(props: {
 
   // Peer -> user mapping for labelling sessions; lightweight JSON.
   const peerMap = useDocumentPeersQuery(() =>
-    isOpen() ? props.documentId() : ''
+    isOpen() || shouldLoad() ? props.documentId() : ''
   );
 
   // AI peers are recognizable from the peer id alone (reserved block) and all
@@ -219,6 +222,7 @@ export function HistoryProvider(props: {
     open,
     enter,
     exit,
+    requestLoad,
     sessions,
     loading: {
       sessions: () => historyDoc() == null || peerMap.isPending,

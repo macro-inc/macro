@@ -14,11 +14,12 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::StreamExt;
-use model::{response::GenericErrorResponse, user::UserContext};
+use macro_authorization::MacroAuthorizationExtractor;
+use model::response::GenericErrorResponse;
 
 use model::{
     document::{ContentType, DocumentBasic, FileType},
@@ -49,13 +50,13 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(state, document_context, user_context, req, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, document_context, user, req, _access), fields(user_id=?user.macro_user_id))]
 #[allow(deprecated, reason = "we just want deprecated to show up in utoipa")]
 #[deprecated(note = "we no longer support editing docx files as they are now converted to pdf.")]
 pub async fn presave_document_handler(
-    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<PreSaveDocumentRequest>,

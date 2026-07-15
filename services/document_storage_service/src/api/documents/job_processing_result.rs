@@ -1,13 +1,14 @@
+use crate::api::context::AuthorizationService;
 use crate::model::response::documents::get::GetDocumentProcessingResultResponse;
 use axum::{
-    Extension,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use macro_authorization::OptionalMacroAuthorizationExtractor;
 use macro_db_client::document::get_document_process_content_from_job_id;
+use model::response::GenericErrorResponse;
 use model::response::GenericResponse;
-use model::{response::GenericErrorResponse, user::UserContext};
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
@@ -32,10 +33,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
 pub async fn job_processing_result_handler(
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
     Path(Params {
         document_id,
         job_id,

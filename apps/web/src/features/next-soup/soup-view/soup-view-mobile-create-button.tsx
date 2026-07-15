@@ -4,6 +4,7 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { hapticImpact } from '@core/mobile/haptics';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
@@ -63,7 +64,7 @@ export function SoupViewMobileCreateButton(props: {
       runCreateAction('task', { source: 'mobile_dock' });
     },
     channels: () => {
-      runCreateAction('channel', { source: 'mobile_dock' });
+      openNewChannelModal();
     },
   };
 

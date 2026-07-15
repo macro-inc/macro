@@ -120,6 +120,40 @@ pick up a change there.
 If you already started without `--build-aux-services` and suspect a stale
 sync/lexical image, press `q` and restart with the flag.
 
+## Headless Mode (previews, agents, CI)
+
+`just stack` is the same stack without a terminal attached: no hotkey loop, no
+dev server. The frontend is built once (a dev-mode bundle with production
+optimizations) and served statically by the instance's Caddy proxy, so the whole
+product lives behind **one origin** and a finished `up` leaves only Docker
+containers running — nothing to babysit.
+
+```bash
+just stack up                  # bring everything up, print URLs, return
+just stack status --json      # machine-readable state (containers, health, URLs)
+just stack update             # rebuild + reload only changed services (the `r` hotkey)
+just stack update --frontend  # also rebuild the frontend bundle
+just stack down               # containers + volumes + state
+```
+
+All the `run_local` flags apply (`--instance`, `--no-doppler --env-file`,
+`--no-build`, `--binaries-dir`); CI can hand in a prebuilt bundle with
+`--frontend-dist`, and `--infra-only` stops after the infra bring-up + init
+(the CI bake mode — without Doppler the app services have no env to boot
+with, and the snapshot only captures infra volumes). The app is served at `<proxy>/app/` — the bundle resolves its
+backend from the origin it is served on, so the same stack works on localhost
+or behind a preview hostname without a rebuild.
+
+`stack up` also caches the expensive infra init. The first cold run migrates
+the DB, waits out the FusionAuth kickstart, and creates the search indices,
+then saves those volumes as a content-addressed **init snapshot** (keyed by the
+migrations, kickstart, index mappings, image pins, and container platform —
+stored under `infra/local/generated/.snapshots`). Later runs whose inputs match restore the
+snapshot and skip the init entirely; any input change is a cache miss and a
+normal full init. `just stack snapshot` shows the current key; `--no-snapshot`
+opts out. This is also what makes Fly previews boot fast — CI bakes the
+snapshot into the preview image (see `infra/preview/README.md`).
+
 ## Common Commands
 
 Run local binaries against shared dev resources instead of a fully local stack:

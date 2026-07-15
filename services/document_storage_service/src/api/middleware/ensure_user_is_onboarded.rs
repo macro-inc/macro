@@ -1,21 +1,21 @@
+use crate::api::context::AuthorizationService;
 use axum::{
-    Extension,
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
     response::Response,
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::user::onboarding_status::get_onboarding_status;
-use model::user::UserContext;
 use sqlx::PgPool;
 
 pub async fn handler(
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     req: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, String)> {
-    let is_onboarded = get_onboarding_status(&db, user_context.user_id.as_str())
+    let is_onboarded = get_onboarding_status(&db, user.macro_user_id.as_ref())
         .await
         .map_err(|e| {
             (

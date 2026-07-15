@@ -1229,15 +1229,13 @@ async fn grouped_properties_are_populated_by_the_service() {
         .times(1)
         .returning(|_| {
             Box::pin(async move {
-                Ok(vec![GroupedSoupItem {
+                Ok(vec![ItemGroupingInfo {
                     item: SoupItem::Document(soup_document("grouped-document")),
-                    frecency_score: None,
-                    group_key: "document".to_string(),
-                    group_total_count: 1,
-                    row_in_group: 1,
-                    group_label: Some("Documents".to_string()),
-                    group_display_order: Some(1),
-                }])
+                    key: "document".to_string(),
+                    total_group_count: 1,
+                    index_in_group: 1,
+                }]
+                .into_iter())
             })
         });
     soup_mock
@@ -1277,11 +1275,13 @@ async fn grouped_properties_are_populated_by_the_service() {
             },
         })
         .await
-        .unwrap();
+        .unwrap()
+        .collect::<Vec<_>>();
 
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].group_key, "document");
-    assert_eq!(items[0].group_label.as_deref(), Some("Documents"));
+    assert_eq!(items[0].key, "document");
+    assert_eq!(items[0].total_group_count, 1);
+    assert_eq!(items[0].index_in_group, 1);
     assert!(match &items[0].item {
         SoupItem::Document(document) => document.extra.properties.is_empty(),
         _ => false,

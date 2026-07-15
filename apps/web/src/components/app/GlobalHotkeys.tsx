@@ -46,6 +46,8 @@ import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import {
+  darkModeTheme,
+  lightModeTheme,
   setDarkModeTheme,
   setLightModeTheme,
   setThemeMode,
@@ -55,11 +57,13 @@ import {
 } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import {
+  applySystemTheme,
   applyTheme,
   clearThemePreview,
   previewTheme,
+  resolveActiveThemeId,
 } from '@theme/utils/themeUtils';
-import { type Component, onCleanup } from 'solid-js';
+import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
 
 const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
@@ -367,12 +371,59 @@ export default function GlobalShortcuts() {
     </div>
   );
 
+  // The per-mode theme the OS scheme currently resolves to — shown as the
+  // "System preference" option's swatch and previewed on highlight.
+  const systemResolvedTheme = (): ThemeV2 | undefined =>
+    themes().find(
+      (theme) =>
+        theme.id ===
+        (systemMode() === 'dark' ? darkModeTheme() : lightModeTheme())
+    );
+
+  const setVisibleTheme = (themeId: string) => {
+    const resolvedMode = themeMode() === 'system' ? systemMode() : themeMode();
+    if (resolvedMode === 'dark') {
+      setDarkModeTheme(themeId);
+    } else {
+      setLightModeTheme(themeId);
+    }
+  };
+
+  // "System preference" mirrors the Active-theme dropdown's first option: follow
+  // the OS scheme rather than pinning a fixed theme.
+  registerHotkey({
+    scopeId: setThemeScope.commandScopeId,
+    description: 'System preference',
+    keyDownHandler: () => {
+      applySystemTheme();
+      analytics.track('theme_changed', { themeId: 'system' });
+      return true;
+    },
+    runWithInputFocused: true,
+    displayComponent: () => (
+      <div class="flex items-center gap-2">
+        System preference
+        <Show when={systemResolvedTheme()}>
+          {(theme) => <ThemeChips theme={theme()} size="sm" />}
+        </Show>
+      </div>
+    ),
+    onHighlight: () => {
+      const theme = systemResolvedTheme();
+      if (theme) previewTheme(theme.id);
+    },
+    onHighlightEnd: clearThemePreview,
+  });
+
   themes().forEach((theme) => {
     registerHotkey({
       scopeId: setThemeScope.commandScopeId,
       description: `${theme.name}`,
       keyDownHandler: () => {
-        applyTheme(theme.id);
+        // Change the theme currently being viewed without switching between
+        // static and system-driven theme modes.
+        setVisibleTheme(theme.id);
+        applyTheme(resolveActiveThemeId());
         analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },

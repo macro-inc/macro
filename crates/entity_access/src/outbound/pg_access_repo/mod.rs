@@ -121,6 +121,18 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, thread_ids, user_id))]
+    async fn get_owned_email_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(
+            queries::thread_access::get_owned_email_thread_ids(&self.pool, thread_ids, user_id)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_call_access(
         &self,

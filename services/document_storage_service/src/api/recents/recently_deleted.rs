@@ -1,8 +1,9 @@
+use crate::api::context::AuthorizationService;
 use axum::extract::State;
-use axum::{Extension, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse};
+use macro_authorization::MacroAuthorizationExtractor;
 use model::item::Item;
 use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
-use model::user::UserContext;
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
@@ -27,26 +28,28 @@ pub type RecentlyDeletedResponse = TypedSuccessResponse<RecentlyDeletedResponseD
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(db, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
 pub async fn handler(
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> impl IntoResponse {
     tracing::info!("recently_deleted");
 
-    let items =
-        match macro_db_client::recents::deleted::get_recently_deleted(&db, &user_context.user_id)
-            .await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::error!(error=?e, "error getting recently deleted items");
-                return GenericResponse::builder()
-                    .message("error getting recently deleted items")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+    let items = match macro_db_client::recents::deleted::get_recently_deleted(
+        &db,
+        user.macro_user_id.as_ref(),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::error!(error=?e, "error getting recently deleted items");
+            return GenericResponse::builder()
+                .message("error getting recently deleted items")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     let data = RecentlyDeletedResponseData { items };
 

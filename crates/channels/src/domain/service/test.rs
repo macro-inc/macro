@@ -1881,6 +1881,34 @@ async fn create_channel_event_carries_channel_name() {
 }
 
 #[tokio::test]
+async fn create_private_channel_allows_no_invited_participants() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel(
+        sender("macro|sender@test.com"),
+        None,
+        crate::domain::models::CreateChannelRequest {
+            name: Some("private notes".to_string()),
+            channel_type: ChannelType::Private,
+            team_id: None,
+            participants: HashSet::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated { participant_user_ids, .. }]
+            if participant_user_ids == &[macro_id("macro|sender@test.com")]
+    ));
+}
+
+#[tokio::test]
 async fn patch_channel_dispatches_channel_updated() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

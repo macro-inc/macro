@@ -104,6 +104,51 @@ pub fn mount_cache_volume() -> Step<Use> {
         .continue_on_error(true)
 }
 
+/// [`mount_cache_volume`] plus the checkout's cargo target dir and the init
+/// snapshot store. Persisting `target/` is what makes the preview job's
+/// zigbuild incremental — cargo's own fingerprints carry across runs, where
+/// remote sccache alone leaves build scripts, native (cmake/zig) compiles, and
+/// linking cold every time. Persisting the snapshot store gives the bake step
+/// a zero-copy fast path; Namespace artifact storage is its durable fallback.
+/// The volume is a block-device mount, so multi-GB trees cost nothing to save
+/// or restore when it hits.
+pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
+    Step::new("Mount Namespace cache volume")
+        .uses(
+            "namespacelabs",
+            "nscloud-cache-action",
+            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
+        )
+        .add_with(("cache", "rust"))
+        .add_with((
+            "path",
+            format!(
+                "/nix\n${{{{ github.workspace }}}}/target\n{}",
+                vars::PREVIEW_SNAPSHOT_VOLUME_DIR,
+            ),
+        ))
+        .continue_on_error(true)
+}
+
+/// Configure Namespace's artifact-backed remote sccache. `setup-reqs-web`
+/// already installs sccache and exports `RUSTC_WRAPPER=sccache`; this replaces
+/// the local-disk backend with short-lived WebDAV credentials that work across
+/// runners and cache-volume misses.
+pub fn configure_namespace_sccache(cache_name: &str) -> Step<Run> {
+    Step::new("Configure Namespace remote sccache").run(format!(
+        r#"set -euo pipefail
+env_file="$RUNNER_TEMP/namespace-sccache.env"
+if nsc cache sccache setup --cache_name {cache_name} > "$env_file"; then
+  cat "$env_file" >> "$GITHUB_ENV"
+  # Force the next compiler invocation to start a server with the new remote
+  # backend even if a setup hook happened to launch one already.
+  sccache --stop-server >/dev/null 2>&1 || true
+else
+  echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+fi"#
+    ))
+}
+
 /// Repoint sccache at the persisted volume. Runs AFTER `setup-cachix`; this keeps
 /// the compiled artifact cache directory aligned with the Namespace mounted path.
 pub fn pin_sccache_dir() -> Step<Run> {

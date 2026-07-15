@@ -66,8 +66,10 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
 
+    // One SDK config is sufficient for every AWS client in this process.
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
     // Parse our configuration from the environment.
@@ -173,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
 
     // `from_env` routes to local SMTP (Mailpit) when SMTP_HOST is set, else SES.
     let ses_client = ses_client::Ses::from_env(
-        aws_sdk_sesv2::Client::new(&macro_aws_config::get_macro_aws_config().await),
+        aws_sdk_sesv2::Client::new(&aws_config),
         &config.environment.to_string(),
     );
 
@@ -201,12 +203,10 @@ async fn main() -> anyhow::Result<()> {
     };
     tracing::trace!("initialized notification ingress service");
 
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &macro_aws_config::get_macro_aws_config().await,
-    ))
-    .search_event_queue(&search_event_queue)
-    .email_link_manager_queue(&link_manager_queue)
-    .email_backfill_queue(&email_backfill_queue);
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .search_event_queue(&search_event_queue)
+        .email_link_manager_queue(&link_manager_queue)
+        .email_backfill_queue(&email_backfill_queue);
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers

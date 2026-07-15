@@ -1,7 +1,7 @@
 #![deny(missing_docs)]
 //! Shared path discovery for the xtask command crates.
 //!
-//! Every xtask command needs to locate the repository Rust workspace root (to
+//! Every xtask command needs to locate the repository Cargo workspace root (to
 //! anchor `cargo metadata`, read member manifests, spawn `wasm-pack`, …) and
 //! the repository root (where `docker/`, `infra/`, `apps/`, and the root
 //! `justfile` live). Both are derived from this crate's own
@@ -19,8 +19,14 @@ use std::path::{Path, PathBuf};
 /// The repository Cargo workspace root.
 ///
 /// `env!("CARGO_MANIFEST_DIR")` expands to this crate's directory, which is a
-/// fixed location, so the depth here does not depend on the caller.
+/// fixed location, so the depth here does not depend on the caller. Packaged
+/// xtask binaries can set `MACRO_REPO_ROOT` when they run against a staged copy
+/// of the repository rather than the checkout where they were compiled.
 pub fn workspace_root() -> PathBuf {
+    if let Some(root) = repo_root_override() {
+        return root;
+    }
+
     // <workspace>/tooling/xtask/crates/xtask_paths -> nth(4) == <workspace>.
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -32,6 +38,15 @@ pub fn workspace_root() -> PathBuf {
 /// The repository root, which is also the Cargo workspace root.
 pub fn repo_root() -> PathBuf {
     workspace_root()
+}
+
+/// Read the runtime repository root used by packaged xtask binaries.
+///
+/// Environment variables are appropriate here because this tooling crate runs
+/// both inside and outside the service runtime, including in the preview VM.
+#[allow(clippy::disallowed_methods)]
+fn repo_root_override() -> Option<PathBuf> {
+    std::env::var_os("MACRO_REPO_ROOT").map(PathBuf::from)
 }
 
 /// A UTF-8, repository-relative path that must resolve to a regular file.

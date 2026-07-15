@@ -1,5 +1,5 @@
 use super::{
-    context::{ApiContext, EntityAccessService},
+    context::{ApiContext, AuthorizationService, EntityAccessService},
     documents::{export_document, get_document_version},
     history::upsert_history,
     projects::upload_folder,
@@ -22,9 +22,8 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use macro_middleware::{
-    auth::ensure_user_exists,
-    cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
+use macro_middleware::cloud_storage::{
+    document::ensure_document_exists, thread::ensure_thread_exists,
 };
 
 mod associate_github_installations;
@@ -34,9 +33,6 @@ mod associate_github_installations;
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     let ensure_document_exists_middleware =
         axum::middleware::from_fn_with_state(state.clone(), ensure_document_exists::handler);
-
-    let ensure_user_exists_middleware =
-        axum::middleware::from_fn_with_state(state.clone(), ensure_user_exists::handler);
 
     Router::new()
         // User routes
@@ -51,9 +47,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::get_document::get_document_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
-            )
-            .layer(ensure_document_exists_middleware.clone()),
+            ),
         )
         .route(
             "/documents/{document_id}/basic",
@@ -62,20 +58,19 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/{document_id}/export",
-            get(export_document::handler).layer(ensure_document_exists_middleware.clone()),
+            get(export_document::handler),
         )
         .route(
             "/documents/{document_id}/text",
-            get(get_document_text::handler).layer(ensure_document_exists_middleware.clone()),
+            get(get_document_text::handler),
         )
         .route(
             "/documents/{document_id}/full_pdf_modification_data",
-            get(get_full_pdf_modification_data::handler)
-                .layer(ensure_document_exists_middleware.clone()),
+            get(get_full_pdf_modification_data::handler),
         )
         .route(
             "/documents/{document_id}/location",
-            get(location::get_location_handler).layer(ensure_document_exists_middleware.clone()),
+            get(location::get_location_handler),
         )
         .route(
             "/documents/{document_id}/location_v3",
@@ -83,9 +78,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::get_location::get_location_v3_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
-            )
-            .layer(ensure_document_exists_middleware.clone()),
+            ),
         )
         .route(
             "/documents/{document_id}/permissions",
@@ -101,12 +96,13 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::create_document::create_document_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             ),
         )
         .route(
             "/documents/initialize_how_to_guide",
-            post(initialize_how_to_guide::handler).layer(ensure_user_exists_middleware.clone()),
+            post(initialize_how_to_guide::handler),
         )
         .route(
             "/documents/list_with_access",
@@ -114,8 +110,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/{document_id}",
-            put(save_document::save_document_handler)
-                .layer(ensure_document_exists_middleware.clone()),
+            put(save_document::save_document_handler),
         )
         .route(
             "/documents/{document_id}/{document_version_id}",
@@ -123,8 +118,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/{document_id}/{document_version_id}/key",
-            get(get_document_key::get_document_key_handler)
-                .layer(ensure_document_exists_middleware.clone()),
+            get(get_document_key::get_document_key_handler),
         )
         .route(
             "/documents/{document_id}/update",
@@ -136,6 +130,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::put_snapshot::put_snapshot_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             ),
         )
@@ -143,13 +138,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // History routes
         .route(
             "/history/{item_type}/{item_id}",
-            post(upsert_history::upsert_history_handler)
-                .layer(ensure_user_exists_middleware.clone()),
+            post(upsert_history::upsert_history_handler),
         )
         .route(
             "/history/{item_type}/{item_id}",
-            delete(delete_history::delete_history_handler)
-                .layer(ensure_user_exists_middleware.clone()),
+            delete(delete_history::delete_history_handler),
         )
         .route(
             "/threads/{thread_id}/access_level",
@@ -160,8 +153,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/users/populate_items",
-            post(populate_items::populate_items_handler)
-                .layer(ensure_user_exists_middleware.clone()),
+            post(populate_items::populate_items_handler),
         )
         // Project routes
         .route(
@@ -172,14 +164,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/projects/mark_uploaded",
             post(upload_folder::mark_uploaded_handler),
         )
-        .route(
-            "/item_ids",
-            get(get_item_ids::get_item_ids_handler).layer(ensure_user_exists_middleware.clone()),
-        )
-        .route(
-            "/validate_item_ids",
-            post(validate_item_ids::handler).layer(ensure_user_exists_middleware),
-        )
+        .route("/item_ids", get(get_item_ids::get_item_ids_handler))
+        .route("/validate_item_ids", post(validate_item_ids::handler))
         // Github routes
         .route(
             "/github/installations/{github_user_id}/associate",

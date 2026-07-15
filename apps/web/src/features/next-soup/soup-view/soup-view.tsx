@@ -60,6 +60,7 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
+import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -310,6 +311,9 @@ type SoupListEntryState = {
 
 interface SoupViewProps {
   viewName: string;
+  customTabs?: JSX.Element;
+  filterBarVariant?: 'default' | 'tag';
+  showCreateButton?: boolean;
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Query;
   initialSearchText?: string;
@@ -412,10 +416,10 @@ export const SoupView = (props: SoupViewProps) => {
     batch(() => {
       soup.setPreviewEntity(persistedPreviewEntity);
       // Existing entries only stored the symbolic entity id. Treat one as an
-      // open pane while allowing new entries to use their view default.
+      // open pane. The new-inbox default is applied reactively below because
+      // its PostHog flag can resolve after this one-time initialization.
       soupView.setPreviewOpen(
-        persistedPreviewOpen ??
-          (persistedPreviewEntity ? true : isNewInboxEnabled())
+        persistedPreviewOpen ?? persistedPreviewEntity !== undefined
       );
 
       soupView.initialize({
@@ -479,6 +483,20 @@ export const SoupView = (props: SoupViewProps) => {
       }
     });
   });
+
+  // Production resolves the new-inbox flag asynchronously, so wait for it
+  // before applying the default instead of locking in the initial false value.
+  if (
+    persistedPreviewOpen === undefined &&
+    persistedPreviewEntity === undefined
+  ) {
+    let previewDefaulted = false;
+    createRenderEffect(() => {
+      if (previewDefaulted || !isNewInboxEnabled()) return;
+      previewDefaulted = true;
+      soupView.setPreviewOpen(true);
+    });
+  }
 
   const previewEntityCaptorTeardown = panel.handle.registerEntryStateCaptor(
     SOUP_PREVIEW_ENTITY_ENTRY_KEY,
@@ -561,6 +579,12 @@ export const SoupView = (props: SoupViewProps) => {
     () => activeListView() === 'companies' && soupView.viewMode() === 'board'
   );
 
+  // When CRM is unavailable (no team / disabled) the board renders the
+  // empty state instead of columns, so board-only chrome tweaks (like
+  // hiding the AI bar) shouldn't apply.
+  const crmUnavailable = useCrmUnavailable();
+  const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -640,8 +664,10 @@ export const SoupView = (props: SoupViewProps) => {
                   <CollapsibleHeaderItem
                     id="tabs"
                     priority={1}
-                    expanded={() => <SoupViewTabs />}
-                    collapsed={() => <CollapsedSoupViewTabs />}
+                    expanded={() => props.customTabs ?? <SoupViewTabs />}
+                    collapsed={() =>
+                      props.customTabs ?? <CollapsedSoupViewTabs />
+                    }
                     containerClass="h-full"
                   />
                 </Show>
@@ -667,7 +693,11 @@ export const SoupView = (props: SoupViewProps) => {
                 <CompanyDisplayMenu />
               </Show>
               <Show
-                when={!narrowSearchExpanded() && !isComponentListView('search')}
+                when={
+                  !narrowSearchExpanded() &&
+                  !isComponentListView('search') &&
+                  props.showCreateButton !== false
+                }
               >
                 <SoupViewCreateButton />
               </Show>
@@ -733,7 +763,7 @@ export const SoupView = (props: SoupViewProps) => {
             </SplitHeaderRight>
           </Show>
         </div>
-        <SoupFiltersBar />
+        <SoupFiltersBar variant={props.filterBarVariant} />
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
@@ -755,7 +785,7 @@ export const SoupView = (props: SoupViewProps) => {
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isMobile() &&
             !isNewInboxEnabled() &&
-            !isBoardMode()
+            !isBoardRendered()
           }
         >
           <SoupChatInput />

@@ -4,12 +4,15 @@ use crate::domain::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
         TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers,
+        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
 use macro_user_id::{
-    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+    cowlike::CowLike,
+    email::{Email, ReadEmailParts},
+    lowercased::Lowercase,
+    user_id::MacroUserIdStr,
 };
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -162,6 +165,8 @@ impl TeamRepositoryImpl {
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
                 crm_enabled: false,
+                // New teams start without an auto-join domain.
+                auto_join_domain: None,
             })
         })
         .fetch_one(&mut *transaction)
@@ -228,6 +233,12 @@ impl From<sqlx::Error> for RemoveUserFromTeamError {
 impl From<sqlx::Error> for RemoveTeamInviteError {
     fn from(e: sqlx::Error) -> Self {
         Self::StorageLayerError(e.into())
+    }
+}
+
+impl From<sqlx::Error> for ToggleAutoJoinDomainError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::TeamError(e.into())
     }
 }
 
@@ -1051,7 +1062,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1068,6 +1079,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
+                auto_join_domain: row.auto_join_domain,
             })
         })
         .fetch_one(&self.pool)
@@ -1105,7 +1117,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1123,6 +1135,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
+                auto_join_domain: row.auto_join_domain,
             })
         })
         .fetch_all(&self.pool)
@@ -1392,5 +1405,122 @@ impl TeamRepository for TeamRepositoryImpl {
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn toggle_auto_join_domain(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
+        let mut transaction = self.pool.begin().await.map_err(TeamError::from)?;
+
+        // Lock the row so concurrent toggles serialize instead of both
+        // reading the same current value.
+        let team = sqlx::query!(
+            r#"
+            SELECT auto_join_domain, owner_id
+            FROM team
+            WHERE id = $1
+            FOR UPDATE
+            "#,
+            team_id,
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+
+        let new_domain = if team.auto_join_domain.is_some() {
+            None
+        } else {
+            let owner_id = MacroUserIdStr::parse_from_str(&team.owner_id)
+                .map_err(|e| TeamError::StorageLayerError(e.into()))?;
+            let owner_email = owner_id.email_part().lowercase();
+            let domain = owner_email.domain_part();
+
+            if is_generic_email_domain(domain) {
+                return Err(ToggleAutoJoinDomainError::GenericDomainNotAllowed(
+                    domain.to_owned(),
+                ));
+            }
+
+            Some(domain.to_owned())
+        };
+
+        sqlx::query!(
+            r#"
+            UPDATE team
+            SET auto_join_domain = $2
+            WHERE id = $1
+            "#,
+            team_id,
+            new_domain.as_deref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await.map_err(TeamError::from)?;
+
+        Ok(new_domain)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn add_user_to_team(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeamMember<'static>>, TeamError> {
+        let mut transaction = self.pool.begin().await?;
+
+        let inserted = sqlx::query!(
+            r#"
+            INSERT INTO team_user (team_id, user_id, team_role)
+            VALUES ($1, $2, 'member')
+            ON CONFLICT DO NOTHING
+            "#,
+            team_id,
+            user_id.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        // Already a member — nothing was added, so don't touch the seat count.
+        if inserted.rows_affected() == 0 {
+            return Ok(None);
+        }
+
+        TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, 1).await?;
+
+        transaction.commit().await?;
+
+        Ok(Some(TeamMember {
+            team_id: *team_id,
+            user_id: user_id.clone().into_owned(),
+            role: TeamRole::Member,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_id_by_domain(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<uuid::Uuid>, TeamError> {
+        let user_email = user_id.email_part().lowercase();
+        let domain = user_email.domain_part();
+
+        // Uses the partial index on auto_join_domain; when several teams
+        // claim the same domain, pick the oldest (ids are UUIDv7).
+        let team_id = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM team
+            WHERE auto_join_domain = $1
+            ORDER BY id
+            LIMIT 1
+            "#,
+            domain,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(team_id)
     }
 }

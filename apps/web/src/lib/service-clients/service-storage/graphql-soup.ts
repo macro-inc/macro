@@ -11,6 +11,7 @@ import {
   createTauriCacheHost,
   createWorkerCacheHost,
 } from '@graphql-cache/index';
+import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { type Client, createClient, fetchExchange } from '@urql/core';
@@ -94,6 +95,7 @@ export function getGraphqlSoupClient(): Client {
       const host = isTauri()
         ? createTauriCacheHost({ scope })
         : createWorkerCacheHost({ scope });
+      registerCacheHost(host);
       return createClient({
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
@@ -103,6 +105,9 @@ export function getGraphqlSoupClient(): Client {
             // rebinds the cache (see @graphql-cache/scope).
             extractIdentity: (data) =>
               (data as Partial<SoupQuery> | undefined)?.user?.id,
+            // Transport failures remain queued with their optimistic layer;
+            // GraphQL application errors are permanent and roll back.
+            shouldRetryMutation: (error) => error.networkError != null,
           }),
           fetchExchange,
         ],

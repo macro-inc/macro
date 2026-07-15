@@ -2367,6 +2367,7 @@ dependencies = [
  "axum",
  "channels",
  "chrono",
+ "cloudfront_sign",
  "connection",
  "entity_access",
  "entity_access_db_utils",
@@ -2394,6 +2395,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -2848,12 +2850,14 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apollo-compiler",
  "async-graphql",
  "axum",
  "axum-extra",
  "email",
  "entity_access",
  "graphql_common",
+ "graphql_email",
  "graphql_notification",
  "graphql_properties",
  "graphql_soup",
@@ -2862,6 +2866,7 @@ dependencies = [
  "model_user",
  "models_pagination",
  "models_properties",
+ "models_soup",
  "serde",
  "soup",
  "tokio",
@@ -4229,6 +4234,7 @@ dependencies = [
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_axum_utils",
  "macro_config",
@@ -4403,6 +4409,7 @@ dependencies = [
  "connection",
  "document_sub_type",
  "dotenvy",
+ "embedding",
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
@@ -4412,6 +4419,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "lexical_client",
+ "macro_authorization",
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
@@ -4434,6 +4442,7 @@ dependencies = [
  "non_empty",
  "rdkafka",
  "reqwest 0.13.4",
+ "rootcause",
  "s3_key",
  "schemars 1.2.1",
  "serde",
@@ -5075,6 +5084,8 @@ dependencies = [
  "bot_id",
  "cached",
  "cool_asserts",
+ "futures",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
@@ -5083,11 +5094,13 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_permissions",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -5957,6 +5970,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_email"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "email",
+ "entity_access",
+ "macro_user_id",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
@@ -6008,6 +6036,7 @@ dependencies = [
  "model-entity",
  "model_file_type",
  "model_user",
+ "models_grouping",
  "models_pagination",
  "models_soup",
  "serde",
@@ -8112,10 +8141,12 @@ name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "constant_time_eq",
  "cookie",
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "macro_auth",
+ "macro_env_var",
  "macro_user_id",
  "model-error-response",
  "model_user",
@@ -13242,6 +13273,7 @@ dependencies = [
  "frecency",
  "futures",
  "http-body-util",
+ "indexmap 2.14.0",
  "item_filters",
  "macro_db_migrator",
  "macro_user_id",
@@ -16145,6 +16177,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-core",
+ "triomphe",
  "tungstenite 0.28.0",
  "typenum",
  "url",
@@ -16251,6 +16284,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2 0.10.9",
  "strum",
  "tokio",
  "xtask_paths",

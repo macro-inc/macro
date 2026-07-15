@@ -334,9 +334,9 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Storage port for generating presigned recording URLs.
+/// Storage port for generating signed recording GET URLs and deleting objects.
 pub trait RecordingStorage: Send + Sync + 'static {
-    /// Generate a presigned GET URL for a recording key.
+    /// Generate a storage- or distribution-signed GET URL for a recording key.
     ///
     /// The key is in `UUID/TIMESTAMP.ext` format. Implementations must
     /// prepend the appropriate prefix (e.g. `calls/`) when constructing
@@ -346,9 +346,9 @@ pub trait RecordingStorage: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
-    /// Generate a presigned GET URL for a stored preview image key/path.
+    /// Generate a storage- or distribution-signed GET URL for a preview key.
     ///
-    /// The preview key/path is stored as a full S3 object key, for example
+    /// The preview key/path is stored as a full storage object key, for example
     /// `calls/{room}/{recording_stem}/PREVIEW.jpg`.
     fn presign_recording_preview_url(
         &self,

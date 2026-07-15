@@ -22,7 +22,9 @@ use tauri::{AppHandle, Emitter, Runtime};
 pub mod commands;
 mod engine;
 
-pub use engine::{EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire};
+pub use engine::{
+    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+};
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
 /// underlying records changed. Emitted to every webview; hosts filter by

@@ -83,23 +83,24 @@ async fn test_grouped_by_entity_type(pool: Pool<Postgres>) -> anyhow::Result<()>
             grouping,
         },
     )
-    .await?;
+    .await?
+    .collect::<Vec<_>>();
 
     assert!(!items.is_empty(), "Should return some items");
 
     // Check that items have group keys
     for item in &items {
         assert!(
-            ["document", "chat", "project"].contains(&item.group_key.as_str()),
+            ["document", "chat", "project"].contains(&item.key.as_str()),
             "Group key should be a valid entity type, got: {}",
-            item.group_key
+            item.key
         );
     }
 
     // Check that group_total_count is populated
     for item in &items {
         assert!(
-            item.group_total_count > 0,
+            item.total_group_count > 0,
             "group_total_count should be > 0"
         );
     }
@@ -135,15 +136,15 @@ async fn test_grouped_by_project(pool: Pool<Postgres>) -> anyhow::Result<()> {
             grouping,
         },
     )
-    .await?;
+    .await?
+    .collect::<Vec<_>>();
 
     assert!(!items.is_empty(), "Should return some items");
 
     // Group keys should be UUIDs or empty string (for unassigned)
     for item in &items {
-        if !item.group_key.is_empty() {
-            uuid::Uuid::parse_str(&item.group_key)
-                .expect("Non-empty group_key should be a valid UUID");
+        if !item.key.is_empty() {
+            uuid::Uuid::parse_str(&item.key).expect("Non-empty group key should be a valid UUID");
         }
     }
 
@@ -178,10 +179,11 @@ async fn test_grouped_single_group_filter(pool: Pool<Postgres>) -> anyhow::Resul
             },
         },
     )
-    .await?;
+    .await?
+    .collect::<Vec<_>>();
 
     // Find a group key that has items
-    let target_group_key = all_items.first().map(|i| i.group_key.clone());
+    let target_group_key = all_items.first().map(|i| i.key.clone());
     let Some(group_key) = target_group_key else {
         return Ok(()); // No items to test with
     };
@@ -204,12 +206,13 @@ async fn test_grouped_single_group_filter(pool: Pool<Postgres>) -> anyhow::Resul
             },
         },
     )
-    .await?;
+    .await?
+    .collect::<Vec<_>>();
 
     // All returned items should have the same group key
     for item in &filtered_items {
         assert_eq!(
-            item.group_key, group_key,
+            item.key, group_key,
             "All items should belong to the filtered group"
         );
     }

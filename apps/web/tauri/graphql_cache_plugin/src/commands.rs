@@ -9,7 +9,9 @@
 //! the exchange degrades to the network) — same contract as the browser
 //! worker's `{ok: false, error}` responses.
 
-use crate::engine::{EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire};
+use crate::engine::{
+    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+};
 use crate::{CacheState, InitializedCache, emit_ops_affected};
 use cache_sqlite::SqliteStorage;
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -105,9 +107,8 @@ pub async fn graphql_cache_write<R: Runtime>(
     Ok(result)
 }
 
-/// Installs an in-memory optimistic layer from a mutation's optimistic
-/// response. The one engine is shared by all webviews (SharedWorker
-/// semantics), so visible changes are broadcast too.
+/// Durably queues a mutation and its optimistic response. The one engine is
+/// shared by all webviews, so visible changes are broadcast too.
 #[tauri::command]
 pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
@@ -117,6 +118,7 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     operation_name: Option<String>,
     variables: Option<Variables>,
     data: serde_json::Value,
+    created_at_ms: i64,
 ) -> Result<OptimisticWriteResultWire, String> {
     let result = engine_handle(&state)?
         .begin_optimistic_write(
@@ -125,19 +127,55 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
             operation_name,
             variables.unwrap_or_default(),
             data,
+            created_at_ms,
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
     Ok(result)
 }
 
-/// Atomically replaces a pending optimistic layer with the real network
-/// response and flushes contiguous settled layers durably.
+/// Claims the oldest runnable queued mutation.
+#[tauri::command]
+pub async fn graphql_cache_claim_next_mutation(
+    state: State<'_, CacheState>,
+    owner: String,
+    now_ms: i64,
+    lease_expires_at_ms: i64,
+) -> Result<Option<ClaimedMutationWire>, String> {
+    engine_handle(&state)?
+        .claim_next_mutation(owner, now_ms, lease_expires_at_ms)
+        .await
+}
+
+/// Retains a retryable queued mutation and releases its lease.
+#[tauri::command]
+pub async fn graphql_cache_defer_optimistic_write(
+    state: State<'_, CacheState>,
+    transaction_id: String,
+    lease_owner: String,
+    lease_generation: String,
+    next_attempt_at_ms: i64,
+    error: String,
+) -> Result<(), String> {
+    engine_handle(&state)?
+        .defer_optimistic_write(
+            transaction_id,
+            lease_owner,
+            lease_generation,
+            next_attempt_at_ms,
+            error,
+        )
+        .await
+}
+
+/// Atomically replaces a claimed optimistic layer with the real response.
 #[tauri::command]
 pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     transaction_id: String,
+    lease_owner: String,
+    lease_generation: String,
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
@@ -146,6 +184,8 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     let result = engine_handle(&state)?
         .commit_optimistic_write(
             transaction_id,
+            lease_owner,
+            lease_generation,
             query,
             operation_name,
             variables.unwrap_or_default(),
@@ -156,15 +196,17 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     Ok(result)
 }
 
-/// Drops a pending optimistic layer's contribution (mutation failed).
+/// Permanently fails a claimed mutation and drops its optimistic layer.
 #[tauri::command]
 pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     transaction_id: String,
+    lease_owner: String,
+    lease_generation: String,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
-        .rollback_optimistic_write(transaction_id)
+        .rollback_optimistic_write(transaction_id, lease_owner, lease_generation)
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     Ok(result)

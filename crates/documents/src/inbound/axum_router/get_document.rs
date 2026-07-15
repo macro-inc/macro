@@ -1,12 +1,12 @@
 //! Handler for `GET /documents/{document_id}`.
 
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Path, State},
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::user::UserContext;
+use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
@@ -33,10 +33,13 @@ use crate::domain::response::GetDocumentResponse;
     )
 )]
 #[tracing::instrument(skip(state, access), err)]
-pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
-    user_context: Extension<UserContext>,
+pub async fn get_document_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Json<GetDocumentResponse>, DocumentError> {
     let response_data = state

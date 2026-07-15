@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
-        GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+        GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
+        SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -180,7 +180,7 @@ where
     async fn handle_grouped_soup_request(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<()>>, SoupErr> {
+    ) -> Result<T::GroupedItems, SoupErr> {
         self.soup_storage
             .expanded_grouped_cursor_soup(req)
             .await
@@ -698,28 +698,21 @@ where
     async fn populate_grouped_items(
         &self,
         user_id: MacroUserIdStr<'_>,
-        items: Vec<GroupedSoupItem<()>>,
-    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
-        if items.is_empty() {
-            return Ok(Vec::new());
-        }
-
+        items: impl Iterator<Item = ItemGroupingInfo> + Send,
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>>, SoupErr> {
         let (items, metadata): (Vec<_>, Vec<_>) = items
-            .into_iter()
             .map(|item| {
                 (
                     item.item,
-                    (
-                        item.frecency_score,
-                        item.group_key,
-                        item.group_total_count,
-                        item.row_in_group,
-                        item.group_label,
-                        item.group_display_order,
-                    ),
+                    (item.key, item.total_group_count, item.index_in_group),
                 )
             })
             .unzip();
+
+        if items.is_empty() {
+            return Ok(Vec::new().into_iter());
+        }
+
         let items = self
             .soup_storage
             .populate_properties(user_id, items)
@@ -735,27 +728,15 @@ where
             .into_iter()
             .zip(metadata)
             .map(
-                |(
+                |(item, (key, total_group_count, index_in_group))| ItemGroupingInfo {
                     item,
-                    (
-                        frecency_score,
-                        group_key,
-                        group_total_count,
-                        row_in_group,
-                        group_label,
-                        group_display_order,
-                    ),
-                )| GroupedSoupItem {
-                    item,
-                    frecency_score,
-                    group_key,
-                    group_total_count,
-                    row_in_group,
-                    group_label,
-                    group_display_order,
+                    key,
+                    total_group_count,
+                    index_in_group,
                 },
             )
-            .collect())
+            .collect::<Vec<_>>()
+            .into_iter())
     }
 
     async fn get_user_soup_internal<R>(
@@ -939,7 +920,7 @@ where
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem<SoupPropertiesField>>, SoupErr> {
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         let user_id = req.user_id.clone();
         let items = self.handle_grouped_soup_request(req).await?;
         self.populate_grouped_items(user_id, items).await

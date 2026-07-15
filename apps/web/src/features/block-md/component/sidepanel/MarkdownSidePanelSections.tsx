@@ -1,4 +1,7 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
@@ -85,6 +88,8 @@ export function MarkdownSidePanelSections(
 
   const itemType = blockNameToItemType(rawBlockName);
   const entity = (): Entity => ({ id: blockId, type: itemType as EntityType });
+  const propertiesEntityType = (): PropertiesEntityType =>
+    blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
   return (
     <>
@@ -94,11 +99,17 @@ export function MarkdownSidePanelSections(
       <Show when={isSnippet()}>
         <SnippetSharingOwnerSectionConditional documentId={blockId} />
       </Show>
+      <EntityTagsSection
+        entityId={blockId}
+        entityType={propertiesEntityType()}
+        canEdit={props.canEdit}
+        order={20}
+      />
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
-        order={20}
+        order={25}
       >
         <PropertiesSectionContent
           canEdit={props.canEdit}
@@ -133,6 +144,16 @@ function HistorySectionContent() {
   createEffect(() => {
     if (history.isOpen()) {
       sidePanel?.setOpenSectionIds(['history']);
+    }
+  });
+
+  // Discover whether history exists (to choose between the empty state and
+  // the scrubber) once the user actually expands this accordion section —
+  // nothing inside the section can trigger the load itself, since the
+  // scrubber and "Show activity" toggle only render once sessions exist.
+  createEffect(() => {
+    if (sidePanel?.openSectionIds().includes('history')) {
+      history.requestLoad();
     }
   });
   const isShowingSessions = () => history.isOpen() || showSessions();
@@ -440,6 +461,7 @@ function PropertiesSectionContent(props: {
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
       onPropertyPinned={handlePropertyPinned}
       onPropertyUnpinned={handlePropertyUnpinned}
+      showTags={false}
     />
   );
 }

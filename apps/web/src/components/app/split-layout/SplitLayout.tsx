@@ -197,7 +197,9 @@ function createSplitFocusTracker(props: {
     }
 
     let splitWithFocus: SplitId | undefined;
-    for (const split of props.splits()) {
+    // Only visible splits may claim activation — the mobile background
+    // split is excluded and can never become active.
+    for (const split of props.splitManager.getVisibleSplits()) {
       if (isElementInPanel(split.id, element)) {
         splitWithFocus = split.id;
         break;

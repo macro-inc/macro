@@ -2243,12 +2243,10 @@ async fn github_pr_status_changed_opened_team_source_notifies_participant_team_m
             .and_then(|value| value.as_str()),
         Some("macro|alice@user.com")
     );
+    // Alice triggered the event, so she is not notified about her own activity.
     assert_eq!(
         notification_request_recipients(request),
-        vec![
-            "macro|alice@user.com".to_string(),
-            "macro|bob@user.com".to_string(),
-        ]
+        vec!["macro|bob@user.com".to_string()]
     );
 
     let content = notification_request_content(request);
@@ -2459,6 +2457,88 @@ async fn github_pr_status_changed_user_source_does_not_notify_nonparticipant() {
 }
 
 #[tokio::test]
+async fn github_pr_status_changed_does_not_notify_any_macro_user_linked_to_actor() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(
+            team_id,
+            vec![
+                "macro|alice@user.com",
+                "macro|alice-work@user.com",
+                "macro|bob@user.com",
+            ],
+        )
+        .with_github_link("222", "macro|alice@user.com")
+        .with_github_link("222", "macro|alice-work@user.com")
+        .with_github_link("333", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pull_request_event_with_participants(
+        "opened",
+        "Add GitHub notifications",
+        "open",
+        false,
+        None,
+        222,
+        "octocat",
+        PullRequestWebhookParticipants {
+            author: Some((222, "octocat")),
+            requested_reviewers: &[(333, "bob-gh")],
+            assignees: &[],
+        },
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    // The actor's GitHub account is linked to two Macro users; both are
+    // excluded from recipients, not just the attributed sender.
+    assert_eq!(
+        requests[0]
+            .pointer("/req/sender_id")
+            .and_then(|value| value.as_str()),
+        Some("macro|alice@user.com")
+    );
+    assert_eq!(
+        notification_request_recipients(&requests[0]),
+        vec!["macro|bob@user.com".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn github_pr_status_changed_actor_as_only_participant_does_not_notify() {
+    let repo = StubSyncRepo::new()
+        .with_installation_sources(
+            "12345",
+            vec![GithubAppInstallationSource::User(
+                "macro|author@user.com".to_string(),
+            )],
+        )
+        .with_github_link("222", "macro|author@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pull_request_event_with_participants(
+        "opened",
+        "Add GitHub notifications",
+        "open",
+        false,
+        None,
+        222,
+        "octocat",
+        PullRequestWebhookParticipants {
+            author: Some((222, "octocat")),
+            requested_reviewers: &[],
+            assignees: &[],
+        },
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
 async fn github_pr_status_changed_missing_participants_does_not_notify_team_members() {
     let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
     let repo = StubSyncRepo::new()
@@ -2565,8 +2645,8 @@ async fn github_pr_status_changed_send_failure_does_not_fail_webhook_processing(
         "open",
         false,
         None,
-        222,
-        "octocat",
+        333,
+        "other-dev",
         PullRequestWebhookParticipants {
             author: Some((222, "octocat")),
             requested_reviewers: &[],
@@ -4652,11 +4732,9 @@ async fn mention_login_linked_to_multiple_users_notifies_all_in_team() {
             "macro|carol@user.com".to_string(),
         ]
     );
-    assert_eq!(comments.len(), 1);
-    assert_eq!(
-        notification_request_recipients(&comments[0]),
-        vec!["macro|alice@user.com".to_string()]
-    );
+    // The only non-mentioned participant is Alice, who wrote the comment, so
+    // no github_pr_comment notification goes out.
+    assert_eq!(comments.len(), 0);
 }
 
 // ---------------------------------------------------------------------------

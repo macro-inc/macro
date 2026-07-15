@@ -9,12 +9,12 @@ use axum::{
 use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
-    DocumentAccessExtractor, OptionalMacroUserTeamExtractor,
+    DocumentAccessExtractor, OptionalMacroUserTeamExtractorV2,
 };
 use lexical_client::LexicalClient;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::document::DocumentBasic;
 use model::response::GenericSuccessResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::{Deserialize, Serialize};
 use task_dedup::{
@@ -71,9 +71,13 @@ pub struct TaskSimilaritySearchResponse {
 
 /// Handler for `GET /documents/{document_id}/duplicates`.
 #[tracing::instrument(skip(state, _access), err)]
-pub async fn get_task_duplicates_handler<T: DocumentService, Svc: EntityAccessService>(
-    _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
+pub async fn get_task_duplicates_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Json<TaskDuplicatesResponse>, DocumentError> {
     let duplicates = state
@@ -101,10 +105,14 @@ pub async fn get_task_duplicates_handler<T: DocumentService, Svc: EntityAccessSe
     )
 )]
 #[tracing::instrument(skip(state, user, optional_team, request), fields(user_id=?user.macro_user_id), err)]
-pub async fn task_similarity_search_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    user: MacroUserExtractor,
-    optional_team: OptionalMacroUserTeamExtractor<MemberTeamRole, Svc>,
+pub async fn task_similarity_search_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth>,
+    optional_team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Svc, Auth>,
     Json(request): Json<TaskSimilaritySearchRequest>,
 ) -> Result<Json<TaskSimilaritySearchResponse>, DocumentError> {
     // Search the user's whole team, not just their own tasks: a duplicate is a
@@ -134,10 +142,14 @@ pub async fn task_similarity_search_handler<T: DocumentService, Svc: EntityAcces
 
 /// Handler for `POST /documents/{document_id}/duplicates/dismiss`.
 #[tracing::instrument(skip(state, _access, user), err)]
-pub async fn dismiss_task_duplicates_handler<T: DocumentService, Svc: EntityAccessService>(
-    _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
-    user: model_user::axum_extractor::MacroUserExtractor,
+pub async fn dismiss_task_duplicates_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth>,
     Path(Params { document_id }): Path<Params>,
     Json(request): Json<DismissTaskDuplicatesRequest>,
 ) -> Result<Json<GenericSuccessResponse>, DocumentError> {
@@ -156,9 +168,13 @@ pub async fn dismiss_task_duplicates_handler<T: DocumentService, Svc: EntityAcce
 
 /// Handler for `POST /documents/{document_id}/duplicates/{match_id}/delete_this`.
 #[tracing::instrument(skip(state, access, doc), err)]
-pub async fn delete_this_duplicate_task_handler<T: DocumentService, Svc: EntityAccessService>(
-    access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
+pub async fn delete_this_duplicate_task_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: DocumentAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
     doc: Extension<DocumentBasic>,
     Path((document_id, match_id)): Path<(String, Uuid)>,
 ) -> Result<Json<GenericSuccessResponse>, DocumentError> {

@@ -13,6 +13,7 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{Engine, ReadResult, WriteResult};
+use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
 use serde::Serialize;
@@ -57,6 +58,43 @@ pub struct OptimisticWriteResultWire {
     /// Visible (composed-view) changes — nothing is durable until commit.
     #[serde(flatten)]
     pub result: WriteResultWire,
+}
+
+/// Claimed queue head returned to the JavaScript mutation runner.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimedMutationWire {
+    /// Durable mutation id.
+    pub transaction_id: String,
+    /// Claim generation required for settlement.
+    pub lease_generation: String,
+    /// GraphQL mutation document.
+    pub query: String,
+    /// Selected operation name.
+    pub operation_name: Option<String>,
+    /// Variables parsed from their durable canonical JSON representation.
+    pub variables: serde_json::Value,
+    /// Identity witness captured when the mutation was enqueued.
+    pub identity: Option<String>,
+    /// Number of network attempts including this claim.
+    pub attempt_count: u32,
+}
+
+impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
+    type Error = String;
+
+    fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let request = claimed.queued.mutation.request;
+        Ok(Self {
+            transaction_id: claimed.queued.id.to_string(),
+            lease_generation: claimed.lease_generation.to_string(),
+            query: request.query,
+            operation_name: request.operation_name,
+            variables: serde_json::from_str(&request.variables_json).map_err(|e| e.to_string())?,
+            identity: request.identity,
+            attempt_count: claimed.queued.mutation.attempt_count,
+        })
+    }
 }
 
 /// Interns host-side string operation ids to engine `u64` ids.
@@ -116,9 +154,14 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     }
 }
 
+fn parse_u64(value: &str, label: &str) -> Result<u64, String> {
+    value
+        .parse::<u64>()
+        .map_err(|_| format!("invalid {label} `{value}`"))
+}
+
 fn parse_transaction_id(id: &str) -> Result<u64, String> {
-    id.parse::<u64>()
-        .map_err(|_| format!("invalid optimistic transaction id `{id}`"))
+    parse_u64(id, "optimistic transaction id")
 }
 
 impl EngineHandle {
@@ -185,7 +228,7 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Installs an in-memory optimistic layer (persists nothing).
+    /// Durably queues a mutation and its optimistic layer.
     pub async fn begin_optimistic_write(
         &self,
         origin_op_id: Option<String>,
@@ -193,12 +236,20 @@ impl EngineHandle {
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
+        created_at_ms: i64,
     ) -> Result<OptimisticWriteResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         engine
-            .begin_optimistic_write(origin, &query, operation_name.as_deref(), &variables, &data)
+            .begin_optimistic_write(
+                origin,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                created_at_ms,
+            )
             .await
             .map(|(transaction, result)| OptimisticWriteResultWire {
                 transaction_id: transaction.to_string(),
@@ -207,21 +258,72 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Replaces a pending optimistic layer with the real network response.
+    /// Claims the strict mutation queue head when it is runnable.
+    pub async fn claim_next_mutation(
+        &self,
+        owner: String,
+        now_ms: i64,
+        lease_expires_at_ms: i64,
+    ) -> Result<Option<ClaimedMutationWire>, String> {
+        let mut state = self.inner.lock().await;
+        state
+            .engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner,
+                now_ms,
+                lease_expires_at_ms,
+            })
+            .await
+            .map_err(|e| e.to_string())?
+            .map(ClaimedMutationWire::try_from)
+            .transpose()
+    }
+
+    /// Retains a retryable mutation and releases its claim.
+    pub async fn defer_optimistic_write(
+        &self,
+        transaction_id: String,
+        lease_owner: String,
+        lease_generation: String,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<(), String> {
+        let transaction = parse_transaction_id(&transaction_id)?;
+        let claim = MutationClaimToken {
+            owner: lease_owner,
+            generation: parse_u64(&lease_generation, "lease generation")?,
+        };
+        self.inner
+            .lock()
+            .await
+            .engine
+            .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    /// Replaces a claimed optimistic layer with the real network response.
     pub async fn commit_optimistic_write(
         &self,
         transaction_id: String,
+        lease_owner: String,
+        lease_generation: String,
         query: String,
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
     ) -> Result<WriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
+        let claim = MutationClaimToken {
+            owner: lease_owner,
+            generation: parse_u64(&lease_generation, "lease generation")?,
+        };
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         engine
             .commit_optimistic_write(
                 transaction,
+                claim,
                 &query,
                 operation_name.as_deref(),
                 &variables,
@@ -232,16 +334,22 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Drops a pending optimistic layer's contribution (mutation failed).
+    /// Permanently fails a claimed mutation and drops its optimistic layer.
     pub async fn rollback_optimistic_write(
         &self,
         transaction_id: String,
+        lease_owner: String,
+        lease_generation: String,
     ) -> Result<WriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
+        let claim = MutationClaimToken {
+            owner: lease_owner,
+            generation: parse_u64(&lease_generation, "lease generation")?,
+        };
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         engine
-            .rollback_optimistic_write(transaction)
+            .rollback_optimistic_write(transaction, claim)
             .await
             .map(|result| wire_write_result(ops, result))
             .map_err(|e| e.to_string())

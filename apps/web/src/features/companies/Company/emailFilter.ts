@@ -44,3 +44,17 @@ export function emailFilterForDomains(domains: string[]): unknown | undefined {
   const trees = domains.map((d) => anyDirection({ Domain: d }));
   return trees.reduce((acc, cur) => ({ '|': [acc, cur] }));
 }
+
+/** Signal-only leaf — matches the server-side `t.is_signal` flag. */
+export function emailFilterForSignal(): unknown {
+  return { l: { Importance: true } };
+}
+
+/** AND-combine filter trees, skipping undefined operands. */
+export function andEmailFilters(
+  ...trees: (unknown | undefined)[]
+): unknown | undefined {
+  const present = trees.filter((t) => t !== undefined);
+  if (present.length === 0) return undefined;
+  return present.reduce((acc, cur) => ({ '&': [acc, cur] }));
+}

@@ -14,11 +14,14 @@ axum = [
   "dep:tracing",
 ]
 default = ["axum", "outbound"]
+local_auth = ["dep:macro_env_var"]
 outbound = ["dep:macro_auth", "dep:tracing"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
+constant_time_eq = { workspace = true }
 macro_auth = { path = "../macro_auth", optional = true }
+macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }
