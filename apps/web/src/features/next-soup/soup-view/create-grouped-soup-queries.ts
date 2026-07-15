@@ -160,9 +160,22 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
               (candidate) => candidate.key === group.key
             );
             if (!nextGroup) {
-              throw new Error(
-                `GraphQL grouped Soup continuation omitted bin ${group.key}`
-              );
+              if (response.groups.length > 0) {
+                throw new Error(
+                  `GraphQL grouped Soup continuation omitted bin ${group.key}`
+                );
+              }
+
+              // The group may have been exhausted by concurrent deletes
+              // between pages. Treat an empty response as a terminal page.
+              return {
+                items: {},
+                group: {
+                  ...group,
+                  itemIds: [],
+                  nextCursor: null,
+                },
+              };
             }
 
             return {
