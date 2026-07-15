@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::{
     body::{Body, to_bytes},
-    extract::{FromRef, FromRequest},
+    extract::{FromRef, FromRequest, FromRequestParts},
     http::{Request, StatusCode, header},
     response::IntoResponse,
 };
@@ -21,6 +21,8 @@ use crate::domain::models::{
     ViewAccessLevel,
 };
 
+const PROJECT_ID: &str = "project-1";
+const OWNER_ID: &str = "macro|owner@example.com";
 const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 const USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|internal-user@example.com";
@@ -173,6 +175,7 @@ struct FakeAuthorizationService;
 impl MacroAuthorizationService for FakeAuthorizationService {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         match jwt {
+            "owner" => Ok(user_context(OWNER_ID)),
             "valid" => Ok(user_context(USER_ID)),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
@@ -267,6 +270,144 @@ fn internal_request(body: &str, user_id: Option<&str>) -> Request<Body> {
     request
         .body(Body::from(body.to_string()))
         .expect("request should be valid")
+}
+
+fn project(deleted: bool) -> BasicProject {
+    BasicProject {
+        id: PROJECT_ID.to_string(),
+        user_id: MacroUserIdStr::parse_from_str(OWNER_ID).expect("owner id should be valid"),
+        parent_id: None,
+        name: "Test project".to_string(),
+        deleted_at: deleted.then(|| {
+            "2026-01-01T00:00:00Z"
+                .parse()
+                .expect("deleted timestamp should be valid")
+        }),
+    }
+}
+
+fn project_request(token: Option<&str>, project: BasicProject) -> Request<Body> {
+    let mut request = Request::new(Body::empty());
+    request.extensions_mut().insert(project);
+    if let Some(token) = token {
+        request.headers_mut().insert(
+            header::AUTHORIZATION,
+            format!("Bearer {token}")
+                .parse()
+                .expect("header should be valid"),
+        );
+    }
+    request
+}
+
+fn internal_project_request(user_id: Option<&str>, project: BasicProject) -> Request<Body> {
+    let mut request = internal_request("", user_id);
+    request.extensions_mut().insert(project);
+    request
+}
+
+async fn extract_project_access<T: RequiredPermission>(
+    request: Request<Body>,
+    state: &TestState,
+) -> Result<
+    ProjectAccessLevelExtractor<T, FakeEntityAccessService, FakeAuthorizationService>,
+    ExtractorError,
+> {
+    let (mut parts, _) = request.into_parts();
+    ProjectAccessLevelExtractor::from_request_parts(&mut parts, state).await
+}
+
+#[tokio::test]
+async fn anonymous_project_access_returns_unauthenticated_receipt() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let extracted =
+        extract_project_access::<ViewAccessLevel>(project_request(None, project(false)), &state)
+            .await
+            .expect("public project access should be allowed");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.auth(),
+        EntityAccessAuth::Unauthenticated
+    ));
+    assert_eq!(state.entity_access.calls()[0].user_id, None);
+}
+
+#[tokio::test]
+async fn authenticated_project_owner_bypasses_access_lookup() {
+    let state = TestState::new(None);
+    let extracted = extract_project_access::<EditAccessLevel>(
+        project_request(Some("owner"), project(false)),
+        &state,
+    )
+    .await
+    .expect("the project owner should be allowed");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn deleted_project_rejects_non_owner_before_access_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let result = extract_project_access::<ViewAccessLevel>(
+        project_request(Some("valid"), project(true)),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(ExtractorError::UnauthorizedWithMessage(
+            "only owner can access deleted resource"
+        ))
+    ));
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn identity_less_internal_project_access_receives_owner_without_lookup() {
+    let state = TestState::new(None);
+    let extracted = extract_project_access::<EditAccessLevel>(
+        internal_project_request(None, project(false)),
+        &state,
+    )
+    .await
+    .expect("identity-less internal access should be allowed");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.auth(),
+        EntityAccessAuth::Internal
+    ));
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn internal_project_act_as_identity_uses_acl() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let extracted = extract_project_access::<EditAccessLevel>(
+        internal_project_request(Some(INTERNAL_USER_ID), project(false)),
+        &state,
+    )
+    .await
+    .expect("the internal identity should use its project ACL");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.auth(),
+        EntityAccessAuth::Authenticated(user_id) if user_id.as_ref() == INTERNAL_USER_ID
+    ));
+    assert_eq!(
+        state.entity_access.calls(),
+        [AccessCall {
+            user_id: Some(INTERNAL_USER_ID.to_string()),
+            entity_id: PROJECT_ID.to_string(),
+            entity_type: EntityType::Project,
+        }]
+    );
 }
 
 #[tokio::test]

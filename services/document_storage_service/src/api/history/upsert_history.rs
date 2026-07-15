@@ -34,7 +34,11 @@ pub struct Params {
 )]
 #[tracing::instrument(skip(ctx, user, history_access), fields(user_id=?user.macro_user_id))]
 pub async fn upsert_history_handler(
-    history_access: HistoryAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    history_access: HistoryAccessExtractor<
+        ViewAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { item_type, item_id }): Path<Params>,

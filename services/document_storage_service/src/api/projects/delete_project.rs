@@ -56,7 +56,11 @@ pub type ProjectDeleteResponse = TypedSuccessResponse<ProjectDeleteResponseData>
     )]
 #[tracing::instrument(skip(ctx, user, id, _access), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn delete_project_handler(
-    _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: ProjectAccessLevelExtractor<
+        OwnerAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
@@ -145,7 +149,11 @@ pub async fn delete_project_handler(
     )]
 #[tracing::instrument(skip(ctx, user, _access), fields(user_id=?user.macro_user_id))]
 pub async fn permanently_delete_project_handler(
-    _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: ProjectAccessLevelExtractor<
+        OwnerAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,

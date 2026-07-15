@@ -31,22 +31,25 @@ use model_user::axum_extractor::OptionalMacroUserExtractor;
 ///
 /// Type parameter `T` specifies the required access level.
 /// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is the authorization service implementation.
 ///
 /// # Prerequisites
 ///
-/// - Project context must be loaded (BasicProject in extensions)
+/// - Project context must be loaded (`BasicProject` in extensions)
 #[derive(Debug)]
-pub struct ProjectAccessLevelExtractor<T: RequiredPermission, Svc> {
+pub struct ProjectAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for ProjectAccessLevelExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -55,26 +58,20 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
+        let OptionalMacroAuthorizationExtractor {
+            macro_user_id,
+            is_internal_access,
+            ..
+        } = OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
 
         let project_context: Extension<BasicProject> = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
-
-        if internal_user.is_some() {
+        if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {

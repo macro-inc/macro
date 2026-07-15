@@ -39,7 +39,11 @@ pub struct Params {
 #[tracing::instrument(skip(ctx, user, id, _access), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn get_project_permissions_handler(
     State(ctx): State<ApiContext>,
-    _access: ProjectAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: ProjectAccessLevelExtractor<
+        OwnerAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
 ) -> Result<Response, Response> {

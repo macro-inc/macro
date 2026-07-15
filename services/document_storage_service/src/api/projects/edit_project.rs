@@ -51,7 +51,7 @@ pub async fn edit_project_handler_v2(
 /// Edits a project.
 #[tracing::instrument(skip(ctx, user, project, id, access), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn edit_project_handler(
-    access: ProjectAccessLevelExtractor<EditAccessLevel, EntityAccessService>,
+    access: ProjectAccessLevelExtractor<EditAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     project_context: Extension<BasicProject>,

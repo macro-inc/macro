@@ -38,7 +38,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(db, user_context, id, access), fields(user_id=?user_context.macro_user_id, project_id=?id))]
 pub async fn get_project_content_handler(
-    access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
+    access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
     user_context: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
@@ -85,7 +85,7 @@ pub async fn get_project_content_handler(
 )]
 #[tracing::instrument(skip(ctx, user, id, access), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn get_project_handler(
-    access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService>,
+    access: ProjectAccessLevelExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,

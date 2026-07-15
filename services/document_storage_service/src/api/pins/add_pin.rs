@@ -44,7 +44,12 @@ pub async fn add_pin_handler(
     Path(Params { pinned_item_id }): Path<Params>,
     PinAccessLevelExtractor {
         pin_type, inner, ..
-    }: PinAccessLevelExtractor<ViewAccessLevel, EntityAccessService, AddPinRequest>,
+    }: PinAccessLevelExtractor<
+        ViewAccessLevel,
+        EntityAccessService,
+        AddPinRequest,
+        AuthorizationService,
+    >,
 ) -> impl IntoResponse {
     match macro_db_client::pins::upsert_pin(
         ctx.db.clone(),
