@@ -886,18 +886,51 @@ where
         let subscription_id = if enterprise {
             None
         } else {
-            if !self
+            let team_payment_status = match self
                 .team_repository
                 .get_team_payment_status(&team_member.team_id)
-                .await?
+                .await
             {
+                Ok(team_payment_status) => team_payment_status,
+                Err(error) => {
+                    self.team_repository
+                        .rollback_accept_team_invite(&accepted_invite)
+                        .await
+                        .inspect_err(|rollback_err| {
+                            tracing::error!(
+                                error=?rollback_err,
+                                "unable to rollback accepted team invite after getting team payment status failed"
+                            );
+                        })
+                        .ok();
+                    return Err(JoinTeamError::TeamError(error));
+                }
+            };
+
+            if !team_payment_status {
                 // If the team has a subscription id and they are set to not paying continue to error
-                if self
+                let team_subscription_id = match self
                     .team_repository
                     .get_team_subscription_id(&accepted_invite.member.team_id)
-                    .await?
-                    .is_some()
+                    .await
                 {
+                    Ok(team_subscription_id) => team_subscription_id,
+                    Err(error) => {
+                        self.team_repository
+                            .rollback_accept_team_invite(&accepted_invite)
+                            .await
+                            .inspect_err(|rollback_err| {
+                                tracing::error!(
+                                    error=?rollback_err,
+                                    "unable to rollback accepted team invite after getting team subscription failed"
+                                );
+                            })
+                            .ok();
+                        return Err(JoinTeamError::TeamError(error));
+                    }
+                };
+
+                if team_subscription_id.is_some() {
                     self.team_repository
                         .rollback_accept_team_invite(&accepted_invite)
                         .await
@@ -1363,18 +1396,40 @@ where
         let subscription_id = if enterprise {
             None
         } else {
-            if !self
-                .team_repository
-                .get_team_payment_status(&team_id)
-                .await?
-            {
+            let team_payment_status =
+                match self.team_repository.get_team_payment_status(&team_id).await {
+                    Ok(team_payment_status) => team_payment_status,
+                    Err(error) => {
+                        self.rollback_add_user_to_team(
+                            &team_id,
+                            user_id,
+                            "getting team payment status",
+                        )
+                        .await;
+                        return Err(error.into());
+                    }
+                };
+
+            if !team_payment_status {
                 // If the team has a subscription id and they are set to not paying continue to error
-                if self
+                let team_subscription_id = match self
                     .team_repository
                     .get_team_subscription_id(&team_id)
-                    .await?
-                    .is_some()
+                    .await
                 {
+                    Ok(team_subscription_id) => team_subscription_id,
+                    Err(error) => {
+                        self.rollback_add_user_to_team(
+                            &team_id,
+                            user_id,
+                            "getting team subscription id",
+                        )
+                        .await;
+                        return Err(error.into());
+                    }
+                };
+
+                if team_subscription_id.is_some() {
                     self.rollback_add_user_to_team(&team_id, user_id, "the payment status check")
                         .await;
                     return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying).into());

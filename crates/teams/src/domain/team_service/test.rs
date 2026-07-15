@@ -59,11 +59,13 @@ struct MockTeamRepository {
     team_for_get_by_id: Option<Team>,
     team_subscription_id: Option<stripe::SubscriptionId>,
     team_subscription_id_lookup_calls: Arc<Mutex<usize>>,
+    fail_team_subscription_id_lookup: bool,
     backfilled_subscription_id: Arc<Mutex<Option<stripe::SubscriptionId>>>,
     stripe_customer_id: Option<stripe::CustomerId>,
     stripe_customer_id_lookup_calls: Arc<Mutex<usize>>,
     team_payment_status: bool,
     team_payment_status_lookup_calls: Arc<Mutex<usize>>,
+    fail_team_payment_status_lookup: bool,
     enterprise: bool,
     enterprise_status_lookup_calls: Arc<Mutex<usize>>,
     fail_enterprise_status_lookup: bool,
@@ -105,11 +107,13 @@ impl MockTeamRepository {
             team_for_get_by_id: None,
             team_subscription_id: None,
             team_subscription_id_lookup_calls: Arc::new(Mutex::new(0)),
+            fail_team_subscription_id_lookup: false,
             backfilled_subscription_id: Arc::new(Mutex::new(None)),
             stripe_customer_id: None,
             stripe_customer_id_lookup_calls: Arc::new(Mutex::new(0)),
             team_payment_status: true,
             team_payment_status_lookup_calls: Arc::new(Mutex::new(0)),
+            fail_team_payment_status_lookup: false,
             enterprise: false,
             enterprise_status_lookup_calls: Arc::new(Mutex::new(0)),
             fail_enterprise_status_lookup: false,
@@ -185,7 +189,16 @@ impl TeamRepository for MockTeamRepository {
             .unwrap()
             .clone()
             .or_else(|| self.team_subscription_id.clone());
-        async move { Ok(subscription_id) }
+        let fail = self.fail_team_subscription_id_lookup;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "team subscription id lookup failed"
+                )))
+            } else {
+                Ok(subscription_id)
+            }
+        }
     }
 
     fn get_team_payment_status(
@@ -194,7 +207,16 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<bool, TeamError>> + Send {
         *self.team_payment_status_lookup_calls.lock().unwrap() += 1;
         let team_payment_status = self.team_payment_status;
-        async move { Ok(team_payment_status) }
+        let fail = self.fail_team_payment_status_lookup;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "team payment status lookup failed"
+                )))
+            } else {
+                Ok(team_payment_status)
+            }
+        }
     }
 
     fn get_team_enterprise_status(
@@ -2517,6 +2539,55 @@ async fn join_team_enterprise_rolls_back_accepted_invite_when_status_read_fails(
 }
 
 #[tokio::test]
+async fn join_team_rolls_back_accepted_invite_when_billing_lookup_fails() {
+    let team_id = uuid::Uuid::from_u128(49);
+    let invite_id = uuid::Uuid::from_u128(490);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+
+    for (fail_payment_status, fail_subscription_id, expected_subscription_lookups) in
+        [(true, false, 0), (false, true, 1)]
+    {
+        let mut team_repository =
+            make_enterprise_join_team_repository(team_id, invite_id, &user_id);
+        team_repository.enterprise = false;
+        team_repository.fail_team_payment_status_lookup = fail_payment_status;
+        team_repository.fail_team_subscription_id_lookup = fail_subscription_id;
+
+        let service = TeamServiceImpl::new(
+            team_repository.clone(),
+            MockCustomerRepository::default(),
+            MockTeamChannelsRepository::default(),
+            MockUserRolesAndPermissionsService::default(),
+            Arc::new(MockNotificationIngress::new(HashSet::new())),
+            NoOpCrmEnqueuer,
+            NoOpTeamCrmSettingsRepository,
+        );
+
+        let error = service.join_team(&invite_id, &user_id).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            JoinTeamError::TeamError(TeamError::StorageLayerError(_))
+        ));
+        assert_eq!(*team_repository.rollback_accept_calls.lock().unwrap(), 1);
+        assert_eq!(
+            *team_repository
+                .team_payment_status_lookup_calls
+                .lock()
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            *team_repository
+                .team_subscription_id_lookup_calls
+                .lock()
+                .unwrap(),
+            expected_subscription_lookups
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_join_team_backfills_legacy_team_subscription() {
     let team_id = uuid::Uuid::from_u128(43);
     let invite_id = uuid::Uuid::from_u128(430);
@@ -3340,6 +3411,54 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*remove_user_calls.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn try_join_team_by_domain_rolls_back_membership_when_billing_lookup_fails() {
+    let team_id = uuid::Uuid::from_u128(86);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+
+    for (fail_payment_status, fail_subscription_id, expected_subscription_lookups) in
+        [(true, false, 0), (false, true, 1)]
+    {
+        let mut team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
+        team_repository.enterprise = false;
+        team_repository.fail_team_payment_status_lookup = fail_payment_status;
+        team_repository.fail_team_subscription_id_lookup = fail_subscription_id;
+
+        let service = TeamServiceImpl::new(
+            team_repository.clone(),
+            MockCustomerRepository::default(),
+            MockTeamChannelsRepository::default(),
+            MockUserRolesAndPermissionsService::default(),
+            Arc::new(MockNotificationIngress::new(HashSet::new())),
+            NoOpCrmEnqueuer,
+            NoOpTeamCrmSettingsRepository,
+        );
+
+        let error = service.try_join_team_by_domain(&user_id).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            TryJoinTeamByDomainError::TeamError(TeamError::StorageLayerError(_))
+        ));
+        assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
+        assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
+        assert_eq!(
+            *team_repository
+                .team_payment_status_lookup_calls
+                .lock()
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            *team_repository
+                .team_subscription_id_lookup_calls
+                .lock()
+                .unwrap(),
+            expected_subscription_lookups
+        );
+    }
 }
 
 #[tokio::test]
