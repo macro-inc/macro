@@ -1,5 +1,5 @@
 use anyhow::Context;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::InternalApiKey;
 
 pub use macro_env::Environment;
 

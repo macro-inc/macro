@@ -74,9 +74,7 @@ pub async fn setup_and_serve(
     let app = Router::new()
         .nest(
             "/api", // needed for cdn routing
-            Router::new()
-                .merge(file::router().layer(cors.clone()))
-                .merge(health::router().layer(cors.clone())),
+            Router::new().merge(file::router()).merge(health::router()),
         )
         .nest(
             "/internal",
