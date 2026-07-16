@@ -256,26 +256,12 @@ function TagPickerBody(props: {
     });
   };
 
-  const optionScope = (optionId: string): TagScope | undefined =>
-    initialTagState().optionScopes.get(optionId);
-
   const persistSelection = async () => {
     if (saved()) return true;
     setSaved(true);
 
     try {
-      const nextSelectedIds = selectedIds();
-      for (const tag of initialAppliedTags()) {
-        if (!nextSelectedIds.has(tag.optionId)) {
-          await props.docTags.removeTag(tag.scope, tag.optionId);
-        }
-      }
-
-      for (const optionId of nextSelectedIds) {
-        if (initialAppliedIds().has(optionId)) continue;
-        const scope = optionScope(optionId);
-        if (scope) await props.docTags.applyTag(scope, optionId);
-      }
+      await props.docTags.setTagSelection(selectedIds());
       return true;
     } catch (error) {
       setSaved(false);
@@ -289,7 +275,9 @@ function TagPickerBody(props: {
   };
 
   const saveAndClose = async () => {
-    if (await save()) props.onClose();
+    const savePromise = save();
+    props.onClose();
+    await savePromise;
   };
 
   const filteredItems = createMemo(() => {
