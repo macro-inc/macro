@@ -1,304 +1,140 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from '@core/component/UserIcon';
-import { useEmail, useUserId } from '@core/context/user';
-import type { ChannelEntity, EmailEntity, EntityData } from '@entity';
-import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
-import ChatTextIcon from '@phosphor/chat-text.svg';
-import CheckSquareIcon from '@phosphor/check-square.svg';
-import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
-import FolderSimpleIcon from '@phosphor/folder-simple.svg';
-import NotePencilIcon from '@phosphor/note-pencil.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import { Avatar } from '@ui';
-import { type Component, createMemo, type JSX, Show } from 'solid-js';
+import type { ChannelEntity, EntityData } from '@entity';
+import { cn } from '@ui';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { createMemo, Show } from 'solid-js';
 import type { TimelineRow } from './collapse';
-import { Emph, FeedRow, LineBody, StackedBody } from './feed-row';
-import type { EntityEventVerb, EntityTimelineItem } from './timeline-types';
-
-const VERB_BADGES: Record<EntityEventVerb, Component> = {
-  'sent-message': ChatTextIcon,
-  'replied-in-thread': ArrowBendUpLeftIcon,
-  'sent-email': PaperPlaneTiltIcon,
-  'drafted-email': EnvelopeSimpleIcon,
-  'email-activity': EnvelopeSimpleIcon,
-  'created-document': PlusCircleIcon,
-  'edited-document': NotePencilIcon,
-  'created-task': CheckSquareIcon,
-  'edited-task': CheckSquareIcon,
-  'created-folder': FolderSimpleIcon,
-  'agent-chat': SparkleIcon,
-  'attended-call': PhoneIcon,
-};
-
-const MAX_RECIPIENT_NAMES = 2;
+import type { EntityTimelineItem } from './timeline-types';
 
 /**
- * "Alice, Bob +2" — the thread's participants other than the user's own
- * address, for "Sent an email to …" titles.
+ * The "actor verb location" title plus optional content snippet for an
+ * entity-derived event (or a collapsed run of them), e.g. "You sent 5
+ * messages in #general" with the latest message text alongside.
  */
-function recipientsLabel(
-  entity: EmailEntity,
-  myEmail: string | undefined
-): string | undefined {
-  const others = (entity.participants ?? []).filter(
-    (participant) => participant.email.toLowerCase() !== myEmail?.toLowerCase()
-  );
-  if (others.length === 0) return undefined;
-  const names = others
-    .slice(0, MAX_RECIPIENT_NAMES)
-    .map((participant) => participant.name?.trim() || participant.email);
-  const overflow = others.length - MAX_RECIPIENT_NAMES;
-  return overflow > 0 ? `${names.join(', ')} +${overflow}` : names.join(', ');
-}
-
-function emailBody(entity: EmailEntity): JSX.Element {
-  return (
-    <span class="block min-w-0 truncate">
-      <span class="text-ink">{entity.name}</span>
-      <Show when={entity.snippet}>
-        <span class="text-ink-extra-muted"> — {entity.snippet}</span>
-      </Show>
-    </span>
-  );
-}
-
-type Presented = {
-  title: JSX.Element;
-  body?: JSX.Element;
-};
-
-function present(args: {
-  items: EntityTimelineItem[];
-  resolveChannel: (channelId: string) => ChannelEntity | undefined;
-  myEmail: string | undefined;
-}): Presented {
-  const { items, resolveChannel, myEmail } = args;
+function eventText(
+  items: EntityTimelineItem[],
+  resolveChannel: (channelId: string) => ChannelEntity | undefined
+): { title: string; preview?: string } {
   const first = items[0]!;
   const entity = first.entity;
   const count = items.length;
 
-  const channelLabel = (): JSX.Element => {
-    if (entity.type !== 'channel_thread') return 'a channel';
+  const channelLocation = (): string | undefined => {
+    if (entity.type !== 'channel_thread') return undefined;
     const channel = resolveChannel(entity.channelId);
-    if (!channel) return 'a channel';
+    if (!channel) return undefined;
     if (channel.channelType === 'direct_message') {
-      return channel.name.trim() ? (
-        <Emph>{channel.name}</Emph>
-      ) : (
-        'a direct message'
-      );
+      return channel.name.trim() ? `a DM with ${channel.name}` : 'a DM';
     }
-    return channel.name.trim() ? (
-      <Emph>#{channel.name.replace(/^#/, '')}</Emph>
-    ) : (
-      'a channel'
-    );
+    return channel.name.trim()
+      ? `#${channel.name.replace(/^#/, '')}`
+      : undefined;
   };
 
-  const messageBodies = (): string[] =>
-    items.map((item) =>
-      item.entity.type === 'channel_thread' && item.entity.content.trim()
-        ? item.entity.content
-        : '*sent an attachment*'
-    );
+  // For a collapsed run, preview the newest message; the count lives in the
+  // title.
+  const messagePreview = (): string | undefined =>
+    entity.type === 'channel_thread' ? entity.content : undefined;
 
-  const body = (lines: string[]): JSX.Element | undefined => {
-    if (lines.length === 0) return undefined;
-    if (lines.length === 1) return <LineBody text={lines[0]!} />;
-    return <StackedBody lines={lines} />;
-  };
+  const emailSubject = entity.type === 'email' ? entity.name : undefined;
+  const emailSnippet = entity.type === 'email' ? entity.snippet : undefined;
+  const emailPreview = emailSubject
+    ? `**${emailSubject}**${emailSnippet ? ` — ${emailSnippet}` : ''}`
+    : emailSnippet;
 
   switch (first.verb) {
-    case 'sent-message':
+    case 'sent-message': {
+      const location = channelLocation();
+      const action =
+        count === 1 ? 'You sent a message' : `You sent ${count} messages`;
       return {
-        title:
-          count === 1 ? (
-            <>
-              <Emph>You</Emph> to {channelLabel()}
-            </>
-          ) : (
-            <>
-              <Emph>You</Emph> sent {count} messages in {channelLabel()}
-            </>
-          ),
-        body: body(messageBodies()),
-      };
-    case 'replied-in-thread':
-      return {
-        title:
-          count === 1 ? (
-            <>
-              <Emph>You</Emph> replied in a thread in {channelLabel()}
-            </>
-          ) : (
-            <>
-              <Emph>You</Emph> replied in {count} threads in {channelLabel()}
-            </>
-          ),
-        // The thread row's content is the root message (possibly someone
-        // else's) — show it as context for what was replied to.
-        body: body(messageBodies()),
-      };
-    case 'sent-email': {
-      const recipients =
-        entity.type === 'email' ? recipientsLabel(entity, myEmail) : undefined;
-      return {
-        title: recipients ? (
-          <>
-            Sent an email to <Emph>{recipients}</Emph>
-          </>
-        ) : (
-          'Sent an email'
-        ),
-        body: entity.type === 'email' ? emailBody(entity) : undefined,
+        title: location ? `${action} in ${location}` : action,
+        preview: messagePreview(),
       };
     }
-    case 'drafted-email': {
-      const recipients =
-        entity.type === 'email' ? recipientsLabel(entity, myEmail) : undefined;
+    case 'replied-in-thread': {
+      const location = channelLocation();
+      const action =
+        count === 1
+          ? 'You replied in a thread'
+          : `You replied in ${count} threads`;
       return {
-        title: recipients ? (
-          <>
-            Drafted an email to <Emph>{recipients}</Emph>
-          </>
-        ) : (
-          'Drafted an email'
-        ),
-        body: entity.type === 'email' ? emailBody(entity) : undefined,
+        title: location ? `${action} in ${location}` : action,
+        preview: messagePreview(),
       };
     }
+    case 'sent-email':
+      return { title: 'You sent an email', preview: emailPreview };
+    case 'drafted-email':
+      return { title: 'You drafted an email', preview: emailPreview };
     case 'email-activity': {
       const sender =
         entity.type === 'email'
-          ? entity.senderName?.trim() || entity.senderEmail
+          ? (entity.senderName ?? entity.senderEmail)
           : undefined;
       return {
-        title: (
-          <>
-            <Emph>{sender ?? 'Someone'}</Emph> emailed
-          </>
-        ),
-        body: entity.type === 'email' ? emailBody(entity) : undefined,
+        title: sender ? `${sender} emailed` : 'Email activity',
+        preview: emailPreview,
       };
     }
     case 'created-document':
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> created <Emph>“{entity.name}”</Emph>
-          </>
-        ),
-      };
+      return { title: `You created “${entity.name}”` };
     case 'edited-document':
       // No diff available — there is no server-side edit log, only the fact
       // that the document changed since creation.
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> edited <Emph>“{entity.name}”</Emph>
-          </>
-        ),
-      };
+      return { title: `You edited “${entity.name}”` };
     case 'created-task':
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> created task <Emph>{entity.name}</Emph>
-          </>
-        ),
-      };
+      return { title: 'You created a task', preview: entity.name };
     case 'edited-task':
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> updated task <Emph>{entity.name}</Emph>
-          </>
-        ),
-      };
+      return { title: 'You updated a task', preview: entity.name };
     case 'created-folder':
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> created folder <Emph>{entity.name}</Emph>
-          </>
-        ),
-      };
+      return { title: `You created the folder “${entity.name}”` };
     case 'agent-chat':
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> worked with an agent
-          </>
-        ),
-        body: <LineBody text={entity.name} />,
-      };
+      return { title: 'You worked with an agent', preview: entity.name };
     case 'attended-call':
-      return {
-        title: (
-          <>
-            <Emph>You</Emph> attended a call
-          </>
-        ),
-        body: entity.name.trim() ? <LineBody text={entity.name} /> : undefined,
-      };
+      return { title: 'You attended a call', preview: entity.name };
   }
 }
 
-function EventAvatar(props: { entity: EntityData }) {
-  const userId = useUserId();
-
-  // Shared-email rows (Firehose) belong to the sender, who may not be a
-  // Macro user — initials avatar. Everything else in these feeds is the
-  // current user's own action.
-  const emailSender = () => {
-    if (props.entity.type !== 'email') return undefined;
-    const sender =
-      props.entity.senderName?.trim() || props.entity.senderEmail?.trim();
-    return sender || undefined;
-  };
-
+function EventIcon(props: { entity: EntityData }) {
   return (
     <Show
-      when={emailSender()}
+      when={
+        props.entity.type === 'channel_thread'
+          ? props.entity.senderId
+          : undefined
+      }
       fallback={
-        <Show
-          when={userId()}
-          fallback={<span class="size-4 rounded-full bg-ink/10" />}
-        >
-          {(id) => (
-            <UserIcon id={id()} size="fill" suppressClick showTooltip={false} />
-          )}
-        </Show>
+        <EntityIcon targetType={getEntityIconType(props.entity)} size="xs" />
       }
     >
-      {(sender) => (
-        <Avatar size="fill">
-          <Avatar.Fallback>
-            {sender().slice(0, 1).toUpperCase()}
-          </Avatar.Fallback>
-        </Avatar>
+      {(senderId) => (
+        <div class="size-4">
+          <UserIcon
+            id={senderId()}
+            size="fill"
+            suppressClick
+            showTooltip={false}
+          />
+        </div>
       )}
     </Show>
   );
 }
 
 /**
- * A feed row for one entity-derived event, or a collapsed run of them
- * ("You sent 5 messages in #squad"). Clicking opens the newest underlying
- * entity — channel rows open at the specific message.
+ * A single entity-derived activity row (or collapsed run): icon, "actor verb
+ * location" title, one-line content preview, and a relative timestamp.
+ * Clicking opens the newest underlying entity — channel rows open at the
+ * specific message.
  */
-export function EntityEventFeedRow(props: {
+export function EntityEventRow(props: {
   row: TimelineRow;
   resolveChannel: (channelId: string) => ChannelEntity | undefined;
-  connector: boolean;
-  /** Whether email rows are the user's own (Things I did) — shows own avatar. */
-  ownActions?: boolean;
 }) {
-  const email = useEmail();
-
   const items = createMemo(() =>
     props.row.items.flatMap((item) =>
       item.kind === 'entity-event' ? [item] : []
@@ -306,42 +142,40 @@ export function EntityEventFeedRow(props: {
   );
   const first = () => items()[0]!;
 
-  const presented = createMemo(() =>
-    present({
-      items: items(),
-      resolveChannel: props.resolveChannel,
-      myEmail: email(),
-    })
-  );
+  const text = createMemo(() => eventText(items(), props.resolveChannel));
 
-  const badge = () => {
-    const Icon = VERB_BADGES[first().verb];
-    return <Icon />;
+  const open = (openInNewSplit: boolean) => {
+    void openEntityInSplitFromUnifiedList(first().entity, {
+      openInNewSplit,
+    });
   };
 
-  // "Things I did" email rows are the user's own sends — show their avatar,
-  // not sender initials.
-  const avatarEntity = createMemo((): EntityData => {
-    const entity = first().entity;
-    if (props.ownActions && entity.type === 'email') {
-      return { ...entity, senderName: undefined, senderEmail: undefined };
-    }
-    return entity;
-  });
-
   return (
-    <FeedRow
-      avatar={<EventAvatar entity={avatarEntity()} />}
-      badge={badge()}
-      title={presented().title}
-      body={presented().body}
-      ts={props.row.ts}
-      connector={props.connector}
-      onClick={(e) => {
-        void openEntityInSplitFromUnifiedList(first().entity, {
-          openInNewSplit: e.shiftKey,
-        });
-      }}
-    />
+    <div
+      class={cn(
+        'group/event @container/event-row flex items-center gap-2.5 px-3 py-2 min-w-0 overflow-hidden',
+        'cursor-pointer hover:bg-ink-muted/6'
+      )}
+      onClick={(e) => open(e.shiftKey)}
+    >
+      <span class="size-4 shrink-0 flex items-center justify-center [&_svg]:size-3.5">
+        <EventIcon entity={first().entity} />
+      </span>
+      <span class="ph-no-capture min-w-0 shrink truncate text-xs text-ink">
+        {text().title}
+      </span>
+      <Show when={text().preview?.trim()}>
+        {(preview) => (
+          <span class="hidden @md/event-row:inline flex-1 min-w-0 overflow-hidden ph-no-capture truncate text-xs text-ink-muted/60">
+            <StaticMarkdown markdown={preview()} singleLine />
+          </span>
+        )}
+      </Show>
+      <span class="shrink-0 ml-auto text-ink-extra-muted text-xs tabular-nums">
+        {formatDistanceToNowStrict(new Date(props.row.ts), {
+          addSuffix: true,
+        })}
+      </span>
+    </div>
   );
 }

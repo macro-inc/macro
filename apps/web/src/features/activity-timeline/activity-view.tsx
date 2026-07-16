@@ -4,15 +4,16 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { getTypeNoun } from '@entity/extractors-notification/notification-description-helpers';
+import { NotificationRow } from '@entity/extractors-notification/notification-row';
 import type { TimelineRow } from './collapse';
-import { EntityEventFeedRow } from './entity-event-row';
+import { EntityEventRow } from './entity-event-row';
 import { mapMyActivityEntity, mapSharedEmailEntity } from './entity-events';
 import {
   createNotificationTimelineFeed,
   createSoupTimelineFeed,
 } from './feeds';
 import { mergeTimelineFeeds } from './merge-feeds';
-import { NotificationFeedRow } from './notification-feed-row';
 import { TimelinePane } from './timeline-view';
 import { useChannelLookup } from './use-channel-lookup';
 
@@ -41,6 +42,37 @@ const getMyDraftsQuery = (): Query =>
   defineQueryFilters({ emailView: 'drafts' });
 
 /**
+ * A notification row (or collapsed run of them). Single notifications render
+ * through the standard notification row; runs keep the newest notification's
+ * description and swap the content slot for a count summary.
+ */
+function NotificationTimelineRow(props: { row: TimelineRow }) {
+  const notifications = () =>
+    props.row.items.flatMap((item) =>
+      item.kind === 'notification' ? [item.notification] : []
+    );
+  const first = () => notifications()[0]!;
+  const count = () => notifications().length;
+
+  return (
+    <NotificationRow
+      notification={first()}
+      variant="compact"
+      showMarkDone={false}
+      content={
+        // Leave the slot on the default per-type content for single rows;
+        // runs summarize as "5 messages".
+        count() > 1 ? (
+          <span class="truncate">
+            {count()} {getTypeNoun(first().notification_metadata.tag, count())}
+          </span>
+        ) : undefined
+      }
+    />
+  );
+}
+
+/**
  * "Things I did": the user's own recent actions at event granularity —
  * messages sent, threads replied to, emails sent, drafts started, documents
  * created/edited, tasks and folders created, agent sessions, and calls
@@ -63,13 +95,8 @@ function MyActivityPane() {
     }),
   ]);
 
-  const renderRow = (row: TimelineRow, connector: boolean) => (
-    <EntityEventFeedRow
-      row={row}
-      resolveChannel={resolveChannel}
-      connector={connector}
-      ownActions
-    />
+  const renderRow = (row: TimelineRow) => (
+    <EntityEventRow row={row} resolveChannel={resolveChannel} />
   );
 
   return (
@@ -111,15 +138,11 @@ function FirehosePane() {
     }),
   ]);
 
-  const renderRow = (row: TimelineRow, connector: boolean) =>
+  const renderRow = (row: TimelineRow) =>
     row.items[0]!.kind === 'notification' ? (
-      <NotificationFeedRow row={row} connector={connector} />
+      <NotificationTimelineRow row={row} />
     ) : (
-      <EntityEventFeedRow
-        row={row}
-        resolveChannel={resolveChannel}
-        connector={connector}
-      />
+      <EntityEventRow row={row} resolveChannel={resolveChannel} />
     );
 
   return (

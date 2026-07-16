@@ -39,14 +39,13 @@ function sectionize(rows: TimelineRow[]): TimelineSection[] {
 
 /**
  * One scrolling activity pane: a titled, date-sectioned, infinite feed of
- * event rows. Row rendering is supplied by the caller; `connector` tells the
- * row whether to draw its line down to the next entry.
+ * compact event rows. Row rendering is supplied by the caller.
  */
 export function TimelinePane(props: {
   title: string;
   description: string;
   feed: TimelineFeed;
-  renderRow: (row: TimelineRow, connector: boolean) => JSX.Element;
+  renderRow: (row: TimelineRow) => JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
 }) {
@@ -76,7 +75,7 @@ export function TimelinePane(props: {
         <p class="text-xs text-ink-muted">{props.description}</p>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="mx-auto flex w-full max-w-2xl flex-col px-6 pb-10 mobile:pb-(--mobile-content-inset-bottom)">
+        <div class="mx-auto flex w-full max-w-2xl flex-col px-3 pb-10 mobile:pb-(--mobile-content-inset-bottom)">
           <Show
             when={!props.feed.isLoading()}
             fallback={
@@ -98,21 +97,14 @@ export function TimelinePane(props: {
               <For each={sections()}>
                 {(section) => (
                   <section class="mt-20 first:mt-4">
-                    <div class="pb-5 text-sm font-semibold text-ink">
+                    <div class="px-3 pb-3 text-sm font-semibold text-ink">
                       {section.label}
                     </div>
-                    <div class="flow-root">
-                      <ul class="-mb-8">
-                        <For each={section.rows}>
-                          {(row, index) =>
-                            props.renderRow(
-                              row,
-                              index() < section.rows.length - 1
-                            )
-                          }
-                        </For>
-                      </ul>
-                    </div>
+                    <ul class="flex flex-col">
+                      <For each={section.rows}>
+                        {(row) => <li>{props.renderRow(row)}</li>}
+                      </For>
+                    </ul>
                   </section>
                 )}
               </For>
