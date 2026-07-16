@@ -3,23 +3,17 @@ import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
 import { Button, Hotkey, SendButton, Surface } from '@ui';
-import { createEffect, createSignal, Show, untrack } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 
 /**
  * Right-aligned "Edit with AI" pill above the document discussion that expands
- * (click or cmd+j) into a prompt card matching the Discussion composer. Submitting
- * sends the instruction directly to the ai-editing-worker; the edit lands in the
- * document via live sync while the pill reports progress — the worker only responds
- * once the session finishes, so the request promise doubles as the done signal.
+ * into a prompt card matching the Discussion composer.
  */
 export function DocumentAiEditBar(props: { documentId: string }) {
-  const scopeId = blockHotkeyScopeSignal.get;
   const md = mdStore.get;
 
   const [expanded, setExpanded] = createSignal(false);
@@ -68,25 +62,6 @@ export function DocumentAiEditBar(props: { documentId: string }) {
       return true;
     })
     .onChange((markdown) => setPrompt(markdown));
-
-  // cmd+j - expand the AI edit bar and focus the input
-  createEffect(() => {
-    if (!scopeId()) return;
-    untrack(() =>
-      registerHotkey({
-        hotkey: 'cmd+j',
-        scopeId: scopeId(),
-        hotkeyToken: TOKENS.chat.input.focus,
-        description: 'Ask AI to edit this document',
-        keyDownHandler: () => {
-          if (editing()) return true;
-          if (expanded()) editor.controls.focus();
-          else setExpanded(true);
-          return true;
-        },
-      })
-    );
-  });
 
   return (
     <div class="flex justify-end">
