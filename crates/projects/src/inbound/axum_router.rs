@@ -3,10 +3,14 @@
 #[cfg(test)]
 mod tests;
 
+pub mod create_project;
+pub mod delete_project;
+pub mod edit_project;
 pub mod get_batch_preview;
 pub mod get_project;
 pub mod get_projects;
 pub mod project_permission;
+pub mod revert_delete_project;
 
 use std::sync::Arc;
 
@@ -24,10 +28,14 @@ use model::response::GenericErrorResponse;
 use serde::Deserialize;
 
 use self::{
+    create_project::create_project_handler,
+    delete_project::delete_project_handler,
+    edit_project::edit_project_handler,
     get_batch_preview::get_batch_preview_handler,
     get_project::{get_project_content_handler, get_project_handler},
     get_projects::{get_pending_projects_handler, get_projects_handler},
     project_permission::{get_project_access_level_handler, get_project_permissions_handler},
+    revert_delete_project::revert_delete_project_handler,
 };
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
@@ -109,7 +117,9 @@ where
     let project_routes = Router::new()
         .route(
             "/{id}",
-            axum::routing::get(get_project_handler::<T, Svc, Auth>),
+            axum::routing::get(get_project_handler::<T, Svc, Auth>)
+                .patch(edit_project_handler::<T, Svc, Auth>)
+                .delete(delete_project_handler::<T, Svc, Auth>),
         )
         .route(
             "/{id}/content",
@@ -123,6 +133,10 @@ where
             "/{id}/access_level",
             axum::routing::get(get_project_access_level_handler::<T, Svc, Auth>),
         )
+        .route(
+            "/{id}/revert_delete",
+            axum::routing::put(revert_delete_project_handler::<T, Svc, Auth>),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             ensure_project_exists::<T, Svc, Auth>,
@@ -132,7 +146,8 @@ where
         .merge(project_routes)
         .route(
             "/",
-            axum::routing::get(get_projects_handler::<T, Svc, Auth>),
+            axum::routing::get(get_projects_handler::<T, Svc, Auth>)
+                .post(create_project_handler::<T, Svc, Auth>),
         )
         .route(
             "/pending",

@@ -42,12 +42,14 @@ use crate::domain::{
 };
 
 const TOKEN: &str = "valid-token";
+const INTERNAL_KEY: &str = "internal-key";
 const USER_ID: &str = "macro|router@example.com";
 const PROJECT_ID: &str = "project-1";
 
 #[derive(Clone)]
 struct FakeProjectService {
     basic_project: Arc<Mutex<Result<BasicProject, String>>>,
+    mutations: Arc<Mutex<Vec<&'static str>>>,
 }
 
 impl FakeProjectService {
@@ -60,12 +62,14 @@ impl FakeProjectService {
                 name: "Project".to_string(),
                 deleted_at: deleted.then(chrono::Utc::now),
             }))),
+            mutations: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
     fn missing() -> Self {
         Self {
             basic_project: Arc::new(Mutex::new(Err("missing".to_string()))),
+            mutations: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -121,7 +125,11 @@ impl ProjectService for FakeProjectService {
         _actor: MacroUserIdStr<'static>,
         _args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
-        panic!("project creation is not used by these tests")
+        self.mutations
+            .lock()
+            .expect("mutation lock poisoned")
+            .push("create");
+        Ok(project())
     }
 
     async fn edit_project(
@@ -130,7 +138,14 @@ impl ProjectService for FakeProjectService {
         _project: BasicProject,
         _args: PatchProjectRequestV2,
     ) -> Result<(), ProjectError> {
-        panic!("project editing is not used by these tests")
+        if _project.deleted_at.is_some() {
+            return Err(ProjectError::CannotModifyDeleted);
+        }
+        self.mutations
+            .lock()
+            .expect("mutation lock poisoned")
+            .push("edit");
+        Ok(())
     }
 
     async fn soft_delete_project(
@@ -139,7 +154,15 @@ impl ProjectService for FakeProjectService {
         _project: BasicProject,
         _actor_user_id: String,
     ) -> Result<SoftDeleteResult, ProjectError> {
-        panic!("project deletion is not used by these tests")
+        self.mutations
+            .lock()
+            .expect("mutation lock poisoned")
+            .push("delete");
+        Ok(SoftDeleteResult {
+            project_ids: vec![PROJECT_ID.to_string()],
+            document_ids: vec!["document-1".to_string()],
+            chat_ids: vec!["chat-1".to_string()],
+        })
     }
 
     async fn revert_delete_project(
@@ -147,7 +170,11 @@ impl ProjectService for FakeProjectService {
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
         _project: BasicProject,
     ) -> Result<(), ProjectError> {
-        panic!("project restoration is not used by these tests")
+        self.mutations
+            .lock()
+            .expect("mutation lock poisoned")
+            .push("revert");
+        Ok(())
     }
 
     async fn get_batch_preview(
@@ -285,10 +312,13 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 
     async fn authorize_internal(
         &self,
-        _provided_key: &str,
-        _claims: InternalIdentityClaims,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
     ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
-        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+        if provided_key != INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+        Ok(claims.user_id.map(|user_id| user_context(&user_id)))
     }
 }
 
@@ -331,6 +361,26 @@ fn authenticated_request(uri: &str) -> Request<Body> {
     Request::get(uri)
         .header("authorization", format!("Bearer {TOKEN}"))
         .body(Body::empty())
+        .expect("request should be valid")
+}
+
+fn authenticated_json_request(method: &str, uri: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+fn internal_json_request(method: &str, uri: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("x-internal-auth-key", INTERNAL_KEY)
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
         .expect("request should be valid")
 }
 
@@ -421,6 +471,165 @@ async fn access_extractor_denial_prevents_handler() {
     .expect("router should respond");
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn create_returns_project_success_envelope() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_json_request(
+            "POST",
+            "/",
+            json!({ "name": "Created", "projectParentId": null }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({
+            "error": false,
+            "data": {
+                "id": PROJECT_ID,
+                "name": "Project",
+                "userId": USER_ID,
+                "createdAt": null,
+                "updatedAt": null,
+                "deletedAt": null
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn edit_permission_denial_prevents_mutation() {
+    let response = router(
+        FakeProjectService::with_project("macro|owner@example.com", false),
+        Some(AccessLevel::View),
+    )
+    .oneshot(authenticated_json_request(
+        "PATCH",
+        &format!("/{PROJECT_ID}"),
+        json!({ "name": "Edited" }),
+    ))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn owner_can_edit_with_exact_success_response() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_json_request(
+            "PATCH",
+            &format!("/{PROJECT_ID}"),
+            json!({ "name": "Edited" }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({ "error": false, "data": { "success": true } })
+    );
+}
+
+#[tokio::test]
+async fn edit_rejects_deleted_project() {
+    let response = router(FakeProjectService::with_project(USER_ID, true), None)
+        .oneshot(authenticated_json_request(
+            "PATCH",
+            &format!("/{PROJECT_ID}"),
+            json!({ "name": "Edited" }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        json_body(response).await,
+        json!({ "error": true, "message": "cannot modify deleted project" })
+    );
+}
+
+#[tokio::test]
+async fn edit_body_parent_denial_prevents_handler() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_json_request(
+            "PATCH",
+            &format!("/{PROJECT_ID}"),
+            json!({ "projectParentId": Uuid::new_v4().to_string() }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn owner_can_delete_with_exact_response_body() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_json_request(
+            "DELETE",
+            &format!("/{PROJECT_ID}"),
+            json!({}),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({
+            "error": false,
+            "data": {
+                "project_ids": [PROJECT_ID],
+                "document_ids": ["document-1"],
+                "chat_ids": ["chat-1"]
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn deleted_project_creator_can_revert() {
+    let response = router(FakeProjectService::with_project(USER_ID, true), None)
+        .oneshot(authenticated_json_request(
+            "PUT",
+            &format!("/{PROJECT_ID}/revert_delete"),
+            json!({}),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({ "error": false, "data": { "success": true } })
+    );
+}
+
+#[tokio::test]
+async fn internal_actor_can_revert_deleted_project() {
+    let response = router(
+        FakeProjectService::with_project("macro|owner@example.com", true),
+        None,
+    )
+    .oneshot(internal_json_request(
+        "PUT",
+        &format!("/{PROJECT_ID}/revert_delete"),
+        json!({}),
+    ))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({ "error": false, "data": { "success": true } })
+    );
 }
 
 #[tokio::test]
