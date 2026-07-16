@@ -1259,6 +1259,80 @@ async fn canonical_document_task_write_uses_task_storage_type() {
 }
 
 #[tokio::test]
+async fn canonical_document_task_assignee_write_grants_permissions() {
+    let task_id = Uuid::from_u128(0xA5516E);
+    let assignee = MacroUserIdStr::parse_from_str("macro|assignee@test.com").unwrap();
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_document_sub_types()
+        .withf(move |ids| ids == [task_id])
+        .returning(move |_| {
+            Box::pin(async move { Ok(HashMap::from([(task_id, DocumentSubType::Task)])) })
+        });
+    repo.expect_get_property_definition().returning(|_| {
+        Box::pin(async {
+            Ok(Some(PropertyDefinition {
+                id: SystemPropertyKey::ASSIGNEES_UUID,
+                owner: models_properties::PropertyOwner::System,
+                display_name: "Assignees".to_string(),
+                data_type: models_properties::DataType::Entity,
+                is_multi_select: true,
+                specific_entity_type: Some(EntityType::User),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                is_system: true,
+                is_metadata: false,
+            }))
+        })
+    });
+    repo.expect_upsert_entity_property()
+        .withf(move |entity_id, entity_type, property_id, _| {
+            entity_id == task_id.to_string()
+                && *entity_type == EntityType::Task
+                && *property_id == SystemPropertyKey::ASSIGNEES_UUID
+        })
+        .returning(|entity_id, entity_type, property_definition_id, _| {
+            let property = entity_property(entity_id, entity_type, property_definition_id);
+            Box::pin(async move { Ok(property) })
+        });
+
+    let mut permission_service = MockPermissionService::new();
+    let expected_assignee = assignee.clone();
+    permission_service
+        .expect_grant_permissions_to_task()
+        .withf(move |user_ids, id| {
+            user_ids == [expected_assignee.clone()] && id == task_id.to_string()
+        })
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(permission_service),
+        None::<MockNotificationService>,
+    );
+    let receipt = EditReceipt::dangerously_assert_authenticated_user(
+        caller_user_id(),
+        &task_id.to_string(),
+        AccessEntityType::Document,
+    );
+
+    service
+        .set_entity_property(
+            &receipt,
+            SystemPropertyKey::ASSIGNEES_UUID,
+            Some(
+                models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+                    references: vec![models_properties::EntityReference::new(
+                        assignee.as_ref(),
+                        EntityType::User,
+                    )],
+                },
+            ),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn canonical_document_task_read_uses_task_storage_type() {
     let task_id = Uuid::from_u128(0xBEEF);
     let property_id = Uuid::from_u128(0xCAFE);
