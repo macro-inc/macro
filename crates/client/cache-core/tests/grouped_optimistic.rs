@@ -251,6 +251,19 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
         assert_eq!(bins[1]["totalCount"], json!(0));
         assert_eq!(bins[1]["nextCursor"], json!("destination-cursor"));
 
+        // Durable recipes reconstruct the complete property + relation layer
+        // after an application restart.
+        let mut reopened = Engine::new(engine.storage().clone());
+        let hydrated = read_group(&mut reopened).await;
+        assert!(hydrated["user"]["groupSoup"]["bins"][0]["items"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            hydrated["user"]["groupSoup"]["bins"][1]["items"][0]["id"],
+            json!("task-1")
+        );
+
         let claim = claim(&mut engine, transaction).await;
         engine
             .rollback_optimistic_write(transaction, claim)
@@ -301,6 +314,31 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
             )
             .await
             .unwrap();
+
+        // A concurrent authoritative write lands while the mutation is
+        // pending. Settlement must patch this latest base, not promote the
+        // earlier optimistic field snapshot over it.
+        let mut concurrent = group_page();
+        concurrent["user"]["groupSoup"]["bins"][1]["items"] = json!([{
+            "id": "task-2",
+            "entity": {
+                "__typename": "GraphqlSoupDocument",
+                "id": "task-2",
+                "properties": []
+            }
+        }]);
+        engine
+            .write_query(
+                None,
+                GROUP_QUERY,
+                Some("GroupSoup"),
+                &query_variables(),
+                &concurrent,
+                None,
+            )
+            .await
+            .unwrap();
+
         let claim = claim(&mut engine, transaction).await;
         let result = engine
             .commit_optimistic_write(
@@ -318,6 +356,10 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
         assert_eq!(
             committed["user"]["groupSoup"]["bins"][1]["items"][0]["id"],
             json!("task-1")
+        );
+        assert_eq!(
+            committed["user"]["groupSoup"]["bins"][1]["items"][1]["id"],
+            json!("task-2")
         );
     });
 }
