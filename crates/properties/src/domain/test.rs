@@ -11,7 +11,8 @@ use crate::domain::{
 use anyhow::anyhow;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    BotId, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType, ViewAccessLevel,
+    AccessLevel, BotId, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    EntityType as AccessEntityType, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{
@@ -289,6 +290,52 @@ async fn test_link_parent_task_requires_edit_on_parent() {
         err,
         crate::domain::error::PropertiesErr::PermissionDenied
     ));
+}
+
+#[tokio::test]
+async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
+    let bot_access = EditReceipt::dangerously_assert_bot(
+        bot_id.into_storage_id(),
+        &task_id.to_string(),
+        AccessEntityType::Document,
+    );
+    let unauthenticated_access = EditReceipt::try_new(
+        EntityAccessAuth::Unauthenticated,
+        Entity {
+            entity_id: task_id.to_string(),
+            entity_type: AccessEntityType::Document,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+
+    for access in [bot_access, unauthenticated_access] {
+        let mut repo = MockPropertiesRepo::new();
+        repo.expect_link_parent_task().times(0);
+        let service = PropertiesServiceImpl::new(
+            repo,
+            None::<MockPermissionService>,
+            None::<MockNotificationService>,
+        );
+
+        let err = service
+            .handle_task_relationship_property(
+                &access,
+                SystemPropertyKey::PARENT_TASK_UUID,
+                Some(parent_task_value(Uuid::from_u128(0xF00D))),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            crate::domain::error::PropertiesErr::PermissionDenied
+        ));
+    }
 }
 
 #[tokio::test]
