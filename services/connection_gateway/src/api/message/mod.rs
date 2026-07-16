@@ -1,4 +1,8 @@
-use crate::{context::AppState, model::message::Message, service::sender::send_message_to_entity};
+use crate::{
+    context::{AppState, AuthorizationService},
+    model::message::Message,
+    service::sender::send_message_to_entity,
+};
 use axum::{
     Json as JsonResponse, Router,
     extract::{Json, Path, State},
@@ -9,7 +13,7 @@ use connection_gateway_models::{
     BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody, SendMessageResponse,
 };
 use futures::future::try_join_all;
-use macro_middleware::auth;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model_entity::Entity;
 use std::time::Instant;
 
@@ -27,10 +31,6 @@ where
             "/batch_send_unique",
             post(batch_send_unique_messages_handler),
         )
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            auth::internal_access::handler,
-        ))
         .with_state(state)
 }
 
@@ -48,9 +48,10 @@ where
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn send_message_handler(
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     State(ctx): State<AppState>,
     Path(entity): Path<Entity<'static>>,
     Json(body): Json<SendMessageBody>,
@@ -90,8 +91,9 @@ pub async fn send_message_handler(
         (status = 500, description = "Internal server error", body = String),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(_internal_authorization, ctx))]
 pub async fn batch_send_message_handler(
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendMessageBody<'static>>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
@@ -140,9 +142,10 @@ pub async fn batch_send_message_handler(
         (status = 500, description = "Internal server error", body = String),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn batch_send_unique_messages_handler(
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendUniqueMessagesBody>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
