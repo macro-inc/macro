@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO \"ChannelSharePermission\" (share_permission_id, channel_id, access_level)\n                    VALUES ($1, $2, $3::text::\"AccessLevel\")\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aba9d4ae626a82d5219ab748c66fc1d3e01d4af57af5d36325ab9c81ee04f993"
+}

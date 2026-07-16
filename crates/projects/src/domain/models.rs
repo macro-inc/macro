@@ -1,5 +1,57 @@
 //! Domain-owned project models.
 
+use model::project::Project;
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+
+/// Arguments for atomically creating a project and its access metadata.
+#[derive(Debug, Clone)]
+pub struct CreateProjectArgs {
+    /// Project owner.
+    pub user_id: String,
+    /// Project name.
+    pub name: String,
+    /// Optional parent project.
+    pub parent_id: Option<String>,
+    /// Initial sharing configuration.
+    pub share_permission: SharePermissionV2,
+}
+
+/// Arguments for editing a project.
+#[derive(Debug, Clone)]
+pub struct EditProjectArgs {
+    /// Project identifier.
+    pub project_id: String,
+    /// Replacement name, or `None` to leave it unchanged.
+    pub name: Option<String>,
+    /// Whether the parent field is part of the update.
+    pub update_parent: bool,
+    /// Replacement parent. `None` clears it when `update_parent` is true.
+    pub parent_id: Option<String>,
+    /// Optional sharing changes.
+    pub share_permission: Option<UpdateSharePermissionRequestV2>,
+}
+
+/// Identifiers affected by a recursive soft deletion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoftDeleteResult {
+    /// Deleted projects, including the requested root.
+    pub project_ids: Vec<String>,
+    /// Deleted documents.
+    pub document_ids: Vec<String>,
+    /// Deleted chats.
+    pub chat_ids: Vec<String>,
+}
+
+/// Result of restoring a recursively deleted project tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevertDeleteResult {
+    /// Restored project identifiers.
+    pub project_ids: Vec<String>,
+}
+
+/// Result returned by project creation and editing.
+pub type MutatedProject = Project;
+
 /// Errors produced by project operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectError {

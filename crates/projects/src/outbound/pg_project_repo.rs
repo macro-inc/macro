@@ -1,6 +1,10 @@
 //! PostgreSQL implementation of the [`ProjectRepo`] port.
 
 mod content;
+mod create;
+mod delete;
+mod edit;
+mod revert_delete;
 mod share;
 
 #[cfg(test)]
@@ -15,6 +19,9 @@ use model::project::{
 };
 use sqlx::PgPool;
 
+use crate::domain::models::{
+    CreateProjectArgs, EditProjectArgs, RevertDeleteResult, SoftDeleteResult,
+};
 use crate::domain::ports::ProjectRepo;
 
 /// PostgreSQL-backed project repository.
@@ -225,6 +232,57 @@ impl ProjectRepo for PgProjectRepo {
                 None => ProjectPreviewV2::DoesNotExist(WithProjectId { id: id.clone() }),
             })
             .collect())
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn create_project(&self, args: CreateProjectArgs) -> Result<Project, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let project = create::create_project(&mut transaction, &args).await?;
+        transaction.commit().await?;
+        Ok(project)
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn edit_project(&self, args: EditProjectArgs) -> Result<Project, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let project = edit::edit_project(&mut transaction, &args).await?;
+        transaction.commit().await?;
+        Ok(project)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn is_project_recursively_nested(
+        &self,
+        project_id: &str,
+        parent_id: &str,
+    ) -> Result<bool, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        edit::is_project_recursively_nested(&mut transaction, project_id, parent_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn soft_delete_project(&self, project_id: &str) -> Result<SoftDeleteResult, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let result = delete::soft_delete_project(&mut transaction, project_id).await?;
+        transaction.commit().await?;
+        Ok(result)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn revert_delete_project(
+        &self,
+        project_id: &str,
+        previous_parent_id: Option<String>,
+    ) -> Result<RevertDeleteResult, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let result = revert_delete::revert_delete_project(
+            &mut transaction,
+            project_id,
+            previous_parent_id.as_deref(),
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(result)
     }
 
     #[tracing::instrument(err, skip(self))]

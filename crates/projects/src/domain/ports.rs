@@ -20,7 +20,10 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
-use super::models::ProjectError;
+use super::models::{
+    CreateProjectArgs, EditProjectArgs, MutatedProject, ProjectError, RevertDeleteResult,
+    SoftDeleteResult,
+};
 
 /// Repository for reading project data from persistent storage.
 ///
@@ -72,6 +75,38 @@ pub trait ProjectRepo: Send + Sync + 'static {
         &self,
         project_ids: &[String],
     ) -> impl Future<Output = Result<Vec<ProjectPreviewV2>, Self::Err>> + Send;
+
+    /// Atomically create a project and its permission, history, and owner-access rows.
+    fn create_project(
+        &self,
+        args: CreateProjectArgs,
+    ) -> impl Future<Output = Result<MutatedProject, Self::Err>> + Send;
+
+    /// Edit project fields and optional sharing configuration atomically.
+    fn edit_project(
+        &self,
+        args: EditProjectArgs,
+    ) -> impl Future<Output = Result<MutatedProject, Self::Err>> + Send;
+
+    /// Return whether the proposed parent is inside the project's subtree.
+    fn is_project_recursively_nested(
+        &self,
+        project_id: &str,
+        parent_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Soft-delete a project and all of its active descendants.
+    fn soft_delete_project(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<SoftDeleteResult, Self::Err>> + Send;
+
+    /// Restore a deleted project subtree and the owners' history rows.
+    fn revert_delete_project(
+        &self,
+        project_id: &str,
+        previous_parent_id: Option<String>,
+    ) -> impl Future<Output = Result<RevertDeleteResult, Self::Err>> + Send;
 
     /// Update the project's modified timestamp.
     fn update_project_modified(
