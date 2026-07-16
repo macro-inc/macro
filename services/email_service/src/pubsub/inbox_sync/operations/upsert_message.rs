@@ -9,6 +9,7 @@ use crate::pubsub::util::{
 use crate::pubsub::util::{cg_refresh_email, publish_email_event};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
+use contacts::domain::models::messages::ContactConnection;
 use contacts::domain::ports::ContactsIngress;
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, MessageReceivedMetadata, MessageSentMetadata,
@@ -451,23 +452,22 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    let users: std::collections::HashSet<MacroUserIdStr<'static>> =
-        std::iter::once(Ok(link.macro_id.clone()))
-            .chain(
-                connection_emails
-                    .iter()
-                    .map(|email| MacroUserIdStr::try_from_email(email)),
-            )
-            .collect::<Result<_, _>>()
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: anyhow::anyhow!(e).context("invalid user email for contacts"),
-                })
-            })?;
+    let connections = connection_emails
+        .iter()
+        .map(|email| {
+            MacroUserIdStr::try_from_email(email)
+                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
+            })
+        })?;
 
     ctx.contacts_ingress
-        .enqueue_contacts(users)
+        .enqueue_contact_connections(connections)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
