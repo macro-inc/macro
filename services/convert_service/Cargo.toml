@@ -26,6 +26,7 @@ doppler-config = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lambda_client = { path = "../../crates/lambda_client" }
+macro_auth = { path = "../../crates/macro_auth" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }

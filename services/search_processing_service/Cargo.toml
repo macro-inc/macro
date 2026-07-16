@@ -33,6 +33,7 @@ email_db_client = { path = "../../crates/email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
+macro_auth = { path = "../../crates/macro_auth" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }

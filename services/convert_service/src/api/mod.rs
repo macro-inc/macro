@@ -1,7 +1,7 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::InternalApiKey;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
