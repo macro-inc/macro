@@ -321,7 +321,8 @@ pub(crate) type DssCallService = CallServiceImpl<
 >;
 
 /// Type alias for the call router state.
-pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
+pub(crate) type DssCallState =
+    CallRouterState<DssCallService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the call webhook router state.
 pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
