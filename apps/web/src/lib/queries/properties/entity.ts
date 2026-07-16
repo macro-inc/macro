@@ -43,15 +43,16 @@ export function useEntityPropertiesQuery(
         queryKey: propertiesKeys.entity({
           entityType: type,
           entityId: id,
-          includeMetadata,
         }).queryKey,
         queryFn: async () => {
+          // Always fetch with metadata so consumers with different
+          // `includeMetadata` values share one cache entry and one request.
           const data = await throwOnErr(
             async () =>
               await propertiesServiceClient.getEntityProperties({
                 entity_type: type,
                 entity_id: id,
-                query: { include_metadata: includeMetadata },
+                query: { include_metadata: true },
               })
           );
           return data.properties.flatMap((property) => {
@@ -63,6 +64,10 @@ export function useEntityPropertiesQuery(
             }
           });
         },
+        select: (properties: Property[]) =>
+          includeMetadata
+            ? properties
+            : properties.filter((property) => property.isMetadata !== true),
         staleTime: 0,
       };
     },
