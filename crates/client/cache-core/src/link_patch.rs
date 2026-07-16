@@ -390,42 +390,54 @@ fn resolve_from_record(
     let named_type = selected_type(concrete, selected)?;
     resolve_from_value(
         effective,
-        value,
-        owner.clone(),
-        storage_key,
-        Vec::new(),
-        named_type,
-        &selected.selection_set,
         variables,
+        ValueCursor {
+            value,
+            owner: owner.clone(),
+            anchor_field: storage_key,
+            relative_path: Vec::new(),
+            type_name: named_type,
+            selections: &selected.selection_set,
+        },
         &path[1..],
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn resolve_from_value(
-    effective: &HashMap<EntityKey, Record>,
-    value: &CacheValue,
+struct ValueCursor<'a> {
+    value: &'a CacheValue,
     owner: EntityKey,
     anchor_field: FieldKey,
     relative_path: Vec<LinkPathSegment>,
-    type_name: &str,
-    selections: &[Selection],
+    type_name: &'a str,
+    selections: &'a [Selection],
+}
+
+fn resolve_from_value(
+    effective: &HashMap<EntityKey, Record>,
     variables: &serde_json::Map<String, Json>,
+    cursor: ValueCursor<'_>,
     path: &[LinkPathSegment],
 ) -> Result<ResolvedTarget, LinkPatchError> {
     if path.is_empty() {
         return Ok(ResolvedTarget {
-            parent_entity_key: owner,
-            field_key: anchor_field,
-            path: relative_path,
+            parent_entity_key: cursor.owner,
+            field_key: cursor.anchor_field,
+            path: cursor.relative_path,
         });
     }
 
-    if let CacheValue::Ref(key) = value {
-        return resolve_from_record(effective, key, type_name, selections, variables, path);
+    if let CacheValue::Ref(key) = cursor.value {
+        return resolve_from_record(
+            effective,
+            key,
+            cursor.type_name,
+            cursor.selections,
+            variables,
+            path,
+        );
     }
 
-    match (&path[0], value) {
+    match (&path[0], cursor.value) {
         (
             LinkPathSegment::Field {
                 field: response_key,
@@ -438,23 +450,25 @@ fn resolve_from_value(
                     CacheValue::String(value) => Some(value.as_str()),
                     _ => None,
                 })
-                .unwrap_or(type_name);
-            let selected = selected_field(selections, concrete, response_key)?;
+                .unwrap_or(cursor.type_name);
+            let selected = selected_field(cursor.selections, concrete, response_key)?;
             let storage_key = selected_storage_key(selected, variables)?;
             let child = object.get(&storage_key).ok_or(LinkPatchError::WrongShape)?;
-            let mut child_path = relative_path;
+            let mut child_path = cursor.relative_path;
             child_path.push(LinkPathSegment::Field {
                 field: storage_key.clone(),
             });
             resolve_from_value(
                 effective,
-                child,
-                owner,
-                anchor_field,
-                child_path,
-                selected_type(concrete, selected)?,
-                &selected.selection_set,
                 variables,
+                ValueCursor {
+                    value: child,
+                    owner: cursor.owner,
+                    anchor_field: cursor.anchor_field,
+                    relative_path: child_path,
+                    type_name: selected_type(concrete, selected)?,
+                    selections: &selected.selection_set,
+                },
                 &path[1..],
             )
         }
@@ -465,7 +479,8 @@ fn resolve_from_value(
                     maximum: MAX_TRAVERSED_LIST,
                 });
             }
-            let selector = selected_field(selections, type_name, &list_item.where_field)?;
+            let selector =
+                selected_field(cursor.selections, cursor.type_name, &list_item.where_field)?;
             let selector_key = selected_storage_key(selector, variables)?;
             let matches: Vec<_> = items
                 .iter()
@@ -483,7 +498,7 @@ fn resolve_from_value(
             if matches.len() != 1 {
                 return Err(LinkPatchError::SelectorMatchCount(matches.len()));
             }
-            let mut item_path = relative_path;
+            let mut item_path = cursor.relative_path;
             item_path.push(LinkPathSegment::ListItem {
                 list_item: ListItemByScalar {
                     where_field: selector_key,
@@ -492,13 +507,15 @@ fn resolve_from_value(
             });
             resolve_from_value(
                 effective,
-                &items[matches[0]],
-                owner,
-                anchor_field,
-                item_path,
-                type_name,
-                selections,
                 variables,
+                ValueCursor {
+                    value: &items[matches[0]],
+                    owner: cursor.owner,
+                    anchor_field: cursor.anchor_field,
+                    relative_path: item_path,
+                    type_name: cursor.type_name,
+                    selections: cursor.selections,
+                },
                 &path[1..],
             )
         }
@@ -544,7 +561,7 @@ fn selected_storage_key(
     Ok(field_key(&field.name, arguments.as_deref()))
 }
 
-fn selected_type<'a>(concrete: &str, field: &FieldNode) -> Result<&'a str, LinkPatchError> {
+fn selected_type(concrete: &str, field: &FieldNode) -> Result<&'static str, LinkPatchError> {
     meta::field_meta(concrete, &field.name)
         .map(|metadata| metadata.ty.name)
         .ok_or_else(|| LinkPatchError::UnselectedField {
