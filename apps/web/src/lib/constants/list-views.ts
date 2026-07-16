@@ -8,6 +8,8 @@ import { match } from 'ts-pattern';
 
 export const LIST_VIEWS = [
   'inbox',
+  'firehose',
+  'my-activity',
   'agents',
   'mail',
   'documents',
@@ -23,6 +25,8 @@ export type ListView = (typeof LIST_VIEWS)[number];
 
 export const LIST_VIEW_PATHS = {
   inbox: '/inbox',
+  firehose: '/firehose',
+  'my-activity': '/my-activity',
   agents: '/agents',
   mail: '/mail',
   documents: '/documents',
@@ -36,6 +40,8 @@ export const LIST_VIEW_PATHS = {
 
 export const LIST_VIEW_ID = {
   inbox: 'inbox',
+  firehose: 'firehose',
+  'my-activity': 'my-activity',
   agents: 'agents',
   mail: 'mail',
   documents: 'documents',
@@ -73,6 +79,14 @@ export const soupItemMatchesListView = (
     .with('folders', () => item.tag === 'project')
     .with('inbox', 'search', undefined, () => true)
     .with('companies', () => item.tag === 'crmCompany')
+    // Team activity feed: every entity type except CRM rows.
+    .with('firehose', () => item.tag !== 'crmCompany')
+    // Personal activity feed: user scoping happens server-side; here we only
+    // gate the entity types the view's query can return.
+    .with(
+      'my-activity',
+      () => item.tag !== 'crmCompany' && item.tag !== 'foreignEntity'
+    )
     .exhaustive();
 
 const propertiesMatchTagFilter = (

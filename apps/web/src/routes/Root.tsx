@@ -275,6 +275,14 @@ const ROUTES: RouteDefinition[] = [
     component: LAYOUT_ROUTE.component,
   },
   {
+    path: '/firehose',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/my-activity',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
     path: '/agents',
     component: LAYOUT_ROUTE.component,
   },

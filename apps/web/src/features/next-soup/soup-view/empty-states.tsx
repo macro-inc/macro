@@ -34,6 +34,16 @@ type FallbackContent = {
 };
 
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
+  firehose: {
+    plural: 'team activity',
+    description:
+      'A live timeline of everything going on in your team — channel messages, shared emails, documents, and calls will appear here as they happen.',
+  },
+  'my-activity': {
+    plural: 'recent activity',
+    description:
+      'Everything you do in Macro — emails you send, messages you post, documents you edit, and tasks you create — will show up here.',
+  },
   documents: {
     plural: 'documents',
     graphic: EmptyStateDocGraphic,

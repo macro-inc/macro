@@ -158,6 +158,42 @@ registerComponent(
 );
 
 registerComponent(
+  'firehose',
+  withAuth(() => {
+    usePageViewTracking('firehose');
+    const preset = getViewPreset('firehose');
+    return (
+      <SoupView
+        viewName="Firehose"
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
+      />
+    );
+  })
+);
+
+registerComponent(
+  'my-activity',
+  withAuth(() => {
+    usePageViewTracking('my-activity');
+    const user = useUserContext();
+    const preset = getViewPreset('my-activity', undefined, {
+      userId: user.userId(),
+      isTeamAdmin: false,
+    });
+    return (
+      <SoupView
+        viewName="Things I did"
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
+      />
+    );
+  })
+);
+
+registerComponent(
   'agents',
   withAuth(() => {
     usePageViewTracking('agents');

@@ -74,7 +74,9 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
+import ClockCounterClockwiseIcon from '@phosphor/clock-counter-clockwise.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
+import FireIcon from '@phosphor/fire.svg';
 import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -166,6 +168,22 @@ const SIDEBAR_LINKS = [
     icon: AnimatedInboxIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
+  },
+  {
+    id: 'firehose',
+    label: 'Firehose',
+    href: LIST_VIEW_PATHS.firehose,
+    icon: FireIcon,
+    hotkey: 'w',
+    hotkeyToken: TOKENS.sidebar.goTo.firehose,
+  },
+  {
+    id: 'my-activity',
+    label: 'Things I did',
+    href: LIST_VIEW_PATHS['my-activity'],
+    icon: ClockCounterClockwiseIcon,
+    hotkey: 'm',
+    hotkeyToken: TOKENS.sidebar.goTo.myActivity,
   },
   {
     id: 'search',
@@ -1143,7 +1161,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox']
+    ['home', 'inbox', 'firehose', 'my-activity']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
   );
