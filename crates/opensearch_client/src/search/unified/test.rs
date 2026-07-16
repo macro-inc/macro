@@ -535,7 +535,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
           "bcc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "bcc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" }
         },
-        "require_field_match": true
+        "require_field_match": true,
+        "max_analyzer_offset": 999999
       },
       "query": {
         "bool": {
@@ -856,7 +857,8 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
           "bcc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "bcc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" }
         },
-        "require_field_match": true
+        "require_field_match": true,
+        "max_analyzer_offset": 999999
       },
       "query": {
         "bool": {
