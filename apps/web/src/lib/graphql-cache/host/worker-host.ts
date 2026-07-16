@@ -4,6 +4,7 @@
  */
 
 import {
+  type CacheFieldInfo,
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
@@ -15,7 +16,12 @@ import {
   type WriteResult,
 } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
-import type { CacheHost, CacheReadArgs, CacheWriteArgs } from './types';
+import type {
+  BeginOptimisticWriteArgs,
+  CacheHost,
+  CacheReadArgs,
+  CacheWriteArgs,
+} from './types';
 
 type Pending = {
   resolve: (value: unknown) => void;
@@ -158,7 +164,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async beginOptimisticWrite(
-      args: CacheWriteArgs
+      args: BeginOptimisticWriteArgs
     ): Promise<OptimisticWriteResult> {
       await ready;
       return (await request({
@@ -168,8 +174,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
+        linkPatches: args.linkPatches,
+        revalidations: args.revalidations,
         createdAtMs: Date.now(),
       })) as OptimisticWriteResult;
+    },
+
+    async inspectFields(entityKey: string): Promise<CacheFieldInfo[]> {
+      await ready;
+      return (await request({
+        kind: 'inspect-fields',
+        entityKey,
+      })) as CacheFieldInfo[];
     },
 
     async claimNextMutation(

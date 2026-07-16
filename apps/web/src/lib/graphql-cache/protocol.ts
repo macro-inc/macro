@@ -11,6 +11,40 @@
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+export type QueryRevalidationWire = {
+  query: string;
+  operationName?: string;
+  /** Canonical JSON object, kept as text in the durable queue. */
+  variablesJson: string;
+};
+
+export type EmbeddedLinkPathSegment =
+  | { field: string }
+  | {
+      listItem: {
+        whereField: string;
+        equals: string | number | boolean | null;
+      };
+    };
+
+export type OptimisticLinkPatchWire = {
+  parentEntityKey: string;
+  /** Opaque argument-qualified key returned by `inspectFields`. */
+  fieldKey: string;
+  path: EmbeddedLinkPathSegment[];
+  operation:
+    | { kind: 'remove'; entityKey: string }
+    | { kind: 'prependUnique'; entityKey: string };
+  revalidate?: QueryRevalidationWire;
+};
+
+export type CacheFieldInfo = {
+  entityKey: string;
+  fieldName: string;
+  fieldKey: string;
+  arguments?: Record<string, unknown>;
+};
+
 export type WriteResult = {
   /** Entity keys whose records changed. */
   changed: string[];
@@ -22,6 +56,8 @@ export type WriteResult = {
    * then contains every registered operation except the origin.
    */
   reset: boolean;
+  /** Present on successful optimistic settlement; empty otherwise. */
+  revalidations?: QueryRevalidationWire[];
 };
 
 /**
@@ -83,6 +119,8 @@ export type CacheRequest = { id: number } & (
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
+      linkPatches?: OptimisticLinkPatchWire[];
+      revalidations?: QueryRevalidationWire[];
       createdAtMs: number;
     }
   | {
@@ -117,6 +155,7 @@ export type CacheRequest = { id: number } & (
       leaseOwner: string;
       leaseGeneration: string;
     }
+  | { kind: 'inspect-fields'; entityKey: string }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
   | { kind: 'invalidate'; keys: string[] }

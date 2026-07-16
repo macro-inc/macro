@@ -114,6 +114,9 @@ function makeFakeHost(): FakeHost {
         reset: false,
       };
     },
+    async inspectFields() {
+      return [];
+    },
     async claimNextMutation(_owner): Promise<ClaimedMutation | undefined> {
       const head = queue[0];
       if (!head || head.leased) return undefined;

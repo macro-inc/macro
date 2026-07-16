@@ -1,39 +1,137 @@
 /**
- * Typed entry point for optimistic GraphQL mutations through the
- * normalized cache exchange.
+ * Typed entry point for durable optimistic GraphQL mutations.
  *
- * The optimistic response rides in a private urql operation-context slot;
- * the exchange installs it as an in-memory cache layer before the mutation
- * is forwarded to the network, commits the layer with the real response on
- * success, and rolls it back on error. Construction is strongly typed
- * against the generated operation (`TData` must exactly match the mutation
- * selection), while the exchange boundary reads the slot as `unknown`.
+ * Relation updates are declarative because callbacks cannot cross or survive
+ * SharedWorker, Tauri IPC, WASM, and durable queue boundaries.
  */
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import type {
-  AnyVariables,
-  Client,
-  Operation,
-  OperationResult,
-  OperationResultSource,
+import {
+  type AnyVariables,
+  type Client,
+  type Operation,
+  type OperationResult,
+  type OperationResultSource,
+  stringifyDocument,
 } from '@urql/core';
+import { Kind, type OperationDefinitionNode } from 'graphql';
+import type {
+  EmbeddedLinkPathSegment,
+  OptimisticLinkPatchWire,
+  QueryRevalidationWire,
+} from '../protocol';
 
-/** Private operation-context field carrying the optimistic response. */
+/** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+
+export type QueryRevalidation = {
+  document: TypedDocumentNode<unknown, AnyVariables>;
+  variables: AnyVariables;
+};
+
+export type OptimisticLinkPatch = {
+  parentEntityKey: string;
+  fieldKey: string;
+  path: readonly EmbeddedLinkPathSegment[];
+  operation:
+    | { kind: 'remove'; entityKey: string }
+    | { kind: 'prependUnique'; entityKey: string };
+  revalidate?: QueryRevalidation;
+};
+
+export type OptimisticMutationOptions = {
+  linkPatches?: readonly OptimisticLinkPatch[];
+  /** Relevant fields that cannot safely be patched still revalidate on success. */
+  revalidations?: readonly QueryRevalidation[];
+};
 
 export type OptimisticMutationContext<TData = unknown> = {
   optimisticResponse: TData;
+  linkPatches: OptimisticLinkPatchWire[];
+  revalidations: QueryRevalidationWire[];
 };
 
+function documentOperationName(
+  document: TypedDocumentNode<unknown, AnyVariables>
+): string | undefined {
+  for (const definition of document.definitions) {
+    if (definition.kind === Kind.OPERATION_DEFINITION) {
+      return (definition as OperationDefinitionNode).name?.value;
+    }
+  }
+  return undefined;
+}
+
+function serializeRevalidation(
+  revalidation: QueryRevalidation
+): QueryRevalidationWire {
+  return {
+    query: stringifyDocument(revalidation.document),
+    operationName: documentOperationName(revalidation.document),
+    variablesJson: JSON.stringify(revalidation.variables ?? {}),
+  };
+}
+
+function serializePatch(patch: OptimisticLinkPatch): OptimisticLinkPatchWire {
+  return {
+    parentEntityKey: patch.parentEntityKey,
+    fieldKey: patch.fieldKey,
+    path: [...patch.path],
+    operation: patch.operation,
+    revalidate: patch.revalidate
+      ? serializeRevalidation(patch.revalidate)
+      : undefined,
+  };
+}
+
+/** Creates a constrained removal from an existing GroupSoup bin. */
+export function removeGroupedSoupItemLink(args: {
+  parentEntityKey: string;
+  fieldKey: string;
+  binKey: string;
+  itemEntityKey: string;
+  revalidate?: QueryRevalidation;
+}): OptimisticLinkPatch {
+  return groupedSoupItemLinkPatch(args, 'remove');
+}
+
+/** Creates a constrained unique prepend into an existing GroupSoup bin. */
+export function prependGroupedSoupItemLink(args: {
+  parentEntityKey: string;
+  fieldKey: string;
+  binKey: string;
+  itemEntityKey: string;
+  revalidate?: QueryRevalidation;
+}): OptimisticLinkPatch {
+  return groupedSoupItemLinkPatch(args, 'prependUnique');
+}
+
+function groupedSoupItemLinkPatch(
+  args: {
+    parentEntityKey: string;
+    fieldKey: string;
+    binKey: string;
+    itemEntityKey: string;
+    revalidate?: QueryRevalidation;
+  },
+  kind: 'remove' | 'prependUnique'
+): OptimisticLinkPatch {
+  return {
+    parentEntityKey: args.parentEntityKey,
+    fieldKey: args.fieldKey,
+    path: [
+      { field: 'bins' },
+      { listItem: { whereField: 'key', equals: args.binKey } },
+      { field: 'items' },
+    ],
+    operation: { kind, entityKey: args.itemEntityKey },
+    revalidate: args.revalidate,
+  };
+}
+
 /**
- * Executes `document` as a mutation whose `optimisticData` is applied to
- * the normalized cache immediately. Dependent cached queries update right
- * away; the returned source still resolves only with the real network
- * result (never the optimistic one).
- *
- * On clients without the normalized cache exchange the context slot is
- * ignored and this behaves exactly like `client.mutation`.
+ * Executes `document` with one durable optimistic entity/link transaction.
+ * The source resolves only with the real network result.
  */
 export function executeOptimisticMutation<
   TData,
@@ -42,20 +140,20 @@ export function executeOptimisticMutation<
   client: Client,
   document: TypedDocumentNode<TData, TVariables>,
   variables: TVariables,
-  optimisticData: TData
+  optimisticData: TData,
+  options: OptimisticMutationOptions = {}
 ): OperationResultSource<OperationResult<TData, TVariables>> {
   const context: OptimisticMutationContext<TData> = {
     optimisticResponse: optimisticData,
+    linkPatches: (options.linkPatches ?? []).map(serializePatch),
+    revalidations: (options.revalidations ?? []).map(serializeRevalidation),
   };
   return client.mutation(document, variables, {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
   });
 }
 
-/**
- * Reads the optimistic context off an operation at the exchange boundary,
- * where the payload is necessarily `unknown`.
- */
+/** Reads and defensively validates the private context at the exchange edge. */
 export function optimisticContextOf(
   op: Operation
 ): OptimisticMutationContext | undefined {
@@ -63,7 +161,9 @@ export function optimisticContextOf(
   if (
     value !== null &&
     typeof value === 'object' &&
-    'optimisticResponse' in value
+    'optimisticResponse' in value &&
+    'linkPatches' in value &&
+    'revalidations' in value
   ) {
     return value as OptimisticMutationContext;
   }

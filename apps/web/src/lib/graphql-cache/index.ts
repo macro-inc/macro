@@ -5,7 +5,12 @@
 
 export {
   executeOptimisticMutation,
+  type OptimisticLinkPatch,
   type OptimisticMutationContext,
+  type OptimisticMutationOptions,
+  prependGroupedSoupItemLink,
+  type QueryRevalidation,
+  removeGroupedSoupItemLink,
 } from './exchange/optimistic';
 export { createTauriCacheHost } from './host/tauri-host';
 export type {

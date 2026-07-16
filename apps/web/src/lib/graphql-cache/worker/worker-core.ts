@@ -90,10 +90,15 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
+          request.linkPatches,
+          request.revalidations,
           request.createdAtMs
         );
         this.fanOut(result);
         return result;
+      }
+      case 'inspect-fields': {
+        return await this.requireEngine().inspectFields(request.entityKey);
       }
       case 'claim-next-mutation': {
         const engine = this.requireEngine();
@@ -142,7 +147,12 @@ export class CacheWorkerCore {
       case 'invalidate': {
         const engine = this.requireEngine();
         const affectedOps = await engine.invalidateKeys(request.keys);
-        this.fanOut({ changed: request.keys, affectedOps, reset: false });
+        this.fanOut({
+          changed: request.keys,
+          affectedOps,
+          reset: false,
+          revalidations: [],
+        });
         return affectedOps;
       }
       case 'teardown': {

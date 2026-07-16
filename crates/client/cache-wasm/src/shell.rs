@@ -1,6 +1,7 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
-use cache_core::engine::{Engine, ReadResult};
+use cache_core::engine::{CacheFieldInfo, Engine, ReadResult};
+use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
@@ -57,6 +58,28 @@ struct JsWriteResult {
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
+    revalidations: Vec<QueryRevalidation>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsCacheFieldInfo {
+    entity_key: String,
+    field_name: String,
+    field_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    arguments: Option<serde_json::Value>,
+}
+
+impl From<CacheFieldInfo> for JsCacheFieldInfo {
+    fn from(field: CacheFieldInfo) -> Self {
+        Self {
+            entity_key: field.entity_key.0,
+            field_name: field.field_name,
+            field_key: field.field_key,
+            arguments: field.arguments,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -66,6 +89,7 @@ struct JsOptimisticWriteResult {
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
+    revalidations: Vec<QueryRevalidation>,
 }
 
 #[derive(Serialize)]
@@ -180,6 +204,13 @@ fn parse_variables(
     serde_wasm_bindgen::from_value(variables).map_err(err_js)
 }
 
+fn parse_vec<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<Vec<T>, JsValue> {
+    if value.is_undefined() || value.is_null() {
+        return Ok(Vec::new());
+    }
+    serde_wasm_bindgen::from_value(value).map_err(err_js)
+}
+
 #[wasm_bindgen]
 impl CacheEngine {
     /// Attempts a cache read. Resolves to `{kind:"hit",data}` or
@@ -248,6 +279,7 @@ impl CacheEngine {
                 changed: result.changed.into_iter().map(|k| k.0).collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
+                revalidations: result.revalidations,
             })
         })
     }
@@ -263,6 +295,8 @@ impl CacheEngine {
         operation_name: Option<String>,
         variables: JsValue,
         data: JsValue,
+        link_patches: JsValue,
+        revalidations: JsValue,
         created_at_ms: f64,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
@@ -270,6 +304,8 @@ impl CacheEngine {
         future_to_promise(async move {
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
+            let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
@@ -280,6 +316,8 @@ impl CacheEngine {
                     operation_name.as_deref(),
                     &vars,
                     &data,
+                    &link_patches,
+                    &revalidations,
                     created_at_ms,
                 )
                 .await
@@ -289,7 +327,23 @@ impl CacheEngine {
                 changed: result.changed.into_iter().map(|k| k.0).collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
+                revalidations: result.revalidations,
             })
+        })
+    }
+
+    /// Inspects fields on an effective normalized entity record.
+    #[wasm_bindgen(js_name = inspectFields)]
+    pub fn inspect_fields(&self, entity_key: String) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let fields = engine
+                .lock()
+                .await
+                .inspect_fields(&EntityKey(entity_key))
+                .await
+                .map_err(err_js)?;
+            to_js(&fields.into_iter().map(JsCacheFieldInfo::from).collect::<Vec<_>>())
         })
     }
 
@@ -392,6 +446,7 @@ impl CacheEngine {
                 changed: result.changed.into_iter().map(|k| k.0).collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
+                revalidations: result.revalidations,
             })
         })
     }
@@ -422,6 +477,7 @@ impl CacheEngine {
                 changed: result.changed.into_iter().map(|k| k.0).collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
+                revalidations: result.revalidations,
             })
         })
     }
@@ -458,6 +514,7 @@ impl CacheEngine {
                 changed: result.changed.into_iter().map(|key| key.0).collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
+                revalidations: result.revalidations,
             })
         })
     }

@@ -10,13 +10,19 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
+  CacheFieldInfo,
   ClaimedMutation,
   MutationClaim,
   OptimisticWriteResult,
   ReadResult,
   WriteResult,
 } from '../protocol';
-import type { CacheHost, CacheReadArgs, CacheWriteArgs } from './types';
+import type {
+  BeginOptimisticWriteArgs,
+  CacheHost,
+  CacheReadArgs,
+  CacheWriteArgs,
+} from './types';
 
 /** Keep in sync with `OPS_AFFECTED_EVENT` in graphql_cache_plugin. */
 const OPS_AFFECTED_EVENT = 'graphql-cache://ops-affected';
@@ -120,7 +126,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async beginOptimisticWrite(
-      args: CacheWriteArgs
+      args: BeginOptimisticWriteArgs
     ): Promise<OptimisticWriteResult> {
       await ready;
       return await request<OptimisticWriteResult>(
@@ -131,9 +137,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           operationName: args.operationName,
           variables: args.variables,
           data: args.data,
+          linkPatches: args.linkPatches,
+          revalidations: args.revalidations,
           createdAtMs: Date.now(),
         }
       );
+    },
+
+    async inspectFields(entityKey: string): Promise<CacheFieldInfo[]> {
+      await ready;
+      return await request<CacheFieldInfo[]>('graphql_cache_inspect_fields', {
+        entityKey,
+      });
     },
 
     async claimNextMutation(

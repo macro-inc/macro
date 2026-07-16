@@ -167,6 +167,8 @@ fn engine_hydrates_optimistic_layer_after_restart() {
                 Some("SetEntityProperty"),
                 &mutation_vars,
                 &optimistic,
+                &[],
+                &[],
                 10,
             )
             .await

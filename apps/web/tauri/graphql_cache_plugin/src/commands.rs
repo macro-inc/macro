@@ -10,9 +10,11 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+    CacheFieldInfoWire, ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire,
+    ReadResultWire, WriteResultWire,
 };
 use crate::{CacheState, InitializedCache, emit_ops_affected};
+use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_sqlite::SqliteStorage;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -118,6 +120,8 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     operation_name: Option<String>,
     variables: Option<Variables>,
     data: serde_json::Value,
+    link_patches: Option<Vec<OptimisticLinkPatch>>,
+    revalidations: Option<Vec<QueryRevalidation>>,
     created_at_ms: i64,
 ) -> Result<OptimisticWriteResultWire, String> {
     let result = engine_handle(&state)?
@@ -127,11 +131,22 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
             operation_name,
             variables.unwrap_or_default(),
             data,
+            link_patches.unwrap_or_default(),
+            revalidations.unwrap_or_default(),
             created_at_ms,
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
     Ok(result)
+}
+
+/// Inspects effective argument-qualified fields on a normalized record.
+#[tauri::command]
+pub async fn graphql_cache_inspect_fields(
+    state: State<'_, CacheState>,
+    entity_key: String,
+) -> Result<Vec<CacheFieldInfoWire>, String> {
+    engine_handle(&state)?.inspect_fields(entity_key).await
 }
 
 /// Claims the oldest runnable queued mutation.

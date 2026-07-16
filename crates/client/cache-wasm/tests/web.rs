@@ -151,6 +151,8 @@ async fn optimistic_write_round_trip() {
         Some("SetEntityProperty".into()),
         js(mutation_vars.clone()),
         js(serde_json::json!({ "setEntityProperty": { "id": "prop-1", "displayName": "Stage" } })),
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         123.0,
     ))
     .await

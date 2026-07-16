@@ -6,9 +6,12 @@
  */
 
 import type {
+  CacheFieldInfo,
   ClaimedMutation,
   MutationClaim,
+  OptimisticLinkPatchWire,
   OptimisticWriteResult,
+  QueryRevalidationWire,
   ReadResult,
   WriteResult,
 } from '../protocol';
@@ -27,6 +30,12 @@ export interface CacheWriteArgs extends CacheReadArgs {
   identity?: string;
 }
 
+export interface BeginOptimisticWriteArgs extends CacheWriteArgs {
+  linkPatches?: OptimisticLinkPatchWire[];
+  /** Revalidations for relevant cached fields that could not be patched. */
+  revalidations?: QueryRevalidationWire[];
+}
+
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
@@ -36,7 +45,11 @@ export interface CacheHost {
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
-  beginOptimisticWrite(args: CacheWriteArgs): Promise<OptimisticWriteResult>;
+  beginOptimisticWrite(
+    args: BeginOptimisticWriteArgs
+  ): Promise<OptimisticWriteResult>;
+  /** Inspects effective argument-qualified fields without parsing keys in JS. */
+  inspectFields(entityKey: string): Promise<CacheFieldInfo[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(
     owner: string,

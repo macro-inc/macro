@@ -12,7 +12,8 @@
 //! internally — the same scheme as the `cache-wasm` shell.
 
 use cache_core::deps::OpId;
-use cache_core::engine::{Engine, ReadResult, WriteResult};
+use cache_core::engine::{CacheFieldInfo, Engine, ReadResult, WriteResult};
+use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
@@ -45,6 +46,34 @@ pub struct WriteResultWire {
     /// True when the identity witness wiped and rebound the cache before
     /// this write (silent restart).
     pub reset: bool,
+    /// Queries to fetch after successful optimistic settlement.
+    pub revalidations: Vec<QueryRevalidation>,
+}
+
+/// One effective cache field returned to the webview.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheFieldInfoWire {
+    /// Inspected normalized entity key.
+    pub entity_key: String,
+    /// GraphQL field name without arguments.
+    pub field_name: String,
+    /// Exact opaque cache field key.
+    pub field_key: String,
+    /// Parsed canonical field arguments.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<serde_json::Value>,
+}
+
+impl From<CacheFieldInfo> for CacheFieldInfoWire {
+    fn from(field: CacheFieldInfo) -> Self {
+        Self {
+            entity_key: field.entity_key.0,
+            field_name: field.field_name,
+            field_key: field.field_key,
+            arguments: field.arguments,
+        }
+    }
 }
 
 /// Mirrors `OptimisticWriteResult` in
@@ -151,6 +180,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         changed: result.changed.into_iter().map(|k| k.0).collect(),
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
+        revalidations: result.revalidations,
     }
 }
 
@@ -201,6 +231,21 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
+    /// Inspects fields on an effective normalized entity record.
+    pub async fn inspect_fields(
+        &self,
+        entity_key: String,
+    ) -> Result<Vec<CacheFieldInfoWire>, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .inspect_fields(&EntityKey(entity_key))
+            .await
+            .map(|fields| fields.into_iter().map(CacheFieldInfoWire::from).collect())
+            .map_err(|error| error.to_string())
+    }
+
     /// Normalizes and stores a network response.
     pub async fn write(
         &self,
@@ -236,6 +281,8 @@ impl EngineHandle {
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
+        link_patches: Vec<OptimisticLinkPatch>,
+        revalidations: Vec<QueryRevalidation>,
         created_at_ms: i64,
     ) -> Result<OptimisticWriteResultWire, String> {
         let mut state = self.inner.lock().await;
@@ -248,6 +295,8 @@ impl EngineHandle {
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                &link_patches,
+                &revalidations,
                 created_at_ms,
             )
             .await

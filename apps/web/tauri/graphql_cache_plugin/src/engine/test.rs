@@ -118,6 +118,8 @@ fn optimistic_layer_commits_durably() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        vec![],
+        vec![],
         0,
     ))
     .unwrap();
@@ -159,6 +161,8 @@ fn rollback_drops_optimistic_contribution() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        vec![],
+        vec![],
         0,
     ))
     .unwrap();

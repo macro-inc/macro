@@ -9,8 +9,11 @@
  */
 
 import type {
+  CacheFieldInfo,
   ClaimedMutation,
+  OptimisticLinkPatchWire,
   OptimisticWriteResult,
+  QueryRevalidationWire,
   ReadResult,
   WriteResult,
 } from '../protocol';
@@ -36,8 +39,11 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown,
+    linkPatches: OptimisticLinkPatchWire[] | undefined,
+    revalidations: QueryRevalidationWire[] | undefined,
     createdAtMs: number
   ): Promise<OptimisticWriteResult>;
+  inspectFields(entityKey: string): Promise<CacheFieldInfo[]>;
   claimNextMutation(
     owner: string,
     nowMs: number,

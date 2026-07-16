@@ -12,7 +12,10 @@
 
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
-import { executeOptimisticMutation } from '@graphql-cache/index';
+import {
+  executeOptimisticMutation,
+  type OptimisticMutationOptions,
+} from '@graphql-cache/index';
 import { match } from 'ts-pattern';
 import { propertiesServiceClient } from '../service-properties/client';
 import type { EntityReference } from '../service-properties/generated/schemas/entityReference';
@@ -134,6 +137,8 @@ export type SetEntityPropertyArgs = {
    * responds, so those run without optimism and rely on invalidation.
    */
   optimisticProperty?: SoupPropertyFieldsFragment | undefined;
+  /** Mutation-scoped persistent normalized-cache relation recipes. */
+  optimisticCache?: OptimisticMutationOptions;
 };
 
 /**
@@ -173,7 +178,8 @@ export async function setEntityProperty(
         variables,
         {
           setEntityProperty: args.optimisticProperty,
-        } satisfies SetEntityPropertyMutation
+        } satisfies SetEntityPropertyMutation,
+        args.optimisticCache
       ).toPromise()
     : await client.mutation(SetEntityPropertyDocument, variables).toPromise();
   if (result.error) {
