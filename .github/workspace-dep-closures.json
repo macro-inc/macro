@@ -4525,7 +4525,6 @@
       "crates/remote_env_var",
       "crates/s3_client",
       "crates/s3_key",
-      "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
       "crates/sqs_client",
       "crates/sqs_worker",
