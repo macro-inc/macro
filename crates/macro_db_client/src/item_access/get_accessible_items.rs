@@ -46,6 +46,7 @@ fn to_items(ids: Vec<String>, item_type: &str) -> Vec<UserAccessibleItem> {
         .collect()
 }
 
+#[tracing::instrument(skip(db), err)]
 async fn accessible_documents(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -79,6 +80,7 @@ async fn accessible_documents(
     Ok(to_items(ids, "document"))
 }
 
+#[tracing::instrument(skip(db), err)]
 async fn accessible_chats(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -112,6 +114,7 @@ async fn accessible_chats(
     Ok(to_items(ids, "chat"))
 }
 
+#[tracing::instrument(skip(db), err)]
 async fn accessible_projects(
     db: &Pool<Postgres>,
     user_id: &str,
