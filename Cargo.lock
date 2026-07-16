@@ -16125,6 +16125,8 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "percent-encoding",
  "phf 0.13.1",
  "phf_shared 0.10.0",
