@@ -3,9 +3,7 @@ use chrono::Utc;
 use models_email::service::label::system_labels;
 use models_properties::EntityType;
 use opensearch_client::{
-    OpensearchClient,
-    date_format::{EpochMillis, EpochSeconds},
-    upsert::email::UpsertEmailArgs,
+    OpensearchClient, date_format::EpochMillis, upsert::email::UpsertEmailArgs,
 };
 use properties::outbound::entity_properties_get_query::{
     get_entity_properties_for_index, get_entity_properties_for_index_batch,
@@ -54,14 +52,7 @@ pub async fn process_upsert_message(
         return Ok(());
     };
 
-    let now = EpochSeconds::new(Utc::now().timestamp())?;
     let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
-
-    let updated_at = message_info
-        .internal_date_ts
-        .map(|date| EpochSeconds::new(date.timestamp()))
-        .transpose()?
-        .unwrap_or(now);
 
     let updated_at_millis = message_info
         .internal_date_ts
@@ -132,12 +123,7 @@ pub async fn process_upsert_message(
             .map(|label| label.name.clone())
             .collect(),
         content,
-        updated_at_seconds: updated_at,
         updated_at_millis,
-        sent_at_seconds: message_info
-            .internal_date_ts
-            .map(|date| EpochSeconds::new(date.timestamp()))
-            .transpose()?,
         sent_at_millis: message_info
             .internal_date_ts
             .map(|date| EpochMillis::new(date.timestamp_millis()))
@@ -166,7 +152,6 @@ pub async fn process_upsert_thread_message(
         .parse()
         .context("failed to parse thread_id as UUID")?;
 
-    let now = EpochSeconds::new(Utc::now().timestamp())?;
     let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
 
     // A full index overwrites each doc, so thread properties must ride along
@@ -205,21 +190,10 @@ pub async fn process_upsert_thread_message(
             }
 
             if let Some(content) = message.body_parsed_linkless {
-                let sent_at = message
-                    .internal_date_ts
-                    .map(|date| EpochSeconds::new(date.timestamp()))
-                    .transpose()?;
-
                 let sent_at_millis = message
                     .internal_date_ts
                     .map(|date| EpochMillis::new(date.timestamp_millis()))
                     .transpose()?;
-
-                let updated_at = message
-                    .internal_date_ts
-                    .map(|date| EpochSeconds::new(date.timestamp()))
-                    .transpose()?
-                    .unwrap_or(now);
 
                 let updated_at_millis = message
                     .internal_date_ts
@@ -268,9 +242,7 @@ pub async fn process_upsert_thread_message(
                         .map(|label| label.name.clone())
                         .collect(),
                     content,
-                    updated_at_seconds: updated_at,
                     updated_at_millis,
-                    sent_at_seconds: sent_at,
                     sent_at_millis,
                     properties: properties.clone(),
                 });
@@ -314,7 +286,6 @@ pub async fn process_upsert_thread_batch_message(
         .map(|id| id.parse().context("failed to parse thread_id as UUID"))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let now = EpochSeconds::new(Utc::now().timestamp())?;
     let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
 
     let messages =
@@ -346,21 +317,10 @@ pub async fn process_upsert_thread_batch_message(
         }
 
         if let Some(content) = message.body_parsed_linkless {
-            let sent_at = message
-                .internal_date_ts
-                .map(|date| EpochSeconds::new(date.timestamp()))
-                .transpose()?;
-
             let sent_at_millis = message
                 .internal_date_ts
                 .map(|date| EpochMillis::new(date.timestamp_millis()))
                 .transpose()?;
-
-            let updated_at = message
-                .internal_date_ts
-                .map(|date| EpochSeconds::new(date.timestamp()))
-                .transpose()?
-                .unwrap_or(now);
 
             let updated_at_millis = message
                 .internal_date_ts
@@ -409,9 +369,7 @@ pub async fn process_upsert_thread_batch_message(
                     .map(|label| label.name.clone())
                     .collect(),
                 content,
-                updated_at_seconds: updated_at,
                 updated_at_millis,
-                sent_at_seconds: sent_at,
                 sent_at_millis,
                 properties: properties_by_thread
                     .get(&message.thread_db_id.to_string())

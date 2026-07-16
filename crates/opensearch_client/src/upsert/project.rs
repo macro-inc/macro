@@ -1,11 +1,7 @@
 use models_opensearch::SearchIndex;
 
 use super::properties::IndexedProperty;
-use crate::{
-    Result,
-    date_format::{EpochMillis, EpochSeconds},
-    error::OpensearchClientError,
-};
+use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
 
 /// The arguments for upserting a project into the opensearch index.
 ///
@@ -22,10 +18,6 @@ pub struct UpsertProjectArgs {
     /// The parent project id, if nested
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_project_id: Option<String>,
-    /// The created at time of the project
-    pub created_at_seconds: EpochSeconds,
-    /// The updated at time of the project
-    pub updated_at_seconds: EpochSeconds,
     /// The created at time of the project, in milliseconds
     pub created_at_millis: EpochMillis,
     /// The updated at time of the project, in milliseconds

@@ -1,9 +1,7 @@
 use anyhow::Context;
 use models_properties::EntityType;
 use opensearch_client::{
-    OpensearchClient,
-    date_format::{EpochMillis, EpochSeconds},
-    upsert::call_record::UpsertCallRecordSegmentArgs,
+    OpensearchClient, date_format::EpochMillis, upsert::call_record::UpsertCallRecordSegmentArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use sqlx::PgPool;
@@ -58,10 +56,6 @@ pub async fn process_call_record(
         .segments
         .into_iter()
         .map(|seg| {
-            let ended_at_seconds = seg
-                .ended_at
-                .map(|dt| EpochSeconds::new(dt.timestamp()))
-                .transpose()?;
             let ended_at_millis = seg
                 .ended_at
                 .map(|dt| EpochMillis::new(dt.timestamp_millis()))
@@ -76,8 +70,6 @@ pub async fn process_call_record(
                 speaker_id: seg.speaker_id,
                 sequence_num: seg.sequence_num,
                 content: seg.content,
-                started_at_seconds: EpochSeconds::new(seg.started_at.timestamp())?,
-                ended_at_seconds,
                 started_at_millis: EpochMillis::new(seg.started_at.timestamp_millis())?,
                 ended_at_millis,
                 properties: properties.clone(),

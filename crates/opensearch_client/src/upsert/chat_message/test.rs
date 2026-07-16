@@ -6,8 +6,6 @@ fn args() -> UpsertChatMessageArgs {
         chat_message_id: "msg1".to_string(),
         user_id: "macro|gab@macro.com".to_string(),
         role: "user".to_string(),
-        created_at_seconds: EpochSeconds::new(1_700_000_000).unwrap(),
-        updated_at_seconds: EpochSeconds::new(1_700_000_000).unwrap(),
         created_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
         updated_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
         title: "Chat title".to_string(),

@@ -12,8 +12,6 @@ fn channel_index(updated_at_millis: Option<i64>) -> ChannelMessageIndex {
         thread_id: id,
         sender_id: "macro|gab@macro.com".to_string(),
         mentions: vec![],
-        created_at_seconds: 1_700_000_000,
-        updated_at_seconds: 1_700_000_000,
         created_at_millis: updated_at_millis,
         updated_at_millis,
     }
@@ -43,17 +41,6 @@ fn millis_timestamps_are_distinct_within_a_second() {
     assert!(
         later_ts > earlier_ts,
         "sub-second ordering must be preserved"
-    );
-}
-
-/// Docs indexed before the millis backfill carry no `*_millis`; the read path
-/// falls back to the second-resolution field.
-#[test]
-fn falls_back_to_seconds_when_millis_absent() {
-    let hit = channel_hit_to_search_hit(hit_for(channel_index(None)));
-    assert_eq!(
-        hit.updated_at.expect("updated_at").timestamp_millis(),
-        1_700_000_000_000
     );
 }
 

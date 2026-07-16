@@ -26,7 +26,7 @@ use crate::{
         },
         projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
         query::Keys,
-        utils::{millis_or_seconds, opt_millis_or_seconds},
+        utils::millis_to_datetime,
     },
 };
 use chrono::Utc;
@@ -366,8 +366,7 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
     match &hit.source {
         UnifiedSearchIndex::Document(parent) => {
             let entity_id = parent.entity_id;
-            let updated_at =
-                opt_millis_or_seconds(parent.updated_at_millis, parent.updated_at_seconds);
+            let updated_at = millis_to_datetime(parent.updated_at_millis);
 
             let mut out: Vec<SearchHit> = Vec::new();
 
@@ -412,8 +411,7 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
                 return vec![hit.into()];
             };
             let entity_id = parent.entity_id;
-            let updated_at =
-                opt_millis_or_seconds(parent.updated_at_millis, parent.updated_at_seconds);
+            let updated_at = millis_to_datetime(parent.updated_at_millis);
             let expanded = crate::search::chats::expand_inner_hits_to_search_hits(
                 entity_id, updated_at, inner,
             );
@@ -423,7 +421,7 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
             expanded
         }
         UnifiedSearchIndex::CallRecord(parent) => {
-            let updated_at = millis_or_seconds(parent.started_at_millis, parent.started_at_seconds);
+            let updated_at = millis_to_datetime(parent.started_at_millis);
             let mut out: Vec<SearchHit> = Vec::new();
 
             // A name match surfaces as a parent-level hit. Segment content lives
@@ -451,10 +449,7 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
                         speaker_id: String::new(),
                         sequence_num: 0,
                         started_at: updated_at.unwrap_or_default(),
-                        ended_at: opt_millis_or_seconds(
-                            parent.ended_at_millis,
-                            parent.ended_at_seconds,
-                        ),
+                        ended_at: millis_to_datetime(parent.ended_at_millis),
                         participant_ids: parent.participant_ids.clone(),
                     })),
                     updated_at,
@@ -500,12 +495,10 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     channel_message_id: a.message_id,
                     thread_id: (a.thread_id != a.message_id).then_some(a.thread_id),
                     sender_id: a.sender_id,
-                    created_at: millis_or_seconds(a.created_at_millis, a.created_at_seconds)
-                        .unwrap_or_default(),
-                    updated_at: millis_or_seconds(a.updated_at_millis, a.updated_at_seconds)
-                        .unwrap_or_default(),
+                    created_at: millis_to_datetime(a.created_at_millis).unwrap_or_default(),
+                    updated_at: millis_to_datetime(a.updated_at_millis).unwrap_or_default(),
                 })),
-                updated_at: millis_or_seconds(a.updated_at_millis, a.updated_at_seconds),
+                updated_at: millis_to_datetime(a.updated_at_millis),
             },
             UnifiedSearchIndex::Document(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -524,7 +517,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     })
                     .unwrap_or_default(),
                 goto: None,
-                updated_at: opt_millis_or_seconds(a.updated_at_millis, a.updated_at_seconds),
+                updated_at: millis_to_datetime(a.updated_at_millis),
             },
             UnifiedSearchIndex::Email(a) => {
                 let a = *a;
@@ -549,11 +542,11 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                         bcc: a.bcc,
                         cc: a.cc,
                         labels: a.labels,
-                        sent_at: opt_millis_or_seconds(a.sent_at_millis, a.sent_at_seconds),
+                        sent_at: millis_to_datetime(a.sent_at_millis),
                         sender: a.sender,
                         recipients: a.recipients,
                     })),
-                    updated_at: opt_millis_or_seconds(a.sent_at_millis, a.sent_at_seconds),
+                    updated_at: millis_to_datetime(a.sent_at_millis),
                 }
             }
             UnifiedSearchIndex::Chat(a) => SearchHit {
@@ -573,7 +566,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     })
                     .unwrap_or_default(),
                 goto: None,
-                updated_at: opt_millis_or_seconds(a.updated_at_millis, a.updated_at_seconds),
+                updated_at: millis_to_datetime(a.updated_at_millis),
             },
             UnifiedSearchIndex::Project(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -592,7 +585,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     })
                     .unwrap_or_default(),
                 goto: None,
-                updated_at: opt_millis_or_seconds(a.updated_at_millis, a.updated_at_seconds),
+                updated_at: millis_to_datetime(a.updated_at_millis),
             },
             UnifiedSearchIndex::CallRecord(a) => SearchHit {
                 entity_id: a.entity_id,
@@ -619,12 +612,11 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     transcript_id: uuid::Uuid::nil(),
                     speaker_id: String::new(),
                     sequence_num: 0,
-                    started_at: millis_or_seconds(a.started_at_millis, a.started_at_seconds)
-                        .unwrap_or_default(),
-                    ended_at: opt_millis_or_seconds(a.ended_at_millis, a.ended_at_seconds),
+                    started_at: millis_to_datetime(a.started_at_millis).unwrap_or_default(),
+                    ended_at: millis_to_datetime(a.ended_at_millis),
                     participant_ids: a.participant_ids,
                 })),
-                updated_at: millis_or_seconds(a.started_at_millis, a.started_at_seconds),
+                updated_at: millis_to_datetime(a.started_at_millis),
             },
         }
     }

@@ -11,8 +11,6 @@ fn segment() -> UpsertCallRecordSegmentArgs {
         speaker_id: "macro|gab@macro.com".to_string(),
         sequence_num: 0,
         content: "segment content".to_string(),
-        started_at_seconds: EpochSeconds::new(1_700_000_000).unwrap(),
-        ended_at_seconds: Some(EpochSeconds::new(1_700_000_100).unwrap()),
         started_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
         ended_at_millis: Some(EpochMillis::new(1_700_000_100_456).unwrap()),
         properties: vec![],

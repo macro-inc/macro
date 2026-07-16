@@ -8,9 +8,7 @@ use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
-    OpensearchClient,
-    date_format::{EpochMillis, EpochSeconds},
-    upsert::document::UpsertDocumentArgs,
+    OpensearchClient, date_format::EpochMillis, upsert::document::UpsertDocumentArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use s3_key::{
@@ -126,7 +124,6 @@ fn generate_parent_only_upsert(
         content: String::new(),
         owner_id: document_info.owner.to_string(),
         file_type,
-        updated_at_seconds: EpochSeconds::new(Utc::now().timestamp())?,
         updated_at_millis: EpochMillis::new(Utc::now().timestamp_millis())?,
         sub_type: document_info.sub_type.map(|st| st.to_string()),
         properties: vec![],
@@ -295,7 +292,6 @@ pub async fn update_search_with_raw_document(
 
     tracing::trace!("got raw file content");
 
-    let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
     let uuid = macro_uuid::generate_uuid_v7().to_string();
 
@@ -315,7 +311,6 @@ pub async fn update_search_with_raw_document(
                         content: page_content.clone(),
                         owner_id: search_extractor_message.user_id.clone(),
                         file_type: file_type.to_string(),
-                        updated_at_seconds: updated_at,
                         updated_at_millis,
                         sub_type: sub_type.clone(),
                         properties: vec![],
@@ -340,7 +335,6 @@ pub async fn update_search_with_raw_document(
                 content: content.clone(),
                 owner_id: search_extractor_message.user_id.clone(),
                 file_type: file_type.to_string(),
-                updated_at_seconds: updated_at,
                 updated_at_millis,
                 sub_type: sub_type.clone(),
                 properties: vec![],
@@ -362,7 +356,6 @@ pub async fn update_search_with_raw_document(
                     content: result.content,
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
-                    updated_at_seconds: updated_at,
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
@@ -382,7 +375,6 @@ pub async fn update_search_with_raw_document(
                     content: content.clone(),
                     owner_id: search_extractor_message.user_id.clone(),
                     file_type: file_type.to_string(),
-                    updated_at_seconds: updated_at,
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
@@ -409,7 +401,6 @@ fn generate_upserts(
     markdown_result: Vec<MarkdownParseResult>,
 ) -> anyhow::Result<Vec<UpsertDocumentArgs>> {
     let result = markdown_result;
-    let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
     let file_type = FileType::from_str(
         document_info
@@ -430,7 +421,6 @@ fn generate_upserts(
             content: result.content,
             owner_id: document_info.owner.to_string(),
             file_type: file_type.to_string(),
-            updated_at_seconds: updated_at,
             updated_at_millis,
             sub_type: sub_type.clone(),
             properties: vec![],

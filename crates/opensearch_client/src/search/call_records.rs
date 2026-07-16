@@ -9,7 +9,7 @@ use crate::{
         },
         properties::build_tag_filter,
         query::Keys,
-        utils::{millis_or_seconds, opt_millis_or_seconds},
+        utils::millis_to_datetime,
     },
 };
 
@@ -45,9 +45,6 @@ pub(crate) struct CallRecordIndex {
     pub channel_name: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
-    pub started_at_seconds: i64,
-    #[serde(default)]
-    pub ended_at_seconds: Option<i64>,
     #[serde(default)]
     pub started_at_millis: Option<i64>,
     #[serde(default)]
@@ -359,9 +356,6 @@ struct SegmentSource {
     speaker_id: Option<String>,
     #[serde(default)]
     sequence_num: Option<i32>,
-    started_at_seconds: i64,
-    #[serde(default)]
-    ended_at_seconds: Option<i64>,
     #[serde(default)]
     started_at_millis: Option<i64>,
     #[serde(default)]
@@ -423,18 +417,12 @@ pub(crate) fn expand_inner_hits_to_search_hits(
                     transcript_id: seg.source.transcript_id,
                     speaker_id: seg.source.speaker_id.unwrap_or_default(),
                     sequence_num: seg.source.sequence_num.unwrap_or_default(),
-                    started_at: millis_or_seconds(
-                        seg.source.started_at_millis,
-                        seg.source.started_at_seconds,
-                    )
-                    .unwrap_or_default(),
-                    ended_at: opt_millis_or_seconds(
-                        seg.source.ended_at_millis,
-                        seg.source.ended_at_seconds,
-                    ),
+                    started_at: millis_to_datetime(seg.source.started_at_millis)
+                        .unwrap_or_default(),
+                    ended_at: millis_to_datetime(seg.source.ended_at_millis),
                     participant_ids: parent.participant_ids.clone(),
                 })),
-                updated_at: millis_or_seconds(parent.started_at_millis, parent.started_at_seconds),
+                updated_at: millis_to_datetime(parent.started_at_millis),
             });
         }
     }

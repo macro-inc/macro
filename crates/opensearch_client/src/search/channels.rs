@@ -10,7 +10,7 @@ use crate::{
             exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::{Keys, TermCombine},
-        utils::millis_or_seconds,
+        utils::millis_to_datetime,
     },
 };
 
@@ -30,8 +30,6 @@ pub(crate) struct ChannelMessageIndex {
     pub thread_id: uuid::Uuid,
     pub sender_id: String,
     pub mentions: Vec<String>,
-    pub created_at_seconds: i64,
-    pub updated_at_seconds: i64,
     #[serde(default)]
     pub created_at_millis: Option<i64>,
     #[serde(default)]
@@ -312,12 +310,10 @@ fn channel_hit_to_search_hit(hit: Hit<ChannelMessageIndex>) -> SearchHit {
             channel_message_id: a.message_id,
             thread_id: (a.thread_id != a.message_id).then_some(a.thread_id),
             sender_id: a.sender_id,
-            created_at: millis_or_seconds(a.created_at_millis, a.created_at_seconds)
-                .unwrap_or_default(),
-            updated_at: millis_or_seconds(a.updated_at_millis, a.updated_at_seconds)
-                .unwrap_or_default(),
+            created_at: millis_to_datetime(a.created_at_millis).unwrap_or_default(),
+            updated_at: millis_to_datetime(a.updated_at_millis).unwrap_or_default(),
         })),
-        updated_at: millis_or_seconds(a.updated_at_millis, a.updated_at_seconds),
+        updated_at: millis_to_datetime(a.updated_at_millis),
     }
 }
 
