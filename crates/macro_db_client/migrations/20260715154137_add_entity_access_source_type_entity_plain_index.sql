@@ -1,0 +1,21 @@
+-- no-transaction
+-- Plain-column source-first index for the accessible-items path.
+--
+-- idx_entity_access_source_type_entity keys its third column on the
+-- expression (entity_id::text). Postgres never uses expression entries to
+-- satisfy a reference to the underlying column, so any query that reads
+-- ea.entity_id is disqualified from an index-only scan on that index and
+-- pays a heap fetch per grant row. Keying entity_id as a plain column keeps
+-- the (source_id, entity_type) range scan index-only; callers cast the uuid
+-- after the read.
+--
+-- NOTE: if the concurrent build is interrupted mid-deploy it can leave an
+-- INVALID index behind, and the IF NOT EXISTS rerun will not rebuild it
+-- (this migration must stay a single statement — sqlx sends no-transaction
+-- migrations as one simple-query batch, and a multi-statement batch gets an
+-- implicit transaction, which CONCURRENTLY forbids). If that happens, fix by
+-- hand: DROP INDEX CONCURRENTLY idx_entity_access_source_type_entity_plain;
+-- then re-run migrations. Check with:
+--   SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_entity_access_source_type_entity_plain
+    ON entity_access (source_id, entity_type, entity_id);

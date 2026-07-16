@@ -38,5 +38,6 @@ export * from './single-line';
 export * from './snippets';
 export * from './tab-indentation';
 export * from './tables';
+export * from './tags';
 export * from './text-paste';
 export * from './wordcount';

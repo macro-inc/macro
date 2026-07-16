@@ -8,6 +8,7 @@ import {
   parseGroupMentions,
   parseLinks,
   parsePullRequestMentions,
+  parseTagMentions,
   parseUserMentions,
 } from '../utils/parsers';
 
@@ -176,6 +177,18 @@ describe('parseGroupMentions', () => {
   });
 });
 
+describe('parseTagMentions', () => {
+  it('extracts #name from a tag mention', () => {
+    const input =
+      '<m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch","color":"#0091FF"}</m-tag>';
+    expect(parseTagMentions(input)).toBe('#Launch');
+  });
+
+  it('returns empty string for invalid JSON', () => {
+    expect(parseTagMentions('<m-tag>invalid</m-tag>')).toBe('');
+  });
+});
+
 describe('markdownToPlainText', () => {
   it('converts mixed content to plain text', () => {
     const input =
@@ -205,6 +218,12 @@ describe('markdownToPlainText', () => {
     const input =
       'See <m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>.';
     expect(markdownToPlainText(input)).toBe('See macro/macro#123.');
+  });
+
+  it('handles text with tag mentions', () => {
+    const input =
+      'Ship <m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch"}</m-tag>.';
+    expect(markdownToPlainText(input)).toBe('Ship #Launch.');
   });
 
   it('returns original text when no mentions present', () => {
@@ -250,6 +269,12 @@ describe('markdownToEmbeddingText', () => {
     expect(markdownToEmbeddingText(input)).toBe(
       'See [macro/macro#123](pr:foreign-1).'
     );
+  });
+
+  it('keeps tag names', () => {
+    const input =
+      'Ship <m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch"}</m-tag>.';
+    expect(markdownToEmbeddingText(input)).toBe('Ship #Launch.');
   });
 
   it('keeps link urls', () => {

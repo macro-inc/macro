@@ -250,6 +250,7 @@ export function EmptyState(props: {
           <Match when={!teamResolved()}>{null}</Match>
           <Match when={hasNoTeam()}>
             <EmptyStatePanel
+              centered
               graphic={EmptyStateCompaniesGraphic}
               title="Join a team to enable CRM"
               description="Create or join a team in Settings > Team."
@@ -261,6 +262,7 @@ export function EmptyState(props: {
           </Match>
           <Match when={!crmEnabled()}>
             <EmptyStatePanel
+              centered
               graphic={EmptyStateCompaniesGraphic}
               title="CRM is disabled"
               description={

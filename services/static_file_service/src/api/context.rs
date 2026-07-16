@@ -3,7 +3,7 @@ use crate::service::dynamodb::client::DynamodbClient;
 use crate::service::s3::client::S3Client;
 use aws_sdk_sqs::Client;
 use axum::extract::FromRef;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::InternalApiKey;
 use std::sync::Arc;
 
 #[derive(Clone, FromRef)]

@@ -247,6 +247,18 @@ const CHANNEL_BODY = {
         index: false,
         doc_values: true,
       },
+      created_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
     },
   },
 };
@@ -295,6 +307,12 @@ const DOCUMENT_BODY = {
       updated_at_seconds: {
         type: 'date',
         format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
         index: false,
         doc_values: true,
       },
@@ -376,6 +394,18 @@ const PROJECTS_BODY = {
       updated_at_seconds: {
         type: 'date',
         format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      created_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
         index: false,
         doc_values: true,
       },
@@ -472,6 +502,12 @@ const EMAIL_BODY = {
         index: false,
         doc_values: true,
       },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
       subject: {
         type: 'text',
         fields: {
@@ -484,6 +520,12 @@ const EMAIL_BODY = {
       sent_at_seconds: {
         type: 'date',
         format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      sent_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
         index: false,
         doc_values: true,
       },
@@ -535,6 +577,12 @@ const CHATS_V2_BODY = {
         index: false,
         doc_values: true,
       },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
       // Parent-only entity properties (tags, custom). Same nested shape as
       // DOCUMENT_BODY so property filters match definition_id + value within
       // the same entry rather than cross-matching across properties.
@@ -554,6 +602,12 @@ const CHATS_V2_BODY = {
       created_at_seconds: {
         type: 'date',
         format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      created_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
         index: false,
         doc_values: true,
       },
@@ -604,6 +658,18 @@ const CALL_RECORDS_V2_BODY = {
         index: false,
         doc_values: true,
       },
+      started_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      ended_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
       // Parent-only entity properties (tags, custom). Same nested shape as
       // DOCUMENT_BODY so property filters match definition_id + value within
       // the same entry rather than cross-matching across properties.
@@ -625,6 +691,8 @@ const CALL_RECORDS_V2_BODY = {
       // to the parent's call-start timestamp.
       created_at_seconds: { type: 'alias', path: 'started_at_seconds' },
       updated_at_seconds: { type: 'alias', path: 'started_at_seconds' },
+      created_at_millis: { type: 'alias', path: 'started_at_millis' },
+      updated_at_millis: { type: 'alias', path: 'started_at_millis' },
       // Join relationship
       call_relation: {
         type: 'join',

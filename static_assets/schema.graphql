@@ -1322,6 +1322,10 @@ type GraphqlSoupBin {
 	"""
 	totalCount: Int!
 	"""
+	Opaque cursor for the next page in this bin, if one exists.
+	"""
+	nextCursor: String
+	"""
 	Items in this bin, ordered by their index within the group.
 	"""
 	items: [GraphqlSoupItem!]!
@@ -2391,9 +2395,27 @@ type GroupedSoup {
 }
 
 """
-Input for `Query.groupSoup`.
+Input for continuing a single grouped Soup bin.
 """
-input GroupedSoupInput {
+input GroupedSoupContinuationInput {
+	"""
+	The field used to divide Soup items into bins.
+	"""
+	groupBy: GraphqlGroupByInput!
+	"""
+	The grouping key of the bin to continue.
+	"""
+	groupKey: String!
+	"""
+	Opaque cursor returned for the bin by a previous grouped query.
+	"""
+	cursor: String!
+}
+
+"""
+Input for starting a grouped Soup query.
+"""
+input GroupedSoupInitialInput {
 	"""
 	The field used to divide Soup items into bins.
 	"""
@@ -2410,6 +2432,20 @@ input GroupedSoupInput {
 	AST-shaped filters applied to each Soup entity type.
 	"""
 	filters: GraphqlEntityFilterAst
+}
+
+"""
+Input for `Query.groupSoup`.
+"""
+input GroupedSoupInput @oneOf {
+	"""
+	Start a new grouped Soup query.
+	"""
+	initial: GroupedSoupInitialInput
+	"""
+	Continue one bin from a cursor returned by a previous grouped query.
+	"""
+	continuation: GroupedSoupContinuationInput
 }
 
 """
@@ -2450,9 +2486,27 @@ input SetEntityPropertyInput {
 }
 
 """
-Input for `Query.soup`.
+Input for continuing a Soup query.
 """
-input SoupInput {
+input SoupContinuationInput {
+	"""
+	Opaque cursor returned by a previous GraphQL Soup response.
+	"""
+	cursor: String!
+	"""
+	Whether to return expanded Soup items. Defaults to true.
+	"""
+	expand: Boolean
+	"""
+	Email preview view used when hydrating email Soup items.
+	"""
+	emailView: GraphqlEmailView
+}
+
+"""
+Input for starting a Soup query.
+"""
+input SoupInitialInput {
 	"""
 	Maximum number of items to return. Defaults to 20, max 500.
 	"""
@@ -2467,10 +2521,6 @@ input SoupInput {
 	"""
 	sortMethod: GraphqlSimpleSortMethod
 	"""
-	Opaque cursor returned by a previous GraphQL Soup response.
-	"""
-	cursor: String
-	"""
 	Email preview view used when hydrating email Soup items.
 	"""
 	emailView: GraphqlEmailView
@@ -2478,6 +2528,20 @@ input SoupInput {
 	AST-shaped filters applied to each Soup entity type.
 	"""
 	filters: GraphqlEntityFilterAst
+}
+
+"""
+Input for `Query.soup`.
+"""
+input SoupInput @oneOf {
+	"""
+	Start a new Soup query.
+	"""
+	initial: SoupInitialInput
+	"""
+	Continue a Soup query from an opaque cursor.
+	"""
+	continuation: SoupContinuationInput
 }
 
 """

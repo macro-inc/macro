@@ -23,6 +23,7 @@ aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 doppler-config = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
 macro_cors = { path = "../../crates/macro_cors" }
@@ -50,3 +51,5 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

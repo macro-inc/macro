@@ -18,6 +18,7 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     const paid = modelsForPlan(true);
     // Every known model is selectable for a paid user.
     expect([...paid].sort()).toEqual([...Object.values(Model)].sort());
+    expect(DEFAULT_MODEL).toBe(Model.sonnet5);
     expect(defaultModelForPlan(true)).toBe(DEFAULT_MODEL);
   });
 

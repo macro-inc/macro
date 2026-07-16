@@ -27,6 +27,7 @@ import { FloatingTableMenu } from '@core/component/LexicalMarkdown/component/men
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
+import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
@@ -67,6 +68,7 @@ import {
   tableCellResizerPlugin,
   tablePlugin,
   tableTouchSelectionPlugin,
+  tagsPlugin,
   textPastePlugin,
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
@@ -167,6 +169,8 @@ import {
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
 import WarningIcon from '@phosphor/warning.svg';
+import { useDocTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
@@ -226,6 +230,10 @@ export function MarkdownEditor(props: {
   const blockId = useBlockId();
   const userId = useUserId();
   const blockName = useMaybeBlockAliasedName();
+  const documentTags = useDocTags(
+    blockId,
+    blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
+  );
 
   const mdDocumentName = useBlockDocumentName('');
 
@@ -308,6 +316,7 @@ export function MarkdownEditor(props: {
   autoRegister(editorFocusSignal(editor, setEditorFocus));
 
   const mentionsMenuOperations = createMenuOperations();
+  const tagsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
   const actionsMenuOperations = createMenuOperations();
   const snippetsMenuOperations = createMenuOperations();
@@ -531,6 +540,15 @@ export function MarkdownEditor(props: {
         menu: mentionsMenuOperations,
         peerIdValidator: peerIdValidator(),
         sourceDocumentId: blockId,
+      })
+    )
+    .use(
+      tagsPlugin({
+        menu: tagsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        onCreateTag: (tag) => {
+          void documentTags.applyTag(tag.scope, tag.optionId);
+        },
       })
     )
     .use(
@@ -1060,6 +1078,12 @@ export function MarkdownEditor(props: {
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
           showOpenTabs
+        />
+
+        <TagsMenu
+          editor={editor}
+          menu={tagsMenuOperations}
+          useBlockBoundary={true}
         />
 
         <SnippetsMenu

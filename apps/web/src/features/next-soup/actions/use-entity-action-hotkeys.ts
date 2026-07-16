@@ -13,7 +13,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { useIsTeamAdmin } from '@queries/team/teams';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -78,10 +77,7 @@ export const useEntityActionHotkeys = (
 
   const favoriteAction = makeFavoriteAction();
 
-  const isTeamAdmin = useIsTeamAdmin();
-  const setCompanyPropertyAction = makeSetCompanyPropertyAction({
-    isTeamAdmin: () => isTeamAdmin(),
-  });
+  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const getEntitiesForAction = (): EntityData[] => {
     if (

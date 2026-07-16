@@ -1,55 +1,84 @@
-#[allow(unused_imports)]
 use super::*;
-use axum::{Extension, body::Body, http::Request};
+use axum::{
+    body::Body,
+    http::{Request, header},
+};
 use http_body_util::BodyExt;
-use model_user::UserContext;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthConfig, JwtValidator,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl, ValidatedIdentity,
+};
 use rate_limit::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult, RateLimitServiceImpl,
     domain::models::RateLimitOk,
 };
 use rootcause::Report;
 use std::collections::HashSet;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 use tower::ServiceExt;
 
-#[derive(Clone, Debug)]
+const FOUND_USER_ID: &str = "macro|found@test.com";
+const NOT_FOUND_USER_ID: &str = "macro|notfound@test.com";
+const SENDER_USER_ID: &str = "macro|sender@test.com";
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
+
 struct MockService;
 
 impl ContactsService for MockService {
     async fn query_contacts(
         &self,
         user_id: MacroUserIdStr<'_>,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
-        if user_id.as_ref() == "macro|found@test.com" {
-            let contacts = [
-                "macro|contact1@test.com",
-                "macro|contact2@test.com",
-                "macro|contact3@test.com",
-            ]
-            .into_iter()
-            .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
-            .collect();
-            return Ok(contacts);
-        } else if user_id.as_ref() == "macro|many@test.com" {
-            let contacts = [
-                "macro|contact4@test.com",
-                "macro|contact5@test.com",
-                "macro|contact6@test.com",
-                "macro|contact7@test.com",
-                "macro|contact8@test.com",
-                "macro|contact9@test.com",
-                "macro|contact10@test.com",
-            ]
-            .into_iter()
-            .map(|s| MacroUserIdStr::try_from(s.to_string()).unwrap())
-            .collect();
-            return Ok(contacts);
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        if user_id.as_ref() != FOUND_USER_ID {
+            return Ok(Vec::new());
         }
 
-        Ok(vec![])
+        Ok([
+            "macro|contact1@test.com",
+            "macro|contact2@test.com",
+            "macro|contact3@test.com",
+        ]
+        .into_iter()
+        .map(|user_id| MacroUserIdStr::try_from(user_id.to_string()).unwrap())
+        .collect())
     }
 
-    async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), rootcause::Report> {
+    async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), Report> {
         Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeJwtValidator {
+    validation_count: Arc<AtomicUsize>,
+}
+
+impl FakeJwtValidator {
+    fn validation_count(&self) -> usize {
+        self.validation_count.load(Ordering::SeqCst)
+    }
+}
+
+impl JwtValidator for FakeJwtValidator {
+    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+        self.validation_count.fetch_add(1, Ordering::SeqCst);
+
+        let user_id = match jwt {
+            "found" => FOUND_USER_ID,
+            "not-found" => NOT_FOUND_USER_ID,
+            "sender" => SENDER_USER_ID,
+            _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        };
+
+        Ok(ValidatedIdentity {
+            user_id: user_id.to_string(),
+            fusion_user_id: "fusion-user-id".to_string(),
+            permissions: None,
+            organization_id: None,
+        })
     }
 }
 
@@ -65,14 +94,14 @@ impl rate_limit::RateLimitPort for MockRateLimitPort {
         config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
         if self.should_exceed {
-            Ok(Err(RateLimitExceeded {
+            return Ok(Err(RateLimitExceeded {
                 current_count: config.max_count.saturating_add(1),
                 max_count: config.max_count,
                 retry_after: config.window,
-            }))
-        } else {
-            Ok(Ok(RateLimitOk::new_testing_value(0, key, config)))
+            }));
         }
+
+        Ok(Ok(RateLimitOk::new_testing_value(0, key, config)))
     }
 
     async fn decrement(&self, _key: &RateLimitKey) -> Result<(), Report> {
@@ -80,63 +109,58 @@ impl rate_limit::RateLimitPort for MockRateLimitPort {
     }
 }
 
-fn allowing_rate_limiter() -> RateLimitServiceImpl<MockRateLimitPort> {
+fn rate_limiter(should_exceed: bool) -> RateLimitServiceImpl<MockRateLimitPort> {
     RateLimitServiceImpl {
-        repo: MockRateLimitPort {
-            should_exceed: false,
+        repo: MockRateLimitPort { should_exceed },
+    }
+}
+
+fn build_test_router(should_exceed: bool) -> (Router, FakeJwtValidator) {
+    let validator = FakeJwtValidator::default();
+    let authorization_service = MacroAuthorizationServiceImpl::new(
+        validator.clone(),
+        InternalAuthConfig {
+            api_key: VALID_INTERNAL_KEY.to_string(),
+            default_user_id: None,
         },
-    }
+    );
+    let state = ContactsRouterState {
+        contacts_service: Arc::new(MockService),
+        rate_limit_service: rate_limiter(should_exceed),
+        authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
+    };
+
+    (contacts_router::<_, _, _, ()>(state), validator)
 }
 
-fn exceeding_rate_limiter() -> RateLimitServiceImpl<MockRateLimitPort> {
-    RateLimitServiceImpl {
-        repo: MockRateLimitPort {
-            should_exceed: true,
-        },
-    }
+fn bearer_get_request(token: &str) -> Request<Body> {
+    Request::get("/contacts")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
 }
 
-fn mock_service() -> Arc<MockService> {
-    Arc::new(MockService)
-}
-
-fn test_user_context(user_id: &str) -> UserContext {
-    UserContext {
-        user_id: user_id.to_string(),
-        permissions: None,
-        organization_id: None,
-        fusion_user_id: "".to_string(),
-    }
-}
-
-fn build_test_router(
-    rate_limiter: RateLimitServiceImpl<MockRateLimitPort>,
-    user_id: &str,
-) -> Router {
-    contacts_router(rate_limiter)
-        .with_state(mock_service())
-        .layer(Extension(test_user_context(user_id)))
+fn add_contact_request(token: &str) -> Request<Body> {
+    Request::post("/contacts")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::json!({"user_id": "macro|recipient@example.com"}).to_string(),
+        ))
+        .unwrap()
 }
 
 #[tokio::test]
-async fn test_get_contact() {
-    let user_id = "macro|found@test.com";
-    let api = build_test_router(allowing_rate_limiter(), user_id);
+async fn bearer_get_returns_contacts() {
+    let (api, validator) = build_test_router(false);
 
-    let response = api
-        .oneshot(
-            Request::builder()
-                .uri("/contacts")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = api.oneshot(bearer_get_request("found")).await.unwrap();
+
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(validator.validation_count(), 1);
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let body: GetContactsResponse = serde_json::from_slice(&body).unwrap();
-
-    let contact_list: HashSet<&str> = [
+    let expected_contacts: HashSet<&str> = [
         "macro|contact1@test.com",
         "macro|contact2@test.com",
         "macro|contact3@test.com",
@@ -144,88 +168,96 @@ async fn test_get_contact() {
     .into_iter()
     .collect();
 
-    assert_eq!(body.contacts.len(), 3, "Not enough contacts");
+    assert_eq!(body.contacts.len(), expected_contacts.len());
     for contact in &body.contacts {
-        assert!(
-            contact_list.contains(contact.as_ref()),
-            "Could not find contact: {}",
-            contact.as_ref()
-        );
+        assert!(expected_contacts.contains(contact.as_ref()));
     }
 }
 
 #[tokio::test]
-async fn test_get_contact_not_found() {
-    let user_id = "macro|notfound@test.com";
-    let api = build_test_router(allowing_rate_limiter(), user_id);
+async fn bearer_get_returns_not_found() {
+    let (api, _) = build_test_router(false);
 
-    let response = api
-        .oneshot(
-            Request::builder()
-                .uri("/contacts")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = api.oneshot(bearer_get_request("not-found")).await.unwrap();
+
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
-async fn test_add_contact() {
-    let user_id = "macro|sender@test.com";
-    let api = build_test_router(allowing_rate_limiter(), user_id);
+async fn bearer_post_adds_contact_and_validates_once() {
+    let (api, validator) = build_test_router(false);
 
-    let response = api
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/contacts")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({"user_id": "macro|recipient@example.com"}).to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = api.oneshot(add_contact_request("sender")).await.unwrap();
+
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(validator.validation_count(), 1);
 }
 
 #[tokio::test]
-async fn test_add_contact_rate_limited() {
-    let user_id = "macro|sender@test.com";
-    let api = build_test_router(exceeding_rate_limiter(), user_id);
+async fn post_rate_limit_is_preserved() {
+    let (api, validator) = build_test_router(true);
 
-    let response = api
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/contacts")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({"user_id": "macro|recipient@example.com"}).to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = api.oneshot(add_contact_request("sender")).await.unwrap();
+
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(validator.validation_count(), 1);
 }
 
 #[tokio::test]
-async fn test_get_not_affected_by_rate_limit() {
-    let user_id = "macro|found@test.com";
-    let api = build_test_router(exceeding_rate_limiter(), user_id);
+async fn get_is_not_affected_by_post_rate_limit() {
+    let (api, _) = build_test_router(true);
 
-    let response = api
-        .oneshot(
-            Request::builder()
-                .uri("/contacts")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = api.oneshot(bearer_get_request("found")).await.unwrap();
+
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn missing_credentials_are_rejected() {
+    let (api, validator) = build_test_router(false);
+    let request = Request::get("/contacts").body(Body::empty()).unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(validator.validation_count(), 0);
+}
+
+#[tokio::test]
+async fn invalid_credentials_are_rejected() {
+    let (api, validator) = build_test_router(false);
+
+    let response = api.oneshot(bearer_get_request("invalid")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(validator.validation_count(), 1);
+}
+
+#[tokio::test]
+async fn internal_acting_user_is_authenticated() {
+    let (api, validator) = build_test_router(false);
+    let request = Request::get("/contacts")
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, FOUND_USER_ID)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(validator.validation_count(), 0);
+}
+
+#[tokio::test]
+async fn internal_request_without_an_identity_is_rejected() {
+    let (api, validator) = build_test_router(false);
+    let request = Request::get("/contacts")
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(validator.validation_count(), 0);
 }

@@ -148,7 +148,7 @@ impl TeamRepositoryImpl {
             r#"
             INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)
             VALUES ($1, $2, $3, 1, $4, TRUE)
-            RETURNING id, name, slug, owner_id
+            RETURNING id, name, slug, owner_id, enterprise
             "#,
             id,
             team_name,
@@ -167,6 +167,7 @@ impl TeamRepositoryImpl {
                 crm_enabled: false,
                 // New teams start without an auto-join domain.
                 auto_join_domain: None,
+                enterprise: row.enterprise,
             })
         })
         .fetch_one(&mut *transaction)
@@ -352,6 +353,22 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(paying)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_enterprise_status(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        let enterprise = sqlx::query_scalar!(
+            r#"
+            SELECT enterprise
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(enterprise)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1062,7 +1079,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_team_by_id(&self, team_id: &uuid::Uuid) -> Result<TeamWithMembers, TeamError> {
         let team = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1080,6 +1097,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
                 auto_join_domain: row.auto_join_domain,
+                enterprise: row.enterprise,
             })
         })
         .fetch_one(&self.pool)
@@ -1117,7 +1135,7 @@ impl TeamRepository for TeamRepositoryImpl {
     async fn get_user_teams(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<Team>, TeamError> {
         let teams = sqlx::query!(
             r#"
-            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain,
+            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1136,6 +1154,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     .into_owned(),
                 crm_enabled: row.crm_enabled,
                 auto_join_domain: row.auto_join_domain,
+                enterprise: row.enterprise,
             })
         })
         .fetch_all(&self.pool)

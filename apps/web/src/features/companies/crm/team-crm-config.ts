@@ -66,6 +66,8 @@ export type TeamCrmConfig = {
    */
   closedStageIds?: string[];
   teamViews?: TeamCrmSavedView[];
+  /** Team view applied by default when a member opens the Customers view. */
+  defaultTeamViewId?: string;
 };
 
 export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {

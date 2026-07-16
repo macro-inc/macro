@@ -618,7 +618,11 @@ async fn main() -> anyhow::Result<()> {
             .with_voice_repo(PgVoiceRepo::new(db.clone())),
     );
 
-    let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
+    let call_state = CallRouterState::new(
+        call_service.clone(),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());

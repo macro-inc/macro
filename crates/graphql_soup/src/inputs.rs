@@ -32,8 +32,17 @@ use soup::domain::models::{GroupedSortRequest, SoupQuery, SoupRequest, SoupType}
 use uuid::Uuid;
 
 /// Input for `Query.soup`.
+#[derive(async_graphql::OneofObject)]
+pub enum SoupInput {
+    /// Start a new Soup query.
+    Initial(Box<SoupInitialInput>),
+    /// Continue a Soup query from an opaque cursor.
+    Continuation(SoupContinuationInput),
+}
+
+/// Input for starting a Soup query.
 #[derive(async_graphql::InputObject)]
-pub struct SoupInput {
+pub struct SoupInitialInput {
     /// Maximum number of items to return. Defaults to 20, max 500.
     limit: Option<u16>,
     /// Whether to return expanded Soup items. Defaults to true.
@@ -41,17 +50,35 @@ pub struct SoupInput {
     /// Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
     /// not supported by this initial GraphQL adapter.
     sort_method: Option<GraphqlSimpleSortMethod>,
-    /// Opaque cursor returned by a previous GraphQL Soup response.
-    cursor: Option<String>,
     /// Email preview view used when hydrating email Soup items.
     email_view: Option<GraphqlEmailView>,
     /// AST-shaped filters applied to each Soup entity type.
     filters: Option<GraphqlEntityFilterAst>,
 }
 
-/// Input for `Query.groupSoup`.
+/// Input for continuing a Soup query.
 #[derive(async_graphql::InputObject)]
-pub struct GroupedSoupInput {
+pub struct SoupContinuationInput {
+    /// Opaque cursor returned by a previous GraphQL Soup response.
+    cursor: String,
+    /// Whether to return expanded Soup items. Defaults to true.
+    expand: Option<bool>,
+    /// Email preview view used when hydrating email Soup items.
+    email_view: Option<GraphqlEmailView>,
+}
+
+/// Input for `Query.groupSoup`.
+#[derive(async_graphql::OneofObject)]
+pub enum GroupedSoupInput {
+    /// Start a new grouped Soup query.
+    Initial(Box<GroupedSoupInitialInput>),
+    /// Continue one bin from a cursor returned by a previous grouped query.
+    Continuation(GroupedSoupContinuationInput),
+}
+
+/// Input for starting a grouped Soup query.
+#[derive(async_graphql::InputObject)]
+pub struct GroupedSoupInitialInput {
     /// The field used to divide Soup items into bins.
     group_by: GraphqlGroupByInput,
     /// Maximum number of items to return per bin. Defaults to 20, max 500.
@@ -62,9 +89,33 @@ pub struct GroupedSoupInput {
     filters: Option<GraphqlEntityFilterAst>,
 }
 
+/// Input for continuing a single grouped Soup bin.
+#[derive(async_graphql::InputObject)]
+pub struct GroupedSoupContinuationInput {
+    /// The field used to divide Soup items into bins.
+    group_by: GraphqlGroupByInput,
+    /// The grouping key of the bin to continue.
+    group_key: String,
+    /// Opaque cursor returned for the bin by a previous grouped query.
+    cursor: String,
+}
+
 impl GroupedSoupInput {
     /// Convert this value into the grouped Soup domain request.
     pub(crate) fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> async_graphql::Result<GroupedSortRequest<'static>> {
+        match self {
+            Self::Initial(input) => input.into_request(macro_user_id),
+            Self::Continuation(input) => input.into_request(macro_user_id),
+        }
+    }
+}
+
+impl GroupedSoupInitialInput {
+    /// Convert an initial input into the grouped Soup domain request.
+    fn into_request(
         self,
         macro_user_id: MacroUserIdStr<'static>,
     ) -> async_graphql::Result<GroupedSortRequest<'static>> {
@@ -87,6 +138,32 @@ impl GroupedSoupInput {
                 field: self.group_by.into_group_by_field()?,
                 group_key: None,
                 per_group_limit: Some(u32::from(limit)),
+            },
+        })
+    }
+}
+
+impl GroupedSoupContinuationInput {
+    /// Decode a bin cursor into the grouped Soup domain request.
+    fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> async_graphql::Result<GroupedSortRequest<'static>> {
+        let cursor = Base64Str::<
+            CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
+        >::new_from_string(self.cursor)
+        .decode_json()
+        .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
+        let limit = u16::try_from(cursor.limit).unwrap_or(500).min(500);
+
+        Ok(GroupedSortRequest {
+            limit,
+            cursor: Query::Cursor(cursor),
+            user_id: macro_user_id,
+            grouping: GroupingConfig {
+                field: self.group_by.into_group_by_field()?,
+                group_key: Some(self.group_key),
+                per_group_limit: None,
             },
         })
     }
@@ -173,6 +250,20 @@ impl SoupInput {
         macro_user_id: MacroUserIdStr<'static>,
         link_ids: Vec<Uuid>,
     ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
+        match self {
+            Self::Initial(input) => input.into_request(macro_user_id, link_ids),
+            Self::Continuation(input) => input.into_request(macro_user_id, link_ids),
+        }
+    }
+}
+
+impl SoupInitialInput {
+    /// Convert an initial input into the request representation.
+    fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+        link_ids: Vec<Uuid>,
+    ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
         let filter = self
             .filters
             .map(GraphqlEntityFilterAst::into_ast)
@@ -183,35 +274,59 @@ impl SoupInput {
             .map(SimpleSortMethod::from)
             .unwrap_or(SimpleSortMethod::ViewedAt);
 
-        let cursor = match self.cursor {
-            Some(cursor) => {
-                let cursor = Base64Str::<
-                    CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
-                >::new_from_string(cursor)
-                .decode_json()
-                .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
-                SoupQuery::new_cursor_simple(cursor)
-            }
-            None => SoupQuery::new_sort_simple(sort, filter),
-        };
-
         Ok(SoupRequest {
-            soup_type: match self.expand {
-                Some(false) => SoupType::UnExpanded,
-                Some(true) | None => SoupType::Expanded,
-            },
+            soup_type: soup_type(self.expand),
             limit: self.limit.unwrap_or(20).min(500),
-            cursor,
+            cursor: SoupQuery::new_sort_simple(sort, filter),
             user: macro_user_id,
-            email_preview_view: self
-                .email_view
-                .map(GraphqlEmailView::as_preview_view_str)
-                .unwrap_or("inbox")
-                .parse()
-                .map_err(async_graphql::Error::new)?,
+            email_preview_view: email_preview_view(self.email_view)?,
             link_ids,
         })
     }
+}
+
+impl SoupContinuationInput {
+    /// Decode a cursor continuation into the request representation.
+    fn into_request(
+        self,
+        macro_user_id: MacroUserIdStr<'static>,
+        link_ids: Vec<Uuid>,
+    ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
+        let cursor = Base64Str::<
+            CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
+        >::new_from_string(self.cursor)
+        .decode_json()
+        .map_err(|err| async_graphql::Error::new(format!("invalid cursor: {err}")))?;
+        let limit = u16::try_from(cursor.limit).unwrap_or(500).min(500);
+
+        Ok(SoupRequest {
+            soup_type: soup_type(self.expand),
+            limit,
+            cursor: SoupQuery::new_cursor_simple(cursor),
+            user: macro_user_id,
+            email_preview_view: email_preview_view(self.email_view)?,
+            link_ids,
+        })
+    }
+}
+
+/// Convert the optional GraphQL expansion flag into the domain representation.
+fn soup_type(expand: Option<bool>) -> SoupType {
+    match expand {
+        Some(false) => SoupType::UnExpanded,
+        Some(true) | None => SoupType::Expanded,
+    }
+}
+
+/// Convert the optional GraphQL email view into the domain representation.
+fn email_preview_view(
+    email_view: Option<GraphqlEmailView>,
+) -> async_graphql::Result<email::domain::models::PreviewView> {
+    email_view
+        .map(GraphqlEmailView::as_preview_view_str)
+        .unwrap_or("inbox")
+        .parse()
+        .map_err(async_graphql::Error::new)
 }
 
 /// GraphQL input representing the email view.

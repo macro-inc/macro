@@ -1,5 +1,48 @@
 use super::*;
+use crate::search::model::Hit;
 use opensearch_query_builder::ToOpenSearchJson;
+
+fn channel_index(updated_at_millis: Option<i64>) -> ChannelMessageIndex {
+    let id = uuid::Uuid::new_v4();
+    ChannelMessageIndex {
+        entity_id: uuid::Uuid::new_v4(),
+        channel_type: "team".to_string(),
+        org_id: None,
+        message_id: id,
+        thread_id: id,
+        sender_id: "macro|gab@macro.com".to_string(),
+        mentions: vec![],
+        created_at_millis: updated_at_millis,
+        updated_at_millis,
+    }
+}
+
+fn hit_for(source: ChannelMessageIndex) -> Hit<ChannelMessageIndex> {
+    Hit {
+        score: Some(1.0),
+        source,
+        highlight: None,
+        inner_hits: None,
+    }
+}
+
+/// A millisecond timestamp is preserved at full precision, and two hits in the
+/// same second but different milliseconds sort distinctly by `updated_at`.
+#[test]
+fn millis_timestamps_are_distinct_within_a_second() {
+    let earlier = channel_hit_to_search_hit(hit_for(channel_index(Some(1_700_000_000_123))));
+    let later = channel_hit_to_search_hit(hit_for(channel_index(Some(1_700_000_000_456))));
+
+    let earlier_ts = earlier.updated_at.expect("updated_at");
+    let later_ts = later.updated_at.expect("updated_at");
+
+    assert_eq!(earlier_ts.timestamp_millis(), 1_700_000_000_123);
+    assert_eq!(later_ts.timestamp_millis(), 1_700_000_000_456);
+    assert!(
+        later_ts > earlier_ts,
+        "sub-second ordering must be preserved"
+    );
+}
 
 #[test]
 fn test_build_bool_query() -> anyhow::Result<()> {

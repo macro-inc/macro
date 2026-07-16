@@ -1,9 +1,11 @@
 import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
 import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import {
@@ -60,7 +62,7 @@ type StageColumn = {
  * previews the company to the side instead of replacing the split.
  */
 export function CompanyKanban() {
-  const { source, soup, stageFilter } = useSoupView();
+  const { source, soup, stageFilter, searchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const saveMutation = useBulkSaveEntityPropertiesMutation();
   const orchestrator = useGlobalBlockOrchestrator();
@@ -71,6 +73,13 @@ export function CompanyKanban() {
 
   // Mirror the list view's no-team / CRM-disabled empty states.
   const crmUnavailable = useCrmUnavailable();
+  const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
+    useFilterRefinements();
+
+  // Debug: force the board to render its empty state regardless of content.
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const stageColumns = createMemo((): StageColumn[] => {
     // Candidates in canonical pipeline order: the filterable set (active
@@ -98,6 +107,15 @@ export function CompanyKanban() {
   const { paneVisible, selectedEntity } = usePreviewPaneVisiblity();
 
   const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
+
+  // Mirror the list view's empty states: beyond CRM-unavailable, an empty
+  // board ("No customers yet" / no search or filter matches) shows the
+  // panel instead of a row of empty columns. Fetches keep the board
+  // mounted so the empty state doesn't flash during refetches.
+  const showEmptyState = () =>
+    crmUnavailable() ||
+    (!source.isFetching() && companies().length === 0) ||
+    forceEmptyState();
 
   const columns = createMemo(() => {
     const buckets = new Map<string, EntityData[]>(
@@ -186,8 +204,16 @@ export function CompanyKanban() {
 
   return (
     <Show
-      when={!crmUnavailable()}
-      fallback={<EmptyState listView="companies" />}
+      when={!showEmptyState()}
+      fallback={
+        <EmptyState
+          listView="companies"
+          search={!!searchText()}
+          hasRefinementsFromBase={hasActiveRefinements()}
+          hasHiddenItems={hasHiddenItems()}
+          onClearFilters={resetToTabDefaults}
+        />
+      }
     >
       <Resize.Zone direction="horizontal" gutter={0}>
         <Resize.Panel id="company-kanban" minSize={200}>

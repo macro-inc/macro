@@ -26,6 +26,7 @@ import { FloatingFormatMenu } from '../component/menu/FloatingFormatMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
 import { MentionsMenu } from '../component/menu/MentionsMenu';
 import { SnippetsMenu } from '../component/menu/SnippetsMenu';
+import { TagsMenu } from '../component/menu/TagsMenu';
 import { DragInsertIndicator } from '../component/misc/DragInsertIndicator';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
@@ -263,6 +264,17 @@ export const MarkdownShell: Component<
                 builderConfig.mentions?.disableMentionTracking
               }
               sources={builderConfig.mentions?.sources}
+            />
+          )}
+        </Show>
+
+        <Show when={state.tagsMenuOps}>
+          {(menu) => (
+            <TagsMenu
+              editor={editor}
+              menu={menu()}
+              useBlockBoundary={false}
+              portalScope={props.portalScope}
             />
           )}
         </Show>

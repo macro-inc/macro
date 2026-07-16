@@ -4,7 +4,7 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use crate::upsert::properties::IndexedProperty;
-use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
 
 #[cfg(test)]
 mod test;
@@ -31,9 +31,9 @@ pub struct UpsertCallRecordSegmentArgs {
     pub speaker_id: String,
     pub sequence_num: i32,
     pub content: String,
-    pub started_at_seconds: EpochSeconds,
+    pub started_at_millis: EpochMillis,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ended_at_seconds: Option<EpochSeconds>,
+    pub ended_at_millis: Option<EpochMillis>,
     /// Denormalized parent entity properties (tags, custom) used for search
     /// filtering. Shared across every segment of a call; empty for untagged
     /// calls. Only written onto the parent doc.
@@ -78,7 +78,7 @@ fn parent_doc_body(any_segment: &UpsertCallRecordSegmentArgs) -> serde_json::Val
         "entity_id": &any_segment.call_id,
         "channel_id": &any_segment.channel_id,
         "participant_ids": &any_segment.participant_ids,
-        "started_at_seconds": any_segment.started_at_seconds,
+        "started_at_millis": any_segment.started_at_millis,
         "call_relation": PARENT_RELATION,
     });
     if let Some(channel_name) = &any_segment.channel_name {
@@ -87,8 +87,8 @@ fn parent_doc_body(any_segment: &UpsertCallRecordSegmentArgs) -> serde_json::Val
     if let Some(name) = &any_segment.name {
         doc["name"] = serde_json::Value::String(name.clone());
     }
-    if let Some(ended) = &any_segment.ended_at_seconds {
-        doc["ended_at_seconds"] = serde_json::to_value(ended).unwrap_or(serde_json::Value::Null);
+    if let Some(ended) = &any_segment.ended_at_millis {
+        doc["ended_at_millis"] = serde_json::to_value(ended).unwrap_or(serde_json::Value::Null);
     }
     if !any_segment.properties.is_empty()
         && let Ok(properties) = serde_json::to_value(&any_segment.properties)
@@ -106,8 +106,8 @@ fn child_doc_body(seg: &UpsertCallRecordSegmentArgs) -> serde_json::Value {
         "speaker_id": &seg.speaker_id,
         "sequence_num": seg.sequence_num,
         "content": &seg.content,
-        "started_at_seconds": seg.started_at_seconds,
-        "ended_at_seconds": &seg.ended_at_seconds,
+        "started_at_millis": seg.started_at_millis,
+        "ended_at_millis": &seg.ended_at_millis,
         "call_relation": {
             "name": CHILD_RELATION,
             "parent": &seg.call_id,

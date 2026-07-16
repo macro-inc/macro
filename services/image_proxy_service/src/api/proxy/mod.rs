@@ -1,12 +1,16 @@
 mod resolver;
 
+use crate::api::context::AuthorizationService;
+
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use futures::StreamExt;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_middleware::tracking::ClientIp;
+use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::error::Error;
@@ -152,9 +156,17 @@ pub struct ProxyParams {
     get,
     path = "/proxy",
     params(("url" = String, Query, description = "The image url to proxy")),
+    responses(
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+    ),
 )]
-#[tracing::instrument(err(Debug), skip(http_client))]
+#[tracing::instrument(
+    err(Debug),
+    skip(user, http_client),
+    fields(user_id = ?user.macro_user_id)
+)]
 pub async fn proxy_request_handler(
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Query(params): Query<ProxyParams>,
     State(http_client): State<reqwest::Client>,
     _ip: ClientIp,

@@ -35,9 +35,13 @@ where
     let Cached(MacroUserExtractor { macro_user_id, .. }) =
         extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
     let request = input.into_request(macro_user_id)?;
+    let sort_method = *request.cursor.sort_method();
+    let filters = request.cursor.filter().clone();
     let items = service.get_user_soup_grouped(request).await?;
     let groups: NestedSoupGroups<_, _> = items.collect();
-    Ok(GroupedSoup::from(groups))
+    Ok(GroupedSoup::from(
+        groups.with_next_cursors(sort_method, filters),
+    ))
 }
 
 /// Resolve a page of Soup items for the authenticated user: runs the lazy

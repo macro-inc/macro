@@ -1,14 +1,18 @@
 import { createTabLeaderSignal } from '@notifications/notification-election';
 import {
   fetchGraphqlSoup,
-  type GraphqlSoupInput,
+  type GraphqlSoupInitialInput,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
-const BACKFILL_VERSION = 1;
+// Bump when a default backfill input changes so persisted opaque cursors
+// cannot retain the previous server-side filters.
+const BACKFILL_VERSION = 2;
 const PAGE_LIMIT = 250;
+// The email-content DataLoader rejects operations with more than 20 threads.
+const EMAIL_CONTENT_PAGE_LIMIT = 20;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
@@ -18,8 +22,8 @@ export type SoupBackfillParams = {
   /** Stable checkpoint namespace. Change it when the input changes. */
   checkpointId: string;
   /** Soup input shared by every page. The backfill manages the cursor. */
-  input: Omit<GraphqlSoupInput, 'cursor'>;
-  /** Delay between successful pages. Defaults to five seconds. */
+  input: GraphqlSoupInitialInput;
+  /** Delay between successful pages. Defaults to two seconds. */
   pageDelayMs?: number;
 };
 
@@ -31,6 +35,7 @@ export const ALL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
     },
@@ -38,13 +43,14 @@ export const ALL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
 };
 
 /**
- * Fetches email threads while excluding every other entity variant with an
- * impossible id filter.
+ * Fetches email threads and their newest content message while excluding every
+ * other entity variant with an impossible id filter.
  */
 export const EMAIL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
-  checkpointId: 'email-all',
+  // This namespace must not reuse checkpoints from the old metadata-only pass.
+  checkpointId: 'email-content-all',
   input: {
-    limit: PAGE_LIMIT,
+    limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
@@ -216,9 +222,9 @@ function and<T>(left: T | null | undefined, right: T): T {
  * caller-provided filters. Other entity types continue to be fetched normally.
  */
 export function withUpdatedSince(
-  input: Omit<GraphqlSoupInput, 'cursor'>,
+  input: GraphqlSoupInitialInput,
   updatedSince: string | null
-): Omit<GraphqlSoupInput, 'cursor'> {
+): GraphqlSoupInitialInput {
   if (!updatedSince) return input;
 
   const filters = input.filters ?? {};
@@ -278,10 +284,15 @@ export async function runSoupBackfill(
 
   while (!signal.aborted) {
     const page = await fetchGraphqlSoup(
-      {
-        ...passInput,
-        cursor: checkpoint.nextCursor ?? undefined,
-      },
+      checkpoint.nextCursor
+        ? {
+            continuation: {
+              cursor: checkpoint.nextCursor,
+              expand: passInput.expand,
+              emailView: passInput.emailView,
+            },
+          }
+        : { initial: passInput },
       {
         signal,
         // Backfill must stop on a network failure instead of advancing from
@@ -359,7 +370,7 @@ export function useSoupBackfill(
   });
 }
 
-/** Backfills only email threads using an independent persisted checkpoint. */
+/** Backfills email thread metadata and content with an independent checkpoint. */
 export function useEmailSoupBackfill(userId: Accessor<string | undefined>) {
   return useSoupBackfill(userId, () => EMAIL_SOUP_BACKFILL_PARAMS);
 }

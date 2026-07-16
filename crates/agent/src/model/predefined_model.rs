@@ -11,6 +11,7 @@ use utoipa::ToSchema;
 
 static ANTHROPIC: &str = "anthropic";
 static OPENAI: &str = "openai";
+const CLAUDE_SONNET_5: &str = "claude-sonnet-5";
 
 /// This type is **serialize-only**: every variant's wire form is the
 /// provider's **api id** — the exact string the API (and the model router)
@@ -31,6 +32,9 @@ pub enum PredefinedModel {
     /// Claude Opus 4.7
     #[serde(rename = "claude-opus-4-7")]
     Opus4_7,
+    /// Claude Sonnet 5
+    #[serde(rename = "claude-sonnet-5")]
+    Sonnet5,
     /// Claude Sonnet 4.6
     #[serde(rename = "claude-sonnet-4-6")]
     Sonnet4_6,
@@ -53,6 +57,7 @@ impl From<PredefinedModel> for super::types::Model<'static> {
         let (provider, name) = match model {
             PredefinedModel::Smart | PredefinedModel::Retired => (ANTHROPIC, CLAUDE_OPUS_4_8),
             PredefinedModel::Opus4_7 => (ANTHROPIC, CLAUDE_OPUS_4_7),
+            PredefinedModel::Sonnet5 => (ANTHROPIC, CLAUDE_SONNET_5),
             PredefinedModel::Sonnet4_6 => (ANTHROPIC, CLAUDE_SONNET_4_6),
             PredefinedModel::Fast | PredefinedModel::Haiku4_5 => (ANTHROPIC, CLAUDE_HAIKU_4_5),
             PredefinedModel::Gpt5_5 => (OPENAI, GPT_5_5),
@@ -69,6 +74,7 @@ impl PredefinedModel {
     /// Returns `additional_params` JSON to enable extended thinking / reasoning.
     ///
     /// - Opus 4.8 / 4.7: `adaptive` (model chooses when to think)
+    /// - Sonnet 5: `adaptive` (manual extended thinking is unsupported)
     /// - Sonnet 4.6 / Haiku 4.5: `enabled` with `budget_tokens`
     /// - GPT-5.5 / GPT-5 mini: Responses API `reasoning` with effort
     ///   (no `temperature`; reasoning models reject it)
@@ -77,6 +83,9 @@ impl PredefinedModel {
             Self::Smart | Self::Opus4_7 | Self::Retired => serde_json::json!({
                 "thinking": { "type": "adaptive", "display": "summarized" },
                 "temperature": 1
+            }),
+            Self::Sonnet5 => serde_json::json!({
+                "thinking": { "type": "adaptive", "display": "summarized" }
             }),
             Self::Sonnet4_6 | Self::Fast | Self::Haiku4_5 => serde_json::json!({
                 "thinking": {
@@ -98,7 +107,9 @@ impl PredefinedModel {
     /// Context window size in tokens.
     pub fn context_window(&self) -> u64 {
         match self {
-            Self::Smart | Self::Opus4_7 | Self::Sonnet4_6 | Self::Retired => 1_000_000,
+            Self::Smart | Self::Opus4_7 | Self::Sonnet5 | Self::Sonnet4_6 | Self::Retired => {
+                1_000_000
+            }
             Self::Fast | Self::Haiku4_5 => 200_000,
             Self::Gpt5_5 | Self::Gpt5Mini => 400_000,
         }
