@@ -171,12 +171,12 @@ export function useToggleAutoJoinDomainMutation(
           const applyDomain = (old: TeamWithMembers | null | undefined) =>
             old
               ? {
-                ...old,
-                team: {
-                  ...old.team,
-                  auto_join_domain: data.auto_join_domain ?? null,
-                },
-              }
+                  ...old,
+                  team: {
+                    ...old.team,
+                    auto_join_domain: data.auto_join_domain ?? null,
+                  },
+                }
               : old;
           queryClient.setQueryData<TeamWithMembers | null>(
             teamKeys.detail(teamId).queryKey,
