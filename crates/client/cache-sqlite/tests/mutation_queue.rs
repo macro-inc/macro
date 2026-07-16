@@ -118,7 +118,7 @@ fn queue_and_optimistic_layer_survive_reopen() {
 
 #[test]
 fn engine_hydrates_optimistic_layer_after_restart() {
-    use cache_core::engine::{Engine, ReadResult};
+    use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
     use serde_json::json;
 
     block_on(async {
@@ -163,13 +163,15 @@ fn engine_hydrates_optimistic_layer_after_restart() {
         engine
             .begin_optimistic_write(
                 None,
-                CACHE_MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars,
-                &optimistic,
-                &[],
-                &[],
-                10,
+                BeginOptimisticWrite {
+                    query: CACHE_MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars,
+                    data: &optimistic,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 10,
+                },
             )
             .await
             .unwrap();

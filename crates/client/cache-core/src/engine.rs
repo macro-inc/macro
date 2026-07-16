@@ -6,8 +6,7 @@ use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormaliz
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
 use crate::link_patch::{
-    LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
-    deduplicate_patches,
+    LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches, deduplicate_patches,
 };
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
 use crate::queue::{
@@ -84,6 +83,24 @@ pub struct CacheFieldInfo {
     pub field_key: String,
     /// Parsed canonical arguments when the field key contains valid JSON.
     pub arguments: Option<Json>,
+}
+
+/// Borrowed inputs for atomically beginning one optimistic mutation.
+pub struct BeginOptimisticWrite<'a> {
+    /// GraphQL mutation document.
+    pub query: &'a str,
+    /// Selected operation name.
+    pub operation_name: Option<&'a str>,
+    /// Mutation variables.
+    pub variables: &'a serde_json::Map<String, Json>,
+    /// Optimistic mutation response.
+    pub data: &'a Json,
+    /// Ordered constrained relation recipes.
+    pub link_patches: &'a [OptimisticLinkPatch],
+    /// Revalidations for relevant fields that could not be patched.
+    pub revalidations: &'a [QueryRevalidation],
+    /// Wall-clock enqueue timestamp.
+    pub created_at_ms: i64,
 }
 
 /// Engine-assigned id of one optimistic mutation transaction. Never reuse
@@ -249,10 +266,12 @@ impl<S: Storage> Engine<S> {
                 updates,
                 link_patches: patches,
                 revalidations: deduplicate_revalidations(
-                    source
-                        .revalidations
-                        .into_iter()
-                        .chain(source.link_patches.into_iter().filter_map(|patch| patch.revalidate)),
+                    source.revalidations.into_iter().chain(
+                        source
+                            .link_patches
+                            .into_iter()
+                            .filter_map(|patch| patch.revalidate),
+                    ),
                 ),
             });
         }
@@ -552,14 +571,17 @@ impl<S: Storage> Engine<S> {
     pub async fn begin_optimistic_write(
         &mut self,
         origin_op: Option<OpId>,
-        query: &str,
-        operation_name: Option<&str>,
-        variables: &serde_json::Map<String, Json>,
-        data: &Json,
-        link_patches: &[OptimisticLinkPatch],
-        revalidations: &[QueryRevalidation],
-        created_at_ms: i64,
+        input: BeginOptimisticWrite<'_>,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
+        let BeginOptimisticWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            link_patches,
+            revalidations,
+            created_at_ms,
+        } = input;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
@@ -1004,9 +1026,7 @@ fn effective_records(
         .collect()
 }
 
-fn present_records(
-    records: HashMap<EntityKey, Option<Record>>,
-) -> HashMap<EntityKey, Record> {
+fn present_records(records: HashMap<EntityKey, Option<Record>>) -> HashMap<EntityKey, Record> {
     records
         .into_iter()
         .filter_map(|(key, record)| record.map(|record| (key, record)))

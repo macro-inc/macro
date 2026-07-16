@@ -12,7 +12,9 @@
 //! internally — the same scheme as the `cache-wasm` shell.
 
 use cache_core::deps::OpId;
-use cache_core::engine::{CacheFieldInfo, Engine, ReadResult, WriteResult};
+use cache_core::engine::{
+    BeginOptimisticWrite, CacheFieldInfo, Engine, ReadResult, WriteResult,
+};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
@@ -291,13 +293,15 @@ impl EngineHandle {
         engine
             .begin_optimistic_write(
                 origin,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-                &link_patches,
-                &revalidations,
-                created_at_ms,
+                BeginOptimisticWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    link_patches: &link_patches,
+                    revalidations: &revalidations,
+                    created_at_ms,
+                },
             )
             .await
             .map(|(transaction, result)| OptimisticWriteResultWire {

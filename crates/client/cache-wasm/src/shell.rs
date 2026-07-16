@@ -1,6 +1,6 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
-use cache_core::engine::{CacheFieldInfo, Engine, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, CacheFieldInfo, Engine, ReadResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
@@ -312,13 +312,15 @@ impl CacheEngine {
             let (transaction, result) = engine
                 .begin_optimistic_write(
                     origin,
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
-                    &link_patches,
-                    &revalidations,
-                    created_at_ms,
+                    BeginOptimisticWrite {
+                        query: &query,
+                        operation_name: operation_name.as_deref(),
+                        variables: &vars,
+                        data: &data,
+                        link_patches: &link_patches,
+                        revalidations: &revalidations,
+                        created_at_ms,
+                    },
                 )
                 .await
                 .map_err(err_js)?;
@@ -343,7 +345,12 @@ impl CacheEngine {
                 .inspect_fields(&EntityKey(entity_key))
                 .await
                 .map_err(err_js)?;
-            to_js(&fields.into_iter().map(JsCacheFieldInfo::from).collect::<Vec<_>>())
+            to_js(
+                &fields
+                    .into_iter()
+                    .map(JsCacheFieldInfo::from)
+                    .collect::<Vec<_>>(),
+            )
         })
     }
 

@@ -1,6 +1,6 @@
 //! GroupSoup nested-link optimistic transaction integration tests.
 
-use cache_core::engine::{Engine, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{
     LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch, QueryRevalidation,
 };
@@ -56,7 +56,9 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
 "#;
 
 fn object(value: Json) -> serde_json::Map<String, Json> {
-    let Json::Object(value) = value else { unreachable!() };
+    let Json::Object(value) = value else {
+        unreachable!()
+    };
     value
 }
 
@@ -131,14 +133,18 @@ fn patch(field_key: &str, bin: &str, operation: LinkOperation) -> OptimisticLink
         parent_entity_key: EntityKey("GraphqlUser:user-1".into()),
         field_key: field_key.into(),
         path: vec![
-            LinkPathSegment::Field { field: "bins".into() },
+            LinkPathSegment::Field {
+                field: "bins".into(),
+            },
             LinkPathSegment::ListItem {
                 list_item: ListItemByScalar {
                     where_field: "key".into(),
                     equals: json!(bin),
                 },
             },
-            LinkPathSegment::Field { field: "items".into() },
+            LinkPathSegment::Field {
+                field: "items".into(),
+            },
         ],
         operation,
         revalidate: Some(QueryRevalidation {
@@ -182,8 +188,7 @@ async fn setup() -> (Engine<InMemoryStorage>, String) {
         .find(|field| field.field_name == "groupSoup")
         .expect("groupSoup field");
     assert_eq!(
-        grouped.arguments.unwrap()["input"]["groupBy"]["property"]
-            ["propertyDefinitionId"],
+        grouped.arguments.unwrap()["input"]["groupBy"]["property"]["propertyDefinitionId"],
         json!("status-def")
     );
     (engine, grouped.field_key)
@@ -229,21 +234,21 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
         let (transaction, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_variables("completed"),
-                &mutation_response("completed"),
-                &patches,
-                &[],
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_variables("completed"),
+                    data: &mutation_response("completed"),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();
 
         let optimistic = read_group(&mut engine).await;
-        let bins = optimistic["user"]["groupSoup"]["bins"]
-            .as_array()
-            .unwrap();
+        let bins = optimistic["user"]["groupSoup"]["bins"].as_array().unwrap();
         assert!(bins[0]["items"].as_array().unwrap().is_empty());
         assert_eq!(bins[1]["items"][0]["id"], json!("task-1"));
         // Server-owned pagination metadata is deliberately untouched.
@@ -255,10 +260,12 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
         // after an application restart.
         let mut reopened = Engine::new(engine.storage().clone());
         let hydrated = read_group(&mut reopened).await;
-        assert!(hydrated["user"]["groupSoup"]["bins"][0]["items"]
-            .as_array()
-            .unwrap()
-            .is_empty());
+        assert!(
+            hydrated["user"]["groupSoup"]["bins"][0]["items"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             hydrated["user"]["groupSoup"]["bins"][1]["items"][0]["id"],
             json!("task-1")
@@ -274,10 +281,12 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
             restored["user"]["groupSoup"]["bins"][0]["items"][0]["id"],
             json!("task-1")
         );
-        assert!(restored["user"]["groupSoup"]["bins"][1]["items"]
-            .as_array()
-            .unwrap()
-            .is_empty());
+        assert!(
+            restored["user"]["groupSoup"]["bins"][1]["items"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     });
 }
 
@@ -304,13 +313,15 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
         let (transaction, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_variables("completed"),
-                &mutation_response("completed"),
-                &patches,
-                &[],
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_variables("completed"),
+                    data: &mutation_response("completed"),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();
@@ -388,13 +399,15 @@ fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
             engine
                 .begin_optimistic_write(
                     None,
-                    MUTATION,
-                    Some("SetEntityProperty"),
-                    &mutation_variables("completed"),
-                    &mutation_response("completed"),
-                    &patches,
-                    &[],
-                    0,
+                    BeginOptimisticWrite {
+                        query: MUTATION,
+                        operation_name: Some("SetEntityProperty"),
+                        variables: &mutation_variables("completed"),
+                        data: &mutation_response("completed"),
+                        link_patches: &patches,
+                        revalidations: &[],
+                        created_at_ms: 0,
+                    },
                 )
                 .await
                 .is_err()

@@ -165,10 +165,10 @@ fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
     validate_entity_key(&patch.parent_entity_key)?;
     validate_entity_key(patch.operation.entity_key())?;
     for segment in &patch.path {
-        if let LinkPathSegment::ListItem { list_item } = segment {
-            if !is_json_scalar(&list_item.equals) {
-                return Err(LinkPatchError::NonScalarSelector);
-            }
+        if let LinkPathSegment::ListItem { list_item } = segment
+            && !is_json_scalar(&list_item.equals)
+        {
+            return Err(LinkPatchError::NonScalarSelector);
         }
     }
     Ok(())
@@ -179,10 +179,9 @@ fn validate_entity_key(key: &EntityKey) -> Result<(), LinkPatchError> {
         return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
     };
     let valid_name = !typename.is_empty()
-        && typename
-            .chars()
-            .enumerate()
-            .all(|(index, ch)| ch == '_' || ch.is_ascii_alphabetic() || (index > 0 && ch.is_ascii_digit()));
+        && typename.chars().enumerate().all(|(index, ch)| {
+            ch == '_' || ch.is_ascii_alphabetic() || (index > 0 && ch.is_ascii_digit())
+        });
     if !valid_name || value.is_empty() || value.chars().any(char::is_whitespace) {
         return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
     }
@@ -190,7 +189,10 @@ fn validate_entity_key(key: &EntityKey) -> Result<(), LinkPatchError> {
 }
 
 fn is_json_scalar(value: &Json) -> bool {
-    matches!(value, Json::Null | Json::Bool(_) | Json::Number(_) | Json::String(_))
+    matches!(
+        value,
+        Json::Null | Json::Bool(_) | Json::Number(_) | Json::String(_)
+    )
 }
 
 /// Applies an already ordered patch set against effective records and writes
@@ -372,14 +374,18 @@ mod tests {
             parent_entity_key: EntityKey("GraphqlUser:user-1".into()),
             field_key: "groupSoup({})".into(),
             path: vec![
-                LinkPathSegment::Field { field: "bins".into() },
+                LinkPathSegment::Field {
+                    field: "bins".into(),
+                },
                 LinkPathSegment::ListItem {
                     list_item: ListItemByScalar {
                         where_field: "key".into(),
                         equals: json!(bin),
                     },
                 },
-                LinkPathSegment::Field { field: "items".into() },
+                LinkPathSegment::Field {
+                    field: "items".into(),
+                },
             ],
             operation,
             revalidate: None,
@@ -417,10 +423,16 @@ mod tests {
         let CacheValue::Object(grouped) = &changed.fields["groupSoup({})"] else {
             panic!()
         };
-        let CacheValue::List(bins) = &grouped["bins"] else { panic!() };
-        let CacheValue::Object(source) = &bins[0] else { panic!() };
+        let CacheValue::List(bins) = &grouped["bins"] else {
+            panic!()
+        };
+        let CacheValue::Object(source) = &bins[0] else {
+            panic!()
+        };
         assert_eq!(source["items"], CacheValue::List(vec![]));
-        let CacheValue::Object(destination) = &bins[1] else { panic!() };
+        let CacheValue::Object(destination) = &bins[1] else {
+            panic!()
+        };
         assert_eq!(
             destination["items"],
             CacheValue::List(vec![CacheValue::Ref(EntityKey(
@@ -462,10 +474,19 @@ mod tests {
     #[test]
     fn rejects_non_ref_target_and_invalid_keys() {
         let (parent, mut initial) = record();
-        let CacheValue::Object(grouped) = initial.fields.get_mut("groupSoup({})").unwrap() else { panic!() };
-        let CacheValue::List(bins) = grouped.get_mut("bins").unwrap() else { panic!() };
-        let CacheValue::Object(source) = &mut bins[0] else { panic!() };
-        source.insert("items".into(), CacheValue::List(vec![CacheValue::String("bad".into())]));
+        let CacheValue::Object(grouped) = initial.fields.get_mut("groupSoup({})").unwrap() else {
+            panic!()
+        };
+        let CacheValue::List(bins) = grouped.get_mut("bins").unwrap() else {
+            panic!()
+        };
+        let CacheValue::Object(source) = &mut bins[0] else {
+            panic!()
+        };
+        source.insert(
+            "items".into(),
+            CacheValue::List(vec![CacheValue::String("bad".into())]),
+        );
         let mut effective = HashMap::from([(parent, initial)]);
         let mut updates = RecordUpdates::new();
         assert_eq!(
@@ -474,7 +495,9 @@ mod tests {
                 &mut updates,
                 &[patch(
                     "in-progress",
-                    LinkOperation::Remove { entity_key: EntityKey("bad".into()) }
+                    LinkOperation::Remove {
+                        entity_key: EntityKey("bad".into())
+                    }
                 )],
                 false,
             ),

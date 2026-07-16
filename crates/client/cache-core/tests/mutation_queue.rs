@@ -1,7 +1,6 @@
 use cache_core::queue::{
-    MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
-    OptimisticSource, PersistedOptimisticLayer, StoredMutation, decode_optimistic_source,
-    encode_optimistic_source,
+    MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation, OptimisticSource,
+    PersistedOptimisticLayer, StoredMutation, decode_optimistic_source, encode_optimistic_source,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
