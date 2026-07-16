@@ -1,12 +1,18 @@
 use axum::Extension;
 use axum::Router;
 use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::{Request, StatusCode, header};
 use http_body_util::BodyExt;
+use macro_authorization::{
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
 use model::response::StringIDResponse;
-use model_user::UserContext;
+use model::user::UserContext;
+use rootcause::Report;
+use std::sync::Arc;
 use tower::util::ServiceExt;
 
 use crate::domain::models::{
@@ -453,13 +459,49 @@ impl EntityAccessService for MockAccessService {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+/// Fake authorization service accepting the `valid` bearer token as the test
+/// user.
+#[derive(Clone)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(
+        &self,
+        jwt: &str,
+    ) -> std::result::Result<UserContext, Report<MacroAuthorizationError>> {
+        if jwt != "valid" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(UserContext {
+            user_id: "macro|test@example.com".to_string(),
+            fusion_user_id: "1234".to_string(),
+            permissions: None,
+            organization_id: None,
+        })
+    }
+
+    async fn authorize_internal(
+        &self,
+        _provided_key: &str,
+        _claims: InternalIdentityClaims,
+    ) -> std::result::Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+}
+
+fn authorization_state() -> MacroAuthorizationState<FakeAuthorizationService> {
+    MacroAuthorizationState::new(Arc::new(FakeAuthorizationService))
+}
+
+/// Attaches the test user's bearer token to every request, mirroring the
+/// credentials a real client would send.
+async fn attach_bearer(mut req: Request<Body>) -> Request<Body> {
+    req.headers_mut().insert(
+        header::AUTHORIZATION,
+        "Bearer valid".parse().expect("header should be valid"),
+    );
+    req
 }
 
 fn chat_basic_extension() -> Extension<ChatBasic> {
@@ -476,21 +518,33 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 }
 
 fn mock_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(MockService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(ChatRouterState::new(
+        MockService,
+        MockAccessService,
+        authorization_state(),
+    ))
+    .layer(chat_basic_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn error_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(ErrorService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(ChatRouterState::new(
+        ErrorService,
+        MockAccessService,
+        authorization_state(),
+    ))
+    .layer(chat_basic_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn not_found_id_router() -> Router {
-    chat_id_router(ChatRouterState::new(NotFoundService, MockAccessService))
-        .layer(chat_basic_extension())
-        .layer(user_extension())
+    chat_id_router(ChatRouterState::new(
+        NotFoundService,
+        MockAccessService,
+        authorization_state(),
+    ))
+    .layer(chat_basic_extension())
+    .layer(axum::middleware::map_request(attach_bearer))
 }
 
 // -- get_chat tests --

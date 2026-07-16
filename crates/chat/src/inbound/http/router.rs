@@ -12,44 +12,62 @@ use axum::{
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+};
 use model::response::StringIDResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Result};
 use crate::domain::ports::ChatService;
-use crate::inbound::http::extractors::ChatModelAccess;
 
-/// Shared state for the chat router, wrapping a [`ChatService`] implementation
-/// and an [`EntityAccessService`] for authorization.
-pub struct ChatRouterState<S, Svc> {
+/// Shared state for the chat router, wrapping a [`ChatService`] implementation,
+/// an [`EntityAccessService`] for entity authorization, and a
+/// [`MacroAuthorizationService`] for caller authentication.
+pub struct ChatRouterState<S, Svc, Auth> {
     inner: Arc<S>,
     access_service: Arc<Svc>,
+    authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, Svc> Clone for ChatRouterState<S, Svc> {
+impl<S, Svc, Auth> Clone for ChatRouterState<S, Svc, Auth> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
             access_service: Arc::clone(&self.access_service),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S, Svc> FromRef<ChatRouterState<S, Svc>> for Arc<Svc> {
-    fn from_ref(state: &ChatRouterState<S, Svc>) -> Self {
+impl<S, Svc, Auth> FromRef<ChatRouterState<S, Svc, Auth>> for Arc<Svc> {
+    fn from_ref(state: &ChatRouterState<S, Svc, Auth>) -> Self {
         state.access_service.clone()
     }
 }
 
-impl<S: ChatService, Svc: EntityAccessService> ChatRouterState<S, Svc> {
-    /// Create a new [`ChatRouterState`] from a service and access service.
-    pub fn new(service: S, access_service: Svc) -> Self {
+impl<S, Svc, Auth> FromRef<ChatRouterState<S, Svc, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &ChatRouterState<S, Svc, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+impl<S: ChatService, Svc: EntityAccessService, Auth: MacroAuthorizationService>
+    ChatRouterState<S, Svc, Auth>
+{
+    /// Create a new [`ChatRouterState`] from a service, access service, and
+    /// authorization state.
+    pub fn new(
+        service: S,
+        access_service: Svc,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             inner: Arc::new(service),
             access_service: Arc::new(access_service),
+            authorization_state,
         }
     }
 }
@@ -57,12 +75,17 @@ impl<S: ChatService, Svc: EntityAccessService> ChatRouterState<S, Svc> {
 /// Build the router for the `POST /` create-chat route.
 ///
 /// This is separated so that DCS can apply different middleware
-/// (e.g. `ensure_user_exists` + quota checks) without `ensure_chat_exists`.
-pub fn chat_create_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync + 'static>(
-    state: ChatRouterState<S, Svc>,
+/// (e.g. quota checks) without `ensure_chat_exists`.
+pub fn chat_create_router<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+>(
+    state: ChatRouterState<S, Svc, Auth>,
 ) -> Router<T> {
     Router::new()
-        .route("/", post(create_chat_handler::<S, Svc>))
+        .route("/", post(create_chat_handler::<S, Svc, Auth>))
         .with_state(state)
 }
 
@@ -70,41 +93,49 @@ pub fn chat_create_router<S: ChatService, Svc: EntityAccessService, T: Send + Sy
 ///
 /// These routes require `ensure_chat_exists` middleware to populate
 /// `ChatBasic` in extensions before the [`ChatAccessLevelExtractor`] runs.
-pub fn chat_id_router<S: ChatService, Svc: EntityAccessService, T: Send + Sync + 'static>(
-    state: ChatRouterState<S, Svc>,
+pub fn chat_id_router<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+>(
+    state: ChatRouterState<S, Svc, Auth>,
 ) -> Router<T> {
     Router::new()
         .route(
             "/{chat_id}",
-            get(get_chat_handler::<S, Svc>)
-                .delete(delete_chat_handler::<S, Svc>)
-                .patch(patch_chat_handler::<S, Svc>),
+            get(get_chat_handler::<S, Svc, Auth>)
+                .delete(delete_chat_handler::<S, Svc, Auth>)
+                .patch(patch_chat_handler::<S, Svc, Auth>),
         )
         .route(
             "/{chat_id}/permanent",
-            delete(permanently_delete_chat_handler::<S, Svc>),
+            delete(permanently_delete_chat_handler::<S, Svc, Auth>),
         )
-        .route("/{chat_id}/copy", post(copy_chat_handler::<S, Svc>))
+        .route("/{chat_id}/copy", post(copy_chat_handler::<S, Svc, Auth>))
         .route(
             "/{chat_id}/revert_delete",
-            put(revert_delete_handler::<S, Svc>),
+            put(revert_delete_handler::<S, Svc, Auth>),
         )
         .route(
             "/{chat_id}/permissions",
-            get(get_chat_permissions_handler::<S, Svc>),
+            get(get_chat_permissions_handler::<S, Svc, Auth>),
         )
         .route(
             "/{chat_id}/tool/update",
-            post(update_tool_call_handler::<S, Svc>),
+            post(update_tool_call_handler::<S, Svc, Auth>),
         )
         .route(
             "/{chat_id}/tool/response/update",
-            post(update_tool_response_handler::<S, Svc>),
+            post(update_tool_response_handler::<S, Svc, Auth>),
         )
-        .route("/{chat_id}/tool/call", post(call_tool_handler::<S, Svc>))
+        .route(
+            "/{chat_id}/tool/call",
+            post(call_tool_handler::<S, Svc, Auth>),
+        )
         .route(
             "/{chat_id}/tool/reject",
-            post(reject_tool_call_handler::<S, Svc>),
+            post(reject_tool_call_handler::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -132,11 +163,13 @@ pub struct CreateChatRequest {
 )]
 /// Create a new chat.
 #[tracing::instrument(skip(state, user, req), fields(user_id = %user.macro_user_id), err(Debug))]
-pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    State(state): State<ChatRouterState<S, Svc>>,
-    user: MacroUserExtractor,
-    // 402 on no perms
-    _model_access: ChatModelAccess,
+pub async fn create_chat_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>> {
     let id = state
@@ -168,9 +201,13 @@ pub async fn create_chat_handler<S: ChatService, Svc: EntityAccessService>(
 )]
 /// Get a chat by ID with messages and web citations.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn get_chat_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
 ) -> Result<Json<GetChatResponse>> {
     let response = state.inner.get_chat(access.entity_access_receipt).await?;
@@ -192,9 +229,13 @@ pub async fn get_chat_handler<S: ChatService, Svc: EntityAccessService>(
 )]
 /// Soft-delete a chat.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn delete_chat_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
 ) -> Result<StatusCode> {
     state.inner.delete(access.entity_access_receipt).await?;
@@ -215,9 +256,13 @@ pub async fn delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
 )]
 /// Permanently delete a chat and all associated data.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn permanently_delete_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn permanently_delete_chat_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
 ) -> Result<StatusCode> {
     state
@@ -254,9 +299,13 @@ pub struct PatchChatRequest {
 )]
 /// Patch a chat's name, project, or share permissions.
 #[tracing::instrument(skip(state, access, req), fields(chat_id = %chat_id), err(Debug))]
-pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn patch_chat_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
     Json(req): Json<PatchChatRequest>,
 ) -> Result<StatusCode> {
@@ -290,9 +339,13 @@ pub async fn patch_chat_handler<S: ChatService, Svc: EntityAccessService>(
 )]
 /// Copy a chat and its messages into a new chat.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn copy_chat_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<ViewAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn copy_chat_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
 ) -> Result<Json<StringIDResponse>> {
     let id = state.inner.copy_chat(access.entity_access_receipt).await?;
@@ -313,9 +366,13 @@ pub async fn copy_chat_handler<S: ChatService, Svc: EntityAccessService>(
 )]
 /// Revert a soft-deleted chat.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn revert_delete_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn revert_delete_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
 ) -> Result<StatusCode> {
     state
@@ -347,9 +404,13 @@ pub struct GetChatPermissionsResponse {
 )]
 /// Get the share permissions for a chat.
 #[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn get_chat_permissions_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<EditAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn get_chat_permissions_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
 ) -> Result<Json<GetChatPermissionsResponse>> {
     let permissions = state
@@ -434,9 +495,13 @@ pub struct RejectToolCallRequest {
     fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
     err(Debug)
 )]
-pub async fn update_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn update_tool_call_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
     Json(req): Json<UpdateToolCallRequest>,
 ) -> Result<StatusCode> {
@@ -471,9 +536,13 @@ pub async fn update_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
     fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
     err(Debug)
 )]
-pub async fn update_tool_response_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn update_tool_response_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
     Json(req): Json<UpdateToolResponseRequest>,
 ) -> Result<StatusCode> {
@@ -509,9 +578,13 @@ pub async fn update_tool_response_handler<S: ChatService, Svc: EntityAccessServi
     fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
     err(Debug)
 )]
-pub async fn call_tool_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn call_tool_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
     Json(req): Json<CallToolRequest>,
 ) -> Result<Json<CallToolResponse>> {
@@ -546,9 +619,13 @@ pub async fn call_tool_handler<S: ChatService, Svc: EntityAccessService>(
     fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
     err(Debug)
 )]
-pub async fn reject_tool_call_handler<S: ChatService, Svc: EntityAccessService>(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<ChatRouterState<S, Svc>>,
+pub async fn reject_tool_call_handler<
+    S: ChatService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<ChatRouterState<S, Svc, Auth>>,
     Path(chat_id): Path<String>,
     Json(req): Json<RejectToolCallRequest>,
 ) -> Result<StatusCode> {
