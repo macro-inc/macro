@@ -174,7 +174,9 @@ export const I_TABLE_NODE: ElementTransformer = {
 				const rowContent = rowMatch[2];
 				const rowNode = new TableRowNode();
 
-				const height = A_POSITIVE.catch(undefined).parse(rowAttrs.height);
+				const height = A_POSITIVE.optional()
+					.catch(undefined)
+					.parse(rowAttrs.height);
 				if (height) {
 					rowNode.setHeight(height);
 				}
@@ -186,11 +188,15 @@ export const I_TABLE_NODE: ElementTransformer = {
 					const cellContent = cellMatch[2];
 					const cellNode = new TableCellNode();
 
-					const colSpan = A_SPAN.catch(undefined).parse(cellAttrs.colspan);
+					const colSpan = A_SPAN.optional()
+						.catch(undefined)
+						.parse(cellAttrs.colspan);
 					if (colSpan) {
 						cellNode.setColSpan(colSpan);
 					}
-					const rowSpan = A_SPAN.catch(undefined).parse(cellAttrs.rowspan);
+					const rowSpan = A_SPAN.optional()
+						.catch(undefined)
+						.parse(cellAttrs.rowspan);
 					if (rowSpan) {
 						cellNode.setRowSpan(rowSpan);
 					}

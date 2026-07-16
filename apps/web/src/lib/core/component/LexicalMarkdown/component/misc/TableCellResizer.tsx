@@ -16,13 +16,13 @@ import { getDOMCellFromTarget } from '@lexical/table';
 import { calculateZoomLevel } from '@lexical/utils';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { registerEditorWidthObserver } from '../../plugins/shared/utils';
-import { createLayoutTick } from './createLayoutTick';
 import {
   $applyResizeDrag,
   $captureResizeDrag,
   $revertResizeDrag,
   type ResizeEdge,
 } from '../../plugins/tables/tableCellResize';
+import { createLayoutTick } from './createLayoutTick';
 
 // Width of the pointer-device hit strip along a cell edge.
 const HIT_ZONE_PX = 9;
