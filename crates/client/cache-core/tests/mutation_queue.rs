@@ -19,10 +19,16 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         source
     );
     assert_eq!(
-        decode_optimistic_source(r#"{"version":7,"rename":{"name":"legacy"}}"#)
-            .unwrap()
-            .mutation_data,
-        json!({"version": 7, "rename": {"name": "legacy"}})
+        decode_optimistic_source(
+            r#"{"version":2,"mutationData":{"name":"collision"},"rename":{"name":"legacy"}}"#
+        )
+        .unwrap()
+        .mutation_data,
+        json!({
+            "version": 2,
+            "mutationData": {"name": "collision"},
+            "rename": {"name": "legacy"}
+        })
     );
 }
 

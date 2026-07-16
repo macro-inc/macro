@@ -31,11 +31,12 @@ function host(args?: {
   initialContainsItem?: boolean;
   miss?: boolean;
   onInspect?: () => void;
+  sourceKey?: string;
 }): CacheHost {
   const value = (containsItem: boolean) => ({
     bins: [
       {
-        key: 'in-progress',
+        key: args?.sourceKey ?? 'in-progress',
         totalCount: 1,
         nextCursor: null,
         items: containsItem ? [{ id: 'task-1' }] : [],
@@ -176,6 +177,20 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     expect(result.updates.map((patch) => patch.operation.kind)).toEqual([
       'remove',
       'prependUnique',
+    ]);
+  });
+
+  it('prepends an addition-only multi-value change from an existing group', async () => {
+    const result = await buildOptimisticGroupedPropertyUpdates({
+      host: host({ sourceKey: 'shared' }),
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: ['shared'],
+      newGroupKeys: ['shared', 'completed'],
+    });
+
+    expect(result.updates.map((patch) => patch.operation)).toEqual([
+      { kind: 'prependUnique', entityKey: 'GraphqlSoupItem:task-1' },
     ]);
   });
 

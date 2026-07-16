@@ -14,6 +14,9 @@ use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use thiserror::Error;
 
+#[cfg(test)]
+mod test;
+
 /// Maximum field-only path depth accepted by query inspection.
 pub const MAX_INSPECTION_PATH_DEPTH: usize = 16;
 /// Maximum cached argument variants returned by one inspection.
@@ -204,12 +207,9 @@ fn resolve_fields_owner(
     path: &[String],
 ) -> Result<OwnerResolution, QueryInspectionError> {
     let response_key = &path[0];
-    let field = selected_field(selections, concrete, response_key).ok_or_else(|| {
-        QueryInspectionError::UnselectedField {
-            type_name: concrete.to_string(),
-            field: response_key.clone(),
-        }
-    })?;
+    let Some(field) = selected_field(selections, concrete, response_key) else {
+        return Ok(OwnerResolution::Absent);
+    };
     if path.len() == 1 {
         return Ok(OwnerResolution::Owner(InspectionOwner {
             fields: fields.clone(),

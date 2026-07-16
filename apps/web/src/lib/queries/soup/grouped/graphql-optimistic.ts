@@ -127,8 +127,9 @@ export async function buildOptimisticGroupedPropertyUpdates(
   const updates: OptimisticUpdate[] = [];
   const itemEntityKey = `GraphqlSoupItem:${args.entityId}`;
   for (const pages of views.values()) {
+    const sourceGroupKeys = removed.length > 0 ? removed : args.oldGroupKeys;
     const sourcePages = pages.filter((page) =>
-      removed.some((key) =>
+      sourceGroupKeys.some((key) =>
         page.bins
           .find((bin) => bin.key === key)
           ?.items.some((item) => item.id === args.entityId)
