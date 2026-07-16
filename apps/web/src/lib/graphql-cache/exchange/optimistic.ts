@@ -25,6 +25,7 @@ import type {
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
 declare const selectionType: unique symbol;
+declare const optimisticUpdateType: unique symbol;
 
 type JsonScalar = string | number | boolean | null;
 type Present<T> = Exclude<T, null | undefined>;
@@ -67,8 +68,10 @@ export type LinkDiff =
   | { kind: 'remove'; entityKey: string }
   | { kind: 'prependUnique'; entityKey: string };
 
-/** Serializable optimistic cache update produced by {@link update}. */
-export type OptimisticUpdate = OptimisticLinkPatchWire;
+/** Opaque serializable cache update produced only by {@link update}. */
+export type OptimisticUpdate = OptimisticLinkPatchWire & {
+  readonly [optimisticUpdateType]: true;
+};
 
 export type QueryRevalidation = {
   document: TypedDocumentNode<unknown, AnyVariables>;
@@ -164,7 +167,7 @@ export function update<TItem extends object>(
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
     operation,
-  };
+  } as OptimisticUpdate;
 }
 
 /**
