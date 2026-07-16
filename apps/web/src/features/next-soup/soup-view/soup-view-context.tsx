@@ -74,6 +74,7 @@ import { useReactiveSoupAstItemsQuery } from '@queries/soup/reactive-items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
+import { active } from '@tauri-apps/plugin-notification';
 import {
   type Accessor,
   batch,
@@ -87,6 +88,7 @@ import {
   onCleanup,
   type Setter,
   Suspense,
+  untrack,
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
@@ -226,11 +228,11 @@ export const SoupViewContextProvider: FlowComponent<
 
   const panel = useSplitPanelOrThrow();
 
-  const activeListView = (): ListView | undefined => {
+  const activeListView = createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
     if (content.type !== 'component') return;
     return isListViewID(content.id) ? content.id : undefined;
-  };
+  });
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
