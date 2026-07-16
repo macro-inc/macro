@@ -146,6 +146,7 @@ notification = { path = "../../crates/notification" }
 opensearch_client = { path = "../../crates/opensearch_client" }
 properties = { path = "../../crates/properties" }
 properties_service = { path = "../../crates/properties_service" }
+projects_hex = { path = "../../crates/projects", package = "projects" }
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = [
   "axum",
 ] }

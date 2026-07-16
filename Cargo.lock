@@ -4273,6 +4273,7 @@ dependencies = [
  "notification",
  "opensearch_client",
  "ordered-float",
+ "projects",
  "properties",
  "properties_service",
  "rate_limit",
@@ -11002,6 +11003,54 @@ checksum = "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb"
 dependencies = [
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "projects"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "aws-sdk-s3",
+ "axum",
+ "axum-extra",
+ "base64 0.22.1",
+ "chrono",
+ "dotenvy",
+ "dynamodb_client",
+ "entity_access",
+ "entity_access_db_utils",
+ "entity_access_management",
+ "futures",
+ "hex",
+ "http-body-util",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_env",
+ "macro_env_var",
+ "macro_sha_count_client",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "model",
+ "model-entity",
+ "model-error-response",
+ "models_bulk_upload",
+ "models_permissions",
+ "s3_key",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sqs_client",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "unicode-segmentation",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
