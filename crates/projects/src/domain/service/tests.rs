@@ -7,7 +7,11 @@ use entity_access::domain::models::{
 use entity_access_management::domain::models::EntityAccessManagementError;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::ContentType;
+use model::document::{ContentType, DocumentMetadata, FileType};
+use model::folder::{
+    FileSystemNodeWithIds, FolderItem, S3Destination, UploadFolderRequest,
+    UploadFolderWithIdsResponse,
+};
 use model::item::Item;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::{
@@ -15,6 +19,7 @@ use model::project::{
 };
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
+    UploadExtractFolderRequest, UploadFolderStatus,
 };
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -22,6 +27,7 @@ use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::models::PurgedProjectTree;
 use crate::domain::ports::MockProjectRepo;
 
 #[derive(Clone, Copy)]
@@ -913,4 +919,350 @@ async fn missing_full_project_maps_to_not_found() {
         .unwrap_err();
 
     assert!(matches!(error, ProjectError::NotFound(id) if id == "root"));
+}
+
+#[derive(Clone)]
+struct OrderedSha {
+    events: Arc<Mutex<Vec<&'static str>>>,
+}
+
+impl ShaCounterPort for OrderedSha {
+    async fn decrement_counts(&self, _sha_counts: &[(String, i64)]) -> anyhow::Result<()> {
+        self.events.lock().unwrap().push("sha");
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct OrderedIndexer {
+    events: Arc<Mutex<Vec<&'static str>>>,
+    fail: bool,
+}
+
+impl OrderedIndexer {
+    fn record(&self, event: &'static str) -> anyhow::Result<()> {
+        self.events.lock().unwrap().push(event);
+        if self.fail {
+            anyhow::bail!("index unavailable");
+        }
+        Ok(())
+    }
+}
+
+impl ProjectSearchIndexer for OrderedIndexer {
+    async fn upsert_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
+        self.record("upsert")
+    }
+
+    async fn remove_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
+        self.record("projects")
+    }
+
+    async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
+        self.record("chats")
+    }
+
+    async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
+        self.record("documents")
+    }
+
+    async fn enqueue_document_deletes(
+        &self,
+        _documents: Vec<(String, String)>,
+    ) -> anyhow::Result<()> {
+        self.record("document_deletes")
+    }
+}
+
+#[derive(Clone)]
+struct RecordingUploadUrls {
+    calls: Arc<Mutex<Vec<String>>>,
+    fail_document: bool,
+}
+
+impl ProjectUploadUrlPort for RecordingUploadUrls {
+    async fn put_upload_zip_staging_presigned_url(
+        &self,
+        key: BulkUploadStagingKey,
+        _sha: String,
+    ) -> anyhow::Result<String> {
+        self.calls.lock().unwrap().push(key.to_key());
+        Ok("https://upload.example".to_string())
+    }
+
+    async fn put_document_storage_presigned_url(
+        &self,
+        key: String,
+        _sha: String,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        self.calls.lock().unwrap().push(key);
+        if self.fail_document {
+            anyhow::bail!("sensitive S3 failure");
+        }
+        Ok("https://document.example".to_string())
+    }
+
+    async fn put_docx_upload_presigned_url(
+        &self,
+        _key: String,
+        _sha: String,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        unreachable!()
+    }
+
+    fn document_storage_bucket(&self) -> &str {
+        "documents-bucket"
+    }
+
+    fn docx_upload_bucket(&self) -> &str {
+        "docx-bucket"
+    }
+}
+
+#[derive(Clone)]
+struct RecordingExtract {
+    request_ids: Arc<Mutex<Vec<Uuid>>>,
+}
+
+impl BulkUploadRequestPort for RecordingExtract {
+    async fn create_bulk_upload_request(
+        &self,
+        request_id: Uuid,
+        user_id: &str,
+        name: Option<&str>,
+        parent_id: Option<&str>,
+    ) -> anyhow::Result<BulkUploadRequest> {
+        self.request_ids.lock().unwrap().push(request_id);
+        Ok(BulkUploadRequest {
+            request_id: request_id.to_string(),
+            user_id: user_id.to_string(),
+            key: format!("extract/{request_id}"),
+            status: UploadFolderStatus::Pending,
+            name: name.map(str::to_string),
+            created_at: String::new(),
+            updated_at: String::new(),
+            completed_at: None,
+            error_message: None,
+            root_project_id: None,
+            parent_id: parent_id.map(str::to_string),
+        })
+    }
+
+    async fn get_bulk_upload_document_statuses(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<BulkUploadRequestDocuments> {
+        unreachable!()
+    }
+}
+
+fn upload_document(id: &str, file_type: FileType) -> DocumentMetadata {
+    DocumentMetadata::new_document(
+        id,
+        7,
+        user_id("macro|owner@example.com"),
+        id,
+        Some(file_type),
+        "0123456789abcdef",
+        None,
+        None,
+        None,
+        Some("project"),
+        Some("Project"),
+        None,
+        None,
+        None,
+    )
+}
+
+#[tokio::test]
+async fn permanent_delete_runs_external_work_after_committed_purge() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let repo_events = events.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_purge_deleted_project_tree()
+        .return_once(move |_| {
+            repo_events.lock().unwrap().push("repo");
+            Box::pin(async {
+                Ok(PurgedProjectTree {
+                    project_ids: vec!["project".to_string()],
+                    chat_ids: vec!["chat".to_string()],
+                    documents: vec![("document".to_string(), "owner".to_string())],
+                    bom_shas: vec![("sha".to_string(), 2)],
+                })
+            })
+        });
+    let service = ProjectServiceImpl::new(
+        repo,
+        NullPort,
+        RecordingBulkUpload::default(),
+        OrderedSha {
+            events: events.clone(),
+        },
+        NullPort,
+        OrderedIndexer {
+            events: events.clone(),
+            fail: true,
+        },
+        None,
+    );
+
+    service
+        .permanently_delete_project(mutation_receipt::<OwnerAccessLevel>(
+            Uuid::new_v4(),
+            AccessLevel::Owner,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *events.lock().unwrap(),
+        vec![
+            "repo",
+            "sha",
+            "projects",
+            "chats",
+            "documents",
+            "document_deletes"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn permanent_delete_has_no_external_side_effects_when_purge_fails() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_purge_deleted_project_tree()
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("commit failed")) }));
+    let service = service(repo, RecordingBulkUpload::default());
+
+    let result = service
+        .permanently_delete_project(mutation_receipt::<OwnerAccessLevel>(
+            Uuid::new_v4(),
+            AccessLevel::Owner,
+        ))
+        .await;
+
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn destination_maps_preserve_internal_external_and_docx_behavior() {
+    let urls = RecordingUploadUrls {
+        calls: Arc::new(Mutex::new(Vec::new())),
+        fail_document: false,
+    };
+    let pdf = upload_document("pdf", FileType::Pdf);
+    let docx = upload_document("docx", FileType::Docx);
+
+    let internal = build_destination_map(&urls, &[pdf.clone(), docx.clone()], true)
+        .await
+        .unwrap();
+    assert!(matches!(
+        internal.get("pdf"),
+        Some(S3Destination::Internal(info)) if info.bucket == "documents-bucket"
+    ));
+    assert!(matches!(
+        internal.get("docx"),
+        Some(S3Destination::Internal(info)) if info.bucket == "docx-bucket"
+    ));
+
+    let external = build_destination_map(&urls, &[pdf, docx], false)
+        .await
+        .unwrap();
+    assert!(matches!(
+        external.get("pdf"),
+        Some(S3Destination::External(_))
+    ));
+    assert!(!external.contains_key("docx"));
+}
+
+#[tokio::test]
+async fn upload_folder_compensates_after_destination_failure() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_upload_folder().return_once(|_| {
+        Box::pin(async {
+            Ok(UploadFolderWithIdsResponse {
+                file_system: FileSystemNodeWithIds::Folder {
+                    content: Default::default(),
+                    project_id: "project".to_string(),
+                },
+                project_ids: vec!["project".to_string()],
+                documents: vec![upload_document("document", FileType::Pdf)],
+            })
+        })
+    });
+    repo.expect_delete_uploaded_tree()
+        .withf(|projects, documents| projects == ["project"] && documents == ["document"])
+        .return_once(|_, _| Box::pin(async { Ok(()) }));
+    let service = ProjectServiceImpl::new(
+        repo,
+        RecordingUploadUrls {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            fail_document: true,
+        },
+        RecordingBulkUpload::default(),
+        NullPort,
+        NullPort,
+        NullPort,
+        None,
+    );
+
+    let result = service
+        .upload_folder(
+            user_id("macro|owner@example.com"),
+            false,
+            UploadFolderRequest {
+                content: vec![FolderItem {
+                    name: "document".to_string(),
+                    full_name: "document.pdf".to_string(),
+                    file_type: Some(FileType::Pdf),
+                    relative_path: "Upload".to_string(),
+                    sha: "0123456789abcdef".to_string(),
+                }],
+                root_folder_name: "Upload".to_string(),
+                upload_request_id: "request".to_string(),
+                parent_id: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::Internal(_))));
+}
+
+#[tokio::test]
+async fn upload_extract_uses_fixed_request_id() {
+    let fixed_id = Uuid::new_v4();
+    let extract = RecordingExtract {
+        request_ids: Arc::new(Mutex::new(Vec::new())),
+    };
+    let request_ids = extract.request_ids.clone();
+    let service = ProjectServiceImpl::new(
+        MockProjectRepo::new(),
+        RecordingUploadUrls {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            fail_document: false,
+        },
+        extract,
+        NullPort,
+        NullPort,
+        NullPort,
+        Some(fixed_id),
+    );
+
+    let response = service
+        .create_upload_extract_request(
+            user_id("macro|owner@example.com"),
+            UploadExtractFolderRequest {
+                sha: "0123456789abcdef".to_string(),
+                name: Some("Upload".to_string()),
+                parent_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.request_id, fixed_id.to_string());
+    assert_eq!(*request_ids.lock().unwrap(), vec![fixed_id]);
 }

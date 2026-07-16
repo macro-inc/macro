@@ -10,7 +10,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::ContentType;
-use model::folder::UploadFolderWithIdsResponse;
+use model::folder::{UploadFolderRequest, UploadFolderResponseData, UploadFolderWithIdsResponse};
 use model::item::{Item, ItemWithUserAccessLevel};
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
@@ -18,7 +18,10 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
     ProjectWithUploadRequest,
 };
-use models_bulk_upload::{BulkUploadRequest, BulkUploadRequestDocuments};
+use models_bulk_upload::{
+    BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
+    UploadExtractFolderResponseData,
+};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use s3_key::BulkUploadStagingKey;
@@ -297,12 +300,39 @@ pub trait ProjectService: Send + Sync + 'static {
         actor_user_id: String,
     ) -> impl Future<Output = Result<SoftDeleteResult, ProjectError>> + Send;
 
+    /// Permanently purge a soft-deleted project subtree.
+    fn permanently_delete_project(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<(), ProjectError>> + Send;
+
     /// Restore a soft-deleted project subtree.
     fn revert_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project: BasicProject,
     ) -> impl Future<Output = Result<(), ProjectError>> + Send;
+
+    /// Create a pending project tree and its upload destinations.
+    fn upload_folder(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        internal: bool,
+        args: UploadFolderRequest,
+    ) -> impl Future<Output = Result<UploadFolderResponseData, ProjectError>> + Send;
+
+    /// Create a tracked request for extracting an uploaded archive.
+    fn create_upload_extract_request(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        args: UploadExtractFolderRequest,
+    ) -> impl Future<Output = Result<UploadExtractFolderResponseData, ProjectError>> + Send;
+
+    /// Finalize the uploaded state of a project tree.
+    fn mark_projects_uploaded(
+        &self,
+        root_project_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, ProjectError>> + Send;
 
     /// Get project previews without applying per-project access filtering.
     fn get_batch_preview(

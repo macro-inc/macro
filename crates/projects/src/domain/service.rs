@@ -9,6 +9,7 @@ use entity_access::domain::models::{
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
+use model::folder::{UploadFolderRequest, UploadFolderResponseData};
 use model::item::{Item, ItemWithUserAccessLevel};
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
@@ -16,16 +17,21 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
     WithProjectId,
 };
+use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
-use super::models::{CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult};
+use super::models::{
+    CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult, UploadFolderRepoArgs,
+};
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
     ShaCounterPort,
 };
+use super::upload::{build_destination_map, build_root_folder};
 
 #[cfg(test)]
 mod tests;
@@ -454,6 +460,60 @@ where
         Ok(deleted)
     }
 
+    async fn permanently_delete_project(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ProjectError> {
+        let purged = self
+            .repo
+            .purge_deleted_project_tree(&receipt.entity().entity_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to permanently delete project"))?;
+
+        if !purged.bom_shas.is_empty() {
+            self.sha_counter
+                .decrement_counts(&purged.bom_shas)
+                .await
+                .map_err(|error| internal_error(error, "unable to update document references"))?;
+        }
+
+        if !purged.project_ids.is_empty() {
+            let _ = self
+                .search_indexer
+                .remove_projects(purged.project_ids)
+                .await
+                .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged projects for search"));
+        }
+        if !purged.chat_ids.is_empty() {
+            let _ = self
+                .search_indexer
+                .remove_chats(purged.chat_ids)
+                .await
+                .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged chats for search"));
+        }
+        if !purged.documents.is_empty() {
+            let document_ids = purged
+                .documents
+                .iter()
+                .map(|(document_id, _)| document_id.clone())
+                .collect();
+            let _ = self
+                .search_indexer
+                .remove_documents(document_ids)
+                .await
+                .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged documents for search"));
+            let _ = self
+                .search_indexer
+                .enqueue_document_deletes(purged.documents)
+                .await
+                .inspect_err(
+                    |error| tracing::error!(error = ?error, "unable to enqueue document deletion"),
+                );
+        }
+
+        Ok(())
+    }
+
     async fn revert_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -475,6 +535,111 @@ where
                 });
         }
         Ok(())
+    }
+
+    async fn upload_folder(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        internal: bool,
+        args: UploadFolderRequest,
+    ) -> Result<UploadFolderResponseData, ProjectError> {
+        let root_folder = build_root_folder(&args.root_folder_name, args.content)
+            .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
+        let uploaded = self
+            .repo
+            .upload_folder(UploadFolderRepoArgs {
+                user_id: actor,
+                share_permission: SharePermissionV2::new_project_share_permission(),
+                root_folder,
+                root_folder_name: args.root_folder_name,
+                upload_request_id: args.upload_request_id,
+                parent_id: args.parent_id,
+            })
+            .await
+            .map_err(|error| internal_error(error, "unable to upload folder"))?;
+
+        let document_ids: Vec<String> = uploaded
+            .documents
+            .iter()
+            .map(|document| document.document_id.clone())
+            .collect();
+        let destination_map =
+            match build_destination_map(&self.upload_url_service, &uploaded.documents, internal)
+                .await
+            {
+                Ok(destination_map) => destination_map,
+                Err(error) => {
+                    tracing::error!(error = ?error, "unable to build upload destinations");
+                    let _ = self
+                        .repo
+                        .delete_uploaded_tree(&uploaded.project_ids, &document_ids)
+                        .await
+                        .inspect_err(|compensation_error| {
+                            tracing::error!(
+                                error = ?compensation_error,
+                                "unable to compensate failed folder upload"
+                            );
+                        });
+                    return Err(ProjectError::Internal(anyhow::anyhow!(
+                        "unable to prepare folder upload"
+                    )));
+                }
+            };
+
+        if !uploaded.project_ids.is_empty() {
+            let _ = self
+                .search_indexer
+                .upsert_projects(uploaded.project_ids)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, "unable to enqueue uploaded projects for search");
+                });
+        }
+
+        Ok(UploadFolderResponseData {
+            file_system: uploaded.file_system,
+            destination_map,
+        })
+    }
+
+    async fn create_upload_extract_request(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        args: UploadExtractFolderRequest,
+    ) -> Result<UploadExtractFolderResponseData, ProjectError> {
+        let request_id = self.fixed_upload_request_id.unwrap_or_else(Uuid::new_v4);
+        let request = self
+            .bulk_upload_service
+            .create_bulk_upload_request(
+                request_id,
+                actor.as_ref(),
+                args.name.as_deref(),
+                args.parent_id.as_deref(),
+            )
+            .await
+            .map_err(|error| internal_error(error, "unable to create upload request"))?;
+        let key = BulkUploadStagingKey::from_s3_key(&request.key)
+            .map_err(|error| internal_error(error, "unable to create upload request"))?;
+        let presigned_url = self
+            .upload_url_service
+            .put_upload_zip_staging_presigned_url(key, args.sha)
+            .await
+            .map_err(|error| internal_error(error, "unable to create upload URL"))?;
+
+        Ok(UploadExtractFolderResponseData {
+            request_id: request_id.to_string(),
+            presigned_url,
+        })
+    }
+
+    async fn mark_projects_uploaded(
+        &self,
+        root_project_id: &str,
+    ) -> Result<Vec<String>, ProjectError> {
+        self.repo
+            .mark_projects_uploaded(root_project_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to mark projects uploaded"))
     }
 
     async fn get_batch_preview(

@@ -19,6 +19,7 @@ use macro_authorization::{
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{
+    folder::{UploadFolderRequest, UploadFolderResponseData},
     item::ItemWithUserAccessLevel,
     project::{
         BasicProject, PendingProject, Project, ProjectPreview,
@@ -27,6 +28,7 @@ use model::{
     },
 };
 use model_user::UserContext;
+use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::{
     SharePermissionV2, access_level::AccessLevel as ShareAccessLevel,
 };
@@ -165,6 +167,13 @@ impl ProjectService for FakeProjectService {
         })
     }
 
+    async fn permanently_delete_project(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
+    ) -> Result<(), ProjectError> {
+        panic!("permanent delete is not used by these tests")
+    }
+
     async fn revert_delete_project(
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
@@ -175,6 +184,30 @@ impl ProjectService for FakeProjectService {
             .expect("mutation lock poisoned")
             .push("revert");
         Ok(())
+    }
+
+    async fn upload_folder(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _internal: bool,
+        _args: UploadFolderRequest,
+    ) -> Result<UploadFolderResponseData, ProjectError> {
+        panic!("folder upload is not used by these tests")
+    }
+
+    async fn create_upload_extract_request(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _args: UploadExtractFolderRequest,
+    ) -> Result<UploadExtractFolderResponseData, ProjectError> {
+        panic!("upload extraction is not used by these tests")
+    }
+
+    async fn mark_projects_uploaded(
+        &self,
+        _root_project_id: &str,
+    ) -> Result<Vec<String>, ProjectError> {
+        panic!("mark uploaded is not used by these tests")
     }
 
     async fn get_batch_preview(
