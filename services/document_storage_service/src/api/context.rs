@@ -206,16 +206,11 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                 &user_id,
                 None,
                 entity_id,
-                properties::access_entity_type(models_properties::EntityType::Task),
+                model_entity::EntityType::Document,
             )
             .await?;
-        let access = properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            models_properties::EntityType::Task,
-        )?;
-
         self.properties
-            .set_entity_property(&access, property_definition_id, value)
+            .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
             .map(|_| ())
             .map_err(Into::into)

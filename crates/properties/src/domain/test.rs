@@ -1,14 +1,17 @@
 //! Unit tests for PropertiesServiceImpl using mockall-generated repo.
 
 use super::service_impl::PropertiesServiceImpl;
-use crate::domain::model::{EditReceipt, PropertiesAccessReceipt, ViewReceipt};
+use crate::domain::model::{
+    EditReceipt, PropertyAccessReceiptExt, ViewReceipt, canonical_entity_type,
+};
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
     service::PropertiesService,
 };
 use anyhow::anyhow;
+use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    BotId, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
+    BotId, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{
@@ -18,6 +21,7 @@ use models_properties::{
         property_value::PropertyValue,
     },
 };
+use std::collections::HashMap;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -42,19 +46,19 @@ fn caller_user_id() -> MacroUserIdStr<'static> {
 
 /// An edit receipt for the test caller, minted without an access check.
 fn edit_receipt(entity_id: &str, entity_type: EntityType) -> EditReceipt {
-    PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+    EditReceipt::dangerously_assert_authenticated_user(
         caller_user_id(),
         entity_id,
-        entity_type,
+        canonical_entity_type(entity_type),
     )
 }
 
 /// A view receipt for the test caller, minted without an access check.
 fn view_receipt(entity_id: &str, entity_type: EntityType) -> ViewReceipt {
-    PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+    ViewReceipt::dangerously_assert_authenticated_user(
         caller_user_id(),
         entity_id,
-        entity_type,
+        canonical_entity_type(entity_type),
     )
 }
 
@@ -66,9 +70,7 @@ fn bot_receipt_has_no_authenticated_user_identity() {
         "document-1",
         entity_access::domain::models::EntityType::Document,
     );
-    let access =
-        PropertiesAccessReceipt::try_from_entity_access_receipt(receipt, EntityType::Document)
-            .unwrap();
+    let access = receipt;
 
     assert!(access.authenticated_user().is_none());
     assert!(matches!(access.auth(), EntityAccessAuth::Bot(id) if id.bot_id() == bot_id));
@@ -80,7 +82,7 @@ fn create_mock_permission_service() -> MockPermissionService {
     perm_checker
         .expect_mint_edit_receipt()
         .returning(|_, entity_id, entity_type| {
-            let receipt = PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+            let receipt = EditReceipt::dangerously_assert_authenticated_user(
                 caller_user_id(),
                 entity_id,
                 entity_type,
@@ -1188,4 +1190,185 @@ async fn test_remove_entity_property_option_happy_path() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn canonical_document_task_write_uses_task_storage_type() {
+    let task_id = Uuid::from_u128(0xA11CE);
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_document_sub_types()
+        .withf(move |ids| ids == [task_id])
+        .returning(move |_| {
+            Box::pin(async move { Ok(HashMap::from([(task_id, DocumentSubType::Task)])) })
+        });
+    repo.expect_get_property_definition().returning(|_| {
+        Box::pin(async {
+            Ok(Some(PropertyDefinition {
+                id: SystemPropertyKey::STATUS_UUID,
+                owner: models_properties::PropertyOwner::System,
+                display_name: "Status".to_string(),
+                data_type: models_properties::DataType::SelectString,
+                is_multi_select: false,
+                specific_entity_type: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                is_system: true,
+                is_metadata: false,
+            }))
+        })
+    });
+    repo.expect_count_valid_property_options()
+        .returning(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_upsert_entity_property()
+        .withf(move |entity_id, entity_type, property_id, _| {
+            entity_id == task_id.to_string()
+                && *entity_type == EntityType::Task
+                && *property_id == SystemPropertyKey::STATUS_UUID
+        })
+        .returning(|entity_id, entity_type, property_definition_id, _| {
+            let property = entity_property(entity_id, entity_type, property_definition_id);
+            Box::pin(async move { Ok(property) })
+        });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+    let receipt = EditReceipt::dangerously_assert_authenticated_user(
+        caller_user_id(),
+        &task_id.to_string(),
+        AccessEntityType::Document,
+    );
+
+    let property = service
+        .set_entity_property(
+            &receipt,
+            SystemPropertyKey::STATUS_UUID,
+            Some(
+                models_properties::api::requests::SetPropertyValue::SelectOption {
+                    option_id: StatusOption::COMPLETED_UUID,
+                },
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(property.property.entity_type, EntityType::Task);
+}
+
+#[tokio::test]
+async fn canonical_document_task_read_uses_task_storage_type() {
+    let task_id = Uuid::from_u128(0xBEEF);
+    let property_id = Uuid::from_u128(0xCAFE);
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_document_sub_types()
+        .withf(move |ids| ids == [task_id])
+        .returning(move |_| {
+            Box::pin(async move { Ok(HashMap::from([(task_id, DocumentSubType::Task)])) })
+        });
+    repo.expect_get_entity_property_value()
+        .withf(move |entity_id, entity_type, id| {
+            entity_id == task_id.to_string()
+                && *entity_type == EntityType::Task
+                && *id == property_id
+        })
+        .returning(|_, _, _| Box::pin(async { Ok(Some(PropertyValue::Str("value".into()))) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+    let receipt = ViewReceipt::dangerously_assert_authenticated_user(
+        caller_user_id(),
+        &task_id.to_string(),
+        AccessEntityType::Document,
+    );
+
+    assert_eq!(
+        service.get_property_value(&receipt, property_id).await.unwrap(),
+        Some(PropertyValue::Str("value".into()))
+    );
+}
+
+#[tokio::test]
+async fn mixed_document_bulk_read_batches_subtypes_and_returns_canonical_keys() {
+    let task_id = Uuid::from_u128(0x1001);
+    let snippet_id = Uuid::from_u128(0x1002);
+    let mut repo = MockPropertiesRepo::new();
+
+    repo.expect_get_document_sub_types()
+        .times(1)
+        .withf(move |ids| {
+            ids.len() == 2 && ids.contains(&task_id) && ids.contains(&snippet_id)
+        })
+        .returning(move |_| {
+            Box::pin(async move {
+                Ok(HashMap::from([
+                    (task_id, DocumentSubType::Task),
+                    (snippet_id, DocumentSubType::Snippet),
+                ]))
+            })
+        });
+    repo.expect_get_entity_properties_batch()
+        .withf(move |references| {
+            references.len() == 2
+                && references.iter().any(|reference| {
+                    reference.entity_id == task_id.to_string()
+                        && reference.entity_type == EntityType::Task
+                })
+                && references.iter().any(|reference| {
+                    reference.entity_id == snippet_id.to_string()
+                        && reference.entity_type == EntityType::Document
+                })
+        })
+        .returning(|references| {
+            Box::pin(async move {
+                Ok(references
+                    .iter()
+                    .map(|reference| {
+                        (
+                            crate::domain::model::EntityPropertiesKey::from(reference),
+                            Vec::new(),
+                        )
+                    })
+                    .collect())
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+    let receipts = [
+        ViewReceipt::dangerously_assert_authenticated_user(
+            caller_user_id(),
+            &task_id.to_string(),
+            AccessEntityType::Document,
+        ),
+        ViewReceipt::dangerously_assert_authenticated_user(
+            caller_user_id(),
+            &snippet_id.to_string(),
+            AccessEntityType::Document,
+        ),
+    ];
+
+    let result = service
+        .get_bulk_entity_properties(&receipts, Vec::new())
+        .await
+        .unwrap();
+
+    assert!(result.keys().all(|key| key.entity_type == AccessEntityType::Document));
+    assert!(result.contains_key(&crate::domain::model::PropertyTargetKey {
+        entity_id: task_id.to_string(),
+        entity_type: AccessEntityType::Document,
+    }));
+    assert!(result.contains_key(&crate::domain::model::PropertyTargetKey {
+        entity_id: snippet_id.to_string(),
+        entity_type: AccessEntityType::Document,
+    }));
 }

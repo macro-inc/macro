@@ -11,7 +11,7 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, TaskAssignedNotification};
+use crate::domain::model::{EditReceipt, PropertyAccessReceiptExt, TaskAssignedNotification};
 use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 use crate::domain::service_impl::PropertiesServiceImpl;
 
@@ -41,7 +41,11 @@ where
         let permission_service = self.permission_service()?;
         for task_id in referenced_task_ids {
             permission_service
-                .mint_edit_receipt(user_id, &task_id.to_string(), EntityType::Task)
+                .mint_edit_receipt(
+                    user_id,
+                    &task_id.to_string(),
+                    entity_access::domain::models::EntityType::Document,
+                )
                 .await
                 .map_err(|_| PropertiesErr::PermissionDenied)?;
         }
