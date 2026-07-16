@@ -3181,6 +3181,7 @@ dependencies = [
  "http-body-util",
  "lambda_client",
  "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_config",
  "macro_cors",

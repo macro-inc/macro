@@ -11,6 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures::StreamExt;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::{
     convert::ConvertQueueMessage,
     document::{BomPart, BomPartWithContent, DocumentMetadata},
@@ -19,7 +20,7 @@ use model::{
 };
 use s3_key::{build_docx_to_pdf_converted_document_key, build_temp_docx_key};
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 /// Backfill docx all
 #[utoipa::path(
@@ -39,9 +40,10 @@ use crate::api::context::ApiContext;
             (status = 500, description = "internal server error", body = ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Query(pagination): extract::Query<PaginationQueryParams>,
 ) -> Result<Response, Response> {
     let pagination = Pagination::from_query_params(pagination);
