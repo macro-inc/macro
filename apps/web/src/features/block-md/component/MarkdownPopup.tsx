@@ -5,6 +5,7 @@ import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
+import { INLINE_AI_EDITING } from '@core/constant/featureFlags';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
@@ -534,7 +535,7 @@ export function MarkdownPopup(props: {
           </Button>
         </div>
 
-        <Show when={canEdit()}>
+        <Show when={INLINE_AI_EDITING && canEdit()}>
           <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
             <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
             <textarea

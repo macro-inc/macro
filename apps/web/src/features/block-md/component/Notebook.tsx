@@ -16,9 +16,9 @@ import {
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
-  ENABLE_DOCUMENT_AI_EDIT_BAR,
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
+  INLINE_AI_EDITING,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -370,7 +370,7 @@ export function Notebook(props: {
           </div>
           <Show when={!history.isOpen()}>
             <Show
-              when={ENABLE_DOCUMENT_AI_EDIT_BAR && canEdit() && !isMobile()}
+              when={INLINE_AI_EDITING && canEdit() && !isMobile()}
             >
               <div class="mb-2">
                 <DocumentAiEditBar documentId={props.documentId} />

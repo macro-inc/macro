@@ -318,9 +318,10 @@ export const ENABLE_UNIFIED_LIST_AI_INPUT = resolveFeatureFlag(
   true
 );
 
-// Floating cmd+j AI edit bar in the document view
-export const ENABLE_DOCUMENT_AI_EDIT_BAR = resolveFeatureFlag(
-  'ENABLE_DOCUMENT_AI_EDIT_BAR',
+// Inline AI editing: the floating document AI edit pill and the AI editing
+// tool in the selection formatting menu
+export const INLINE_AI_EDITING = resolveFeatureFlag(
+  'INLINE_AI_EDITING',
   true
 );
 
