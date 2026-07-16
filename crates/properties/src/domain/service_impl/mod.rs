@@ -1067,6 +1067,9 @@ where
         // granted access to each canonical entity.
         let mut result = HashMap::with_capacity(subjects.len());
         for (subject, receipt) in subjects.into_iter().zip(access) {
+            if result.contains_key(&subject.canonical_key) {
+                continue;
+            }
             let mut properties = internal_result
                 .remove(&subject.storage_key())
                 .unwrap_or_default();
