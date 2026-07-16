@@ -1,17 +1,22 @@
 use std::sync::{Arc, Mutex};
 
 use entity_access::domain::models::{
-    Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
+    EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::models::EntityAccessManagementError;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::ContentType;
 use model::item::Item;
-use model::project::{Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest};
+use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
+use model::project::{
+    BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
+};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
 };
+use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
@@ -118,6 +123,122 @@ impl ProjectSearchIndexer for NullPort {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum EamCall {
+    Add(Uuid, Uuid),
+    Move(Uuid, Option<Uuid>, Option<Uuid>),
+}
+
+#[derive(Clone, Default)]
+struct RecordingEam {
+    calls: Arc<Mutex<Vec<EamCall>>>,
+}
+
+impl EntityAccessManagementService for RecordingEam {
+    async fn add_entity_to_project(
+        &self,
+        entity_id: &Uuid,
+        _entity_type: EntityType,
+        project_id: &Uuid,
+    ) -> Result<(), EntityAccessManagementError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(EamCall::Add(*entity_id, *project_id));
+        Ok(())
+    }
+
+    async fn remove_entity_from_project(
+        &self,
+        _entity_id: &Uuid,
+        _entity_type: EntityType,
+        _old_project_id: &Uuid,
+    ) -> Result<(), EntityAccessManagementError> {
+        unreachable!()
+    }
+
+    async fn move_project(
+        &self,
+        project_id: &Uuid,
+        old_project_id: Option<&Uuid>,
+        new_project_id: Option<&Uuid>,
+    ) -> Result<(), EntityAccessManagementError> {
+        self.calls.lock().unwrap().push(EamCall::Move(
+            *project_id,
+            old_project_id.copied(),
+            new_project_id.copied(),
+        ));
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum IndexCall {
+    Upsert(Vec<String>),
+    Remove(Vec<String>),
+}
+
+#[derive(Clone, Default)]
+struct RecordingIndexer {
+    calls: Arc<Mutex<Vec<IndexCall>>>,
+}
+
+impl ProjectSearchIndexer for RecordingIndexer {
+    async fn upsert_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(IndexCall::Upsert(project_ids));
+        Ok(())
+    }
+
+    async fn remove_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(IndexCall::Remove(project_ids));
+        Ok(())
+    }
+
+    async fn remove_chats(&self, _chat_ids: Vec<String>) -> anyhow::Result<()> {
+        unreachable!()
+    }
+
+    async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
+        unreachable!()
+    }
+
+    async fn enqueue_document_deletes(
+        &self,
+        _documents: Vec<(String, String)>,
+    ) -> anyhow::Result<()> {
+        unreachable!()
+    }
+}
+
+fn mutation_service(
+    repo: MockProjectRepo,
+    eam: RecordingEam,
+    indexer: RecordingIndexer,
+) -> ProjectServiceImpl<
+    MockProjectRepo,
+    NullPort,
+    RecordingBulkUpload,
+    NullPort,
+    RecordingEam,
+    RecordingIndexer,
+> {
+    ProjectServiceImpl::new(
+        repo,
+        NullPort,
+        RecordingBulkUpload::default(),
+        NullPort,
+        eam,
+        indexer,
+        None,
+    )
+}
+
 #[derive(Clone, Default)]
 struct RecordingBulkUpload {
     calls: Arc<Mutex<Vec<String>>>,
@@ -200,6 +321,50 @@ fn receipt(
         EntityPermission::AccessLevel { access_level },
     )
     .unwrap()
+}
+
+fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
+    BasicProject {
+        id: id.to_string(),
+        user_id: user_id("macro|owner@example.com"),
+        parent_id: parent_id.map(|id| id.to_string()),
+        name: "Project".to_string(),
+        deleted_at: deleted.then(chrono::Utc::now),
+    }
+}
+
+fn mutation_receipt<T>(project_id: Uuid, access_level: AccessLevel) -> EntityAccessReceipt<T>
+where
+    T: entity_access::domain::models::RequiredPermission,
+{
+    EntityAccessReceipt::try_new(
+        EntityAccessAuth::Authenticated(user_id("macro|owner@example.com")),
+        Entity {
+            entity_id: project_id.to_string(),
+            entity_type: EntityType::Project,
+        },
+        EntityPermission::AccessLevel { access_level },
+    )
+    .unwrap()
+}
+
+fn patch_request(
+    parent_id: Option<String>,
+    share_permission: Option<UpdateSharePermissionRequestV2>,
+) -> PatchProjectRequestV2 {
+    PatchProjectRequestV2 {
+        name: None,
+        project_parent_id: parent_id,
+        share_permission,
+    }
+}
+
+fn share_update() -> UpdateSharePermissionRequestV2 {
+    UpdateSharePermissionRequestV2 {
+        is_public: Some(true),
+        public_access_level: Some(AccessLevel::View),
+        channel_share_permissions: None,
+    }
 }
 
 fn document_status() -> ProjectDocumentStatus {
@@ -337,6 +502,399 @@ async fn preview_deduplicates_ids_before_calling_repository() {
 
     assert_eq!(previews.len(), 1);
     assert!(matches!(&previews[0], ProjectPreview::Access(data) if data.id == "one"));
+}
+
+#[tokio::test]
+async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let accepted_name = "👨‍👩‍👧‍👦".repeat(100);
+    let expected_name = accepted_name.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_create_project()
+        .withf(move |args| {
+            args.name == expected_name
+                && args.parent_id.as_deref() == Some(parent_id.to_string().as_str())
+                && !args.share_permission.is_public
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    Some(&parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .withf(move |id| id == parent_id.to_string())
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let eam = RecordingEam::default();
+    let eam_calls = eam.calls.clone();
+    let indexer = RecordingIndexer::default();
+    let index_calls = indexer.calls.clone();
+    let service = mutation_service(repo, eam, indexer);
+
+    service
+        .create_project(
+            user_id("macro|owner@example.com"),
+            CreateProjectRequest {
+                name: accepted_name,
+                project_parent_id: Some(parent_id),
+            },
+        )
+        .await
+        .unwrap();
+    let error = service
+        .create_project(
+            user_id("macro|owner@example.com"),
+            CreateProjectRequest {
+                name: "👨‍👩‍👧‍👦".repeat(101),
+                project_parent_id: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ProjectError::NameTooLong { max: 100 }));
+    assert_eq!(
+        *eam_calls.lock().unwrap(),
+        vec![EamCall::Add(project_id, parent_id)]
+    );
+    assert_eq!(
+        *index_calls.lock().unwrap(),
+        vec![
+            IndexCall::Upsert(vec![project_id.to_string()]),
+            IndexCall::Upsert(vec![parent_id.to_string()]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn edit_requires_owner_for_moves_and_share_changes() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let repo = MockProjectRepo::new();
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    let move_error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            patch_request(Some(parent_id.to_string()), None),
+        )
+        .await
+        .unwrap_err();
+    let share_error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(share_update())),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        move_error,
+        ProjectError::UnauthorizedWithMessage(_)
+    ));
+    assert!(matches!(
+        share_error,
+        ProjectError::UnauthorizedWithMessage(_)
+    ));
+}
+
+#[tokio::test]
+async fn edit_rejects_deleted_self_recursive_and_invalid_parents() {
+    let project_id = Uuid::new_v4();
+    let recursive_parent = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_is_project_recursively_nested()
+        .withf(move |id, parent| {
+            id == project_id.to_string() && parent == recursive_parent.to_string()
+        })
+        .return_once(|_, _| Box::pin(async { Ok(true) }));
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    let deleted = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, true),
+            patch_request(None, None),
+        )
+        .await
+        .unwrap_err();
+    let self_parent = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(Some(project_id.to_string()), None),
+        )
+        .await
+        .unwrap_err();
+    let invalid_parent = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(Some("not-a-uuid".to_string()), None),
+        )
+        .await
+        .unwrap_err();
+    let recursive = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(Some(recursive_parent.to_string()), None),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(deleted, ProjectError::CannotModifyDeleted));
+    assert!(matches!(self_parent, ProjectError::BadRequest(_)));
+    assert!(matches!(invalid_parent, ProjectError::BadRequest(_)));
+    assert!(matches!(recursive, ProjectError::RecursiveNesting));
+}
+
+#[tokio::test]
+async fn owner_edit_propagates_move_and_pairs_every_bump_with_an_upsert() {
+    let project_id = Uuid::new_v4();
+    let old_parent_id = Uuid::new_v4();
+    let new_parent_id = Uuid::new_v4();
+    let bumped = Arc::new(Mutex::new(Vec::new()));
+    let recorded_bumps = bumped.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_is_project_recursively_nested()
+        .return_once(|_, _| Box::pin(async { Ok(false) }));
+    repo.expect_edit_project()
+        .withf(move |args| {
+            args.project_id == project_id.to_string()
+                && args.update_parent
+                && args.parent_id.as_deref() == Some(new_parent_id.to_string().as_str())
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    Some(&new_parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .times(3)
+        .returning(move |id| {
+            recorded_bumps.lock().unwrap().push(id.to_string());
+            Box::pin(async { Ok(()) })
+        });
+    let eam = RecordingEam::default();
+    let eam_calls = eam.calls.clone();
+    let indexer = RecordingIndexer::default();
+    let index_calls = indexer.calls.clone();
+    let service = mutation_service(repo, eam, indexer);
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, Some(old_parent_id), false),
+            patch_request(Some(new_parent_id.to_string()), Some(share_update())),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *eam_calls.lock().unwrap(),
+        vec![EamCall::Move(
+            project_id,
+            Some(old_parent_id),
+            Some(new_parent_id)
+        )]
+    );
+    let bumps = bumped.lock().unwrap().clone();
+    let indexed = index_calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|call| match call {
+            IndexCall::Upsert(ids) if ids.len() == 1 => Some(ids[0].clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(bumps, indexed);
+}
+
+#[tokio::test]
+async fn empty_parent_clears_persistence_and_eam_parent_argument() {
+    let project_id = Uuid::new_v4();
+    let old_parent_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_edit_project()
+        .withf(|args| args.update_parent && args.parent_id.is_none())
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    None,
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let eam = RecordingEam::default();
+    let calls = eam.calls.clone();
+    let service = mutation_service(repo, eam, RecordingIndexer::default());
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, Some(old_parent_id), false),
+            patch_request(Some(String::new()), None),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![EamCall::Move(project_id, Some(old_parent_id), None)]
+    );
+}
+
+#[tokio::test]
+async fn edit_name_limit_counts_unicode_graphemes() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_edit_project().return_once(move |_| {
+        Box::pin(async move {
+            Ok(project(
+                &project_id.to_string(),
+                "macro|owner@example.com",
+                None,
+            ))
+        })
+    });
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+    let mut accepted = patch_request(None, None);
+    accepted.name = Some("é".repeat(100));
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            accepted,
+        )
+        .await
+        .unwrap();
+    let mut rejected = patch_request(None, None);
+    rejected.name = Some("é".repeat(101));
+    let error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            rejected,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ProjectError::NameTooLong { max: 100 }));
+}
+
+#[tokio::test]
+async fn failed_database_bump_still_runs_the_paired_index_upsert() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
+    let indexer = RecordingIndexer::default();
+    let calls = indexer.calls.clone();
+    let service = mutation_service(repo, RecordingEam::default(), indexer);
+
+    service.bump_project_modified(&project_id.to_string()).await;
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![IndexCall::Upsert(vec![project_id.to_string()])]
+    );
+}
+
+#[tokio::test]
+async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let deleted_ids = vec![project_id.to_string(), Uuid::new_v4().to_string()];
+    let expected_deleted_ids = deleted_ids.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_soft_delete_project().return_once(move |_| {
+        Box::pin(async move {
+            Ok(SoftDeleteResult {
+                project_ids: deleted_ids,
+                document_ids: vec!["document".to_string()],
+                chat_ids: vec!["chat".to_string()],
+            })
+        })
+    });
+    repo.expect_update_project_modified()
+        .withf(move |id| id == parent_id.to_string())
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let indexer = RecordingIndexer::default();
+    let calls = indexer.calls.clone();
+    let service = mutation_service(repo, RecordingEam::default(), indexer);
+
+    service
+        .soft_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, Some(parent_id), false),
+            "macro|owner@example.com".to_string(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            IndexCall::Remove(expected_deleted_ids),
+            IndexCall::Upsert(vec![parent_id.to_string()]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn revert_upserts_every_restored_project() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let restored_ids = vec![project_id.to_string(), Uuid::new_v4().to_string()];
+    let expected_ids = restored_ids.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_revert_delete_project()
+        .withf(move |id, parent| {
+            id == project_id.to_string()
+                && parent.as_deref() == Some(parent_id.to_string().as_str())
+        })
+        .return_once(move |_, _| {
+            Box::pin(async move {
+                Ok(crate::domain::models::RevertDeleteResult {
+                    project_ids: restored_ids,
+                })
+            })
+        });
+    let indexer = RecordingIndexer::default();
+    let calls = indexer.calls.clone();
+    let service = mutation_service(repo, RecordingEam::default(), indexer);
+
+    service
+        .revert_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, Some(parent_id), true),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![IndexCall::Upsert(expected_ids)]
+    );
 }
 
 #[tokio::test]

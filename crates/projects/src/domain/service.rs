@@ -3,12 +3,14 @@
 use std::collections::HashSet;
 
 use entity_access::domain::models::{
-    EntityAccessAuth, EntityAccessReceipt, EntityPermission, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::item::{Item, ItemWithUserAccessLevel};
+use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
 use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
@@ -16,9 +18,10 @@ use model::project::{
 };
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
-use super::models::ProjectError;
+use super::models::{CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult};
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
     ShaCounterPort,
@@ -26,6 +29,8 @@ use super::ports::{
 
 #[cfg(test)]
 mod tests;
+
+const MAX_PROJECT_NAME_GRAPHEMES: usize = 100;
 
 /// Concrete project service backed by repository and external-system ports.
 pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx>
@@ -82,6 +87,31 @@ where
             search_indexer,
             fixed_upload_request_id,
         }
+    }
+
+    async fn bump_project_modified(&self, project_id: &str) {
+        let _ = self
+            .repo
+            .update_project_modified(project_id)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    project_id,
+                    "unable to update project modified date"
+                );
+            });
+        let _ = self
+            .search_indexer
+            .upsert_projects(vec![project_id.to_string()])
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    project_id,
+                    "unable to enqueue project search upsert"
+                );
+            });
     }
 }
 
@@ -247,6 +277,206 @@ where
         receipt_access_level(&receipt)
     }
 
+    async fn create_project(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        args: CreateProjectRequest,
+    ) -> Result<Project, ProjectError> {
+        validate_project_name(&args.name)?;
+
+        let parent_id = args.project_parent_id.map(|id| id.to_string());
+        let project = self
+            .repo
+            .create_project(CreateProjectArgs {
+                user_id: actor.to_string(),
+                name: args.name,
+                parent_id: parent_id.clone(),
+                share_permission: SharePermissionV2::new_project_share_permission(),
+            })
+            .await
+            .map_err(|error| internal_error(error, "unable to create project"))?;
+
+        let entity_id = args
+            .project_parent_id
+            .map(|_| parse_internal_uuid(&project.id, "created project ID"))
+            .transpose()?;
+        let _ = self
+            .search_indexer
+            .upsert_projects(vec![project.id.clone()])
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    project_id = %project.id,
+                    "unable to enqueue project search upsert"
+                );
+            });
+
+        if let Some((parent_id, entity_id)) = args.project_parent_id.zip(entity_id) {
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&entity_id, EntityType::Project, &parent_id)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        %entity_id,
+                        project_id = %parent_id,
+                        "unable to update entity access for project"
+                    );
+                });
+            self.bump_project_modified(&parent_id.to_string()).await;
+        }
+
+        Ok(project)
+    }
+
+    async fn edit_project(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        project: BasicProject,
+        args: PatchProjectRequestV2,
+    ) -> Result<(), ProjectError> {
+        if project.deleted_at.is_some() {
+            return Err(ProjectError::CannotModifyDeleted);
+        }
+        if let Some(name) = args.name.as_deref() {
+            validate_project_name(name)?;
+        }
+
+        let is_owner = receipt_is_owner(&receipt);
+        if args.project_parent_id.is_some() && !is_owner {
+            return Err(ProjectError::UnauthorizedWithMessage(
+                "you do not have valid permissions to move this item".to_string(),
+            ));
+        }
+        if args.share_permission.is_some() && !is_owner {
+            return Err(ProjectError::UnauthorizedWithMessage(
+                "you do not have valid permission to modify share permissions".to_string(),
+            ));
+        }
+
+        let new_parent_id = args
+            .project_parent_id
+            .as_deref()
+            .filter(|id| !id.is_empty());
+        if new_parent_id == Some(project.id.as_str()) {
+            return Err(ProjectError::BadRequest(
+                "project parent id matches project id".to_string(),
+            ));
+        }
+        if let Some(parent_id) = new_parent_id {
+            parse_request_uuid(parent_id, "project parent ID")?;
+            let recursively_nested = self
+                .repo
+                .is_project_recursively_nested(&project.id, parent_id)
+                .await
+                .map_err(|error| {
+                    internal_error(error, "error checking if project is recursively nested")
+                })?;
+            if recursively_nested {
+                return Err(ProjectError::RecursiveNesting);
+            }
+        }
+
+        let project_uuid = parse_internal_uuid(&project.id, "project ID")?;
+        let old_parent_uuid = project
+            .parent_id
+            .as_deref()
+            .map(|id| parse_internal_uuid(id, "stored parent project ID"))
+            .transpose()?;
+        let new_parent_uuid = new_parent_id
+            .map(|id| parse_request_uuid(id, "project parent ID"))
+            .transpose()?;
+
+        self.repo
+            .edit_project(EditProjectArgs {
+                project_id: project.id.clone(),
+                name: args.name,
+                update_parent: args.project_parent_id.is_some(),
+                parent_id: new_parent_id.map(str::to_string),
+                share_permission: args.share_permission,
+            })
+            .await
+            .map_err(|error| internal_error(error, "unable to patch project"))?;
+
+        self.bump_project_modified(&project.id).await;
+        let _ = self
+            .entity_access_management_service
+            .move_project(
+                &project_uuid,
+                old_parent_uuid.as_ref(),
+                new_parent_uuid.as_ref(),
+            )
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    project_id = %project.id,
+                    "unable to update entity access for project"
+                );
+            });
+        if let Some(parent_id) = project.parent_id.as_deref() {
+            self.bump_project_modified(parent_id).await;
+        }
+        if let Some(parent_id) = new_parent_id {
+            self.bump_project_modified(parent_id).await;
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete_project(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project: BasicProject,
+        _actor_user_id: String,
+    ) -> Result<SoftDeleteResult, ProjectError> {
+        let deleted = self
+            .repo
+            .soft_delete_project(&receipt.entity().entity_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to delete project"))?;
+
+        if !deleted.project_ids.is_empty() {
+            let _ = self
+                .search_indexer
+                .remove_projects(deleted.project_ids.clone())
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, "unable to enqueue deleted projects for search");
+                });
+        }
+        if let Some(parent_id) = project.parent_id.as_deref() {
+            self.bump_project_modified(parent_id).await;
+        }
+
+        Ok(deleted)
+    }
+
+    async fn revert_delete_project(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project: BasicProject,
+    ) -> Result<(), ProjectError> {
+        let restored = self
+            .repo
+            .revert_delete_project(&receipt.entity().entity_id, project.parent_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to revert project"))?;
+
+        if !restored.project_ids.is_empty() {
+            let _ = self
+                .search_indexer
+                .upsert_projects(restored.project_ids)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, "unable to enqueue restored projects for search");
+                });
+        }
+        Ok(())
+    }
+
     async fn get_batch_preview(
         &self,
         _actor: Option<MacroUserIdStr<'static>>,
@@ -273,6 +503,35 @@ where
             .map_err(|error| internal_error(error, "unable to get basic project"))?
             .ok_or_else(|| ProjectError::NotFound(project_id.to_string()))
     }
+}
+
+fn validate_project_name(name: &str) -> Result<(), ProjectError> {
+    if name.graphemes(true).count() > MAX_PROJECT_NAME_GRAPHEMES {
+        return Err(ProjectError::NameTooLong {
+            max: MAX_PROJECT_NAME_GRAPHEMES,
+        });
+    }
+    Ok(())
+}
+
+fn receipt_is_owner(receipt: &EntityAccessReceipt<EditAccessLevel>) -> bool {
+    matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    )
+}
+
+fn parse_request_uuid(value: &str, field: &str) -> Result<Uuid, ProjectError> {
+    Uuid::parse_str(value)
+        .map_err(|_| ProjectError::BadRequest(format!("{field} must be a valid UUID")))
+}
+
+fn parse_internal_uuid(value: &str, field: &str) -> Result<Uuid, ProjectError> {
+    Uuid::parse_str(value).map_err(|error| {
+        ProjectError::Internal(anyhow::anyhow!("invalid {field} in project data: {error}"))
+    })
 }
 
 fn receipt_access_level<T>(receipt: &EntityAccessReceipt<T>) -> Result<AccessLevel, ProjectError>

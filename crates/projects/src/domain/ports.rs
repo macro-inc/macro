@@ -5,10 +5,13 @@
 
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::ContentType;
 use model::item::{Item, ItemWithUserAccessLevel};
+use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
 use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
@@ -207,7 +210,7 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// Inbound-facing service interface for project read operations.
+/// Inbound-facing service interface for project operations.
 pub trait ProjectService: Send + Sync + 'static {
     /// List projects visible through the user's project history.
     fn list_projects(
@@ -244,6 +247,36 @@ pub trait ProjectService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<AccessLevel, ProjectError>> + Send;
+
+    /// Create a project, optionally beneath an authorized parent.
+    fn create_project(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        args: CreateProjectRequest,
+    ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
+
+    /// Edit project metadata and sharing settings.
+    fn edit_project(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        project: BasicProject,
+        args: PatchProjectRequestV2,
+    ) -> impl Future<Output = Result<(), ProjectError>> + Send;
+
+    /// Soft-delete a project subtree.
+    fn soft_delete_project(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project: BasicProject,
+        actor_user_id: String,
+    ) -> impl Future<Output = Result<SoftDeleteResult, ProjectError>> + Send;
+
+    /// Restore a soft-deleted project subtree.
+    fn revert_delete_project(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project: BasicProject,
+    ) -> impl Future<Output = Result<(), ProjectError>> + Send;
 
     /// Get project previews without applying per-project access filtering.
     fn get_batch_preview(

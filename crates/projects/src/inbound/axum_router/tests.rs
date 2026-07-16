@@ -21,7 +21,9 @@ use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroU
 use model::{
     item::ItemWithUserAccessLevel,
     project::{
-        BasicProject, PendingProject, Project, ProjectPreview, response::GetProjectResponseData,
+        BasicProject, PendingProject, Project, ProjectPreview,
+        request::{CreateProjectRequest, PatchProjectRequestV2},
+        response::GetProjectResponseData,
     },
 };
 use model_user::UserContext;
@@ -34,7 +36,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::{ProjectRouterState, projects_router};
-use crate::domain::{models::ProjectError, ports::ProjectService};
+use crate::domain::{
+    models::{ProjectError, SoftDeleteResult},
+    ports::ProjectService,
+};
 
 const TOKEN: &str = "valid-token";
 const USER_ID: &str = "macro|router@example.com";
@@ -109,6 +114,40 @@ impl ProjectService for FakeProjectService {
         _receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<ShareAccessLevel, ProjectError> {
         Ok(ShareAccessLevel::Owner)
+    }
+
+    async fn create_project(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _args: CreateProjectRequest,
+    ) -> Result<Project, ProjectError> {
+        panic!("project creation is not used by these tests")
+    }
+
+    async fn edit_project(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _project: BasicProject,
+        _args: PatchProjectRequestV2,
+    ) -> Result<(), ProjectError> {
+        panic!("project editing is not used by these tests")
+    }
+
+    async fn soft_delete_project(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
+        _project: BasicProject,
+        _actor_user_id: String,
+    ) -> Result<SoftDeleteResult, ProjectError> {
+        panic!("project deletion is not used by these tests")
+    }
+
+    async fn revert_delete_project(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
+        _project: BasicProject,
+    ) -> Result<(), ProjectError> {
+        panic!("project restoration is not used by these tests")
     }
 
     async fn get_batch_preview(
