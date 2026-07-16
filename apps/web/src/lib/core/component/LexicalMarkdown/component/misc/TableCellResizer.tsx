@@ -103,6 +103,10 @@ export function TableCellResizer() {
 
     const onPointerUp = (up: PointerEvent) => {
       if (up.pointerId !== down.pointerId) return;
+      if (frame) {
+        cancelAnimationFrame(frame);
+        applyDelta();
+      }
       cleanup();
     };
     const cancelDrag = () => {

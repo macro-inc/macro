@@ -198,7 +198,10 @@ export function TableInsertButton() {
   );
 
   // Positions go stale on any scroll; just hide.
-  const onScroll = () => setInsertTarget(undefined);
+  const onScroll = () => {
+    setInsertTarget(undefined);
+    setButtonHovered(false);
+  };
   document.addEventListener('scroll', onScroll, {
     capture: true,
     passive: true,
@@ -237,8 +240,11 @@ export function TableInsertButton() {
             </Show>
             <button
               type="button"
-              class="fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-accent hover:bg-accent hover:text-surface"
+              class="fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-accent hover:bg-accent hover:text-surface"
               style={{ left: `${target().x}px`, top: `${target().y}px` }}
+              aria-label={
+                target().type === 'row' ? 'Insert row' : 'Insert column'
+              }
               onPointerDown={(e) => e.preventDefault()}
               onPointerEnter={() => setButtonHovered(true)}
               onPointerLeave={() => {

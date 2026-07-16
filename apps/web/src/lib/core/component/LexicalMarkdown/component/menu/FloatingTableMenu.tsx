@@ -83,9 +83,10 @@ export function FloatingTableMenu() {
     const currentPlugins = plugins();
     if (!currentPlugins) return;
 
-    if (!canEdit()) return;
-
-    currentPlugins.use(tablePickerPlugin({ onCreateTable: handleCreateTable }));
+    currentPlugins.useReactive(canEdit, () => {
+      if (!canEdit()) return;
+      return tablePickerPlugin({ onCreateTable: handleCreateTable });
+    });
   });
 
   const visibleRows = () =>

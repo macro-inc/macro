@@ -100,6 +100,11 @@ describe('table touch selection', () => {
     elementsUnderPointer = [];
   });
   afterEach(() => {
+    // Tests that fire a long press without a matching pointerup/pointercancel
+    // leave the plugin's document-level gesture listeners attached; end
+    // whatever gesture (armed or active) is in progress before teardown.
+    document.dispatchEvent(touchEvent('pointercancel'));
+    vi.clearAllTimers();
     vi.useRealTimers();
     document.body.innerHTML = '';
   });

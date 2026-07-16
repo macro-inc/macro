@@ -312,7 +312,10 @@ export const E_TABLE_NODE: ElementTransformer = {
 					rowOutput.push("");
 				}
 
-				if (mapCell.cell.__headerState === TableCellHeaderStates.ROW) {
+				if (
+					mapCell.cell.__headerState === TableCellHeaderStates.ROW ||
+					mapCell.cell.__headerState === TableCellHeaderStates.BOTH
+				) {
 					isHeaderRow = true;
 				}
 			}

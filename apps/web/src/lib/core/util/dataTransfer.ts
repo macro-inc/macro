@@ -11,6 +11,7 @@ type ExtractedEntries = {
  * called from a user gesture on mobile browsers.
  */
 export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null> {
+  if (!navigator.clipboard) return null;
   const dataTransfer = new DataTransfer();
   try {
     for (const item of await navigator.clipboard.read()) {

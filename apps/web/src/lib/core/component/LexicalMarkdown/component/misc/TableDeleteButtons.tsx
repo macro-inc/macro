@@ -35,7 +35,7 @@ type DeleteTarget = {
 const EDGE_PROXIMITY_PX = 20;
 
 const BUTTON_CLASS =
-  'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface';
+  'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface';
 
 export function TableDeleteButtons() {
   const mdData = mdStore.get;
@@ -128,7 +128,10 @@ export function TableDeleteButtons() {
   );
 
   // Positions go stale on any scroll; just hide.
-  const onScroll = () => setTarget(undefined);
+  const onScroll = () => {
+    setTarget(undefined);
+    setHovered(undefined);
+  };
   document.addEventListener('scroll', onScroll, {
     capture: true,
     passive: true,
