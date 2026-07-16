@@ -10,6 +10,7 @@ use axum::routing::get;
 use futures::StreamExt;
 use macro_authorization::MacroAuthorizationExtractor;
 use macro_middleware::tracking::ClientIp;
+use model::response::ErrorResponse;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::error::Error;
@@ -155,6 +156,9 @@ pub struct ProxyParams {
     get,
     path = "/proxy",
     params(("url" = String, Query, description = "The image url to proxy")),
+    responses(
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+    ),
 )]
 #[tracing::instrument(
     err(Debug),
