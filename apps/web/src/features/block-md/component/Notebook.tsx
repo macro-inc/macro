@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -18,7 +19,8 @@ import {
   DEV_MODE_ENV,
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
-  INLINE_AI_EDITING,
+  INLINE_AI_EDITING_FLAG,
+  INLINE_AI_EDITING_OVERRIDE,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -120,6 +122,9 @@ export function Notebook(props: {
   const { navigatedFromJK } = useNavigatedFromJK();
   const documentId = props.documentId;
   const canEdit = useCanEdit();
+  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
+    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
+  });
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -370,7 +375,7 @@ export function Notebook(props: {
           </div>
           <Show when={!history.isOpen()}>
             <Show
-              when={INLINE_AI_EDITING && canEdit() && !isMobile()}
+              when={inlineAiEditing().enabled && canEdit() && !isMobile()}
             >
               <div class="mb-2">
                 <DocumentAiEditBar documentId={props.documentId} />

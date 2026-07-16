@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
@@ -5,7 +6,10 @@ import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 // import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
-import { INLINE_AI_EDITING } from '@core/constant/featureFlags';
+import {
+  INLINE_AI_EDITING_FLAG,
+  INLINE_AI_EDITING_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
@@ -141,6 +145,9 @@ export function MarkdownPopup(props: {
   const showPopup = debouncedDependent(popupVisible, 100);
 
   const canEdit = useCanEdit();
+  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
+    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
+  });
   const canComment = useCanComment();
   const currentUserId = useUserId();
 
@@ -535,7 +542,7 @@ export function MarkdownPopup(props: {
           </Button>
         </div>
 
-        <Show when={INLINE_AI_EDITING && canEdit()}>
+        <Show when={inlineAiEditing().enabled && canEdit()}>
           <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
             <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
             <textarea
