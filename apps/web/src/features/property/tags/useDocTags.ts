@@ -165,22 +165,52 @@ function createDocTags(
     return provisioned.definition;
   };
 
+  const updatePendingOptionIds = (
+    definitionId: string,
+    update: (optionIds: string[]) => string[]
+  ) => {
+    setPendingOptionIdsByDefinition((prev) => {
+      const next = new Map(prev);
+      const current =
+        prev.get(definitionId) ?? appliedOptionIdsForDefinition(definitionId);
+      next.set(definitionId, update(current));
+      return next;
+    });
+  };
+
   const applyTag = async (scope: TagScope, optionId: string) => {
     const definition = await resolveDefinition(scope);
-    const current = appliedOptionIdsForDefinition(definition.id);
+    const current = visibleOptionIdsForDefinition(definition.id);
     if (current.includes(optionId)) return;
-    await setTagOptionIdsForDefinition(definition, [...current, optionId]);
+    const nextOptionIds = [...current, optionId];
+    updatePendingOptionIds(definition.id, () => nextOptionIds);
+
+    try {
+      await setTagOptionIdsForDefinition(definition, nextOptionIds);
+    } catch (error) {
+      updatePendingOptionIds(definition.id, (optionIds) =>
+        optionIds.filter((id) => id !== optionId)
+      );
+      throw error;
+    }
   };
 
   const removeTag = async (scope: TagScope, optionId: string) => {
     const definition = definitionByScope().get(scope);
     if (!definition) return;
-    const current = appliedOptionIdsForDefinition(definition.id);
+    const current = visibleOptionIdsForDefinition(definition.id);
     if (!current.includes(optionId)) return;
-    await setTagOptionIdsForDefinition(
-      definition,
-      current.filter((id) => id !== optionId)
-    );
+    const nextOptionIds = current.filter((id) => id !== optionId);
+    updatePendingOptionIds(definition.id, () => nextOptionIds);
+
+    try {
+      await setTagOptionIdsForDefinition(definition, nextOptionIds);
+    } catch (error) {
+      updatePendingOptionIds(definition.id, (optionIds) =>
+        optionIds.includes(optionId) ? optionIds : [...optionIds, optionId]
+      );
+      throw error;
+    }
   };
 
   const toggleTag = async (scope: TagScope, optionId: string) => {
