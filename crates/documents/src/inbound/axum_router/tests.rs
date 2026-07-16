@@ -47,6 +47,7 @@ use crate::{
     domain::{
         content::DocumentContent,
         create::DocumentCreator,
+        events::InteractionReason,
         models::{
             CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
             DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
@@ -276,6 +277,14 @@ impl DocumentService for FakeDocumentService {
                 bytes,
             });
         Ok(())
+    }
+
+    async fn record_interaction(
+        &self,
+        _document_id: &str,
+        _reason: InteractionReason,
+    ) -> anyhow::Result<()> {
+        panic!("unexpected record_interaction call")
     }
 
     async fn get_team_share(
