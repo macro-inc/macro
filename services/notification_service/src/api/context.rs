@@ -1,7 +1,6 @@
 use crate::config::Config;
 use axum::extract::FromRef;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
 use sqlx::PgPool;
 use std::sync::Arc;
 
