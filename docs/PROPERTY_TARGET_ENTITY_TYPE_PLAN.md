@@ -50,6 +50,7 @@ properties domain resolves document subtype
 7. **Use one resolution path for reads and writes.** Fixing only `set_entity_property` would recreate the mismatch in the opposite direction.
 8. **Do not add `Task` to `model_entity::EntityType`.** Tasks remain canonical documents.
 9. **Do not run or create a database migration for this work.** Existing `TASK` rows remain authoritative for task documents.
+10. **Prefer strong domain types over stringly typed interfaces.** Repository and service contracts should use types such as `Uuid` for UUID-backed identifiers rather than `String`, converting only at transport boundaries when necessary.
 
 ## Goals
 
@@ -116,14 +117,15 @@ Extend the properties outbound port with a fact-oriented, batch API, for example
 ```rust
 fn get_document_sub_types(
     &self,
-    document_ids: &[String],
+    document_ids: &[Uuid],
 ) -> impl Future<
-    Output = Result<HashMap<String, Option<DocumentSubType>>, Self::Err>
+    Output = Result<HashMap<Uuid, Option<DocumentSubType>>, Self::Err>
 > + Send;
 ```
 
 Implementation requirements:
 
+- Keep UUID-backed identifiers strongly typed as `Uuid` throughout domain and repository interfaces; do not weaken them to `String` for convenience.
 - Query `Document`/`document_sub_type` for all supplied document ids in one SQLx query.
 - Return `Some(Task)` only for task documents; `None` means a regular document/no subtype. Snippets resolve to internal `Document`.
 - Deduplicate input ids.
@@ -278,23 +280,11 @@ Classify each occurrence as either:
 - **target type**: change to canonical `DOCUMENT`; or
 - **reference/filter/rendering/internal task classification**: retain Task semantics.
 
-## Compatibility and rollout
+## Compatibility and atomic rollout
 
-Removing `TASK` from a GraphQL input enum is a breaking contract for already-deployed clients. Choose one rollout based on deployment guarantees:
+This work uses an atomic deployment strategy. Removing `TASK` from the GraphQL target input enum is a breaking contract, so the backend and every client must deploy together.
 
-### Preferred safe rollout
-
-1. Backend accepts both legacy `TASK` and canonical `DOCUMENT` target values, but immediately canonicalizes both to a document access receipt and resolves subtype internally.
-2. Deploy regenerated frontend sending only `DOCUMENT`.
-3. After old clients are no longer supported, remove `TASK` from the target-only transport enum.
-
-During the compatibility phase, `TASK` must be treated only as a deprecated alias at the inbound boundary. It must not be passed into the domain as the caller's chosen storage namespace.
-
-### Atomic rollout
-
-If backend and every client are guaranteed to deploy atomically, create the no-Task target enum immediately and regenerate clients in the same change.
-
-Document which rollout was chosen in the implementation revision.
+Create the target-only enum without `TASK` immediately, regenerate all clients in the same change, and deploy the backend and clients atomically. Do not add a deprecated `TASK` alias or a compatibility phase.
 
 Changing the committed GraphQL SDL rotates the normalized cache schema hash, so persisted client caches will rebuild automatically. Do not add manual cache-version logic.
 
@@ -333,7 +323,7 @@ Any SQLx query changes require `just prepare_db` from the repository root. Never
 Add tests proving:
 
 1. `SetEntityPropertyInput` accepts canonical `DOCUMENT` for a task target.
-2. The target-only enum does not expose Task in the end-state schema (or marks the legacy alias deprecated during rollout).
+2. The target-only enum does not expose Task.
 3. Entity-reference values can still represent the existing Task reference type where required.
 4. A mutation setting Assignees followed by a fresh/network-equivalent GraphQL Soup query returns the assignee.
 5. A regular document with the same shape still reads Document-scoped properties.
