@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-pub use macro_auth::InternalApiKey;
+use macro_auth::InternalApiKey;
 use model::user::UserContext;
 use std::borrow::Cow;
 
