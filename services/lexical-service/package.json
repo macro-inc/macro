@@ -45,7 +45,7 @@
 		"hono": "^4.6.20",
 		"immer": "^10.0.3",
 		"lexical": "0.45.0",
-		"loro-crdt": "1.13.7",
+		"loro-crdt": "catalog:",
 		"nanoid": "^5.1.5",
 		"p-queue": "^9.3.0",
 		"random-js": "^2.1.0",
