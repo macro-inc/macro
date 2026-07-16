@@ -3,11 +3,14 @@ import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
+import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
-import { Button, Hotkey, SendButton, Surface } from '@ui';
+import { Button, SendButton, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
+
+false && clickOutside;
 
 /**
  * Right-aligned "Edit with AI" pill above the document discussion that expands
@@ -117,6 +120,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             if (next && event.currentTarget.contains(next)) return;
             setFocused(false);
           }}
+          use:clickOutside={collapse}
           active={focused()}
           class="w-96 max-w-full rounded-xl"
           depth={2}
@@ -135,11 +139,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
                 />
               </div>
             </div>
-            <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1.5 text-2xs text-ink-extra-muted">
-                <Hotkey shortcut="escape" theme="subtle" />
-                to dismiss
-              </span>
+            <div class="flex items-center justify-end">
               <SendButton
                 tooltip="Send edit"
                 shortcut="enter"
