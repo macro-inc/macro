@@ -88,3 +88,4 @@ doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }

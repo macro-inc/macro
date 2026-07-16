@@ -13,6 +13,9 @@ mod health;
 mod message;
 pub(crate) mod swagger;
 
+#[cfg(test)]
+mod test;
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(connection::router())
