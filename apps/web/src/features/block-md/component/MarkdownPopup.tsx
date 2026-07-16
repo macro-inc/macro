@@ -407,6 +407,7 @@ export function MarkdownPopup(props: {
     };
 
     const handleAiEditSubmit = () => {
+      if (aiEditRunning()) return;
       const instruction = aiEditInput().trim();
       if (!instruction) return;
       const nodeIds = resolveSelectedNodeIds();
@@ -576,7 +577,7 @@ export function MarkdownPopup(props: {
           <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
             <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
             <textarea
-              class="grow resize-none overflow-hidden bg-transparent text-sm placeholder-gray-400 focus:outline-none"
+              class="grow resize-none overflow-hidden bg-transparent text-sm placeholder:text-ink-placeholder focus:outline-none"
               rows={1}
               placeholder="Ask Macro to edit this selection"
               ref={(el) => {

@@ -19,9 +19,20 @@ const ALLOWED_ORIGINS = new Set([
 
 function isOriginAllowed(origin: string): boolean {
   if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (origin.startsWith('https://') && origin.endsWith('preview.macro.com')) {
-    return true;
+
+  try {
+    const { protocol, hostname } = new URL(origin);
+    if (
+      protocol === 'https:' &&
+      (hostname === 'preview.macro.com' ||
+        hostname.endsWith('.preview.macro.com'))
+    ) {
+      return true;
+    }
+  } catch {
+    // Not a valid URL; fall through to the other checks.
   }
+
   const localhostPort = origin.match(/^http:\/\/localhost:(\d+)$/)?.[1];
   if (localhostPort) {
     const port = Number(localhostPort);
