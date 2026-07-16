@@ -10,10 +10,6 @@ export function applyAiOps(
 ): void {
   const doc = new Doc({ editor, ids: mapping });
   for (const op of ops) {
-    try {
-      doc.apply(op);
-    } catch (e) {
-      console.error('failed to apply ai op', op, e);
-    }
+    doc.apply(op);
   }
 }
