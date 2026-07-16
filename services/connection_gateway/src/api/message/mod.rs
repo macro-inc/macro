@@ -37,6 +37,7 @@ where
 #[utoipa::path(
         post,
         path = "/message/send/{entity_type}/{entity_id}",
+        security(("internal-api-key" = [])),
         params(
             ("entity_type" = String, Path, description = "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc..."),
             ("entity_id" = String, Path, description = "the id of the entity to send the message to"),
@@ -85,6 +86,7 @@ pub async fn send_message_handler(
 #[utoipa::path(
     post,
     path = "/batch_send",
+    security(("internal-api-key" = [])),
     request_body = BatchSendMessageBody,
     responses(
         (status = 200, description = "Message sent successfully", body = SendMessageResponse),

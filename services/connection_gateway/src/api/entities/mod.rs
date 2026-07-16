@@ -32,6 +32,7 @@ pub struct QueryParams {
 #[utoipa::path(
         get,
         path = "/track/{entity_type}/{entity_id}",
+        security(("internal-api-key" = [])),
         params(
             ("entity_type" = String, Path, description = "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc..."),
             ("entity_id" = String, Path, description = "the id of the entity to send the message to"),
