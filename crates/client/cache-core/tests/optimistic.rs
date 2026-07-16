@@ -194,6 +194,8 @@ fn begin_persists_mutation_and_optimistic_layer() {
                 Some("SetEntityProperty"),
                 &mutation_vars("doing"),
                 &mutation_response("Status", "doing"),
+                &[],
+                &[],
                 123,
             )
             .await
@@ -227,6 +229,8 @@ fn claimed_success_atomically_commits_real_response() {
                 Some("SetEntityProperty"),
                 &mutation_vars("doing"),
                 &mutation_response("Status", "doing"),
+                &[],
+                &[],
                 0,
             )
             .await
@@ -274,6 +278,8 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
                 Some("SetEntityProperty"),
                 &mutation_vars("a"),
                 &mutation_response("Status", "a"),
+                &[],
+                &[],
                 0,
             )
             .await
@@ -285,6 +291,8 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
                 Some("SetEntityProperty"),
                 &mutation_vars("b"),
                 &mutation_response("Status", "b"),
+                &[],
+                &[],
                 1,
             )
             .await
@@ -327,6 +335,8 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
                 Some("SetEntityProperty"),
                 &mutation_vars("a"),
                 &mutation_response("Status", "a"),
+                &[],
+                &[],
                 0,
             )
             .await
@@ -338,6 +348,8 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
                 Some("SetEntityProperty"),
                 &mutation_vars("b"),
                 &mutation_response("Status", "b"),
+                &[],
+                &[],
                 1,
             )
             .await
@@ -369,6 +381,8 @@ fn stale_claim_cannot_settle_mutation() {
                 Some("SetEntityProperty"),
                 &mutation_vars("doing"),
                 &mutation_response("Status", "doing"),
+                &[],
+                &[],
                 0,
             )
             .await
@@ -413,6 +427,8 @@ fn clear_and_identity_reset_drop_durable_queue() {
                 Some("SetEntityProperty"),
                 &mutation_vars("doing"),
                 &mutation_response("Status", "doing"),
+                &[],
+                &[],
                 0,
             )
             .await

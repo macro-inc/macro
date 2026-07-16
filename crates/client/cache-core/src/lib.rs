@@ -7,6 +7,7 @@ pub mod denormalize;
 pub mod deps;
 pub mod document;
 pub mod engine;
+pub mod link_patch;
 pub mod meta;
 pub mod normalize;
 pub mod queue;
