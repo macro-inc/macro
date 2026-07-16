@@ -2,11 +2,15 @@ import {
   defineQueryFilters,
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
+import type { TabItem } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getTypeNoun } from '@entity/extractors-notification/notification-description-helpers';
 import { NotificationRow } from '@entity/extractors-notification/notification-row';
 import type { SoupApiItemFilter } from '@queries/soup/items';
+import { makePersisted } from '@solid-primitives/storage';
+import { createSignal, type JSX, Show } from 'solid-js';
 import type { TimelineRow } from './collapse';
 import { EntityEventRow } from './entity-event-row';
 import { mapMyActivityEntity, mapSharedEmailEntity } from './entity-events';
@@ -101,7 +105,7 @@ function NotificationTimelineRow(props: { row: TimelineRow }) {
  * created/edited, tasks and folders created, agent sessions, and calls
  * attended.
  */
-function MyActivityPane() {
+function MyActivityPane(props: { trailing?: JSX.Element }) {
   const userId = useUserId();
   const resolveChannel = useChannelLookup();
 
@@ -132,6 +136,7 @@ function MyActivityPane() {
       renderRow={renderRow}
       emptyTitle="No activity yet"
       emptyDescription="Messages and emails you send, documents you edit, and tasks you create will appear here."
+      trailing={props.trailing}
     />
   );
 }
@@ -145,7 +150,7 @@ function MyActivityPane() {
  * (visibility inherited from CRM permissions) shows up even though it never
  * notifies this user directly.
  */
-function FirehosePane() {
+function FirehosePane(props: { trailing?: JSX.Element }) {
   const resolveChannel = useChannelLookup();
 
   const feed = mergeTimelineFeeds([
@@ -179,23 +184,46 @@ function FirehosePane() {
       renderRow={renderRow}
       emptyTitle="Nothing happening yet"
       emptyDescription="Messages, replies, comments, shared emails, calls, and pull request activity from across your team will appear here."
+      trailing={props.trailing}
     />
   );
 }
 
+type ActivityTab = 'me' | 'team';
+
+const ACTIVITY_TABS: TabItem[] = [
+  { value: 'me', label: 'Me' },
+  { value: 'team', label: 'Team' },
+];
+
 /**
- * The Activity tab: "Things I did" (the user's own action timeline) on the
- * left, the team Firehose on the right, each scrolling independently.
+ * The Activity tab: one pane at a time with a Me/Team toggle — "Things I
+ * did" (the user's own action timeline) vs the team Firehose. A single
+ * column keeps the view usable inside narrow splits; the toggle matches the
+ * segmented tabs other list views use.
  */
 export function ActivityView() {
+  const [tab, setTab] = makePersisted(createSignal<ActivityTab>('me'), {
+    name: 'activity-view-tab',
+  });
+
+  // A factory rather than a shared element: each pane mount gets its own
+  // node instead of re-parenting one instance across Show branches.
+  const tabs = () => (
+    <TabsInset
+      list={ACTIVITY_TABS}
+      value={tab()}
+      defaultValue="me"
+      onChange={(value) => setTab(value as ActivityTab)}
+    />
+  );
+
   return (
-    <div class="flex h-full min-h-0 flex-col md:flex-row">
-      <div class="min-h-0 min-w-0 flex-1 border-b border-edge-muted md:border-b-0 md:border-r">
-        <MyActivityPane />
-      </div>
-      <div class="min-h-0 min-w-0 flex-1">
-        <FirehosePane />
-      </div>
-    </div>
+    <Show
+      when={tab() === 'team'}
+      fallback={<MyActivityPane trailing={tabs()} />}
+    >
+      <FirehosePane trailing={tabs()} />
+    </Show>
   );
 }
