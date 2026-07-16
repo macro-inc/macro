@@ -19,10 +19,10 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use models_properties::DataType;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::DataType;
 use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::Serialize;

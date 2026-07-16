@@ -978,10 +978,7 @@ where
         let subject = self.resolve_subject(access).await?;
         let mut properties = self
             .repository
-            .get_entity_properties_with_definitions(
-                access.entity_id(),
-                subject.storage_entity_type,
-            )
+            .get_entity_properties_with_definitions(access.entity_id(), subject.storage_entity_type)
             .await
             .map_err(anyhow::Error::from)?;
         retain_caller_visible_tags(&mut properties, access.auth());
@@ -1083,10 +1080,8 @@ where
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn delete_entity_properties(&self, access: &EditReceipt) -> Result<(), PropertiesErr> {
         let subject = self.resolve_subject(access).await?;
-        let entity_reference = EntityReference::new(
-            access.entity_id().to_string(),
-            subject.storage_entity_type,
-        );
+        let entity_reference =
+            EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
         Ok(self
             .repository
             .delete_entity_properties(&entity_reference)

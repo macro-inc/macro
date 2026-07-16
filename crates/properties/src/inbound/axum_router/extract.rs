@@ -92,12 +92,7 @@ where
     A: EntityAccessService,
 {
     let receipt = entity_access_service
-        .generate_entity_access_receipt::<T>(
-            user_id,
-            None,
-            entity_id,
-            entity_type,
-        )
+        .generate_entity_access_receipt::<T>(user_id, None, entity_id, entity_type)
         .await
         .map_err(|_| PropertiesErr::PermissionDenied)?;
 

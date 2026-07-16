@@ -143,13 +143,12 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             | AccessEntityType::User
             | AccessEntityType::EmailThread => {}
             _ => {
-                let (owner, deleted) =
-                    permission_queries::get_owner_and_deleted(
-                        &self.db,
-                        entity_id,
-                        storage_entity_type(entity_type)?,
-                    )
-                    .await?;
+                let (owner, deleted) = permission_queries::get_owner_and_deleted(
+                    &self.db,
+                    entity_id,
+                    storage_entity_type(entity_type)?,
+                )
+                .await?;
 
                 // If you are the owner fast return
                 if user_id.is_some_and(|u| owner == u.as_ref()) {
@@ -194,14 +193,12 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             .get_access_level(Some(user_id), entity_id, entity_type)
             .await?
         {
-            Some(access_level @ (AccessLevel::Edit | AccessLevel::Owner)) => {
-                Ok(access_receipt(
-                    caller_auth(Some(user_id)),
-                    entity_id,
-                    entity_type,
-                    access_level,
-                )?)
-            }
+            Some(access_level @ (AccessLevel::Edit | AccessLevel::Owner)) => Ok(access_receipt(
+                caller_auth(Some(user_id)),
+                entity_id,
+                entity_type,
+                access_level,
+            )?),
             Some(_) | None => anyhow::bail!("Access denied"),
         }
     }

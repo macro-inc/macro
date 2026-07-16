@@ -16,9 +16,7 @@ use axum::{
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use model::user::axum_extractor::MacroUserExtractor;
-use models_properties::api::{
-    PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue,
-};
+use models_properties::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -355,11 +353,7 @@ impl IntoResponse for SetEntityPropertyErr {
 )]
 #[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, entity_type = ?access.0.entity_type(), has_value = request.value.is_some()), err)]
 pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
-    Path((_entity_type, _entity_id, property_uuid)): Path<(
-        PropertyTargetEntityType,
-        String,
-        Uuid,
-    )>,
+    Path((_entity_type, _entity_id, property_uuid)): Path<(PropertyTargetEntityType, String, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
     access: EditReceiptExtractor,
     Json(request): Json<SetEntityPropertyRequest>,

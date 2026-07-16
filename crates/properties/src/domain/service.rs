@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
@@ -21,7 +22,6 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::EntityType;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 

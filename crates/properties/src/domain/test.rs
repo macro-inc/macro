@@ -1289,7 +1289,10 @@ async fn canonical_document_task_read_uses_task_storage_type() {
     );
 
     assert_eq!(
-        service.get_property_value(&receipt, property_id).await.unwrap(),
+        service
+            .get_property_value(&receipt, property_id)
+            .await
+            .unwrap(),
         Some(PropertyValue::Str("value".into()))
     );
 }
@@ -1302,9 +1305,7 @@ async fn mixed_document_bulk_read_batches_subtypes_and_returns_canonical_keys() 
 
     repo.expect_get_document_sub_types()
         .times(1)
-        .withf(move |ids| {
-            ids.len() == 2 && ids.contains(&task_id) && ids.contains(&snippet_id)
-        })
+        .withf(move |ids| ids.len() == 2 && ids.contains(&task_id) && ids.contains(&snippet_id))
         .returning(move |_| {
             Box::pin(async move {
                 Ok(HashMap::from([
@@ -1362,13 +1363,21 @@ async fn mixed_document_bulk_read_batches_subtypes_and_returns_canonical_keys() 
         .await
         .unwrap();
 
-    assert!(result.keys().all(|key| key.entity_type == AccessEntityType::Document));
-    assert!(result.contains_key(&crate::domain::model::PropertyTargetKey {
-        entity_id: task_id.to_string(),
-        entity_type: AccessEntityType::Document,
-    }));
-    assert!(result.contains_key(&crate::domain::model::PropertyTargetKey {
-        entity_id: snippet_id.to_string(),
-        entity_type: AccessEntityType::Document,
-    }));
+    assert!(
+        result
+            .keys()
+            .all(|key| key.entity_type == AccessEntityType::Document)
+    );
+    assert!(
+        result.contains_key(&crate::domain::model::PropertyTargetKey {
+            entity_id: task_id.to_string(),
+            entity_type: AccessEntityType::Document,
+        })
+    );
+    assert!(
+        result.contains_key(&crate::domain::model::PropertyTargetKey {
+            entity_id: snippet_id.to_string(),
+            entity_type: AccessEntityType::Document,
+        })
+    );
 }
