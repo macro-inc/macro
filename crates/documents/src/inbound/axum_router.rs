@@ -68,7 +68,6 @@ use self::{
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
-    put_interaction::put_interaction_handler,
     put_snapshot::put_snapshot_handler,
     task_duplicates::{
         delete_this_duplicate_task_handler, dismiss_task_duplicates_handler,
@@ -246,10 +245,6 @@ where
         .route(
             "/{document_id}/snapshot",
             axum::routing::put(put_snapshot_handler::<T, Svc>),
-        )
-        .route(
-            "/{document_id}/interaction",
-            axum::routing::put(put_interaction_handler::<T, Svc>),
         )
         .route(
             "/{document_id}/team_share",
