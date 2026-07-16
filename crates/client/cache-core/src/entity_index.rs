@@ -8,48 +8,48 @@ use crate::value::{CacheValue, EntityKey, Record};
 use chrono::DateTime;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use serde_json::Value as Json;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use thiserror::Error;
 
 /// Quick Access bucket attached to an indexed normalized entity record.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityBucket {
-    /// A regular non-note document.
+    /// A document, including notes, tasks, and snippets.
     Document,
-    /// A markdown note document.
-    Note,
-    /// A task document.
-    Task,
-    /// A snippet document.
-    Snippet,
     /// An AI chat.
     Chat,
     /// A project.
     Project,
     /// An email thread.
     Email,
-    /// A non-direct-message channel.
+    /// A channel, including direct messages.
     Channel,
-    /// A direct-message channel.
-    Dm,
     /// A CRM company.
     CrmCompany,
 }
 
 impl EntityBucket {
+    /// Every indexed entity type.
+    pub const ALL: [Self; 6] = [
+        Self::Document,
+        Self::Chat,
+        Self::Project,
+        Self::Email,
+        Self::Channel,
+        Self::CrmCompany,
+    ];
+
     /// Stable persisted representation of the bucket.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Document => "document",
-            Self::Note => "note",
-            Self::Task => "task",
-            Self::Snippet => "snippet",
             Self::Chat => "chat",
             Self::Project => "project",
             Self::Email => "email",
             Self::Channel => "channel",
-            Self::Dm => "dm",
             Self::CrmCompany => "crm_company",
         }
     }
@@ -66,14 +66,10 @@ impl FromStr for EntityBucket {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "document" => Ok(Self::Document),
-            "note" => Ok(Self::Note),
-            "task" => Ok(Self::Task),
-            "snippet" => Ok(Self::Snippet),
             "chat" => Ok(Self::Chat),
             "project" => Ok(Self::Project),
             "email" => Ok(Self::Email),
             "channel" => Ok(Self::Channel),
-            "dm" => Ok(Self::Dm),
             "crm_company" => Ok(Self::CrmCompany),
             _ => Err(ParseEntityBucketError(value.to_string())),
         }
@@ -111,25 +107,20 @@ impl<'de> Deserialize<'de> for EntityIndexCursor {
     }
 }
 
-fn encode_cursor(cursor: &EntityIndexCursor) -> String {
-    let key = cursor
-        .entity_key
+fn encode_entity_key(entity_key: &EntityKey) -> String {
+    entity_key
         .0
         .as_bytes()
         .iter()
         .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    format!("{}.{key}", cursor.sort_timestamp)
+        .collect()
 }
 
-fn decode_cursor(value: &str) -> Result<EntityIndexCursor, String> {
-    let (timestamp, encoded_key) = value
-        .split_once('.')
-        .ok_or_else(|| "invalid entity index cursor".to_string())?;
-    if encoded_key.len() % 2 != 0 {
+fn decode_entity_key(encoded: &str) -> Result<EntityKey, String> {
+    if !encoded.len().is_multiple_of(2) {
         return Err("invalid entity index cursor".to_string());
     }
-    let key_bytes = encoded_key
+    let bytes = encoded
         .as_bytes()
         .chunks_exact(2)
         .map(|pair| {
@@ -137,13 +128,30 @@ fn decode_cursor(value: &str) -> Result<EntityIndexCursor, String> {
             u8::from_str_radix(pair, 16).map_err(|_| "invalid entity index cursor")
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let entity_key = String::from_utf8(key_bytes).map_err(|_| "invalid entity index cursor")?;
+    String::from_utf8(bytes)
+        .map(EntityKey)
+        .map_err(|_| "invalid entity index cursor".to_string())
+}
+
+fn encode_cursor(cursor: &EntityIndexCursor) -> String {
+    format!(
+        "{}.{}",
+        cursor.sort_timestamp,
+        encode_entity_key(&cursor.entity_key)
+    )
+}
+
+fn decode_cursor(value: &str) -> Result<EntityIndexCursor, String> {
+    let (timestamp, encoded_key) = value
+        .split_once('.')
+        .ok_or_else(|| "invalid entity index cursor".to_string())?;
+    let entity_key = decode_entity_key(encoded_key)?;
     let sort_timestamp = timestamp
         .parse::<i64>()
         .map_err(|_| "invalid entity index cursor")?;
     Ok(EntityIndexCursor {
         sort_timestamp,
-        entity_key: EntityKey(entity_key),
+        entity_key,
     })
 }
 
@@ -160,6 +168,8 @@ pub struct EntityIndexQuery {
     /// Requested maximum number of index entries. Storage and engine
     /// implementations clamp this to [`MAX_ENTITY_INDEX_PAGE_SIZE`].
     pub limit: usize,
+    /// Whether this page should include the total number of matching rows.
+    pub include_total_count: bool,
 }
 
 impl EntityIndexQuery {
@@ -210,6 +220,129 @@ pub struct IndexedEntityPage {
     pub next_cursor: Option<EntityIndexCursor>,
     /// Whether another indexed page exists after this one.
     pub has_more: bool,
+    /// Total rows across the selected buckets when requested.
+    pub total_count: Option<u64>,
+    /// Per-entity-type totals when requested.
+    pub bucket_counts: Option<BTreeMap<EntityBucket, u64>>,
+}
+
+/// Opaque cursor into relevance, recency, and entity-key search ordering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntitySearchCursor {
+    /// Relevance score of the last returned entity.
+    pub score: i64,
+    /// Recency timestamp of the last returned entity.
+    pub sort_timestamp: i64,
+    /// Entity key of the last returned entity.
+    pub entity_key: EntityKey,
+}
+
+impl Serialize for EntitySearchCursor {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!(
+            "{}.{}.{}",
+            self.score,
+            self.sort_timestamp,
+            encode_entity_key(&self.entity_key)
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for EntitySearchCursor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let mut parts = value.splitn(3, '.');
+        let score = parts
+            .next()
+            .and_then(|part| part.parse::<i64>().ok())
+            .ok_or_else(|| D::Error::custom("invalid entity search cursor"))?;
+        let sort_timestamp = parts
+            .next()
+            .and_then(|part| part.parse::<i64>().ok())
+            .ok_or_else(|| D::Error::custom("invalid entity search cursor"))?;
+        let entity_key = parts
+            .next()
+            .ok_or_else(|| D::Error::custom("invalid entity search cursor"))
+            .and_then(|part| decode_entity_key(part).map_err(D::Error::custom))?;
+        Ok(Self {
+            score,
+            sort_timestamp,
+            entity_key,
+        })
+    }
+}
+
+/// Cache-side search over projected normalized entity metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntitySearchQuery {
+    /// Buckets to include. Empty means every indexed bucket.
+    pub buckets: Vec<EntityBucket>,
+    /// User-entered search text.
+    pub query: String,
+    /// Exclusive cursor from a preceding search page.
+    pub cursor: Option<EntitySearchCursor>,
+    /// Requested maximum page size.
+    pub limit: usize,
+    /// Whether the result should include the total number of matches.
+    pub include_total_count: bool,
+}
+
+impl EntitySearchQuery {
+    /// Page size after applying the cache-wide safety bound.
+    pub fn bounded_limit(&self) -> usize {
+        self.limit.min(MAX_ENTITY_INDEX_PAGE_SIZE)
+    }
+
+    /// Adapter result bound, including one extra match for `has_more`.
+    pub fn bounded_storage_limit(&self) -> usize {
+        self.bounded_limit().saturating_add(1)
+    }
+}
+
+/// One matching index entry ordered by relevance and recency.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntitySearchEntry {
+    /// Normalized entity key.
+    pub entity_key: EntityKey,
+    /// Projected entity bucket.
+    pub bucket: EntityBucket,
+    /// Recency timestamp in Unix milliseconds.
+    pub sort_timestamp: i64,
+    /// Shared cache-core relevance score.
+    pub score: i64,
+}
+
+/// Bounded adapter result for an entity search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntitySearchIndexResult {
+    /// At most the requested number of ordered matching entries.
+    pub entries: Vec<EntitySearchEntry>,
+    /// Total matches when requested.
+    pub total_count: Option<u64>,
+    /// Per-entity-type match totals when requested.
+    pub bucket_counts: Option<BTreeMap<EntityBucket, u64>>,
+}
+
+/// One hydrated search page returned across cache host boundaries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexedEntitySearchPage {
+    /// Hydrated matching entities in relevance order.
+    pub items: Vec<IndexedEntityItem>,
+    /// Cursor for the next page.
+    pub next_cursor: Option<EntitySearchCursor>,
+    /// Whether another search page exists.
+    pub has_more: bool,
+    /// Total matching entities when requested.
+    pub total_count: Option<u64>,
+    /// Per-entity-type match totals when requested.
+    pub bucket_counts: Option<BTreeMap<EntityBucket, u64>>,
 }
 
 /// Optional index columns persisted alongside one encoded record.
@@ -224,8 +357,8 @@ pub struct RecordIndexMetadata {
 /// Derives Quick Access index metadata from a fully merged normalized record.
 ///
 /// Unsupported entities, people, calls, and tombstoned records are left
-/// unindexed. Task and snippet subtypes take precedence over file type;
-/// otherwise markdown documents use the `note` bucket.
+/// unindexed. Document and channel subtypes remain fields on their normalized
+/// records rather than becoming cache-index entity types.
 pub fn record_index_metadata(key: &EntityKey, record: &Record) -> Option<RecordIndexMetadata> {
     if key.is_root() || is_deleted(record) {
         return None;
@@ -233,11 +366,11 @@ pub fn record_index_metadata(key: &EntityKey, record: &Record) -> Option<RecordI
 
     let typename = record.typename()?;
     let bucket = match typename {
-        "GraphqlSoupDocument" => document_bucket(record),
+        "GraphqlSoupDocument" => EntityBucket::Document,
         "GraphqlSoupChat" => EntityBucket::Chat,
         "GraphqlSoupProject" => EntityBucket::Project,
         "GraphqlSoupEmailThread" => EntityBucket::Email,
-        "GraphqlSoupChannel" => channel_bucket(record),
+        "GraphqlSoupChannel" => EntityBucket::Channel,
         "GraphqlSoupCrmCompany" => EntityBucket::CrmCompany,
         _ => return None,
     };
@@ -258,43 +391,159 @@ pub fn record_index_metadata(key: &EntityKey, record: &Record) -> Option<RecordI
     })
 }
 
+fn string_field<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
+    match record.fields.get(field) {
+        Some(CacheValue::String(value)) => Some(value),
+        _ => None,
+    }
+}
+
+fn append_string_field(parts: &mut Vec<String>, record: &Record, field: &str) {
+    if let Some(value) = string_field(record, field)
+        && !value.trim().is_empty()
+    {
+        parts.push(value.to_string());
+    }
+}
+
+fn append_string_list(parts: &mut Vec<String>, record: &Record, field: &str) {
+    let Some(CacheValue::List(values)) = record.fields.get(field) else {
+        return;
+    };
+    parts.extend(values.iter().filter_map(|value| match value {
+        CacheValue::String(value) if !value.trim().is_empty() => Some(value.clone()),
+        _ => None,
+    }));
+}
+
+/// Projects searchable scalar text directly from a normalized entity record.
+pub fn record_search_text(record: &Record) -> Option<String> {
+    let typename = record.typename()?;
+    let mut parts = Vec::new();
+    match typename {
+        "GraphqlSoupDocument" => append_string_field(&mut parts, record, "documentName"),
+        "GraphqlSoupChat" => append_string_field(&mut parts, record, "chatName"),
+        "GraphqlSoupProject" => append_string_field(&mut parts, record, "projectName"),
+        "GraphqlSoupEmailThread" => {
+            for field in ["emailName", "senderName", "senderEmail", "snippet"] {
+                append_string_field(&mut parts, record, field);
+            }
+        }
+        "GraphqlSoupChannel" => append_string_field(&mut parts, record, "channelName"),
+        "GraphqlSoupCrmCompany" => {
+            append_string_field(&mut parts, record, "crmCompanyName");
+            append_string_field(&mut parts, record, "description");
+            append_string_list(&mut parts, record, "domains");
+        }
+        _ => return None,
+    }
+    // Support normalized responses that used a GraphQL alias for the name.
+    append_string_field(&mut parts, record, "name");
+    Some(parts.join(" "))
+}
+
+/// Lower-cased non-empty terms used by every storage search implementation.
+pub fn normalized_search_terms(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .map(|term| term.to_lowercase())
+        .filter(|term| !term.is_empty())
+        .collect()
+}
+
+/// Computes a deterministic relevance score for projected search text.
+///
+/// Every query term must occur as a case-insensitive substring. Exact,
+/// leading, and word-prefix matches rank above later substring matches.
+pub fn entity_search_score(search_text: &str, query: &str) -> Option<i64> {
+    let terms = normalized_search_terms(query);
+    if terms.is_empty() {
+        return Some(0);
+    }
+    let text = search_text.to_lowercase();
+    let mut position_penalty = 0_i64;
+    for term in &terms {
+        let position = text.find(term)?;
+        position_penalty = position_penalty.saturating_add(position as i64);
+    }
+
+    let normalized_query = terms.join(" ");
+    let base = if text == normalized_query {
+        1_000_000
+    } else if text.starts_with(&normalized_query) {
+        900_000
+    } else if text
+        .split(|character: char| !character.is_alphanumeric())
+        .any(|word| word.starts_with(&normalized_query))
+    {
+        800_000
+    } else {
+        700_000
+    };
+    Some(
+        base - position_penalty.saturating_mul(100)
+            - i64::try_from(text.len().min(10_000)).unwrap_or(10_000),
+    )
+}
+
+/// Comparator for relevance DESC, recency DESC, entity key ASC.
+pub fn entity_search_entry_order(left: &EntitySearchEntry, right: &EntitySearchEntry) -> Ordering {
+    right
+        .score
+        .cmp(&left.score)
+        .then_with(|| right.sort_timestamp.cmp(&left.sort_timestamp))
+        .then_with(|| left.entity_key.cmp(&right.entity_key))
+}
+
+/// Whether an entry occurs strictly after an opaque search cursor.
+pub fn entity_search_entry_after_cursor(
+    entry: &EntitySearchEntry,
+    cursor: Option<&EntitySearchCursor>,
+) -> bool {
+    cursor.is_none_or(|cursor| {
+        entry.score < cursor.score
+            || (entry.score == cursor.score
+                && (entry.sort_timestamp < cursor.sort_timestamp
+                    || (entry.sort_timestamp == cursor.sort_timestamp
+                        && entry.entity_key > cursor.entity_key)))
+    })
+}
+
+/// Retains only the best `limit` entries while an adapter streams matches.
+pub fn push_bounded_search_entry(
+    entries: &mut Vec<EntitySearchEntry>,
+    entry: EntitySearchEntry,
+    limit: usize,
+) {
+    if limit == 0 {
+        return;
+    }
+    if entries.len() < limit {
+        entries.push(entry);
+        return;
+    }
+    let Some((worst_index, worst)) = entries
+        .iter()
+        .enumerate()
+        .max_by(|(_, left), (_, right)| entity_search_entry_order(left, right))
+    else {
+        return;
+    };
+    if entity_search_entry_order(&entry, worst) == Ordering::Less {
+        entries[worst_index] = entry;
+    }
+}
+
+/// Sorts a bounded adapter result into the shared search order.
+pub fn sort_search_entries(entries: &mut [EntitySearchEntry]) {
+    entries.sort_by(entity_search_entry_order);
+}
+
 fn is_deleted(record: &Record) -> bool {
     !matches!(
         record.fields.get("deletedAt"),
         None | Some(CacheValue::Null)
     )
-}
-
-fn document_bucket(record: &Record) -> EntityBucket {
-    let kind = match record.fields.get("subType") {
-        Some(CacheValue::Object(fields)) => match fields.get("kind") {
-            Some(CacheValue::String(kind)) => Some(kind.as_str()),
-            _ => None,
-        },
-        _ => None,
-    };
-
-    match kind {
-        Some(kind) if kind.eq_ignore_ascii_case("task") => EntityBucket::Task,
-        Some(kind) if kind.eq_ignore_ascii_case("snippet") => EntityBucket::Snippet,
-        _ => match record.fields.get("fileType") {
-            Some(CacheValue::String(file_type)) if file_type.eq_ignore_ascii_case("md") => {
-                EntityBucket::Note
-            }
-            _ => EntityBucket::Document,
-        },
-    }
-}
-
-fn channel_bucket(record: &Record) -> EntityBucket {
-    match record.fields.get("channelType") {
-        Some(CacheValue::String(channel_type))
-            if channel_type.eq_ignore_ascii_case("direct_message") =>
-        {
-            EntityBucket::Dm
-        }
-        _ => EntityBucket::Channel,
-    }
 }
 
 fn timestamp(record: &Record, field: &str) -> Option<i64> {

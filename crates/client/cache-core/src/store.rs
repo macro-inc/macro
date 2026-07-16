@@ -6,7 +6,11 @@
 //! from a multi-threaded runtime), unbounded on wasm — wasm futures aren't
 //! `Send`.
 
-use crate::entity_index::{EntityIndexEntry, EntityIndexQuery, record_index_metadata};
+use crate::entity_index::{
+    EntityIndexEntry, EntityIndexQuery, EntitySearchEntry, EntitySearchIndexResult,
+    EntitySearchQuery, entity_search_entry_after_cursor, entity_search_score,
+    push_bounded_search_entry, record_index_metadata, record_search_text, sort_search_entries,
+};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -46,6 +50,20 @@ pub trait Storage: MaybeSend {
         &self,
         query: &EntityIndexQuery,
     ) -> impl Future<Output = Result<Vec<EntityIndexEntry>, Self::Error>> + MaybeSend;
+
+    /// Counts indexed entities across the selected buckets. An empty bucket
+    /// list means all indexed entities.
+    fn count_entity_index(
+        &self,
+        buckets: &[crate::entity_index::EntityBucket],
+    ) -> impl Future<Output = Result<u64, Self::Error>> + MaybeSend;
+
+    /// Searches projected entity metadata without hydrating non-matching
+    /// normalized records.
+    fn search_entity_index(
+        &self,
+        query: &EntitySearchQuery,
+    ) -> impl Future<Output = Result<EntitySearchIndexResult, Self::Error>> + MaybeSend;
 
     /// Atomically appends a mutation and its optimistic layer to the queue.
     fn enqueue_mutation(
@@ -182,6 +200,63 @@ impl Storage for InMemoryStorage {
         });
         entries.truncate(query.bounded_storage_limit());
         Ok(entries)
+    }
+
+    async fn count_entity_index(
+        &self,
+        buckets: &[crate::entity_index::EntityBucket],
+    ) -> Result<u64, Self::Error> {
+        let buckets: std::collections::HashSet<_> = buckets.iter().copied().collect();
+        Ok(self
+            .records
+            .iter()
+            .filter(|(entity_key, record)| {
+                record_index_metadata(entity_key, record).is_some_and(|metadata| {
+                    buckets.is_empty() || buckets.contains(&metadata.bucket)
+                })
+            })
+            .count() as u64)
+    }
+
+    async fn search_entity_index(
+        &self,
+        query: &EntitySearchQuery,
+    ) -> Result<EntitySearchIndexResult, Self::Error> {
+        let buckets: std::collections::HashSet<_> = query.buckets.iter().copied().collect();
+        let mut entries = Vec::with_capacity(query.bounded_storage_limit());
+        let mut total_count = 0_u64;
+        let mut bucket_counts = BTreeMap::new();
+        for (entity_key, record) in &self.records {
+            let Some(metadata) = record_index_metadata(entity_key, record) else {
+                continue;
+            };
+            if !buckets.is_empty() && !buckets.contains(&metadata.bucket) {
+                continue;
+            }
+            let Some(search_text) = record_search_text(record) else {
+                continue;
+            };
+            let Some(score) = entity_search_score(&search_text, &query.query) else {
+                continue;
+            };
+            total_count = total_count.saturating_add(1);
+            *bucket_counts.entry(metadata.bucket).or_default() += 1;
+            let entry = EntitySearchEntry {
+                entity_key: entity_key.clone(),
+                bucket: metadata.bucket,
+                sort_timestamp: metadata.sort_timestamp,
+                score,
+            };
+            if entity_search_entry_after_cursor(&entry, query.cursor.as_ref()) {
+                push_bounded_search_entry(&mut entries, entry, query.bounded_storage_limit());
+            }
+        }
+        sort_search_entries(&mut entries);
+        Ok(EntitySearchIndexResult {
+            entries,
+            total_count: query.include_total_count.then_some(total_count),
+            bucket_counts: query.include_total_count.then_some(bucket_counts),
+        })
     }
 
     async fn enqueue_mutation(

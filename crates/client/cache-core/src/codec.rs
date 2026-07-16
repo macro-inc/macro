@@ -12,7 +12,7 @@ use thiserror::Error;
 
 /// Bump when the stored representation of [`Record`]/[`CacheValue`]
 /// (or anything else persisted) changes incompatibly.
-pub const CACHE_FORMAT_VERSION: u32 = 3;
+pub const CACHE_FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum CodecError {

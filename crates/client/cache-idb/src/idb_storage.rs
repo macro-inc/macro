@@ -3,7 +3,10 @@ use cache_core::codec::{
     decode_stored_mutation, encode_optimistic_layer, encode_record, encode_stored_mutation,
 };
 use cache_core::entity_index::{
-    EntityBucket, EntityIndexEntry, EntityIndexQuery, ParseEntityBucketError, record_index_metadata,
+    EntityBucket, EntityIndexEntry, EntityIndexQuery, EntitySearchEntry, EntitySearchIndexResult,
+    EntitySearchQuery, ParseEntityBucketError, entity_search_entry_after_cursor,
+    entity_search_score, push_bounded_search_entry, record_index_metadata, record_search_text,
+    sort_search_entries,
 };
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
@@ -15,6 +18,7 @@ use idb::{
     CursorDirection, Database, DatabaseEvent, Factory, Index, IndexParams, KeyPath, KeyRange,
     ObjectStoreParams, Query, TransactionMode,
 };
+use std::collections::BTreeMap;
 use thiserror::Error;
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -24,7 +28,7 @@ const MUTATION_QUEUE_STORE: &str = "mutation_queue";
 const OPTIMISTIC_LAYERS_STORE: &str = "optimistic_layers";
 const RECORDS_BY_SORT_INDEX: &str = "records_by_sort";
 const RECORDS_BY_BUCKET_SORT_INDEX: &str = "records_by_bucket_sort";
-const DB_VERSION: u32 = 2;
+const DB_VERSION: u32 = 3;
 const SCOPE_META_KEY: &str = "scope";
 const NAMESPACE_META_KEY: &str = "namespace";
 
@@ -194,6 +198,54 @@ async fn collect_index_entries(
         cursor.next(None).await?;
     }
     Ok(entries)
+}
+
+async fn search_index_entries(
+    index: &Index,
+    query: &EntitySearchQuery,
+) -> Result<EntitySearchIndexResult, IdbStorageError> {
+    let Some(cursor) = index
+        .open_cursor(None, Some(CursorDirection::Next))?
+        .await?
+    else {
+        return Ok(EntitySearchIndexResult {
+            entries: Vec::new(),
+            total_count: query.include_total_count.then_some(0),
+            bucket_counts: query.include_total_count.then_some(BTreeMap::new()),
+        });
+    };
+    let buckets: std::collections::HashSet<_> = query.buckets.iter().copied().collect();
+    let mut cursor = cursor.into_managed();
+    let mut entries = Vec::with_capacity(query.bounded_storage_limit());
+    let mut total_count = 0_u64;
+    let mut bucket_counts = BTreeMap::new();
+    while let Some(value) = cursor.value()? {
+        let index_entry = index_entry_from_envelope(&value)?;
+        if buckets.is_empty() || buckets.contains(&index_entry.bucket) {
+            let record = decode_record(&record_bytes_from_envelope(&value)?)?;
+            let search_text = record_search_text(&record).unwrap_or_default();
+            if let Some(score) = entity_search_score(&search_text, &query.query) {
+                total_count = total_count.saturating_add(1);
+                *bucket_counts.entry(index_entry.bucket).or_default() += 1;
+                let entry = EntitySearchEntry {
+                    entity_key: index_entry.entity_key,
+                    bucket: index_entry.bucket,
+                    sort_timestamp: index_entry.sort_timestamp,
+                    score,
+                };
+                if entity_search_entry_after_cursor(&entry, query.cursor.as_ref()) {
+                    push_bounded_search_entry(&mut entries, entry, query.bounded_storage_limit());
+                }
+            }
+        }
+        cursor.next(None).await?;
+    }
+    sort_search_entries(&mut entries);
+    Ok(EntitySearchIndexResult {
+        entries,
+        total_count: query.include_total_count.then_some(total_count),
+        bucket_counts: query.include_total_count.then_some(bucket_counts),
+    })
 }
 
 fn mutation_id_from_js(value: &JsValue) -> Result<MutationId, IdbStorageError> {
@@ -483,6 +535,51 @@ impl Storage for IdbStorage {
         });
         entries.truncate(query.bounded_storage_limit());
         Ok(entries)
+    }
+
+    async fn count_entity_index(&self, buckets: &[EntityBucket]) -> Result<u64, Self::Error> {
+        let tx = self
+            .db
+            .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
+        let index = tx
+            .object_store(RECORDS_STORE)?
+            .index(RECORDS_BY_BUCKET_SORT_INDEX)?;
+        if buckets.is_empty() {
+            let global_index = tx
+                .object_store(RECORDS_STORE)?
+                .index(RECORDS_BY_SORT_INDEX)?;
+            return Ok(u64::from(global_index.count(None)?.await?));
+        }
+
+        let buckets: std::collections::HashSet<_> = buckets.iter().copied().collect();
+        let mut requests = Vec::with_capacity(buckets.len());
+        for bucket in buckets {
+            let lower = compound_key([JsValue::from_str(bucket.as_str())]);
+            let upper = compound_key([
+                JsValue::from_str(bucket.as_str()),
+                js_sys::Array::new().into(),
+            ]);
+            let range = KeyRange::bound(&lower, &upper, None, Some(true))?;
+            requests.push(index.count(Some(Query::from(range)))?);
+        }
+        let mut count = 0_u64;
+        for request in requests {
+            count += u64::from(request.await?);
+        }
+        Ok(count)
+    }
+
+    async fn search_entity_index(
+        &self,
+        query: &EntitySearchQuery,
+    ) -> Result<EntitySearchIndexResult, Self::Error> {
+        let tx = self
+            .db
+            .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
+        let index = tx
+            .object_store(RECORDS_STORE)?
+            .index(RECORDS_BY_SORT_INDEX)?;
+        search_index_entries(&index, query).await
     }
 
     async fn enqueue_mutation(

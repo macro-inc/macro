@@ -6,7 +6,8 @@ use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormaliz
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
 use crate::entity_index::{
-    EntityIndexCursor, EntityIndexQuery, IndexedEntityPage, indexed_entity_item,
+    EntityBucket, EntityIndexCursor, EntityIndexEntry, EntityIndexQuery, EntitySearchCursor,
+    EntitySearchQuery, IndexedEntityPage, IndexedEntitySearchPage, indexed_entity_item,
 };
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
 use crate::queue::{
@@ -370,12 +371,36 @@ impl<S: Storage> Engine<S> {
         &mut self,
         query: &EntityIndexQuery,
     ) -> Result<IndexedEntityPage, EngineError<S::Error>> {
+        let bucket_counts = if query.include_total_count {
+            let buckets: BTreeSet<_> = if query.buckets.is_empty() {
+                EntityBucket::ALL.into_iter().collect()
+            } else {
+                query.buckets.iter().copied().collect()
+            };
+            let mut counts = BTreeMap::new();
+            for bucket in buckets {
+                let count = self
+                    .storage
+                    .count_entity_index(&[bucket])
+                    .await
+                    .map_err(EngineError::Storage)?;
+                counts.insert(bucket, count);
+            }
+            Some(counts)
+        } else {
+            None
+        };
+        let total_count = bucket_counts
+            .as_ref()
+            .map(|counts| counts.values().copied().sum());
         let page_limit = query.bounded_limit();
         if page_limit == 0 {
             return Ok(IndexedEntityPage {
                 items: Vec::new(),
                 next_cursor: None,
-                has_more: false,
+                has_more: total_count.is_some_and(|count| count > 0),
+                total_count,
+                bucket_counts,
             });
         }
 
@@ -383,6 +408,7 @@ impl<S: Storage> Engine<S> {
             buckets: query.buckets.clone(),
             cursor: query.cursor.clone(),
             limit: page_limit.saturating_add(1),
+            include_total_count: false,
         };
         let mut entries = self
             .storage
@@ -422,6 +448,78 @@ impl<S: Storage> Engine<S> {
             items,
             next_cursor,
             has_more,
+            total_count,
+            bucket_counts,
+        })
+    }
+
+    /// Searches durable projected metadata and hydrates only the matching
+    /// normalized records returned by the requested page.
+    pub async fn search_indexed_items(
+        &mut self,
+        query: &EntitySearchQuery,
+    ) -> Result<IndexedEntitySearchPage, EngineError<S::Error>> {
+        let page_limit = query.bounded_limit();
+        let mut result = self
+            .storage
+            .search_entity_index(query)
+            .await
+            .map_err(EngineError::Storage)?;
+        if page_limit == 0 {
+            return Ok(IndexedEntitySearchPage {
+                items: Vec::new(),
+                next_cursor: None,
+                has_more: result.total_count.is_some_and(|count| count > 0),
+                total_count: result.total_count,
+                bucket_counts: result.bucket_counts,
+            });
+        }
+        let has_more = result.entries.len() > page_limit;
+        result.entries.truncate(page_limit);
+        let next_cursor = has_more.then(|| {
+            let last = result
+                .entries
+                .last()
+                .expect("a search page with more entries contains a last item");
+            EntitySearchCursor {
+                score: last.score,
+                sort_timestamp: last.sort_timestamp,
+                entity_key: last.entity_key.clone(),
+            }
+        });
+
+        let keys: BTreeSet<_> = result
+            .entries
+            .iter()
+            .map(|entry| entry.entity_key.clone())
+            .collect();
+        let bases = self.load_bases(&keys).await?;
+        let items = result
+            .entries
+            .into_iter()
+            .map(|entry| {
+                let entity_key = entry.entity_key.clone();
+                let record = bases
+                    .get(&entity_key)
+                    .ok_or_else(|| EngineError::InvalidIndexedRecord(entity_key.clone()))?;
+                indexed_entity_item(
+                    EntityIndexEntry {
+                        entity_key: entry.entity_key,
+                        bucket: entry.bucket,
+                        sort_timestamp: entry.sort_timestamp,
+                    },
+                    record,
+                )
+                .ok_or(EngineError::InvalidIndexedRecord(entity_key))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(IndexedEntitySearchPage {
+            items,
+            next_cursor,
+            has_more,
+            total_count: result.total_count,
+            bucket_counts: result.bucket_counts,
         })
     }
 

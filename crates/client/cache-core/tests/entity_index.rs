@@ -84,6 +84,7 @@ fn engine_pages_filters_and_decodes_indexed_entities() {
                 buckets: Vec::new(),
                 cursor: None,
                 limit: 2,
+                include_total_count: true,
             })
             .await
             .unwrap();
@@ -93,7 +94,10 @@ fn engine_pages_filters_and_decodes_indexed_entities() {
                 .iter()
                 .map(|item| (item.id.as_str(), item.bucket))
                 .collect::<Vec<_>>(),
-            vec![("doc-a", EntityBucket::Task), ("doc-b", EntityBucket::Note),]
+            vec![
+                ("doc-a", EntityBucket::Document),
+                ("doc-b", EntityBucket::Document),
+            ]
         );
         assert!(first.has_more);
         assert_eq!(first.items[1].entity["name"], "Entity doc-b");
@@ -104,6 +108,7 @@ fn engine_pages_filters_and_decodes_indexed_entities() {
                 buckets: Vec::new(),
                 cursor: first.next_cursor,
                 limit: 2,
+                include_total_count: false,
             })
             .await
             .unwrap();
@@ -120,9 +125,10 @@ fn engine_pages_filters_and_decodes_indexed_entities() {
 
         let selected = engine
             .query_indexed_items(&EntityIndexQuery {
-                buckets: vec![EntityBucket::Note, EntityBucket::Chat],
+                buckets: vec![EntityBucket::Document, EntityBucket::Chat],
                 cursor: None,
                 limit: 10,
+                include_total_count: true,
             })
             .await
             .unwrap();

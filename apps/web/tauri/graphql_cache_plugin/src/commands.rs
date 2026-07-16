@@ -16,7 +16,8 @@ use crate::{
     CacheState, InitializedCache, emit_entity_index_changed, emit_ops_affected,
 };
 use cache_core::entity_index::{
-    EntityBucket, EntityIndexCursor, EntityIndexQuery, IndexedEntityPage,
+    EntityBucket, EntityIndexCursor, EntityIndexQuery, EntitySearchCursor, EntitySearchQuery,
+    IndexedEntityPage, IndexedEntitySearchPage,
 };
 use cache_sqlite::SqliteStorage;
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -92,12 +93,35 @@ pub async fn graphql_cache_query_indexed_items(
     buckets: Vec<EntityBucket>,
     cursor: Option<EntityIndexCursor>,
     limit: u32,
+    include_total_count: bool,
 ) -> Result<IndexedEntityPage, String> {
     engine_handle(&state)?
         .query_indexed_items(EntityIndexQuery {
             buckets,
             cursor,
             limit: limit as usize,
+            include_total_count,
+        })
+        .await
+}
+
+/// Searches projected durable entity metadata.
+#[tauri::command]
+pub async fn graphql_cache_search_indexed_items(
+    state: State<'_, CacheState>,
+    buckets: Vec<EntityBucket>,
+    query: String,
+    cursor: Option<EntitySearchCursor>,
+    limit: u32,
+    include_total_count: bool,
+) -> Result<IndexedEntitySearchPage, String> {
+    engine_handle(&state)?
+        .search_indexed_items(EntitySearchQuery {
+            buckets,
+            query,
+            cursor,
+            limit: limit as usize,
+            include_total_count,
         })
         .await
 }

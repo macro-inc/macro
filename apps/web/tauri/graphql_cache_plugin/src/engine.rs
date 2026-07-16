@@ -13,7 +13,9 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{Engine, ReadResult, WriteResult};
-use cache_core::entity_index::{EntityIndexQuery, IndexedEntityPage};
+use cache_core::entity_index::{
+    EntityIndexQuery, EntitySearchQuery, IndexedEntityPage, IndexedEntitySearchPage,
+};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
@@ -212,6 +214,20 @@ impl EngineHandle {
             .await
             .engine
             .query_indexed_items(&query)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    /// Searches projected metadata and hydrates one matching page.
+    pub async fn search_indexed_items(
+        &self,
+        query: EntitySearchQuery,
+    ) -> Result<IndexedEntitySearchPage, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .search_indexed_items(&query)
             .await
             .map_err(|e| e.to_string())
     }

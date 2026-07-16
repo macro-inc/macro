@@ -17,7 +17,10 @@ use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
 use cache_core::entity_index::{
-    EntityBucket, EntityIndexEntry, EntityIndexQuery, ParseEntityBucketError, record_index_metadata,
+    EntityBucket, EntityIndexEntry, EntityIndexQuery, EntitySearchEntry, EntitySearchIndexResult,
+    EntitySearchQuery, ParseEntityBucketError, entity_search_entry_after_cursor,
+    entity_search_score, push_bounded_search_entry, record_index_metadata, record_search_text,
+    sort_search_entries,
 };
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
@@ -26,6 +29,7 @@ use cache_core::queue::{
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
 use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
@@ -68,7 +72,6 @@ fn ensure_record_index_schema(conn: &Connection) -> Result<(), SqliteStorageErro
     if !column_names.iter().any(|name| name == "sort_timestamp") {
         conn.execute("ALTER TABLE records ADD COLUMN sort_timestamp INTEGER", [])?;
     }
-
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS records_by_sort
              ON records(sort_timestamp DESC, key ASC)
@@ -363,6 +366,79 @@ impl Storage for SqliteStorage {
             });
         }
         Ok(entries)
+    }
+
+    async fn count_entity_index(&self, buckets: &[EntityBucket]) -> Result<u64, Self::Error> {
+        let mut sql = String::from("SELECT COUNT(*) FROM records WHERE bucket IS NOT NULL");
+        let mut values = Vec::<rusqlite::types::Value>::new();
+        if !buckets.is_empty() {
+            sql.push_str(" AND bucket IN (");
+            sql.push_str(&vec!["?"; buckets.len()].join(", "));
+            sql.push(')');
+            values.extend(
+                buckets
+                    .iter()
+                    .map(|bucket| bucket.as_str().to_string().into()),
+            );
+        }
+
+        Ok(self
+            .conn()
+            .query_row(&sql, params_from_iter(values.iter()), |row| row.get(0))?)
+    }
+
+    async fn search_entity_index(
+        &self,
+        query: &EntitySearchQuery,
+    ) -> Result<EntitySearchIndexResult, Self::Error> {
+        let mut sql = String::from(
+            "SELECT key, bucket, sort_timestamp, value
+             FROM records WHERE bucket IS NOT NULL",
+        );
+        let mut values = Vec::<rusqlite::types::Value>::new();
+        if !query.buckets.is_empty() {
+            sql.push_str(" AND bucket IN (");
+            sql.push_str(&vec!["?"; query.buckets.len()].join(", "));
+            sql.push(')');
+            values.extend(
+                query
+                    .buckets
+                    .iter()
+                    .map(|bucket| bucket.as_str().to_string().into()),
+            );
+        }
+
+        let conn = self.conn();
+        let mut statement = conn.prepare(&sql)?;
+        let mut rows = statement.query(params_from_iter(values.iter()))?;
+        let mut entries = Vec::with_capacity(query.bounded_storage_limit());
+        let mut total_count = 0_u64;
+        let mut bucket_counts = BTreeMap::new();
+        while let Some(row) = rows.next()? {
+            let record = decode_record(&row.get::<_, Vec<u8>>(3)?)?;
+            let search_text = record_search_text(&record).unwrap_or_default();
+            let Some(score) = entity_search_score(&search_text, &query.query) else {
+                continue;
+            };
+            total_count = total_count.saturating_add(1);
+            let bucket = row.get::<_, String>(1)?.parse::<EntityBucket>()?;
+            *bucket_counts.entry(bucket).or_default() += 1;
+            let entry = EntitySearchEntry {
+                entity_key: EntityKey(row.get(0)?),
+                bucket,
+                sort_timestamp: row.get(2)?,
+                score,
+            };
+            if entity_search_entry_after_cursor(&entry, query.cursor.as_ref()) {
+                push_bounded_search_entry(&mut entries, entry, query.bounded_storage_limit());
+            }
+        }
+        sort_search_entries(&mut entries);
+        Ok(EntitySearchIndexResult {
+            entries,
+            total_count: query.include_total_count.then_some(total_count),
+            bucket_counts: query.include_total_count.then_some(bucket_counts),
+        })
     }
 
     async fn enqueue_mutation(

@@ -119,6 +119,7 @@ fn queries_all_and_selected_buckets_with_an_exclusive_cursor() {
         buckets: Vec::new(),
         cursor: None,
         limit: 2,
+        include_total_count: false,
     }))
     .unwrap();
     assert_eq!(
@@ -130,9 +131,10 @@ fn queries_all_and_selected_buckets_with_an_exclusive_cursor() {
     );
 
     let selected = block_on(storage.query_entity_index(&EntityIndexQuery {
-        buckets: vec![EntityBucket::Note, EntityBucket::Task],
+        buckets: vec![EntityBucket::Document],
         cursor: None,
         limit: 10,
+        include_total_count: false,
     }))
     .unwrap();
     assert_eq!(
@@ -144,12 +146,13 @@ fn queries_all_and_selected_buckets_with_an_exclusive_cursor() {
     );
 
     let second = block_on(storage.query_entity_index(&EntityIndexQuery {
-        buckets: vec![EntityBucket::Note],
+        buckets: vec![EntityBucket::Document],
         cursor: Some(EntityIndexCursor {
             sort_timestamp: first[1].sort_timestamp,
             entity_key: first[1].entity_key.clone(),
         }),
         limit: 2,
+        include_total_count: false,
     }))
     .unwrap();
     assert_eq!(second.len(), 1);

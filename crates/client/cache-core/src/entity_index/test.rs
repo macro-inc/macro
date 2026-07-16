@@ -43,25 +43,25 @@ fn document_with_subtype(kind: Option<&str>) -> Record {
 }
 
 #[test]
-fn documents_distinguish_notes_tasks_and_snippets() {
+fn document_subtypes_share_one_indexed_entity_type() {
     let document = document_with_subtype(None);
     assert_eq!(metadata(&document).unwrap().bucket, EntityBucket::Document);
 
     let mut note = document_with_subtype(None);
     set_string(&mut note, "fileType", "md");
-    assert_eq!(metadata(&note).unwrap().bucket, EntityBucket::Note);
+    assert_eq!(metadata(&note).unwrap().bucket, EntityBucket::Document);
 
     let mut task = document_with_subtype(Some("task"));
     set_string(&mut task, "fileType", "md");
-    assert_eq!(metadata(&task).unwrap().bucket, EntityBucket::Task);
+    assert_eq!(metadata(&task).unwrap().bucket, EntityBucket::Document);
 
     let mut snippet = document_with_subtype(Some("snippet"));
     set_string(&mut snippet, "fileType", "md");
-    assert_eq!(metadata(&snippet).unwrap().bucket, EntityBucket::Snippet);
+    assert_eq!(metadata(&snippet).unwrap().bucket, EntityBucket::Document);
 }
 
 #[test]
-fn maps_supported_entity_types_and_channel_kinds() {
+fn maps_supported_entity_types_and_groups_channel_kinds() {
     for (typename, expected) in [
         ("GraphqlSoupChat", EntityBucket::Chat),
         ("GraphqlSoupProject", EntityBucket::Project),
@@ -76,7 +76,7 @@ fn maps_supported_entity_types_and_channel_kinds() {
 
     let mut dm = entity("GraphqlSoupChannel");
     set_string(&mut dm, "channelType", "direct_message");
-    assert_eq!(metadata(&dm).unwrap().bucket, EntityBucket::Dm);
+    assert_eq!(metadata(&dm).unwrap().bucket, EntityBucket::Channel);
 }
 
 #[test]
@@ -131,14 +131,10 @@ fn uses_entity_specific_timestamp_precedence() {
 fn bucket_strings_round_trip_and_query_limits_are_bounded() {
     for bucket in [
         EntityBucket::Document,
-        EntityBucket::Note,
-        EntityBucket::Task,
-        EntityBucket::Snippet,
         EntityBucket::Chat,
         EntityBucket::Project,
         EntityBucket::Email,
         EntityBucket::Channel,
-        EntityBucket::Dm,
         EntityBucket::CrmCompany,
     ] {
         assert_eq!(bucket.as_str().parse::<EntityBucket>().unwrap(), bucket);
@@ -148,6 +144,7 @@ fn bucket_strings_round_trip_and_query_limits_are_bounded() {
         buckets: Vec::new(),
         cursor: None,
         limit: usize::MAX,
+        include_total_count: false,
     };
     assert_eq!(query.bounded_limit(), MAX_ENTITY_INDEX_PAGE_SIZE);
     assert_eq!(

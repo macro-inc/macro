@@ -135,14 +135,15 @@ fn indexed_query_returns_native_cache_entities() {
     .unwrap();
 
     let page = block_on(handle.query_indexed_items(EntityIndexQuery {
-        buckets: vec![EntityBucket::Note],
+        buckets: vec![EntityBucket::Document],
         cursor: None,
         limit: 10,
+        include_total_count: true,
     }))
     .unwrap();
     assert_eq!(page.items.len(), 1);
     assert_eq!(page.items[0].id, "doc-1");
-    assert_eq!(page.items[0].bucket, EntityBucket::Note);
+    assert_eq!(page.items[0].bucket, EntityBucket::Document);
 }
 
 #[test]

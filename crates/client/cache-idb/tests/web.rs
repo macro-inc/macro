@@ -135,6 +135,7 @@ async fn persists_quick_access_index_metadata() {
             buckets: Vec::new(),
             cursor: None,
             limit: 2,
+            include_total_count: false,
         })
         .await
         .unwrap();
@@ -146,12 +147,13 @@ async fn persists_quick_access_index_metadata() {
     );
     let selected = storage
         .query_entity_index(&EntityIndexQuery {
-            buckets: vec![EntityBucket::Task, EntityBucket::Note],
+            buckets: vec![EntityBucket::Document],
             cursor: Some(EntityIndexCursor {
                 sort_timestamp: all[0].sort_timestamp,
                 entity_key: all[0].entity_key.clone(),
             }),
             limit: 3,
+            include_total_count: false,
         })
         .await
         .unwrap();

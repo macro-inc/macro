@@ -1,7 +1,9 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
 use cache_core::engine::{Engine, ReadResult};
-use cache_core::entity_index::{EntityBucket, EntityIndexCursor, EntityIndexQuery};
+use cache_core::entity_index::{
+    EntityBucket, EntityIndexCursor, EntityIndexQuery, EntitySearchCursor, EntitySearchQuery,
+};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
@@ -181,16 +183,21 @@ fn parse_variables(
     serde_wasm_bindgen::from_value(variables).map_err(err_js)
 }
 
+fn parse_buckets(buckets: JsValue) -> Result<Vec<EntityBucket>, JsValue> {
+    if buckets.is_undefined() || buckets.is_null() {
+        Ok(Vec::new())
+    } else {
+        serde_wasm_bindgen::from_value::<Vec<EntityBucket>>(buckets).map_err(err_js)
+    }
+}
+
 fn parse_index_query(
     buckets: JsValue,
     cursor: JsValue,
     limit: u32,
+    include_total_count: bool,
 ) -> Result<EntityIndexQuery, JsValue> {
-    let buckets = if buckets.is_undefined() || buckets.is_null() {
-        Vec::new()
-    } else {
-        serde_wasm_bindgen::from_value::<Vec<EntityBucket>>(buckets).map_err(err_js)?
-    };
+    let buckets = parse_buckets(buckets)?;
     let cursor = if cursor.is_undefined() || cursor.is_null() {
         None
     } else {
@@ -200,6 +207,28 @@ fn parse_index_query(
         buckets,
         cursor,
         limit: limit as usize,
+        include_total_count,
+    })
+}
+
+fn parse_search_query(
+    buckets: JsValue,
+    query: String,
+    cursor: JsValue,
+    limit: u32,
+    include_total_count: bool,
+) -> Result<EntitySearchQuery, JsValue> {
+    let cursor = if cursor.is_undefined() || cursor.is_null() {
+        None
+    } else {
+        Some(serde_wasm_bindgen::from_value::<EntitySearchCursor>(cursor).map_err(err_js)?)
+    };
+    Ok(EntitySearchQuery {
+        buckets: parse_buckets(buckets)?,
+        query,
+        cursor,
+        limit: limit as usize,
+        include_total_count,
     })
 }
 
@@ -240,12 +269,33 @@ impl CacheEngine {
         buckets: JsValue,
         cursor: JsValue,
         limit: u32,
+        include_total_count: bool,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         future_to_promise(async move {
-            let query = parse_index_query(buckets, cursor, limit)?;
+            let query = parse_index_query(buckets, cursor, limit, include_total_count)?;
             let mut engine = engine.lock().await;
             let page = engine.query_indexed_items(&query).await.map_err(err_js)?;
+            to_js(&page)
+        })
+    }
+
+    /// Searches projected durable entity metadata and hydrates only one
+    /// matching page.
+    #[wasm_bindgen(js_name = searchIndexedItems)]
+    pub fn search_indexed_items(
+        &self,
+        buckets: JsValue,
+        query: String,
+        cursor: JsValue,
+        limit: u32,
+        include_total_count: bool,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let query = parse_search_query(buckets, query, cursor, limit, include_total_count)?;
+            let mut engine = engine.lock().await;
+            let page = engine.search_indexed_items(&query).await.map_err(err_js)?;
             to_js(&page)
         })
     }
