@@ -62,6 +62,7 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedActivityIcon } from '@icon/wide-activity';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
@@ -74,9 +75,7 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import ClockCounterClockwiseIcon from '@phosphor/clock-counter-clockwise.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
-import FireIcon from '@phosphor/fire.svg';
 import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -170,20 +169,12 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
-    id: 'firehose',
-    label: 'Firehose',
-    href: '/firehose',
-    icon: FireIcon,
-    hotkey: 'w',
-    hotkeyToken: TOKENS.sidebar.goTo.firehose,
-  },
-  {
-    id: 'my-activity',
-    label: 'Things I did',
-    href: '/my-activity',
-    icon: ClockCounterClockwiseIcon,
-    hotkey: 'm',
-    hotkeyToken: TOKENS.sidebar.goTo.myActivity,
+    id: 'activity',
+    label: 'Activity',
+    href: '/activity',
+    icon: AnimatedActivityIcon,
+    hotkey: 'y',
+    hotkeyToken: TOKENS.sidebar.goTo.activity,
   },
   {
     id: 'search',
@@ -1161,7 +1152,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox', 'firehose', 'my-activity']
+    ['home', 'inbox', 'activity']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
   );

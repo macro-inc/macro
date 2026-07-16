@@ -10,46 +10,49 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import type { TimelineFeed, TimelineItem } from './timeline-types';
+import { collapseTimeline, type TimelineRow } from './collapse';
+import type { TimelineFeed } from './timeline-types';
 
 type TimelineSection = {
   key: string;
   label: string;
-  items: TimelineItem[];
+  rows: TimelineRow[];
 };
 
 /**
- * Group a newest-first item list into contiguous relative-date sections
- * (Today, Yesterday, Last 7 days, …).
+ * Collapse repeat runs, then group the rows into contiguous relative-date
+ * sections (Today, Yesterday, Last 7 days, …).
  */
-function sectionize(items: TimelineItem[]): TimelineSection[] {
+function sectionize(rows: TimelineRow[]): TimelineSection[] {
   const sections: TimelineSection[] = [];
-  for (const item of items) {
-    const bucket = dateBucket(item.ts);
+  for (const row of rows) {
+    const bucket = dateBucket(row.ts);
     const current = sections[sections.length - 1];
     if (current && current.key === bucket.key) {
-      current.items.push(item);
+      current.rows.push(row);
     } else {
-      sections.push({ key: bucket.key, label: bucket.label, items: [item] });
+      sections.push({ key: bucket.key, label: bucket.label, rows: [row] });
     }
   }
   return sections;
 }
 
 /**
- * Shared shell for the activity timelines: a titled, date-sectioned,
- * infinite-scrolling list of event rows. Row rendering is supplied by the
- * view so notification rows and entity-event rows keep their own components.
+ * One scrolling activity pane: a titled, date-sectioned, infinite feed of
+ * event rows. Row rendering is supplied by the caller; `connector` tells the
+ * row whether to draw its line down to the next entry.
  */
-export function TimelineView(props: {
+export function TimelinePane(props: {
   title: string;
   description: string;
   feed: TimelineFeed;
-  renderItem: (item: TimelineItem) => JSX.Element;
+  renderRow: (row: TimelineRow, connector: boolean) => JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
 }) {
-  const sections = createMemo(() => sectionize(props.feed.items()));
+  const sections = createMemo(() =>
+    sectionize(collapseTimeline(props.feed.items()))
+  );
 
   let sentinel: HTMLDivElement | undefined;
   createEffect(() => {
@@ -68,11 +71,12 @@ export function TimelineView(props: {
 
   return (
     <div class="flex h-full min-h-0 flex-col">
+      <div class="shrink-0 px-6 pb-2 pt-5">
+        <h2 class="text-base font-semibold text-ink">{props.title}</h2>
+        <p class="text-xs text-ink-muted">{props.description}</p>
+      </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="mx-auto flex w-full max-w-3xl flex-col px-4 pb-6 pt-8 mobile:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom)">
-          <h1 class="px-3 text-lg font-semibold text-ink">{props.title}</h1>
-          <p class="px-3 pb-4 text-xs text-ink-muted">{props.description}</p>
-
+        <div class="mx-auto flex w-full max-w-2xl flex-col px-6 pb-10 mobile:pb-(--mobile-content-inset-bottom)">
           <Show
             when={!props.feed.isLoading()}
             fallback={
@@ -93,15 +97,22 @@ export function TimelineView(props: {
             >
               <For each={sections()}>
                 {(section) => (
-                  <section>
-                    <div class="sticky top-0 z-10 bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted">
+                  <section class="mt-20 first:mt-4">
+                    <div class="pb-5 text-sm font-semibold text-ink">
                       {section.label}
                     </div>
-                    <ul class="flex flex-col">
-                      <For each={section.items}>
-                        {(item) => <li>{props.renderItem(item)}</li>}
-                      </For>
-                    </ul>
+                    <div class="flow-root">
+                      <ul class="-mb-8">
+                        <For each={section.rows}>
+                          {(row, index) =>
+                            props.renderRow(
+                              row,
+                              index() < section.rows.length - 1
+                            )
+                          }
+                        </For>
+                      </ul>
+                    </div>
                   </section>
                 )}
               </For>

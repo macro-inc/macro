@@ -14,6 +14,7 @@ export type EntityEventVerb =
   | 'created-document'
   | 'edited-document'
   | 'created-task'
+  | 'edited-task'
   | 'created-folder'
   | 'agent-chat'
   | 'attended-call';
@@ -22,8 +23,7 @@ export type EntityEventVerb =
  * One row of an activity timeline: either a notification (someone did
  * something — the metadata carries actor, action, and content) or an
  * entity-derived event (an action inferred from a soup row, e.g. "you sent
- * this message"). `ts` is epoch milliseconds and must match the ordering of
- * the feed that produced the item, since the merge relies on it.
+ * this message"). `ts` is epoch milliseconds.
  */
 export type TimelineItem =
   | {
@@ -40,14 +40,34 @@ export type TimelineItem =
       entity: EntityData;
     };
 
+export type NotificationTimelineItem = Extract<
+  TimelineItem,
+  { kind: 'notification' }
+>;
+export type EntityTimelineItem = Extract<
+  TimelineItem,
+  { kind: 'entity-event' }
+>;
+
 /**
- * A paginated, newest-first stream of timeline items. Thin adapter over an
- * infinite query so heterogeneous sources (notifications, soup) can be
- * merged into one timeline.
+ * A paginated stream of timeline items. Thin adapter over an infinite query
+ * so heterogeneous sources (notifications, soup) can be merged into one
+ * timeline.
+ *
+ * `boundaryTs` is the pagination cursor position expressed as a timestamp:
+ * every server row with sort-ts newer than it has been fetched. Items may be
+ * synthesized at timestamps older than the row they came from (e.g. a
+ * document row also emits a "created" event at its creation time), so the
+ * merge trusts `boundaryTs`, not item order, for completeness.
  */
 export type TimelineFeed = {
-  /** Items loaded so far, sorted newest-first. */
+  /** Items loaded so far, in any order. */
   items: () => TimelineItem[];
+  /**
+   * Completeness boundary: all server rows newer than this are loaded.
+   * `undefined` while nothing has been fetched yet.
+   */
+  boundaryTs: () => number | undefined;
   /** Whether more (older) pages exist. */
   hasMore: () => boolean;
   /** Whether the first page is still loading. */

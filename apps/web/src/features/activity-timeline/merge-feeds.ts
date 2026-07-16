@@ -1,34 +1,32 @@
 import type { TimelineFeed, TimelineItem } from './timeline-types';
 
 /**
- * Merge several newest-first feeds into one newest-first timeline.
+ * Merge several paginated feeds into one newest-first timeline.
  *
  * Correctness rule: an item may only be emitted once no unloaded page of any
- * feed could still contain a newer item. Each feed is sorted descending, so
- * everything at or above the *watermark* — the newest "oldest loaded item"
- * across feeds that still have more pages — is final. Items below it are
- * withheld until the lagging feeds catch up. A feed with more pages but
- * nothing loaded yet pins the watermark at +infinity (nothing renders until
- * its first page lands).
+ * feed could still contain a newer item. Each feed reports a `boundaryTs` —
+ * the timestamp its pagination cursor has reached — so everything at or
+ * above the *watermark* (the newest boundary across feeds that still have
+ * more pages) is final. Items below it are withheld until the lagging feeds
+ * catch up; synthesized items older than their source row simply surface
+ * once the watermark descends past them. A feed with more pages but nothing
+ * fetched yet pins the watermark at +infinity (nothing renders until its
+ * first page lands).
  *
  * `fetchMore` advances the feeds that bound the watermark, so each call
  * makes progress instead of over-fetching sources that are already ahead.
- * Items are deduped by id (first, i.e. newest, occurrence wins) — sources
- * may overlap, e.g. a websocket insert reapplied to more than one
- * notification query.
+ * Items are deduped by id (first occurrence wins) — sources may overlap,
+ * e.g. a websocket insert reapplied to more than one notification query.
  */
 export function mergeTimelineFeeds(feeds: TimelineFeed[]): TimelineFeed {
-  const oldestLoadedTs = (feed: TimelineFeed): number => {
-    const items = feed.items();
-    const last = items[items.length - 1];
-    return last ? last.ts : Number.POSITIVE_INFINITY;
-  };
+  const feedBoundary = (feed: TimelineFeed): number =>
+    feed.boundaryTs() ?? Number.POSITIVE_INFINITY;
 
   const watermark = (): number => {
     let mark = Number.NEGATIVE_INFINITY;
     for (const feed of feeds) {
       if (!feed.hasMore()) continue;
-      mark = Math.max(mark, oldestLoadedTs(feed));
+      mark = Math.max(mark, feedBoundary(feed));
     }
     return mark;
   };
@@ -60,12 +58,16 @@ export function mergeTimelineFeeds(feeds: TimelineFeed[]): TimelineFeed {
     for (const feed of feeds) {
       if (!feed.hasMore()) continue;
       if (feed.isFetchingMore() || feed.isLoading()) continue;
-      if (oldestLoadedTs(feed) >= mark) feed.fetchMore();
+      if (feedBoundary(feed) >= mark) feed.fetchMore();
     }
   };
 
   return {
     items,
+    // The merged completeness boundary is the watermark itself: -Infinity
+    // when every feed is exhausted (fully complete), +Infinity while a feed
+    // with pages has fetched nothing.
+    boundaryTs: () => watermark(),
     hasMore: () => feeds.some((feed) => feed.hasMore()),
     isLoading: () => feeds.some((feed) => feed.isLoading()),
     isFetchingMore: () => feeds.some((feed) => feed.isFetchingMore()),

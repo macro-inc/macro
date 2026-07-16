@@ -1,5 +1,4 @@
-import { FirehoseView } from '@app/features/activity-timeline/firehose-view';
-import { MyActivityView } from '@app/features/activity-timeline/my-activity-view';
+import { ActivityView } from '@app/features/activity-timeline/activity-view';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
@@ -160,20 +159,21 @@ registerComponent(
 );
 
 registerComponent(
-  'firehose',
+  'activity',
   withAuth(() => {
-    usePageViewTracking('firehose');
-    return <FirehoseView />;
+    usePageViewTracking('activity');
+    return <ActivityView />;
   })
 );
 
-registerComponent(
-  'my-activity',
-  withAuth(() => {
-    usePageViewTracking('my-activity');
-    return <MyActivityView />;
-  })
-);
+// The Activity tab briefly shipped as two separate views; restored splits
+// may still reference their ids.
+registerComponent('firehose', () => (
+  <RedirectSplit to={{ type: 'component', id: 'activity' }} />
+));
+registerComponent('my-activity', () => (
+  <RedirectSplit to={{ type: 'component', id: 'activity' }} />
+));
 
 registerComponent(
   'agents',

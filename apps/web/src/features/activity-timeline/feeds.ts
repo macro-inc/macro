@@ -8,6 +8,7 @@ import type { UnifiedNotification } from '@notifications';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
+import { entitySortTs } from './entity-events';
 import type { TimelineFeed, TimelineItem } from './timeline-types';
 
 const PAGE_SIZE = 50;
@@ -30,10 +31,11 @@ export function createNotificationTimelineFeed(args: {
     done: args.done,
   });
 
+  const rows = createMemo((): UnifiedNotification[] => query.data ?? []);
+
   const items = createMemo((): TimelineItem[] => {
-    const notifications: UnifiedNotification[] = query.data ?? [];
     const mapped: TimelineItem[] = [];
-    for (const notification of notifications) {
+    for (const notification of rows()) {
       if (
         EXCLUDED_NOTIFICATION_TAGS.has(notification.notification_metadata.tag)
       ) {
@@ -51,8 +53,21 @@ export function createNotificationTimelineFeed(args: {
     return mapped;
   });
 
+  // Cursor position: rows arrive newest-first, so the boundary is the oldest
+  // fetched row — including excluded ones, which still advance the cursor.
+  const boundaryTs = createMemo((): number | undefined => {
+    let boundary: number | undefined;
+    for (const notification of rows()) {
+      const ts = new Date(notification.created_at).getTime();
+      if (Number.isNaN(ts)) continue;
+      if (boundary === undefined || ts < boundary) boundary = ts;
+    }
+    return boundary;
+  });
+
   return {
     items,
+    boundaryTs,
     hasMore: () => query.hasNextPage ?? false,
     isLoading: () => query.isLoading,
     isFetchingMore: () => query.isFetchingNextPage,
@@ -64,12 +79,13 @@ export function createNotificationTimelineFeed(args: {
 
 /**
  * A timeline feed over a soup query, sorted by `updated_at`, with each row
- * mapped to an activity event. Rows the mapper returns `undefined` for are
- * dropped.
+ * mapped to zero or more activity events. Events may sit at timestamps older
+ * than their row (e.g. a document's "created" event); the boundary tracks
+ * the row sort key so the merge withholds them until pagination catches up.
  */
 export function createSoupTimelineFeed(args: {
   query: () => Query;
-  map: (entity: EntityData) => TimelineItem | undefined;
+  map: (entity: EntityData) => TimelineItem[];
   enabled?: () => boolean;
 }): TimelineFeed {
   const query = useSoupAstItemsQuery(
@@ -80,21 +96,28 @@ export function createSoupTimelineFeed(args: {
     () => ({ enabled: args.enabled?.() ?? true })
   );
 
-  const items = createMemo((): TimelineItem[] => {
-    const entities = query.data?.entities ?? [];
-    const mapped: TimelineItem[] = [];
-    for (const entity of entities) {
-      const item = args.map(entity);
-      if (item) mapped.push(item);
+  const entities = createMemo((): EntityData[] => query.data?.entities ?? []);
+
+  const items = createMemo((): TimelineItem[] =>
+    entities().flatMap((entity) => args.map(entity))
+  );
+
+  const boundaryTs = createMemo((): number | undefined => {
+    let boundary: number | undefined;
+    for (const entity of entities()) {
+      const ts = entitySortTs(entity);
+      if (ts === undefined) continue;
+      if (boundary === undefined || ts < boundary) boundary = ts;
     }
-    return mapped;
+    return boundary;
   });
 
   return {
     items,
+    boundaryTs,
+    hasMore: () => query.hasNextPage ?? false,
     // While disabled (e.g. the user id has not resolved yet) the feed reports
     // loading so the merge withholds output instead of treating it as empty.
-    hasMore: () => query.hasNextPage ?? false,
     isLoading: () => query.isLoading || !(args.enabled?.() ?? true),
     isFetchingMore: () => query.isFetchingNextPage,
     fetchMore: () => {

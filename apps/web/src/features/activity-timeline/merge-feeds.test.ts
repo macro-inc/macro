@@ -8,13 +8,19 @@ function item(id: string, ts: number): TimelineItem {
 
 function feed(args: {
   items: TimelineItem[];
+  /** Defaults to the oldest item ts (plain row-per-item feed). */
+  boundaryTs?: number;
   hasMore?: boolean;
   isLoading?: boolean;
   isFetchingMore?: boolean;
   fetchMore?: () => void;
 }): TimelineFeed {
+  const defaultBoundary = args.items.length
+    ? Math.min(...args.items.map((i) => i.ts))
+    : undefined;
   return {
     items: () => args.items,
+    boundaryTs: () => args.boundaryTs ?? defaultBoundary,
     hasMore: () => args.hasMore ?? false,
     isLoading: () => args.isLoading ?? false,
     isFetchingMore: () => args.isFetchingMore ?? false,
@@ -41,6 +47,26 @@ describe('mergeTimelineFeeds', () => {
     ]);
     expect(merged.items().map((i) => i.id)).toEqual(['a', 'c', 'b']);
     expect(merged.hasMore()).toBe(true);
+  });
+
+  it('withholds synthesized items older than their feed boundary', () => {
+    const merged = mergeTimelineFeeds([
+      // A row fetched at ts=100 synthesized an extra event at ts=10; the
+      // boundary (cursor position) is still 100.
+      feed({
+        items: [item('a', 100), item('a-created', 10)],
+        boundaryTs: 100,
+        hasMore: true,
+      }),
+    ]);
+    expect(merged.items().map((i) => i.id)).toEqual(['a']);
+  });
+
+  it('emits synthesized old items once every feed is exhausted', () => {
+    const merged = mergeTimelineFeeds([
+      feed({ items: [item('a', 100), item('a-created', 10)], boundaryTs: 100 }),
+    ]);
+    expect(merged.items().map((i) => i.id)).toEqual(['a', 'a-created']);
   });
 
   it('emits nothing while a feed with pages has loaded no items yet', () => {
