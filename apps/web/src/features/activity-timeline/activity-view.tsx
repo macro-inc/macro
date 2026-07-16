@@ -6,6 +6,7 @@ import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getTypeNoun } from '@entity/extractors-notification/notification-description-helpers';
 import { NotificationRow } from '@entity/extractors-notification/notification-row';
+import type { SoupApiItemFilter } from '@queries/soup/items';
 import type { TimelineRow } from './collapse';
 import { EntityEventRow } from './entity-event-row';
 import { mapMyActivityEntity, mapSharedEmailEntity } from './entity-events';
@@ -23,12 +24,19 @@ import { useChannelLookup } from './use-channel-lookup';
  * chats and folders they own, and calls they attended — plus, via the email
  * view, the emails they sent. Drafts live in a separate email view, so they
  * are a second query merged in below.
+ *
+ * Documents are restricted to the types the user authors in Macro (md and
+ * canvas, which includes tasks). Ingested files — email-auto-parsed PDFs,
+ * attachment uploads, bulk imports — are actions a pipeline took, not the
+ * user, and their updatedAt also moves on viewer activity, so they are
+ * excluded entirely rather than shown as created/edited.
  */
 const getMyActionsQuery = (userId: string): Query =>
   defineQueryFilters({
     include: {
       channelThreadParticipantId: [userId],
       documentOwnerId: [userId],
+      fileType: ['md', 'canvas'],
       isEmailAttachment: false,
       chatOwnerId: [userId],
       folderOwnerId: [userId],
@@ -40,6 +48,21 @@ const getMyActionsQuery = (userId: string): Query =>
 
 const getMyDraftsQuery = (): Query =>
   defineQueryFilters({ emailView: 'drafts' });
+
+/**
+ * Websocket-insert gates mirroring the server queries above (the cache layer
+ * bypasses the server AST — see `createSoupTimelineFeed.itemFilter`). The
+ * document arm mirrors the authorable-types restriction; the mapper drops
+ * anything else that slips through.
+ */
+const myActionsItemFilter: SoupApiItemFilter = (item) =>
+  item.tag !== 'document' ||
+  item.data.subType?.type === 'task' ||
+  item.data.fileType === 'md' ||
+  item.data.fileType === 'canvas';
+
+const emailOnlyItemFilter: SoupApiItemFilter = (item) =>
+  item.tag === 'emailThread';
 
 /**
  * A notification row (or collapsed run of them). Single notifications render
@@ -87,11 +110,13 @@ function MyActivityPane() {
       query: () => getMyActionsQuery(userId() ?? ''),
       map: (entity) => mapMyActivityEntity(entity, userId()),
       enabled: () => userId() !== undefined,
+      itemFilter: myActionsItemFilter,
     }),
     createSoupTimelineFeed({
       query: getMyDraftsQuery,
       map: (entity) => mapMyActivityEntity(entity, userId()),
       enabled: () => userId() !== undefined,
+      itemFilter: emailOnlyItemFilter,
     }),
   ]);
 
@@ -135,6 +160,7 @@ function FirehosePane() {
           emailView: 'all',
         }),
       map: mapSharedEmailEntity,
+      itemFilter: emailOnlyItemFilter,
     }),
   ]);
 
