@@ -3,6 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::api;
@@ -15,12 +16,15 @@ use thiserror::Error;
 pub enum ListLinksError {
     #[error("Database error")]
     DatabaseError(anyhow::Error),
+    #[error("Invalid macro user id")]
+    InvalidMacroId,
 }
 
 impl IntoResponse for ListLinksError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             ListLinksError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ListLinksError::InvalidMacroId => StatusCode::BAD_REQUEST,
         };
 
         (status_code, self.to_string()).into_response()
@@ -52,12 +56,12 @@ pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
 ) -> Result<Response, ListLinksError> {
-    let inboxes = email_db_client::links::get::fetch_inbox_details_for_macro_id(
-        &ctx.db,
-        &user_context.user_id,
-    )
-    .await
-    .map_err(ListLinksError::DatabaseError)?;
+    let macro_id = MacroUserIdStr::parse_from_str(&user_context.user_id)
+        .map_err(|_| ListLinksError::InvalidMacroId)?;
+
+    let inboxes = email_db_client::links::get::fetch_inbox_details_for_macro_id(&ctx.db, &macro_id)
+        .await
+        .map_err(ListLinksError::DatabaseError)?;
 
     let links = inboxes
         .into_iter()

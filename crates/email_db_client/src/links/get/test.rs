@@ -4,6 +4,7 @@ use crate::links::get::{
     fetch_owned_link_for_thread,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::db;
 use models_email::service::backfill::BackfillJobStatus;
 use models_email::service::link::UserProvider;
@@ -13,6 +14,10 @@ use sqlx::{Pool, Postgres};
 const CHILD: &str = "macro|sharedbox@corp.test"; // owns the inbox
 const PRIMARY: &str = "macro|primary@corp.test"; // delegate
 const STRANGER: &str = "macro|stranger@corp.test"; // no relationship
+
+fn macro_id(s: &str) -> MacroUserIdStr<'_> {
+    MacroUserIdStr::try_from(s).unwrap()
+}
 
 /// macro_user + "User" rows so macro_user_links FKs resolve.
 async fn insert_user(pool: &Pool<Postgres>, macro_id: &str, email: &str) {
@@ -320,7 +325,7 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
     )
     .await;
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
     let inbox = &details[0];
     assert_eq!(inbox.link.id, link_id);
@@ -348,7 +353,7 @@ async fn fetch_inbox_details_includes_delegated_inbox_with_optional_fields_absen
 
     // No backfill jobs and no self-contact — the delegate still sees the inbox,
     // with the optional details absent.
-    let details = fetch_inbox_details_for_macro_id(&pool, PRIMARY).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(PRIMARY)).await?;
     assert_eq!(details.len(), 1);
     let inbox = &details[0];
     assert_eq!(inbox.link.id, link_id);
@@ -391,7 +396,7 @@ async fn fetch_inbox_details_orders_newest_first_and_pairs_rows_per_inbox(
     )
     .await;
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     let ids: Vec<Uuid> = details.iter().map(|d| d.link.id).collect();
     assert_eq!(ids, vec![link_b, link_a]);
 
@@ -427,7 +432,7 @@ async fn fetch_inbox_details_dedupes_inbox_that_is_both_owned_and_delegated(
     // user). Both UNION branches match and must collapse to one row.
     insert_delegation(&pool, CHILD, PRIMARY, link_id).await;
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
     assert_eq!(details[0].link.id, link_id);
 
@@ -457,7 +462,7 @@ async fn fetch_inbox_details_photo_ignores_matching_email_on_other_link(
     )
     .await;
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
     assert!(details[0].photo_url.is_none());
 
@@ -476,7 +481,7 @@ async fn fetch_inbox_details_photo_absent_when_self_contact_has_no_photo(
     // Self-contact row exists but has no SFS photo yet.
     insert_contact_with_photo(&pool, link_id, "sharedbox@corp.test", None).await;
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
     assert!(details[0].photo_url.is_none());
 
@@ -520,7 +525,7 @@ async fn fetch_inbox_details_maps_each_backfill_status(pool: Pool<Postgres>) -> 
         expected_by_link.push((link_id, expected));
     }
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), expected_by_link.len());
     for (link_id, expected) in expected_by_link {
         let inbox = details.iter().find(|d| d.link.id == link_id).unwrap();
@@ -536,11 +541,28 @@ async fn fetch_inbox_details_empty_for_user_without_inboxes(
 ) -> anyhow::Result<()> {
     insert_user(&pool, CHILD, "sharedbox@corp.test").await;
 
-    let details = fetch_inbox_details_for_macro_id(&pool, CHILD).await?;
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert!(details.is_empty());
 
-    // An empty macro_id is rejected outright.
-    assert!(fetch_inbox_details_for_macro_id(&pool, "").await.is_err());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_inbox_details_defaults_settings_when_row_missing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+
+    // A legacy link with no email_settings row must still be listed, with
+    // default settings.
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert_eq!(details.len(), 1);
+    let inbox = &details[0];
+    assert_eq!(inbox.link.id, link_id);
+    assert!(!inbox.settings.signature_on_replies_forwards);
+    assert!(inbox.settings.signature.is_none());
 
     Ok(())
 }

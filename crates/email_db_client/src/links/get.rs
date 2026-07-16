@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use doppleganger::Mirror;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::db;
 use models_email::email::service::link;
 use models_email::service;
@@ -187,7 +188,7 @@ struct DbInboxDetailsRow {
     last_sync_error_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
-    signature_on_replies_forwards: bool,
+    signature_on_replies_forwards: Option<bool>,
     signature: Option<String>,
     latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
     photo_url: Option<String>,
@@ -195,15 +196,14 @@ struct DbInboxDetailsRow {
 
 /// Single-query variant of [`fetch_inboxes_for_macro_id`] that also joins each
 /// inbox's settings, its most recent backfill job status, and its own photo
-/// (the self-contact's SFS photo, synced from people/me).
+/// (the self-contact's SFS photo, synced from people/me). Inboxes without an
+/// `email_settings` row get default settings.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_inbox_details_for_macro_id(
     pool: &PgPool,
-    macro_id: &str,
+    macro_id: &MacroUserIdStr<'_>,
 ) -> anyhow::Result<Vec<InboxDetails>> {
-    if macro_id.is_empty() {
-        anyhow::bail!("macro_id cannot be empty");
-    }
+    let macro_id: &str = macro_id.as_ref();
 
     let rows = sqlx::query_as!(
         DbInboxDetailsRow,
@@ -218,7 +218,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                l.last_sync_error_at,
                l.created_at as "created_at!",
                l.updated_at as "updated_at!",
-               s.signature_on_replies_forwards as "signature_on_replies_forwards!",
+               s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
                bj.status as "latest_backfill_status?: _",
                c.sfs_photo_url as "photo_url?"
@@ -236,7 +236,7 @@ pub async fn fetch_inbox_details_for_macro_id(
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
         ) l
-        JOIN email_settings s ON s.link_id = l.id
+        LEFT JOIN email_settings s ON s.link_id = l.id
         LEFT JOIN LATERAL (
             SELECT status FROM email_backfill_jobs
             WHERE link_id = l.id
@@ -256,7 +256,8 @@ pub async fn fetch_inbox_details_for_macro_id(
         .map(|row| {
             let settings = service::settings::Settings {
                 link_id: row.id,
-                signature_on_replies_forwards: row.signature_on_replies_forwards,
+                // Missing settings row → schema default (FALSE).
+                signature_on_replies_forwards: row.signature_on_replies_forwards.unwrap_or(false),
                 signature: row.signature,
             };
             let link = link::Link::try_from(DbLink {
