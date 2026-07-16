@@ -1,3 +1,4 @@
+import type { DocumentOp } from '@ai-ops/editor';
 import { toast } from '@core/component/Toast/Toast';
 import { getDocumentPermissionToken } from '@service-storage/client';
 import { createSignal } from 'solid-js';
@@ -62,10 +63,17 @@ export function cancelAiEdit(documentId: string): void {
  * finishes, so the returned promise doubles as a completion signal. Cancelable
  * via `cancelAiEdit` (a later edit on the same document takes over the
  * registry slot). Failures are logged. Never rejects.
+ *
+ * Pass `onOps` to instead have the worker compute ops WITHOUT committing them
+ * to the shared doc — the full op list is handed back once the session
+ * finishes, and `onOps` applies them locally (via `applyAiOps`), so the edit
+ * lands in the caller's own undo stack (Ctrl+Z) and syncs out attributed to
+ * the user.
  */
 export async function requestAiEdit(args: {
   documentId: string;
   prompt: string;
+  onOps?: (ops: DocumentOp[]) => void;
 }): Promise<AiEditResult> {
   const controller = new AbortController();
   editControllers.set(args.documentId, controller);
@@ -81,6 +89,7 @@ export async function requestAiEdit(args: {
         prompt: args.prompt,
         models: MODELS,
         interpret: false,
+        propagate: args.onOps === undefined ? undefined : false,
       }),
       signal: controller.signal,
     });
@@ -88,6 +97,10 @@ export async function requestAiEdit(args: {
       const body = await res.text().catch(() => '');
       console.error('ai edit request failed', res.status, body);
       return 'failed';
+    }
+    if (args.onOps) {
+      const { ops } = (await res.json()) as { ops: DocumentOp[] };
+      args.onOps(ops);
     }
     return 'ok';
   } catch (e) {

@@ -1,3 +1,4 @@
+import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -59,7 +60,7 @@ import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid'
 import {
   cancelAiEdit,
   hasActiveAiEdit,
-  requestAiEditWithToast,
+  requestAiEdit,
 } from '@service-ai-editing/client';
 import { generateTitle } from '@service-cognition/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
@@ -118,27 +119,15 @@ export function MarkdownPopup(props: {
   const [aiEditRunning, setAiEditRunning] = createSignal(false);
   const [aiInputFocused, setAiInputFocused] = createSignal(false);
 
-  // Ctrl (held alone) is the opt-in: selecting while holding it sends the
-  // caret to the prompt box. Pressing any other key — even with ctrl down,
-  // e.g. ctrl+A / ctrl+C — disarms it so shortcuts never trigger the focus.
-  const [ctrlHeld, setCtrlHeld] = createSignal(false);
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      setCtrlHeld(
-        e.key === 'Control' && !e.shiftKey && !e.altKey && !e.metaKey
-      );
       // Escape anywhere stops a running edit on this document (no-op
       // otherwise; the prompt box's own Escape stops propagation first).
       if (e.key === 'Escape') cancelAiEdit(blockId);
     };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Control') setCtrlHeld(false);
-    };
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
     onCleanup(() => {
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
     });
   });
 
@@ -383,54 +372,52 @@ export function MarkdownPopup(props: {
       if (!aiEditRunning()) setAiEditLocation(null);
     });
 
-    // Ctrl-selecting opts into the prompt box: once the selection settles
-    // with ctrl held, the caret moves there.
-    const settledSelection = debouncedDependent(selection, 150);
-    createEffect(
-      on(settledSelection, () => {
-        if (!ctrlHeld()) return;
-        setAiEditOpen(true);
-        requestAnimationFrame(() => aiInputRef?.focus());
-      })
-    );
-
-    // Resolves the loro-mirror node id of the top-level block containing the
-    // selection anchor, via the nodeIdPlugin's node state / key mapping.
-    const resolveSelectedNodeId = (): string | null => {
+    // Resolves the loro-mirror node ids of every top-level block touched by
+    // the selection, via the nodeIdPlugin's node state / key mapping.
+    const resolveSelectedNodeIds = (): string[] => {
       const lexicalSelection = selection()?.lexicalSelection;
-      if (!lexicalSelection) return null;
+      if (!lexicalSelection) return [];
       return editor.read(() => {
-        const anchorNode = lexicalSelection.anchor.getNode();
-        const topNode = anchorNode.getTopLevelElement() ?? anchorNode;
-        return (
-          $getId(topNode) ??
-          props.lexicalMapping.nodeKeyToIdMap.get(topNode.getKey()) ??
-          null
+        const topNodes = new Set(
+          lexicalSelection
+            .getNodes()
+            .map((node) => node.getTopLevelElement() ?? node)
         );
+        const ids = new Set<string>();
+        for (const node of topNodes) {
+          const id =
+            $getId(node) ??
+            props.lexicalMapping.nodeKeyToIdMap.get(node.getKey());
+          if (id) ids.add(id);
+        }
+        return [...ids];
       });
     };
 
     const handleAiEditSubmit = () => {
       const instruction = aiEditInput().trim();
       if (!instruction) return;
-      const nodeId = resolveSelectedNodeId();
-      if (!nodeId) {
-        toast.failure('Could not resolve the selected node');
+      const nodeIds = resolveSelectedNodeIds();
+      if (nodeIds.length === 0) {
+        toast.failure('Could not resolve the selected nodes');
         return;
       }
       // The highlight is already tracking the selection; flagging the run
       // keeps it alive (as the loading indicator) after the popup closes.
       setAiEditRunning(true);
-      requestAiEditWithToast(
-        {
-          documentId: blockId,
-          prompt: `user has selected node ${nodeId} and asks for you to: ${instruction}. focus on only editing around this region`,
-        },
-        () => {
+      // Apply ops locally so the edit lands in this client's undo stack.
+      requestAiEdit({
+        documentId: blockId,
+        prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+        onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
+      })
+        .then((result) => {
+          if (result === 'failed') toast.failure('AI edit failed');
+        })
+        .finally(() => {
           setAiEditLocation(null);
           setAiEditRunning(false);
-        }
-      );
+        });
       setAiEditInput('');
       setAiEditOpen(false);
       setPopupVisible(false);

@@ -4,6 +4,7 @@ import {
   InMemoryWALStore,
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
+import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { LanguageModel } from 'ai';
 import { supervisor } from './ai-editing/agents';
@@ -13,7 +14,6 @@ import type { UsageEntry } from './ai-editing/token-tracker';
 import type { CoderRunCode, DispatchEditTrace } from './ai-editing/tools';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
-import { createWorkerSyncSource } from './sources';
 import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Model = {
@@ -34,7 +34,8 @@ export type ResolvedModels = {
 };
 
 export type RunEditArgs = {
-  wsUrl: string;
+  /** Live sync source, already constructed by the caller (ws in prod). */
+  source: SyncServiceSource;
   documentId: string;
   prompt: string;
   models: ResolvedModels;
@@ -48,6 +49,11 @@ export type RunEditArgs = {
   interpret?: boolean;
   /** Include a markdown trace of all supervisor steps in the result. */
   debug?: boolean;
+  /**
+   * Commit edits to the shared Loro doc (default true). Set false to have the
+   * caller receive the returned `ops` without them being committed.
+   */
+  propagate?: boolean;
 };
 
 export type { UsageEntry };
@@ -63,11 +69,7 @@ export type RunEditResult = {
 export async function runEditSession(
   args: RunEditArgs
 ): Promise<RunEditResult> {
-  const source = createWorkerSyncSource(
-    args.wsUrl,
-    args.documentId,
-    args.signal
-  );
+  const source = args.source;
   const initialResult = await source.doInitialSync();
   if (initialResult.isErr()) {
     source.cleanup();
@@ -96,7 +98,10 @@ export async function runEditSession(
 
   // The workspace owns the editing surface + its two-way sync with Loro, and
   // hands out per-coder writers. Under debug it also records a replay trace.
-  const workspace = new EditingWorkspace(manager, source, wal);
+  const shouldPropagate = args.propagate ?? true;
+  const workspace = new EditingWorkspace(manager, source, wal, {
+    propagate: shouldPropagate,
+  });
 
   const allOps: DocumentOp[] = [];
   const coderCodeBlocks: CoderRunCode[][][] = [];
@@ -125,9 +130,11 @@ export async function runEditSession(
     });
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
-    // commit reached the server before we disconnect.
-    await workspace.flush();
-    await wal.flush();
+    // commit reached the server before we disconnect. No-op when not propagating.
+    if (shouldPropagate) {
+      await workspace.flush();
+      await wal.flush();
+    }
 
     const usage = totalUsage.toEntries();
 

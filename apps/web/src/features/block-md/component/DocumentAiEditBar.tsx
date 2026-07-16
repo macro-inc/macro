@@ -1,14 +1,13 @@
+import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import {
-  cancelAiEdit,
-  requestAiEditWithToast,
-} from '@service-ai-editing/client';
+import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
 import { Button, Hotkey, SendButton, Surface } from '@ui';
 import { createEffect, createSignal, Show, untrack } from 'solid-js';
 
@@ -43,10 +42,20 @@ export function DocumentAiEditBar(props: { documentId: string }) {
     setPrompt('');
     collapse();
     setEditing(true);
-    requestAiEditWithToast(
-      { documentId: props.documentId, prompt: value },
-      () => setEditing(false)
-    );
+
+    requestAiEdit({
+      documentId: props.documentId,
+      prompt: value,
+      onOps: (ops) => {
+        const target = md.editor;
+        const mapping = md.mapping;
+        if (target && mapping) applyAiOps(target, mapping, ops);
+      },
+    })
+      .then((result) => {
+        if (result === 'failed') toast.failure('AI edit failed');
+      })
+      .finally(() => setEditing(false));
   };
 
   editor

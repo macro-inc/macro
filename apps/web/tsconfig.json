@@ -107,6 +107,9 @@
       "@service-ai-editing/*": [
         "./src/lib/service-clients/ai-editing-worker/*"
       ],
+      "@ai-ops/*": [
+        "../../services/ai-editing-worker/src/ai-editing/*"
+      ],
       "@service-connection/*": [
         "./src/lib/service-clients/service-connection/*"
       ],
