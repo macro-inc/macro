@@ -1,6 +1,10 @@
 import { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
 import {
+  createNoopLiveSyncSource,
+  type LiveSyncSource,
+} from '@macro-inc/collaboration/collab/source';
+import {
   InMemoryWALStore,
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
@@ -91,17 +95,22 @@ export async function runEditSession(
     );
   }
 
+  // When the caller applies the returned ops locally instead, propagating
+  // here too would double the content — so route live sync to a no-op sink
+  // that acks everything and forwards nothing.
+  const shouldPropagate = args.propagate ?? true;
+  const liveSource: LiveSyncSource = shouldPropagate
+    ? source
+    : createNoopLiveSyncSource(args.documentId);
+
   const wal = new WALSyncer<RawUpdate>(
     new InMemoryWALStore<RawUpdate>(),
-    (updates) => source.pushUpdate(updates)
+    (updates) => liveSource.pushUpdate(updates)
   );
 
   // The workspace owns the editing surface + its two-way sync with Loro, and
   // hands out per-coder writers. Under debug it also records a replay trace.
-  const shouldPropagate = args.propagate ?? true;
-  const workspace = new EditingWorkspace(manager, source, wal, {
-    propagate: shouldPropagate,
-  });
+  const workspace = new EditingWorkspace(manager, liveSource, wal);
 
   const allOps: DocumentOp[] = [];
   const coderCodeBlocks: CoderRunCode[][][] = [];
@@ -130,11 +139,10 @@ export async function runEditSession(
     });
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
-    // commit reached the server before we disconnect. No-op when not propagating.
-    if (shouldPropagate) {
-      await workspace.flush();
-      await wal.flush();
-    }
+    // commit reached the server before we disconnect. No-op sink when not
+    // propagating, so this is harmless either way.
+    await workspace.flush();
+    await wal.flush();
 
     const usage = totalUsage.toEntries();
 

@@ -2,8 +2,8 @@ import type { InferType } from '@loro-mirror/core';
 import { SyncEngine } from '@macro-inc/collaboration/collab/engine';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
+import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import type { WALSyncer } from '@macro-inc/collaboration/collab/wal';
-import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
 import type {
   MARKDOWN_LORO_SCHEMA,
   MarkdownLoroSchemaType,
@@ -29,13 +29,6 @@ import { createWorkerAwareness } from './sources';
 
 export type EditingWorkspaceOptions = {
   pool?: PeerPool;
-  /**
-   * When false, edits are applied to the in-memory session (so the AI still
-   * sees its own prior edits) but never committed to the shared Loro doc. Set
-   * false when the caller returns ops to a client that applies them locally
-   * instead — so committing here too would double the content.
-   */
-  propagate?: boolean;
 };
 
 export class EditingWorkspace {
@@ -44,16 +37,14 @@ export class EditingWorkspace {
   private chain: Promise<void> = Promise.resolve();
   private readonly outstanding = new Map<Peer, AwarenessSource>();
   private readonly pool: PeerPool;
-  private readonly shouldPropagate: boolean;
 
   constructor(
     private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
-    private readonly source: SyncServiceSource,
+    private readonly source: LiveSyncSource,
     wal: WALSyncer<RawUpdate>,
     opts: EditingWorkspaceOptions = {}
   ) {
     this.pool = opts.pool ?? new PeerPool();
-    this.shouldPropagate = opts.propagate ?? true;
     // Seed the editing surface from the merged state.
     this.session = createEditingSession();
     loadSnapshot(
@@ -88,10 +79,7 @@ export class EditingWorkspace {
    *  `release` (on the returned writer) clears the cursor and returns the peer. */
   async borrowWriter(): Promise<Writer> {
     const peer = await this.pool.borrow();
-    const doc = new Doc(
-      this.session,
-      this.shouldPropagate ? () => this.propagate(peer.peerId) : () => {}
-    );
+    const doc = new Doc(this.session, () => this.propagate(peer.peerId));
     const awarenessSource = realAwarenessSource({
       mirror: this.manager.mirror!,
       doc: this.manager.doc,
@@ -110,7 +98,6 @@ export class EditingWorkspace {
 
   /** Perform one final catch-all sync and wait for all queued propagation to finish. */
   flush(): Promise<void> {
-    if (!this.shouldPropagate) return this.chain;
     this.propagate(nextAiPeerId());
     return this.chain;
   }
