@@ -109,11 +109,10 @@ pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
 /// optimistic mutation response with no relation recipes.
 pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String> {
     let json: Json = serde_json::from_str(value).map_err(|error| error.to_string())?;
-    let is_envelope = json
-        .as_object()
-        .and_then(|object| object.get("version"))
-        .and_then(Json::as_u64)
-        .is_some();
+    let is_envelope = json.as_object().is_some_and(|object| {
+        object.get("version").and_then(Json::as_u64).is_some()
+            && object.contains_key("mutationData")
+    });
     if !is_envelope {
         return Ok(OptimisticSource {
             mutation_data: json,

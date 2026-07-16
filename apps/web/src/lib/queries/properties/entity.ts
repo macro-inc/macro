@@ -1,11 +1,11 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
 } from '@property/api/converters';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type {
   Property,
@@ -31,11 +31,11 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
-import { type MutationCallbacks, withCallbacks } from '../utils';
 import {
   buildOptimisticGroupedPropertyLinkPatches,
   groupedPropertyKeys,
 } from '../soup/grouped/graphql-optimistic';
+import { type MutationCallbacks, withCallbacks } from '../utils';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
@@ -495,7 +495,9 @@ export function useBulkSaveEntityPropertiesMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: BulkSaveEntityPropertiesParams) => {
-      const save = async (item: BulkSaveEntityPropertiesParams['properties'][number]) => {
+      const save = async (
+        item: BulkSaveEntityPropertiesParams['properties'][number]
+      ) => {
         const propertyValue = propertyValueToApi(
           item.apiValues,
           item.property.isMultiSelect
@@ -515,8 +517,8 @@ export function useBulkSaveEntityPropertiesMutation(
             try {
               const oldGroupKeys = groupedPropertyKeys(item.property);
               const newGroupKeys = groupedPropertyKeys(item.apiValues);
-              optimisticCache =
-                await buildOptimisticGroupedPropertyLinkPatches({
+              optimisticCache = await buildOptimisticGroupedPropertyLinkPatches(
+                {
                   host,
                   entityId: item.entityId,
                   propertyDefinitionId: item.property.propertyDefinitionId,
@@ -524,7 +526,8 @@ export function useBulkSaveEntityPropertiesMutation(
                   newGroupKeys: newGroupKeys ?? [],
                   revalidateOnly:
                     oldGroupKeys === undefined || newGroupKeys === undefined,
-                });
+                }
+              );
             } catch (error) {
               // Relation discovery is an optimization. Property writes still
               // proceed with normalized entity optimism when cache inspection

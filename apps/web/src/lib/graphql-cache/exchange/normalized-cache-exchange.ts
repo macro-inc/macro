@@ -56,10 +56,7 @@ import {
   tap,
 } from 'wonka';
 import type { CacheHost } from '../host/types';
-import type {
-  OptimisticWriteResult,
-  QueryRevalidationWire,
-} from '../protocol';
+import type { OptimisticWriteResult, QueryRevalidationWire } from '../protocol';
 import { optimisticContextOf } from './optimistic';
 
 /**
@@ -400,6 +397,12 @@ export function normalizedCacheExchange(
             begin = await host.beginOptimisticWrite({
               ...args,
               linkPatches: [],
+              revalidations: [
+                ...args.revalidations,
+                ...args.linkPatches.flatMap((patch) =>
+                  patch.revalidate ? [patch.revalidate] : []
+                ),
+              ],
             });
           }
           liveQueuedOps.set(begin.transactionId, op);

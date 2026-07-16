@@ -93,11 +93,22 @@ describe('createTauriCacheHost', () => {
       return Promise.resolve(null);
     });
 
+    const patch = {
+      parentEntityKey: 'GraphqlUser:user-1',
+      fieldKey: 'groupSoup({})',
+      path: [{ field: 'bins' }],
+      operation: { kind: 'remove' as const, entityKey: 'Thing:1' },
+    };
     const begun = await host.beginOptimisticWrite({
       query: 'mutation { m }',
       data: { m: 1 },
+      linkPatches: [patch],
     });
     expect(begun).toEqual(optimistic);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_begin_optimistic_write',
+      expect.objectContaining({ linkPatches: [patch] })
+    );
 
     const claim = { owner: 'runner', generation: '2' };
     await host.commitOptimisticWrite('1', claim, {
@@ -123,6 +134,30 @@ describe('createTauriCacheHost', () => {
         leaseGeneration: '2',
       }
     );
+  });
+
+  it('inspects effective fields through the native command', async () => {
+    const fields = [
+      {
+        entityKey: 'GraphqlUser:user-1',
+        fieldName: 'groupSoup',
+        fieldKey: 'groupSoup({})',
+        arguments: {},
+      },
+    ];
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(
+        command === 'graphql_cache_inspect_fields' ? fields : null
+      )
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+
+    await expect(host.inspectFields('GraphqlUser:user-1')).resolves.toEqual(
+      fields
+    );
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_inspect_fields', {
+      entityKey: 'GraphqlUser:user-1',
+    });
   });
 
   it('delivers only own-client op keys from the broadcast event', async () => {

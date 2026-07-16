@@ -1,6 +1,6 @@
 import {
-  prependGroupedSoupItemLink,
   type OptimisticLinkPatch,
+  prependGroupedSoupItemLink,
   type QueryRevalidation,
   removeGroupedSoupItemLink,
 } from '@graphql-cache/exchange/optimistic';
@@ -8,9 +8,10 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { stringifyDocument } from '@urql/core';
 import {
   type GroupedSoupInput,
-  type GroupSoupMembershipQuery,
   GroupSoupMembershipDocument,
+  type GroupSoupMembershipQuery,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { groupedSoupLogicalViewKey } from './graphql-operation-registry';
 import { NOT_SET_GROUP_KEY } from './types';
 
 const VIEWER_QUERY = `query OptimisticGroupSoupViewer { user { id } }`;
@@ -82,17 +83,22 @@ export async function buildOptimisticGroupedPropertyLinkPatches(
   const newKeys = new Set(unique(args.newGroupKeys));
   const removed = [...oldKeys].filter((key) => !newKeys.has(key));
   const added = [...newKeys].filter((key) => !oldKeys.has(key));
-  if (
-    removed.length === 0 &&
-    added.length === 0 &&
-    !args.revalidateOnly
-  ) {
+  if (removed.length === 0 && added.length === 0 && !args.revalidateOnly) {
     return { patches: [], revalidations: [] };
   }
 
   const patches: OptimisticLinkPatch[] = [];
   const revalidations: QueryRevalidation[] = [];
   const membershipQuery = stringifyDocument(GroupSoupMembershipDocument);
+  const views = new Map<
+    string,
+    Array<{
+      fieldKey: string;
+      input: GroupedSoupInput;
+      bins: GroupSoupMembershipQuery['user']['groupSoup']['bins'];
+      revalidate: QueryRevalidation;
+    }>
+  >();
 
   for (const field of fields) {
     if (field.fieldName !== 'groupSoup') continue;
@@ -113,44 +119,67 @@ export async function buildOptimisticGroupedPropertyLinkPatches(
     if (membership.kind !== 'hit') continue;
     const data = membership.data as GroupSoupMembershipQuery;
     const bins = data.user?.groupSoup?.bins;
-    if (!bins) continue;
+    const logicalView = groupedSoupLogicalViewKey(input);
+    if (!bins || !logicalView) continue;
+    const pages = views.get(logicalView) ?? [];
+    pages.push({
+      fieldKey: field.fieldKey,
+      input: input as GroupedSoupInput,
+      bins,
+      revalidate,
+    });
+    views.set(logicalView, pages);
+  }
 
-    // A destination prepend belongs only on an initial page. If any required
-    // destination bin is absent, skip the complete move for this field.
-    if (
-      added.length > 0 &&
-      (!isInitialInput(input) ||
-        added.some((key) => !bins.some((bin) => bin.key === key)))
-    ) {
-      continue;
+  if (args.revalidateOnly) return { patches, revalidations };
+
+  const itemEntityKey = `GraphqlSoupItem:${args.entityId}`;
+  for (const pages of views.values()) {
+    const sourcePages = pages.filter((page) =>
+      removed.some((key) =>
+        page.bins
+          .find((bin) => bin.key === key)
+          ?.items.some((item) => item.id === args.entityId)
+      )
+    );
+    if (sourcePages.length === 0) continue;
+
+    const destinationPages = pages.filter(
+      (page) =>
+        isInitialInput(page.input) &&
+        added.every((key) => page.bins.some((bin) => bin.key === key))
+    );
+    // Never expose a source-only move when this logical view has nowhere to
+    // show the destination. Revalidation will recover absent/new groups.
+    if (added.length > 0 && destinationPages.length === 0) continue;
+
+    for (const page of sourcePages) {
+      for (const key of removed) {
+        const source = page.bins.find((bin) => bin.key === key);
+        if (!source?.items.some((item) => item.id === args.entityId)) continue;
+        patches.push(
+          removeGroupedSoupItemLink({
+            parentEntityKey,
+            fieldKey: page.fieldKey,
+            binKey: key,
+            itemEntityKey,
+            revalidate: page.revalidate,
+          })
+        );
+      }
     }
-
-    if (args.revalidateOnly) continue;
-
-    const itemEntityKey = `GraphqlSoupItem:${args.entityId}`;
-    for (const key of removed) {
-      const source = bins.find((bin) => bin.key === key);
-      if (!source?.items.some((item) => item.id === args.entityId)) continue;
-      patches.push(
-        removeGroupedSoupItemLink({
-          parentEntityKey,
-          fieldKey: field.fieldKey,
-          binKey: key,
-          itemEntityKey,
-          revalidate,
-        })
-      );
-    }
-    for (const key of added) {
-      patches.push(
-        prependGroupedSoupItemLink({
-          parentEntityKey,
-          fieldKey: field.fieldKey,
-          binKey: key,
-          itemEntityKey,
-          revalidate,
-        })
-      );
+    for (const page of destinationPages) {
+      for (const key of added) {
+        patches.push(
+          prependGroupedSoupItemLink({
+            parentEntityKey,
+            fieldKey: page.fieldKey,
+            binKey: key,
+            itemEntityKey,
+            revalidate: page.revalidate,
+          })
+        );
+      }
     }
   }
 
