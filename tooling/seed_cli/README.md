@@ -50,14 +50,13 @@ just seed-scenario reset --file seed/scenarios/team-perms.json   # or --all
   know emails, so accounts created through the signup webhook survive it.
 - `apply` creates each user's FusionAuth account first (the signup webhook
   writes the base rows, which the seeder then adopts), so every seeded user
-  can log in through the real passwordless flow — grab the one-time code with
-  `just code <email>` (it reads mailpit). If FusionAuth is unreachable, apply
-  seeds database rows only and says so.
+  can log in through the real passwordless flow. If FusionAuth is
+  unreachable, apply seeds database rows only and says so.
 - To drive several personas at once in one browser window, open the links
   apply prints (`http://alice.localhost:3000/app/login?email=…`) as plain
   tabs. Hostnames get separate cookie jars (ports don't), the app follows the
   page hostname to the backend proxy, and locally the login completes itself
   (the local backend returns the one-time code and dev builds auto-submit
   it) — so each link logs its persona straight in, one live session per tab
-  against the same stack. `just code <email>` still prints codes from mailpit
-  for manual logins.
+  against the same stack. For manual logins outside a dev build, the one-time
+  codes land in mailpit (`just status_local` prints its UI address).

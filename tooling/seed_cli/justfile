@@ -15,16 +15,6 @@ get_environment:
 seed *ARGS:
   cargo r "$@"
 
-# Print the latest passwordless login code mailpit captured for an email,
-# e.g. `just code alice@seed.macro.local`. Trigger the code from the login
-# page first; this just saves the trip to http://localhost:8025.
-code EMAIL:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  id=$(curl -s "http://localhost:8025/api/v1/search?query=to:{{ EMAIL }}&limit=1" | python3 -c "import json,sys; m=json.load(sys.stdin).get('messages',[]); print(m[0]['ID'] if m else '')")
-  if [ -z "$id" ]; then echo "no mail for {{ EMAIL }}"; exit 1; fi
-  curl -s "http://localhost:8025/api/v1/message/$id" | python3 -c "import json,sys,re; c=re.findall(r'\b(\d{6})\b', json.load(sys.stdin).get('Text','')); print(c[0] if c else 'no code found')"
-
 # Reset and seed deterministic data for the local Playwright smoke suite.
 local-e2e-smoke:
   LOCAL_E2E_SEED="true" \
