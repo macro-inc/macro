@@ -161,11 +161,20 @@ export function optimisticContextOf(
   if (
     value !== null &&
     typeof value === 'object' &&
-    'optimisticResponse' in value &&
-    'linkPatches' in value &&
-    'revalidations' in value
+    'optimisticResponse' in value
   ) {
-    return value as OptimisticMutationContext;
+    const context = value as Partial<OptimisticMutationContext> & {
+      optimisticResponse: unknown;
+    };
+    return {
+      optimisticResponse: context.optimisticResponse,
+      linkPatches: Array.isArray(context.linkPatches)
+        ? context.linkPatches
+        : [],
+      revalidations: Array.isArray(context.revalidations)
+        ? context.revalidations
+        : [],
+    };
   }
   return undefined;
 }

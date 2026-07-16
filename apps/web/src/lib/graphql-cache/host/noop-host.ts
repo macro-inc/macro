@@ -9,7 +9,6 @@ const emptyWriteResult = (): WriteResult => ({
   changed: [],
   affectedOps: [],
   reset: false,
-  revalidations: [],
 });
 
 /**
