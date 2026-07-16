@@ -8,7 +8,7 @@ import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
-import { Show, type Component } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
