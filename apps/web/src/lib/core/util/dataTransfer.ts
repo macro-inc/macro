@@ -11,20 +11,24 @@ type ExtractedEntries = {
  * called from a user gesture on mobile browsers.
  */
 export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null> {
-  if (!navigator.clipboard) return null;
+  const clipboard = navigator.clipboard;
+  if (!clipboard) return null;
+
   const dataTransfer = new DataTransfer();
-  try {
-    for (const item of await navigator.clipboard.read()) {
-      for (const type of item.types) {
-        if (type !== 'text/html' && type !== 'text/plain') continue;
-        const blob = await item.getType(type);
-        dataTransfer.setData(type, await blob.text());
-      }
+  const items = await clipboard.read().catch(() => []);
+  for (const item of items) {
+    for (const type of item.types) {
+      if (type !== 'text/html' && type !== 'text/plain') continue;
+      const blob = await item.getType(type);
+      dataTransfer.setData(type, await blob.text());
     }
-  } catch {
-    const text = await navigator.clipboard.readText().catch(() => '');
+  }
+
+  if (dataTransfer.types.length === 0) {
+    const text = await clipboard.readText().catch(() => '');
     if (text) dataTransfer.setData('text/plain', text);
   }
+
   return dataTransfer.types.length > 0 ? dataTransfer : null;
 }
 
@@ -39,28 +43,30 @@ export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null
 export async function writeClipboardData(
   data: Record<string, string | undefined>
 ): Promise<boolean> {
+  const clipboard = navigator.clipboard;
+  if (!clipboard) return false;
+
   const html = data['text/html'];
   const text = data['text/plain'] ?? '';
-  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+
+  if (typeof ClipboardItem !== 'undefined' && clipboard.write) {
     const items: Record<string, Blob> = {
       'text/plain': new Blob([text], { type: 'text/plain' }),
     };
     if (html !== undefined) {
       items['text/html'] = new Blob([html], { type: 'text/html' });
     }
-    try {
-      await navigator.clipboard.write([new ClipboardItem(items)]);
-      return true;
-    } catch {
-      // Fall through to a plain-text write below.
-    }
+    const wrote = await clipboard
+      .write([new ClipboardItem(items)])
+      .then(() => true)
+      .catch(() => false);
+    if (wrote) return true;
   }
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+
+  return clipboard
+    .writeText(text)
+    .then(() => true)
+    .catch(() => false);
 }
 
 const EMPTY_RESULT: ExtractedEntries = {
