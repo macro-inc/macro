@@ -90,6 +90,14 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
+use projects_hex::{
+    domain::service::ProjectServiceImpl,
+    inbound::axum_router::ProjectRouterState,
+    outbound::{
+        DynamoBulkUploadAdapter, PgProjectRepo, S3ProjectUploadAdapter, ShaCountAdapter,
+        SqsProjectSearchIndexer,
+    },
+};
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
@@ -413,6 +421,25 @@ async fn main() -> anyhow::Result<()> {
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
     );
+
+    let project_service = Arc::new(ProjectServiceImpl::new(
+        PgProjectRepo::new(db.clone()),
+        S3ProjectUploadAdapter::new(
+            macro_aws_config::s3_client().await,
+            config.document_storage_bucket.as_ref(),
+            config.docx_document_upload_bucket.as_ref(),
+            config.upload_staging_bucket.as_ref(),
+        ),
+        DynamoBulkUploadAdapter::new(dynamodb_client.clone()),
+        ShaCountAdapter::new(Redis::new(redis_client.clone())),
+        entity_access_management_service.clone(),
+        SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone())),
+        if cfg!(feature = "local") {
+            Some(uuid::uuid!("d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc"))
+        } else {
+            None
+        },
+    ));
 
     let document_service = Arc::new(
         DocumentServiceImpl::new(
@@ -855,6 +882,11 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         channel_list_state,
         entity_access_service: entity_access_service.clone(),
+        projects_state: ProjectRouterState {
+            service: project_service,
+            access_service: entity_access_service.clone(),
+            authorization_state: authorization_state.clone(),
+        },
         documents_state: DocumentRouterState {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),

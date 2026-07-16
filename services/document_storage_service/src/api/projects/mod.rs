@@ -1,7 +1,7 @@
 use super::context::ApiContext;
 use axum::{
     Router,
-    routing::{delete, get, patch, post, put},
+    routing::{delete, patch, post, put},
 };
 use macro_middleware::cloud_storage::project::ensure_project_exists;
 
@@ -19,23 +19,13 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let ensure_project_exists_middleware =
         axum::middleware::from_fn_with_state(state.clone(), ensure_project_exists::handler);
     Router::new()
-        .route("/", get(get_projects::get_projects_handler))
-        .route("/pending", get(get_projects::get_pending_projects_handler))
-        .route(
-            "/{id}/permissions",
-            get(project_permission::get_project_permissions_handler)
-                .layer(ensure_project_exists_middleware.clone()),
-        )
-        .route(
-            "/{id}/access_level",
-            get(project_permission::get_project_access_level_handler)
-                .layer(ensure_project_exists_middleware.clone()),
-        )
-        .route(
-            "/{id}/content",
-            get(get_project::get_project_content_handler)
-                .layer(ensure_project_exists_middleware.clone()),
-        )
+        // NOTE: GET / is now served by the projects hex crate router.
+        // NOTE: GET /pending is now served by the projects hex crate router.
+        // NOTE: GET /{id} is now served by the projects hex crate router.
+        // NOTE: GET /{id}/content is now served by the projects hex crate router.
+        // NOTE: GET /{id}/permissions is now served by the projects hex crate router.
+        // NOTE: GET /{id}/access_level is now served by the projects hex crate router.
+        // NOTE: POST /preview is now served by the projects hex crate router.
         .route("/", post(create_project::create_project_handler))
         .route("/upload", post(upload_folder::upload_folder_handler))
         .route(
@@ -59,14 +49,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/{id}/permanent",
             delete(delete_project::permanently_delete_project_handler)
-                .layer(ensure_project_exists_middleware.clone()),
-        )
-        .route(
-            "/{id}",
-            get(get_project::get_project_handler).layer(ensure_project_exists_middleware),
-        )
-        .route(
-            "/preview",
-            post(get_batch_preview::get_batch_preview_handler),
+                .layer(ensure_project_exists_middleware),
         )
 }
