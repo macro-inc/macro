@@ -6,7 +6,10 @@ import {
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 import { entitySortTs } from './entity-events';
 import type { TimelineFeed, TimelineItem } from './timeline-types';
@@ -87,13 +90,23 @@ export function createSoupTimelineFeed(args: {
   query: () => Query;
   map: (entity: EntityData) => TimelineItem[];
   enabled?: () => boolean;
+  /**
+   * Mirror of the server query for the websocket cache layer: optimistic
+   * inserts bypass the server AST, so without this gate any entity the user
+   * touches (e.g. an auto-ingested attachment doc bumped by viewing it) gets
+   * prepended into this feed's cache.
+   */
+  itemFilter?: SoupApiItemFilter;
 }): TimelineFeed {
   const query = useSoupAstItemsQuery(
     () => ({
       params: { limit: PAGE_SIZE, sort_method: 'updated_at' },
       body: compileToAst(queryStateFrom(args.query())),
     }),
-    () => ({ enabled: args.enabled?.() ?? true })
+    () => ({
+      enabled: args.enabled?.() ?? true,
+      meta: args.itemFilter ? { itemFilter: args.itemFilter } : undefined,
+    })
   );
 
   const entities = createMemo((): EntityData[] => query.data?.entities ?? []);

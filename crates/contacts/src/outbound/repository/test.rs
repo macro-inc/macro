@@ -42,6 +42,30 @@ async fn test_create_connections_ordering(pool: PgPool) -> sqlx::Result<()> {
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_create_connections_deduplicates_and_ignores_self_edges(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let user1 = "macro|a@test.com";
+    let user2 = "macro|b@test.com";
+    let repo = DbContactsRepository::new(pool.clone());
+
+    repo.create_connections(vec![
+        (mid(user1), mid(user2)),
+        (mid(user2), mid(user1)),
+        (mid(user1), mid(user1)),
+    ])
+    .await
+    .unwrap();
+
+    let count = sqlx::query_scalar!("SELECT count(*) FROM contacts_connections")
+        .fetch_one(&pool)
+        .await?
+        .unwrap();
+    assert_eq!(count, 1);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("user_list"))

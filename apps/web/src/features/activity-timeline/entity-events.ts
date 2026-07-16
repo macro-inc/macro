@@ -11,6 +11,21 @@ import type { EntityEventVerb, TimelineItem } from './timeline-types';
  */
 const EDIT_SPLIT_WINDOW_MS = 60 * 1000;
 
+/**
+ * Document types the user actually authors inside Macro. Other file types
+ * (pdf, docx, images, …) mostly reach the workspace through ingestion
+ * pipelines — email-attachment parsing, bulk-upload extraction — and their
+ * updatedAt also moves on viewer activity (e.g. opening a PDF), so treating
+ * them as created/edited would fabricate actions the user never took.
+ */
+const AUTHORABLE_FILE_TYPES: ReadonlySet<string> = new Set(['md', 'canvas']);
+
+function isAuthorableDocument(entity: EntityData): boolean {
+  if (entity.type !== 'document') return false;
+  if (entity.subType?.type === 'task') return true;
+  return AUTHORABLE_FILE_TYPES.has(entity.fileType ?? '');
+}
+
 function tsOf(value: DateValue | null | undefined): number | undefined {
   if (value == null) return undefined;
   const ms = new Date(value).getTime();
@@ -102,6 +117,7 @@ export function mapMyActivityEntity(
           ),
         ];
       case 'document':
+        if (!isAuthorableDocument(entity)) return [];
         return entity.subType?.type === 'task'
           ? documentEvents(entity, 'created-task', 'edited-task')
           : documentEvents(entity, 'created-document', 'edited-document');
