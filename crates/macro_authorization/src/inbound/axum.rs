@@ -103,11 +103,16 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
     },
 ];
 
-/// Extracts and authorizes credentials for a required authenticated user.
+/// Extracts and authorizes a required acting user.
 ///
-/// Internal service credentials are checked first. User credentials are read
-/// from the `macro-api-token` query parameter, followed by a bearer header or
-/// access-token cookie. The authorization service is resolved from Axum state.
+/// This extractor automatically supports both direct user access and internal
+/// service access. Internal credentials are checked first and must resolve to
+/// an acting user through an identity header or the configured default user.
+/// User credentials are read from the `macro-api-token` query parameter,
+/// followed by a bearer header or access-token cookie. Use
+/// [`InternalMacroAuthorizationExtractor`] instead only when the endpoint must
+/// be exclusively internal and does not require an acting user. The
+/// authorization service is resolved from Axum state.
 #[non_exhaustive]
 pub struct MacroAuthorizationExtractor<Svc> {
     /// The validated Macro user identifier.
@@ -153,11 +158,19 @@ where
     }
 }
 
-/// Authorizes an internal service request using its internal API key.
+/// Authorizes an exclusively internal service endpoint using an internal API key.
+///
+/// Use this extractor only for endpoints that will never accept direct user
+/// access. Do not use it merely to support internal callers:
+/// [`MacroAuthorizationExtractor`] and [`OptionalMacroAuthorizationExtractor`]
+/// already accept internal credentials automatically. This extractor does not
+/// accept user credentials as a substitute and intentionally exposes no user
+/// identity.
 ///
 /// Both the standard and legacy DSS internal API key headers are accepted.
 /// Acting-user identity headers are forwarded to the authorization service so
-/// it can construct a user context, but only the internal API key is required.
+/// it can validate any supplied identity, but only the internal API key is
+/// required.
 #[non_exhaustive]
 pub struct InternalMacroAuthorizationExtractor<Svc> {
     _service: PhantomData<fn() -> Svc>,
@@ -191,10 +204,16 @@ where
     }
 }
 
-/// Extracts and authorizes credentials when an authenticated user is present.
+/// Extracts and authorizes an optional acting user.
 ///
-/// Requests without credentials succeed with an empty [`UserContext`]. Any
-/// supplied credential must still pass authorization.
+/// This extractor automatically supports anonymous callers, direct user
+/// credentials, and internal service credentials. Internal credentials are
+/// checked first and set `is_internal_access` even when they establish no user
+/// identity. Requests without credentials succeed with an empty
+/// [`UserContext`]. Any supplied credential must still pass authorization; an
+/// invalid credential is never treated as anonymous. Use
+/// [`InternalMacroAuthorizationExtractor`] instead only when the endpoint must
+/// be exclusively internal.
 #[non_exhaustive]
 pub struct OptionalMacroAuthorizationExtractor<Svc> {
     /// The validated Macro user identifier, or `None` for an anonymous request.
