@@ -195,7 +195,7 @@ function MobileSearchInner() {
       <Show when={showTabs()}>
         <FloatRegion
           region="accessory"
-          priority={20}
+          priority={100}
           active={() => SearchState.isOpen()}
         >
           <CategoryFilterTabs />
@@ -206,7 +206,7 @@ function MobileSearchInner() {
           while search is open, regardless of keyboard visibility. */}
       <FloatRegion
         region="dock"
-        priority={20}
+        priority={100}
         active={() => SearchState.isOpen()}
       >
         <SearchInputBar onBack={handleBack} />
