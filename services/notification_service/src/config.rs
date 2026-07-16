@@ -1,8 +1,8 @@
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use macro_auth::InternalApiKey;
 use macro_env::Environment;
 use macro_env_var::{env_var, env_vars, maybe_env_var};
-use macro_middleware::auth::internal_access::InternalApiKey;
 use std::sync::LazyLock;
 
 // We load this through `macro_config` at startup as part of [`Config`]. This lazy is retained for

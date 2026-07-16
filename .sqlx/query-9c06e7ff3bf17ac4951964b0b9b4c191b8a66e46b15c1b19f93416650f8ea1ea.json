@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain,\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            JOIN team_user tu ON t.id = tu.team_id\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE tu.user_id = $1\n            ",
+  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            JOIN team_user tu ON t.id = tu.team_id\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE tu.user_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -30,6 +30,11 @@
       },
       {
         "ordinal": 5,
+        "name": "enterprise",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
         "name": "crm_enabled!",
         "type_info": "Bool"
       }
@@ -45,8 +50,9 @@
       false,
       false,
       true,
+      false,
       null
     ]
   },
-  "hash": "bbf73370ac43c4f2378584e005b10a8d854b7c0203978dfb28c2fa7a70996bdd"
+  "hash": "9c06e7ff3bf17ac4951964b0b9b4c191b8a66e46b15c1b19f93416650f8ea1ea"
 }

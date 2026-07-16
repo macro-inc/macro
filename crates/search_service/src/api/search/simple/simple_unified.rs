@@ -529,9 +529,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let crm_count = crm_hits.len();
 
     let final_tagged = {
-        let _span = tracing::info_span!("combine_and_sort_results", chat_name_count, content_count)
-            .entered();
-
         // Wrap results with source tags
         let mut combined: Vec<TaggedSearchHit> = Vec::new();
         combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
@@ -547,8 +544,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             source: SearchSource::CrmCompany,
         }));
 
-        tracing::debug!(total_combined = combined.len(), "combined all results");
-
         // Sort: updated_at DESC (None to bottom), entity_id DESC as tiebreaker
         combined.sort_by(|a, b| match (&b.hit.updated_at, &a.hit.updated_at) {
             (Some(b_ts), Some(a_ts)) => b_ts
@@ -562,19 +557,10 @@ pub(in crate::api::search) async fn perform_unified_search(
         // Take the first page_size distinct entities (keeping all of each
         // entity's hits), not the first page_size hits.
         let page_size_usize = page_size as usize;
-        let final_tagged: Vec<TaggedSearchHit> = take_first_n_entities(combined, page_size_usize);
-
-        tracing::debug!(
-            final_count = final_tagged.len(),
-            "final results after pagination"
-        );
-
-        final_tagged
+        take_first_n_entities(combined, page_size_usize)
     };
 
     let next_cursor = {
-        let _span = tracing::info_span!("compute_pagination_cursors").entered();
-
         // Count included results by source
         let included_chat_names = final_tagged
             .iter()

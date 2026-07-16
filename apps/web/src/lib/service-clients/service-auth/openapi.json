@@ -4281,7 +4281,14 @@
       "Team": {
         "type": "object",
         "description": "The Team struct",
-        "required": ["id", "name", "slug", "owner_id", "crm_enabled"],
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "owner_id",
+          "crm_enabled",
+          "enterprise"
+        ],
         "properties": {
           "auto_join_domain": {
             "type": ["string", "null"],
@@ -4290,6 +4297,10 @@
           "crm_enabled": {
             "type": "boolean",
             "description": "Whether the CRM is enabled for this team (from `team_crm_settings`;\n`false` when no row exists)."
+          },
+          "enterprise": {
+            "type": "boolean",
+            "description": "Whether this team is on an enterprise license. Enterprise teams are\nbilled out-of-band; membership changes skip all Stripe subscription\nbookkeeping (no seat counts, no subscription backfill, no paying check)."
           },
           "id": {
             "type": "string",

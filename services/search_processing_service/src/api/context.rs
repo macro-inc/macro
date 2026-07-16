@@ -1,5 +1,5 @@
 use axum::extract::FromRef;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::InternalApiKey;
 use std::sync::Arc;
 
 use crate::BackfillServiceImpl;

@@ -39,6 +39,8 @@ use sqlx::{Executor, PgPool, Postgres};
 #[cfg(feature = "list")]
 use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use std::collections::{HashMap, HashSet};
+
+use indexmap::IndexMap;
 use uuid::Uuid;
 
 /// Postgres-backed repository for channels.
@@ -1925,8 +1927,10 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        // Group by message_id, then fold by emoji within each message.
-        let mut map: HashMap<Uuid, HashMap<String, Vec<String>>> = HashMap::new();
+        // Group by message_id, then fold by emoji within each message. Rows arrive
+        // ordered by created_at ASC, so an IndexMap preserves first-reacted order per
+        // emoji instead of the random order a HashMap would iterate in.
+        let mut map: HashMap<Uuid, IndexMap<String, Vec<String>>> = HashMap::new();
         for r in rows {
             map.entry(r.message_id)
                 .or_default()

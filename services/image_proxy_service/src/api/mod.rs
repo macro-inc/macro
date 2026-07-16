@@ -11,16 +11,12 @@ mod health;
 pub(crate) mod proxy;
 pub(crate) mod swagger;
 
-pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer();
+#[cfg(test)]
+mod test;
 
+pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let env = state.environment;
-    let app = api_router(state.clone())
-        .with_state(state)
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
-        .merge(health::router())
-        .layer(cors)
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    let app = app(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -37,14 +33,17 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         .context("error starting service")
 }
 
-fn api_router(state: ApiContext) -> Router<ApiContext> {
-    Router::new().nest(
-        "/proxy",
-        proxy::router().layer(
-            ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
-        ),
-    )
+fn app(state: ApiContext) -> Router {
+    let cors = macro_cors::cors_layer();
+
+    api_router()
+        .with_state(state)
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
+        .merge(health::router())
+        .layer(cors)
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+}
+
+fn api_router() -> Router<ApiContext> {
+    Router::new().nest("/proxy", proxy::router())
 }

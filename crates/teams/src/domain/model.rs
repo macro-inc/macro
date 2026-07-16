@@ -330,6 +330,10 @@ pub struct Team {
     /// The email domain new users are automatically joined to this team
     /// with, when automatic domain joining is enabled (None otherwise).
     pub(crate) auto_join_domain: Option<String>,
+    /// Whether this team is on an enterprise license. Enterprise teams are
+    /// billed out-of-band; membership changes skip all Stripe subscription
+    /// bookkeeping (no seat counts, no subscription backfill, no paying check).
+    pub(crate) enterprise: bool,
 }
 
 impl Team {
@@ -341,6 +345,7 @@ impl Team {
         slug: String,
         owner_id: MacroUserIdStr<'static>,
         crm_enabled: bool,
+        enterprise: bool,
     ) -> Self {
         Self {
             id,
@@ -349,6 +354,7 @@ impl Team {
             owner_id,
             crm_enabled,
             auto_join_domain: None,
+            enterprise,
         }
     }
 }
@@ -382,6 +388,11 @@ impl Team {
     /// The team's auto-join domain, when automatic domain joining is enabled
     pub fn auto_join_domain(&self) -> Option<&str> {
         self.auto_join_domain.as_deref()
+    }
+
+    /// Whether this team is on an enterprise license
+    pub fn enterprise(&self) -> bool {
+        self.enterprise
     }
 }
 

@@ -112,7 +112,6 @@ pub async fn fetch_link_by_macro_id_and_email_address(
 /// inboxes delegated via macro_user_links. The union is the read-side half of the
 /// multi-inbox narrow-graph design — it surfaces both the user's own inboxes
 /// (same macro_id) and inboxes belonging to other macro users they've been delegated.
-#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: &str,

@@ -6,35 +6,6 @@ const MIN_REASONABLE_SECONDS: i64 = 946684800; // Year 2000
 const MAX_REASONABLE_MILLIS: i64 = MAX_REASONABLE_SECONDS * 1000;
 const MIN_REASONABLE_MILLIS: i64 = MIN_REASONABLE_SECONDS * 1000;
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-pub struct EpochSeconds(i64);
-
-impl EpochSeconds {
-    pub fn new(seconds: i64) -> Result<Self> {
-        if seconds > MAX_REASONABLE_SECONDS {
-            return Err(OpensearchClientError::ValidationFailed {
-                details: format!(
-                    "timestamp {} appears to be in milliseconds (exceeds year 3000). Expected seconds since Unix epoch.",
-                    seconds
-                ),
-            });
-        }
-        if seconds < MIN_REASONABLE_SECONDS {
-            return Err(OpensearchClientError::ValidationFailed {
-                details: format!(
-                    "timestamp {} is before year 2000. Expected seconds since Unix epoch.",
-                    seconds
-                ),
-            });
-        }
-        Ok(Self(seconds))
-    }
-
-    pub fn get(&self) -> i64 {
-        self.0
-    }
-}
-
 /// A validated epoch-milliseconds timestamp, serialized as a raw `i64` for
 /// OpenSearch date fields mapped with `format: epoch_millis`.
 #[derive(Debug, Clone, Copy, serde::Serialize)]

@@ -1001,8 +1001,17 @@ async fn reactions_grouped_by_emoji(pool: Pool<Postgres>) -> anyhow::Result<()> 
     let repo = repo(pool);
     let map = repo.get_reactions_batch(&[MSG1, MSG3]).await?;
 
-    // msg1 has thumbsup (2 users) and tada (1 user)
+    // msg1 has thumbsup (2 users) and tada (1 user), and should always come back in
+    // first-reacted-at order (thumbsup before tada) rather than shuffled, since the
+    // fixture reacts thumbsup before tada.
     let msg1_reactions = map.get(&MSG1).unwrap();
+    assert_eq!(
+        msg1_reactions
+            .iter()
+            .map(|r| r.emoji.as_str())
+            .collect::<Vec<_>>(),
+        vec!["\u{1f44d}", "\u{1f389}"]
+    );
     let thumbsup = msg1_reactions
         .iter()
         .find(|r| r.emoji == "\u{1f44d}")

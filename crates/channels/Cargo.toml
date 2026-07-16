@@ -48,6 +48,7 @@ outbound = [
   "dep:contacts",
   "dep:entity_access",
   "dep:entity_access_db_utils",
+  "dep:indexmap",
   "dep:macro_uuid",
   "dep:model-entity",
   "dep:model_notifications",
@@ -80,6 +81,7 @@ entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 filter_ast = { path = "../filter_ast", optional = true }
 frecency = { path = "../frecency", optional = true }
 futures = { workspace = true, optional = true }
+indexmap = { workspace = true, optional = true }
 item_filters = { path = "../item_filters", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }

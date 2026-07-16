@@ -76,10 +76,7 @@ pub async fn handler(
         project,
         call_record,
         crm_company,
-    } = {
-        let _span = tracing::info_span!("split_search_response_by_type").entered();
-        results.into_iter().split_search_response()
-    };
+    } = results.into_iter().split_search_response();
 
     let (
         enriched_document_results,
@@ -137,8 +134,6 @@ pub async fn handler(
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
     let results = {
-        let _span = tracing::info_span!("combine_and_sort_enriched_results").entered();
-
         let mut results = vec![];
 
         results.extend(enriched_document_results);
@@ -160,7 +155,6 @@ pub async fn handler(
 
 /// Sorts the unified results
 /// This method is so we can more easily test sorting
-#[tracing::instrument(skip(results), fields(count = results.len()))]
 fn sort_unified_search_results(
     mut results: Vec<UnifiedSearchResponseItem>,
 ) -> Vec<UnifiedSearchResponseItem> {

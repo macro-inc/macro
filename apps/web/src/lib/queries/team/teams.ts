@@ -320,6 +320,7 @@ export function useCreateTeamWithInvitesMutation(
               owner_id: userInfo.userId,
               crm_enabled: false,
               auto_join_domain: null,
+              enterprise: false,
             };
 
             queryClient.setQueryData<Team[]>(
