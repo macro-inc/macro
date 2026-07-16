@@ -1,13 +1,13 @@
 use axum::extract::FromRef;
 use macro_authorization::{
-    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoopMacroAuthJwtValidator,
 };
 use s3_client::S3;
 use std::sync::Arc;
 
 use crate::config::Config;
 
-pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<NoopMacroAuthJwtValidator>;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {

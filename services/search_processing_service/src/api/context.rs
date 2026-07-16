@@ -8,8 +8,7 @@ use crate::BackfillServiceImpl;
 use crate::config::Config;
 use crate::domain::jobs::BackfillJobs;
 
-pub(crate) type AuthorizationService =
-    MacroAuthorizationServiceImpl<NoopMacroAuthJwtValidator>;
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<NoopMacroAuthJwtValidator>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

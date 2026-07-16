@@ -2,8 +2,7 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use config::{Config, Environment};
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
 use macro_entrypoint::MacroEntrypoint;
 use process::runner::run_worker;
 use sqlx::postgres::PgPoolOptions;
@@ -67,14 +66,9 @@ async fn main() -> anyhow::Result<()> {
     smoke_test_lok(&config.lok_path)?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&aws_config),
-    );
-    let jwt_validation_args =
-        JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
-            .await?;
+
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_validation_args),
+        NoopMacroAuthJwtValidator, // we only have internal calls in this service.
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
