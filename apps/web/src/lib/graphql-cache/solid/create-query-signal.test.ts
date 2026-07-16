@@ -1,10 +1,14 @@
-import type { Client, OperationResult } from '@urql/core';
+import { type Client, CombinedError, type OperationResult } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeSubject } from 'wonka';
 import { createQuerySignal, type QuerySignal } from './create-query-signal';
 
-type FakeResult = Partial<OperationResult>;
+type FakeResult = Omit<Partial<OperationResult>, 'data'> & {
+  // GraphQL permits a root-level null response even though urql's operation
+  // result type models missing data as undefined.
+  data?: OperationResult['data'] | null;
+};
 
 /**
  * Fake urql client: each `query()` call returns a fresh subject the test
@@ -78,6 +82,24 @@ describe('createQuerySignal', () => {
     expect(query.data()).toEqual({ from: 'network' });
     executions[0]?.next({ data: { from: 'optimistic' }, stale: false });
     expect(query.data()).toEqual({ from: 'optimistic' });
+  });
+
+  it('retains valid data and reports errors when GraphQL data is null', () => {
+    const harness = setup();
+    dispose = harness.dispose;
+    const { query, executions } = harness;
+    const error = new CombinedError({
+      graphQLErrors: ['root non-null field failed'],
+    });
+
+    executions[0]?.next({ data: null, error });
+    expect(query.data()).toBeUndefined();
+    expect(query.error()).toBe(error);
+
+    executions[0]?.next({ data: { page: 1 } });
+    executions[0]?.next({ data: null, error });
+    expect(query.data()).toEqual({ page: 1 });
+    expect(query.error()).toBe(error);
   });
 
   it('resubscribes when variables change and ignores the old source', () => {

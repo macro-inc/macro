@@ -1,426 +1,297 @@
+/**
+ * @file Column resize handles for tables. On pointer devices an invisible
+ * strip along the hovered cell's right edge shows a line on hover and drags
+ * that column border. Touch has no handle at all: a horizontal swipe that
+ * starts near a column border resizes it. The first touchmove decides the
+ * gesture — mostly-vertical movement is left to the browser as a scroll,
+ * and a still finger disarms before the long-press cell selection fires.
+ * The new width applies live while dragging, with the pointer captured so
+ * the drag survives leaving the editor; Escape/pointercancel restores the
+ * pre-drag width.
+ */
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { createBlockSignal } from '@core/block';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import type { TableCellNode, TableDOMCell, TableMapType } from '@lexical/table';
-import {
-  $computeTableMapSkipCellCheck,
-  $getTableNodeFromLexicalNodeOrThrow,
-  $getTableRowIndexFromTableCellNode,
-  $isTableCellNode,
-  $isTableRowNode,
-  getDOMCellFromTarget,
-  getTableElement,
-} from '@lexical/table';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getDOMCellFromTarget } from '@lexical/table';
 import { calculateZoomLevel } from '@lexical/utils';
-import { createCallback } from '@solid-primitives/rootless';
-import { $getNearestNodeFromDOMNode, isHTMLElement } from 'lexical';
-import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { registerEditorWidthObserver } from '../../plugins/shared/utils';
+import {
+  $applyResizeDrag,
+  $captureResizeDrag,
+  $revertResizeDrag,
+  type ResizeEdge,
+} from '../../plugins/tables/tableCellResize';
+import { createLayoutTick } from './createLayoutTick';
 
-// Constants
-const MIN_ROW_HEIGHT = 35;
-export const MIN_COLUMN_WIDTH = 120;
+// Width of the pointer-device hit strip along a cell edge.
+const HIT_ZONE_PX = 9;
+// Touch counts as starting on a border within this distance of it.
+const TOUCH_EDGE_PX = 12;
+// A still finger is a long-press (cell selection), not a resize; disarm
+// before tableTouchSelection's 400ms long-press fires.
+const TOUCH_ARM_TIMEOUT_MS = 350;
 
-// Types
-type PointerPosition = {
-  x: number;
-  y: number;
-};
-
-type PointerDraggingDirection = 'right' | 'bottom';
+// Set while dragging; names the border of the active cell being dragged.
+// Module scope: at most one drag runs across all editors, and the other
+// floating table controls (insert/delete buttons) hide themselves on it —
+// their hover tracking freezes while the resize captures the pointer.
+const [dragEdge, setDragEdge] = createSignal<ResizeEdge>();
+export const tableColumnResizeEdge = dragEdge;
 
 export function TableCellResizer() {
-  // State and references
   const mdData = mdStore.get;
   const editor = () => mdData.editor;
 
-  let targetRef: HTMLElement | undefined;
-  let resizerRef: HTMLDivElement | undefined;
-  let tableRectRef: DOMRect | undefined;
-  let pointerStartPosRef: PointerPosition | undefined;
+  // Cell whose border carries the handle: the hovered cell on pointer
+  // devices, the touched cell during a touch drag.
+  const [activeCellElem, setActiveCellElem] = createSignal<HTMLElement>();
+  const { layoutTick, bumpLayout } = createLayoutTick();
 
-  const [pointerCurrentPos, setPointerCurrentPos] = createBlockSignal<
-    PointerPosition | undefined
-  >(undefined);
-
-  const [activeCell, setActiveCell] = createBlockSignal<
-    TableDOMCell | undefined
-  >(undefined);
-
-  const [draggingDirection, setDraggingDirection] = createBlockSignal<
-    PointerDraggingDirection | undefined
-  >(undefined);
-
-  // Helper functions
-  const resetState = createCallback(() => {
-    setActiveCell(undefined);
-    setDraggingDirection(undefined);
-    targetRef = undefined;
-    pointerStartPosRef = undefined;
-    tableRectRef = undefined;
-  });
-
-  const isHeightChanging = (direction: PointerDraggingDirection) => {
-    return direction === 'bottom';
-  };
-
-  const getCellNodeHeight = (cell: TableCellNode): number | undefined => {
-    const domCellNode = editor()?.getElementByKey(cell.getKey());
-    return domCellNode?.clientHeight;
-  };
-
-  const getCellColumnIndex = (
-    tableCellNode: TableCellNode,
-    tableMap: TableMapType
+  const startResize = (
+    cellElem: HTMLElement,
+    edge: ResizeEdge,
+    down: { pointerId: number; clientX: number; pointerType: string },
+    captureTarget: HTMLElement
   ) => {
-    for (let row = 0; row < tableMap.length; row++) {
-      for (let column = 0; column < tableMap[row].length; column++) {
-        if (tableMap[row][column].cell === tableCellNode) {
-          return column;
-        }
-      }
-    }
-  };
-
-  // Update handlers
-  const updateRowHeight = createCallback((heightChange: number) => {
-    const currentActiveCell = activeCell();
-    if (!currentActiveCell) {
-      throw new Error('TableCellResizer: Expected active cell.');
-    }
-
-    editor()?.update(
-      () => {
-        const tableCellNode = $getNearestNodeFromDOMNode(
-          currentActiveCell.elem
-        );
-        if (!$isTableCellNode(tableCellNode)) {
-          throw new Error('TableCellResizer: Table cell node not found.');
-        }
-
-        const tableNode = $getTableNodeFromLexicalNodeOrThrow(tableCellNode);
-        const baseRowIndex = $getTableRowIndexFromTableCellNode(tableCellNode);
-        const tableRows = tableNode.getChildren();
-
-        // Determine if this is a full row merge by checking colspan
-        const isFullRowMerge =
-          tableCellNode.getColSpan() === tableNode.getColumnCount();
-
-        // For full row merges, apply to first row. For partial merges, apply to last row
-        const tableRowIndex = isFullRowMerge
-          ? baseRowIndex
-          : baseRowIndex + tableCellNode.getRowSpan() - 1;
-
-        if (tableRowIndex >= tableRows.length || tableRowIndex < 0) {
-          throw new Error('Expected table cell to be inside of table row.');
-        }
-
-        const tableRow = tableRows[tableRowIndex];
-        if (!$isTableRowNode(tableRow)) {
-          throw new Error('Expected table row');
-        }
-
-        let height = tableRow.getHeight();
-        if (height === undefined) {
-          const rowCells = tableRow.getChildren<TableCellNode>();
-          height = Math.min(
-            ...rowCells.map((cell) => getCellNodeHeight(cell) ?? Infinity)
-          );
-        }
-
-        const newHeight = Math.max(height + heightChange, MIN_ROW_HEIGHT);
-        tableRow.setHeight(newHeight);
-      },
-      { tag: 'skip-scroll-into-view' }
+    const currentEditor = editor();
+    if (!currentEditor) return;
+    const zoom = calculateZoomLevel(cellElem);
+    const drag = currentEditor.read(() =>
+      $captureResizeDrag(currentEditor, cellElem, edge, zoom)
     );
-  });
+    if (!drag) return;
 
-  const updateColumnWidth = createCallback((widthChange: number) => {
-    const currentActiveCell = activeCell();
-    if (!currentActiveCell) {
-      throw new Error('TableCellResizer: Expected active cell.');
+    const isTouch = down.pointerType === 'touch';
+    try {
+      captureTarget.setPointerCapture(down.pointerId);
+    } catch {
+      // The pointer ended between the down event and here.
+      return;
     }
+    setActiveCellElem(cellElem);
+    setDragEdge(edge);
 
-    editor()?.update(
-      () => {
-        const tableCellNode = $getNearestNodeFromDOMNode(
-          currentActiveCell.elem
-        );
-        if (!$isTableCellNode(tableCellNode)) {
-          throw new Error('TableCellResizer: Table cell node not found.');
-        }
+    const previousCursor = document.body.style.cursor;
+    if (!isTouch) document.body.style.cursor = 'col-resize';
 
-        const tableNode = $getTableNodeFromLexicalNodeOrThrow(tableCellNode);
-        const [tableMap] = $computeTableMapSkipCellCheck(tableNode, null, null);
-        const columnIndex = getCellColumnIndex(tableCellNode, tableMap);
+    let frame = 0;
+    let delta = 0;
+    // The first live update pushes one history entry; the rest merge into
+    // it so the whole drag undoes in a single step.
+    let pushedHistory = false;
 
-        if (columnIndex === undefined) {
-          throw new Error('TableCellResizer: Table column not found.');
-        }
+    const applyDelta = () => {
+      frame = 0;
+      const tag = pushedHistory
+        ? ['skip-scroll-into-view', 'history-merge']
+        : ['skip-scroll-into-view'];
+      pushedHistory = true;
+      currentEditor.update(() => $applyResizeDrag(drag, delta), { tag });
+    };
 
-        const colWidths = tableNode.getColWidths();
-        if (!colWidths) {
-          return;
-        }
+    const onPointerMove = (move: PointerEvent) => {
+      if (move.pointerId !== down.pointerId) return;
+      move.preventDefault();
+      delta = (move.clientX - down.clientX) / zoom;
+      if (!frame) frame = requestAnimationFrame(applyDelta);
+    };
 
-        const width = colWidths[columnIndex];
-        if (width === undefined) {
-          return;
-        }
+    // pointermove can't stop the page from panning; only preventDefault
+    // from a non-passive touchmove listener can.
+    const blockScroll = (event: TouchEvent) => event.preventDefault();
 
-        const newColWidths = [...colWidths];
-        const newWidth = Math.max(width + widthChange, MIN_COLUMN_WIDTH);
-        newColWidths[columnIndex] = newWidth;
-        tableNode.setColWidths(newColWidths);
-      },
-      { tag: 'skip-scroll-into-view' }
-    );
-  });
-
-  // Event handlers
-  const pointerUpHandler = createCallback(
-    (direction: PointerDraggingDirection) => {
-      const handler = (event: PointerEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const currentActiveCell = activeCell();
-        if (!currentActiveCell) {
-          throw new Error('TableCellResizer: Expected active cell.');
-        }
-
-        if (pointerStartPosRef) {
-          const { x, y } = pointerStartPosRef;
-          if (!currentActiveCell) {
-            return;
-          }
-
-          const zoom = calculateZoomLevel(event.target as Element);
-          if (isHeightChanging(direction)) {
-            const heightChange = (event.clientY - y) / zoom;
-            updateRowHeight(heightChange);
-          } else {
-            const widthChange = (event.clientX - x) / zoom;
-            updateColumnWidth(widthChange);
-          }
-
-          resetState();
-          document.removeEventListener('pointerup', handler);
-        }
-      };
-      return handler;
-    }
-  );
-
-  const toggleResize = createCallback(
-    (direction: PointerDraggingDirection): ((event: PointerEvent) => void) =>
-      (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const currentActiveCell = activeCell();
-        if (!currentActiveCell) {
-          throw new Error('TableCellResizer: Expected active cell.');
-        }
-
-        pointerStartPosRef = {
-          x: event.clientX,
-          y: event.clientY,
-        };
-
-        setPointerCurrentPos(pointerStartPosRef);
-        setDraggingDirection(direction);
-        document.addEventListener('pointerup', pointerUpHandler(direction));
+    const onPointerUp = (up: PointerEvent) => {
+      if (up.pointerId !== down.pointerId) return;
+      if (frame) {
+        cancelAnimationFrame(frame);
+        applyDelta();
       }
-  );
-
-  const onPointerMove = (event: PointerEvent) => {
-    const target = event.target;
-    if (!isHTMLElement(target)) {
-      return;
-    }
-
-    if (draggingDirection()) {
-      event.preventDefault();
-      event.stopPropagation();
-      setPointerCurrentPos({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      return;
-    }
-
-    if (resizerRef && resizerRef.contains(target)) {
-      return;
-    }
-
-    if (targetRef !== target) {
-      targetRef = target;
-      const cell = getDOMCellFromTarget(target);
-
-      if (cell && activeCell() !== cell) {
-        editor()?.read(() => {
-          const tableCellNode = $getNearestNodeFromDOMNode(cell.elem);
-          if (!tableCellNode) {
-            throw new Error('TableCellResizer: Table cell node not found.');
-          }
-
-          const tableNode = $getTableNodeFromLexicalNodeOrThrow(tableCellNode);
-          const tableElement = getTableElement(
-            tableNode,
-            editor()?.getElementByKey(tableNode.getKey()) ?? null
-          );
-
-          if (!tableElement) {
-            throw new Error('TableCellResizer: Table element not found.');
-          }
-
-          targetRef = target as HTMLElement;
-          tableRectRef = tableElement.getBoundingClientRect();
-          setActiveCell(cell);
+      cleanup();
+    };
+    const cancelDrag = () => {
+      if (pushedHistory) {
+        currentEditor.update(() => $revertResizeDrag(drag), {
+          tag: ['skip-scroll-into-view', 'history-merge'],
         });
-      } else if (!cell) {
-        resetState();
       }
+      cleanup();
+    };
+    const onPointerCancel = (event: PointerEvent) => {
+      if (event.pointerId !== down.pointerId) return;
+      cancelDrag();
+    };
+    const onKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') cancelDrag();
+    };
+
+    const cleanup = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      if (captureTarget.hasPointerCapture(down.pointerId)) {
+        captureTarget.releasePointerCapture(down.pointerId);
+      }
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('pointercancel', onPointerCancel);
+      document.removeEventListener('touchmove', blockScroll);
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.cursor = previousCursor;
+      setDragEdge(undefined);
+      if (isTouch) setActiveCellElem(undefined);
+    };
+
+    // Document-level listeners see the captured events by bubbling, so one
+    // set serves both the desktop strip and the touch gesture.
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerCancel);
+    if (isTouch) {
+      document.addEventListener('touchmove', blockScroll, { passive: false });
     }
+    document.addEventListener('keydown', onKeyDown);
   };
 
-  const onPointerDown = (event: PointerEvent) => {
-    const isTouchEvent = event.pointerType === 'touch';
-    if (isTouchEvent) {
-      onPointerMove(event);
-    }
+  // Hover activation (mouse/pen). Touch never hovers; its activation is the
+  // swipe gesture below.
+  let lastHoverTarget: EventTarget | null = null;
+  const onRootPointerMove = (event: PointerEvent) => {
+    if (event.pointerType === 'touch' || dragEdge()) return;
+    if (event.target === lastHoverTarget) return;
+    lastHoverTarget = event.target;
+    const cell =
+      event.target instanceof Node ? getDOMCellFromTarget(event.target) : null;
+    setActiveCellElem(cell?.elem);
   };
 
-  // Event listeners setup
-  const resizerContainer = resizerRef;
-  resizerContainer?.addEventListener('pointermove', onPointerMove, {
-    capture: true,
+  const onRootPointerDown = (down: PointerEvent) => {
+    if (down.pointerType !== 'touch' || !down.isPrimary) return;
+    if (!editor()?.isEditable() || dragEdge()) return;
+    const cell =
+      down.target instanceof Node ? getDOMCellFromTarget(down.target) : null;
+    if (!cell) return;
+    const rect = cell.elem.getBoundingClientRect();
+    const edge: ResizeEdge | undefined =
+      Math.abs(down.clientX - rect.right) <= TOUCH_EDGE_PX
+        ? 'right'
+        : Math.abs(down.clientX - rect.left) <= TOUCH_EDGE_PX
+          ? 'left'
+          : undefined;
+    if (!edge) return;
+
+    const { pointerId, clientX: startX, clientY: startY, pointerType } = down;
+    let timer = 0;
+    const cancelArmed = () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('touchmove', onArmedTouchMove);
+      document.removeEventListener('pointerup', cancelArmed);
+      document.removeEventListener('pointercancel', cancelArmed);
+    };
+    // Deciding on the first touchmove (while it is still cancelable) is what
+    // lets a horizontal swipe beat the browser's pan gesture.
+    const onArmedTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      cancelArmed();
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      // Mostly-vertical first movement is a scroll; leave it to the browser.
+      if (Math.abs(dx) <= Math.abs(dy)) return;
+      event.preventDefault();
+      startResize(
+        cell.elem,
+        edge,
+        { pointerId, clientX: startX, pointerType },
+        cell.elem
+      );
+    };
+    timer = window.setTimeout(cancelArmed, TOUCH_ARM_TIMEOUT_MS);
+    document.addEventListener('touchmove', onArmedTouchMove, {
+      passive: false,
+    });
+    document.addEventListener('pointerup', cancelArmed);
+    document.addEventListener('pointercancel', cancelArmed);
+  };
+
+  let cleanupRoot: (() => void) | null = null;
+  const removeRootListener = editor()?.registerRootListener((root) => {
+    cleanupRoot?.();
+    cleanupRoot = null;
+    if (!root) return;
+    root.addEventListener('pointermove', onRootPointerMove);
+    root.addEventListener('pointerdown', onRootPointerDown);
+    cleanupRoot = () => {
+      root.removeEventListener('pointermove', onRootPointerMove);
+      root.removeEventListener('pointerdown', onRootPointerDown);
+    };
   });
 
-  const removeRootListener = editor()?.registerRootListener(
-    (rootElement, prevRootElement) => {
-      prevRootElement?.removeEventListener('pointermove', onPointerMove);
-      prevRootElement?.removeEventListener('pointerdown', onPointerDown);
-      rootElement?.addEventListener('pointermove', onPointerMove);
-      rootElement?.addEventListener('pointerdown', onPointerDown);
-    }
-  );
+  const removeUpdateListener = editor()?.registerUpdateListener(bumpLayout);
 
-  const [editorWidth, setEditorWidth] = createSignal(Infinity);
-  let cleanUpWidthObserver = () => {};
-  if (editor()) {
-    cleanUpWidthObserver = registerEditorWidthObserver(editor()!, (width) => {
-      setEditorWidth(width);
-    });
+  let cleanupWidthObserver = () => {};
+  const widthObserverEditor = editor();
+  if (widthObserverEditor) {
+    cleanupWidthObserver = registerEditorWidthObserver(
+      widthObserverEditor,
+      bumpLayout
+    );
   }
 
   onCleanup(() => {
     removeRootListener?.();
-    cleanUpWidthObserver();
-    resizerContainer?.removeEventListener('pointermove', onPointerMove);
+    removeUpdateListener?.();
+    cleanupRoot?.();
+    cleanupWidthObserver();
   });
 
-  // UI related
-  const getResizers = createMemo(() => {
-    const currentActiveCell = activeCell();
-    editorWidth(); // Make this memo reactive on editor width change.
-    const rootEl = editor()?.getRootElement();
-    // let rootRect = rootEl ? containedClientRect(rootEl!) : null;
-    // let containerRect = rootEl ? getContainerRect(rootEl) : null;
-    let rootRect = rootEl ? rootEl.getBoundingClientRect() : null;
-    if (currentActiveCell) {
-      // const cellRect = containedClientRect(currentActiveCell.elem);
-      const cellRect = currentActiveCell.elem.getBoundingClientRect();
-      const zoneWidth = 5; // Pixel width of the zone where you can drag the edge
-
-      const styles: Record<string, JSX.CSSProperties> = {
-        bottom: {
-          'background-color': 'transparent',
-          cursor: 'row-resize',
-          height: `${zoneWidth}px`,
-          left: `${cellRect.left}px`,
-          top: `${cellRect.top + cellRect.height - zoneWidth / 2}px`,
-          width: `${cellRect.width}px`,
-          position: 'fixed', // Use fixed positioning based on viewport coordinates
-        },
-        right: {
-          'background-color': 'transparent',
-          cursor: 'col-resize',
-          height: `${cellRect.height}px`,
-          left: `${cellRect.left + cellRect.width - zoneWidth / 2}px`,
-          top: `${cellRect.top}px`,
-          width: `${zoneWidth}px`,
-          position: 'fixed', // Use fixed positioning based on viewport coordinates
-        },
-      };
-
-      const tableRect = tableRectRef;
-      const currentDraggingDirection = draggingDirection();
-      const currentPointerPos = pointerCurrentPos();
-
-      if (currentDraggingDirection && currentPointerPos && tableRect) {
-        const compensatedMousePos = {
-          x: currentPointerPos.x,
-          y: currentPointerPos.y,
-        };
-        if (isHeightChanging(currentDraggingDirection)) {
-          styles[currentDraggingDirection].left = `${tableRect.left}px`;
-          styles[currentDraggingDirection].top = `${compensatedMousePos.y}px`;
-          styles[currentDraggingDirection].height = '3px';
-          styles[currentDraggingDirection].width = `${tableRect.width}px`;
-
-          // Do not let the resizer go outside of the root element;
-          if (rootRect) {
-            styles[currentDraggingDirection].left =
-              `${Math.max(rootRect.left, tableRect.left)}px`;
-            styles[currentDraggingDirection].width =
-              `${Math.min(rootRect.width, tableRect.width)}px`;
-          }
-        } else {
-          styles[currentDraggingDirection].top = `${tableRect.top}px`;
-          styles[currentDraggingDirection].left = `${compensatedMousePos.x}px`;
-          styles[currentDraggingDirection].width = '3px';
-          styles[currentDraggingDirection].height = `${tableRect.height}px`;
-        }
-
-        styles[currentDraggingDirection]['background-color'] =
-          'var(--color-accent-bg)';
-      }
-
-      return styles;
-    }
-
-    return {
-      bottom: undefined,
-      left: undefined,
-      right: undefined,
-      top: undefined,
-    };
+  const cellRect = createMemo(() => {
+    layoutTick();
+    const elem = activeCellElem();
+    if (!elem?.isConnected) return;
+    return elem.getBoundingClientRect();
   });
+
+  const onStripPointerDown = (down: PointerEvent) => {
+    if (down.pointerType === 'mouse' && down.button !== 0) return;
+    const cellElem = activeCellElem();
+    const strip = down.currentTarget;
+    if (!cellElem || !(strip instanceof HTMLElement)) return;
+    down.preventDefault();
+    down.stopPropagation();
+    startResize(cellElem, 'right', down, strip);
+  };
+
+  // The strip doubles as the drag indicator on touch, pinned to whichever
+  // border is being dragged.
+  const stripX = (rect: DOMRect) =>
+    dragEdge() === 'left' ? rect.left : rect.right;
 
   return (
-    <Show when={activeCell()}>
-      <ScopedPortal scope="split">
-        <div ref={resizerRef}>
-          <Show when={getResizers().right}>
+    <Show when={cellRect()}>
+      {(rect) => (
+        <ScopedPortal scope="split">
+          <Show when={!isTouchDevice() || dragEdge()}>
             <div
-              class="touch-none pointer-course"
+              class="group fixed z-20 flex cursor-col-resize touch-none justify-center"
               style={{
-                ...(getResizers().right || {}),
+                left: `${stripX(rect()) - HIT_ZONE_PX / 2}px`,
+                top: `${rect().top}px`,
+                width: `${HIT_ZONE_PX}px`,
+                height: `${rect().height}px`,
               }}
-              onPointerDown={toggleResize('right')}
-            />
+              onPointerDown={onStripPointerDown}
+            >
+              <div
+                class="h-full w-[3px] bg-accent transition-opacity"
+                classList={{
+                  'opacity-100': !!dragEdge(),
+                  'opacity-0 group-hover:opacity-70': !dragEdge(),
+                }}
+              />
+            </div>
           </Show>
-          <Show when={getResizers().bottom}>
-            <div
-              class="touch-none pointer-course"
-              style={getResizers().bottom || undefined}
-              onPointerDown={toggleResize('bottom')}
-            />
-          </Show>
-        </div>
-      </ScopedPortal>
+        </ScopedPortal>
+      )}
     </Show>
   );
 }

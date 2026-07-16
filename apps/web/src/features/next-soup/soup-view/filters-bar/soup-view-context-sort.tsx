@@ -76,6 +76,9 @@ export const SoupViewContextSort = () => {
       <Match when={isComponentListView('folders')}>
         <FilesSort {...openProps()} />
       </Match>
+      <Match when={component() === 'tag'}>
+        <FilesSort {...openProps()} />
+      </Match>
     </Switch>
   );
 };

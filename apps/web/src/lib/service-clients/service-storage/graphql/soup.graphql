@@ -1,241 +1,335 @@
 query Soup($input: SoupInput!) {
-  user {
-    id
-    soup(input: $input) {
-      items {
-        id
-        entityType
-        frecencyScore
-        entity {
-          __typename
-          ... on GraphqlSoupDocument {
-            id
-            documentName: name
-            ownerId
-            fileType
-            projectId
-            createdAt
-            updatedAt
-            viewedAt
-            deletedAt
-            subType {
-              kind
-              isCompleted
-            }
-            properties {
-              ...SoupPropertyFields
-            }
-          }
-          ... on GraphqlSoupChat {
-            id
-            chatName: name
-            ownerId
-            projectId
-            isPersistent
-            createdAt
-            updatedAt
-            viewedAt
-            deletedAt
-            properties {
-              ...SoupPropertyFields
-            }
-          }
-          ... on GraphqlSoupProject {
-            id
-            projectName: name
-            ownerId
-            parentId
-            createdAt
-            updatedAt
-            viewedAt
-            deletedAt
-            properties {
-              ...SoupPropertyFields
-            }
-          }
-          ... on GraphqlSoupEmailThread {
-            id
-            providerId
-            ownerId
-            inboxVisible
-            linkId
-            emailName: name
-            snippet
-            senderEmail
-            senderName
-            senderPhotoUrl
-            isRead
-            isDraft
-            isImportant
-            projectId
-            sortTs
-            createdAt
-            updatedAt
-            viewedAt
-            participants {
-              id
-              linkId
-              name
-              email
-              sfsPhotoUrl
-            }
-            attachments {
-              id
-              messageId
-              providerAttachmentId
-              filename
-              mimeType
-              sizeBytes
-              contentId
-              createdAt
-            }
-            labels {
-              id
-              linkId
-              providerLabelId
-              name
-              createdAt
-              messageListVisibility
-              labelListVisibility
-              type
-            }
-            properties {
-              ...SoupPropertyFields
-            }
-          }
-          ... on GraphqlSoupChannel {
-            id
-            channelName: name
-            channelType
-            ownerId
-            organizationId
-            channelTeamId: teamId
-            createdAt
-            updatedAt
-            viewedAt
-            interactedAt
-            participants {
-              channelId
-              userId
-              role
-              joinedAt
-              leftAt
-            }
-            latestMessage {
-              ...SoupChannelMessageFields
-            }
-            latestNonThreadMessage {
-              ...SoupChannelMessageFields
-            }
-          }
-          ... on GraphqlSoupChannelThread {
-            id
-            channelId
-            senderId
-            content
-            createdAt
-            updatedAt
-            effectiveUpdatedAt
-            replyCount
-          }
-          ... on GraphqlSoupCall {
-            id
-            channelId
-            channelName
-            createdBy
-            customName
-            summary
-            startedAt
-            endedAt
-            durationMs
-            isActive
-            status
-            attended
-            participants {
-              userId
-              joinedAt
-              leftAt
-            }
-          }
-          ... on GraphqlSoupCrmCompany {
-            id
-            crmTeamId: teamId
-            crmCompanyName: name
-            description
-            emailSync
-            hidden
-            createdAt
-            updatedAt
-            viewedAt
-            domains
-            properties {
-              ...SoupPropertyFields
-            }
-          }
-          ... on GraphqlSoupForeignEntity {
-            id
-            foreignEntityId
-            foreignEntitySource
-            storedForId
-            storedForAuthEntity
-            metadata
-            createdAt
-            updatedAt
-          }
-        }
-      }
-      nextCursor
-      hasMore
-    }
-  }
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...SoupItemFields
+			}
+			nextCursor
+			hasMore
+		}
+	}
+}
+
+fragment SoupItemFields on GraphqlSoupItem {
+				id
+				entityType
+				frecencyScore
+				entity {
+					__typename
+					... on GraphqlSoupDocument {
+						id
+						documentName: name
+						ownerId
+						fileType
+						projectId
+						createdAt
+						updatedAt
+						viewedAt
+						deletedAt
+						subType {
+							kind
+							isCompleted
+						}
+						properties {
+							...SoupPropertyFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupChat {
+						id
+						chatName: name
+						ownerId
+						projectId
+						isPersistent
+						createdAt
+						updatedAt
+						viewedAt
+						deletedAt
+						properties {
+							...SoupPropertyFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupProject {
+						id
+						projectName: name
+						ownerId
+						parentId
+						createdAt
+						updatedAt
+						viewedAt
+						deletedAt
+						properties {
+							...SoupPropertyFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupEmailThread {
+						id
+						providerId
+						ownerId
+						inboxVisible
+						linkId
+						emailName: name
+						snippet
+						senderEmail
+						senderName
+						senderPhotoUrl
+						isRead
+						isDraft
+						isImportant
+						projectId
+						sortTs
+						createdAt
+						updatedAt
+						viewedAt
+						participants {
+							id
+							linkId
+							name
+							email
+							sfsPhotoUrl
+						}
+						attachments {
+							id
+							messageId
+							providerAttachmentId
+							filename
+							mimeType
+							sizeBytes
+							contentId
+							createdAt
+						}
+						labels {
+							id
+							linkId
+							providerLabelId
+							name
+							createdAt
+							messageListVisibility
+							labelListVisibility
+							type
+						}
+						properties {
+							...SoupPropertyFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+						latestContentMessage {
+							__typename
+							id
+							threadId
+							linkId
+							subject
+							snippet
+							internalDateTs
+							sentAt
+							isRead
+							isStarred
+							isSent
+							hasAttachments
+							from {
+								email
+								name
+								photoUrl
+							}
+							to {
+								email
+								name
+								photoUrl
+							}
+							cc {
+								email
+								name
+								photoUrl
+							}
+							bcc {
+								email
+								name
+								photoUrl
+							}
+							labels {
+								providerLabelId
+								name
+							}
+							bodyParsed
+							bodyText
+							bodyHtmlSanitized
+							bodyMacro
+							bodyReplyless
+							createdAt
+							updatedAt
+						}
+					}
+					... on GraphqlSoupChannel {
+						id
+						channelName: name
+						channelType
+						ownerId
+						organizationId
+						channelTeamId: teamId
+						createdAt
+						updatedAt
+						viewedAt
+						interactedAt
+						participants {
+							channelId
+							userId
+							role
+							joinedAt
+							leftAt
+						}
+						latestMessage {
+							...SoupChannelMessageFields
+						}
+						latestNonThreadMessage {
+							...SoupChannelMessageFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupChannelThread {
+						id
+						channelId
+						senderId
+						content
+						createdAt
+						updatedAt
+						effectiveUpdatedAt
+						replyCount
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupCall {
+						id
+						channelId
+						channelName
+						createdBy
+						customName
+						summary
+						startedAt
+						endedAt
+						durationMs
+						isActive
+						status
+						attended
+						participants {
+							userId
+							joinedAt
+							leftAt
+						}
+						properties {
+							...SoupPropertyFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupCrmCompany {
+						id
+						crmTeamId: teamId
+						crmCompanyName: name
+						description
+						emailSync
+						hidden
+						createdAt
+						updatedAt
+						viewedAt
+						domains
+						properties {
+							...SoupPropertyFields
+						}
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+					... on GraphqlSoupForeignEntity {
+						id
+						foreignEntityId
+						foreignEntitySource
+						storedForId
+						storedForAuthEntity
+						metadata
+						createdAt
+						updatedAt
+						notifications {
+							...SoupNotificationFields
+						}
+					}
+				}
 }
 
 fragment SoupPropertyFields on GraphqlProperty {
-  id
-  propertyDefinitionId
-  displayName
-  dataType
-  isMultiSelect
-  specificEntityType
-  isSystem
-  isMetadata
-  value {
-    __typename
-    ... on GraphqlBooleanPropertyValue {
-      boolValue: value
-    }
-    ... on GraphqlNumberPropertyValue {
-      numberValue: value
-    }
-    ... on GraphqlStringPropertyValue {
-      stringValue: value
-    }
-    ... on GraphqlDatePropertyValue {
-      dateValue: value
-    }
-    ... on GraphqlSelectOptionPropertyValue {
-      optionIds
-    }
-    ... on GraphqlEntityReferencePropertyValue {
-      references {
-        entityId
-        entityType
-        specificMessageId
-      }
-    }
-    ... on GraphqlLinkPropertyValue {
-      urls
-    }
-  }
+	id
+	propertyDefinitionId
+	displayName
+	dataType
+	isMultiSelect
+	specificEntityType
+	isSystem
+	isMetadata
+	value {
+		__typename
+		... on GraphqlBooleanPropertyValue {
+			boolValue: value
+		}
+		... on GraphqlNumberPropertyValue {
+			numberValue: value
+		}
+		... on GraphqlStringPropertyValue {
+			stringValue: value
+		}
+		... on GraphqlDatePropertyValue {
+			dateValue: value
+		}
+		... on GraphqlSelectOptionPropertyValue {
+			optionIds
+		}
+		... on GraphqlEntityReferencePropertyValue {
+			references {
+				entityId
+				entityType
+				specificMessageId
+			}
+		}
+		... on GraphqlLinkPropertyValue {
+			urls
+		}
+	}
 }
 
 fragment SoupChannelMessageFields on GraphqlSoupChannelMessage {
-  id
-  threadId
-  senderId
-  content
-  createdAt
-  updatedAt
-  deletedAt
-  mentions
+	id
+	threadId
+	senderId
+	content
+	createdAt
+	updatedAt
+	deletedAt
+	mentions
+}
+
+fragment SoupNotificationFields on GraphqlSoupNotification {
+	id
+	eventType
+	entityType
+	entityId
+	sent
+	done
+	seen
+	createdAt
+	viewedAt
+	updatedAt
+	senderId
+	metadata
 }

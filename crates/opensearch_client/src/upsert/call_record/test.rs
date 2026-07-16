@@ -11,8 +11,8 @@ fn segment() -> UpsertCallRecordSegmentArgs {
         speaker_id: "macro|gab@macro.com".to_string(),
         sequence_num: 0,
         content: "segment content".to_string(),
-        started_at_seconds: EpochSeconds::new(1_700_000_000).unwrap(),
-        ended_at_seconds: Some(EpochSeconds::new(1_700_000_100).unwrap()),
+        started_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
+        ended_at_millis: Some(EpochMillis::new(1_700_000_100_456).unwrap()),
         properties: vec![],
     }
 }
@@ -25,6 +25,7 @@ fn parent_doc_body_has_metadata_and_name_no_child_fields() {
     assert_eq!(doc["channel_id"], "channel1");
     assert_eq!(doc["channel_name"], "Standup");
     assert_eq!(doc["name"], "Weekly standup");
+    assert_eq!(doc["started_at_millis"], 1_700_000_000_123i64);
     assert_eq!(doc["call_relation"], "call");
     // Child-only fields must not be present on the parent.
     assert!(doc.get("content").is_none());

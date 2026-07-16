@@ -119,8 +119,7 @@ where
         // Publish semantic macro.email events now that the optimistic DB
         // writes are committed. The provider echo of this change finds no
         // label diff during inbox sync, so each change publishes only once.
-        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids)
-            .await;
+        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids);
 
         // Enqueue Gmail API calls via the gmail_ops worker (provider messages only)
         let provider_messages: Vec<(Uuid, String)> = messages
@@ -162,7 +161,7 @@ where
     /// [`EmailMacroEvent::thread_label_change`]). Scheduled sends cancelled
     /// by trashing publish `message_send_cancelled`. Actor is not tracked on
     /// this path — the inbox owner is on `link`.
-    async fn publish_thread_label_events(
+    fn publish_thread_label_events(
         &self,
         link: &Link,
         thread_id: Uuid,
@@ -185,7 +184,7 @@ where
         );
 
         if let Some(event) = event {
-            self.publish_email_event(&event).await;
+            self.publish_email_event(&event);
         }
 
         for message_id in cancelled_send_ids {
@@ -198,8 +197,7 @@ where
                     thread_id,
                     reason: SendCancelReason::ThreadTrashed,
                 },
-            ))
-            .await;
+            ));
         }
     }
 }

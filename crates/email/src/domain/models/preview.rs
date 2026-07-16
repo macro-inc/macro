@@ -145,6 +145,8 @@ pub struct GetEmailsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
+    /// Whether aggregate frecency should be loaded for the returned threads.
+    pub include_frecency: bool,
     /// Proof that the caller belongs to a team. Forwarded by the soup
     /// router unconditionally (when the user is on a team); the email
     /// service uses it only when `crm_scope` is `Some` to authorize the

@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
@@ -19,6 +20,10 @@ import type { EntityType } from '../../service-clients/service-properties/genera
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { setEntityProperty } from '../../service-clients/service-storage/graphql-properties';
+import {
+  getGraphqlCacheHost,
+  getGraphqlSoupClient,
+} from '../../service-clients/service-storage/graphql-soup';
 import { queryClient } from '../client';
 import {
   getSoupEntityById,
@@ -26,6 +31,10 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
+import {
+  buildOptimisticGroupedPropertyUpdates,
+  groupedPropertyKeys,
+} from '../soup/grouped/graphql-optimistic';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
@@ -43,15 +52,16 @@ export function useEntityPropertiesQuery(
         queryKey: propertiesKeys.entity({
           entityType: type,
           entityId: id,
-          includeMetadata,
         }).queryKey,
         queryFn: async () => {
+          // Always fetch with metadata so consumers with different
+          // `includeMetadata` values share one cache entry and one request.
           const data = await throwOnErr(
             async () =>
               await propertiesServiceClient.getEntityProperties({
                 entity_type: type,
                 entity_id: id,
-                query: { include_metadata: includeMetadata },
+                query: { include_metadata: true },
               })
           );
           return data.properties.flatMap((property) => {
@@ -63,6 +73,10 @@ export function useEntityPropertiesQuery(
             }
           });
         },
+        select: (properties: Property[]) =>
+          includeMetadata
+            ? properties
+            : properties.filter((property) => property.isMetadata !== true),
         staleTime: 0,
       };
     },
@@ -486,29 +500,65 @@ export function useBulkSaveEntityPropertiesMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: BulkSaveEntityPropertiesParams) => {
-      await Promise.all(
-        vars.properties.map((item) => {
-          const propertyValue = propertyValueToApi(
-            item.apiValues,
-            item.property.isMultiSelect
-          );
+      const save = async (
+        item: BulkSaveEntityPropertiesParams['properties'][number]
+      ) => {
+        const propertyValue = propertyValueToApi(
+          item.apiValues,
+          item.property.isMultiSelect
+        );
+        const optimisticProperty = buildOptimisticSetEntityProperty(
+          item.property,
+          item.apiValues
+        );
+        let optimisticCache;
 
-          return setEntityProperty({
-            entityType: item.entityType,
-            entityId: item.entityId,
-            propertyDefinitionId: getPropertyDefinitionId(item.property),
-            value: propertyValue,
-            // GraphQL path only: updates the normalized property record
-            // referenced by soup query results. The TanStack optimistic
-            // transaction below stays until soup consumers move to
-            // reactive urql queries.
-            optimisticProperty: buildOptimisticSetEntityProperty(
-              item.property,
-              item.apiValues
-            ),
-          });
-        })
-      );
+        if (ENABLE_GRAPHQL_SOUP() && isInstantiatedProperty(item.property)) {
+          // Client construction owns host selection; force it before asking
+          // for the host used by inspect-driven relation discovery.
+          getGraphqlSoupClient();
+          const host = getGraphqlCacheHost();
+          if (host) {
+            try {
+              const oldGroupKeys = groupedPropertyKeys(item.property);
+              const newGroupKeys = groupedPropertyKeys(item.apiValues);
+              optimisticCache = await buildOptimisticGroupedPropertyUpdates({
+                host,
+                entityId: item.entityId,
+                propertyDefinitionId: item.property.propertyDefinitionId,
+                oldGroupKeys: oldGroupKeys ?? [],
+                newGroupKeys: newGroupKeys ?? [],
+                revalidateOnly:
+                  oldGroupKeys === undefined || newGroupKeys === undefined,
+              });
+            } catch (error) {
+              // Relation discovery is an optimization. Property writes still
+              // proceed with normalized entity optimism when cache inspection
+              // is unavailable.
+              console.warn('Failed to build grouped Soup optimism', error);
+            }
+          }
+        }
+
+        return setEntityProperty({
+          entityType: item.entityType,
+          entityId: item.entityId,
+          propertyDefinitionId: getPropertyDefinitionId(item.property),
+          value: propertyValue,
+          // The TanStack optimistic transaction below stays as a transitional
+          // render mirror until grouped Soup is a live urql subscription.
+          optimisticProperty,
+          optimisticCache,
+        });
+      };
+
+      if (ENABLE_GRAPHQL_SOUP()) {
+        // Begin each durable layer sequentially so later relation recipes see
+        // the effective result of earlier property edits.
+        for (const item of vars.properties) await save(item);
+      } else {
+        await Promise.all(vars.properties.map(save));
+      }
     },
     ...withCallbacks<
       void,

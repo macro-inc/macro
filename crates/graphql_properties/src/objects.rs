@@ -71,6 +71,7 @@ impl From<EntityPropertyWithDefinition> for GraphqlProperty {
     }
 }
 
+/// A property assignment and its current value.
 #[Object]
 impl GraphqlProperty {
     /// The globally unique identifier of this entity-property assignment.

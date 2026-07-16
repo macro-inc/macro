@@ -1,20 +1,22 @@
 //! Entity access service implementation.
 
-use std::marker::PhantomData;
-use std::str::FromStr;
+use std::{collections::HashMap, marker::PhantomData, str::FromStr};
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess, Entity,
-        EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
-        UserTeamInfo,
+        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+        Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+        RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
     ports::{AccessRepository, EntityAccessService},
 };
+use futures::{StreamExt, stream};
 use macro_user_id::{
     cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
 };
 use uuid::Uuid;
+
+const MAX_CONCURRENT_BATCH_ACCESS_CHECKS: usize = 8;
 
 /// Implementation of the [`EntityAccessService`].
 ///
@@ -161,6 +163,126 @@ where
             entity_permission,
             _marker: PhantomData,
         })
+    }
+
+    async fn generate_email_thread_view_access_receipts(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        thread_ids: &[String],
+    ) -> HashMap<String, Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>> {
+        let mut receipts = HashMap::with_capacity(thread_ids.len());
+        let mut valid_ids = Vec::with_capacity(thread_ids.len());
+
+        for thread_id in thread_ids {
+            match Uuid::parse_str(thread_id) {
+                Ok(id) => valid_ids.push((thread_id.clone(), id)),
+                Err(_) => {
+                    receipts.insert(
+                        thread_id.clone(),
+                        Err(AccessError::BadRequest("Invalid thread ID format")),
+                    );
+                }
+            }
+        }
+
+        let owned_ids = match self
+            .repo
+            .get_owned_email_thread_ids(
+                &valid_ids.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+                user_id,
+            )
+            .await
+        {
+            Ok(ids) => ids.into_iter().collect::<std::collections::HashSet<_>>(),
+            Err(error) => {
+                tracing::error!(?error, "bulk email thread ownership check failed");
+                for (thread_id, _) in valid_ids {
+                    receipts.insert(thread_id, Err(AccessError::Internal));
+                }
+                return receipts;
+            }
+        };
+
+        let mut remaining = Vec::new();
+        for (thread_id, id) in valid_ids {
+            if owned_ids.contains(&id) {
+                receipts.insert(
+                    thread_id.clone(),
+                    Ok(EntityAccessReceipt {
+                        auth: EntityAccessAuth::Authenticated(MacroUserIdStr(
+                            user_id.clone().into_owned(),
+                        )),
+                        entity: Entity {
+                            entity_id: thread_id,
+                            entity_type: EntityType::EmailThread,
+                        },
+                        entity_permission: EntityPermission::AccessLevel {
+                            access_level: AccessLevel::Owner,
+                        },
+                        _marker: PhantomData,
+                    }),
+                );
+            } else {
+                remaining.push(thread_id);
+            }
+        }
+
+        let fallback = stream::iter(remaining.into_iter().map(|thread_id| async move {
+            let result = self
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    user_id,
+                    user_org_id,
+                    &thread_id,
+                    EntityType::EmailThread,
+                )
+                .await;
+            (thread_id, result)
+        }))
+        .buffer_unordered(MAX_CONCURRENT_BATCH_ACCESS_CHECKS)
+        .collect::<Vec<_>>()
+        .await;
+        receipts.extend(fallback);
+        receipts
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        let entity_permission = match entity_type {
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread
+            | EntityType::Call => {
+                let access_level = self
+                    .repo
+                    .get_bot_entity_access(bot_id, entity_id, entity_type)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?;
+                EntityPermission::AccessLevel { access_level }
+            }
+            EntityType::Channel => {
+                let channel_id = Uuid::from_str(entity_id)
+                    .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
+                let result = self.repo.get_bot_channel_role(&channel_id, bot_id).await?;
+                channel_role_result_to_permission(result)?
+            }
+            _ => return Err(AccessError::BadRequest("Unsupported bot entity type")),
+        };
+
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]

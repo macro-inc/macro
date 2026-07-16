@@ -28,6 +28,8 @@ pub mod premium_user;
 pub mod reject_invitation;
 /// Remove a user from a team.
 pub mod remove_user_from_team;
+/// Toggle automatic domain joining for a team.
+pub mod toggle_auto_join_domain;
 
 #[cfg(test)]
 mod test;
@@ -47,7 +49,7 @@ use model_error_response::ErrorResponse;
 use crate::domain::{
     model::{
         CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        RemoveTeamInviteError, RemoveUserFromTeamError, TeamError,
+        RemoveTeamInviteError, RemoveUserFromTeamError, TeamError, ToggleAutoJoinDomainError,
     },
     team_repo::TeamService,
 };
@@ -92,6 +94,10 @@ where
         .route("/", patch(patch_team::handler::<T, Eas>))
         .route("/", delete(delete_team::handler::<T, Eas>))
         .route("/crm", patch(patch_team_crm_settings::handler::<T, Eas>))
+        .route(
+            "/auto-join-domain/toggle",
+            post(toggle_auto_join_domain::handler::<T, Eas>),
+        )
         .route("/invites", get(get_team_invites::handler::<T, Eas>))
         .route("/invite", post(invite_to_team::handler::<T, Eas>))
         .route(
@@ -147,6 +153,21 @@ impl IntoResponse for TeamError {
             ),
         }
         .into_response()
+    }
+}
+
+impl IntoResponse for ToggleAutoJoinDomainError {
+    fn into_response(self) -> Response {
+        match self {
+            ToggleAutoJoinDomainError::GenericDomainNotAllowed(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            )
+                .into_response(),
+            ToggleAutoJoinDomainError::TeamError(e) => e.into_response(),
+        }
     }
 }
 

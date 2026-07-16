@@ -4,14 +4,22 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
 
 /**
  * The Team struct
  */
 export interface Team {
+  /** The email domain new users are automatically joined to this team
+with, when automatic domain joining is enabled (None otherwise). */
+  auto_join_domain?: TeamAutoJoinDomain;
   /** Whether the CRM is enabled for this team (from `team_crm_settings`;
 `false` when no row exists). */
   crm_enabled: boolean;
+  /** Whether this team is on an enterprise license. Enterprise teams are
+billed out-of-band; membership changes skip all Stripe subscription
+bookkeeping (no seat counts, no subscription backfill, no paying check). */
+  enterprise: boolean;
   id: string;
   name: string;
   owner_id: string;

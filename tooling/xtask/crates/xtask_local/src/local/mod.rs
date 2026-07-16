@@ -34,6 +34,8 @@ pub mod mailpit;
 pub mod opensearch;
 pub mod proxy;
 pub mod resources;
+pub mod snapshot;
+pub mod stack;
 pub mod stage;
 pub mod summary;
 pub mod validate;
@@ -152,6 +154,16 @@ use stage::Stage;
 
 const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexical_service"];
 
+/// The artifact-driven preview updater can refresh every Docker-built app
+/// service. Keep this separate so enabling local aux rebuilds does not make the
+/// existing `run_local` edit loop rebuild the AI worker too.
+const PREVIEW_AUX_SERVICE_IMAGES: &[&str] = &[
+    "websocket_service",
+    "sync_service",
+    "lexical_service",
+    "ai_editing_worker",
+];
+
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     if mode.spec().runs_local_infra {
@@ -166,6 +178,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode.label(),
         instance.name()
     ));
+    if !stage.is_dry_run() {
+        stack::clear_state(&instance)?;
+    }
 
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a
@@ -183,7 +198,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(&stage, mode, &instance, args)?;
+    let (env, target) = prepare(&stage, mode, &instance, args, false)?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -206,7 +221,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // start. The teardown means everything is freshly created each run, so
     // otherwise the services race their backends on startup (no `macrodb`,
     // DynamoDB/OpenSearch connection refused).
-    bring_up_infra(&stage, mode, &instance, &env)?;
+    bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
     bring_up_app(&stage, mode, &instance, &env)?;
 
     // No restart-to-reload step: the teardown means `up` always creates fresh
@@ -225,7 +240,13 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         frontend::start(&stage, &instance, mode)?
     };
 
-    summary::print(mode, &instance, &env);
+    summary::print(
+        mode,
+        &instance,
+        &env,
+        &frontend::url(&instance),
+        &mailpit::direct_ui_url(&instance),
+    );
 
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
@@ -430,12 +451,14 @@ fn interact(
 /// runtime image + service binaries, and generate the compose override /
 /// Caddyfile / kickstart. Deliberately does NOT create the external
 /// networks/volumes — that's done after the background teardown joins, since
-/// teardown removes them. Returns the resolved env + build target.
+/// teardown removes them. `static_frontend` wires the proxy to serve the staged
+/// app bundle (headless `stack up`). Returns the resolved env + build target.
 fn prepare(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
     args: &cli::RunArgs,
+    static_frontend: bool,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
@@ -461,8 +484,8 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    gen_compose::generate(mode, instance, &binaries)?;
-    proxy::write_caddyfile(instance, mode)?;
+    gen_compose::generate(mode, instance, &binaries, static_frontend)?;
+    proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode.spec().runs_local_infra {
         fusionauth::write_kickstart(instance)?;
     }
@@ -500,6 +523,29 @@ fn recreate_aux_service_containers(
     stage.run("Recreating auxiliary service containers", &mut up)
 }
 
+fn recreate_preview_aux_service_containers(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+) -> Result<()> {
+    let mut up = compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps"])
+        .args(PREVIEW_AUX_SERVICE_IMAGES);
+    stage.run("Recreating preview auxiliary services", &mut up)
+}
+
+/// How the local infra reaches its initialized state on bring-up.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InfraInit {
+    /// Run the real init: migrate the DB, let FusionAuth apply its kickstart,
+    /// create the OpenSearch indices.
+    Full,
+    /// The volumes were restored from an init snapshot — the state already
+    /// exists, so the init steps are skipped (LocalStack is provisioned either
+    /// way; its state isn't volume-backed).
+    FromSnapshot,
+}
+
 /// Bring up the backend infra the app services connect to at startup, and get it
 /// fully ready before any of them start. The clean-slate teardown means
 /// everything is freshly created each run, so this ordering is what stops the
@@ -511,6 +557,7 @@ fn bring_up_infra(
     mode: Mode,
     instance: &Instance,
     env: &env_layer::ResolvedEnv,
+    init: InfraInit,
 ) -> Result<()> {
     if stage.is_dry_run() {
         return Ok(());
@@ -545,7 +592,7 @@ fn bring_up_infra(
         localstack::provision(instance)
     })?;
 
-    if spec.migrates_db {
+    if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.
         db::migrate(stage, instance)?;
     }
@@ -553,11 +600,18 @@ fn bring_up_infra(
         // Kafka is healthy (`--wait` gates on its broker healthcheck); create
         // the event topics declared in `macro_event_topics` — the local
         // equivalent of the MSK topic provisioning driven by the generated
-        // `.github/kafka-cluster-topics.json`.
-        stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+        // `.github/kafka-cluster-topics.json`. Restored volumes already carry
+        // the topics (they live in the broker's data dir), so only a full init
+        // provisions — which also means a snapshot-restoring `stack up` (e.g.
+        // the preview VM) never needs the rdkafka-backed `local-stack` feature.
+        if init == InfraInit::Full {
+            stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+        }
 
         // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
-        // poll it patiently until the kickstart has applied.
+        // poll it patiently until it's up. On a full init that wait covers the
+        // ~minute kickstart; on a snapshot restore the kickstart is already in
+        // the restored volumes, so this is just JVM boot.
         let mut fa = compose_cmd(instance, env);
         fa.arg("up").arg("-d").arg("fusionauth");
         stage.run("Starting FusionAuth", &mut fa)?;
@@ -566,7 +620,10 @@ fn bring_up_infra(
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
         // instead of 404ing on the missing `documents`/`chats`/… indices.
-        opensearch::provision_indices(stage, instance, &env.merged)?;
+        // Restored volumes already contain them.
+        if init == InfraInit::Full {
+            opensearch::provision_indices(stage, instance, &env.merged)?;
+        }
     }
     Ok(())
 }
@@ -709,7 +766,7 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
@@ -743,7 +800,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false)?;
     println!("{}", path.display());
     Ok(())
 }

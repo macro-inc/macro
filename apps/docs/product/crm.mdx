@@ -1,14 +1,60 @@
 ---
 title: "CRM"
 icon: "building"
-description: "Contact and company records built automatically from your team's email, with no data entry."
+description: "Contact and company records built automatically from your team's email."
 ---
+
+<Frame>
+  ![The CRM board view, with one column per stage](/images/crm_board_view.png)
+</Frame>
 
 <Note>
   CRM is rolling out now. If you don't see the **Customers** view in your workspace yet, it hasn't reached your account.
 </Note>
 
 Most CRMs die because nobody fills them in. Macro's CRM builds itself: because your team's email already flows through Macro, contact and company records are created and kept up to date automatically as you work. You don't have to run an importer or type in fields.
+
+### Board and list views
+
+The board is the default view when you open **Customers**: every company appears as a card in the column for its current stage, and you drag a card to a new column to move it through your pipeline. Each column header is a stage:
+
+<div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#9ca3af" size={10} /> <strong>Lead</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#4ade80" size={10} /> <strong>Qualified</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#a78bfa" size={10} /> <strong>Demo</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#fbbf24" size={10} /> <strong>Trial</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#fb923c" size={10} /> <strong>Negotiation</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#34d399" size={10} /> <strong>Customer</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#f87171" size={10} /> <strong>Churned</strong></div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="regular" color="#9ca3af" size={10} /> <span><strong>No stage</strong>, for companies that haven't been placed in your pipeline yet</span></div>
+</div>
+
+While records create themselves, stages are all manual: Macro doesn't yet know where a company lies in your pipeline and relies on you to distinguish your leads from your customers by setting each record's stage. New records start in **No stage** until someone on your team places them.
+
+Prefer a table? Switch to the **List** view from the toggle in the topbar:
+
+<Frame>
+  ![The CRM list view, a table grouped by stage](/images/crm_list_view.png)
+</Frame>
+
+The list trades cards for rows. Every company appears in a table with **Stage**, **Owner**, **Revenue**, and **Last Interaction** columns you can edit inline, and rows are grouped by stage, with a **Not set** group collecting the companies that haven't been placed yet. Use the **Group** and **Filter** controls in the toolbar to reshape the table, or sort by a column like **Last Interaction** to surface the accounts you've talked to most recently. It's the view to reach for when you want to scan or update many records at once rather than move deals through the pipeline.
+
+<Note>
+  Have CRM in Macro but can't see your leads? It needs to be enabled for your team — turn it on in your team settings, or contact your team admin to enable it.
+</Note>
+
+### Saved views
+
+Once you've shaped the board or list with the **Group** and **Filter** controls, save that arrangement as a **view** so you don't have to rebuild it each time. Open the **Views** menu in the topbar to save the current setup, switch between saved views, and manage them. Views come in two kinds: **personal** views that only you see, and **team** views shared with everyone (team views are created and managed by admins and owners).
+
+Pin a view as your **default** with the push-pin action on any saved view, and Customers opens straight to it. A personal default takes precedence over a team default, so you can override the team's starting point with your own.
 
 ### Records build themselves
 
@@ -18,7 +64,7 @@ New companies are enriched automatically with public data: name, description, lo
 
 ### One shared view of every relationship
 
-Open **Customers** from the sidebar to browse your team's accounts. A company page shows its domains, contacts, and email threads in one place. The **Team** and **Me** tabs let you see either everything your team has exchanged with that account or just your own threads. Contact pages work the same way.
+Open **Customers** from the sidebar to browse your team's accounts. A company page shows its domains, contacts, and email threads in one place. The **Team** and **Me** tabs let you see either everything your team has exchanged with that account or just your own threads. A **Signal / All** toggle sits alongside them: **Signal** narrows the list to the important threads (the same importance filter as the mail view's Signal tab), while **All** shows every thread. The two toggles combine, so you can look at just the important email you've personally exchanged, or everything the whole team ever has. Contact pages work the same way.
 
 Every company and contact also has a **discussion** thread, so deal notes and context live on the record itself instead of in a side channel. Like everything in Macro, CRM records are blocks: @mention a company or contact in a doc, task, or channel, and agents can use your CRM as context like the rest of your [team memory](/product/unified-memory).
 

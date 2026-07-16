@@ -38,6 +38,9 @@ use mcp_auth_proxy::{
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
+use roles_and_permissions::{
+    domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
+};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use soup::domain::service::SoupImpl;
@@ -53,7 +56,7 @@ pub struct McpContext {
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
     pub mcp_public_host: String,
-    pub db: PgPool,
+    pub user_roles_and_permissions_service: UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
 }
 
 pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
@@ -108,12 +111,16 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
         .context("MCP_PUBLIC_URL has no host")?
         .to_owned();
 
+    let roles_repository = MacroDB::new(db.clone());
+    let user_roles_and_permissions_service =
+        UserRolesAndPermissionsServiceImpl::new(roles_repository.clone(), roles_repository);
+
     Ok(McpContext {
         jwt_args,
         tool_context,
         auth_proxy,
         mcp_public_host,
-        db,
+        user_roles_and_permissions_service,
     })
 }
 
@@ -236,6 +243,9 @@ async fn build_tool_context(
             ),
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker: macro_event_broker.clone(),
+        // No search event queue is configured in this context, so no
+        // search-index refresh is published from here.
+        search_indexer: None,
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(

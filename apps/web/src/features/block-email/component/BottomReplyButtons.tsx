@@ -8,7 +8,7 @@ import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
-import type { Component } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
@@ -62,42 +62,43 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     return email ? inboxIconProps(email) : { email: '' };
   };
 
-  if (!isMobile()) {
-    return (
-      <div class="flex w-full items-center pt-4">
-        <button
-          type="button"
-          class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-ink-placeholder hover:text-ink-muted"
-          onClick={open('reply-all')}
-        >
-          <UserIcon
-            {...currentUserIconProps()}
-            size="md"
-            showTooltip={false}
-            suppressClick
-          />
-          <span class="truncate">Reply...</span>
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <FloatRegionOrInline region="accessory">
-      <div class="w-full p-2 pb-2 pt-4 mobile:px-(--mobile-chrome-gutter) mobile:py-0">
-        <div class="flex flex-row items-center gap-2 mobile:pointer-events-auto">
-          <ReplyActionButton
-            icon={ArrowBendUpLeft}
-            label="Reply"
+    <Show
+      when={isMobile()}
+      fallback={
+        <div class="flex w-full items-center pt-4">
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-ink-placeholder hover:text-ink-muted"
             onClick={open('reply-all')}
-          />
-          <ReplyActionButton
-            icon={ArrowBendUpRight}
-            label="Forward"
-            onClick={open('forward')}
-          />
+          >
+            <UserIcon
+              {...currentUserIconProps()}
+              size="md"
+              showTooltip={false}
+              suppressClick
+            />
+            <span class="truncate">Reply...</span>
+          </button>
         </div>
-      </div>
-    </FloatRegionOrInline>
+      }
+    >
+      <FloatRegionOrInline region="accessory">
+        <div class="w-full p-2 pb-2 pt-4 mobile:px-(--mobile-chrome-gutter) mobile:py-0">
+          <div class="flex flex-row items-center gap-2 mobile:pointer-events-auto">
+            <ReplyActionButton
+              icon={ArrowBendUpLeft}
+              label="Reply"
+              onClick={open('reply-all')}
+            />
+            <ReplyActionButton
+              icon={ArrowBendUpRight}
+              label="Forward"
+              onClick={open('forward')}
+            />
+          </div>
+        </div>
+      </FloatRegionOrInline>
+    </Show>
   );
 }

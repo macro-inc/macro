@@ -13,8 +13,10 @@ import {
 } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
+  $getConvertibleListFromSelection,
   autoRegister,
   type EnhancedSelection,
+  LIST_TO_TABLE_COMMAND,
   NODE_TRANSFORM,
   registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
@@ -53,6 +55,7 @@ import { getScrollParentElement } from '@core/util/scrollParent';
 import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import GridIcon from '@phosphor/grid-four.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -156,6 +159,9 @@ export function MarkdownPopup(props: {
   const [isLoading, setIsLoading] = createSignal<boolean>(false);
   const [isConverting, setIsConverting] = createSignal(false);
   const [hasCheckboxes, setHasCheckboxes] = createSignal(false);
+  const [convertibleListKey, setConvertibleListKey] = createSignal<
+    string | null
+  >(null);
   const { replaceOrInsertSplit } = useSplitLayout();
   let markdownRootRef!: HTMLDivElement;
 
@@ -182,6 +188,9 @@ export function MarkdownPopup(props: {
       setLocationCopied(false);
       editor.read(() => {
         setHasCheckboxes($canConvertCheckboxesToTasks());
+        setConvertibleListKey(
+          $getConvertibleListFromSelection()?.getKey() ?? null
+        );
       });
     })
   );
@@ -519,6 +528,27 @@ export function MarkdownPopup(props: {
               {isConverting() ? 'Converting...' : 'Tasks'}
             </Button>
           </Show>
+          <Show when={canEdit() && convertibleListKey()}>
+            {(listKey) => (
+              <Button
+                size="sm"
+                class="rounded-md"
+                depth={3}
+                variant="ghost"
+                tooltip="Convert list to table"
+                onClick={() => {
+                  const converted = editor.dispatchCommand(
+                    LIST_TO_TABLE_COMMAND,
+                    listKey()
+                  );
+                  if (converted) setPopupVisible(false);
+                }}
+              >
+                <GridIcon class="size-4" />
+                Table
+              </Button>
+            )}
+          </Show>
           <Button
             size="sm"
             class="px-2 text-xs rounded-md py-1.25"
@@ -792,7 +822,7 @@ export function MarkdownPopup(props: {
       <ScopedPortal scope="local">
         <div
           ref={setAnchorRef}
-          class="absolute pointer-events-none z-highlight-menu"
+          class="absolute pointer-events-none z-50"
           style={{
             left: `${anchorRefPosition().left}px`,
             top: `${anchorRefPosition().top}px`,

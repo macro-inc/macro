@@ -2,15 +2,15 @@
 
 mod queries;
 
-pub use queries::{SourceIds, get_user_source_ids};
+pub use queries::{SourceIds, get_bot_source_ids, get_user_source_ids};
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess, EntityType,
-        UserTeamInfo,
+        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+        EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -121,6 +121,18 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, thread_ids, user_id))]
+    async fn get_owned_email_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(
+            queries::thread_access::get_owned_email_thread_ids(&self.pool, thread_ids, user_id)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_call_access(
         &self,
@@ -134,6 +146,75 @@ impl AccessRepository for PgAccessRepository {
             .await
             .map_err(|_| AccessError::Internal)?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_bot_entity_access(
+        &self,
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let entity_uuid = entity_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
+        let bot_principal = bot_id.into_storage_id();
+        let source_ids = queries::get_bot_source_ids(&self.pool, &bot_principal)
+            .await
+            .map_err(|_| AccessError::Internal)?;
+
+        let access = match entity_type {
+            EntityType::Document => {
+                queries::document_access::get_document_access(&self.pool, &entity_uuid, &source_ids)
+                    .await
+            }
+            EntityType::Chat => {
+                queries::chat_access::get_chat_access(&self.pool, &entity_uuid, &source_ids).await
+            }
+            EntityType::Project => {
+                queries::project_access::get_project_access(&self.pool, &entity_uuid, &source_ids)
+                    .await
+            }
+            EntityType::EmailThread => {
+                queries::thread_access::get_thread_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                    None,
+                )
+                .await
+            }
+            EntityType::Call => {
+                queries::call_access::get_call_access(&self.pool, &entity_uuid, &source_ids).await
+            }
+            EntityType::User
+            | EntityType::Channel
+            | EntityType::ChannelMessage
+            | EntityType::Team
+            | EntityType::ForeignEntity
+            | EntityType::StaticFile
+            | EntityType::CrmCompany
+            | EntityType::CrmContact => {
+                return Err(AccessError::BadRequest(
+                    "Unsupported entity type for bot access",
+                ));
+            }
+        };
+
+        access.map_err(AccessError::from)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_bot_channel_role(
+        &self,
+        channel_id: &Uuid,
+        bot_id: BotId,
+    ) -> Result<ChannelRoleResult, AccessError> {
+        let bot_principal = bot_id.into_storage_id();
+        Ok(
+            queries::channel_role::get_bot_channel_role(&self.pool, channel_id, &bot_principal)
+                .await?,
+        )
     }
 
     #[tracing::instrument(err, skip(self))]

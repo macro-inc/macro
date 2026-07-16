@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupEnrichedEmailThreadPreview } from './soupEnrichedEmailThreadPreview';
+import type { SoupEnrichedEmailThreadPreviewSoupPropertiesField } from './soupEnrichedEmailThreadPreviewSoupPropertiesField';
 import type { SoupItemOneOfSevenTag } from './soupItemOneOfSevenTag';
 
 /**
@@ -12,6 +12,6 @@ import type { SoupItemOneOfSevenTag } from './soupItemOneOfSevenTag';
  */
 export type SoupItemOneOfSeven = {
   /** Email thread item. */
-  data: SoupEnrichedEmailThreadPreview;
+  data: SoupEnrichedEmailThreadPreviewSoupPropertiesField;
   tag: SoupItemOneOfSevenTag;
 };

@@ -21,6 +21,10 @@ const cloudStorageServiceStack = new pulumi.StackReference(
   }
 );
 
+const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
+  name: `macro-inc/call-recording/${stack}`,
+});
+
 const shaCleanupStack = new pulumi.StackReference('cloud-storage-sha-cleanup', {
   name: `macro-inc/cloud-storage-sha-cleanup/${stack}`,
 });
@@ -60,8 +64,19 @@ export const fileStorageBucketName: pulumi.Output<string> = cloudStorageStack
   .apply((bucketName) => bucketName as string);
 const fileStorageBucket = getStorageBucketFromName(fileStorageBucketName);
 
+const callRecordingBucketId = callRecordingStack
+  .getOutput('callRecordingBucketId')
+  .apply((bucketId) => bucketId as string);
+const callRecordingBucketRegionalDomainName = callRecordingStack
+  .getOutput('callRecordingBucketRegionalDomainName')
+  .apply((domainName) => domainName as string);
+
 const s3CloudfrontDistribution = getCloudfrontDistribution({
   bucket: fileStorageBucket,
+  callRecordingOrigin: {
+    bucketId: callRecordingBucketId,
+    bucketRegionalDomainName: callRecordingBucketRegionalDomainName,
+  },
   privateKeySecretName: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
 });
 export const s3CloudfrontDistributionId =

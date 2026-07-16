@@ -18,7 +18,9 @@ secret!(CLOUDFLARE_API_TOKEN);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DD_WEB_APP_TOKEN);
+secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
+secret!(FLY_API_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
 secret!(POSTHOG_API_KEY);
@@ -40,6 +42,23 @@ pub const NEXTEST_TEST_THREADS: u32 = 32;
 /// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
 pub const CI_CACHE_TAG: &str = "sccache-ci";
 
+/// Namespace cache tag for the Fly preview deploy job. Its own pool, NOT
+/// [`CI_CACHE_TAG`]: sharing looked economical but was measured cold both ways
+/// (run 28968155599: sccache 2.65% hits, cargo target dir absent). The
+/// check/test jobs compile for the host while this job zigbuilds with
+/// `--target x86_64-unknown-linux-gnu.2.36`, so their sccache entries hash
+/// differently and never serve this job — and they don't persist the cargo
+/// target dir at all, so a volume from the shared pool almost never carries
+/// one. A dedicated low-concurrency pool gives the job's target dir and init
+/// snapshots the best chance of a zero-copy hit; Rust objects use the durable
+/// remote sccache below instead of depending on this volume's placement.
+pub const PREVIEW_CACHE_TAG: &str = "fly-preview";
+
+/// Durable Namespace remote sccache shared by Fly preview jobs. Unlike the
+/// local cache volume, this has an artifact-backed cold tier, so a job placed
+/// on a runner that has never seen the volume can still reuse Rust objects.
+pub const PREVIEW_SCCACHE_NAME: &str = "fly-preview";
+
 /// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
 /// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
 /// gives the frontend its own volume — isolated both from the Rust CI volume
@@ -50,6 +69,12 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.
 pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
+
+/// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
+/// on the preview cache volume for the zero-copy fast path; the workflow also
+/// backs each content-addressed snapshot up to Namespace artifact storage so a
+/// cache-volume miss does not force another infra bake.
+pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
 
 /// Max on-disk size for the sccache cache. Larger than the setup default since
 /// the persisted volume can hold a full-workspace cache.

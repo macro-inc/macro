@@ -4,11 +4,11 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
-    EntityAccessReceipt, EntityPermission, RequiredPermission, UserTeamInfo,
+    AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+    EntityAccessReceipt, EntityPermission, RequiredPermission, UserTeamInfo, ViewAccessLevel,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use std::future::Future;
+use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
 /// Repository for accessing entity permissions from the database.
@@ -44,12 +44,42 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Return the requested email threads owned by, or inbox-delegated to, a user.
+    fn get_owned_email_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a call.
     fn get_call_access(
         &self,
         call_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Get the highest access level a bot has for an entity resolved through
+    /// `entity_access` source IDs (document, chat, project, email thread, or call).
+    ///
+    /// A bot's sources are the channels it actively participates in (using its
+    /// canonical `bot|<uuid>` principal), its owning team when team-scoped, and
+    /// the bot principal itself.
+    fn get_bot_entity_access(
+        &self,
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Get the role a bot explicitly holds in a channel.
+    ///
+    /// Public and organization channels do not implicitly admit bots; an active
+    /// participant row for the bot's canonical principal is required.
+    fn get_bot_channel_role(
+        &self,
+        channel_id: &Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
 
     /// Check whether a user has access to a foreign entity.
     ///
@@ -169,6 +199,54 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
 
+    /// Mint view receipts for a distinct batch of email thread IDs.
+    ///
+    /// Implementations may override this to share authorization work across
+    /// the batch. The default preserves correctness for test and alternate
+    /// adapters by delegating to the single-entity API.
+    fn generate_email_thread_view_access_receipts<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        thread_ids: &'a [String],
+    ) -> impl Future<
+        Output = HashMap<String, Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>>,
+    > + Send
+    + 'a {
+        async move {
+            let mut receipts = HashMap::with_capacity(thread_ids.len());
+            for thread_id in thread_ids {
+                receipts.insert(
+                    thread_id.clone(),
+                    self.generate_entity_access_receipt::<ViewAccessLevel>(
+                        user_id,
+                        user_org_id,
+                        thread_id,
+                        EntityType::EmailThread,
+                    )
+                    .await,
+                );
+            }
+            receipts
+        }
+    }
+
+    /// Generates an [`EntityAccessReceipt<T>`] for an authenticated bot.
+    ///
+    /// Document, chat, project, email-thread, and call permissions are resolved
+    /// from the bot's entity-access sources. Channel permissions require an
+    /// explicit active participant role; public and organization channels do
+    /// not implicitly admit bots. All other entity types are unsupported.
+    ///
+    /// The type parameter `T` specifies the minimum permission required.
+    /// Returns an error if the bot does not satisfy that requirement.
+    fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        bot_id: BotId,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
+
     /// Get the access level a user has for an entity.
     ///
     /// Returns `None` if the user has no access to the entity.
@@ -282,6 +360,15 @@ impl EntityAccessService for NoOpEntityAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        Err(AccessError::Internal)
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

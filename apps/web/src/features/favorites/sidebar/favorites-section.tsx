@@ -385,11 +385,18 @@ const FavoriteRow = (props: {
   const open = (e: MouseEvent) => openFavorite(e.shiftKey);
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
   const openInCurrentSplit = () => openFavorite(false);
   const openInNewSplit = () => {
     if (canOpenInNewSplit()) openFavorite(true);
   };
-  const openFullscreen = () => layout.popoverSplit(content());
+  const openFullscreen = () => {
+    const split = layout.replaceAllSplits(content(), {
+      referredFrom: 'sidebar',
+    });
+    globalSplitManager()?.returnFocus();
+    return split;
+  };
   const markAllAsRead = () => {
     void notificationSource.bulkMarkAsRead(props.notifications());
   };
@@ -476,7 +483,9 @@ const FavoriteRow = (props: {
                 onClick={openInNewSplit}
                 disabled={!canOpenInNewSplit()}
               />
-              <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+              <Show when={canOpenFullscreen()}>
+                <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+              </Show>
               <MenuItem
                 text="Open in current split"
                 onClick={openInCurrentSplit}

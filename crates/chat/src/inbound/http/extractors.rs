@@ -1,6 +1,5 @@
 //! Axum extractors for chat inbound handlers.
 
-use crate::domain::models::FREE_MODEL;
 use crate::domain::ports::ModelAccessService;
 use crate::domain::service::ModelAccessServiceImpl;
 use axum::extract::FromRequestParts;
@@ -34,11 +33,7 @@ impl ChatModelAccess {
 
     /// The default model for this user — the best one they're entitled to.
     pub fn best_model(&self) -> &'static str {
-        if self.professional {
-            "anthropic/claude-opus-4-8"
-        } else {
-            FREE_MODEL
-        }
+        ModelAccessServiceImpl.best_model(self.professional)
     }
 }
 
@@ -84,6 +79,7 @@ impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::domain::models::FREE_MODEL;
 
     fn access(permissions: &[PermissionId]) -> ChatModelAccess {
         let professional = permissions.contains(&PermissionId::ReadProfessionalFeatures);
@@ -121,7 +117,8 @@ mod test {
     #[test]
     fn professional_user_defaults_to_smart_and_has_everything() {
         let pro = access(&[PermissionId::ReadProfessionalFeatures]);
-        assert_eq!(pro.best_model(), "anthropic/claude-opus-4-8");
+        assert_eq!(pro.best_model(), "anthropic/claude-sonnet-5");
+        assert!(pro.has_access("anthropic/claude-sonnet-5"));
         assert!(pro.has_access("anthropic/claude-opus-4-8"));
         assert!(pro.has_access(FREE_MODEL));
         assert!(pro.has_access("openai/gpt-5.5"));

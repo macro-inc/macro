@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::context::ApiContext,
+    api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
     domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
     outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
@@ -11,6 +11,7 @@ use crate::{
 use anyhow::Context;
 use config::{Config, Environment};
 use lexical_client::LexicalClient;
+use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
 use macro_entrypoint::MacroEntrypoint;
 use opensearch_client::OpensearchClient;
 #[cfg(feature = "pdf")]
@@ -69,8 +70,15 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
     tracing::trace!("initialized config");
 
-    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        NoopMacroAuthJwtValidator, // we only have internal calls in this service.
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: None,
+        },
+    )));
 
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
     let search_event_queue = macro_queues::SearchEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue);
@@ -179,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(ApiContext {
         db,
-        internal_api_key: config.internal_api_key.clone(),
+        authorization_state,
         sqs_client,
         opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),

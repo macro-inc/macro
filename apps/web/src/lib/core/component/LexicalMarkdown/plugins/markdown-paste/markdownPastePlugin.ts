@@ -39,7 +39,8 @@ function registerMarkdownPastePlugin(editor: LexicalEditor) {
           const clipboard = event.clipboardData;
           if (!clipboard) return false;
           // do not handle richer clipboards.
-          if (clipboard.getData('application/x-lexical-clipboard')) {
+          // https://github.com/facebook/lexical/blob/main/packages/lexical-clipboard/src/clipboard.ts#L67
+          if (clipboard.getData('application/x-lexical-editor')) {
             return false;
           }
           if (clipboard.getData('text/html')) {

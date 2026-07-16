@@ -148,13 +148,14 @@ export function SplitPanel(props: SplitPanelProps) {
       isSoloSettings()
   );
 
-  const hasFocusedSplitBorder = createMemo(
-    () =>
-      !isMobile() &&
-      props.active &&
-      multipleSplits() &&
-      !props.handle.isSpotLight()
-  );
+  const splitFocusStyling = () =>
+    !isMobile() &&
+    props.active &&
+    multipleSplits() &&
+    !props.handle.isSpotLight();
+
+  const splitUnfocusedStyling = () =>
+    !isMobile() && !props.active && multipleSplits();
 
   return (
     <SoupContextProvider soup={nextSoup}>
@@ -201,7 +202,9 @@ export function SplitPanel(props: SplitPanelProps) {
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
-              'relative size-full': !props.handle.isSpotLight(),
+              // mobile:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile
+              // search overlay paints over it.
+              'relative size-full mobile:isolate': !props.handle.isSpotLight(),
             }}
             style={{
               '--split-header-height': `${
@@ -224,15 +227,16 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               edgeColor={
-                hasFocusedSplitBorder()
+                splitFocusStyling()
                   ? 'color-mix(in oklch, var(--color-edge) 80%, var(--color-ink))'
                   : undefined
               }
               class={cn(
-                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!',
+                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0! bg-panel',
                 {
-                  'shadow-sm shadow-drop-shadow/50': !hasFocusedSplitBorder(),
-                  'shadow-lg shadow-drop-shadow/70': hasFocusedSplitBorder(),
+                  'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
+                    splitUnfocusedStyling(),
+                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
                 }
               )}
               depth={isMobile() ? 0 : 1}

@@ -88,6 +88,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   'contact-mention': 1,
   'group-mention': 1,
   'pr-mention': 1,
+  'tag-mention': 1,
   'theme-mention': 1,
   'unknown-mention': 1,
 };
@@ -360,6 +361,19 @@ export function serializeNode(node: SerNode): FxpNode {
     )
     .with({ type: 'theme-mention' }, (n) =>
       el('theme-mention', [], nodeAttrs(n, { ...(n.name && { name: n.name }) }))
+    )
+    .with({ type: 'tag-mention' }, (n) =>
+      el(
+        'tag-mention',
+        [],
+        nodeAttrs(n, {
+          optionId: n.optionId,
+          propertyDefinitionId: n.propertyDefinitionId,
+          scope: n.scope,
+          name: n.name,
+          ...(n.color && { color: n.color }),
+        })
+      )
     )
     .with({ type: 'unknown-mention' }, (n) =>
       el(

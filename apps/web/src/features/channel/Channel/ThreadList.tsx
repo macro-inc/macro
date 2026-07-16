@@ -200,10 +200,17 @@ export function ThreadList(props: ThreadListProps) {
 
   const scrollToTarget = (
     handle: VirtualizerHandle,
-    target: ThreadListScrollTarget
+    target: ThreadListScrollTarget,
+    options: { cancelPin?: boolean } = {}
   ): boolean => {
     const index = resolveTargetIndex(target);
     if (index < 0) return false;
+    // A deliberate navigation to a specific target aborts an in-flight
+    // pinToBottom settle loop, which would otherwise yank the view back to the
+    // bottom frame-by-frame and strand the target (e.g. opening a channel at
+    // latest, then clicking a message/thread row within its settle window).
+    // pinToBottom opts out so it doesn't cancel the loop it is establishing.
+    if (options.cancelPin !== false) cancelPinToBottom?.();
     const align = getTargetAlign(target);
     handle.scrollToIndex(index, { align, offset: insetAlignOffset(align) });
     return true;
@@ -309,7 +316,11 @@ export function ThreadList(props: ThreadListProps) {
   const pinToBottom = (handle: VirtualizerHandle): boolean => {
     cancelPinToBottom?.();
 
-    const didScroll = scrollToTarget(handle, { tag: 'bottom', align: 'end' });
+    const didScroll = scrollToTarget(
+      handle,
+      { tag: 'bottom', align: 'end' },
+      { cancelPin: false }
+    );
     const el = scrollRef;
     if (!didScroll || !el) return didScroll;
 

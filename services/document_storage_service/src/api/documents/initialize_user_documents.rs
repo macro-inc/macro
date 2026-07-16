@@ -1,15 +1,15 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::State,
     response::{IntoResponse, Json, Response},
 };
 use futures::StreamExt;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::cowlike::CowLike;
 use model::{
     document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},
 };
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
 use s3_key::build_cloud_storage_bucket_document_key;
@@ -36,7 +36,7 @@ const CANVAS_TEMPLATE: &str = include_str!("./template/canvas_template.canvas");
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
     tracing::info!("initialize user documents");
     let start_time = std::time::Instant::now();

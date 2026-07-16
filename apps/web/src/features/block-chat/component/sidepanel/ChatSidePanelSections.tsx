@@ -1,4 +1,7 @@
-import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
+import {
+  EntityPropertiesSection,
+  EntityTagsSection,
+} from '@app/features/property/side-panel/properties';
 import {
   DateValueDisplay,
   FolderLink,
@@ -22,11 +25,17 @@ export function ChatSidePanelSections() {
           <ChatDetailsContent chatId={chatId} />
         </Suspense>
       </SidePanel.Section>
+      <EntityTagsSection
+        entityId={chatId}
+        entityType="CHAT"
+        canEdit={canEdit()}
+        order={20}
+      />
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
-        order={20}
+        order={30}
       >
         <Suspense fallback={<SidePanel.Loading />}>
           <ChatPropertiesContent chatId={chatId} canEdit={canEdit()} />
@@ -92,6 +101,7 @@ function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
       entityType="CHAT"
       canEdit={props.canEdit}
       documentName={query.data?.name}
+      showTags={false}
     />
   );
 }

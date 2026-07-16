@@ -172,8 +172,7 @@ pub async fn seen_handler(
             is_read: true,
             origin: EmailEventOrigin::UserAction,
         }),
-    )
-    .await;
+    );
 
     // Enqueue gmail ops messages in batch
     let gmail_ops_messages: Vec<_> = unread_messages

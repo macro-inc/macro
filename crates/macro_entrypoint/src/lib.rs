@@ -4,12 +4,17 @@
 
 mod datadog_fmt;
 
+#[cfg(test)]
+mod test;
+
 use macro_env::Environment;
-use macro_env_var::{env_vars, maybe_env_var};
+use macro_env_var::{env_vars, maybe_env_vars};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter, Layer, Registry, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt,
+};
 use tracing_tree::HierarchicalLayer;
 
 env_vars! {
@@ -17,8 +22,9 @@ env_vars! {
     pub struct DdEnv;
 }
 
-maybe_env_var! {
+maybe_env_vars! {
     pub struct RustLog;
+    pub struct OtelTraceFilter;
 }
 
 /// Build an [`EnvFilter`] from `RUST_LOG`, honoring values injected via `APP_SECRETS_JSON`.
@@ -32,6 +38,22 @@ fn rust_log_env_filter() -> EnvFilter {
         Some(value) => EnvFilter::builder().parse_lossy(value),
         None => EnvFilter::from_default_env(),
     }
+}
+
+/// Build an [`EnvFilter`] for the OpenTelemetry span exporter from `OTEL_TRACE_FILTER`.
+///
+/// Traces are filtered independently of `RUST_LOG` so that lowering log verbosity (e.g.
+/// `RUST_LOG=warn`) cannot silence APM traces — `#[tracing::instrument]` spans default to INFO
+/// and a global filter would drop them before the otel layer sees them. Defaults to `info` when
+/// `OTEL_TRACE_FILTER` is unset or contains no valid directives.
+fn otel_env_filter() -> EnvFilter {
+    otel_trace_filter(OtelTraceFilter::new().as_deref())
+}
+
+fn otel_trace_filter(value: Option<&str>) -> EnvFilter {
+    EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse_lossy(value.unwrap_or(""))
 }
 
 /// unit struct which defines the behaviour for instantiation
@@ -119,7 +141,9 @@ impl MacroEntrypoint {
                     .unwrap_or_else(|_| "unknown-service".to_string());
 
                 let tracer = tracer_provider.tracer(service_name);
-                let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+                let otel_layer = tracing_opentelemetry::layer()
+                    .with_tracer(tracer)
+                    .with_filter(otel_env_filter());
 
                 // Build the JSON event format, then wrap it with DatadogFormat
                 // to inject dd.trace_id / dd.span_id for trace-log correlation.
@@ -134,13 +158,10 @@ impl MacroEntrypoint {
                 let fmt_layer = tracing_subscriber::fmt::layer()
                     .with_ansi(false)
                     .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
-                    .event_format(datadog_fmt::DatadogFormat { inner: json_format });
+                    .event_format(datadog_fmt::DatadogFormat { inner: json_format })
+                    .with_filter(rust_log_env_filter());
 
-                Registry::default()
-                    .with(rust_log_env_filter())
-                    .with(fmt_layer)
-                    .with(otel_layer)
-                    .init();
+                Registry::default().with(fmt_layer).with(otel_layer).init();
 
                 InitializedEntrypoint {
                     tracer_provider: Some(tracer_provider),

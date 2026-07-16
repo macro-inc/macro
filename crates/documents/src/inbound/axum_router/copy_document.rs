@@ -6,8 +6,8 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::document::{DocumentBasic, FileTypeExt};
-use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
 use super::{DocumentRouterState, Params};
@@ -38,11 +38,15 @@ use crate::domain::ports::DocumentService;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, access, user_context, document_context, req), fields(user_id=%user_context.macro_user_id, document_version_id=?params.version_id))]
-pub async fn copy_document_handler<T: DocumentService, Svc: EntityAccessService>(
-    access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
-    user_context: MacroUserExtractor,
+#[tracing::instrument(skip(state, access, user, document_context, req), fields(user_id=%user.macro_user_id, document_version_id=?params.version_id))]
+pub async fn copy_document_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Query(params): Query<CopyDocumentQueryParams>,
@@ -57,7 +61,7 @@ pub async fn copy_document_handler<T: DocumentService, Svc: EntityAccessService>
         .copy_document(
             access.entity_access_receipt,
             document_context.0,
-            user_context.macro_user_id,
+            user.macro_user_id,
             req.document_name,
             params.version_id,
             req.version_id,

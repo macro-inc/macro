@@ -12,7 +12,6 @@ import {
   PlatformNotificationProvider,
   triggerNotificationNavigation,
 } from '@notifications';
-import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -180,7 +179,6 @@ export function MaybePushNotificationRegistration(props: {
     if (!tapped) return;
     if (!notificationId) return;
 
-    invalidateUserNotifications();
     triggerNotificationNavigation(notificationId);
   });
 

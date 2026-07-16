@@ -35,6 +35,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
             })
             .collect(),
         transcript: Vec::new(),
+        user_access_level: None,
     }
 }
 

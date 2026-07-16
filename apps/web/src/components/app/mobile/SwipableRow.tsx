@@ -512,8 +512,13 @@ export function SwipableRow(
     onCleanup(() => ctx.unregisterRowHandler(entityId));
   });
 
-  onCleanup(() => {
-    ctx.clearState(props.id);
+  // `props.id` can resolve through a parent getter chain (e.g. a message row
+  // inside a `<Show>` accessor) that is already stale by the time this row is
+  // disposed, so it must not be read inside onCleanup; capture it while
+  // mounted and clear with the captured value.
+  createEffect(() => {
+    const id = props.id;
+    onCleanup(() => ctx.clearState(id));
   });
 
   const swipePhase = () => rowState().phase;

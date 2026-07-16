@@ -24,11 +24,15 @@ mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
 mod deploy_ai_editing_worker;
+mod deploy_all_services;
+mod deploy_cloud_storage_on_push;
 mod deploy_preview;
 mod deploy_web_app;
 mod deploy_web_app_dev_push;
 mod path_validation;
+mod preview_fly;
 mod pulumi_preview_pr;
+mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
 mod steps;
@@ -163,6 +167,26 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(deploy_ai_editing_worker::deploy_ai_editing_worker)(),
     },
     WorkflowFile {
+        slug: "deploy_all_services",
+        file_name: "deploy_all_services.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_all_services::deploy_all_services,
+                deploy_all_services::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_cloud_storage_on_push",
+        file_name: "deploy_cloud_storage_on_push.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_cloud_storage_on_push::deploy_cloud_storage_on_push,
+                deploy_cloud_storage_on_push::patch,
+            )
+        },
+    },
+    WorkflowFile {
         slug: "deploy_preview",
         file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
@@ -193,6 +217,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
+        slug: "reusable_deploy_service",
+        file_name: "reusable_deploy_service.yml",
+        render_yaml: || {
+            render_patched(
+                reusable_deploy_service::reusable_deploy_service,
+                reusable_deploy_service::patch,
+            )
+        },
+    },
+    WorkflowFile {
         slug: "reusable_preview_service",
         file_name: "reusable_preview_service.yml",
         render_yaml: || {
@@ -201,6 +235,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 reusable_preview_service::patch,
             )
         },
+    },
+    WorkflowFile {
+        slug: "preview_fly",
+        file_name: "preview-fly.yml",
+        render_yaml: || render_gh_workflow(preview_fly::preview_fly)(),
+    },
+    WorkflowFile {
+        slug: "preview_fly",
+        file_name: "preview-fly-cleanup.yml",
+        render_yaml: || render_gh_workflow(preview_fly::preview_fly_cleanup)(),
     },
     WorkflowFile {
         slug: "check_node_modules_nix",

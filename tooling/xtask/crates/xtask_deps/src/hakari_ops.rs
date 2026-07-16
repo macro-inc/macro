@@ -2,9 +2,55 @@
 //! the `cargo hakari` CLI wraps, minus the CLI (and its version skew).
 
 use anyhow::{Context, Result, anyhow};
+use guppy::PackageId;
 use guppy::graph::PackageGraph;
 use hakari::HakariBuilder;
 use hakari::summaries::{DEFAULT_CONFIG_PATH, HakariConfig};
+use serde::Deserialize;
+
+/// Xtask-only extension to `.config/hakari.toml`: the hakari engine only
+/// accepts exact member names in `workspace-members`, so path globs live in
+/// an `[xtask]` table it ignores and are expanded here.
+#[derive(Debug, Default, Deserialize)]
+struct XtaskConfig {
+    #[serde(default)]
+    xtask: XtaskSection,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct XtaskSection {
+    /// Workspace-relative member-path globs, a literal prefix ending in a
+    /// single `*` (e.g. `crates/client/*`). Every matched member becomes a
+    /// traversal exclude: not unified into workspace-hack and never given
+    /// the workspace-hack dependency by manage-deps.
+    #[serde(default)]
+    traversal_exclude_globs: Vec<String>,
+}
+
+/// Expands the path globs against workspace member paths. A glob matching
+/// nothing is an error — it is either a typo or a stale entry.
+fn glob_excludes<'g>(graph: &'g PackageGraph, globs: &[String]) -> Result<Vec<&'g PackageId>> {
+    let mut ids = Vec::new();
+    for glob in globs {
+        let prefix = glob.strip_suffix('*').ok_or_else(|| {
+            anyhow!("[xtask] traversal-exclude-globs entry `{glob}` must end with `*`")
+        })?;
+        let matched: Vec<_> = graph
+            .workspace()
+            .iter_by_path()
+            .filter(|(path, _)| path.as_str().starts_with(prefix))
+            .map(|(_, package)| package.id())
+            .collect();
+        if matched.is_empty() {
+            return Err(anyhow!(
+                "[xtask] traversal-exclude-globs entry `{glob}` matched no workspace members"
+            ));
+        }
+        ids.extend(matched);
+    }
+    Ok(ids)
+}
 
 /// Regenerates (or, in check mode, diffs) the workspace-hack crate:
 /// the generated section of its Cargo.toml, plus the `workspace-hack`
@@ -17,11 +63,18 @@ pub fn run(graph: &PackageGraph, check: bool, drift: &mut Vec<String>) -> Result
     let config: HakariConfig = contents
         .parse()
         .map_err(|e| anyhow!("parsing {config_path}: {e}"))?;
+    let xtask_config: XtaskConfig = toml::from_str(&contents)
+        .map_err(|e| anyhow!("parsing [xtask] section of {config_path}: {e}"))?;
+    let extra_excludes = glob_excludes(graph, &xtask_config.xtask.traversal_exclude_globs)?;
     let make_builder = || -> Result<HakariBuilder<'_>> {
-        config
+        let mut builder = config
             .builder
             .to_hakari_builder(graph)
-            .map_err(|e| anyhow!("resolving {config_path}: {e}"))
+            .map_err(|e| anyhow!("resolving {config_path}: {e}"))?;
+        builder
+            .add_traversal_excludes(extra_excludes.iter().copied())
+            .map_err(|e| anyhow!("applying [xtask] traversal-exclude-globs: {e}"))?;
+        Ok(builder)
     };
     let mut changed = false;
 

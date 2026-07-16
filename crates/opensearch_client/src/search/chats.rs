@@ -41,7 +41,8 @@ pub(crate) struct ChatIndex {
     pub entity_id: uuid::Uuid,
     pub user_id: String,
     pub title: String,
-    pub updated_at_seconds: Option<i64>,
+    #[serde(default)]
+    pub updated_at_millis: Option<i64>,
 }
 
 pub(crate) struct ChatSearchConfig;
@@ -188,6 +189,7 @@ impl ChatQueryBuilder {
 fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "require_field_match": true,
+        "max_analyzer_offset": super::HIGHLIGHT_MAX_ANALYZER_OFFSET,
         "pre_tags": ["<macro_em>"],
         "post_tags": ["</macro_em>"],
         "fields": {

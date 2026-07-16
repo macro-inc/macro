@@ -10,8 +10,9 @@ use rand::Rng;
 use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 use authentication_service::service::user::create_user::create_user;
 use fusionauth::error::FusionAuthClientError;
-use macro_user_id::email::Email;
+use macro_user_id::{email::Email, user_id::MacroUserIdStr};
 use model::authentication::webhooks::FusionAuthUserWebhook;
+use teams::domain::team_repo::TeamService;
 
 /// FusionAuth create user webhook
 #[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
@@ -217,6 +218,32 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     Err(e) => {
                         tracing::error!(error=?e, "failed to initialize how to guide after {MAX_ATTEMPTS} attempts");
                     }
+                }
+            }
+        }
+    });
+
+    // Automatically add the new user to a team whose auto-join domain
+    // matches their email domain. Fire-and-forget: a failed auto-join must
+    // never block user creation.
+    tokio::spawn({
+        let teams_service = ctx.teams_service.clone();
+        let user_id = user_id.clone();
+        async move {
+            let user_id = match MacroUserIdStr::parse_from_str(&user_id) {
+                Ok(user_id) => user_id,
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to parse user id for team auto-join");
+                    return;
+                }
+            };
+            match teams_service.try_join_team_by_domain(&user_id).await {
+                Ok(Some(member)) => {
+                    tracing::info!(team_id=%member.team_id, %user_id, "auto-joined user to team by email domain");
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::error!(error=?e, %user_id, "failed to auto-join user to team by email domain");
                 }
             }
         }

@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use futures::future::join_all;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::api;
@@ -16,12 +16,15 @@ use thiserror::Error;
 pub enum ListLinksError {
     #[error("Database error")]
     DatabaseError(anyhow::Error),
+    #[error("Invalid macro user id")]
+    InvalidMacroId,
 }
 
 impl IntoResponse for ListLinksError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             ListLinksError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ListLinksError::InvalidMacroId => StatusCode::BAD_REQUEST,
         };
 
         (status_code, self.to_string()).into_response()
@@ -53,53 +56,29 @@ pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
 ) -> Result<Response, ListLinksError> {
-    let links =
-        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
-            .await
-            .map_err(ListLinksError::DatabaseError)?;
+    let macro_id = MacroUserIdStr::parse_from_str(&user_context.user_id)
+        .map_err(|_| ListLinksError::InvalidMacroId)?;
 
-    let tasks = links.into_iter().map(|link| {
-        let ctx = ctx.clone();
-        async move {
-            let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
-                .await
-                .map_err(ListLinksError::DatabaseError)?;
+    let inboxes = email_db_client::links::get::fetch_inbox_details_for_macro_id(&ctx.db, &macro_id)
+        .await
+        .map_err(ListLinksError::DatabaseError)?;
 
-            let latest_job =
-                email_db_client::backfill::job::get::get_latest_backfill_job_by_link_id(
-                    &ctx.db, link.id,
-                )
-                .await
-                .map_err(ListLinksError::DatabaseError)?;
+    let links = inboxes
+        .into_iter()
+        .map(|inbox| {
             let sync_status = api::link::SyncStatus::derive(
-                link.is_sync_active,
-                link.needs_reauth,
-                latest_job.map(|job| job.status),
+                inbox.link.is_sync_active,
+                inbox.link.needs_reauth,
+                inbox.latest_backfill_status,
             );
-
-            // The inbox's own photo comes from its self-contact (synced from people/me).
-            let photo_url = email_db_client::contacts::get::fetch_contact_by_email(
-                &ctx.db,
-                link.id,
-                link.email_address.0.as_ref(),
-            )
-            .await
-            .map_err(ListLinksError::DatabaseError)?
-            .and_then(|contact| contact.photo_url);
-
-            Ok(api::link::Link::new(
-                link,
-                api::settings::Settings::from(settings),
+            api::link::Link::new(
+                inbox.link,
+                api::settings::Settings::from(inbox.settings),
                 sync_status,
-                photo_url,
-            ))
-        }
-    });
+                inbox.photo_url,
+            )
+        })
+        .collect();
 
-    let results = join_all(tasks).await;
-
-    let api_links: Result<Vec<_>, _> = results.into_iter().collect();
-    let api_links = api_links?;
-
-    Ok((StatusCode::OK, Json(ListLinksResponse { links: api_links })).into_response())
+    Ok((StatusCode::OK, Json(ListLinksResponse { links })).into_response())
 }

@@ -59,6 +59,10 @@ type MarkDoneVariables = {
 
 type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
 
+type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
+  nextEntityId?: string;
+};
+
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const splitPanel = useSplitPanel();
@@ -216,12 +220,39 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     entities: EntityData[],
     soup: SoupState,
     onNavigate?: (entity: EntityData) => void,
-    opts?: MarkDoneExecuteOpts
+    opts?: MarkDoneExecuteWithSoupOpts
   ) => {
-    const currentIndex = soup.focus.index();
     const focusedIdBeforeMarkDone = soup.focus.id();
-    const nextRow =
-      soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
+    const markedEntityIds = new Set(entities.map((entity) => entity.id));
+    const adjacentRow = (direction: 1 | -1) => {
+      let previousCandidateIndex: number | undefined;
+
+      for (let distance = 1; distance <= soup.items.count(); distance++) {
+        const candidate = soup.navigate.peekOffset(direction * distance, {
+          wrapNavigation: false,
+          skipGroupHeaders: true,
+          skipLoadMore: true,
+        });
+
+        // Peeking clamps at list boundaries, so a repeated index means there
+        // are no more candidates in this direction.
+        if (!candidate || candidate.index === previousCandidateIndex) return;
+        previousCandidateIndex = candidate.index;
+
+        if (
+          candidate.row.id === focusedIdBeforeMarkDone ||
+          markedEntityIds.has(candidate.row.original.id)
+        ) {
+          continue;
+        }
+
+        return candidate.row;
+      }
+    };
+    const fallbackNextRow = adjacentRow(1) ?? adjacentRow(-1);
+    const nextRow = opts?.nextEntityId
+      ? (soup.items.get(opts.nextEntityId) ?? fallbackNextRow)
+      : fallbackNextRow;
 
     if (soup.collapseEntity.shouldCollapse()) {
       const collapse = soup.collapseEntity.callback();

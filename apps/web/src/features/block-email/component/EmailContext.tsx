@@ -4,6 +4,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { URL_PARAMS } from '@block-email/constants';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   getPermissions,
@@ -28,6 +29,7 @@ import {
   blockSenderWithToast,
   markSenderNoiseWithToast,
   markSenderSignalWithToast,
+  trackExternalThreadArchive,
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
@@ -67,6 +69,12 @@ export function markThreadDraftSaved(threadId: string) {
   draftSavedThreadIds.add(threadId);
 }
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
+
+type ArchiveThreadOptions = {
+  silent?: boolean;
+  onUndoHandle?: (handle: UndoHandle) => void;
+  nextEntityId?: string;
+};
 
 type EmailContextValues = {
   registerMessagesList: (list: HTMLElement) => void;
@@ -126,10 +134,8 @@ type EmailContextValues = {
     refetch: () => void;
   };
 
-  archiveThread: (opts?: {
-    silent?: boolean;
-    onUndoHandle?: (handle: UndoHandle) => void;
-  }) => boolean;
+  archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -348,6 +354,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   };
 
   const soup = useMaybeSoup();
+  const previewPanel = useMaybePreviewPanel();
   const splitPanel = useSplitPanel();
 
   const userId = useUserId();
@@ -365,55 +372,89 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
-  const archiveThread = (opts?: {
-    silent?: boolean;
-    onUndoHandle?: (handle: UndoHandle) => void;
-  }) => {
+  const getMarkDoneNavigationTargetId = () => {
+    if (!soup) return;
+
+    const focusedId = soup.focus.id();
+    const navigationOptions = {
+      wrapNavigation: false,
+      skipGroupHeaders: true,
+      skipLoadMore: true,
+    };
+    const candidates = [
+      soup.navigate.peekOffset(1, navigationOptions)?.row,
+      soup.navigate.peekOffset(-1, navigationOptions)?.row,
+    ];
+    return candidates.find((row) => row && row.id !== focusedId)?.id;
+  };
+
+  const archiveThread = (opts?: ArchiveThreadOptions) => {
     const thread = threadQuery.data;
     // `=== true` because callers may pass this straight to an event handler.
-    const silent = opts?.silent === true;
-    const markDoneOpts = { silent, onUndoHandle: opts?.onUndoHandle };
+    const markDoneOpts = {
+      silent: opts?.silent === true,
+      onUndoHandle: opts?.onUndoHandle,
+      nextEntityId: opts?.nextEntityId,
+    };
 
     if (!thread?.db_id) return false;
 
-    archiveMutation.mutate({
-      threadId: thread.db_id,
-      archive: thread.inbox_visible,
-      linkId: toHeaderLinkId(thread.link_id),
-    });
+    // Unarchiving ('e' on an already-done thread) is a plain toggle back to
+    // the inbox; the mark-done action doesn't apply.
+    if (!thread.inbox_visible) {
+      archiveMutation.mutate({
+        threadId: thread.db_id,
+        archive: false,
+        linkId: toHeaderLinkId(thread.link_id),
+      });
+      return true;
+    }
 
-    if (!props) return false;
-
+    // Mark done issues the /archived request itself (with undo support), so
+    // the paths below skip archiveMutation and only mirror its thread-cache
+    // handling via trackExternalThreadArchive.
     const selectedRow = soup?.items.get(thread.db_id);
+    const cachedItem = selectedRow
+      ? undefined
+      : getSoupEntityById(thread.db_id);
 
     if (soup && selectedRow) {
-      markAsDoneAction.executeWithSoup(
-        [selectedRow.original],
-        soup,
-        (nextEntity) => {
-          const splitHandle = splitPanel?.handle;
-          if (!splitHandle) return;
-          void openEntityInSplitFromUnifiedList(nextEntity, {
-            splitHandle,
-            mergeHistory: true,
-            referredFrom: splitHandle.referredFrom(),
-          });
-        },
-        markDoneOpts
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markAsDoneAction.executeWithSoup(
+          [selectedRow.original],
+          soup,
+          (nextEntity) => {
+            const splitHandle = splitPanel?.handle;
+            if (!splitHandle || previewPanel !== undefined) return;
+            void openEntityInSplitFromUnifiedList(nextEntity, {
+              splitHandle,
+              mergeHistory: true,
+              referredFrom: splitHandle.referredFrom(),
+            });
+          },
+          markDoneOpts
+        )
       );
-    } else {
+    } else if (cachedItem && cachedItem.tag !== 'channelThread') {
       // Not rendered inside a soup list (e.g. thread opened in a split): no
       // row to drive the action from, so mark done via the cached soup entity
-      // so soup views drop the thread and its notifications settle. The
-      // archive itself already ran above.
-      const cachedItem = getSoupEntityById(thread.db_id);
-      if (cachedItem && cachedItem.tag !== 'channelThread') {
-        void markAsDoneAction.execute(
+      // so soup views drop the thread and its notifications settle.
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markAsDoneAction.execute(
           [mapApiSoupItemToEntity(cachedItem)],
           undefined,
           markDoneOpts
-        );
-      }
+        )
+      );
+    } else {
+      // No soup entity to drive mark-done from: archive directly.
+      archiveMutation.mutate({
+        threadId: thread.db_id,
+        archive: true,
+        linkId: toHeaderLinkId(thread.link_id),
+      });
     }
 
     return true;
@@ -563,13 +604,19 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   // We can't invalidate/refetch while mounted because any query state change
   // triggers SolidQuery's createClientSubscriber → Resource.refetch() → Suspense
   // DOM detach, which resets scroll position.
-  onCleanup(() => {
-    if (draftSavedThreadIds.has(props.threadID)) {
-      draftSavedThreadIds.delete(props.threadID);
-      queryClient.removeQueries({
-        queryKey: emailKeys.threadMessages(props.threadID).queryKey,
-      });
-    }
+  // `props.threadID` chains through the email block's non-keyed
+  // `<Show when={threadId()}>` accessor, which is already stale during
+  // disposal; capture it while mounted instead of reading it in the cleanup.
+  createEffect(() => {
+    const threadID = props.threadID;
+    onCleanup(() => {
+      if (draftSavedThreadIds.has(threadID)) {
+        draftSavedThreadIds.delete(threadID);
+        queryClient.removeQueries({
+          queryKey: emailKeys.threadMessages(threadID).queryKey,
+        });
+      }
+    });
   });
 
   return (
@@ -582,6 +629,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
           archiveThread,
+          getMarkDoneNavigationTargetId,
           blockSender,
           markSenderSignal,
           markSenderNoise,

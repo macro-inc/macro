@@ -6,7 +6,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{gen_compose, kickstart, stage::Stage};
+use super::{gen_compose, identity, kickstart, stage::Stage};
 
 /// The local populate-JWT lambda body, inlined into `kickstart.json`.
 ///
@@ -49,18 +49,30 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
     Ok(())
 }
 
-/// Block until FusionAuth reports status Ok (it applies the kickstart on first
-/// boot against an empty DB, which is slow). Runs as a stage so it shows the
-/// spinner.
+/// Block until the kickstart has fully applied (first boot against an empty DB
+/// is slow). Runs as a stage so it shows the spinner.
+///
+/// Polls the kickstart's OWN artifacts — a tenant fetch authorized by the
+/// kickstart API key — NOT `/api/status`: FusionAuth reports status Ok while
+/// the kickstart is still applying, and the snapshot save stops the containers
+/// right after this wait. Gating on status alone once froze a mid-kickstart DB
+/// into a snapshot (no tenant), and every stack restored from it 500'd at
+/// login with `InvalidTenantIdException` — while the key never changed, so the
+/// bad snapshot was sticky. The fetch below succeeds only once the API key,
+/// the tenant, and the application all exist (the kickstart creates the
+/// application after the tenant).
 pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!(
-        "http://localhost:{}/api/status",
-        instance.port(Port::FusionAuth)
+        "http://localhost:{}/api/application/{}",
+        instance.port(Port::FusionAuth),
+        identity::APPLICATION_ID,
     );
     let script = format!(
-        "for i in $(seq 1 90); do curl -fsS {url} 2>/dev/null | grep -q '\"status\":\"Ok\"' && exit 0; sleep 2; done; echo 'timed out waiting for FusionAuth'; exit 1"
+        "for i in $(seq 1 120); do curl -fsS --max-time 3 -H 'Authorization: {key}' {url} >/dev/null 2>&1 && exit 0; sleep 2; done; \
+         echo 'timed out waiting for the FusionAuth kickstart'; exit 1",
+        key = identity::FUSIONAUTH_API_KEY,
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
-    stage.run("Waiting for FusionAuth", &mut cmd)
+    stage.run("Waiting for FusionAuth (kickstart)", &mut cmd)
 }

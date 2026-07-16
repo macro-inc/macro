@@ -127,6 +127,22 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * A tag color from the fixed palette.
+ */
+export type TagColor =
+  | 'red'
+  | 'tomato'
+  | 'orange'
+  | 'amber'
+  | 'yellow'
+  | 'green'
+  | 'teal'
+  | 'blue'
+  | 'indigo'
+  | 'purple'
+  | 'pink'
+  | 'gray';
+/**
  * Where document content is, or is expected to be, read from.
  */
 export type DocumentContentLocation =
@@ -401,8 +417,8 @@ export type TaggedSearchResult1 =
   | (EmailSearchResponseItemWithMetadata & {
       type: 'email';
     })
-  | (ChannelSearchResponseItemWithMetadata & {
-      type: 'channel';
+  | (ChannelMessageSearchResponseItem & {
+      type: 'channelMessage';
     })
   | (ProjectSearchResponseItemWithMetadata & {
       type: 'project';
@@ -672,85 +688,57 @@ export interface CallRecordSummary {
   status?: ToolCallStatus | null;
 }
 /**
- * Metadata for a channel fetched from the database
+ * A single channel-message content hit in the unified search response.
+ * One item per matching message, timestamped by the message itself, so the
+ * unified sort interleaves channel messages with other entity types by
+ * their own recency.
  */
-export interface ChannelMetadata {
-  created_at: string;
-  interacted_at?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update each chat message record for the chat
- * every time the chat updates (specifically for updated_at and viewed_at and interacted_at)
- */
-export interface ChannelSearchResponseItemWithMetadata {
+export interface ChannelMessageSearchResponseItem {
   /**
-   * The id of the channel
+   * The id of the channel the message belongs to
    */
   channel_id: string;
-  /**
-   * The search results for the channel
-   * This may be empty if the search result match was not on content
-   */
-  channel_message_search_results: ChannelSearchResult[];
   /**
    * The type of channel
    */
   channel_type: string;
   /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  /**
-   * Metadata from the database. None if the channel doesn't exist in the database.
-   */
-  metadata?: ChannelMetadata | null;
-  /**
-   * we don't store this for channels atm but keeping it here for consistency
-   */
-  owner_id?: string | null;
-}
-/**
- * A channel message match for a given channel id
- */
-export interface ChannelSearchResult {
-  /**
    * When the channel message was created
-   * This is only prsent if the search result is on the message content
    */
-  created_at?: string | null;
+  created_at: string;
   /**
    * When the channel message was deleted, if it has been
    */
   deleted_at?: string | null;
   highlight: SearchHighlight;
   /**
-   * The channel message id
-   * This is only prsent if the search result is on the message content
+   * Standardized id field shared by all item types; the channel id.
    */
-  message_id?: string | null;
+  id: string;
+  /**
+   * The channel message id
+   */
+  message_id: string;
+  /**
+   * we don't store this for channels atm but keeping it here for consistency
+   */
+  owner_id?: string | null;
   /**
    * The score of the result
    */
   score?: number | null;
   /**
    * The sender id
-   * This is only prsent if the search result is on the message content
    */
-  sender_id?: string | null;
+  sender_id: string;
   /**
    * The channel message thread id
    */
   thread_id?: string | null;
   /**
    * When the channel message was last updated
-   * This is only prsent if the search result is on the message content
    */
-  updated_at?: string | null;
+  updated_at: string;
 }
 /**
  * A single message in the tool response.
@@ -1131,6 +1119,43 @@ export interface CreateDocumentResponse {
   documentId: string;
 }
 /**
+ * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
+ */
+export interface CreateTag {
+  color: TagColor;
+  /**
+   * The tag's label, e.g. "Urgent" or "Follow-up".
+   */
+  label: string;
+  scope?: TagScope & string;
+}
+/**
+ * Response from the [`CreateTag`] tool.
+ */
+export interface CreateTagResponse {
+  /**
+   * The tag's color, when set.
+   */
+  color?: string | null;
+  /**
+   * The new tag's option id. Use it with SetEntityProperty to apply or remove the tag.
+   */
+  id: string;
+  /**
+   * The tag's label.
+   */
+  label: string;
+  /**
+   * The tag set's property definition id. Use it as propertyDefinitionId with SetEntityProperty.
+   */
+  propertyDefinitionId: string;
+  scope: TagScope;
+  /**
+   * Human-readable summary.
+   */
+  summary: string;
+}
+/**
  * A CRM domain attached to a company in search results.
  */
 export interface CrmCompanySearchDomain {
@@ -1192,6 +1217,32 @@ export interface CrmCompanySearchResponseItem {
    * When the company was last updated (the sort key).
    */
   updatedAt: string;
+}
+/**
+ * Permanently delete a tag from the user's personal set or their team's shared set. This removes the tag from every item it is currently applied to, so it is destructive and cannot be undone — confirm with the user first. Both ids come from a ListTags result: `id` is the tag's option id, and `property_definition_id` is the propertyDefinitionId of the set that contains it. To simply remove a tag from a single item without deleting the tag itself, use SetEntityProperty with remove_option_ids instead.
+ */
+export interface DeleteTag {
+  /**
+   * The tag's option id (the `id` field from a ListTags result).
+   */
+  id: string;
+  /**
+   * The tag set's property definition id (the `propertyDefinitionId` of the ListTags set that contains this tag).
+   */
+  property_definition_id: string;
+}
+/**
+ * Response from the [`DeleteTag`] tool.
+ */
+export interface DeleteTagResponse {
+  /**
+   * Human-readable summary.
+   */
+  message: string;
+  /**
+   * Whether the tag was deleted.
+   */
+  success: boolean;
 }
 /**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
@@ -1309,6 +1360,52 @@ export interface EditDocumentResponse {
   /**
    * A short outcome for the model -- whether the edit was applied or
    * interrupted -- never the underlying list of edit operations.
+   */
+  summary: string;
+}
+/**
+ * Rename or recolor an existing tag in the user's personal set or their team's shared set. The tag's id is preserved, so the change is reflected everywhere the tag is already applied — no item loses the tag. Provide the tag's `id` and its set's `property_definition_id` (both from ListTags) plus a new `label` and/or `color`; omit whichever you want to leave unchanged. This edits the tag itself; to change which tags are on a specific item, use SetEntityProperty instead.
+ */
+export interface EditTag {
+  /**
+   * A new color for the tag, chosen from the fixed tag palette. Omit to keep the current color.
+   */
+  color?: TagColor | null;
+  /**
+   * The tag's option id (the `id` field from a ListTags result).
+   */
+  id: string;
+  /**
+   * A new label for the tag. Omit to keep the current label.
+   */
+  label?: string | null;
+  /**
+   * The tag set's property definition id (the `propertyDefinitionId` of the ListTags set that contains this tag).
+   */
+  property_definition_id: string;
+}
+/**
+ * Response from the [`EditTag`] tool.
+ */
+export interface EditTagResponse {
+  /**
+   * The tag's color after the edit, when set.
+   */
+  color?: string | null;
+  /**
+   * The tag's option id (unchanged).
+   */
+  id: string;
+  /**
+   * The tag's label after the edit.
+   */
+  label: string;
+  /**
+   * The tag set's property definition id.
+   */
+  propertyDefinitionId: string;
+  /**
+   * Human-readable summary.
    */
   summary: string;
 }

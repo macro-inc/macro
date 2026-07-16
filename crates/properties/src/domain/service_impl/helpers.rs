@@ -16,6 +16,7 @@ fn tag_visible_to(owner: &PropertyOwner, auth: &EntityAccessAuth) -> bool {
     match owner {
         PropertyOwner::User { user_id } => match auth {
             EntityAccessAuth::Authenticated(caller) => user_id == caller.as_ref(),
+            EntityAccessAuth::Bot(_) => false,
             EntityAccessAuth::Unauthenticated => false,
             EntityAccessAuth::Internal => true,
         },

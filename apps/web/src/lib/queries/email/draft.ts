@@ -16,6 +16,8 @@ type CreateDraftParams = {
   sendTime?: Date | null;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
+  /** Skip updating soup when the thread will immediately be marked done. */
+  skipSoupRefetch?: boolean;
 };
 
 /**
@@ -43,13 +45,15 @@ export function useSaveDraftMutation(
           console.error('Failed to save draft', error);
           toast.failure('Failed to save draft');
         },
-        onSuccess(data) {
+        onSuccess(data, vars) {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
           const threadId = data.draft.thread_db_id;
           if (!threadId) return;
-          refetchSoupEntity(threadId, 'emailThread');
+          if (!vars.skipSoupRefetch) {
+            refetchSoupEntity(threadId, 'emailThread');
+          }
           // Reopening the thread reads the messages cache; drop it so the
           // saved draft body isn't served stale.
           queryClient.invalidateQueries({
@@ -68,6 +72,8 @@ type DeleteDraftParams = {
   threadId?: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
+  /** Skip updating soup when the thread will immediately be marked done. */
+  skipSoupRefetch?: boolean;
 };
 
 /**
@@ -97,7 +103,7 @@ export function useDeleteDraftMutation(
           // drafts tab without a manual refresh. No-op for compose drafts,
           // whose thread is deleted along with the draft, so the refetch
           // finds nothing to update.
-          if (vars.threadId) {
+          if (vars.threadId && !vars.skipSoupRefetch) {
             refetchSoupEntity(vars.threadId, 'emailThread');
           }
         },

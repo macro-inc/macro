@@ -54,6 +54,14 @@ fn variants_serialize_to_their_api_id() {
     }
 
     assert_eq!(PredefinedModel::Opus4_7.to_string(), ant(CLAUDE_OPUS_4_7));
+    assert_eq!(
+        PredefinedModel::Sonnet5.to_string(),
+        "anthropic/claude-sonnet-5"
+    );
+    assert_eq!(
+        serde_json::to_string(&PredefinedModel::Sonnet5).unwrap(),
+        r#""claude-sonnet-5""#
+    );
     assert_eq!(PredefinedModel::Haiku4_5.to_string(), ant(CLAUDE_HAIKU_4_5));
     assert_eq!(
         PredefinedModel::Sonnet4_6.to_string(),
@@ -63,4 +71,13 @@ fn variants_serialize_to_their_api_id() {
         PredefinedModel::Gpt5_5.to_string(),
         format!("openai/{}", GPT_5_5)
     );
+}
+
+#[test]
+fn sonnet_5_uses_adaptive_thinking() {
+    let params = PredefinedModel::Sonnet5.thinking_params();
+    assert_eq!(params["thinking"]["type"], "adaptive");
+    assert!(params["thinking"].get("budget_tokens").is_none());
+    assert!(params.get("temperature").is_none());
+    assert_eq!(PredefinedModel::Sonnet5.context_window(), 1_000_000);
 }

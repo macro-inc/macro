@@ -14,12 +14,35 @@ use entity_access::{
 use graphql_common::extract_part;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::TypeEraseCursor;
-use soup::domain::ports::SoupService;
+use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
 
 use crate::{
-    inputs::SoupInput,
-    objects::{SoupEntityEdges, SoupPage},
+    inputs::{GroupedSoupInput, SoupInput},
+    objects::{GroupedSoup, SoupEntityEdges, SoupPage},
 };
+
+/// Resolve Soup items nested into grouping bins for the authenticated user.
+pub async fn resolve_grouped_soup<S, St, Edges>(
+    service: &S,
+    ctx: &Context<'_>,
+    input: GroupedSoupInput,
+) -> async_graphql::Result<GroupedSoup<Edges>>
+where
+    S: SoupService,
+    St: Clone + Send + Sync + 'static,
+    Edges: SoupEntityEdges,
+{
+    let Cached(MacroUserExtractor { macro_user_id, .. }) =
+        extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
+    let request = input.into_request(macro_user_id)?;
+    let sort_method = *request.cursor.sort_method();
+    let filters = request.cursor.filter().clone();
+    let items = service.get_user_soup_grouped(request).await?;
+    let groups: NestedSoupGroups<_, _> = items.collect();
+    Ok(GroupedSoup::from(
+        groups.with_next_cursors(sort_method, filters),
+    ))
+}
 
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
@@ -62,6 +85,19 @@ where
         None
     };
 
-    let page = service.get_user_soup(request, team_receipt).await?;
-    Ok(SoupPage::from(page.type_erase()))
+    let include_frecency = ctx
+        .look_ahead()
+        .field("items")
+        .field("frecencyScore")
+        .exists();
+
+    if include_frecency {
+        let page = service
+            .get_user_soup_with_frecency(request, team_receipt)
+            .await?;
+        Ok(SoupPage::from(page.type_erase()))
+    } else {
+        let page = service.get_user_soup(request, team_receipt).await?;
+        Ok(SoupPage::from(page.type_erase()))
+    }
 }

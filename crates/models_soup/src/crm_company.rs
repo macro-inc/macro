@@ -1,4 +1,3 @@
-use crate::SoupProperty;
 use chrono::{DateTime, Utc};
 use crm::domain::model::{CrmCompanyForSoup, CrmDomain};
 use serde::{Deserialize, Serialize};
@@ -37,7 +36,7 @@ impl From<CrmDomain> for SoupCrmDomain {
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct SoupCrmCompany {
+pub struct SoupCrmCompany<T = ()> {
     /// The id of the company.
     pub id: Uuid,
     /// The id of the team that owns this company record.
@@ -62,13 +61,12 @@ pub struct SoupCrmCompany {
     /// Domains associated with this company, ordered by creation time
     /// ascending (primary first).
     pub domains: Vec<SoupCrmDomain>,
-    /// Properties attached to this company (system CRM properties like
-    /// Stage / Owner / Revenue plus any custom ones).
-    #[serde(default)]
-    pub properties: Vec<SoupProperty>,
+    /// Extra fields passed from above
+    #[serde(flatten)]
+    pub extra: T,
 }
 
-impl From<CrmCompanyForSoup> for SoupCrmCompany {
+impl From<CrmCompanyForSoup> for SoupCrmCompany<()> {
     fn from(c: CrmCompanyForSoup) -> Self {
         let CrmCompanyForSoup {
             company,
@@ -91,7 +89,7 @@ impl From<CrmCompanyForSoup> for SoupCrmCompany {
                 .into_iter()
                 .map(SoupCrmDomain::from)
                 .collect(),
-            properties: Vec::new(),
+            extra: (),
         }
     }
 }

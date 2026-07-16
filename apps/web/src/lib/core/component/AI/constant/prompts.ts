@@ -1,8 +1,8 @@
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { useUserContext } from '@core/context/user';
 import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
 import { authServiceClient } from '@service-auth/client';
 import { createResource } from 'solid-js';
+import { getOpenEntitiesPrompt } from './openEntitiesPrompt';
 
 const ABOUT_MACRO = `
 Macro is an AI workspace with all the latest models and built-in editors for pdfs, docs, notes, images, diagrams, chats and more. Macro is like ChatGPT but you can do all your work inside it+
@@ -34,7 +34,7 @@ export function useAdditionalInstructions() {
     const response = await authServiceClient.getUserName();
     return response.isOk() ? response.value : null;
   });
-  return () => {
+  return (currentChatId?: string) => {
     let prompt = ABOUT_MACRO;
     const name = userName();
     const parts = [name?.first_name, name?.last_name].filter(Boolean);
@@ -54,33 +54,12 @@ export function useAdditionalInstructions() {
         '\nThese are system instructions provided by the user. Follow them\n';
       prompt += userInstructions;
     }
-    const openEntities = getOpenEntitiesPrompt();
+    const openEntities = getOpenEntitiesPrompt(currentChatId);
     if (openEntities) {
       prompt += openEntities;
     }
     return appendDate(prompt);
   };
-}
-
-function getOpenEntitiesPrompt(): string | null {
-  const manager = globalSplitManager();
-  if (!manager) return null;
-
-  const splits = manager.splits();
-  const items: string[] = [];
-  for (const split of splits) {
-    if (split.content.type === 'component') continue;
-    const handle = manager.getSplit(split.id);
-    const name = handle?.displayName();
-    const type = split.content.type;
-    if (name) {
-      items.push(`- ${name} (${type}, id: ${split.content.id})`);
-    } else {
-      items.push(`- ${type} (id: ${split.content.id})`);
-    }
-  }
-  if (items.length === 0) return null;
-  return `\nThe user currently has the following items open:\n${items.join('\n')}`;
 }
 
 function appendDate(prompt: string) {

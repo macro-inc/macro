@@ -48,25 +48,30 @@ pub fn parse_macro_user_id(
 /// `Literal`) plus its binary node struct, and an [`IntoFilterExpr`] impl
 /// converting it into a `filter_ast` expression over the target literal.
 ///
-/// The generated types deliberately carry no doc comments: doc comments on
-/// GraphQL input types are emitted as SDL descriptions, and the exported
-/// `schema.graphql` must not change.
+/// The generated types and fields carry documentation that is emitted as SDL
+/// descriptions, keeping the exported schema self-documenting.
 #[macro_export]
 macro_rules! filter_expr_input {
     ($name:ident, $binary_name:ident, $literal:ty, $target:ty, $type_name:literal) => {
-        #[allow(missing_docs)]
+        #[doc = concat!("The two operands of a recursive `", $type_name, "` binary expression.")]
         #[derive(async_graphql::InputObject)]
         pub struct $binary_name {
+            /// The left-hand expression.
             pub left: Box<$name>,
+            /// The right-hand expression.
             pub right: Box<$name>,
         }
 
-        #[allow(missing_docs)]
+        #[doc = concat!("A recursive `", $type_name, "` filter expression.")]
         #[derive(async_graphql::OneofObject)]
         pub enum $name {
+            /// Matches when both expressions match.
             And($binary_name),
+            /// Matches when either expression matches.
             Or($binary_name),
+            /// Negates an expression.
             Not(Box<$name>),
+            /// Matches a domain-specific literal condition.
             Literal($literal),
         }
 

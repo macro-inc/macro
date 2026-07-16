@@ -13,6 +13,7 @@ import {
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import { useEntityProperties } from '@property/hooks';
+import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -51,7 +52,10 @@ export function InlineTaskProperties() {
       .filter((p): p is Property => p !== undefined);
   });
   const shouldShowRow = createMemo(
-    () => blockName === 'task' || inlineProperties().length > 0
+    () =>
+      blockName === 'task' ||
+      blockName === 'md' ||
+      inlineProperties().length > 0
   );
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
@@ -83,6 +87,10 @@ export function InlineTaskProperties() {
           <For each={inlineProperties()}>
             {(property) => <InlinePropertyValue property={property} />}
           </For>
+          <InlineFetchedEntityTagsPill
+            entityId={blockId}
+            entityType={entityType}
+          />
           <Modals />
         </PropertiesProvider>
       </Show>

@@ -635,7 +635,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
   return match(result)
     .with({ type: 'document' }, (r) => r.document_id)
     .with({ type: 'chat' }, (r) => r.chat_id)
-    .with({ type: 'channel' }, (r) => r.channel_id)
+    .with({ type: 'channelMessage' }, (r) => `${r.channel_id}:${r.message_id}`)
     .with({ type: 'email' }, (r) => r.thread_id)
     .with({ type: 'project' }, (r) => r.id)
     .with({ type: 'call' }, (r) => r.call_id)

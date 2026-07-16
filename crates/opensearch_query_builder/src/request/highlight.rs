@@ -16,6 +16,12 @@ pub struct Highlight<'a> {
     /// Require field match
     #[serde(skip_serializing_if = "Option::is_none")]
     pub require_field_match: Option<bool>,
+    /// Cap on how many characters of a field are analyzed for highlighting.
+    /// Must stay below the index-level `index.highlight.max_analyzer_offset`
+    /// (default 1,000,000) — with this set, oversized fields get truncated
+    /// highlights instead of failing the whole shard's fetch phase.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_analyzer_offset: Option<u32>,
 }
 
 impl<'a> Highlight<'a> {
@@ -39,6 +45,12 @@ impl<'a> Highlight<'a> {
         self.require_field_match = Some(require_field_match);
         self
     }
+
+    /// Set the max analyzed offset for highlighting
+    pub fn max_analyzer_offset(mut self, max_analyzer_offset: u32) -> Self {
+        self.max_analyzer_offset = Some(max_analyzer_offset);
+        self
+    }
 }
 
 impl<'a> ToOpenSearchJson for Highlight<'a> {
@@ -57,6 +69,13 @@ impl<'a> ToOpenSearchJson for Highlight<'a> {
             result.insert(
                 "require_field_match".to_string(),
                 Value::Bool(require_field_match),
+            );
+        }
+
+        if let Some(max_analyzer_offset) = self.max_analyzer_offset {
+            result.insert(
+                "max_analyzer_offset".to_string(),
+                Value::Number(max_analyzer_offset.into()),
             );
         }
 

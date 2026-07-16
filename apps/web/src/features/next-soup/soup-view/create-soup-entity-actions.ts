@@ -13,7 +13,6 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
-import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 import {
   makeBlockSenderAction,
@@ -30,6 +29,7 @@ import {
   makeMoveToProjectAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
+  makeSetCompanyPropertyAction,
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
@@ -85,7 +85,6 @@ export function createSoupEntityActions(): {
   const analytics = useAnalytics();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const isTeamAdmin = useIsTeamAdmin();
   const hiddenMutation = useSetCompanyHiddenMutation();
 
   const markDone = makeMarkDoneAction({
@@ -113,10 +112,10 @@ export function createSoupEntityActions(): {
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
   const hideCompanyAction = makeHideCompanyAction({
-    isTeamAdmin: () => isTeamAdmin(),
     setHidden: (companyId, hidden) =>
       hiddenMutation.mutateAsync({ companyId, hidden }),
   });
+  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const buildActionGroups: BuildActionGroups = (
     soup,
@@ -191,11 +190,14 @@ export function createSoupEntityActions(): {
         ) {
           // Thread rows are keyed by their root; getChannelEntityTarget
           // recovers the clicked reply from the driving notification so the
-          // new split lands on it rather than the root message.
-          const target = getChannelEntityTarget(entity) ?? {
-            messageId: entity.messageId,
-            threadId: entity.threadId,
-          };
+          // new split lands on it rather than the root message. These rows
+          // always resolve to a message target (their own ids at worst), never
+          // `latest`, which only a whole-channel row produces.
+          const resolved = getChannelEntityTarget(entity);
+          const target =
+            resolved?.kind === 'message'
+              ? resolved
+              : { messageId: entity.messageId, threadId: entity.threadId };
           splitManager.createNewSplit({
             content: {
               type: 'channel',
@@ -370,8 +372,29 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // CRM group: Hide / Unhide (admin/owner only, single company)
+    // CRM group: Set stage/owner/revenue on the whole company
+    // selection, Hide / Unhide for a single company.
     const crmItems: SoupEntityActionItem[] = [];
+
+    if (canExecuteAll(setCompanyPropertyAction.canExecute)) {
+      crmItems.push(
+        {
+          id: 'set-stage',
+          label: 'Set stage',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'stage'),
+        },
+        {
+          id: 'set-owner',
+          label: 'Set owner',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'owner'),
+        },
+        {
+          id: 'set-revenue',
+          label: 'Set revenue',
+          onClick: () => setCompanyPropertyAction.execute(entities, 'revenue'),
+        }
+      );
+    }
 
     const singleEntity = entities.length === 1 ? entities[0] : undefined;
     if (

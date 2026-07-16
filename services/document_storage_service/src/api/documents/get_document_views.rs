@@ -1,4 +1,4 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::model::response::user_views::UserViewsResponse;
 use axum::{
     Extension, Json,
@@ -7,7 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::{document::DocumentBasic, response::GenericErrorResponse, user::UserContext};
+use macro_authorization::MacroAuthorizationExtractor;
+use model::{document::DocumentBasic, response::GenericErrorResponse};
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::Deserialize;
@@ -33,12 +34,12 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, document_id, _access), fields(user_id=?user_context.user_id, document_id=?document_context.document_id, original_document_id=?document_id))]
+#[tracing::instrument(skip(db, user, document_id, _access), fields(user_id=?user.macro_user_id, document_id=?document_context.document_id, original_document_id=?document_id))]
 pub async fn get_document_views_handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     Path(Params { document_id }): Path<Params>,
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
 ) -> Result<Response, Response> {
     let users = macro_db_client::document::get_document_views(&db, &document_context.document_id)

@@ -1,10 +1,9 @@
-use super::{context::ApiContext, middleware};
+use super::context::ApiContext;
 use axum::{
     Router,
     routing::{delete, get, patch, post, put},
 };
 use macro_middleware::cloud_storage::project::ensure_project_exists;
-use tower::ServiceBuilder;
 
 pub(in crate::api) mod create_project;
 pub(in crate::api) mod delete_project;
@@ -20,18 +19,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let ensure_project_exists_middleware =
         axum::middleware::from_fn_with_state(state.clone(), ensure_project_exists::handler);
     Router::new()
-        .route(
-            "/",
-            get(get_projects::get_projects_handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
-            )),
-        )
-        .route(
-            "/pending",
-            get(get_projects::get_pending_projects_handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
-            )),
-        )
+        .route("/", get(get_projects::get_projects_handler))
+        .route("/pending", get(get_projects::get_pending_projects_handler))
         .route(
             "/{id}/permissions",
             get(project_permission::get_project_permissions_handler)
@@ -47,44 +36,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             get(get_project::get_project_content_handler)
                 .layer(ensure_project_exists_middleware.clone()),
         )
-        .route(
-            "/",
-            post(create_project::create_project_handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
-            )),
-        )
-        .route(
-            "/upload",
-            post(upload_folder::upload_folder_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        middleware::check_user_document_count::handler_upload_folder,
-                    )),
-            ),
-        )
+        .route("/", post(create_project::create_project_handler))
+        .route("/upload", post(upload_folder::upload_folder_handler))
         .route(
             "/upload_extract",
-            post(upload_folder::upload_extract_folder_handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state,
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    )), // TODO: get item count from front end and/or handle during the extract step
-                        // .layer(axum::middleware::from_fn(
-                        //     middleware::check_user_document_count::handler_upload_folder,
-                        // )),
-            ),
+            post(upload_folder::upload_extract_folder_handler),
         )
         .route(
             "/{id}",

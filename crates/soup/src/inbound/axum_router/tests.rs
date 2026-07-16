@@ -7,7 +7,7 @@ use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{BotId, EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
@@ -27,8 +27,9 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            FrecencyQueryInner, GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType,
+            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
+            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+            grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -72,13 +73,61 @@ impl MockSoup {
 impl SoupService for MockSoup {
     async fn get_user_soup<T>(
         &self,
-        req: SoupRequest<T>,
+        _req: SoupRequest<T>,
         _team_receipt: Option<
             entity_access::domain::models::EntityAccessReceipt<
                 entity_access::domain::models::MemberTeamRole,
             >,
         >,
     ) -> Result<SoupOutput<T>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_with_properties<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_with_frecency<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_user_soup_with_properties_and_frecency<T>(
+        &self,
+        req: SoupRequest<T>,
+        _team_receipt: Option<
+            entity_access::domain::models::EntityAccessReceipt<
+                entity_access::domain::models::MemberTeamRole,
+            >,
+        >,
+    ) -> Result<SoupOutput<T, EnrichedSoupItem>, SoupErr>
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send,
@@ -113,8 +162,10 @@ impl SoupService for MockSoup {
     async fn get_user_soup_grouped(
         &self,
         _req: GroupedSortRequest<'_>,
-    ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
-        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
+        Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(SoupErr::SoupDbErr(
+            anyhow::anyhow!("Not implemented"),
+        ))
     }
 
     async fn caller_tag_sets<'a>(
@@ -284,6 +335,20 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         &self,
         _user_id: &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<T>,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn generate_bot_entity_access_receipt<
+        T: entity_access::domain::models::RequiredPermission,
+    >(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: entity_access::domain::models::EntityType,
     ) -> Result<
@@ -1728,6 +1793,27 @@ fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
             serde_json::to_string(other).unwrap()
         ),
     }
+}
+
+#[test]
+fn ast_endpoint_crm_ef_merge_tolerates_shared_arc() {
+    // The soup service clones the request filters before AST expansion
+    // (`get_user_soup_internal`), so the `ef` Arc reaches the CRM
+    // AND-merge with refcount > 1. The merge must clone, not error.
+    let js = json!({
+        "ef": { "l": { "Importance": true } },
+        "ecd": ["acme.com"],
+    });
+    let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
+    let _extra_ref = api.email_filter.clone();
+    let ast = api
+        .into_entity_ast()
+        .expect("shared ef Arc must not fail the merge");
+    let tree = ast.email_filter.tree.as_ref().expect("tree set");
+    assert!(
+        matches!(tree.as_ref(), filter_ast::Expr::And(_, _)),
+        "expected And at root after CRM AND-merge"
+    );
 }
 
 #[test]

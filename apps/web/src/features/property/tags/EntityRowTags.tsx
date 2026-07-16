@@ -1,11 +1,13 @@
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn, HoverCard, Layer } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import { TagPicker } from './TagPicker';
-import { type ResolvedTag, useSoupDocTags } from './useDocTags';
+import { type ResolvedTag, useDocTags, useSoupDocTags } from './useDocTags';
 
 type DocTags = ReturnType<typeof useSoupDocTags>;
 
@@ -73,7 +75,7 @@ function TagChip(props: {
         <TagPicker
           docTags={props.docTags}
           triggerClass={chipClass}
-          triggerLabel={`Edit ${props.tag.label}`}
+          triggerLabel={`Change or select tag ${props.tag.label}`}
           onOpenChange={setPickerOpen}
         >
           <TagDot color={props.tag.color} class="size-2" />
@@ -180,5 +182,110 @@ export function EntityRowTags(props: {
         </Show>
       </div>
     </Show>
+  );
+}
+
+export function InlineTagsPill(props: {
+  docTags: DocTags;
+  class?: string;
+  showPlaceholder?: boolean;
+}) {
+  const tags = () => props.docTags.appliedTags();
+  const first = () => tags()[0];
+  const dots = () => tags().slice(0, MAX_OVERFLOW_DOTS);
+  const label = () =>
+    `${tags().length} ${tags().length === 1 ? 'Tag' : 'Tags'}`;
+
+  return (
+    <Show when={tags().length > 0 || props.showPlaceholder}>
+      <Layer depth={2}>
+        <TagPicker
+          docTags={props.docTags}
+          triggerClass={cn(
+            'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+            'px-2 py-1 leading-tight text-left rounded-full bg-surface',
+            'hover:bg-hover text-ink-muted focus-visible:bg-active focus-visible:ring-accent/10',
+            tags().length === 0 && 'text-ink-extra-muted',
+            props.class
+          )}
+          triggerLabel="Change or select tags"
+        >
+          <Switch>
+            <Match when={tags().length === 0}>
+              <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+                <CircleDashedEmpty class="size-3 shrink-0" />
+                <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+                  Tags
+                </span>
+              </span>
+            </Match>
+            <Match when={tags().length === 1 && first()}>
+              {(tag) => (
+                <>
+                  <TagDot color={tag().color} class="size-2.5" />
+                  <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+                    {tag().label}
+                  </span>
+                </>
+              )}
+            </Match>
+            <Match when={tags().length > 1}>
+              <span class="flex items-center">
+                <For each={dots()}>
+                  {(tag, index) => (
+                    <TagDot
+                      color={tag.color}
+                      class={cn(
+                        'size-2.5 ring-2 ring-surface',
+                        index() > 0 && '-ml-1'
+                      )}
+                    />
+                  )}
+                </For>
+              </span>
+              <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+                {label()}
+              </span>
+            </Match>
+          </Switch>
+          <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
+        </TagPicker>
+      </Layer>
+    </Show>
+  );
+}
+
+export function InlineEntityTagsPill(props: {
+  entityId: string;
+  entityType: EntityType;
+  properties: SoupProperty[] | undefined;
+  class?: string;
+}) {
+  const docTags = useSoupDocTags(
+    props.entityId,
+    props.entityType,
+    () => props.properties
+  );
+  return (
+    <InlineTagsPill
+      docTags={docTags}
+      class={props.class}
+      showPlaceholder={props.entityType === EntityType.TASK}
+    />
+  );
+}
+
+export function InlineFetchedEntityTagsPill(props: {
+  entityId: string;
+  entityType: EntityType;
+  class?: string;
+}) {
+  const docTags = useDocTags(props.entityId, props.entityType);
+  return (
+    <InlineTagsPill
+      docTags={docTags}
+      class={props.class}
+      showPlaceholder={props.entityType === EntityType.TASK}
+    />
   );
 }

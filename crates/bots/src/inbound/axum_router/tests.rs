@@ -11,7 +11,7 @@ use axum::{
 };
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, EntityPermission, EntityType,
+        AccessError, AccessLevel, BotId, CallChannelInfo, EntityPermission, EntityType,
         ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
@@ -201,6 +201,15 @@ impl EntityAccessService for TestAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        unimplemented!()
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {

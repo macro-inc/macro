@@ -188,6 +188,8 @@ describe('setEntityProperty', () => {
     expect(context).toEqual({
       normalizedCacheOptimistic: {
         optimisticResponse: { setEntityProperty: optimistic },
+        linkPatches: [],
+        revalidations: [],
       },
     });
   });

@@ -279,7 +279,7 @@ async function emitCallStartedNotification(args: {
   const callerName =
     (createdBy ? await DefaultUserNameResolver(createdBy) : undefined) ??
     'Someone';
-  const target = channelName ? ` in #${channelName}` : '';
+  const target = channelName ? ` in ${channelName}` : '';
 
   const handle = await notif.showNotification({
     title: `Incoming call${target}`,

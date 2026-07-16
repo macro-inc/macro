@@ -137,7 +137,10 @@ pub async fn main() -> Result<(), EventBrokerError> {
         },
     );
 
-    service.send_event(&event).await?;
+    service
+        .send_event(&event)?
+        .await
+        .expect("event publish task should complete")?;
 
     Ok(())
 }

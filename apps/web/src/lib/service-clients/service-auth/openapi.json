@@ -1883,6 +1883,75 @@
         }
       }
     },
+    "/team/auto-join-domain/toggle": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::toggle_auto_join_domain"],
+        "summary": "Toggles automatic domain joining for the team. When the team has no\nauto-join domain, sets it to the team owner's email domain — rejected\nwith a 400 when that domain is a generic email provider domain (e.g.\ngmail.com). When one is already set, removes it. New users whose email\ndomain matches a team's auto-join domain are added to that team on\nsignup. Requires the caller to be an Admin or Owner of the team.",
+        "operationId": "toggle_team_auto_join_domain",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToggleAutoJoinDomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/crm": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],
@@ -4212,11 +4281,26 @@
       "Team": {
         "type": "object",
         "description": "The Team struct",
-        "required": ["id", "name", "slug", "owner_id", "crm_enabled"],
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "owner_id",
+          "crm_enabled",
+          "enterprise"
+        ],
         "properties": {
+          "auto_join_domain": {
+            "type": ["string", "null"],
+            "description": "The email domain new users are automatically joined to this team\nwith, when automatic domain joining is enabled (None otherwise)."
+          },
           "crm_enabled": {
             "type": "boolean",
             "description": "Whether the CRM is enabled for this team (from `team_crm_settings`;\n`false` when no row exists)."
+          },
+          "enterprise": {
+            "type": "boolean",
+            "description": "Whether this team is on an enterprise license. Enterprise teams are\nbilled out-of-band; membership changes skip all Stripe subscription\nbookkeeping (no seat counts, no subscription backfill, no paying check)."
           },
           "id": {
             "type": "string",
@@ -4339,6 +4423,16 @@
           "team": {
             "$ref": "#/components/schemas/Team",
             "description": "The team"
+          }
+        }
+      },
+      "ToggleAutoJoinDomainResponse": {
+        "type": "object",
+        "description": "Response for the toggle auto-join domain endpoint.",
+        "properties": {
+          "auto_join_domain": {
+            "type": ["string", "null"],
+            "description": "The team's auto-join domain after the toggle (null when it was\nunset by this call)."
           }
         }
       },

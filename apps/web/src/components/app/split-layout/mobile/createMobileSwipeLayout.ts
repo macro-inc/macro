@@ -144,8 +144,11 @@ export function createMobileSwipeLayout(
     if (!preparedFgId) return;
 
     batch(() => {
-      splitManager.activateSplit(preparedFgId);
+      // Flip roles before activating: activateSplit refuses excluded
+      // (background) splits, and the prepared split stays excluded until
+      // the flip.
       toggleFgSlot();
+      splitManager.activateSplit(preparedFgId);
     });
   }
 
@@ -171,8 +174,6 @@ export function createMobileSwipeLayout(
         splitManager.removeSplit(currentFgId);
       }
 
-      splitManager.activateSplit(currentBgId);
-
       const newBgHandle = newBgContent
         ? splitManager.createNewSplit({
             content: newBgContent,
@@ -183,7 +184,11 @@ export function createMobileSwipeLayout(
         : undefined;
 
       setNewBgSlotId(newBgHandle?.id);
+      // Flip roles before activating: activateSplit refuses excluded
+      // (background) splits, and the promoted split stays excluded until
+      // the flip.
       toggleFgSlot();
+      splitManager.activateSplit(currentBgId);
     });
   }
 

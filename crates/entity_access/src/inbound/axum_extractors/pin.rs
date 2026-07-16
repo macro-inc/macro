@@ -1,5 +1,8 @@
 //! Pin access extractor.
 
+#[cfg(test)]
+mod test;
+
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -8,14 +11,15 @@ use axum::{
     Json, RequestExt,
     extract::{FromRef, FromRequest, Path, Request},
 };
+use macro_authorization::{
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+};
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
     models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
-
 /// Path parameters for pin routes.
 #[derive(serde::Deserialize)]
 pub struct PinParams {
@@ -31,24 +35,29 @@ pub struct JsonBodyWithPinType {
     pub pin_type: String,
 }
 
-/// Validates the user has access to pin the particular item.
+/// Validates an authenticated user has access to pin the particular item.
+///
+/// Type parameter `T` specifies the required access level, `Svc` is the entity access service,
+/// `V` is the request body, and `Auth` is the authorization service.
 #[derive(Debug)]
-pub struct PinAccessLevelExtractor<T: RequiredPermission, Svc, V> {
+pub struct PinAccessLevelExtractor<T: RequiredPermission, Svc, V, Auth> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
     /// The pin type extracted from the request body
     pub pin_type: JsonBodyWithPinType,
     /// Request body
     pub inner: V,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc, V> FromRequest<S> for PinAccessLevelExtractor<T, Svc, V>
+impl<T, S, Svc, V, Auth> FromRequest<S> for PinAccessLevelExtractor<T, Svc, V, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
     V: DeserializeOwned + std::fmt::Debug,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -57,12 +66,11 @@ where
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        // NOTE: for pinned items, the user must exist so we explicitly do not
-        // use the OptionalMacroUserExtractor
-        let MacroUserExtractor { macro_user_id, .. } = req
-            .extract_parts()
+        let OptionalMacroAuthorizationExtractor { macro_user_id, .. } = req
+            .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
+        let macro_user_id = macro_user_id.ok_or(ExtractorError::Unauthorized)?;
 
         let Path(PinParams { pinned_item_id }) = req
             .extract_parts_with_state(state)

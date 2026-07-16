@@ -10,5 +10,5 @@ export type UnifiedSearchResponseItemOneOfOnezeroAllOfType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UnifiedSearchResponseItemOneOfOnezeroAllOfType = {
-  channel: 'channel',
+  channelMessage: 'channelMessage',
 } as const;

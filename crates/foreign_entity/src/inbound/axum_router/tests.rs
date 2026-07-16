@@ -10,8 +10,8 @@ use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
         models::{
-            AccessError, AccessLevel, CallChannelInfo, EntityAccessReceipt, EntityPermission,
-            EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
+            AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt,
+            EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
         },
         ports::EntityAccessService,
     },
@@ -151,6 +151,15 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         unreachable!("InternalUser extension should bypass real access receipt generation")
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        unreachable!("InternalUser extension should bypass bot access receipt generation")
     }
 
     async fn get_access_level(

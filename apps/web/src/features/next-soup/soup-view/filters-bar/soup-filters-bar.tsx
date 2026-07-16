@@ -26,7 +26,7 @@ import { Button, Tooltip } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
 
-export function SoupFiltersBar() {
+export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
 
@@ -67,6 +67,7 @@ export function SoupFiltersBar() {
     const content = panel.handle.content();
     return content.type === 'component' && content.id === 'search';
   });
+  const isTagView = createMemo(() => props.variant === 'tag');
 
   // The new inbox hides sort (it's fixed to updated_at for this view).
   const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
@@ -85,7 +86,17 @@ export function SoupFiltersBar() {
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
         <div class="flex items-start gap-1 min-w-0 flex-1">
-          <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
+          <Show
+            when={!isSearchView() && !isTagView()}
+            fallback={
+              <Show when={isTagView()} fallback={<SearchFiltersRow />}>
+                <Show when={!isNewInbox()}>
+                  <SoupViewContextSort />
+                </Show>
+                <SoupViewContextGroup />
+              </Show>
+            }
+          >
             <Show when={!isNewInbox()}>
               <SoupViewContextSort />
             </Show>
@@ -118,7 +129,7 @@ export function SoupFiltersBar() {
         </Tooltip>
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
-      <Show when={!isSearchView()}>
+      <Show when={!isSearchView() && !isTagView()}>
         <SoupActiveFiltersBar
           filters={consolidatedFiltersList()}
           onClearAll={resetToTabDefaults}

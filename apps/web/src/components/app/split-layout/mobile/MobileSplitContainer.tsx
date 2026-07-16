@@ -57,6 +57,10 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
           <div
             class={motion.classForSlot(mobileSwipeLayout.fgIsSlotA())}
             style={motion.styleForSlot(mobileSwipeLayout.fgIsSlotA())}
+            // The background slot is inert so focus (including programmatic
+            // autofocus in late-mounting content) can never land inside the
+            // invisible panel. Demoting a slot also blurs any focused child.
+            inert={!mobileSwipeLayout.fgIsSlotA()}
             onTransitionEnd={(e) =>
               motion.handleTransitionEnd(e, mobileSwipeLayout.fgIsSlotA())
             }
@@ -89,6 +93,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
           <div
             class={motion.classForSlot(!mobileSwipeLayout.fgIsSlotA())}
             style={motion.styleForSlot(!mobileSwipeLayout.fgIsSlotA())}
+            inert={mobileSwipeLayout.fgIsSlotA()}
             onTransitionEnd={(e) =>
               motion.handleTransitionEnd(e, !mobileSwipeLayout.fgIsSlotA())
             }

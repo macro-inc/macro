@@ -20,6 +20,8 @@ type ToolParserMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -28,6 +30,7 @@ type ToolParserMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -134,6 +137,8 @@ const toolParserMap = {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
   },
+  CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
   DisplayResults: {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
@@ -142,6 +147,7 @@ const toolParserMap = {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
   },
+  EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
   GetCompany: {
     call: schemas.GetCompany,
     response: schemas.GetCompanyResponse,
@@ -274,6 +280,8 @@ type ToolDataMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -282,6 +290,7 @@ type ToolDataMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;

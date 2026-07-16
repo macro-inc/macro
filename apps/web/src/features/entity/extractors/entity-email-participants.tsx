@@ -101,14 +101,6 @@ function resolveParticipants(
 ): ResolvedParticipant[] {
   if (!participants || participants.length === 0) return [];
 
-  if (
-    participants.length === 1 &&
-    userEmail &&
-    participants[0].email === userEmail
-  ) {
-    return [{ participant: participants[0], displayName: 'me' }];
-  }
-
   const seen = new Set<string>();
   const result: ResolvedParticipant[] = [];
 
@@ -123,6 +115,13 @@ function resolveParticipants(
     seen.add(displayName);
 
     result.push({ participant, displayName });
+  }
+
+  // Every participant was the current user (self-to-self threads, or
+  // duplicate own-address rows from multi-inbox accounts) — show "me".
+  if (result.length === 0) {
+    const self = participants.find((p) => userEmail && p.email === userEmail);
+    if (self) return [{ participant: self, displayName: 'me' }];
   }
 
   return result;

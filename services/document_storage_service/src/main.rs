@@ -1,6 +1,11 @@
 #![recursion_limit = "256"]
 use crate::{
-    api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
+    api::{
+        MACRO_INTERNAL_USER_ID,
+        context::{
+            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, TaskPropertiesAdapter,
+        },
+    },
     config::{
         CalEventTypeContentNamesKey, CalWebhookSecretKey, MetaAccessToken, MetaPixelId,
         MetaTestEventCode,
@@ -18,8 +23,11 @@ use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{
-        ai_call_summarizer::AiCallSummarizer, livekit_rtc_client::LivekitRtcClient,
-        pg_call_repo::PgCallRepo, pg_voice_repo::PgVoiceRepo,
+        ai_call_summarizer::AiCallSummarizer,
+        livekit_rtc_client::LivekitRtcClient,
+        pg_call_repo::PgCallRepo,
+        pg_voice_repo::PgVoiceRepo,
+        s3_recording_storage::{RecordingCloudFrontConfig, S3RecordingStorage},
     },
 };
 use channels::{
@@ -69,6 +77,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -238,6 +247,13 @@ async fn main() -> anyhow::Result<()> {
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_validation_args.clone()),
+        InternalAuthConfig {
+            api_key: dss_auth_key.as_ref().to_string(),
+            default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
+        },
+    )));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -398,21 +414,28 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create kafka event publisher")?,
     );
 
-    let document_service = Arc::new(DocumentServiceImpl::new(
-        document_repo,
-        cloudfront_config,
-        sync_service_client.as_ref().clone(),
-        s3_upload_adapter,
-        TaskPropertiesAdapter {
-            system_properties: system_properties_service.clone(),
-            properties: properties_service.clone(),
-            entity_access_service: entity_access_service.clone(),
-        },
-        connection_service,
-        entity_access_management_service.clone(),
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-        macro_event_broker.clone(),
-    ));
+    let document_service = Arc::new(
+        DocumentServiceImpl::new(
+            document_repo,
+            cloudfront_config,
+            sync_service_client.as_ref().clone(),
+            s3_upload_adapter,
+            TaskPropertiesAdapter {
+                system_properties: system_properties_service.clone(),
+                properties: properties_service.clone(),
+                entity_access_service: entity_access_service.clone(),
+            },
+            connection_service,
+            entity_access_management_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            macro_event_broker.clone(),
+        )
+        .with_search_indexer(Arc::new(
+            crate::service::document_search_indexer::SqsDocumentSearchIndexer::new(
+                sqs_client.clone(),
+            ),
+        )),
+    );
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
         db.clone(),
@@ -508,10 +531,25 @@ async fn main() -> anyhow::Result<()> {
         _ => None,
     };
     let recording_storage = match &egress_config {
-        Some(config) => Some(
-            call::outbound::s3_recording_storage::S3RecordingStorage::new(config.bucket.clone())
-                .await,
-        ),
+        Some(egress_config) => {
+            let cloudfront_config = RecordingCloudFrontConfig {
+                distribution_url: config
+                    .document_storage_service_cloudfront_distribution_url
+                    .as_ref()
+                    .to_string(),
+                signer_public_key_id: config
+                    .document_storage_service_cloudfront_signer_public_key_id
+                    .as_ref()
+                    .to_string(),
+                signer_private_key: config
+                    .document_storage_service_cloudfront_signer_private_key
+                    .as_ref()
+                    .to_string(),
+                presigned_url_expiry_seconds: config
+                    .document_storage_service_presigned_url_expiry_seconds,
+            };
+            Some(S3RecordingStorage::new(egress_config.bucket.clone(), cloudfront_config).await)
+        }
         None => None,
     };
     let mut call_service_builder = CallServiceImpl::<_, _, _, _, _, _, AiCallSummarizer>::new(
@@ -580,7 +618,11 @@ async fn main() -> anyhow::Result<()> {
             .with_voice_repo(PgVoiceRepo::new(db.clone())),
     );
 
-    let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
+    let call_state = CallRouterState::new(
+        call_service.clone(),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
@@ -806,6 +848,7 @@ async fn main() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
+        authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
@@ -815,6 +858,7 @@ async fn main() -> anyhow::Result<()> {
         documents_state: DocumentRouterState {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
+            authorization_state: authorization_state.clone(),
             pool: db.clone(),
             task_dedup_service,
             lexical_client: lexical_client.clone(),

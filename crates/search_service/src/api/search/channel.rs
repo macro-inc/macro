@@ -17,13 +17,60 @@ use macro_user_id::user_id::MacroUserId;
 use model::user::UserContext;
 use models_search::MatchType;
 use models_search::channel::{
-    ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem,
-    ChannelSearchResponseItemWithMetadata, ChannelSearchResult, ChannelSortTimestamp,
+    ChannelMessageSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
+    ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
+    ChannelSortTimestamp,
 };
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
+
+/// Fetches the per-user channel history info and message deletion states
+/// backing channel search enrichment. Channels without history info are the
+/// caller's signal to drop the hit (no access / channel gone).
+async fn fetch_channel_enrichment(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: &[opensearch_client::search::model::SearchHit],
+) -> Result<
+    (
+        HashMap<Uuid, ChannelHistoryInfo>,
+        HashMap<Uuid, Option<DateTime<Utc>>>,
+    ),
+    SearchError,
+> {
+    let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
+
+    // Message IDs are needed so we can flag any that have been deleted.
+    let message_ids: Vec<Uuid> = results
+        .iter()
+        .filter_map(|r| match &r.goto {
+            Some(SearchGotoContent::Channels(goto)) => Some(goto.channel_message_id),
+            _ => None,
+        })
+        .collect();
+
+    tokio::try_join!(
+        async {
+            comms_db_client::activity::get_activity::get_channel_history_info(
+                &ctx.db,
+                user_id,
+                &channel_ids,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+        },
+        async {
+            comms_db_client::messages::get_deleted_ats::get_message_deletion_states(
+                &ctx.db,
+                &message_ids,
+            )
+            .await
+        },
+    )
+    .map_err(SearchError::InternalError)
+}
 
 /// Enriches channel message search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
@@ -42,37 +89,8 @@ pub(in crate::api::search) async fn enrich_channels(
         return Ok(vec![]);
     }
 
-    // Extract channel IDs from results
-    let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
-
-    // Extract message IDs from results so we can flag any that have been deleted.
-    let message_ids: Vec<Uuid> = results
-        .iter()
-        .filter_map(|r| match &r.goto {
-            Some(SearchGotoContent::Channels(goto)) => Some(goto.channel_message_id),
-            _ => None,
-        })
-        .collect();
-
-    let (channel_histories, message_states) = tokio::try_join!(
-        async {
-            comms_db_client::activity::get_activity::get_channel_history_info(
-                &ctx.db,
-                user_id,
-                &channel_ids,
-            )
-            .await
-            .map_err(anyhow::Error::from)
-        },
-        async {
-            comms_db_client::messages::get_deleted_ats::get_message_deletion_states(
-                &ctx.db,
-                &message_ids,
-            )
-            .await
-        },
-    )
-    .map_err(SearchError::InternalError)?;
+    let (channel_histories, message_states) =
+        fetch_channel_enrichment(ctx, user_id, &results).await?;
 
     // Construct enriched results
     let enriched_results =
@@ -80,6 +98,69 @@ pub(in crate::api::search) async fn enrich_channels(
             .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Enriches channel message hits into one unified response item per message,
+/// keeping the per-message hit order OpenSearch returned.
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_channel_messages(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: Vec<opensearch_client::search::model::SearchHit>,
+) -> Result<Vec<ChannelMessageSearchResponseItem>, SearchError> {
+    let results: Vec<opensearch_client::search::model::SearchHit> = results
+        .into_iter()
+        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Channels)
+        .collect();
+
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let (channel_histories, message_states) =
+        fetch_channel_enrichment(ctx, user_id, &results).await?;
+
+    Ok(construct_channel_message_items(
+        results,
+        channel_histories,
+        message_states,
+    ))
+}
+
+/// Builds one per-message item per content hit. Drops hits whose channel has
+/// no history info for the caller (no access / channel gone) and hits whose
+/// message no longer exists in the DB (stale OpenSearch entries); soft-deleted
+/// messages are kept with `deleted_at` set. The channels index carries no
+/// name field, so every hit has message goto content.
+pub fn construct_channel_message_items(
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
+    channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
+    message_states: HashMap<Uuid, Option<DateTime<Utc>>>,
+) -> Vec<ChannelMessageSearchResponseItem> {
+    search_results
+        .into_iter()
+        .filter_map(|hit| {
+            let Some(SearchGotoContent::Channels(goto)) = hit.goto else {
+                return None;
+            };
+            let info = channel_histories.get(&hit.entity_id)?;
+            let deleted_at = *message_states.get(&goto.channel_message_id)?;
+            Some(ChannelMessageSearchResponseItem {
+                id: hit.entity_id,
+                owner_id: Some(info.user_id.clone()),
+                channel_type: info.channel_type.clone(),
+                channel_id: hit.entity_id,
+                message_id: goto.channel_message_id,
+                thread_id: goto.thread_id,
+                sender_id: goto.sender_id,
+                created_at: goto.created_at,
+                updated_at: goto.updated_at,
+                deleted_at,
+                highlight: hit.highlight.into(),
+                score: hit.score,
+            })
+        })
+        .collect()
 }
 
 pub fn construct_search_result(

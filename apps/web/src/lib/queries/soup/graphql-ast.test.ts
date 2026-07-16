@@ -3,7 +3,11 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { describe, expect, it } from 'vitest';
-import { makeGraphqlSoupInput } from './graphql-ast';
+import {
+  makeGraphqlGroupedSoupContinuationInput,
+  makeGraphqlGroupedSoupInput,
+  makeGraphqlSoupInput,
+} from './graphql-ast';
 
 const UPDATED_AT = '2026-01-01T00:00:00.000Z';
 
@@ -26,20 +30,86 @@ describe('makeGraphqlSoupInput', () => {
     });
 
     expect(input).toMatchObject({
-      limit: 100,
-      expand: true,
-      sortMethod: 'UPDATED_AT',
-      emailView: 'INBOX',
-      filters: {
-        documentFilter: {
-          and: {
-            left: { literal: { notificationDone: false } },
-            right: { literal: { updatedAt: { gte: UPDATED_AT } } },
+      initial: {
+        limit: 100,
+        expand: true,
+        sortMethod: 'UPDATED_AT',
+        emailView: 'INBOX',
+        filters: {
+          documentFilter: {
+            and: {
+              left: { literal: { notificationDone: false } },
+              right: { literal: { updatedAt: { gte: UPDATED_AT } } },
+            },
+          },
+          emailFilter: {
+            tree: { literal: { shared: 'EXCLUDE' } },
           },
         },
-        emailFilter: {
-          tree: { literal: { shared: 'EXCLUDE' } },
+      },
+    });
+  });
+
+  it('maps cursor requests without resending filters or sort', () => {
+    const input = makeGraphqlSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(
+        queryStateFrom({
+          include: { documentDone: false },
+          emailView: 'sent',
+        })
+      ),
+      cursor: 'opaque-cursor',
+    });
+
+    expect(input).toEqual({
+      continuation: {
+        cursor: 'opaque-cursor',
+        expand: true,
+        emailView: 'SENT',
+      },
+    });
+  });
+
+  it('maps grouped requests to GraphQL input', () => {
+    const input = makeGraphqlGroupedSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(queryStateFrom({ include: { documentDone: false } })),
+      groupBy: {
+        type: 'property',
+        propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+        entityType: 'TASK',
+      },
+    });
+
+    expect(input).toMatchObject({
+      initial: {
+        groupBy: {
+          field: 'PROPERTY',
+          propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+          entityType: 'TASK',
         },
+        limit: 100,
+        sortMethod: 'UPDATED_AT',
+        filters: {
+          documentFilter: { literal: { notificationDone: false } },
+        },
+      },
+    });
+  });
+
+  it('maps grouped cursor continuations to GraphQL input', () => {
+    expect(
+      makeGraphqlGroupedSoupContinuationInput({
+        groupBy: { type: 'entity_type' },
+        groupKey: 'document',
+        cursor: 'opaque-cursor',
+      })
+    ).toEqual({
+      continuation: {
+        groupBy: { field: 'ENTITY_TYPE' },
+        groupKey: 'document',
+        cursor: 'opaque-cursor',
       },
     });
   });
@@ -57,10 +127,16 @@ describe('makeGraphqlSoupInput', () => {
       },
     });
 
-    expect(input.filters?.propertiesFilter).toEqual({
-      literal: {
-        propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
-        value: { selectOption: '00000000-0000-0000-0000-000000000002' },
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          propertiesFilter: {
+            literal: {
+              propertyDefinitionId: '00000000-0000-0000-0000-000000000001',
+              value: { selectOption: '00000000-0000-0000-0000-000000000002' },
+            },
+          },
+        },
       },
     });
   });
@@ -71,8 +147,14 @@ describe('makeGraphqlSoupInput', () => {
       body: { cthf: { l: { Participant: 'user-1' } } } as never,
     });
 
-    expect(input.filters?.channelThreadFilter).toEqual({
-      literal: { participant: 'user-1' },
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          channelThreadFilter: {
+            literal: { participant: 'user-1' },
+          },
+        },
+      },
     });
   });
 

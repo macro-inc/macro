@@ -7,7 +7,7 @@ use crate::domain::{
     ports::{EmailRepo, RecipientsByMessageId},
 };
 use entity_access::domain::models::{
-    AccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
+    AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use frecency::domain::ports::FrecencyQueryService;
 use std::collections::HashMap;
@@ -259,42 +259,13 @@ where
             .into_iter()
             .filter(|row| is_owner || !row.is_draft)
             .map(|row| {
-                let sender = senders.remove(&row.db_id);
-                let recipient_list = recipients.remove(&row.db_id).unwrap_or_default();
-                let message_labels = labels.remove(&row.db_id).unwrap_or_default();
-
-                let (to, cc, bcc) = split_recipients(recipient_list);
-
-                let body_replyless = email_utils::body_replyless::compute_body_replyless(
-                    row.subject.as_deref(),
-                    row.body_html_sanitized.as_deref(),
-                    row.body_text.as_deref(),
-                );
-
-                let body_parsed = email_utils::body_parsed::compute_body_parsed(
-                    row.body_html_sanitized.is_some(),
-                    &body_replyless,
-                );
-
-                ParsedMessage {
-                    db_id: row.db_id,
-                    link_id: row.link_id,
-                    thread_db_id: row.thread_db_id,
-                    subject: row.subject,
-                    from: sender,
-                    to,
-                    cc,
-                    bcc,
-                    labels: message_labels
-                        .into_iter()
-                        .map(|l| ParsedLabel {
-                            provider_id: l.provider_label_id,
-                            name: l.name.unwrap_or_default(),
-                        })
-                        .collect(),
-                    body_parsed,
-                    internal_date_ts: row.internal_date_ts,
-                }
+                let message_id = row.db_id;
+                parsed_message_from_row(
+                    row,
+                    senders.remove(&message_id),
+                    recipients.remove(&message_id).unwrap_or_default(),
+                    labels.remove(&message_id).unwrap_or_default(),
+                )
             })
             .collect();
 
@@ -318,4 +289,128 @@ where
             labels,
         }))
     }
+
+    /// Fetch the newest non-draft content message for each authorized thread in one
+    /// repository batch, then assemble senders, recipients, and labels in bulk.
+    pub(crate) async fn get_latest_messages_parsed_impl(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        let thread_ids = email_thread_ids_from_receipts(receipts)?;
+
+        if thread_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let rows = self
+            .email_repo
+            .latest_content_message_rows(&thread_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+        let message_ids = rows.iter().map(|row| row.db_id).collect::<Vec<_>>();
+        let (mut senders, mut recipients, mut labels) = tokio::try_join!(
+            async {
+                self.email_repo
+                    .senders_by_message_ids(&message_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
+            async {
+                self.email_repo
+                    .recipients_by_message_ids(&message_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
+            async {
+                self.email_repo
+                    .labels_by_message_ids(&message_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
+        )?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let message_id = row.db_id;
+                let thread_id = row.thread_db_id;
+                let message = parsed_message_from_row(
+                    row,
+                    senders.remove(&message_id),
+                    recipients.remove(&message_id).unwrap_or_default(),
+                    labels.remove(&message_id).unwrap_or_default(),
+                );
+                (thread_id, message)
+            })
+            .collect())
+    }
 }
+
+fn email_thread_ids_from_receipts(
+    receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+) -> Result<Vec<Uuid>, EmailErr> {
+    receipts
+        .into_iter()
+        .map(|receipt| {
+            if receipt.entity().entity_type != EntityType::EmailThread {
+                return Err(EmailErr::Unauthorized);
+            }
+            Uuid::parse_str(&receipt.entity().entity_id)
+                .map_err(|err| EmailErr::RepoErr(anyhow::anyhow!("invalid thread id: {err}")))
+        })
+        .collect()
+}
+
+fn parsed_message_from_row(
+    row: MessageRow,
+    sender: Option<ContactInfo>,
+    recipients: Vec<(ContactInfo, crate::domain::models::RecipientType)>,
+    labels: Vec<MessageLabel>,
+) -> ParsedMessage {
+    let (to, cc, bcc) = split_recipients(recipients);
+    let body_replyless = email_utils::body_replyless::compute_body_replyless(
+        row.subject.as_deref(),
+        row.body_html_sanitized.as_deref(),
+        row.body_text.as_deref(),
+    );
+    let body_parsed = email_utils::body_parsed::compute_body_parsed(
+        row.body_html_sanitized.is_some(),
+        &body_replyless,
+    );
+
+    ParsedMessage {
+        db_id: row.db_id,
+        link_id: row.link_id,
+        thread_db_id: row.thread_db_id,
+        subject: row.subject,
+        snippet: row.snippet,
+        from: sender,
+        to,
+        cc,
+        bcc,
+        labels: labels
+            .into_iter()
+            .map(|label| ParsedLabel {
+                provider_id: label.provider_label_id,
+                name: label.name.unwrap_or_default(),
+            })
+            .collect(),
+        body_parsed,
+        body_text: row.body_text,
+        body_html_sanitized: row.body_html_sanitized,
+        body_macro: row.body_macro,
+        body_replyless,
+        internal_date_ts: row.internal_date_ts,
+        sent_at: row.sent_at,
+        is_read: row.is_read,
+        is_starred: row.is_starred,
+        is_sent: row.is_sent,
+        is_draft: row.is_draft,
+        has_attachments: row.has_attachments,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod test;

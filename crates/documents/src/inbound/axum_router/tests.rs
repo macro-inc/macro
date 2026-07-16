@@ -1,4 +1,776 @@
-// Placeholder for handler integration tests.
-// Full integration tests would require mocking the entity access service
-// and document service, constructing a test router, and making HTTP requests.
-// For now, the core logic is tested via the domain service and outbound repo tests.
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use axum::{
+    Router,
+    body::Body,
+    http::{Request, StatusCode, request::Builder},
+};
+use embedding::embedding_provider::openai::TextEmbedding3Small;
+use entity_access::domain::{
+    models::{
+        AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
+        EntityType, RequiredPermission, UserTeamInfo,
+    },
+    ports::EntityAccessService,
+};
+use http_body_util::BodyExt;
+use lexical_client::LexicalClient;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use model::{
+    document::{DocumentBasic, response::DocumentResponseMetadata},
+    sync_service::SyncServiceVersionID,
+};
+use model_entity::Entity;
+use model_user::UserContext;
+use rootcause::Report;
+use serde_json::{Value, json};
+use sqlx::postgres::PgPoolOptions;
+use sync_service_client::SyncServiceClient;
+use task_dedup::{
+    JudgeResult, PgTaskDedupService,
+    domain::ports::{TaskDedupNotifier, TaskDuplicateJudge},
+    outbound::{
+        cohere::CohereReranker,
+        postgres::{PgTaskMatchRepo, PgTaskVectorDb},
+    },
+};
+use tower::ServiceExt;
+use uuid::Uuid;
+
+use super::{DocumentRouterState, documents_router};
+use crate::{
+    domain::{
+        content::DocumentContent,
+        create::DocumentCreator,
+        models::{
+            CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
+            DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
+            LocationQueryParams, TaskBranchName,
+        },
+        ports::{DocumentService, create::DocumentCreationService},
+        response::{
+            CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
+            GetDocumentResponseData, LocationResponseV3,
+        },
+    },
+    outbound::{
+        document_bytes_upload::ReqwestDocumentBytesUploader,
+        markdown_init::LexicalSyncMarkdownInitializer,
+    },
+};
+
+const JWT_TOKEN: &str = "valid-jwt";
+const JWT_USER_ID: &str = "macro|jwt-user@example.com";
+const STANDARD_INTERNAL_KEY: &str = "standard-internal-key";
+const STANDARD_INTERNAL_USER_ID: &str = "macro|standard-internal@example.com";
+const LEGACY_INTERNAL_KEY: &str = "legacy-internal-key";
+const LEGACY_INTERNAL_USER_ID: &str = "macro|legacy-internal@example.com";
+const LEGACY_INTERNAL_API_KEY_HEADER: &str = "x-document-storage-service-auth-key";
+const LEGACY_INTERNAL_USER_ID_HEADER: &str = "x-document-storage-service-user-id";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CreateDocumentCall {
+    user_id: String,
+    email_attachment_id: Option<Uuid>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct UploadSnapshotCall {
+    document_id: String,
+    bytes: Vec<u8>,
+}
+
+#[derive(Default)]
+struct FakeDocumentService {
+    create_calls: Mutex<Vec<CreateDocumentCall>>,
+    upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
+}
+
+impl FakeDocumentService {
+    fn create_calls(&self) -> Vec<CreateDocumentCall> {
+        self.create_calls
+            .lock()
+            .expect("create calls lock poisoned")
+            .clone()
+    }
+
+    fn upload_snapshot_calls(&self) -> Vec<UploadSnapshotCall> {
+        self.upload_snapshot_calls
+            .lock()
+            .expect("upload snapshot calls lock poisoned")
+            .clone()
+    }
+}
+
+impl DocumentService for FakeDocumentService {
+    async fn internal_get_basic_document(
+        &self,
+        document_id: &str,
+    ) -> Result<DocumentBasic, DocumentError> {
+        Ok(DocumentBasic {
+            document_id: document_id.to_string(),
+            document_name: "test document".to_string(),
+            owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
+                .expect("test user id should be valid"),
+            file_type: Some("pdf".to_string()),
+            sub_type: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            project_id: None,
+            deleted_at: None,
+        })
+    }
+
+    async fn get_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+    ) -> Result<GetDocumentResponseData, DocumentError> {
+        panic!("unexpected get_document call")
+    }
+
+    async fn get_document_location(
+        &self,
+        _document_context: &DocumentBasic,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _params: LocationQueryParams,
+    ) -> Result<LocationResponseV3, DocumentError> {
+        panic!("unexpected get_document_location call")
+    }
+
+    async fn delete_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<
+            entity_access::domain::models::OwnerAccessLevel,
+        >,
+        _project_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected delete_document call")
+    }
+
+    async fn get_document_text(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        panic!("unexpected get_document_text call")
+    }
+
+    async fn get_document_comments(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+    ) -> Result<Vec<CommentThread>, DocumentError> {
+        panic!("unexpected get_document_comments call")
+    }
+
+    async fn create_document(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: CreateDocumentRepoArgs,
+        _job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        self.create_calls
+            .lock()
+            .expect("create calls lock poisoned")
+            .push(CreateDocumentCall {
+                user_id: user_id.as_ref().to_string(),
+                email_attachment_id: args.email_attachment_id,
+            });
+
+        Ok(create_document_response(user_id))
+    }
+
+    async fn get_document_content(
+        &self,
+        _document_context: &DocumentBasic,
+    ) -> Result<DocumentContent, DocumentError> {
+        panic!("unexpected get_document_content call")
+    }
+
+    async fn get_short_id(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        panic!("unexpected get_short_id call")
+    }
+
+    async fn get_task_branch_name(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _document_name: String,
+    ) -> Result<TaskBranchName, DocumentError> {
+        panic!("unexpected get_task_branch_name call")
+    }
+
+    async fn get_task_github_pull_requests(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _document_context: &DocumentBasic,
+    ) -> Result<GithubPullRequestsResponse, DocumentError> {
+        panic!("unexpected get_task_github_pull_requests call")
+    }
+
+    async fn edit_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _document_context: DocumentBasic,
+        _args: EditDocumentServiceArgs,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected edit_document call")
+    }
+
+    async fn update_task_status(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _status: &str,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected update_task_status call")
+    }
+
+    async fn copy_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _document_context: DocumentBasic,
+        _user_id: MacroUserIdStr<'static>,
+        _document_name: String,
+        _query_version_id: Option<i64>,
+        _sync_version_id: Option<SyncServiceVersionID>,
+    ) -> Result<DocumentResponse, DocumentError> {
+        panic!("unexpected copy_document call")
+    }
+
+    async fn get_project_name(&self, _project_id: &str) -> Result<String, DocumentError> {
+        panic!("unexpected get_project_name call")
+    }
+
+    async fn get_project_children(
+        &self,
+        _project_id: &str,
+    ) -> Result<Vec<Entity<'static>>, DocumentError> {
+        panic!("unexpected get_project_children call")
+    }
+
+    async fn handle_task_properties(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _document_id: &str,
+        _request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected handle_task_properties call")
+    }
+
+    async fn get_snapshot(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        panic!("unexpected get_snapshot call")
+    }
+
+    async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
+        self.upload_snapshot_calls
+            .lock()
+            .expect("upload snapshot calls lock poisoned")
+            .push(UploadSnapshotCall {
+                document_id: document_id.to_string(),
+                bytes,
+            });
+        Ok(())
+    }
+
+    async fn get_team_share(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        panic!("unexpected get_team_share call")
+    }
+
+    async fn set_team_share(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _share: bool,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        panic!("unexpected set_team_share call")
+    }
+}
+
+impl DocumentCreationService for FakeDocumentService {
+    async fn create_document(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: CreateDocumentRepoArgs,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        DocumentService::create_document(self, user_id, args, job_id).await
+    }
+
+    async fn handle_task_properties(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _document_id: &str,
+        _request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected creation handle_task_properties call")
+    }
+
+    async fn mark_document_uploaded(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected mark_document_uploaded call")
+    }
+
+    async fn set_document_content(
+        &self,
+        _document_id: &str,
+        _content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_document_content call")
+    }
+
+    async fn cleanup_created_document(&self, _document_id: &str) {
+        panic!("unexpected cleanup_created_document call")
+    }
+}
+
+fn create_document_response(user_id: MacroUserIdStr<'static>) -> CreateDocumentResponseData {
+    CreateDocumentResponseData {
+        document_response: DocumentResponse {
+            document_metadata: DocumentResponseMetadataWithContent::new(
+                DocumentResponseMetadata {
+                    document_id: "created-document".to_string(),
+                    document_version_id: 1,
+                    owner: user_id,
+                    document_name: "test document".to_string(),
+                    file_type: Some("pdf".to_string()),
+                    sha: Some("test-sha".to_string()),
+                    branched_from_id: None,
+                    branched_from_version_id: None,
+                    document_family_id: None,
+                    document_bom: None,
+                    modification_data: None,
+                    created_at: None,
+                    updated_at: None,
+                    sub_type: None,
+                },
+                DocumentContent::pending(),
+            ),
+            presigned_url: None,
+        },
+        content_type: "application/pdf".to_string(),
+        file_type: Some("pdf".to_string()),
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeEntityAccessService;
+
+impl EntityAccessService for FakeEntityAccessService {
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        panic!("unexpected generate_entity_access_receipt call")
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        panic!("unexpected generate_bot_entity_access_receipt call")
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        panic!("unexpected get_access_level call")
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        panic!("unexpected check_access call")
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        panic!("unexpected check_public_access call")
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        panic!("unexpected get_entity_permission call")
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(EntityPermission, Uuid), AccessError> {
+        panic!("unexpected get_crm_entity_permission_with_team call")
+    }
+
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        panic!("unexpected get_users_by_entity call")
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        panic!("unexpected get_call_channel call")
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        panic!("unexpected get_call_channel_by_channel_id call")
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        panic!("unexpected get_user_team call")
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum AuthorizationCall {
+    Jwt(String),
+    Internal {
+        provided_key: String,
+        claims: InternalIdentityClaims,
+    },
+}
+
+#[derive(Clone, Default)]
+struct FakeAuthorizationService {
+    calls: Arc<Mutex<Vec<AuthorizationCall>>>,
+}
+
+impl FakeAuthorizationService {
+    fn calls(&self) -> Vec<AuthorizationCall> {
+        self.calls.lock().expect("auth calls lock poisoned").clone()
+    }
+}
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.calls
+            .lock()
+            .expect("auth calls lock poisoned")
+            .push(AuthorizationCall::Jwt(jwt.to_string()));
+
+        if jwt != JWT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(user_context(JWT_USER_ID))
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        self.calls
+            .lock()
+            .expect("auth calls lock poisoned")
+            .push(AuthorizationCall::Internal {
+                provided_key: provided_key.to_string(),
+                claims: claims.clone(),
+            });
+
+        if !matches!(provided_key, STANDARD_INTERNAL_KEY | LEGACY_INTERNAL_KEY) {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.as_deref().map(user_context))
+    }
+}
+
+fn user_context(user_id: &str) -> UserContext {
+    UserContext {
+        user_id: user_id.to_string(),
+        fusion_user_id: "test-fusion-user".to_string(),
+        permissions: None,
+        organization_id: None,
+    }
+}
+
+struct FakeTaskDuplicateJudge;
+
+#[async_trait]
+impl TaskDuplicateJudge for FakeTaskDuplicateJudge {
+    async fn judge(&self, _left: &str, _right: &str) -> JudgeResult {
+        panic!("unexpected task duplicate judge call")
+    }
+}
+
+struct FakeTaskDedupNotifier;
+
+#[async_trait]
+impl TaskDedupNotifier for FakeTaskDedupNotifier {
+    async fn notify_matches_updated(&self, _document_id: &str) -> anyhow::Result<()> {
+        panic!("unexpected task dedup notifier call")
+    }
+}
+
+fn test_router() -> (Router, Arc<FakeDocumentService>, FakeAuthorizationService) {
+    let pool = PgPoolOptions::new()
+        .connect_lazy("postgres://postgres:postgres@localhost/documents-router-test")
+        .expect("test database URL should be valid");
+    let document_service = Arc::new(FakeDocumentService::default());
+    let authorization_service = FakeAuthorizationService::default();
+    let lexical_client = Arc::new(LexicalClient::new(
+        "unused-internal-key".to_string(),
+        "http://localhost/lexical".to_string(),
+    ));
+    let task_dedup_service = Arc::new(PgTaskDedupService::new(
+        TextEmbedding3Small::new("unused-openai-key"),
+        PgTaskVectorDb::new(pool.clone()),
+        CohereReranker::new("unused-cohere-key"),
+        Arc::new(FakeTaskDuplicateJudge),
+        Arc::new(FakeTaskDedupNotifier),
+        Arc::new(PgTaskMatchRepo::new(pool.clone())),
+    ));
+    let creator = DocumentCreator::new(
+        document_service.clone(),
+        LexicalSyncMarkdownInitializer::new(
+            lexical_client.as_ref().clone(),
+            SyncServiceClient::new(
+                "unused-internal-key".to_string(),
+                "http://localhost/sync".to_string(),
+            ),
+        ),
+        ReqwestDocumentBytesUploader::default(),
+    );
+    let state = DocumentRouterState {
+        service: document_service.clone(),
+        access_service: Arc::new(FakeEntityAccessService),
+        authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        pool,
+        task_dedup_service,
+        lexical_client,
+        creator,
+        document_permission_jwt_secret: "unused-jwt-secret".to_string(),
+    };
+    let router = documents_router::<
+        FakeDocumentService,
+        FakeEntityAccessService,
+        FakeAuthorizationService,
+        (),
+    >(state);
+
+    (router, document_service, authorization_service)
+}
+
+fn create_request() -> Builder {
+    Request::post("/").header("content-type", "application/json")
+}
+
+fn request_body(email_attachment_id: Option<Uuid>) -> Body {
+    Body::from(
+        serde_json::to_vec(&json!({
+            "sha": "test-sha",
+            "documentName": "test document.pdf",
+            "fileType": "pdf",
+            "emailAttachmentId": email_attachment_id,
+        }))
+        .expect("request should serialize"),
+    )
+}
+
+fn finish_request(builder: Builder, email_attachment_id: Option<Uuid>) -> Request<Body> {
+    builder
+        .body(request_body(email_attachment_id))
+        .expect("request should build")
+}
+
+async fn send(router: &Router, request: Request<Body>) -> (StatusCode, Value) {
+    let response = router.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("response body should collect")
+        .to_bytes();
+    let body = serde_json::from_slice(&bytes).expect("response should contain JSON");
+
+    (status, body)
+}
+
+async fn send_status(router: &Router, request: Request<Body>) -> StatusCode {
+    router.clone().oneshot(request).await.unwrap().status()
+}
+
+#[tokio::test]
+async fn snapshot_upload_requires_internal_api_key() {
+    let snapshot = b"snapshot bytes";
+    let (router, document_service, authorization_service) = test_router();
+
+    let jwt_request = Request::put("/snapshot-document/snapshot")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::from(snapshot.as_slice()))
+        .expect("request should build");
+    assert_eq!(
+        send_status(&router, jwt_request).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(document_service.upload_snapshot_calls().is_empty());
+    assert!(authorization_service.calls().is_empty());
+
+    let internal_request = Request::put("/snapshot-document/snapshot")
+        .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+        .body(Body::from(snapshot.as_slice()))
+        .expect("request should build");
+    assert_eq!(send_status(&router, internal_request).await, StatusCode::OK);
+    assert_eq!(
+        document_service.upload_snapshot_calls(),
+        [UploadSnapshotCall {
+            document_id: "snapshot-document".to_string(),
+            bytes: snapshot.to_vec(),
+        }]
+    );
+    assert_eq!(
+        authorization_service.calls(),
+        [AuthorizationCall::Internal {
+            provided_key: STANDARD_INTERNAL_KEY.to_string(),
+            claims: InternalIdentityClaims::default(),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
+    let email_attachment_id = Uuid::new_v4();
+    let (router, document_service, authorization_service) = test_router();
+    let request = finish_request(
+        create_request()
+            .header(LEGACY_INTERNAL_API_KEY_HEADER, LEGACY_INTERNAL_KEY)
+            .header(LEGACY_INTERNAL_USER_ID_HEADER, LEGACY_INTERNAL_USER_ID),
+        Some(email_attachment_id),
+    );
+
+    let (status, _body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        document_service.create_calls(),
+        [CreateDocumentCall {
+            user_id: LEGACY_INTERNAL_USER_ID.to_string(),
+            email_attachment_id: Some(email_attachment_id),
+        }]
+    );
+    assert!(!authorization_service.calls().is_empty());
+    assert!(authorization_service.calls().iter().all(|call| matches!(
+        call,
+        AuthorizationCall::Internal { provided_key, .. }
+            if provided_key == LEGACY_INTERNAL_KEY
+    )));
+}
+
+#[tokio::test]
+async fn standard_internal_headers_reach_the_document_service() {
+    let (router, document_service, authorization_service) = test_router();
+    let request = finish_request(
+        create_request()
+            .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+            .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID),
+        None,
+    );
+
+    let (status, _body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        document_service.create_calls(),
+        [CreateDocumentCall {
+            user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            email_attachment_id: None,
+        }]
+    );
+    assert!(!authorization_service.calls().is_empty());
+    assert!(authorization_service.calls().iter().all(|call| matches!(
+        call,
+        AuthorizationCall::Internal { provided_key, .. }
+            if provided_key == STANDARD_INTERNAL_KEY
+    )));
+}
+
+#[tokio::test]
+async fn standard_internal_headers_take_precedence_over_legacy_headers() {
+    let (router, document_service, authorization_service) = test_router();
+    let request = finish_request(
+        create_request()
+            .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
+            .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID)
+            .header(LEGACY_INTERNAL_API_KEY_HEADER, LEGACY_INTERNAL_KEY)
+            .header(LEGACY_INTERNAL_USER_ID_HEADER, LEGACY_INTERNAL_USER_ID),
+        None,
+    );
+
+    let (status, _body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        document_service.create_calls(),
+        [CreateDocumentCall {
+            user_id: STANDARD_INTERNAL_USER_ID.to_string(),
+            email_attachment_id: None,
+        }]
+    );
+    assert!(!authorization_service.calls().is_empty());
+    assert!(authorization_service.calls().iter().all(|call| matches!(
+        call,
+        AuthorizationCall::Internal {
+            provided_key,
+            claims: InternalIdentityClaims {
+                user_id: Some(user_id),
+                ..
+            },
+        } if provided_key == STANDARD_INTERNAL_KEY && user_id == STANDARD_INTERNAL_USER_ID
+    )));
+}
+
+#[tokio::test]
+async fn jwt_user_cannot_create_a_document_for_an_email_attachment() {
+    let email_attachment_id = Uuid::new_v4();
+    let (router, document_service, _authorization_service) = test_router();
+    let request = finish_request(
+        create_request().header("authorization", format!("Bearer {JWT_TOKEN}")),
+        Some(email_attachment_id),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert!(document_service.create_calls().is_empty());
+}

@@ -4,7 +4,8 @@ use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
-use axum::{Extension, Router, routing::get};
+use axum::{Router, routing::get};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState};
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use saved_views::{ExcludedDefaultViewStorage, PgViewStorage, ViewStorage};
@@ -18,6 +19,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::api::ApiContext;
+use crate::api::context::AuthorizationService;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
@@ -118,21 +120,20 @@ struct SavedViewOwner(pub UserContext);
 
 impl<S> FromRequestParts<S> for SavedViewOwner
 where
-    S: Send + Sync,
+    S: Send + Sync + 'static,
     PgPool: FromRef<S>,
+    MacroAuthorizationState<AuthorizationService>: FromRef<S>,
 {
     type Rejection = SavedViewErr;
 
-    //HACK: to be replaced once @seanaye's extractor pr is merged
-    //until then, we are left with using these extension extractors
     #[tracing::instrument(skip(parts, state), err)]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
 
-        let user_context = Extension::<UserContext>::from_request_parts(parts, state)
-            .await
-            .map(|Extension(ctx)| ctx)
-            .map_err(|_| SavedViewErr::BadRequest("Missing user context"))?;
+        let user =
+            MacroAuthorizationExtractor::<AuthorizationService>::from_request_parts(parts, state)
+                .await
+                .map_err(|_| SavedViewErr::Unauthorized)?;
 
         let saved_view_id = Path::<SavedViewParams>::from_request_parts(parts, state)
             .await
@@ -142,11 +143,11 @@ where
         authorize_view_access(
             &PgViewStorage::new(db),
             saved_view_id,
-            &user_context.user_id,
+            user.macro_user_id.as_ref(),
         )
         .await?;
 
-        Ok(SavedViewOwner(user_context))
+        Ok(SavedViewOwner(user.user_context))
     }
 }
 
@@ -160,22 +161,22 @@ where
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id), err)]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id), err)]
 async fn get_views_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<(StatusCode, Json<ViewsResponse>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
     let (views, excluded_default_views) = try_join!(
         async {
             pg_view_storage
-                .get_views_for_user(&user_context.user_id)
+                .get_views_for_user(user.macro_user_id.as_ref())
                 .await
         },
         async {
             pg_view_storage
-                .get_excluded_default_views_for_user(&user_context.user_id)
+                .get_excluded_default_views_for_user(user.macro_user_id.as_ref())
                 .await
         }
     )?;
@@ -201,13 +202,13 @@ async fn get_views_handler(
 )]
 async fn create_view_handler(
     ctx: State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(create_view_request): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<View>), SavedViewErr> {
     let pg_view_storage = PgViewStorage::new(ctx.db.clone());
 
     let new_view = View::new(
-        user_context.user_id.clone(),
+        user.macro_user_id.to_string(),
         create_view_request.name,
         create_view_request.config,
     );
@@ -285,10 +286,10 @@ async fn patch_view_handler(
         (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), fields(user_id=?user_context.user_id), err)]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id), err)]
 pub async fn exclude_default_view_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(ExcludeDefaultViewRequest {
         default_view_id: id,
     }): Json<ExcludeDefaultViewRequest>,
@@ -297,7 +298,7 @@ pub async fn exclude_default_view_handler(
 
     pg_view_storage
         .create_excluded_default_view(ExcludedDefaultView::new(
-            user_context.user_id.clone(),
+            user.macro_user_id.to_string(),
             id.to_string(),
         ))
         .await?;

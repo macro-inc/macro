@@ -1,13 +1,13 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::project::BasicProject;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 
 #[derive(serde::Deserialize)]
@@ -31,10 +31,10 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, project_context, id), fields(user_id=?user_context.user_id, project_id=?id))]
+#[tracing::instrument(skip(ctx, user, project_context, id), fields(user_id=?user.macro_user_id, project_id=?id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { id }): Path<Params>,
     project_context: Extension<BasicProject>,
 ) -> impl IntoResponse {

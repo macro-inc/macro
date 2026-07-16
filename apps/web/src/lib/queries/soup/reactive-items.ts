@@ -11,6 +11,7 @@
  */
 
 import { createQuerySignal } from '@graphql-cache/solid/create-query-signal';
+import { logger } from '@observability/logger';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
   SoupDocument,
@@ -22,6 +23,7 @@ import {
   getGraphqlSoupClient,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
+import type { CombinedError } from '@urql/core';
 import {
   type Accessor,
   createComputed,
@@ -46,6 +48,8 @@ export type ReactiveSoupAstItemsQueryOptions = {
 
 export type ReactiveSoupAstItemsQuery = {
   data: Accessor<SoupAstItemsData | undefined>;
+  /** Latest GraphQL transport or application error. */
+  error: Accessor<CombinedError | undefined>;
   /** False when the filter AST has no GraphQL translation. */
   isSupported: Accessor<boolean>;
   isLoading: Accessor<boolean>;
@@ -105,10 +109,25 @@ export function useReactiveSoupAstItemsQuery(
     });
     const page = createMemo(() => {
       const data = query.data();
-      return data === undefined ? undefined : mapGraphqlSoupPage(data);
+      return data == null ? undefined : mapGraphqlSoupPage(data);
     });
     return { query, page };
   });
+
+  const error = (): CombinedError | undefined => {
+    for (const entry of pages()) {
+      const queryError = entry.query.error();
+      if (queryError) return queryError;
+    }
+    return undefined;
+  };
+  createComputed(
+    on(error, (queryError) => {
+      if (queryError) {
+        logger.error(queryError, { graphqlOperation: 'Soup' });
+      }
+    })
+  );
 
   const lastPage = () => pages().at(-1);
 
@@ -131,6 +150,7 @@ export function useReactiveSoupAstItemsQuery(
 
   return {
     data,
+    error,
     isSupported,
     isLoading: () => data() === undefined && isFetching(),
     isFetching,

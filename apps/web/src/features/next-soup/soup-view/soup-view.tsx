@@ -48,6 +48,7 @@ import {
   CompanyDisplayMenu,
   CompanyViewsMenu,
 } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
@@ -63,6 +64,7 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
+import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -80,7 +82,6 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@components/app/split-layout/context';
-import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -111,8 +112,6 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
-import KanbanIcon from '@phosphor/kanban.svg';
-import ListIcon from '@phosphor/list.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -316,6 +315,9 @@ type SoupListEntryState = {
 
 interface SoupViewProps {
   viewName: string;
+  customTabs?: JSX.Element;
+  filterBarVariant?: 'default' | 'tag';
+  showCreateButton?: boolean;
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Query;
   initialSearchText?: string;
@@ -339,47 +341,6 @@ interface SoupViewProps {
    */
   initialCrmView?: CrmViewConfig;
 }
-
-type SoupViewMode = 'list' | 'board';
-
-/** Segmented list/board toggle shown in the topbar of the Customers view. */
-const SoupViewModeToggle = (props: {
-  mode: SoupViewMode;
-  onChange: (mode: SoupViewMode) => void;
-}) => {
-  return (
-    <div class="flex items-center gap-0.5 rounded-lg border border-edge-muted bg-surface p-0.5">
-      <Tooltip label="List">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          label="List view"
-          class={cn(
-            'size-6 rounded-md p-1',
-            props.mode === 'list' && 'bg-active text-ink'
-          )}
-          onClick={() => props.onChange('list')}
-        >
-          <ListIcon class="size-3.5" />
-        </Button>
-      </Tooltip>
-      <Tooltip label="Board">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          label="Board view"
-          class={cn(
-            'size-6 rounded-md p-1',
-            props.mode === 'board' && 'bg-active text-ink'
-          )}
-          onClick={() => props.onChange('board')}
-        >
-          <KanbanIcon class="size-3.5" />
-        </Button>
-      </Tooltip>
-    </div>
-  );
-};
 
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
@@ -438,18 +399,19 @@ export const SoupView = (props: SoupViewProps) => {
     { default: [] }
   );
 
-  // List/board display mode — currently only the Customers view offers a
-  // board (kanban grouped by Stage). Per-entry state so back/forward
-  // restores the mode the user left each entry with. Declared before the
-  // init effect below so a shared CRM view can set it during init.
-  const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
-    default: 'list',
-  });
-
   // Shared CRM view opened via a `?crmView=` link — only honored on the
   // Customers view; its pieces win over persisted/preset values in init.
   const initialCrmView =
     contentId === 'companies' ? props.initialCrmView : undefined;
+
+  // A default saved view only applies to a fresh Customers entry: restored
+  // (back/forward) entries keep what the user was looking at, and share
+  // links carry their own state.
+  const applyDefaultCrmView =
+    contentId === 'companies' &&
+    initialCrmView === undefined &&
+    persistedFilters === undefined &&
+    persistedPredicates === undefined;
 
   // We handle the restore of the persistence here instead of within the context
   // because the context is no longer recreated for each soup view because we
@@ -467,10 +429,10 @@ export const SoupView = (props: SoupViewProps) => {
     batch(() => {
       soup.setPreviewEntity(persistedPreviewEntity);
       // Existing entries only stored the symbolic entity id. Treat one as an
-      // open pane while allowing new entries to use their view default.
+      // open pane. The new-inbox default is applied reactively below because
+      // its PostHog flag can resolve after this one-time initialization.
       soupView.setPreviewOpen(
-        persistedPreviewOpen ??
-          (persistedPreviewEntity ? true : isNewInboxEnabled())
+        persistedPreviewOpen ?? persistedPreviewEntity !== undefined
       );
 
       soupView.initialize({
@@ -530,10 +492,24 @@ export const SoupView = (props: SoupViewProps) => {
         if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
           soup.predicates.toggle({ and: ['company-owner'] });
         }
-        setViewMode(initialCrmView.viewMode ?? 'list');
+        soupView.setViewMode(initialCrmView.viewMode ?? 'board');
       }
     });
   });
+
+  // Production resolves the new-inbox flag asynchronously, so wait for it
+  // before applying the default instead of locking in the initial false value.
+  if (
+    persistedPreviewOpen === undefined &&
+    persistedPreviewEntity === undefined
+  ) {
+    let previewDefaulted = false;
+    createRenderEffect(() => {
+      if (previewDefaulted || !isNewInboxEnabled()) return;
+      previewDefaulted = true;
+      soupView.setPreviewOpen(true);
+    });
+  }
 
   const previewEntityCaptorTeardown = panel.handle.registerEntryStateCaptor(
     SOUP_PREVIEW_ENTITY_ENTRY_KEY,
@@ -613,8 +589,14 @@ export const SoupView = (props: SoupViewProps) => {
   });
 
   const isBoardMode = createMemo(
-    () => activeListView() === 'companies' && viewMode() === 'board'
+    () => activeListView() === 'companies' && soupView.viewMode() === 'board'
   );
+
+  // When CRM is unavailable (no team / disabled) the board renders the
+  // empty state instead of columns, so board-only chrome tweaks (like
+  // hiding the AI bar) shouldn't apply.
+  const crmUnavailable = useCrmUnavailable();
+  const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
@@ -695,8 +677,10 @@ export const SoupView = (props: SoupViewProps) => {
                   <CollapsibleHeaderItem
                     id="tabs"
                     priority={1}
-                    expanded={() => <SoupViewTabs />}
-                    collapsed={() => <CollapsedSoupViewTabs />}
+                    expanded={() => props.customTabs ?? <SoupViewTabs />}
+                    collapsed={() =>
+                      props.customTabs ?? <CollapsedSoupViewTabs />
+                    }
                     containerClass="h-full"
                   />
                 </Show>
@@ -719,15 +703,15 @@ export const SoupView = (props: SoupViewProps) => {
                   !narrowSearchExpanded() && isComponentListView('companies')
                 }
               >
-                <CompanyViewsMenu
-                  viewMode={viewMode()}
-                  setViewMode={setViewMode}
-                />
+                <CompanyViewsMenu />
                 <CompanyDisplayMenu />
-                <SoupViewModeToggle mode={viewMode()} onChange={setViewMode} />
               </Show>
               <Show
-                when={!narrowSearchExpanded() && !isComponentListView('search')}
+                when={
+                  !narrowSearchExpanded() &&
+                  !isComponentListView('search') &&
+                  props.showCreateButton !== false
+                }
               >
                 <SoupViewCreateButton />
               </Show>
@@ -793,7 +777,10 @@ export const SoupView = (props: SoupViewProps) => {
             </SplitHeaderRight>
           </Show>
         </div>
-        <SoupFiltersBar />
+        <SoupFiltersBar variant={props.filterBarVariant} />
+        <Show when={applyDefaultCrmView}>
+          <CrmDefaultViewLoader />
+        </Show>
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
@@ -808,9 +795,14 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
       </div>
       <Suspense>
+        {/* The board hides the AI bar: it floats over the bottom edge, where
+            it would cover the board's horizontal scrollbar. */}
         <Show
           when={
-            ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile() && !isNewInboxEnabled()
+            ENABLE_UNIFIED_LIST_AI_INPUT &&
+            !isMobile() &&
+            !isNewInboxEnabled() &&
+            !isBoardRendered()
           }
         >
           <SoupChatInput />
@@ -1268,7 +1260,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        class="size-full no-select-children"
+        class="size-full"
         ref={(el) => {
           setSoupViewRef(el);
           attachHotkeys(el);
@@ -1290,7 +1282,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             <SoupViewFileDropzone>
               <div
                 class={cn(
-                  '@container/u-list size-full unified-list-root flex flex-col relative',
+                  '@container/u-list size-full unified-list-root flex flex-col relative no-select-children',
                   paneVisible() && 'border-r border-edge-muted'
                 )}
               >
