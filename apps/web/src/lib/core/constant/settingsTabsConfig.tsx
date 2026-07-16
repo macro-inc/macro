@@ -139,9 +139,6 @@ export const getSettingsTabItem = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const teamsFlag = useFeatureFlag('enable-teams-settings', {
-    enabledOverride: ENABLE_TEAMS_OVERRIDE,
-  });
   const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
     enabledOverride: BOT_MANAGEMENT_OVERRIDE,
   });
@@ -157,12 +154,12 @@ export const useSettingsTabAvailable = () => {
       case 'Billing':
         return true;
       case 'Team':
-        return teamsFlag().enabled;
+        return true;
       // CRM is still rolling out (Macro-internal only); keep the settings tab
       // behind the same enable-crm gate as every other CRM surface so it never
       // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return teamsFlag().enabled && crmFlag().enabled;
+        return crmFlag().enabled;
       case 'Connected':
         return true;
       case 'Shortcuts':
