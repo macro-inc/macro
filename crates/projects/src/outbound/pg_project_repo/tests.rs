@@ -281,6 +281,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
 )]
 async fn recursive_detection_and_soft_delete_output(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgProjectRepo::new(pool.clone());
+    assert!(repo.is_project_recursively_nested(ROOT_ID, ROOT_ID).await?);
     assert!(
         repo.is_project_recursively_nested(ROOT_ID, CHILD_ID)
             .await?

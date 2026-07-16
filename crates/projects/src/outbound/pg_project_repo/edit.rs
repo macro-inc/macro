@@ -59,7 +59,7 @@ pub(super) async fn is_project_recursively_nested(
             JOIN descendants parent ON child."parentId" = parent.id
             WHERE child."deletedAt" IS NULL
         )
-        SELECT EXISTS(SELECT 1 FROM descendants WHERE id = $2) AS "exists!"
+        SELECT ($1 = $2) OR EXISTS(SELECT 1 FROM descendants WHERE id = $2) AS "exists!"
         "#,
         project_id,
         parent_id,
