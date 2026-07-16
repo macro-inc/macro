@@ -9,6 +9,7 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use serde::Deserialize;
 
+use super::internal_access::InternalAccessExtractor;
 use super::{DocumentRouterState, Params};
 use crate::domain::events::InteractionReason;
 use crate::domain::ports::DocumentService;
@@ -20,8 +21,9 @@ pub struct InteractionRequest {
 }
 
 /// Records a document interaction event.
-#[tracing::instrument(skip(state, body))]
+#[tracing::instrument(skip(state, body, _internal))]
 pub async fn put_interaction_handler<T: DocumentService, Svc: EntityAccessService>(
+    _internal: InternalAccessExtractor,
     State(state): State<DocumentRouterState<T, Svc>>,
     Path(Params { document_id }): Path<Params>,
     Json(body): Json<InteractionRequest>,
