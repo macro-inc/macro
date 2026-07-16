@@ -213,14 +213,7 @@ function shouldShowNativeOfflineFallback(
   );
 }
 
-/**
- * An expired or invalid session is not a connectivity problem: clear the login
- * marker (cookie + localStorage fallback) so future cold opens route to the
- * login screen instead of the offline fallback, then send the user there.
- */
 function SessionExpiredRedirect() {
-  // Component bodies run once in Solid; the synchronous cookie/storage
-  // clearing completes before <Navigate> mounts.
   void clearLocalAuthSession().catch((error) => {
     console.error('Failed to clear local auth session', error);
   });
@@ -231,9 +224,7 @@ function OfflineFallbackRoute() {
   const userInfoQuery = useUserInfoQuery();
 
   // Once the query settles into anything other than a genuine connectivity
-  // failure, bounce to the base path and let BasePathComponent decide where to
-  // go — it's the single source of truth for session-expired vs authenticated
-  // vs logged-out routing.
+  // failure, bounce to the base path.
   return (
     <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
