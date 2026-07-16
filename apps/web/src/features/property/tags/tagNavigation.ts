@@ -60,3 +60,17 @@ export function buildTaggedItemsSplitOptions(
     referredFrom: null,
   };
 }
+
+export function navigateToTag(
+  openWithSplit: (
+    content: SplitContent,
+    options?: OpenWithSplitOptions
+  ) => unknown,
+  tag: TagNavigationTarget,
+  options: Pick<OpenWithSplitOptions, 'handle'> = {}
+) {
+  return openWithSplit(
+    buildTaggedItemsSplitContent(tag),
+    buildTaggedItemsSplitOptions(options)
+  );
+}

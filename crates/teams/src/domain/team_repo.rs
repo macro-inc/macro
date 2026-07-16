@@ -58,6 +58,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
+    /// Returns whether the team uses enterprise billing.
+    fn get_team_enterprise_status(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
     /// Creates a new team
     fn create_team(
         &self,

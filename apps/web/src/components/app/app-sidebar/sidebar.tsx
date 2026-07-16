@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -1409,6 +1410,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView()}>
+          <SidebarActiveCallWidget
+            sidebarState="expanded"
+            class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
+          />
+        </Show>
         <Show when={isExpandedView() && callCtx?.isInCall()}>
           <div data-ui="sidebar-in-call-panel">
             <InCallPanel isSlim={() => false} />

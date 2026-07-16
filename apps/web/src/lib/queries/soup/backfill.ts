@@ -1,7 +1,7 @@
 import { createTabLeaderSignal } from '@notifications/notification-election';
 import {
   fetchGraphqlSoup,
-  type GraphqlSoupInput,
+  type GraphqlSoupInitialInput,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { useQuery } from '@tanstack/solid-query';
@@ -22,7 +22,7 @@ export type SoupBackfillParams = {
   /** Stable checkpoint namespace. Change it when the input changes. */
   checkpointId: string;
   /** Soup input shared by every page. The backfill manages the cursor. */
-  input: Omit<GraphqlSoupInput, 'cursor'>;
+  input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
   pageDelayMs?: number;
 };
@@ -222,9 +222,9 @@ function and<T>(left: T | null | undefined, right: T): T {
  * caller-provided filters. Other entity types continue to be fetched normally.
  */
 export function withUpdatedSince(
-  input: Omit<GraphqlSoupInput, 'cursor'>,
+  input: GraphqlSoupInitialInput,
   updatedSince: string | null
-): Omit<GraphqlSoupInput, 'cursor'> {
+): GraphqlSoupInitialInput {
   if (!updatedSince) return input;
 
   const filters = input.filters ?? {};
@@ -284,10 +284,15 @@ export async function runSoupBackfill(
 
   while (!signal.aborted) {
     const page = await fetchGraphqlSoup(
-      {
-        ...passInput,
-        cursor: checkpoint.nextCursor ?? undefined,
-      },
+      checkpoint.nextCursor
+        ? {
+            continuation: {
+              cursor: checkpoint.nextCursor,
+              expand: passInput.expand,
+              emailView: passInput.emailView,
+            },
+          }
+        : { initial: passInput },
       {
         signal,
         // Backfill must stop on a network failure instead of advancing from

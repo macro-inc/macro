@@ -4,6 +4,7 @@ import type { EntityData } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   parseGroupMeta,
+  resolveGroupMetaForKey,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
 import {
@@ -26,10 +27,16 @@ import type { EntityFilters } from '@service-storage/generated/schemas/entityFil
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
-import { fetchGraphqlSoup } from '@service-storage/graphql-soup';
+import {
+  fetchGraphqlGroupedSoup,
+  fetchGraphqlSoup,
+} from '@service-storage/graphql-soup';
 import { type StaleTime, useInfiniteQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { makeGraphqlSoupInput } from './graphql-ast';
+import {
+  makeGraphqlGroupedSoupInput,
+  makeGraphqlSoupInput,
+} from './graphql-ast';
 
 export type SoupParams = Params;
 
@@ -164,22 +171,73 @@ export const useSoupAstItemsQuery = (
             sort_method = 'updated_at';
           }
 
-          const response = await throwOnErr(
-            async () =>
-              await storageServiceClient.getGroupedSoupAstItems({
-                params: {
-                  group_by: serializeGroupByField(groupBy),
-                  per_group_limit: params.limit,
-                  sort_method,
-                },
+          const fetchRest = async () => {
+            const response = await throwOnErr(
+              async () =>
+                await storageServiceClient.getGroupedSoupAstItems({
+                  params: {
+                    group_by: serializeGroupByField(groupBy),
+                    per_group_limit: params.limit,
+                    sort_method,
+                  },
+                  body,
+                })
+            );
+
+            return {
+              items: response.items,
+              groups: response.groups.map(parseGroupMeta),
+            };
+          };
+
+          const fetchGraphql = async () => {
+            const response = await fetchGraphqlGroupedSoup(
+              makeGraphqlGroupedSoupInput({
+                params: { ...params, sort_method },
                 body,
+                groupBy,
               })
-          );
+            );
+
+            return {
+              items: response.items,
+              groups: response.groups.map((group): GroupMeta => {
+                const firstItem = response.items[group.itemIds[0] ?? ''];
+                const resolved = resolveGroupMetaForKey(
+                  groupBy,
+                  group.key,
+                  firstItem
+                );
+                return {
+                  key: group.key,
+                  label: resolved?.label ?? group.key,
+                  displayOrder: resolved?.displayOrder ?? null,
+                  totalCount: group.totalCount,
+                  itemIds: group.itemIds,
+                  nextCursor: group.nextCursor,
+                };
+              }),
+            };
+          };
+
+          const response =
+            transport === 'graphql'
+              ? await fetchGraphql().catch((error: unknown) => {
+                  if (
+                    error instanceof Error &&
+                    error.message.startsWith('Unsupported GraphQL Soup AST:')
+                  ) {
+                    console.warn(error.message);
+                    return fetchRest();
+                  }
+                  throw error;
+                })
+              : await fetchRest();
 
           return {
             kind: 'grouped',
             items: response.items,
-            groups: response.groups.map(parseGroupMeta),
+            groups: response.groups,
             nextCursor: null,
           };
         }

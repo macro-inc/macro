@@ -356,7 +356,15 @@ export function MessageContainer(props: MessageContainerProps) {
               </Show>
             </div>
             <Show when={showInlineReplyArea()}>
-              <div class={cn('relative -mx-4 mb-0 border-t border-edge-muted')}>
+              <div
+                class={cn(
+                  'relative -mx-4 mb-0 border-t border-ink/20',
+                  (visibleAttachments().length > 0 ||
+                    draftAttachments().length > 0 ||
+                    forwardedAttachments().length > 0) &&
+                    'mt-2'
+                )}
+              >
                 <Show when={props.isLastMessage && !isMobile()}>
                   <FloatingInputLoader
                     isLoading={context.query.isFetching}

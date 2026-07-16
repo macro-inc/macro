@@ -221,8 +221,8 @@ export const SoupViewContextProvider: FlowComponent<
   const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
     enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
   });
-  const resolveTransport = (groupBy: GroupByField | undefined) =>
-    useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined;
+  const resolveTransport = () =>
+    useGraphqlSoupFF().enabled ? 'graphql' : undefined;
 
   const panel = useSplitPanelOrThrow();
 
@@ -281,7 +281,7 @@ export const SoupViewContextProvider: FlowComponent<
         params: soupParams(),
         body: soupBody(),
         groupBy,
-        transport: resolveTransport(groupBy),
+        transport: resolveTransport(),
       }).queryKey,
       (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
         if (!prev) return;
@@ -639,7 +639,7 @@ export const SoupViewContextProvider: FlowComponent<
         params: soupParams(),
         body: soupBody(),
         groupBy,
-        transport: resolveTransport(groupBy),
+        transport: resolveTransport(),
       };
     },
     () => {
@@ -815,6 +815,7 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
+    transport: resolveTransport,
     queryOptions: () => {
       const view = activeListView();
       return {

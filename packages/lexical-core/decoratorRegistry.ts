@@ -47,6 +47,10 @@ import type {
   SnapshotNode,
 } from './nodes/SnapshotNode';
 import type {
+  TagMentionDecoratorProps,
+  TagMentionNode,
+} from './nodes/TagMentionNode';
+import type {
   ThemeMentionDecoratorProps,
   ThemeMentionNode,
 } from './nodes/ThemeMentionNode';
@@ -134,6 +138,10 @@ export interface NodeDecoratorMap {
   ThemeMentionNode: {
     klass: typeof ThemeMentionNode;
     props: ThemeMentionDecoratorProps;
+  };
+  TagMentionNode: {
+    klass: typeof TagMentionNode;
+    props: TagMentionDecoratorProps;
   };
   WatermarkNode: {
     klass: typeof WatermarkNode;

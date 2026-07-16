@@ -17,6 +17,7 @@ import type {
   SelectionData,
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
+import type { TagMentionLifecycle } from '../plugins/tags';
 import type { createMenuOperations } from '../shared/inlineMenu';
 import type { UserMentionRecord } from '../utils/mentionsUtils';
 
@@ -44,6 +45,14 @@ export interface MentionsOptions {
   users?: () => import('@core/user/types').IUser[];
   /** Skip backend mention tracking (e.g. for sandbox/onboarding). */
   disableMentionTracking?: boolean;
+}
+
+export interface TagsOptions {
+  /** Insert inline tag mentions into the editor document. Defaults to true. */
+  insertTags?: boolean;
+  onCreate?: (tag: TagMentionLifecycle) => void;
+  onRemove?: (tag: TagMentionLifecycle) => void;
+  setTags?: (tags: ReadonlySet<TagMentionLifecycle>) => void;
 }
 
 /** Intentional extension point — no options yet. */
@@ -128,6 +137,7 @@ export interface EditorConfig {
   type: EditorType;
   namespace: string;
   mentions?: MentionsOptions;
+  tags?: TagsOptions;
   /** Snippets (`;` menu) follow mentions by default; pass false to opt out. */
   snippets?: false;
   emojis?: EmojisOptions;
@@ -163,6 +173,7 @@ export interface EditorInternals {
   markdownState: () => string;
   actionsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   mentionsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
+  tagsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   snippetsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;

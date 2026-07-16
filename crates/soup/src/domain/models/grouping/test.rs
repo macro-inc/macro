@@ -72,6 +72,40 @@ fn nested_groups_preserve_bin_and_item_insertion_order() {
 }
 
 #[test]
+fn nested_groups_add_cursor_only_to_truncated_bins() {
+    let groups: NestedSoupGroups = vec![
+        ItemGroupingInfo {
+            key: "truncated".to_string(),
+            total_group_count: 2,
+            index_in_group: 1,
+            item: project(1),
+        },
+        ItemGroupingInfo {
+            key: "complete".to_string(),
+            total_group_count: 1,
+            index_in_group: 1,
+            item: project(2),
+        },
+    ]
+    .into_iter()
+    .collect::<NestedSoupGroups>()
+    .with_next_cursors(SimpleSortMethod::UpdatedAt, EntityFilterAst::default());
+
+    let mut bins = groups.into_bins();
+    let (_, truncated) = bins.next().unwrap();
+    let cursor = Base64Str::<
+        CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>,
+    >::new_from_string(truncated.next_cursor().unwrap().to_owned())
+    .decode_json()
+    .unwrap();
+    assert_eq!(cursor.id, Uuid::from_u128(1));
+    assert_eq!(cursor.limit, 1);
+
+    let (_, complete) = bins.next().unwrap();
+    assert!(complete.next_cursor().is_none());
+}
+
+#[test]
 fn rest_grouped_response_remains_normalized() {
     let id = Uuid::from_u128(1);
     let response = build_grouped_response(

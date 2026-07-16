@@ -27,6 +27,7 @@ import {
   type PasteNode,
   type SnapshotNode,
   SupportedNodeTypes,
+  type TagMentionNode,
   type ThemeMentionNode,
   type UnknownMentionNode,
   type UserMentionNode,
@@ -84,6 +85,7 @@ import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
+import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
 import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownMention';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
@@ -346,6 +348,20 @@ const ThemeMention: RenderableEntity<ThemeMentionNode> = {
   render: (props) => (
     <span>
       {ThemeMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const TagMention: RenderableEntity<TagMentionNode> = {
+  guard: (node: LexicalNode): node is TagMentionNode =>
+    node.__type === 'tag-mention',
+  render: (props) => (
+    <span>
+      {TagMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -780,6 +796,7 @@ const InlineEntities: Array<RenderableEntity> = [
   HorizontalRule,
   Equation,
   ThemeMention,
+  TagMention,
   UnknownMention,
   Watermark,
   Paste,
