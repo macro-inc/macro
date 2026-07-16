@@ -59,7 +59,6 @@ import {
   For,
   onCleanup,
   Show,
-  Suspense,
 } from 'solid-js';
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
