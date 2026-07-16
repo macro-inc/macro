@@ -1166,5 +1166,11 @@ export async function executeMarkEntitiesUndone(args: {
       queryKey: notificationKeys.user._def,
       refetchType: 'none',
     }),
+    // Refetch open thread views so the unarchive restores `inbox_visible`.
+    ...emailIds.map((id) =>
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(id).queryKey,
+      })
+    ),
   ]);
 }
