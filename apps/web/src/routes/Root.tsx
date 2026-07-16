@@ -32,6 +32,7 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -194,16 +195,51 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   );
 }
 
+const OFFLINE_ROUTE = '/offline';
+
+function getCurrentQueryString() {
+  const params = new URLSearchParams(window.location.search);
+  return params.toString().length > 0 ? `?${params.toString()}` : '';
+}
+
+function shouldShowNativeOfflineFallback(
+  userInfoQuery: ReturnType<typeof useUserInfoQuery>
+) {
+  return (
+    userInfoQuery.isError &&
+    hasLoginCookie() &&
+    isNativeMobilePlatform() &&
+    !thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
+  );
+}
+
 /**
  * An expired or invalid session is not a connectivity problem: clear the login
  * marker (cookie + localStorage fallback) so future cold opens route to the
  * login screen instead of the offline fallback, then send the user there.
  */
 function SessionExpiredRedirect() {
-  const { value, ...options } = getLoginCookieOptions(false);
-  updateCookie('login', value, options);
-  syncLoginStorage(false);
+  // Component bodies run once in Solid; the synchronous cookie/storage
+  // clearing completes before <Navigate> mounts.
+  void clearLocalAuthSession();
   return <Navigate href={`/welcome${window.location.search}`} />;
+}
+
+function OfflineFallbackRoute() {
+  const userInfoQuery = useUserInfoQuery();
+
+  // Once the query settles into anything other than a genuine connectivity
+  // failure, bounce to the base path and let BasePathComponent decide where to
+  // go — it's the single source of truth for session-expired vs authenticated
+  // vs logged-out routing.
+  return (
+    <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
+      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
+        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      </Match>
+    </Switch>
+  );
 }
 
 function BasePathComponent() {
@@ -240,9 +276,7 @@ function BasePathComponent() {
   const userInfoQuery = useUserInfoQuery();
 
   // Preserve existing query parameters when redirecting
-  const params = new URLSearchParams(window.location.search);
-  const queryString =
-    params.toString().length > 0 ? `?${params.toString()}` : '';
+  const queryString = getCurrentQueryString();
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
   return (
@@ -256,12 +290,8 @@ function BasePathComponent() {
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
       </Match>
-      <Match
-        when={
-          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
-        }
-      >
-        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
+        <Navigate href={`${OFFLINE_ROUTE}${window.location.search}`} />
       </Match>
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
@@ -379,6 +409,10 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => <Login />,
+  },
+  {
+    path: OFFLINE_ROUTE,
+    component: OfflineFallbackRoute,
   },
   {
     path: '/welcome',
