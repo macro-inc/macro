@@ -425,8 +425,8 @@ export function Account() {
             <div class="px-6 py-3.5">
               <Button
                 fullWidth
-                variant="base"
-                depth={3}
+                variant="active"
+                depth={4}
                 onClick={() => logout()}
               >
                 <SignOutIcon class="size-4" />
