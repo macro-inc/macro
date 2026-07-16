@@ -1,6 +1,6 @@
 import type { DocumentEntity, EmailEntity } from '@entity';
 import { describe, expect, it } from 'vitest';
-import { mapMyActivityEntity } from './entity-events';
+import { mapEmailActivityEntity, mapMyActivityEntity } from './entity-events';
 
 const USER = 'macro|me@test.com';
 
@@ -69,28 +69,47 @@ describe('mapMyActivityEntity — documents', () => {
   });
 });
 
+function email(overrides: Partial<EmailEntity> = {}): EmailEntity {
+  return {
+    type: 'email',
+    id: 'thread-1',
+    name: 'Subject',
+    ownerId: USER,
+    isDraft: false,
+    createdAt: CREATED,
+    updatedAt: CREATED,
+    ...overrides,
+  } as EmailEntity;
+}
+
 describe('mapMyActivityEntity — emails', () => {
   it('distinguishes drafts from sent email', () => {
-    const email = (isDraft: boolean): EmailEntity =>
-      ({
-        type: 'email',
-        id: 'thread-1',
-        name: 'Subject',
-        ownerId: USER,
-        isDraft,
-        createdAt: CREATED,
-        updatedAt: CREATED,
-      }) as EmailEntity;
-
     expect(
-      mapMyActivityEntity(email(false), USER).map(
+      mapMyActivityEntity(email(), USER).map(
         (e) => e.kind === 'entity-event' && e.verb
       )
     ).toEqual(['sent-email']);
     expect(
-      mapMyActivityEntity(email(true), USER).map(
+      mapMyActivityEntity(email({ isDraft: true }), USER).map(
         (e) => e.kind === 'entity-event' && e.verb
       )
     ).toEqual(['drafted-email']);
+  });
+});
+
+describe('mapEmailActivityEntity', () => {
+  it('maps signal threads and drops noise and drafts', () => {
+    expect(
+      mapEmailActivityEntity(email({ isImportant: true })).map(
+        (e) => e.kind === 'entity-event' && e.verb
+      )
+    ).toEqual(['email-activity']);
+    // Untriaged rows (importance not loaded) pass through — the server
+    // queries already filter on importance.
+    expect(mapEmailActivityEntity(email())).toHaveLength(1);
+    expect(mapEmailActivityEntity(email({ isImportant: false }))).toEqual([]);
+    expect(
+      mapEmailActivityEntity(email({ isDraft: true, isImportant: true }))
+    ).toEqual([]);
   });
 });
