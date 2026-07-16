@@ -10,6 +10,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::ContentType;
+use model::folder::UploadFolderWithIdsResponse;
 use model::item::{Item, ItemWithUserAccessLevel};
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::response::GetProjectResponseData;
@@ -24,8 +25,8 @@ use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, MutatedProject, ProjectError, RevertDeleteResult,
-    SoftDeleteResult,
+    CreateProjectArgs, EditProjectArgs, MutatedProject, ProjectError, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 
 /// Repository for reading project data from persistent storage.
@@ -104,12 +105,37 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<SoftDeleteResult, Self::Err>> + Send;
 
+    /// Permanently purge an already-soft-deleted project subtree and its child data.
+    fn purge_deleted_project_tree(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<PurgedProjectTree, Self::Err>> + Send;
+
     /// Restore a deleted project subtree and the owners' history rows.
     fn revert_delete_project(
         &self,
         project_id: &str,
         previous_parent_id: Option<String>,
     ) -> impl Future<Output = Result<RevertDeleteResult, Self::Err>> + Send;
+
+    /// Create and commit a pending project tree with empty documents.
+    fn upload_folder(
+        &self,
+        args: UploadFolderRepoArgs,
+    ) -> impl Future<Output = Result<UploadFolderWithIdsResponse, Self::Err>> + Send;
+
+    /// Delete a committed upload tree as compensation for later failures.
+    fn delete_uploaded_tree(
+        &self,
+        project_ids: &[String],
+        document_ids: &[String],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Recursively finalize the uploaded state of a project tree.
+    fn mark_projects_uploaded(
+        &self,
+        root_project_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// Update the project's modified timestamp.
     fn update_project_modified(

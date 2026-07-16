@@ -1,11 +1,16 @@
+use std::collections::HashMap;
+
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model::document::FileType;
+use model::folder::{FileSystemNode, FileSystemNodeWithIds, FolderItem};
 use model::item::Item;
 use model::project::ProjectPreviewV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
 use super::PgProjectRepo;
-use crate::domain::models::{CreateProjectArgs, EditProjectArgs};
+use crate::domain::models::{CreateProjectArgs, EditProjectArgs, UploadFolderRepoArgs};
 use crate::domain::ports::ProjectRepo;
 
 const ROOT_ID: &str = "10000000-0000-0000-0000-000000000001";
@@ -340,5 +345,199 @@ async fn revert_restores_subtree_and_handles_parent_state(
             .as_deref(),
         Some(ROOT_ID)
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn purge_returns_outputs_and_removes_access_and_permissions(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    let deleted = repo.soft_delete_project(ROOT_ID).await?;
+    let document_id = &deleted.document_ids[0];
+    let bom_id = sqlx::query_scalar!(
+        r#"INSERT INTO "DocumentBom" ("documentId") VALUES ($1) RETURNING id"#,
+        document_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO "BomPart" (sha, path, "documentBomId")
+        VALUES ('shared-sha', 'one', $1), ('shared-sha', 'two', $1), ('other-sha', 'three', $1)
+        "#,
+        bom_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let result = repo.purge_deleted_project_tree(ROOT_ID).await?;
+    assert_eq!(result.project_ids.len(), 4);
+    assert_eq!(result.documents.len(), 2);
+    assert_eq!(result.chat_ids.len(), 2);
+    assert_eq!(
+        result.bom_shas,
+        vec![("other-sha".to_owned(), 1), ("shared-sha".to_owned(), 2)]
+    );
+
+    let purged_ids = result
+        .project_ids
+        .iter()
+        .chain(result.documents.iter().map(|(id, _)| id))
+        .chain(&result.chat_ids)
+        .cloned()
+        .collect::<Vec<_>>();
+    let remaining_access = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE entity_id::text = ANY($1)"#,
+        &purged_ids,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_access, 0);
+    let remaining_permissions = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM "ProjectPermission" WHERE "projectId" = ANY($1)"#,
+        &result.project_ids,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_permissions, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn purge_rolls_back_all_deletions(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    repo.soft_delete_project(ROOT_ID).await?;
+
+    let mut transaction = pool.begin().await?;
+    let result = super::delete::purge_deleted_project_tree(&mut transaction, ROOT_ID).await?;
+    assert!(!result.project_ids.is_empty());
+    transaction.rollback().await?;
+
+    assert!(repo.get_basic_project(ROOT_ID).await?.is_some());
+    let access_count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE entity_id::text = $1"#,
+        ROOT_ID,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(access_count, 2);
+    let permission_count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM "ProjectPermission" WHERE "projectId" = $1"#,
+        ROOT_ID,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(permission_count, 1);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn upload_folder_preserves_tree_metadata_and_compensates(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    let file = FolderItem {
+        name: "nested.pdf".to_owned(),
+        full_name: "nested.pdf".to_owned(),
+        file_type: Some(FileType::Pdf),
+        relative_path: "/Upload/Nested".to_owned(),
+        sha: "upload-sha".to_owned(),
+    };
+    let root_folder = FileSystemNode::Folder(HashMap::from([
+        (
+            "Nested".to_owned(),
+            FileSystemNode::Folder(HashMap::from([(
+                "nested.pdf".to_owned(),
+                FileSystemNode::File(file),
+            )])),
+        ),
+        ("Empty".to_owned(), FileSystemNode::Folder(HashMap::new())),
+    ]));
+    let result = repo
+        .upload_folder(UploadFolderRepoArgs {
+            user_id: MacroUserIdStr::parse_from_str("macro|owner@test.com")?.into_owned(),
+            share_permission:
+                models_permissions::share_permission::SharePermissionV2::new_project_share_permission(),
+            root_folder,
+            root_folder_name: "Upload".to_owned(),
+            upload_request_id: "lambda-request-id".to_owned(),
+            parent_id: Some(ROOT_ID.to_owned()),
+        })
+        .await?;
+
+    assert_eq!(result.project_ids.len(), 3);
+    assert_eq!(result.documents.len(), 1);
+    let FileSystemNodeWithIds::Folder { project_id, .. } = &result.file_system else {
+        panic!("root must be a folder");
+    };
+    let root = sqlx::query!(
+        r#"
+        SELECT "parentId" AS parent_id, "uploadPending" AS upload_pending,
+               "uploadRequestId" AS upload_request_id
+        FROM "Project" WHERE id = $1
+        "#,
+        project_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(root.parent_id.as_deref(), Some(ROOT_ID));
+    assert!(root.upload_pending);
+    assert_eq!(root.upload_request_id.as_deref(), Some("lambda-request-id"));
+    assert_eq!(result.documents[0].project_name.as_deref(), Some("Nested"));
+
+    let document_ids = result
+        .documents
+        .iter()
+        .map(|document| document.document_id.clone())
+        .collect::<Vec<_>>();
+    repo.delete_uploaded_tree(&result.project_ids, &document_ids)
+        .await?;
+    let remaining = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM "Project" WHERE id = ANY($1)"#,
+        &result.project_ids,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining, 0);
+    let remaining_access = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE entity_id::text = ANY($1)"#,
+        &document_ids,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(remaining_access, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn mark_uploaded_is_recursive_and_rejects_missing_root(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    let project_ids = repo
+        .mark_projects_uploaded("10000000-0000-0000-0000-000000000006")
+        .await?;
+    assert_eq!(project_ids.len(), 2);
+    let pending = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM "Project" WHERE id = ANY($1) AND "uploadPending""#,
+        &project_ids,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(pending, 0);
+    assert!(repo.mark_projects_uploaded("missing").await.is_err());
     Ok(())
 }

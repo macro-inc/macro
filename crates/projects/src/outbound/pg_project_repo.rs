@@ -6,6 +6,7 @@ mod delete;
 mod edit;
 mod revert_delete;
 mod share;
+mod upload_folder;
 
 #[cfg(test)]
 mod tests;
@@ -20,7 +21,8 @@ use model::project::{
 use sqlx::PgPool;
 
 use crate::domain::models::{
-    CreateProjectArgs, EditProjectArgs, RevertDeleteResult, SoftDeleteResult,
+    CreateProjectArgs, EditProjectArgs, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult,
+    UploadFolderRepoArgs,
 };
 use crate::domain::ports::ProjectRepo;
 
@@ -269,6 +271,17 @@ impl ProjectRepo for PgProjectRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn purge_deleted_project_tree(
+        &self,
+        project_id: &str,
+    ) -> Result<PurgedProjectTree, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let result = delete::purge_deleted_project_tree(&mut transaction, project_id).await?;
+        transaction.commit().await?;
+        Ok(result)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn revert_delete_project(
         &self,
         project_id: &str,
@@ -283,6 +296,41 @@ impl ProjectRepo for PgProjectRepo {
         .await?;
         transaction.commit().await?;
         Ok(result)
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn upload_folder(
+        &self,
+        args: UploadFolderRepoArgs,
+    ) -> Result<model::folder::UploadFolderWithIdsResponse, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let result = upload_folder::upload_folder(&mut transaction, args).await?;
+        transaction.commit().await?;
+        Ok(result)
+    }
+
+    #[tracing::instrument(err, skip(self, project_ids, document_ids))]
+    async fn delete_uploaded_tree(
+        &self,
+        project_ids: &[String],
+        document_ids: &[String],
+    ) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        delete::delete_uploaded_tree(&mut transaction, project_ids, document_ids).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn mark_projects_uploaded(
+        &self,
+        root_project_id: &str,
+    ) -> Result<Vec<String>, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let project_ids =
+            upload_folder::mark_projects_uploaded(&mut transaction, root_project_id).await?;
+        transaction.commit().await?;
+        Ok(project_ids)
     }
 
     #[tracing::instrument(err, skip(self))]

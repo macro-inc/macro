@@ -1,5 +1,7 @@
 //! Domain-owned project models.
 
+use macro_user_id::user_id::MacroUserIdStr;
+use model::folder::FileSystemNode;
 use model::project::Project;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
@@ -47,6 +49,36 @@ pub struct SoftDeleteResult {
 pub struct RevertDeleteResult {
     /// Restored project identifiers.
     pub project_ids: Vec<String>,
+}
+
+/// Data returned after permanently purging a soft-deleted project tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PurgedProjectTree {
+    /// Purged project identifiers, including the requested root.
+    pub project_ids: Vec<String>,
+    /// Purged chat identifiers.
+    pub chat_ids: Vec<String>,
+    /// Purged document identifiers paired with their owner identifiers.
+    pub documents: Vec<(String, String)>,
+    /// Aggregated BOM part counts grouped by SHA.
+    pub bom_shas: Vec<(String, i64)>,
+}
+
+/// Arguments for creating a pending project tree for a folder upload.
+#[derive(Debug)]
+pub struct UploadFolderRepoArgs {
+    /// Owner of every project and document in the tree.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Initial sharing configuration for every created item.
+    pub share_permission: SharePermissionV2,
+    /// Root folder contents to persist.
+    pub root_folder: FileSystemNode,
+    /// Name of the root project.
+    pub root_folder_name: String,
+    /// Lambda-facing bulk-upload request identifier.
+    pub upload_request_id: String,
+    /// Optional parent for the root project.
+    pub parent_id: Option<String>,
 }
 
 /// Result returned by project creation and editing.
