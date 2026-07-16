@@ -374,9 +374,7 @@ export function Notebook(props: {
             </Show>
           </div>
           <Show when={!history.isOpen()}>
-            <Show
-              when={inlineAiEditing().enabled && canEdit() && !isMobile()}
-            >
+            <Show when={inlineAiEditing().enabled && canEdit() && !isMobile()}>
               <div class="mb-2">
                 <DocumentAiEditBar documentId={props.documentId} />
               </div>

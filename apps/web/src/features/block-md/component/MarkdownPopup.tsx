@@ -5,11 +5,6 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
-import {
-  INLINE_AI_EDITING_FLAG,
-  INLINE_AI_EDITING_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
@@ -42,6 +37,11 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
+// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
+import {
+  INLINE_AI_EDITING_FLAG,
+  INLINE_AI_EDITING_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockElementSignal } from '@core/signal/blockElement';
