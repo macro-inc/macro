@@ -121,8 +121,6 @@ export function MarkdownPopup(props: {
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Escape anywhere stops a running edit on this document (no-op
-      // otherwise; the prompt box's own Escape stops propagation first).
       if (e.key === 'Escape') cancelAiEdit(blockId);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -355,9 +353,6 @@ export function MarkdownPopup(props: {
 
     const handleRewrite = (_instructions: string) => {};
 
-    // The prompt row shows alongside the format tools whenever the user can
-    // edit — Escape dismisses just the row.
-    const [aiEditOpen, setAiEditOpen] = createSignal(canEdit());
     const [aiEditInput, setAiEditInput] = createSignal('');
     let aiInputRef: HTMLTextAreaElement | undefined;
 
@@ -419,7 +414,6 @@ export function MarkdownPopup(props: {
           setAiEditRunning(false);
         });
       setAiEditInput('');
-      setAiEditOpen(false);
       setPopupVisible(false);
     };
 
@@ -540,7 +534,7 @@ export function MarkdownPopup(props: {
           </Button>
         </div>
 
-        <Show when={aiEditOpen()}>
+        <Show when={canEdit()}>
           <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
             <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
             <textarea
@@ -565,7 +559,7 @@ export function MarkdownPopup(props: {
                   e.preventDefault();
                   e.stopPropagation();
                   setAiEditInput('');
-                  setAiEditOpen(false);
+                  aiInputRef?.blur();
                 }
               }}
             />
