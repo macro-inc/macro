@@ -7,9 +7,9 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{InternalMacroAuthorizationExtractor, MacroAuthorizationService};
 use serde::Deserialize;
 
-use super::internal_access::InternalAccessExtractor;
 use super::{DocumentRouterState, Params};
 use crate::domain::events::InteractionReason;
 use crate::domain::ports::DocumentService;
@@ -21,10 +21,14 @@ pub struct InteractionRequest {
 }
 
 /// Records a document interaction event.
-#[tracing::instrument(skip(state, body, _internal))]
-pub async fn put_interaction_handler<T: DocumentService, Svc: EntityAccessService>(
-    _internal: InternalAccessExtractor,
-    State(state): State<DocumentRouterState<T, Svc>>,
+#[tracing::instrument(skip(state, body, _internal_authorization))]
+pub async fn put_interaction_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<Auth>,
     Path(Params { document_id }): Path<Params>,
     Json(body): Json<InteractionRequest>,
 ) -> impl IntoResponse {

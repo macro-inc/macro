@@ -140,6 +140,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                 documents_hex::inbound::axum_router::put_interaction::put_interaction_handler::<
                     DocumentService,
                     EntityAccessService,
+                    AuthorizationService,
                 >,
             ),
         )

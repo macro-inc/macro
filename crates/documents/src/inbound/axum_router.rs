@@ -30,7 +30,6 @@ pub mod get_document;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
-pub mod internal_access;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod task_duplicates;
