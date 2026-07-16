@@ -2,6 +2,7 @@ import {
   defineQueryFilters,
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
@@ -10,7 +11,7 @@ import { getTypeNoun } from '@entity/extractors-notification/notification-descri
 import { NotificationRow } from '@entity/extractors-notification/notification-row';
 import type { SoupApiItemFilter } from '@queries/soup/items';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import type { TimelineRow } from './collapse';
 import { EntityEventRow } from './entity-event-row';
 import { mapMyActivityEntity, mapSharedEmailEntity } from './entity-events';
@@ -197,15 +198,29 @@ const ACTIVITY_TABS: TabItem[] = [
 ];
 
 /**
- * The Activity tab: one pane at a time with a Me/Team toggle — "Things I
- * did" (the user's own action timeline) vs the team Firehose. A single
- * column keeps the view usable inside narrow splits; the toggle matches the
- * segmented tabs other list views use.
+ * Minimum split width for showing both timelines side by side. Below it
+ * (half-splits, mobile) each pane would be too cramped to read, so the view
+ * collapses to one pane with a Me/Team toggle. At or above it (e.g. a
+ * full-width window on a 13" laptop) both panes render and the toggle is
+ * hidden.
+ */
+const DUAL_PANE_MIN_SPLIT_WIDTH = 1024;
+
+/**
+ * The Activity tab: "Things I did" (the user's own action timeline) and the
+ * team Firehose. Side by side when the split is wide enough; otherwise one
+ * pane at a time behind a Me/Team segmented toggle (the same control other
+ * list views use), persisted across sessions.
  */
 export function ActivityView() {
+  const panel = useSplitPanelOrThrow();
   const [tab, setTab] = makePersisted(createSignal<ActivityTab>('me'), {
     name: 'activity-view-tab',
   });
+
+  const isDualPane = createMemo(
+    () => (panel.panelSize.width ?? 0) >= DUAL_PANE_MIN_SPLIT_WIDTH
+  );
 
   // A factory rather than a shared element: each pane mount gets its own
   // node instead of re-parenting one instance across Show branches.
@@ -220,10 +235,24 @@ export function ActivityView() {
 
   return (
     <Show
-      when={tab() === 'team'}
-      fallback={<MyActivityPane trailing={tabs()} />}
+      when={isDualPane()}
+      fallback={
+        <Show
+          when={tab() === 'team'}
+          fallback={<MyActivityPane trailing={tabs()} />}
+        >
+          <FirehosePane trailing={tabs()} />
+        </Show>
+      }
     >
-      <FirehosePane trailing={tabs()} />
+      <div class="flex h-full min-h-0">
+        <div class="min-h-0 min-w-0 flex-1 border-r border-edge-muted">
+          <MyActivityPane />
+        </div>
+        <div class="min-h-0 min-w-0 flex-1">
+          <FirehosePane />
+        </div>
+      </div>
     </Show>
   );
 }
