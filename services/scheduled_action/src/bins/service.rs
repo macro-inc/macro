@@ -6,6 +6,10 @@ use anyhow::{Context, Result};
 use axum::Router;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
 use notification::domain::service::SqsNotificationIngress;
@@ -96,10 +100,20 @@ async fn main() -> Result<()> {
         .await
         .context("failed to build jwt validation args")?;
 
-    let state = ScheduledActionRouterState { service };
-    let authed_routes = scheduled_action_router::<_, ()>(state).layer(
-        axum::middleware::from_fn_with_state(jwt_args, macro_middleware::auth::decode_jwt::handler),
+    let authorization_service = MacroAuthorizationServiceImpl::new(
+        MacroAuthJwtValidator::new(jwt_args),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: None,
+        },
     );
+    let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+
+    let state = ScheduledActionRouterState {
+        service,
+        authorization_state,
+    };
+    let authed_routes = scheduled_action_router::<_, _, ()>(state);
 
     let router = Router::new()
         .route("/health", axum::routing::get(health))
