@@ -1,9 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -11,9 +12,10 @@ pub struct Params {
 }
 
 /// Deletes a given document from the open search index
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Path(Params { document_id }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("delete document request initiated");

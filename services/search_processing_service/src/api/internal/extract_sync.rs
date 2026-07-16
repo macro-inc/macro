@@ -1,9 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::document::FileType;
 use sqs_client::search::{SearchQueueMessage, document::SearchExtractorMessage};
 use uuid::Uuid;
@@ -48,9 +49,10 @@ fn documents_to_messages(documents: Vec<SyncDocument>) -> Vec<SearchQueueMessage
 }
 
 /// internal handler to batch queue messages to the worker queue
-#[tracing::instrument(skip(ctx, req))]
+#[tracing::instrument(skip(ctx, _internal_authorization, req))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<ExtractSyncRequest>,
 ) -> Result<Response, Response> {
     let document_ids: Vec<&str> = req

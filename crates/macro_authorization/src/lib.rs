@@ -57,6 +57,6 @@ pub use inbound::{
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
     MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
-/// JWT validator backed by the shared `macro_auth` implementation.
+/// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
-pub use outbound::MacroAuthJwtValidator;
+pub use outbound::{MacroAuthJwtValidator, NoopMacroAuthJwtValidator};

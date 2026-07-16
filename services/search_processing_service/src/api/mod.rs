@@ -1,7 +1,6 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
-use macro_auth::InternalApiKey;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -21,7 +20,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let port = state.config.port;
     let env = state.config.environment;
     let backfill_jobs = state.backfill_jobs.clone();
-    let app = api_router(state.internal_api_key.clone())
+    let app = api_router()
         .with_state(state)
         .layer(cors.clone())
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
@@ -80,18 +79,11 @@ async fn shutdown_signal(backfill_jobs: crate::domain::jobs::BackfillJobs) {
     backfill_jobs.cancel_all_local();
 }
 
-fn api_router(internal_secret: InternalApiKey) -> Router<ApiContext> {
+fn api_router() -> Router<ApiContext> {
     Router::new().nest(
         "/internal",
-        internal::router().layer(
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn_with_state(
-                    internal_secret,
-                    macro_middleware::auth::internal_access::handler,
-                ))
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::connection_drop_prevention_handler,
-                )),
-        ),
+        internal::router().layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+            macro_middleware::connection_drop_prevention_handler,
+        ))),
     )
 }
