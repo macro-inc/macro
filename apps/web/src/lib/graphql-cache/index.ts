@@ -4,6 +4,12 @@
  */
 
 export {
+  type CachedSelection,
+  type InspectionSelection,
+  inspect,
+  selectAll,
+} from './exchange/inspection';
+export {
   executeOptimisticMutation,
   type LinkDiff,
   type ListSelection,
@@ -21,9 +27,11 @@ export type {
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  InspectQueryArgs,
 } from './host/types';
 export { createWorkerCacheHost } from './host/worker-host';
 export type {
+  CachedQueryInstanceWire,
   CachePush,
   CacheRequest,
   CacheResponse,

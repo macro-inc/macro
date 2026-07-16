@@ -141,26 +141,31 @@ describe('createTauriCacheHost', () => {
     );
   });
 
-  it('inspects effective fields through the native command', async () => {
-    const fields = [
+  it('inspects generated query variants through the native command', async () => {
+    const instances = [
       {
-        fieldName: 'groupSoup',
-        arguments: {},
+        variables: { input: { initial: { limit: 20 } } },
+        value: { bins: [] },
       },
     ];
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
-        command === 'graphql_cache_inspect_fields' ? fields : null
+        command === 'graphql_cache_inspect_query' ? instances : null
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
+    const request = {
+      query:
+        'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
+      operationName: 'Views',
+      path: [{ field: 'user' }, { field: 'groupSoup' }],
+    };
 
-    await expect(host.inspectFields('GraphqlUser:user-1')).resolves.toEqual(
-      fields
+    await expect(host.inspectQuery(request)).resolves.toEqual(instances);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_inspect_query',
+      request
     );
-    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_inspect_fields', {
-      entityKey: 'GraphqlUser:user-1',
-    });
   });
 
   it('delivers only own-client op keys from the broadcast event', async () => {

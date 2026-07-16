@@ -40,9 +40,10 @@ export type OptimisticLinkPatchWire = {
     | { kind: 'prependUnique'; entityKey: string };
 };
 
-export type CacheFieldInfo = {
-  fieldName: string;
-  arguments?: Record<string, unknown>;
+export type CachedQueryInstanceWire = {
+  variables: Record<string, unknown>;
+  /** Selected value; omitted when the reconstructed query is a cache miss. */
+  value?: unknown;
 };
 
 export type WriteResult = {
@@ -155,7 +156,13 @@ export type CacheRequest = { id: number } & (
       leaseOwner: string;
       leaseGeneration: string;
     }
-  | { kind: 'inspect-fields'; entityKey: string }
+  | {
+      kind: 'inspect-query';
+      query: string;
+      operationName?: string;
+      /** Response-key field path from the query root. */
+      path: Array<{ field: string }>;
+    }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */
   | { kind: 'invalidate'; keys: string[] }

@@ -10,6 +10,8 @@ pub mod engine;
 pub mod link_patch;
 pub mod meta;
 pub mod normalize;
+pub mod query_inspection;
+mod query_path;
 pub mod queue;
 pub mod store;
 pub mod value;

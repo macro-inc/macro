@@ -97,8 +97,12 @@ export class CacheWorkerCore {
         this.fanOut(result);
         return result;
       }
-      case 'inspect-fields': {
-        return await this.requireEngine().inspectFields(request.entityKey);
+      case 'inspect-query': {
+        return await this.requireEngine().inspectQuery(
+          request.query,
+          request.operationName,
+          request.path
+        );
       }
       case 'claim-next-mutation': {
         const engine = this.requireEngine();

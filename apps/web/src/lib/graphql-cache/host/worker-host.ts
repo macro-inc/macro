@@ -4,7 +4,7 @@
  */
 
 import {
-  type CacheFieldInfo,
+  type CachedQueryInstanceWire,
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
@@ -21,6 +21,7 @@ import type {
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  InspectQueryArgs,
 } from './types';
 
 type Pending = {
@@ -180,12 +181,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as OptimisticWriteResult;
     },
 
-    async inspectFields(entityKey: string): Promise<CacheFieldInfo[]> {
+    async inspectQuery(
+      args: InspectQueryArgs
+    ): Promise<CachedQueryInstanceWire[]> {
       await ready;
       return (await request({
-        kind: 'inspect-fields',
-        entityKey,
-      })) as CacheFieldInfo[];
+        kind: 'inspect-query',
+        query: args.query,
+        operationName: args.operationName,
+        path: args.path,
+      })) as CachedQueryInstanceWire[];
     },
 
     async claimNextMutation(

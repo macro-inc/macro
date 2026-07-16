@@ -1,11 +1,12 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
-use cache_core::engine::{BeginOptimisticWrite, CacheFieldInfo, Engine, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -61,21 +62,9 @@ struct JsWriteResult {
     revalidations: Vec<QueryRevalidation>,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsCacheFieldInfo {
-    field_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    arguments: Option<serde_json::Value>,
-}
-
-impl From<CacheFieldInfo> for JsCacheFieldInfo {
-    fn from(field: CacheFieldInfo) -> Self {
-        Self {
-            field_name: field.field_name,
-            arguments: field.arguments,
-        }
-    }
+#[derive(Deserialize)]
+struct JsInspectionPathSegment {
+    field: String,
 }
 
 #[derive(Serialize)]
@@ -330,23 +319,30 @@ impl CacheEngine {
         })
     }
 
-    /// Inspects fields on an effective normalized entity record.
-    #[wasm_bindgen(js_name = inspectFields)]
-    pub fn inspect_fields(&self, entity_key: String) -> js_sys::Promise {
+    /// Enumerates cached variants of one generated query field.
+    #[wasm_bindgen(js_name = inspectQuery)]
+    pub fn inspect_query(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        path: JsValue,
+    ) -> js_sys::Promise {
         let engine = self.engine.clone();
         future_to_promise(async move {
-            let fields = engine
+            let path: Vec<JsInspectionPathSegment> =
+                serde_wasm_bindgen::from_value(path).map_err(err_js)?;
+            let inspection = QueryInspection {
+                query,
+                operation_name,
+                path: path.into_iter().map(|segment| segment.field).collect(),
+            };
+            let instances = engine
                 .lock()
                 .await
-                .inspect_fields(&EntityKey(entity_key))
+                .inspect_query(&inspection)
                 .await
                 .map_err(err_js)?;
-            to_js(
-                &fields
-                    .into_iter()
-                    .map(JsCacheFieldInfo::from)
-                    .collect::<Vec<_>>(),
-            )
+            to_js(&instances)
         })
     }
 

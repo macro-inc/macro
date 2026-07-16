@@ -12,10 +12,9 @@
 //! internally — the same scheme as the `cache-wasm` shell.
 
 use cache_core::deps::OpId;
-use cache_core::engine::{
-    BeginOptimisticWrite, CacheFieldInfo, Engine, ReadResult, WriteResult,
-};
+use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::query_inspection::{CachedQueryInstance, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
@@ -50,26 +49,6 @@ pub struct WriteResultWire {
     pub reset: bool,
     /// Queries to fetch after successful optimistic settlement.
     pub revalidations: Vec<QueryRevalidation>,
-}
-
-/// One effective cache field returned to the webview.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CacheFieldInfoWire {
-    /// GraphQL field name without arguments.
-    pub field_name: String,
-    /// Parsed canonical field arguments.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<serde_json::Value>,
-}
-
-impl From<CacheFieldInfo> for CacheFieldInfoWire {
-    fn from(field: CacheFieldInfo) -> Self {
-        Self {
-            field_name: field.field_name,
-            arguments: field.arguments,
-        }
-    }
 }
 
 /// Mirrors `OptimisticWriteResult` in
@@ -227,18 +206,23 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Inspects fields on an effective normalized entity record.
-    pub async fn inspect_fields(
+    /// Enumerates cached variants of one generated query field.
+    pub async fn inspect_query(
         &self,
-        entity_key: String,
-    ) -> Result<Vec<CacheFieldInfoWire>, String> {
+        query: String,
+        operation_name: Option<String>,
+        path: Vec<String>,
+    ) -> Result<Vec<CachedQueryInstance>, String> {
         self.inner
             .lock()
             .await
             .engine
-            .inspect_fields(&EntityKey(entity_key))
+            .inspect_query(&QueryInspection {
+                query,
+                operation_name,
+                path,
+            })
             .await
-            .map(|fields| fields.into_iter().map(CacheFieldInfoWire::from).collect())
             .map_err(|error| error.to_string())
     }
 

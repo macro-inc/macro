@@ -122,7 +122,7 @@ function makeFakeHost(): FakeHost {
         reset: false,
       };
     },
-    async inspectFields() {
+    async inspectQuery() {
       return [];
     },
     async claimNextMutation(_owner): Promise<ClaimedMutation | undefined> {

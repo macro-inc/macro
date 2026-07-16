@@ -9,7 +9,7 @@
  */
 
 import type {
-  CacheFieldInfo,
+  CachedQueryInstanceWire,
   ClaimedMutation,
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
@@ -43,7 +43,11 @@ export interface CacheEngine {
     revalidations: QueryRevalidationWire[] | undefined,
     createdAtMs: number
   ): Promise<OptimisticWriteResult>;
-  inspectFields(entityKey: string): Promise<CacheFieldInfo[]>;
+  inspectQuery(
+    query: string,
+    operationName: string | undefined,
+    path: Array<{ field: string }>
+  ): Promise<CachedQueryInstanceWire[]>;
   claimNextMutation(
     owner: string,
     nowMs: number,

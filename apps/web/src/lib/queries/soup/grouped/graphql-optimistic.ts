@@ -1,3 +1,4 @@
+import { inspect, selectAll } from '@graphql-cache/exchange/inspection';
 import {
   type OptimisticUpdate,
   prependUnique,
@@ -7,7 +8,6 @@ import {
   update,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { stringifyDocument } from '@urql/core';
 import {
   type GroupedSoupInput,
   GroupSoupMembershipDocument,
@@ -15,8 +15,6 @@ import {
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import { groupedSoupLogicalViewKey } from './graphql-operation-registry';
 import { NOT_SET_GROUP_KEY } from './types';
-
-const VIEWER_QUERY = `query OptimisticGroupSoupViewer { user { id } }`;
 
 type BuildArgs = {
   host: CacheHost;
@@ -33,30 +31,61 @@ export type OptimisticGroupedPropertyUpdates = {
   revalidations: QueryRevalidation[];
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+type GroupPage = {
+  input: GroupedSoupInput;
+  bins: GroupSoupMembershipQuery['user']['groupSoup']['bins'];
+};
 
-function propertyGroupingId(input: unknown): string | undefined {
-  if (!isRecord(input)) return undefined;
-  const page = isRecord(input.initial)
-    ? input.initial
-    : isRecord(input.continuation)
-      ? input.continuation
-      : undefined;
-  if (!page || !isRecord(page.groupBy)) return undefined;
-  return page.groupBy.field === 'PROPERTY' &&
-    typeof page.groupBy.propertyDefinitionId === 'string'
-    ? page.groupBy.propertyDefinitionId
+type GroupKeyDiff = {
+  removed: string[];
+  added: string[];
+};
+
+/** Returns changed group keys, or nothing when both sets are equivalent. */
+export function diffGroupKeys(
+  oldGroupKeys: readonly string[],
+  newGroupKeys: readonly string[]
+): GroupKeyDiff | undefined {
+  const oldKeys = new Set(oldGroupKeys);
+  const newKeys = new Set(newGroupKeys);
+  const removed = [...oldKeys].filter((key) => !newKeys.has(key));
+  const added = [...newKeys].filter((key) => !oldKeys.has(key));
+  return removed.length > 0 || added.length > 0
+    ? { removed, added }
     : undefined;
 }
 
-function isInitialInput(input: unknown): input is GroupedSoupInput {
-  return isRecord(input) && isRecord(input.initial);
+/** True when one generated grouped input targets the changed property. */
+export function isRelevantPropertyGrouping(
+  input: GroupedSoupInput,
+  propertyDefinitionId: string
+): boolean {
+  const page = input.initial ?? input.continuation;
+  return (
+    page.groupBy.field === 'PROPERTY' &&
+    String(page.groupBy.propertyDefinitionId) === propertyDefinitionId
+  );
 }
 
-function unique(values: readonly string[]): string[] {
-  return [...new Set(values)];
+function isInitialInput(
+  input: GroupedSoupInput
+): input is Extract<GroupedSoupInput, { initial: object }> {
+  return input.initial !== undefined;
+}
+
+/** Associates loaded initial/continuation pages by frontend logical view. */
+export function groupPagesByLogicalView(
+  pages: readonly GroupPage[]
+): Map<string, GroupPage[]> {
+  const views = new Map<string, GroupPage[]>();
+  for (const page of pages) {
+    const logicalView = groupedSoupLogicalViewKey(page.input);
+    if (!logicalView) continue;
+    const grouped = views.get(logicalView) ?? [];
+    grouped.push(page);
+    views.set(logicalView, grouped);
+  }
+  return views;
 }
 
 /**
@@ -67,69 +96,35 @@ function unique(values: readonly string[]): string[] {
 export async function buildOptimisticGroupedPropertyUpdates(
   args: BuildArgs
 ): Promise<OptimisticGroupedPropertyUpdates> {
-  const viewer = await args.host.readQuery({
-    query: VIEWER_QUERY,
-    operationName: 'OptimisticGroupSoupViewer',
-  });
-  if (viewer.kind !== 'hit' || !isRecord(viewer.data)) {
-    return { updates: [], revalidations: [] };
-  }
-  const user = isRecord(viewer.data.user) ? viewer.data.user : undefined;
-  if (!user || typeof user.id !== 'string') {
+  const changes = diffGroupKeys(args.oldGroupKeys, args.newGroupKeys);
+  if (!changes && !args.revalidateOnly) {
     return { updates: [], revalidations: [] };
   }
 
-  const fields = await args.host.inspectFields(`GraphqlUser:${user.id}`);
-  const oldKeys = new Set(unique(args.oldGroupKeys));
-  const newKeys = new Set(unique(args.newGroupKeys));
-  const removed = [...oldKeys].filter((key) => !newKeys.has(key));
-  const added = [...newKeys].filter((key) => !oldKeys.has(key));
-  if (removed.length === 0 && added.length === 0 && !args.revalidateOnly) {
-    return { updates: [], revalidations: [] };
-  }
-
-  const updates: OptimisticUpdate[] = [];
-  const revalidations: QueryRevalidation[] = [];
-  const membershipQuery = stringifyDocument(GroupSoupMembershipDocument);
-  const views = new Map<
-    string,
-    Array<{
-      input: GroupedSoupInput;
-      bins: GroupSoupMembershipQuery['user']['groupSoup']['bins'];
-    }>
-  >();
-
-  for (const field of fields) {
-    if (field.fieldName !== 'groupSoup') continue;
-    const input = field.arguments?.input;
-    if (propertyGroupingId(input) !== args.propertyDefinitionId) continue;
-
-    const revalidate: QueryRevalidation = {
+  const cachedViews = await inspect(
+    args.host,
+    selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
+  );
+  const relevantViews = cachedViews.filter(({ variables }) =>
+    isRelevantPropertyGrouping(variables.input, args.propertyDefinitionId)
+  );
+  const revalidations: QueryRevalidation[] = relevantViews.map(
+    ({ variables }) => ({
       document: GroupSoupMembershipDocument,
-      variables: { input: input as GroupedSoupInput },
-    };
-    revalidations.push(revalidate);
-
-    const membership = await args.host.readQuery({
-      query: membershipQuery,
-      operationName: 'GroupSoupMembership',
-      variables: { input: input as GroupedSoupInput },
-    });
-    if (membership.kind !== 'hit') continue;
-    const data = membership.data as GroupSoupMembershipQuery;
-    const bins = data.user?.groupSoup?.bins;
-    const logicalView = groupedSoupLogicalViewKey(input);
-    if (!bins || !logicalView) continue;
-    const pages = views.get(logicalView) ?? [];
-    pages.push({
-      input: input as GroupedSoupInput,
-      bins,
-    });
-    views.set(logicalView, pages);
+      variables,
+    })
+  );
+  if (args.revalidateOnly || !changes) {
+    return { updates: [], revalidations };
   }
 
-  if (args.revalidateOnly) return { updates, revalidations };
-
+  const views = groupPagesByLogicalView(
+    relevantViews.flatMap(({ variables, value }) =>
+      value ? [{ input: variables.input, bins: value.bins }] : []
+    )
+  );
+  const { removed, added } = changes;
+  const updates: OptimisticUpdate[] = [];
   const itemEntityKey = `GraphqlSoupItem:${args.entityId}`;
   for (const pages of views.values()) {
     const sourcePages = pages.filter((page) =>

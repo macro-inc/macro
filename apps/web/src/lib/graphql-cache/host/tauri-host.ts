@@ -10,7 +10,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
-  CacheFieldInfo,
+  CachedQueryInstanceWire,
   ClaimedMutation,
   MutationClaim,
   OptimisticWriteResult,
@@ -22,6 +22,7 @@ import type {
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  InspectQueryArgs,
 } from './types';
 
 /** Keep in sync with `OPS_AFFECTED_EVENT` in graphql_cache_plugin. */
@@ -144,11 +145,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
-    async inspectFields(entityKey: string): Promise<CacheFieldInfo[]> {
+    async inspectQuery(
+      args: InspectQueryArgs
+    ): Promise<CachedQueryInstanceWire[]> {
       await ready;
-      return await request<CacheFieldInfo[]>('graphql_cache_inspect_fields', {
-        entityKey,
-      });
+      return await request<CachedQueryInstanceWire[]>(
+        'graphql_cache_inspect_query',
+        {
+          query: args.query,
+          operationName: args.operationName,
+          path: args.path,
+        }
+      );
     },
 
     async claimNextMutation(

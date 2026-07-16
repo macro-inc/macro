@@ -10,6 +10,10 @@ use crate::link_patch::{
     deduplicate_patches, missing_patch_record,
 };
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
+use crate::query_inspection::{
+    CachedQueryInstance, OwnerResolution, QueryInspection, QueryInspectionError, prepare,
+    recover_variants, resolve_owner, selected_result_value,
+};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, OptimisticSource, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
@@ -33,6 +37,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Denormalize(#[from] DenormalizeError),
     #[error(transparent)]
     LinkPatch(#[from] LinkPatchError),
+    #[error(transparent)]
+    QueryInspection(#[from] QueryInspectionError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
@@ -71,15 +77,6 @@ pub struct WriteResult {
     pub reset: bool,
     /// Queries that should be revalidated after a successful settlement.
     pub revalidations: Vec<QueryRevalidation>,
-}
-
-/// One cached field on an effective normalized entity record.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CacheFieldInfo {
-    /// GraphQL field name without canonical arguments.
-    pub field_name: String,
-    /// Parsed canonical arguments when the field key contains valid JSON.
-    pub arguments: Option<Json>,
 }
 
 /// Borrowed inputs for atomically beginning one optimistic mutation.
@@ -874,30 +871,53 @@ impl<S: Storage> Engine<S> {
         Ok(out)
     }
 
-    /// Returns the names and parsed arguments of every field in an entity's
-    /// current effective view. Storage keys never escape the cache core.
-    pub async fn inspect_fields(
+    /// Enumerates cached argument variants of one generated query field.
+    ///
+    /// Normalized owners, canonical field keys, cold records, and optimistic
+    /// layers remain internal. Every recovered variable set is read through
+    /// the ordinary denormalizer so inspection has cache-only read semantics.
+    pub async fn inspect_query(
         &mut self,
-        entity_key: &EntityKey,
-    ) -> Result<Vec<CacheFieldInfo>, EngineError<S::Error>> {
+        inspection: &QueryInspection,
+    ) -> Result<Vec<CachedQueryInstance>, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
-        let candidates = BTreeSet::from([entity_key.clone()]);
-        let bases = self.load_bases(&candidates).await?;
-        let effective = effective_records(&bases, &self.optimistic, &candidates);
-        let Some(Some(record)) = effective.get(entity_key) else {
-            return Ok(Vec::new());
-        };
-        Ok(record
-            .fields
-            .keys()
-            .map(|field_key| {
-                let (field_name, arguments) = parse_field_key(field_key);
-                CacheFieldInfo {
-                    field_name,
-                    arguments,
+        let operation = Self::document(&mut self.docs, &inspection.query)?
+            .operation(inspection.operation_name.as_deref())?
+            .clone();
+        let prepared = prepare(&operation, &inspection.path)?;
+
+        let mut candidates = BTreeSet::from([EntityKey::root()]);
+        let owner = loop {
+            let bases = self.load_bases(&candidates).await?;
+            let effective =
+                present_records(effective_records(&bases, &self.optimistic, &candidates));
+            match resolve_owner(&effective, &operation, &inspection.path)? {
+                OwnerResolution::Owner(owner) => break owner,
+                OwnerResolution::Absent => return Ok(Vec::new()),
+                OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {
+                    candidates.insert(key);
                 }
-            })
-            .collect())
+                OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),
+            }
+        };
+        let variables = recover_variants(&owner, &prepared)?;
+        let mut instances = Vec::with_capacity(variables.len());
+        for variables in variables {
+            let value = match self
+                .read_query(
+                    None,
+                    &inspection.query,
+                    inspection.operation_name.as_deref(),
+                    &variables,
+                )
+                .await?
+            {
+                ReadResult::Hit { data } => Some(selected_result_value(&data, &inspection.path)?),
+                ReadResult::Miss => None,
+            };
+            instances.push(CachedQueryInstance { variables, value });
+        }
+        Ok(instances)
     }
 
     /// Reacts to a reset performed by *another* engine instance sharing the
@@ -1091,16 +1111,4 @@ fn deduplicate_revalidations(
         unique.insert(revalidation);
     }
     unique.into_iter().collect()
-}
-
-fn parse_field_key(field_key: &str) -> (String, Option<Json>) {
-    let Some(open) = field_key.find('(') else {
-        return (field_key.to_string(), None);
-    };
-    if !field_key.ends_with(')') {
-        return (field_key.to_string(), None);
-    }
-    let name = field_key[..open].to_string();
-    let arguments = serde_json::from_str(&field_key[open + 1..field_key.len() - 1]).ok();
-    (name, arguments)
 }

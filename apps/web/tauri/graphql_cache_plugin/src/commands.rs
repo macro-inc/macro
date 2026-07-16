@@ -10,12 +10,13 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    CacheFieldInfoWire, ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire,
-    ReadResultWire, WriteResultWire,
+    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
 };
 use crate::{CacheState, InitializedCache, emit_ops_affected};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::query_inspection::CachedQueryInstance;
 use cache_sqlite::SqliteStorage;
+use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
@@ -140,13 +141,28 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     Ok(result)
 }
 
-/// Inspects effective argument-qualified fields on a normalized record.
+/// One field-only response-key path segment for query inspection.
+#[derive(Debug, Deserialize)]
+pub struct InspectionPathSegment {
+    /// Generated GraphQL response key (alias when present).
+    pub field: String,
+}
+
+/// Enumerates cached variants of one generated query field.
 #[tauri::command]
-pub async fn graphql_cache_inspect_fields(
+pub async fn graphql_cache_inspect_query(
     state: State<'_, CacheState>,
-    entity_key: String,
-) -> Result<Vec<CacheFieldInfoWire>, String> {
-    engine_handle(&state)?.inspect_fields(entity_key).await
+    query: String,
+    operation_name: Option<String>,
+    path: Vec<InspectionPathSegment>,
+) -> Result<Vec<CachedQueryInstance>, String> {
+    engine_handle(&state)?
+        .inspect_query(
+            query,
+            operation_name,
+            path.into_iter().map(|segment| segment.field).collect(),
+        )
+        .await
 }
 
 /// Claims the oldest runnable queued mutation.

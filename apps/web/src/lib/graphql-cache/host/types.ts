@@ -6,7 +6,7 @@
  */
 
 import type {
-  CacheFieldInfo,
+  CachedQueryInstanceWire,
   ClaimedMutation,
   MutationClaim,
   OptimisticLinkPatchWire,
@@ -22,6 +22,13 @@ export interface CacheReadArgs {
   query: string;
   operationName?: string;
   variables?: Record<string, unknown>;
+}
+
+export interface InspectQueryArgs {
+  query: string;
+  operationName?: string;
+  /** Response-key field path from the query root. */
+  path: Array<{ field: string }>;
 }
 
 export interface CacheWriteArgs extends CacheReadArgs {
@@ -48,8 +55,8 @@ export interface CacheHost {
   beginOptimisticWrite(
     args: BeginOptimisticWriteArgs
   ): Promise<OptimisticWriteResult>;
-  /** Inspects effective argument-qualified fields without parsing keys in JS. */
-  inspectFields(entityKey: string): Promise<CacheFieldInfo[]>;
+  /** Enumerates cached variants of one generated query field selection. */
+  inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(
     owner: string,

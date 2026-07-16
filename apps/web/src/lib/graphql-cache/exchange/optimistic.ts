@@ -15,12 +15,16 @@ import {
   type OperationResultSource,
   stringifyDocument,
 } from '@urql/core';
-import { Kind, type OperationDefinitionNode } from 'graphql';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
 } from '../protocol';
+import {
+  documentOperationName,
+  type Present,
+  type StringKey,
+} from './generated-selection';
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
@@ -28,8 +32,6 @@ declare const selectionType: unique symbol;
 declare const optimisticUpdateType: unique symbol;
 
 type JsonScalar = string | number | boolean | null;
-type Present<T> = Exclude<T, null | undefined>;
-type StringKey<T> = Extract<keyof T, string>;
 type ScalarKey<T> = {
   [K in StringKey<T>]-?: Present<T[K]> extends JsonScalar ? K : never;
 }[StringKey<T>];
@@ -89,17 +91,6 @@ export type OptimisticMutationContext<TData = unknown> = {
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
 };
-
-function documentOperationName(
-  document: TypedDocumentNode<unknown, AnyVariables>
-): string | undefined {
-  for (const definition of document.definitions) {
-    if (definition.kind === Kind.OPERATION_DEFINITION) {
-      return (definition as OperationDefinitionNode).name?.value;
-    }
-  }
-  return undefined;
-}
 
 function serializeRevalidation(
   revalidation: QueryRevalidation

@@ -3,12 +3,14 @@
 //! Patch recipes are transport-neutral and serializable so they can be kept
 //! with durable optimistic mutations and replayed after a restart.
 
-use crate::document::{Document, FieldNode, OperationKind, Selection, resolve_args_key};
+use crate::document::{Document, FieldNode, OperationKind, Selection};
 use crate::meta;
 use crate::normalize::RecordUpdates;
-use crate::value::{
-    CacheNumber, CacheValue, EntityKey, FieldKey, Record, canonical_json, field_key,
+use crate::query_path::{
+    selected_field as find_selected_field, selected_storage_key as resolve_selected_storage_key,
+    selected_type as resolve_selected_type,
 };
+use crate::value::{CacheNumber, CacheValue, EntityKey, FieldKey, Record, canonical_json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::{BTreeSet, HashMap};
@@ -528,27 +530,11 @@ fn selected_field<'a>(
     concrete: &str,
     response_key: &str,
 ) -> Result<&'a FieldNode, LinkPatchError> {
-    for selection in selections {
-        match selection {
-            Selection::Field(field) if field.response_key == response_key => return Ok(field),
-            Selection::Field(_) => {}
-            Selection::Fragment {
-                type_condition,
-                selection_set,
-            } if type_condition
-                .as_deref()
-                .is_none_or(|condition| meta::type_matches(concrete, condition)) =>
-            {
-                if let Ok(field) = selected_field(selection_set, concrete, response_key) {
-                    return Ok(field);
-                }
-            }
-            Selection::Fragment { .. } => {}
+    find_selected_field(selections, concrete, response_key).ok_or_else(|| {
+        LinkPatchError::UnselectedField {
+            type_name: concrete.to_string(),
+            field: response_key.to_string(),
         }
-    }
-    Err(LinkPatchError::UnselectedField {
-        type_name: concrete.to_string(),
-        field: response_key.to_string(),
     })
 }
 
@@ -556,18 +542,15 @@ fn selected_storage_key(
     field: &FieldNode,
     variables: &serde_json::Map<String, Json>,
 ) -> Result<FieldKey, LinkPatchError> {
-    let arguments = resolve_args_key(field, variables)
-        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
-    Ok(field_key(&field.name, arguments.as_deref()))
+    resolve_selected_storage_key(field, variables)
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))
 }
 
 fn selected_type(concrete: &str, field: &FieldNode) -> Result<&'static str, LinkPatchError> {
-    meta::field_meta(concrete, &field.name)
-        .map(|metadata| metadata.ty.name)
-        .ok_or_else(|| LinkPatchError::UnselectedField {
-            type_name: concrete.to_string(),
-            field: field.response_key.clone(),
-        })
+    resolve_selected_type(concrete, field).ok_or_else(|| LinkPatchError::UnselectedField {
+        type_name: concrete.to_string(),
+        field: field.response_key.clone(),
+    })
 }
 
 fn traverse<'a>(

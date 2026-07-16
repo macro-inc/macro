@@ -1,6 +1,5 @@
-import type { CacheHost, CacheReadArgs } from '@graphql-cache/host/types';
-import type { CacheFieldInfo } from '@graphql-cache/protocol';
-import { describe, expect, it } from 'vitest';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { describe, expect, it, vi } from 'vitest';
 import { registerGroupedSoupContinuation } from './graphql-operation-registry';
 import { buildOptimisticGroupedPropertyUpdates } from './graphql-optimistic';
 
@@ -30,23 +29,49 @@ function host(args?: {
   includeUnrelated?: boolean;
   continuation?: boolean;
   initialContainsItem?: boolean;
+  miss?: boolean;
+  onInspect?: () => void;
 }): CacheHost {
-  const fields: CacheFieldInfo[] = [
+  const value = (containsItem: boolean) => ({
+    bins: [
+      {
+        key: 'in-progress',
+        totalCount: 1,
+        nextCursor: null,
+        items: containsItem ? [{ id: 'task-1' }] : [],
+      },
+      ...(args?.destination === false
+        ? []
+        : [
+            {
+              key: 'completed',
+              totalCount: 0,
+              nextCursor: null,
+              items: [],
+            },
+          ]),
+    ],
+  });
+  const instances: Array<{
+    variables: { input: typeof input | typeof continuationInput };
+    value?: ReturnType<typeof value>;
+  }> = [
     {
-      fieldName: 'groupSoup',
-      arguments: { input },
+      variables: { input },
+      ...(args?.miss
+        ? {}
+        : { value: value(args?.initialContainsItem !== false) }),
     },
   ];
   if (args?.continuation) {
-    fields.push({
-      fieldName: 'groupSoup',
-      arguments: { input: continuationInput },
+    instances.push({
+      variables: { input: continuationInput },
+      value: value(true),
     });
   }
   if (args?.includeUnrelated) {
-    fields.push({
-      fieldName: 'groupSoup',
-      arguments: {
+    instances.push({
+      variables: {
         input: {
           initial: {
             groupBy: {
@@ -57,52 +82,15 @@ function host(args?: {
           },
         },
       },
+      value: value(true),
     });
   }
 
   return {
     clientId: 'test',
-    async readQuery(request: CacheReadArgs) {
-      if (request.operationName === 'OptimisticGroupSoupViewer') {
-        return { kind: 'hit', data: { user: { id: 'user-1' } } };
-      }
-      const requestedInput = request.variables?.input as
-        | typeof input
-        | typeof continuationInput
-        | undefined;
-      const continuation = requestedInput && 'continuation' in requestedInput;
-      const containsItem = continuation || args?.initialContainsItem !== false;
-      return {
-        kind: 'hit',
-        data: {
-          user: {
-            id: 'user-1',
-            groupSoup: {
-              bins: [
-                {
-                  key: 'in-progress',
-                  totalCount: 1,
-                  nextCursor: null,
-                  items: containsItem ? [{ id: 'task-1' }] : [],
-                },
-                ...(args?.destination === false
-                  ? []
-                  : [
-                      {
-                        key: 'completed',
-                        totalCount: 0,
-                        nextCursor: null,
-                        items: [],
-                      },
-                    ]),
-              ],
-            },
-          },
-        },
-      };
-    },
-    async inspectFields() {
-      return fields;
+    async inspectQuery() {
+      args?.onInspect?.();
+      return instances;
     },
   } as unknown as CacheHost;
 }
@@ -189,6 +177,34 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       'remove',
       'prependUnique',
     ]);
+  });
+
+  it('revalidates a relevant cached variant whose complete query is a miss', async () => {
+    const result = await buildOptimisticGroupedPropertyUpdates({
+      host: host({ miss: true }),
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: ['in-progress'],
+      newGroupKeys: ['completed'],
+    });
+
+    expect(result.updates).toEqual([]);
+    expect(result.revalidations).toHaveLength(1);
+    expect(result.revalidations[0]?.variables).toEqual({ input });
+  });
+
+  it('skips inspection when group-key sets are equivalent', async () => {
+    const onInspect = vi.fn();
+    const result = await buildOptimisticGroupedPropertyUpdates({
+      host: host({ onInspect }),
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: ['in-progress', 'in-progress'],
+      newGroupKeys: ['in-progress'],
+    });
+
+    expect(result).toEqual({ updates: [], revalidations: [] });
+    expect(onInspect).not.toHaveBeenCalled();
   });
 
   it('returns revalidation only for unsupported values', async () => {

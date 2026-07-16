@@ -66,14 +66,14 @@ pub enum OperationKind {
     Mutation,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Operation {
     pub name: Option<String>,
     pub kind: OperationKind,
     pub selection_set: Vec<Selection>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Document {
     pub operations: Vec<Operation>,
 }
