@@ -12,7 +12,6 @@ import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntity
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
 import type { EnsureTagSetRequest } from './generated/schemas/ensureTagSetRequest';
 import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
-import type { EntityType } from './generated/schemas/entityType';
 import type { GetBulkEntityProperties200 } from './generated/schemas/getBulkEntityProperties200';
 import type { GetEntityPropertiesParams } from './generated/schemas/getEntityPropertiesParams';
 import type { ListPropertiesParams } from './generated/schemas/listPropertiesParams';

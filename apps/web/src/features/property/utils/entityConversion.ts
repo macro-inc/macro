@@ -1,7 +1,7 @@
 import { type EntityData, isTaskEntity } from '@entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
 import type { ItemType } from '@service-storage/client';
 import { match } from 'ts-pattern';
 
