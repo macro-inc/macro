@@ -7,7 +7,7 @@ use entity_access::{
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::project::BasicProject;
-use model::response::TypedSuccessResponse;
+use model::response::{GenericSuccessResponse, SuccessResponse, TypedSuccessResponse};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -68,5 +68,41 @@ where
             document_ids: deleted.document_ids,
             chat_ids: deleted.chat_ids,
         },
+    }))
+}
+
+/// Permanently delete a soft-deleted project and all of its children.
+#[utoipa::path(
+    tag = "project",
+    delete,
+    operation_id = "permanently_delete_project",
+    path = "/projects/{id}/permanent",
+    params(("id" = String, Path, description = "ID of the project")),
+    responses(
+        (status = 200, body = SuccessResponse),
+        (status = 401, body = model::response::GenericErrorResponse),
+        (status = 404, body = model::response::GenericErrorResponse),
+        (status = 500, body = model::response::GenericErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(state, user, access), fields(user_id=?user.macro_user_id), err)]
+pub async fn permanently_delete_project_handler<T, Svc, Auth>(
+    State(state): State<ProjectRouterState<T, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth>,
+    access: ProjectAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+) -> Result<Json<SuccessResponse>, ProjectError>
+where
+    T: ProjectService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .permanently_delete_project(access.entity_access_receipt)
+        .await?;
+
+    Ok(Json(SuccessResponse {
+        error: false,
+        data: GenericSuccessResponse { success: true },
     }))
 }

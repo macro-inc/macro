@@ -11,6 +11,7 @@ pub mod get_project;
 pub mod get_projects;
 pub mod project_permission;
 pub mod revert_delete_project;
+pub mod upload_folder;
 
 use std::sync::Arc;
 
@@ -29,13 +30,14 @@ use serde::Deserialize;
 
 use self::{
     create_project::create_project_handler,
-    delete_project::delete_project_handler,
+    delete_project::{delete_project_handler, permanently_delete_project_handler},
     edit_project::edit_project_handler,
     get_batch_preview::get_batch_preview_handler,
     get_project::{get_project_content_handler, get_project_handler},
     get_projects::{get_pending_projects_handler, get_projects_handler},
     project_permission::{get_project_access_level_handler, get_project_permissions_handler},
     revert_delete_project::revert_delete_project_handler,
+    upload_folder::{upload_extract_folder_handler, upload_folder_handler},
 };
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
@@ -137,6 +139,10 @@ where
             "/{id}/revert_delete",
             axum::routing::put(revert_delete_project_handler::<T, Svc, Auth>),
         )
+        .route(
+            "/{id}/permanent",
+            axum::routing::delete(permanently_delete_project_handler::<T, Svc, Auth>),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             ensure_project_exists::<T, Svc, Auth>,
@@ -156,6 +162,14 @@ where
         .route(
             "/preview",
             axum::routing::post(get_batch_preview_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/upload",
+            axum::routing::post(upload_folder_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/upload_extract",
+            axum::routing::post(upload_extract_folder_handler::<T, Svc, Auth>),
         )
         .with_state(state)
 }

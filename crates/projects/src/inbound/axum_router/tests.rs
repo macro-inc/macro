@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     Router,
@@ -19,7 +22,7 @@ use macro_authorization::{
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{
-    folder::{UploadFolderRequest, UploadFolderResponseData},
+    folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData},
     item::ItemWithUserAccessLevel,
     project::{
         BasicProject, PendingProject, Project, ProjectPreview,
@@ -52,6 +55,7 @@ const PROJECT_ID: &str = "project-1";
 struct FakeProjectService {
     basic_project: Arc<Mutex<Result<BasicProject, String>>>,
     mutations: Arc<Mutex<Vec<&'static str>>>,
+    upload_internal_flags: Arc<Mutex<Vec<bool>>>,
 }
 
 impl FakeProjectService {
@@ -65,6 +69,7 @@ impl FakeProjectService {
                 deleted_at: deleted.then(chrono::Utc::now),
             }))),
             mutations: Arc::new(Mutex::new(Vec::new())),
+            upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -72,6 +77,7 @@ impl FakeProjectService {
         Self {
             basic_project: Arc::new(Mutex::new(Err("missing".to_string()))),
             mutations: Arc::new(Mutex::new(Vec::new())),
+            upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -171,7 +177,11 @@ impl ProjectService for FakeProjectService {
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
     ) -> Result<(), ProjectError> {
-        panic!("permanent delete is not used by these tests")
+        self.mutations
+            .lock()
+            .expect("mutation lock poisoned")
+            .push("permanent_delete");
+        Ok(())
     }
 
     async fn revert_delete_project(
@@ -189,10 +199,20 @@ impl ProjectService for FakeProjectService {
     async fn upload_folder(
         &self,
         _actor: MacroUserIdStr<'static>,
-        _internal: bool,
+        internal: bool,
         _args: UploadFolderRequest,
     ) -> Result<UploadFolderResponseData, ProjectError> {
-        panic!("folder upload is not used by these tests")
+        self.upload_internal_flags
+            .lock()
+            .expect("upload flag lock poisoned")
+            .push(internal);
+        Ok(UploadFolderResponseData {
+            file_system: FileSystemNodeWithIds::Folder {
+                content: HashMap::new(),
+                project_id: PROJECT_ID.to_string(),
+            },
+            destination_map: HashMap::new(),
+        })
     }
 
     async fn create_upload_extract_request(
@@ -207,7 +227,7 @@ impl ProjectService for FakeProjectService {
         &self,
         _root_project_id: &str,
     ) -> Result<Vec<String>, ProjectError> {
-        panic!("mark uploaded is not used by these tests")
+        Ok(vec![PROJECT_ID.to_string(), "project-child".to_string()])
     }
 
     async fn get_batch_preview(
@@ -243,7 +263,7 @@ impl EntityAccessService for FakeEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected receipt generation")
+        Err(AccessError::Unauthorized)
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
@@ -412,6 +432,18 @@ fn internal_json_request(method: &str, uri: &str, body: Value) -> Request<Body> 
         .method(method)
         .uri(uri)
         .header("x-internal-auth-key", INTERNAL_KEY)
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+fn internal_identity_json_request(method: &str, uri: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("x-internal-auth-key", INTERNAL_KEY)
+        .header("x-internal-macro-user-id", USER_ID)
+        .header("x-internal-fusionauth-user-id", "fusion-user")
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .expect("request should be valid")
@@ -681,5 +713,155 @@ async fn soft_deleted_project_rejects_non_owner_even_with_shared_access() {
     assert_eq!(
         json_body(response).await,
         json!({ "message": "only owner can access deleted resource" })
+    );
+}
+
+#[tokio::test]
+async fn upload_with_parent_denial_prevents_service_call() {
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let calls = service.upload_internal_flags.clone();
+    let response = router(service, None)
+        .oneshot(authenticated_json_request(
+            "POST",
+            "/upload",
+            json!({
+                "content": [],
+                "rootFolderName": "Folder",
+                "uploadRequestId": "request-1",
+                "parentId": Uuid::new_v4().to_string()
+            }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(calls.lock().expect("upload flag lock poisoned").is_empty());
+}
+
+#[tokio::test]
+async fn upload_extract_with_parent_denial_prevents_service_call() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_json_request(
+            "POST",
+            "/upload_extract",
+            json!({
+                "sha": "archive-sha",
+                "parentId": Uuid::new_v4().to_string()
+            }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn anonymous_upload_is_rejected() {
+    let request = Request::post("/upload")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "content": [],
+                "rootFolderName": "Folder",
+                "uploadRequestId": "request-1"
+            })
+            .to_string(),
+        ))
+        .expect("request should be valid");
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(request)
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn internal_upload_selects_internal_destinations_with_exact_lambda_json() {
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let flags = service.upload_internal_flags.clone();
+    let response = router(service, None)
+        .oneshot(internal_identity_json_request(
+            "POST",
+            "/upload",
+            json!({
+                "content": [],
+                "rootFolderName": "Folder",
+                "uploadRequestId": "lambda-request"
+            }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(&*flags.lock().expect("upload flag lock poisoned"), &[true]);
+    assert_eq!(
+        json_body(response).await,
+        json!({
+            "error": false,
+            "data": {
+                "fileSystem": {
+                    "type": "folder",
+                    "content": {},
+                    "project_id": PROJECT_ID
+                },
+                "destinationMap": {}
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn permanent_delete_requires_owner_access() {
+    let service = FakeProjectService::with_project("macro|owner@example.com", true);
+    let mutations = service.mutations.clone();
+    let response = router(service, Some(AccessLevel::Edit))
+        .oneshot(
+            Request::delete(format!("/{PROJECT_ID}/permanent"))
+                .header("authorization", format!("Bearer {TOKEN}"))
+                .body(Body::empty())
+                .expect("request should be valid"),
+        )
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(mutations.lock().expect("mutation lock poisoned").is_empty());
+}
+
+#[tokio::test]
+async fn mark_uploaded_preserves_exact_lambda_request_and_response_json() {
+    use super::upload_folder::mark_uploaded_handler;
+
+    let state = ProjectRouterState {
+        service: Arc::new(FakeProjectService::with_project(USER_ID, false)),
+        access_service: Arc::new(FakeEntityAccessService { access_level: None }),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+    };
+    let router = Router::new()
+        .route(
+            "/mark_uploaded",
+            axum::routing::post(
+                mark_uploaded_handler::<
+                    FakeProjectService,
+                    FakeEntityAccessService,
+                    FakeAuthorizationService,
+                >,
+            ),
+        )
+        .with_state(state);
+    let response = router
+        .oneshot(internal_identity_json_request(
+            "POST",
+            "/mark_uploaded",
+            json!({ "projectId": PROJECT_ID }),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({ "projectIds": [PROJECT_ID, "project-child"] })
     );
 }
