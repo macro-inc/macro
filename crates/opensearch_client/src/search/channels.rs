@@ -18,7 +18,6 @@ use chrono::Utc;
 use models_opensearch::{OpenSearchEntityType, SearchEntityType, SearchIndex};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_query_builder::*;
-use tracing::Instrument;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
@@ -230,28 +229,20 @@ pub(crate) async fn search_channel(
     exclude_source_content(&mut search_request);
 
     let index = SearchIndex::Channels.as_ref();
-    let response = async {
-        client
-            .search(opensearch::SearchParts::Index(&[index]))
-            .body(search_request)
-            .send()
-            .await
-            .map_client_error()
-            .await
-    }
-    .instrument(tracing::info_span!("opensearch_http_request"))
-    .await?;
+    let response = client
+        .search(opensearch::SearchParts::Index(&[index]))
+        .body(search_request)
+        .send()
+        .await
+        .map_client_error()
+        .await?;
 
-    let bytes = async {
-        response
-            .bytes()
-            .await
-            .map_err(|e| OpensearchClientError::HttpBytesError {
-                details: e.to_string(),
-            })
-    }
-    .instrument(tracing::info_span!("opensearch_read_response_body"))
-    .await?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
+            details: e.to_string(),
+        })?;
 
     let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
         .map_err(|e| OpensearchClientError::SearchDeserializationFailed {

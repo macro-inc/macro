@@ -31,7 +31,6 @@ use crate::{
 };
 use chrono::Utc;
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
-use tracing::Instrument;
 
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::*;
@@ -812,39 +811,26 @@ pub(crate) async fn search_unified(
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
-    let response = async {
-        client
-            .search(opensearch::SearchParts::Index(&search_indices))
-            .body(search_request)
-            .send()
-            .await
-            .map_client_error()
-            .await
-    }
-    .instrument(tracing::info_span!("opensearch_http_request"))
-    .await?;
+    let response = client
+        .search(opensearch::SearchParts::Index(&search_indices))
+        .body(search_request)
+        .send()
+        .await
+        .map_client_error()
+        .await?;
 
-    let bytes = async {
-        response
-            .bytes()
-            .await
-            .map_err(|e| OpensearchClientError::HttpBytesError {
-                details: e.to_string(),
-            })
-    }
-    .instrument(tracing::info_span!("opensearch_read_response_body"))
-    .await?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
+            details: e.to_string(),
+        })?;
 
-    let result: DefaultSearchResponse<UnifiedSearchIndex> = {
-        let _span = tracing::info_span!("opensearch_deserialize_response", body_size = bytes.len())
-            .entered();
-        serde_json::from_slice(&bytes).map_err(|e| {
-            OpensearchClientError::SearchDeserializationFailed {
-                details: e.to_string(),
-                raw_body: String::from_utf8_lossy(&bytes).to_string(),
-            }
-        })?
-    };
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
+        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
+        })?;
 
     tracing::info!(
         response_body_bytes = bytes.len(),
