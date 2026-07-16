@@ -6,8 +6,7 @@ use frecency::{
     outbound::postgres::FrecencyPgStorage,
 };
 use last_online_tracker::inbound::LastOnlineWorker;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
 use redis::{RedisError, aio::MultiplexedConnection};
 use std::sync::Arc;
 use stream::domain::StreamManager;
