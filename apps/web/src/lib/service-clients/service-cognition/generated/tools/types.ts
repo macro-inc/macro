@@ -315,9 +315,11 @@ export type EntityItem =
       };
       type: 'foreignEntity';
     };
-export type ToolEntityType =
+/**
+ * Canonical entity type accepted when an AI tool targets an entity's properties.
+ */
+export type ToolPropertyTargetEntityType =
   | 'document'
-  | 'task'
   | 'project'
   | 'chat'
   | 'thread'
@@ -451,6 +453,16 @@ export type SendEmailResponse =
         draft_id: string;
       };
     };
+export type ToolEntityType =
+  | 'document'
+  | 'task'
+  | 'project'
+  | 'chat'
+  | 'thread'
+  | 'channel'
+  | 'call'
+  | 'user'
+  | 'company';
 /**
  * Content of a text editor code execution response - either a result or an error
  */
@@ -1601,14 +1613,14 @@ export interface GetCompanyResponse {
   summary: string;
 }
 /**
- * Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
+ * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
  */
 export interface GetEntityProperties {
   /**
    * The ID of the entity to get properties for.
    */
   entity_id: string;
-  entity_type: ToolEntityType;
+  entity_type: ToolPropertyTargetEntityType;
 }
 /**
  * Response from the GetEntityProperties tool.
@@ -3210,7 +3222,7 @@ export interface SendEmail {
   to: EmailRecipient[];
 }
 /**
- * Set or update a property value on an entity (document, task, project, etc.). Provide the property_definition_id and exactly one value field matching the property's data type.
+ * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
  *
  * For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
  *
@@ -3256,7 +3268,7 @@ export interface SetEntityProperty {
    * For multi entity reference properties.
    */
   entity_refs?: ToolEntityRef[] | null;
-  entity_type: ToolEntityType;
+  entity_type: ToolPropertyTargetEntityType;
   /**
    * For single link properties.
    */
