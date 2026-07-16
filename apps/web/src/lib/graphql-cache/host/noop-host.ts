@@ -29,7 +29,23 @@ export function createNoopCacheHost(reason: string): CacheHost {
     },
     async queryIndexedItems(args: QueryIndexedItemsArgs) {
       normalizeIndexedEntityLimit(args.limit);
-      return { items: [], nextCursor: null, hasMore: false };
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+        totalCount: args.includeTotalCount ? 0 : null,
+        bucketCounts: args.includeTotalCount ? {} : null,
+      };
+    },
+    async searchIndexedItems(args) {
+      normalizeIndexedEntityLimit(args.limit);
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+        totalCount: args.includeTotalCount ? 0 : null,
+        bucketCounts: args.includeTotalCount ? {} : null,
+      };
     },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();

@@ -17,6 +17,7 @@ describe('CacheWorkerCore indexed queries', () => {
       items: [],
       nextCursor: null,
       hasMore: false,
+      totalCount: null,
     };
     const queryIndexedItems = vi.fn().mockResolvedValue(page);
     loadCacheWasmMock.mockResolvedValue({
@@ -34,15 +35,17 @@ describe('CacheWorkerCore indexed queries', () => {
     await core.handleRequest(port, {
       id: 2,
       kind: 'query-indexed-items',
-      buckets: ['note', 'task'],
+      buckets: ['document'],
       cursor: 'cursor-1',
       limit: 25,
+      includeTotalCount: true,
     });
 
     expect(queryIndexedItems).toHaveBeenCalledWith(
-      ['note', 'task'],
+      ['document'],
       'cursor-1',
-      25
+      25,
+      true
     );
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });

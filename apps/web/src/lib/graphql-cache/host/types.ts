@@ -8,10 +8,12 @@
 import type {
   ClaimedMutation,
   IndexedEntityPage,
+  IndexedEntitySearchPage,
   MutationClaim,
   OptimisticWriteResult,
   QueryIndexedItemsArgs,
   ReadResult,
+  SearchIndexedItemsArgs,
   WriteResult,
 } from '../protocol';
 
@@ -38,6 +40,10 @@ export interface CacheHost {
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Lists durable normalized entities through the secondary index. */
   queryIndexedItems(args: QueryIndexedItemsArgs): Promise<IndexedEntityPage>;
+  /** Searches projected metadata and hydrates only matching entities. */
+  searchIndexedItems(
+    args: SearchIndexedItemsArgs
+  ): Promise<IndexedEntitySearchPage>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
   beginOptimisticWrite(args: CacheWriteArgs): Promise<OptimisticWriteResult>;

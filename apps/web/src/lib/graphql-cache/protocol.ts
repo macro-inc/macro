@@ -14,18 +14,16 @@ export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 /** Soup entity buckets persisted by the normalized-cache secondary index. */
 export type IndexedEntityBucket =
   | 'document'
-  | 'note'
-  | 'task'
-  | 'snippet'
   | 'chat'
   | 'project'
   | 'email'
   | 'channel'
-  | 'dm'
   | 'crm_company';
 
 /** Opaque exclusive cursor for deterministic indexed pagination. */
 export type EntityIndexCursor = string;
+/** Opaque cursor for relevance-ordered indexed search. */
+export type EntitySearchCursor = string;
 
 /** Cache-only indexed entity snapshot. Normalized record links are omitted. */
 export type IndexedEntityItem = {
@@ -40,6 +38,10 @@ export type IndexedEntityPage = {
   items: IndexedEntityItem[];
   nextCursor: EntityIndexCursor | null;
   hasMore: boolean;
+  /** Present only when requested, normally on the first page. */
+  totalCount: number | null;
+  /** Per-entity-type totals, present alongside `totalCount`. */
+  bucketCounts?: Partial<Record<IndexedEntityBucket, number>> | null;
 };
 
 export const MAX_INDEXED_ENTITY_PAGE_SIZE = 500;
@@ -49,6 +51,26 @@ export type QueryIndexedItemsArgs = {
   buckets?: IndexedEntityBucket[];
   cursor?: EntityIndexCursor;
   limit: number;
+  /** Request a bucket-wide count without hydrating additional records. */
+  includeTotalCount?: boolean;
+};
+
+export type IndexedEntitySearchPage = {
+  items: IndexedEntityItem[];
+  nextCursor: EntitySearchCursor | null;
+  hasMore: boolean;
+  totalCount: number | null;
+  /** Per-entity-type match totals, present alongside `totalCount`. */
+  bucketCounts?: Partial<Record<IndexedEntityBucket, number>> | null;
+};
+
+export type SearchIndexedItemsArgs = {
+  /** Empty or omitted means every indexed entity bucket. */
+  buckets?: IndexedEntityBucket[];
+  query: string;
+  cursor?: EntitySearchCursor;
+  limit: number;
+  includeTotalCount?: boolean;
 };
 
 /** Validates and clamps an indexed page size before crossing a host boundary. */
@@ -170,6 +192,15 @@ export type CacheRequest = { id: number } & (
       buckets: IndexedEntityBucket[];
       cursor?: EntityIndexCursor;
       limit: number;
+      includeTotalCount: boolean;
+    }
+  | {
+      kind: 'search-indexed-items';
+      buckets: IndexedEntityBucket[];
+      query: string;
+      cursor?: EntitySearchCursor;
+      limit: number;
+      includeTotalCount: boolean;
     }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */

@@ -11,8 +11,10 @@
 import type {
   ClaimedMutation,
   EntityIndexCursor,
+  EntitySearchCursor,
   IndexedEntityBucket,
   IndexedEntityPage,
+  IndexedEntitySearchPage,
   OptimisticWriteResult,
   ReadResult,
   WriteResult,
@@ -28,8 +30,16 @@ export interface CacheEngine {
   queryIndexedItems(
     buckets: IndexedEntityBucket[],
     cursor: EntityIndexCursor | undefined,
-    limit: number
+    limit: number,
+    includeTotalCount: boolean
   ): Promise<IndexedEntityPage>;
+  searchIndexedItems(
+    buckets: IndexedEntityBucket[],
+    query: string,
+    cursor: EntitySearchCursor | undefined,
+    limit: number,
+    includeTotalCount: boolean
+  ): Promise<IndexedEntitySearchPage>;
   writeQuery(
     originOpId: string | undefined,
     query: string,

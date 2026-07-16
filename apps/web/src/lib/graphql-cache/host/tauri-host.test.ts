@@ -74,6 +74,7 @@ describe('createTauriCacheHost', () => {
       items: [],
       nextCursor: null,
       hasMore: false,
+      totalCount: 2,
     };
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
@@ -85,17 +86,19 @@ describe('createTauriCacheHost', () => {
 
     await expect(
       host.queryIndexedItems({
-        buckets: ['note', 'task'],
+        buckets: ['document'],
         cursor,
         limit: 25,
+        includeTotalCount: true,
       })
     ).resolves.toEqual(page);
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_query_indexed_items',
       {
-        buckets: ['note', 'task'],
+        buckets: ['document'],
         cursor,
         limit: 25,
+        includeTotalCount: true,
       }
     );
   });

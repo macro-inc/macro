@@ -96,7 +96,20 @@ function makeFakeHost(): FakeHost {
       return readResult;
     },
     async queryIndexedItems() {
-      return { items: [], nextCursor: null, hasMore: false };
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+        totalCount: null,
+      };
+    },
+    async searchIndexedItems() {
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+        totalCount: null,
+      };
     },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({

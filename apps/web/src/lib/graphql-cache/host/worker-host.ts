@@ -8,12 +8,14 @@ import {
   type CacheRequest,
   type ClaimedMutation,
   type IndexedEntityPage,
+  type IndexedEntitySearchPage,
   isCachePush,
   type MutationClaim,
   normalizeIndexedEntityLimit,
   type OptimisticWriteResult,
   type QueryIndexedItemsArgs,
   type ReadResult,
+  type SearchIndexedItemsArgs,
   type WorkerMessage,
   type WriteResult,
 } from '../protocol';
@@ -173,7 +175,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         buckets: args.buckets ?? [],
         cursor: args.cursor,
         limit,
+        includeTotalCount: args.includeTotalCount ?? false,
       })) as IndexedEntityPage;
+    },
+
+    async searchIndexedItems(
+      args: SearchIndexedItemsArgs
+    ): Promise<IndexedEntitySearchPage> {
+      const limit = normalizeIndexedEntityLimit(args.limit);
+      await ready;
+      return (await request({
+        kind: 'search-indexed-items',
+        buckets: args.buckets ?? [],
+        query: args.query,
+        cursor: args.cursor,
+        limit,
+        includeTotalCount: args.includeTotalCount ?? false,
+      })) as IndexedEntitySearchPage;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
