@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::body::{Body, Bytes};
@@ -6,6 +7,10 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use macro_auth::middleware::decode_jwt::{JwtValidationArgs, MacroAccessToken};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState,
+};
 use macro_env::Environment;
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -18,8 +23,16 @@ const TEST_INTERNAL_API_KEY: &str = "test-internal-key";
 const TEST_USER_ID: &str = "macro|image-proxy-test@example.com";
 
 fn test_context() -> ApiContext {
+    let authorization_service = MacroAuthorizationServiceImpl::new(
+        MacroAuthJwtValidator::new(JwtValidationArgs::new_testing()),
+        InternalAuthConfig {
+            api_key: TEST_INTERNAL_API_KEY.to_string(),
+            default_user_id: None,
+        },
+    );
+
     ApiContext {
-        jwt_args: JwtValidationArgs::new_testing(),
+        authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
         environment: Environment::Production,
         http_client: proxy::build_http_client().expect("test HTTP client should build"),
     }

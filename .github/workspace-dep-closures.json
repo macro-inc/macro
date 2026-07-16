@@ -2856,6 +2856,7 @@
       "crates/entity_access_db_utils",
       "crates/ip_extractor",
       "crates/macro_auth",
+      "crates/macro_authorization",
       "crates/macro_aws_config",
       "crates/macro_config",
       "crates/macro_config_derive",

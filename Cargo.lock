@@ -7044,6 +7044,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_config",
  "macro_cors",
