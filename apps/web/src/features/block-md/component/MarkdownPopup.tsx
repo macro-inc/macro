@@ -136,10 +136,18 @@ export function MarkdownPopup(props: {
     });
   });
 
+  // Derive the highlight from the selection at the point it's set, rather
+  // than mirroring it reactively; an in-flight edit keeps it alive past the
+  // popup (see the onCleanup below).
+  const setSelectionAndHighlight = (value: EnhancedSelection | null) => {
+    setSelection(value);
+    setAiEditLocation(editor.read(() => $getSelectionLocation()));
+  };
+
   plugins.use(
     popupPlugin({
       setIsPopupVisible: setPopupVisible,
-      setSelection: setSelection,
+      setSelection: setSelectionAndHighlight,
     })
   );
 
@@ -372,13 +380,6 @@ export function MarkdownPopup(props: {
     const [aiEditInput, setAiEditInput] = createSignal('');
     let aiInputRef: HTMLTextAreaElement | undefined;
 
-    // Mirror the selection into the highlight for as long as the toolbar is
-    // up; an in-flight edit keeps it alive past the popup.
-    createEffect(
-      on(selection, () => {
-        setAiEditLocation(editor.read(() => $getSelectionLocation()));
-      })
-    );
     onCleanup(() => {
       if (!aiEditRunning()) setAiEditLocation(null);
     });
