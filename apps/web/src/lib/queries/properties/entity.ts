@@ -32,7 +32,7 @@ import {
   type SoupTransaction,
 } from '../soup/cache';
 import {
-  buildOptimisticGroupedPropertyLinkPatches,
+  buildOptimisticGroupedPropertyUpdates,
   groupedPropertyKeys,
 } from '../soup/grouped/graphql-optimistic';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -517,17 +517,15 @@ export function useBulkSaveEntityPropertiesMutation(
             try {
               const oldGroupKeys = groupedPropertyKeys(item.property);
               const newGroupKeys = groupedPropertyKeys(item.apiValues);
-              optimisticCache = await buildOptimisticGroupedPropertyLinkPatches(
-                {
-                  host,
-                  entityId: item.entityId,
-                  propertyDefinitionId: item.property.propertyDefinitionId,
-                  oldGroupKeys: oldGroupKeys ?? [],
-                  newGroupKeys: newGroupKeys ?? [],
-                  revalidateOnly:
-                    oldGroupKeys === undefined || newGroupKeys === undefined,
-                }
-              );
+              optimisticCache = await buildOptimisticGroupedPropertyUpdates({
+                host,
+                entityId: item.entityId,
+                propertyDefinitionId: item.property.propertyDefinitionId,
+                oldGroupKeys: oldGroupKeys ?? [],
+                newGroupKeys: newGroupKeys ?? [],
+                revalidateOnly:
+                  oldGroupKeys === undefined || newGroupKeys === undefined,
+              });
             } catch (error) {
               // Relation discovery is an optimization. Property writes still
               // proceed with normalized entity optimism when cache inspection

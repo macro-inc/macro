@@ -399,9 +399,11 @@ export function normalizedCacheExchange(
               linkPatches: [],
               revalidations: [
                 ...args.revalidations,
-                ...args.linkPatches.flatMap((patch) =>
-                  patch.revalidate ? [patch.revalidate] : []
-                ),
+                ...args.linkPatches.map((patch) => ({
+                  query: patch.query,
+                  operationName: patch.operationName,
+                  variablesJson: patch.variablesJson,
+                })),
               ],
             });
           }

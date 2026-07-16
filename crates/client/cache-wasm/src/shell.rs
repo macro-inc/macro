@@ -64,9 +64,7 @@ struct JsWriteResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsCacheFieldInfo {
-    entity_key: String,
     field_name: String,
-    field_key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     arguments: Option<serde_json::Value>,
 }
@@ -74,9 +72,7 @@ struct JsCacheFieldInfo {
 impl From<CacheFieldInfo> for JsCacheFieldInfo {
     fn from(field: CacheFieldInfo) -> Self {
         Self {
-            entity_key: field.entity_key.0,
             field_name: field.field_name,
-            field_key: field.field_key,
             arguments: field.arguments,
         }
     }

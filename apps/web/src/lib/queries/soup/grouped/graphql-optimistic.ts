@@ -1,8 +1,10 @@
 import {
-  type OptimisticLinkPatch,
-  prependGroupedSoupItemLink,
+  type OptimisticUpdate,
+  prependUnique,
   type QueryRevalidation,
-  removeGroupedSoupItemLink,
+  remove,
+  select,
+  update,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { stringifyDocument } from '@urql/core';
@@ -26,8 +28,8 @@ type BuildArgs = {
   revalidateOnly?: boolean;
 };
 
-export type OptimisticGroupedPropertyLinkPatches = {
-  patches: OptimisticLinkPatch[];
+export type OptimisticGroupedPropertyUpdates = {
+  updates: OptimisticUpdate[];
   revalidations: QueryRevalidation[];
 };
 
@@ -62,41 +64,38 @@ function unique(values: readonly string[]): string[] {
  * recipes only where the loaded membership proves the move is applicable.
  * Missing bins/pages are left untouched and revalidated after success.
  */
-export async function buildOptimisticGroupedPropertyLinkPatches(
+export async function buildOptimisticGroupedPropertyUpdates(
   args: BuildArgs
-): Promise<OptimisticGroupedPropertyLinkPatches> {
+): Promise<OptimisticGroupedPropertyUpdates> {
   const viewer = await args.host.readQuery({
     query: VIEWER_QUERY,
     operationName: 'OptimisticGroupSoupViewer',
   });
   if (viewer.kind !== 'hit' || !isRecord(viewer.data)) {
-    return { patches: [], revalidations: [] };
+    return { updates: [], revalidations: [] };
   }
   const user = isRecord(viewer.data.user) ? viewer.data.user : undefined;
   if (!user || typeof user.id !== 'string') {
-    return { patches: [], revalidations: [] };
+    return { updates: [], revalidations: [] };
   }
 
-  const parentEntityKey = `GraphqlUser:${user.id}`;
-  const fields = await args.host.inspectFields(parentEntityKey);
+  const fields = await args.host.inspectFields(`GraphqlUser:${user.id}`);
   const oldKeys = new Set(unique(args.oldGroupKeys));
   const newKeys = new Set(unique(args.newGroupKeys));
   const removed = [...oldKeys].filter((key) => !newKeys.has(key));
   const added = [...newKeys].filter((key) => !oldKeys.has(key));
   if (removed.length === 0 && added.length === 0 && !args.revalidateOnly) {
-    return { patches: [], revalidations: [] };
+    return { updates: [], revalidations: [] };
   }
 
-  const patches: OptimisticLinkPatch[] = [];
+  const updates: OptimisticUpdate[] = [];
   const revalidations: QueryRevalidation[] = [];
   const membershipQuery = stringifyDocument(GroupSoupMembershipDocument);
   const views = new Map<
     string,
     Array<{
-      fieldKey: string;
       input: GroupedSoupInput;
       bins: GroupSoupMembershipQuery['user']['groupSoup']['bins'];
-      revalidate: QueryRevalidation;
     }>
   >();
 
@@ -123,15 +122,13 @@ export async function buildOptimisticGroupedPropertyLinkPatches(
     if (!bins || !logicalView) continue;
     const pages = views.get(logicalView) ?? [];
     pages.push({
-      fieldKey: field.fieldKey,
       input: input as GroupedSoupInput,
       bins,
-      revalidate,
     });
     views.set(logicalView, pages);
   }
 
-  if (args.revalidateOnly) return { patches, revalidations };
+  if (args.revalidateOnly) return { updates, revalidations };
 
   const itemEntityKey = `GraphqlSoupItem:${args.entityId}`;
   for (const pages of views.values()) {
@@ -157,33 +154,33 @@ export async function buildOptimisticGroupedPropertyLinkPatches(
       for (const key of removed) {
         const source = page.bins.find((bin) => bin.key === key);
         if (!source?.items.some((item) => item.id === args.entityId)) continue;
-        patches.push(
-          removeGroupedSoupItemLink({
-            parentEntityKey,
-            fieldKey: page.fieldKey,
-            binKey: key,
-            itemEntityKey,
-            revalidate: page.revalidate,
-          })
-        );
+        const items = select(GroupSoupMembershipDocument, {
+          input: page.input,
+        })
+          .field('user')
+          .field('groupSoup')
+          .field('bins')
+          .item('key', key)
+          .field('items');
+        updates.push(update(items, remove(itemEntityKey)));
       }
     }
     for (const page of destinationPages) {
       for (const key of added) {
-        patches.push(
-          prependGroupedSoupItemLink({
-            parentEntityKey,
-            fieldKey: page.fieldKey,
-            binKey: key,
-            itemEntityKey,
-            revalidate: page.revalidate,
-          })
-        );
+        const items = select(GroupSoupMembershipDocument, {
+          input: page.input,
+        })
+          .field('user')
+          .field('groupSoup')
+          .field('bins')
+          .item('key', key)
+          .field('items');
+        updates.push(update(items, prependUnique(itemEntityKey)));
       }
     }
   }
 
-  return { patches, revalidations };
+  return { updates, revalidations };
 }
 
 /** Group keys reproducible for the first optimistic implementation. */

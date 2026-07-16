@@ -6,7 +6,8 @@ use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormaliz
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
 use crate::link_patch::{
-    LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches, deduplicate_patches,
+    LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
+    deduplicate_patches, missing_patch_record,
 };
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
 use crate::queue::{
@@ -75,12 +76,8 @@ pub struct WriteResult {
 /// One cached field on an effective normalized entity record.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CacheFieldInfo {
-    /// Entity key that was inspected.
-    pub entity_key: EntityKey,
     /// GraphQL field name without canonical arguments.
     pub field_name: String,
-    /// Exact opaque cache field key, including canonical arguments.
-    pub field_key: String,
     /// Parsed canonical arguments when the field key contains valid JSON.
     pub arguments: Option<Json>,
 }
@@ -252,9 +249,10 @@ impl<S: Storage> Engine<S> {
                     detail: error.to_string(),
                 }
             })?;
-            let mut candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
-            candidates.extend(patches.iter().map(|patch| patch.parent_entity_key.clone()));
-            let bases = self.load_bases(&candidates).await?;
+            let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
+            let (candidates, bases) = self
+                .load_link_patch_bases(candidates, &layers, &updates, &patches)
+                .await?;
             let composed = effective_records(&bases, &layers, &candidates);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, &updates);
@@ -269,8 +267,8 @@ impl<S: Storage> Engine<S> {
                     source.revalidations.into_iter().chain(
                         source
                             .link_patches
-                            .into_iter()
-                            .filter_map(|patch| patch.revalidate),
+                            .iter()
+                            .map(OptimisticLinkPatch::revalidation),
                     ),
                 ),
             });
@@ -591,12 +589,14 @@ impl<S: Storage> Engine<S> {
             revalidations
                 .iter()
                 .cloned()
-                .chain(patches.iter().filter_map(|patch| patch.revalidate.clone())),
+                .chain(patches.iter().map(OptimisticLinkPatch::revalidation)),
         );
 
-        let mut candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
-        candidates.extend(patches.iter().map(|patch| patch.parent_entity_key.clone()));
-        let bases = self.load_bases(&candidates).await?;
+        let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
+        let optimistic = self.optimistic.clone();
+        let (candidates, bases) = self
+            .load_link_patch_bases(candidates, &optimistic, &updates, &patches)
+            .await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
         let mut effective = present_records(before.clone());
         merge_updates_into_effective(&mut effective, &updates);
@@ -718,8 +718,9 @@ impl<S: Storage> Engine<S> {
 
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
-        candidates.extend(recipes.iter().map(|patch| patch.parent_entity_key.clone()));
-        let bases = self.load_bases(&candidates).await?;
+        let (mut candidates, bases) = self
+            .load_link_patch_bases(candidates, &[], &updates, &recipes)
+            .await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
 
         // Reapply the idempotent recipes to the latest durable base, never a
@@ -813,6 +814,35 @@ impl<S: Storage> Engine<S> {
         })
     }
 
+    /// Loads every normalized record reached while resolving query-rooted
+    /// link updates, including records currently outside the hot tier.
+    async fn load_link_patch_bases(
+        &mut self,
+        mut candidates: BTreeSet<EntityKey>,
+        layers: &[OptimisticLayer],
+        pending_updates: &RecordUpdates,
+        patches: &[OptimisticLinkPatch],
+    ) -> Result<(BTreeSet<EntityKey>, HashMap<EntityKey, Record>), EngineError<S::Error>> {
+        if !patches.is_empty() {
+            candidates.insert(EntityKey::root());
+        }
+        loop {
+            let bases = self.load_bases(&candidates).await?;
+            let composed = effective_records(&bases, layers, &candidates);
+            let mut effective = present_records(composed);
+            merge_updates_into_effective(&mut effective, pending_updates);
+            let missing: BTreeSet<_> = patches
+                .iter()
+                .filter_map(|patch| missing_patch_record(&effective, patch))
+                .filter(|key| !candidates.contains(key))
+                .collect();
+            if missing.is_empty() {
+                return Ok((candidates, bases));
+            }
+            candidates.extend(missing);
+        }
+    }
+
     /// Loads current durable records (hot tier, then storage) for `keys`
     /// without touching LRU recency or persisting anything.
     async fn load_bases(
@@ -844,8 +874,8 @@ impl<S: Storage> Engine<S> {
         Ok(out)
     }
 
-    /// Returns every field in an entity's current effective view. Field keys
-    /// remain opaque to callers; canonical argument parsing is owned here.
+    /// Returns the names and parsed arguments of every field in an entity's
+    /// current effective view. Storage keys never escape the cache core.
     pub async fn inspect_fields(
         &mut self,
         entity_key: &EntityKey,
@@ -863,9 +893,7 @@ impl<S: Storage> Engine<S> {
             .map(|field_key| {
                 let (field_name, arguments) = parse_field_key(field_key);
                 CacheFieldInfo {
-                    entity_key: entity_key.clone(),
                     field_name,
-                    field_key: field_key.clone(),
                     arguments,
                 }
             })

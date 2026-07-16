@@ -3,8 +3,12 @@
 //! Patch recipes are transport-neutral and serializable so they can be kept
 //! with durable optimistic mutations and replayed after a restart.
 
+use crate::document::{Document, FieldNode, OperationKind, Selection, resolve_args_key};
+use crate::meta;
 use crate::normalize::RecordUpdates;
-use crate::value::{CacheNumber, CacheValue, EntityKey, FieldKey, Record, canonical_json};
+use crate::value::{
+    CacheNumber, CacheValue, EntityKey, FieldKey, Record, canonical_json, field_key,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::{BTreeSet, HashMap};
@@ -83,21 +87,32 @@ pub struct QueryRevalidation {
     pub variables_json: String,
 }
 
-/// One mutation-scoped nested link-list recipe.
+/// One mutation-scoped update rooted at a generated GraphQL query.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptimisticLinkPatch {
-    /// Normalized record containing the argument-qualified field.
-    pub parent_entity_key: EntityKey,
-    /// Opaque exact field key returned by field inspection.
-    pub field_key: FieldKey,
-    /// Constrained traversal beginning inside the selected field value.
+    /// GraphQL query document that gives the path its typed entrypoint.
+    pub query: String,
+    /// Selected operation when the document contains multiple operations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_name: Option<String>,
+    /// Canonical JSON object containing the query variables.
+    pub variables_json: String,
+    /// Response-key traversal beginning at the query root.
     pub path: Vec<LinkPathSegment>,
     /// Idempotent relation operation.
     pub operation: LinkOperation,
-    /// Optional query used to recover server-owned ordering/count/cursor data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub revalidate: Option<QueryRevalidation>,
+}
+
+impl OptimisticLinkPatch {
+    /// Query to refresh after this optimistic update commits.
+    pub fn revalidation(&self) -> QueryRevalidation {
+        QueryRevalidation {
+            query: self.query.clone(),
+            operation_name: self.operation_name.clone(),
+            variables_json: self.variables_json.clone(),
+        }
+    }
 }
 
 /// Failure to validate or apply a constrained link recipe.
@@ -112,12 +127,18 @@ pub enum LinkPatchError {
     /// A normalized entity key is malformed.
     #[error("invalid normalized entity key `{0}`")]
     InvalidEntityKey(String),
-    /// The selected parent record is absent.
-    #[error("link patch parent `{0}` is missing")]
-    MissingParent(String),
-    /// The selected parent field is absent.
-    #[error("link patch field `{field}` is missing on `{parent}`")]
+    /// The selected normalized record is absent.
+    #[error("link update record `{0}` is missing")]
+    MissingParent(EntityKey),
+    /// The selected record field is absent.
+    #[error("link update field `{field}` is missing on `{parent}`")]
     MissingField { parent: String, field: String },
+    /// The generated query entrypoint or variables are invalid.
+    #[error("invalid link update entrypoint: {0}")]
+    InvalidEntrypoint(String),
+    /// A response-key path field was not selected by the query.
+    #[error("query does not select `{field}` on `{type_name}`")]
+    UnselectedField { type_name: String, field: String },
     /// A path step encountered a value of the wrong shape.
     #[error("link patch path encountered an incompatible cache value")]
     WrongShape,
@@ -162,7 +183,7 @@ fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
     if patch.path.is_empty() || patch.path.len() > MAX_PATH_DEPTH {
         return Err(LinkPatchError::InvalidDepth(patch.path.len()));
     }
-    validate_entity_key(&patch.parent_entity_key)?;
+    validate_entrypoint(patch)?;
     validate_entity_key(patch.operation.entity_key())?;
     for segment in &patch.path {
         if let LinkPathSegment::ListItem { list_item } = segment
@@ -172,6 +193,29 @@ fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
         }
     }
     Ok(())
+}
+
+fn validate_entrypoint(
+    patch: &OptimisticLinkPatch,
+) -> Result<serde_json::Map<String, Json>, LinkPatchError> {
+    let document = Document::parse(&patch.query)
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
+    let operation = document
+        .operation(patch.operation_name.as_deref())
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
+    if operation.kind != OperationKind::Query {
+        return Err(LinkPatchError::InvalidEntrypoint(
+            "link update entrypoint must be a query".to_string(),
+        ));
+    }
+    let variables: Json = serde_json::from_str(&patch.variables_json)
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
+    let Json::Object(variables) = variables else {
+        return Err(LinkPatchError::InvalidEntrypoint(
+            "entrypoint variables must be an object".to_string(),
+        ));
+    };
+    Ok(variables)
 }
 
 fn validate_entity_key(key: &EntityKey) -> Result<(), LinkPatchError> {
@@ -230,18 +274,19 @@ fn apply_one(
     updates: &mut RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
+    let resolved = resolve_target(effective, patch)?;
     let record = effective
-        .get_mut(&patch.parent_entity_key)
-        .ok_or_else(|| LinkPatchError::MissingParent(patch.parent_entity_key.0.clone()))?;
+        .get_mut(&resolved.parent_entity_key)
+        .ok_or_else(|| LinkPatchError::MissingParent(resolved.parent_entity_key.clone()))?;
     let mut field_value = record
         .fields
-        .get(&patch.field_key)
+        .get(&resolved.field_key)
         .cloned()
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: patch.parent_entity_key.0.clone(),
-            field: patch.field_key.clone(),
+            parent: resolved.parent_entity_key.0.clone(),
+            field: resolved.field_key.clone(),
         })?;
-    let target = traverse(&mut field_value, &patch.path)?;
+    let target = traverse(&mut field_value, &resolved.path)?;
     let CacheValue::List(links) = target else {
         return Err(LinkPatchError::WrongShape);
     };
@@ -266,13 +311,246 @@ fn apply_one(
 
     record
         .fields
-        .insert(patch.field_key.clone(), field_value.clone());
+        .insert(resolved.field_key.clone(), field_value.clone());
     updates
-        .entry(patch.parent_entity_key.clone())
+        .entry(resolved.parent_entity_key)
         .or_default()
         .fields
-        .insert(patch.field_key.clone(), field_value);
+        .insert(resolved.field_key, field_value);
     Ok(())
+}
+
+#[derive(Debug)]
+struct ResolvedTarget {
+    parent_entity_key: EntityKey,
+    field_key: FieldKey,
+    path: Vec<LinkPathSegment>,
+}
+
+/// Returns the next normalized record required to resolve one query-rooted
+/// update. Engines use this to hydrate graph links from cold storage before
+/// applying the update.
+pub fn missing_patch_record(
+    effective: &HashMap<EntityKey, Record>,
+    patch: &OptimisticLinkPatch,
+) -> Option<EntityKey> {
+    match resolve_target(effective, patch) {
+        Err(LinkPatchError::MissingParent(key)) => Some(key),
+        _ => None,
+    }
+}
+
+fn resolve_target(
+    effective: &HashMap<EntityKey, Record>,
+    patch: &OptimisticLinkPatch,
+) -> Result<ResolvedTarget, LinkPatchError> {
+    let variables = validate_entrypoint(patch)?;
+    let document = Document::parse(&patch.query)
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
+    let operation = document
+        .operation(patch.operation_name.as_deref())
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
+    resolve_from_record(
+        effective,
+        &EntityKey::root(),
+        meta::QUERY_ROOT_TYPE,
+        &operation.selection_set,
+        &variables,
+        &patch.path,
+    )
+}
+
+fn resolve_from_record(
+    effective: &HashMap<EntityKey, Record>,
+    owner: &EntityKey,
+    type_name: &str,
+    selections: &[Selection],
+    variables: &serde_json::Map<String, Json>,
+    path: &[LinkPathSegment],
+) -> Result<ResolvedTarget, LinkPatchError> {
+    let Some(LinkPathSegment::Field {
+        field: response_key,
+    }) = path.first()
+    else {
+        return Err(LinkPatchError::WrongShape);
+    };
+    let record = effective
+        .get(owner)
+        .ok_or_else(|| LinkPatchError::MissingParent(owner.clone()))?;
+    let concrete = record.typename().unwrap_or(type_name);
+    let selected = selected_field(selections, concrete, response_key)?;
+    let storage_key = selected_storage_key(selected, variables)?;
+    let value = record
+        .fields
+        .get(&storage_key)
+        .ok_or_else(|| LinkPatchError::MissingField {
+            parent: owner.0.clone(),
+            field: storage_key.clone(),
+        })?;
+    let named_type = selected_type(concrete, selected)?;
+    resolve_from_value(
+        effective,
+        value,
+        owner.clone(),
+        storage_key,
+        Vec::new(),
+        named_type,
+        &selected.selection_set,
+        variables,
+        &path[1..],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_from_value(
+    effective: &HashMap<EntityKey, Record>,
+    value: &CacheValue,
+    owner: EntityKey,
+    anchor_field: FieldKey,
+    relative_path: Vec<LinkPathSegment>,
+    type_name: &str,
+    selections: &[Selection],
+    variables: &serde_json::Map<String, Json>,
+    path: &[LinkPathSegment],
+) -> Result<ResolvedTarget, LinkPatchError> {
+    if path.is_empty() {
+        return Ok(ResolvedTarget {
+            parent_entity_key: owner,
+            field_key: anchor_field,
+            path: relative_path,
+        });
+    }
+
+    if let CacheValue::Ref(key) = value {
+        return resolve_from_record(effective, key, type_name, selections, variables, path);
+    }
+
+    match (&path[0], value) {
+        (
+            LinkPathSegment::Field {
+                field: response_key,
+            },
+            CacheValue::Object(object),
+        ) => {
+            let concrete = object
+                .get("__typename")
+                .and_then(|value| match value {
+                    CacheValue::String(value) => Some(value.as_str()),
+                    _ => None,
+                })
+                .unwrap_or(type_name);
+            let selected = selected_field(selections, concrete, response_key)?;
+            let storage_key = selected_storage_key(selected, variables)?;
+            let child = object.get(&storage_key).ok_or(LinkPatchError::WrongShape)?;
+            let mut child_path = relative_path;
+            child_path.push(LinkPathSegment::Field {
+                field: storage_key.clone(),
+            });
+            resolve_from_value(
+                effective,
+                child,
+                owner,
+                anchor_field,
+                child_path,
+                selected_type(concrete, selected)?,
+                &selected.selection_set,
+                variables,
+                &path[1..],
+            )
+        }
+        (LinkPathSegment::ListItem { list_item }, CacheValue::List(items)) => {
+            if items.len() > MAX_TRAVERSED_LIST {
+                return Err(LinkPatchError::ListTooLarge {
+                    actual: items.len(),
+                    maximum: MAX_TRAVERSED_LIST,
+                });
+            }
+            let selector = selected_field(selections, type_name, &list_item.where_field)?;
+            let selector_key = selected_storage_key(selector, variables)?;
+            let matches: Vec<_> = items
+                .iter()
+                .enumerate()
+                .filter_map(|(index, value)| {
+                    let CacheValue::Object(object) = value else {
+                        return None;
+                    };
+                    object
+                        .get(&selector_key)
+                        .is_some_and(|value| cache_scalar_equals(value, &list_item.equals))
+                        .then_some(index)
+                })
+                .collect();
+            if matches.len() != 1 {
+                return Err(LinkPatchError::SelectorMatchCount(matches.len()));
+            }
+            let mut item_path = relative_path;
+            item_path.push(LinkPathSegment::ListItem {
+                list_item: ListItemByScalar {
+                    where_field: selector_key,
+                    equals: list_item.equals.clone(),
+                },
+            });
+            resolve_from_value(
+                effective,
+                &items[matches[0]],
+                owner,
+                anchor_field,
+                item_path,
+                type_name,
+                selections,
+                variables,
+                &path[1..],
+            )
+        }
+        _ => Err(LinkPatchError::WrongShape),
+    }
+}
+
+fn selected_field<'a>(
+    selections: &'a [Selection],
+    concrete: &str,
+    response_key: &str,
+) -> Result<&'a FieldNode, LinkPatchError> {
+    for selection in selections {
+        match selection {
+            Selection::Field(field) if field.response_key == response_key => return Ok(field),
+            Selection::Field(_) => {}
+            Selection::Fragment {
+                type_condition,
+                selection_set,
+            } if type_condition
+                .as_deref()
+                .is_none_or(|condition| meta::type_matches(concrete, condition)) =>
+            {
+                if let Ok(field) = selected_field(selection_set, concrete, response_key) {
+                    return Ok(field);
+                }
+            }
+            Selection::Fragment { .. } => {}
+        }
+    }
+    Err(LinkPatchError::UnselectedField {
+        type_name: concrete.to_string(),
+        field: response_key.to_string(),
+    })
+}
+
+fn selected_storage_key(
+    field: &FieldNode,
+    variables: &serde_json::Map<String, Json>,
+) -> Result<FieldKey, LinkPatchError> {
+    let arguments = resolve_args_key(field, variables)
+        .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
+    Ok(field_key(&field.name, arguments.as_deref()))
+}
+
+fn selected_type<'a>(concrete: &str, field: &FieldNode) -> Result<&'a str, LinkPatchError> {
+    meta::field_meta(concrete, &field.name)
+        .map(|metadata| metadata.ty.name)
+        .ok_or_else(|| LinkPatchError::UnselectedField {
+            type_name: concrete.to_string(),
+            field: field.response_key.clone(),
+        })
 }
 
 fn traverse<'a>(
@@ -342,6 +620,8 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
+    const QUERY: &str = "query { user { groupSoup { bins { key items { id } } } } }";
+
     fn record() -> (EntityKey, Record) {
         let parent = EntityKey("GraphqlUser:user-1".into());
         let bin = |key: &str, items: Vec<CacheValue>| {
@@ -364,16 +644,23 @@ mod tests {
             ]),
         )]));
         let record = Record {
-            fields: BTreeMap::from([("groupSoup({})".into(), grouped)]),
+            fields: BTreeMap::from([("groupSoup".into(), grouped)]),
         };
         (parent, record)
     }
 
     fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
         OptimisticLinkPatch {
-            parent_entity_key: EntityKey("GraphqlUser:user-1".into()),
-            field_key: "groupSoup({})".into(),
+            query: QUERY.into(),
+            operation_name: None,
+            variables_json: "{}".into(),
             path: vec![
+                LinkPathSegment::Field {
+                    field: "user".into(),
+                },
+                LinkPathSegment::Field {
+                    field: "groupSoup".into(),
+                },
                 LinkPathSegment::Field {
                     field: "bins".into(),
                 },
@@ -388,14 +675,21 @@ mod tests {
                 },
             ],
             operation,
-            revalidate: None,
         }
     }
 
     #[test]
     fn remove_and_prepend_compose_without_touching_unrelated_values() {
         let (parent, initial) = record();
-        let mut effective = HashMap::from([(parent.clone(), initial.clone())]);
+        let mut effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent.clone(), initial.clone()),
+        ]);
         let mut updates = RecordUpdates::new();
         apply_link_patches(
             &mut effective,
@@ -420,7 +714,7 @@ mod tests {
 
         let changed = effective.get(&parent).unwrap();
         assert_ne!(changed, &initial);
-        let CacheValue::Object(grouped) = &changed.fields["groupSoup({})"] else {
+        let CacheValue::Object(grouped) = &changed.fields["groupSoup"] else {
             panic!()
         };
         let CacheValue::List(bins) = &grouped["bins"] else {
@@ -445,7 +739,15 @@ mod tests {
     #[test]
     fn strict_patch_set_has_no_partial_writes() {
         let (parent, initial) = record();
-        let mut effective = HashMap::from([(parent, initial.clone())]);
+        let mut effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent, initial.clone()),
+        ]);
         let mut updates = RecordUpdates::new();
         let result = apply_link_patches(
             &mut effective,
@@ -467,14 +769,17 @@ mod tests {
             false,
         );
         assert_eq!(result, Err(LinkPatchError::SelectorMatchCount(0)));
-        assert_eq!(effective.values().next(), Some(&initial));
+        assert_eq!(
+            effective.get(&EntityKey("GraphqlUser:user-1".into())),
+            Some(&initial)
+        );
         assert!(updates.is_empty());
     }
 
     #[test]
     fn rejects_non_ref_target_and_invalid_keys() {
         let (parent, mut initial) = record();
-        let CacheValue::Object(grouped) = initial.fields.get_mut("groupSoup({})").unwrap() else {
+        let CacheValue::Object(grouped) = initial.fields.get_mut("groupSoup").unwrap() else {
             panic!()
         };
         let CacheValue::List(bins) = grouped.get_mut("bins").unwrap() else {
@@ -487,7 +792,15 @@ mod tests {
             "items".into(),
             CacheValue::List(vec![CacheValue::String("bad".into())]),
         );
-        let mut effective = HashMap::from([(parent, initial)]);
+        let mut effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent, initial),
+        ]);
         let mut updates = RecordUpdates::new();
         assert_eq!(
             apply_link_patches(

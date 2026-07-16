@@ -94,9 +94,14 @@ describe('createTauriCacheHost', () => {
     });
 
     const patch = {
-      parentEntityKey: 'GraphqlUser:user-1',
-      fieldKey: 'groupSoup({})',
-      path: [{ field: 'bins' }],
+      query: 'query { user { groupSoup { bins { items { id } } } } }',
+      variablesJson: '{}',
+      path: [
+        { field: 'user' },
+        { field: 'groupSoup' },
+        { field: 'bins' },
+        { field: 'items' },
+      ],
       operation: { kind: 'remove' as const, entityKey: 'Thing:1' },
     };
     const begun = await host.beginOptimisticWrite({
@@ -139,9 +144,7 @@ describe('createTauriCacheHost', () => {
   it('inspects effective fields through the native command', async () => {
     const fields = [
       {
-        entityKey: 'GraphqlUser:user-1',
         fieldName: 'groupSoup',
-        fieldKey: 'groupSoup({})',
         arguments: {},
       },
     ];

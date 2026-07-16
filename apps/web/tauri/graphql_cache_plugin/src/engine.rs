@@ -56,12 +56,8 @@ pub struct WriteResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheFieldInfoWire {
-    /// Inspected normalized entity key.
-    pub entity_key: String,
     /// GraphQL field name without arguments.
     pub field_name: String,
-    /// Exact opaque cache field key.
-    pub field_key: String,
     /// Parsed canonical field arguments.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<serde_json::Value>,
@@ -70,9 +66,7 @@ pub struct CacheFieldInfoWire {
 impl From<CacheFieldInfo> for CacheFieldInfoWire {
     fn from(field: CacheFieldInfo) -> Self {
         Self {
-            entity_key: field.entity_key.0,
             field_name: field.field_name,
-            field_key: field.field_key,
             arguments: field.arguments,
         }
     }

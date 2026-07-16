@@ -2,7 +2,7 @@
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{
-    LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch, QueryRevalidation,
+    LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
 };
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
@@ -128,11 +128,18 @@ fn mutation_response(option: &str) -> Json {
     json!({ "setEntityProperty": property(option) })
 }
 
-fn patch(field_key: &str, bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
+fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
-        parent_entity_key: EntityKey("GraphqlUser:user-1".into()),
-        field_key: field_key.into(),
+        query: GROUP_QUERY.into(),
+        operation_name: Some("GroupSoup".into()),
+        variables_json: serde_json::to_string(&query_variables()).unwrap(),
         path: vec![
+            LinkPathSegment::Field {
+                field: "user".into(),
+            },
+            LinkPathSegment::Field {
+                field: "groupSoup".into(),
+            },
             LinkPathSegment::Field {
                 field: "bins".into(),
             },
@@ -147,11 +154,6 @@ fn patch(field_key: &str, bin: &str, operation: LinkOperation) -> OptimisticLink
             },
         ],
         operation,
-        revalidate: Some(QueryRevalidation {
-            query: GROUP_QUERY.into(),
-            operation_name: Some("GroupSoup".into()),
-            variables_json: serde_json::to_string(&query_variables()).unwrap(),
-        }),
     }
 }
 
@@ -166,7 +168,7 @@ async fn read_group(engine: &mut Engine<InMemoryStorage>) -> Json {
     }
 }
 
-async fn setup() -> (Engine<InMemoryStorage>, String) {
+async fn setup() -> Engine<InMemoryStorage> {
     let mut engine = Engine::new(InMemoryStorage::new());
     engine
         .write_query(
@@ -179,19 +181,7 @@ async fn setup() -> (Engine<InMemoryStorage>, String) {
         )
         .await
         .unwrap();
-    let fields = engine
-        .inspect_fields(&EntityKey("GraphqlUser:user-1".into()))
-        .await
-        .unwrap();
-    let grouped = fields
-        .into_iter()
-        .find(|field| field.field_name == "groupSoup")
-        .expect("groupSoup field");
-    assert_eq!(
-        grouped.arguments.unwrap()["input"]["groupBy"]["property"]["propertyDefinitionId"],
-        json!("status-def")
-    );
-    (engine, grouped.field_key)
+    engine
 }
 
 async fn claim(engine: &mut Engine<InMemoryStorage>, id: u64) -> MutationClaimToken {
@@ -214,17 +204,15 @@ async fn claim(engine: &mut Engine<InMemoryStorage>, id: u64) -> MutationClaimTo
 #[test]
 fn cache_only_read_observes_move_and_rollback_restores_it() {
     block_on(async {
-        let (mut engine, field_key) = setup().await;
+        let mut engine = setup().await;
         let patches = [
             patch(
-                &field_key,
                 "in-progress",
                 LinkOperation::Remove {
                     entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
                 },
             ),
             patch(
-                &field_key,
                 "completed",
                 LinkOperation::PrependUnique {
                     entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
@@ -293,17 +281,15 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
 #[test]
 fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
     block_on(async {
-        let (mut engine, field_key) = setup().await;
+        let mut engine = setup().await;
         let patches = [
             patch(
-                &field_key,
                 "in-progress",
                 LinkOperation::Remove {
                     entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
                 },
             ),
             patch(
-                &field_key,
                 "completed",
                 LinkOperation::PrependUnique {
                     entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
@@ -378,17 +364,15 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
 #[test]
 fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
     block_on(async {
-        let (mut engine, field_key) = setup().await;
+        let mut engine = setup().await;
         let patches = [
             patch(
-                &field_key,
                 "in-progress",
                 LinkOperation::Remove {
                     entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
                 },
             ),
             patch(
-                &field_key,
                 "missing",
                 LinkOperation::PrependUnique {
                     entity_key: EntityKey("GraphqlSoupItem:task-1".into()),

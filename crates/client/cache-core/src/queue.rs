@@ -65,7 +65,7 @@ impl StoredMutation {
 }
 
 /// Current version of the durable optimistic source envelope.
-pub const OPTIMISTIC_SOURCE_VERSION: u8 = 1;
+pub const OPTIMISTIC_SOURCE_VERSION: u8 = 2;
 
 /// Durable source needed to reconstruct one optimistic layer statefully.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

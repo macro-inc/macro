@@ -536,9 +536,15 @@ describe('normalizedCacheExchange', () => {
     it('passes declarative link patches into the durable begin call', async () => {
       const base = makeMutationOp(1, optimistic);
       const patch = {
-        parentEntityKey: 'GraphqlUser:user-1',
-        fieldKey: 'groupSoup({})',
-        path: [{ field: 'bins' }, { field: 'items' }],
+        query: 'query Group { user { groupSoup { bins { items { id } } } } }',
+        operationName: 'Group',
+        variablesJson: '{}',
+        path: [
+          { field: 'user' },
+          { field: 'groupSoup' },
+          { field: 'bins' },
+          { field: 'items' },
+        ],
         operation: {
           kind: 'remove' as const,
           entityKey: 'GraphqlSoupItem:task-1',
@@ -567,9 +573,15 @@ describe('normalizedCacheExchange', () => {
           optimisticResponse: optimistic,
           linkPatches: [
             {
-              parentEntityKey: 'GraphqlUser:user-1',
-              fieldKey: 'groupSoup({})',
-              path: [{ field: 'bins' }],
+              query:
+                'query Group { user { groupSoup { bins { items { id } } } } }',
+              operationName: 'Group',
+              variablesJson: '{}',
+              path: [
+                { field: 'user' },
+                { field: 'groupSoup' },
+                { field: 'bins' },
+              ],
               operation: {
                 kind: 'remove',
                 entityKey: 'GraphqlSoupItem:task-1',

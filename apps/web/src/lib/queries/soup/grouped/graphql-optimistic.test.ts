@@ -2,7 +2,7 @@ import type { CacheHost, CacheReadArgs } from '@graphql-cache/host/types';
 import type { CacheFieldInfo } from '@graphql-cache/protocol';
 import { describe, expect, it } from 'vitest';
 import { registerGroupedSoupContinuation } from './graphql-operation-registry';
-import { buildOptimisticGroupedPropertyLinkPatches } from './graphql-optimistic';
+import { buildOptimisticGroupedPropertyUpdates } from './graphql-optimistic';
 
 const input = {
   initial: {
@@ -33,25 +33,19 @@ function host(args?: {
 }): CacheHost {
   const fields: CacheFieldInfo[] = [
     {
-      entityKey: 'GraphqlUser:user-1',
       fieldName: 'groupSoup',
-      fieldKey: 'groupSoup(status)',
       arguments: { input },
     },
   ];
   if (args?.continuation) {
     fields.push({
-      entityKey: 'GraphqlUser:user-1',
       fieldName: 'groupSoup',
-      fieldKey: 'groupSoup(continuation)',
       arguments: { input: continuationInput },
     });
   }
   if (args?.includeUnrelated) {
     fields.push({
-      entityKey: 'GraphqlUser:user-1',
       fieldName: 'groupSoup',
-      fieldKey: 'groupSoup(priority)',
       arguments: {
         input: {
           initial: {
@@ -113,9 +107,9 @@ function host(args?: {
   } as unknown as CacheHost;
 }
 
-describe('buildOptimisticGroupedPropertyLinkPatches', () => {
+describe('buildOptimisticGroupedPropertyUpdates', () => {
   it('builds source removal then destination prepend for a status move', async () => {
-    const result = await buildOptimisticGroupedPropertyLinkPatches({
+    const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ includeUnrelated: true }),
       entityId: 'task-1',
       propertyDefinitionId: 'status-def',
@@ -123,20 +117,32 @@ describe('buildOptimisticGroupedPropertyLinkPatches', () => {
       newGroupKeys: ['completed'],
     });
 
-    expect(result.patches).toHaveLength(2);
-    expect(result.patches.map((patch) => patch.operation)).toEqual([
+    expect(result.updates).toHaveLength(2);
+    expect(result.updates.map((patch) => patch.operation)).toEqual([
       { kind: 'remove', entityKey: 'GraphqlSoupItem:task-1' },
       { kind: 'prependUnique', entityKey: 'GraphqlSoupItem:task-1' },
     ]);
-    expect(result.patches.map((patch) => patch.fieldKey)).toEqual([
-      'groupSoup(status)',
-      'groupSoup(status)',
+    expect(result.updates.map((update) => update.path)).toEqual([
+      [
+        { field: 'user' },
+        { field: 'groupSoup' },
+        { field: 'bins' },
+        { listItem: { whereField: 'key', equals: 'in-progress' } },
+        { field: 'items' },
+      ],
+      [
+        { field: 'user' },
+        { field: 'groupSoup' },
+        { field: 'bins' },
+        { listItem: { whereField: 'key', equals: 'completed' } },
+        { field: 'items' },
+      ],
     ]);
     expect(result.revalidations).toHaveLength(1);
   });
 
   it('does not make a partial move when the destination bin is absent', async () => {
-    const result = await buildOptimisticGroupedPropertyLinkPatches({
+    const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ destination: false }),
       entityId: 'task-1',
       propertyDefinitionId: 'status-def',
@@ -144,13 +150,13 @@ describe('buildOptimisticGroupedPropertyLinkPatches', () => {
       newGroupKeys: ['completed'],
     });
 
-    expect(result.patches).toEqual([]);
+    expect(result.updates).toEqual([]);
     expect(result.revalidations).toHaveLength(1);
   });
 
   it('removes from a registered continuation and prepends to its initial page', async () => {
     registerGroupedSoupContinuation(input, continuationInput);
-    const result = await buildOptimisticGroupedPropertyLinkPatches({
+    const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ continuation: true, initialContainsItem: false }),
       entityId: 'task-1',
       propertyDefinitionId: 'status-def',
@@ -158,18 +164,20 @@ describe('buildOptimisticGroupedPropertyLinkPatches', () => {
       newGroupKeys: ['completed'],
     });
 
-    expect(result.patches.map((patch) => patch.fieldKey)).toEqual([
-      'groupSoup(continuation)',
-      'groupSoup(status)',
-    ]);
-    expect(result.patches.map((patch) => patch.operation.kind)).toEqual([
+    expect(
+      result.updates.map(
+        (update) =>
+          (JSON.parse(update.variablesJson) as { input: unknown }).input
+      )
+    ).toEqual([continuationInput, input]);
+    expect(result.updates.map((patch) => patch.operation.kind)).toEqual([
       'remove',
       'prependUnique',
     ]);
   });
 
   it('uses set differences for multi-value changes', async () => {
-    const result = await buildOptimisticGroupedPropertyLinkPatches({
+    const result = await buildOptimisticGroupedPropertyUpdates({
       host: host(),
       entityId: 'task-1',
       propertyDefinitionId: 'status-def',
@@ -177,14 +185,14 @@ describe('buildOptimisticGroupedPropertyLinkPatches', () => {
       newGroupKeys: ['shared', 'completed'],
     });
 
-    expect(result.patches.map((patch) => patch.operation.kind)).toEqual([
+    expect(result.updates.map((patch) => patch.operation.kind)).toEqual([
       'remove',
       'prependUnique',
     ]);
   });
 
   it('returns revalidation only for unsupported values', async () => {
-    const result = await buildOptimisticGroupedPropertyLinkPatches({
+    const result = await buildOptimisticGroupedPropertyUpdates({
       host: host(),
       entityId: 'task-1',
       propertyDefinitionId: 'status-def',
@@ -193,7 +201,7 @@ describe('buildOptimisticGroupedPropertyLinkPatches', () => {
       revalidateOnly: true,
     });
 
-    expect(result.patches).toEqual([]);
+    expect(result.updates).toEqual([]);
     expect(result.revalidations).toHaveLength(1);
   });
 });

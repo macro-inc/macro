@@ -28,20 +28,20 @@ export type EmbeddedLinkPathSegment =
     };
 
 export type OptimisticLinkPatchWire = {
-  parentEntityKey: string;
-  /** Opaque argument-qualified key returned by `inspectFields`. */
-  fieldKey: string;
+  /** Generated GraphQL operation used as the typed graph entrypoint. */
+  query: string;
+  operationName?: string;
+  /** Variables for the entrypoint operation. */
+  variablesJson: string;
+  /** Response-key path beginning at the query root. */
   path: EmbeddedLinkPathSegment[];
   operation:
     | { kind: 'remove'; entityKey: string }
     | { kind: 'prependUnique'; entityKey: string };
-  revalidate?: QueryRevalidationWire;
 };
 
 export type CacheFieldInfo = {
-  entityKey: string;
   fieldName: string;
-  fieldKey: string;
   arguments?: Record<string, unknown>;
 };
 
