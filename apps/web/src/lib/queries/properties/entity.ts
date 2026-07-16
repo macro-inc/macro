@@ -17,6 +17,7 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { setEntityProperty } from '../../service-clients/service-storage/graphql-properties';
@@ -39,6 +40,12 @@ import { type MutationCallbacks, withCallbacks } from '../utils';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
+function toPropertyTargetEntityType(
+  entityType: EntityType
+): PropertyTargetEntityType {
+  return entityType === 'TASK' ? 'DOCUMENT' : entityType;
+}
+
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
   entityId: Accessor<string>,
@@ -59,7 +66,7 @@ export function useEntityPropertiesQuery(
           const data = await throwOnErr(
             async () =>
               await propertiesServiceClient.getEntityProperties({
-                entity_type: type,
+                entity_type: toPropertyTargetEntityType(type),
                 entity_id: id,
                 query: { include_metadata: true },
               })
@@ -281,7 +288,7 @@ export function useAddEntityPropertyMutation(
       // New attachments have no assignment id until the server responds, so
       // this write is never optimistic; onSettled invalidation refetches.
       await setEntityProperty({
-        entityType: vars.entityType,
+        entityType: toPropertyTargetEntityType(vars.entityType),
         entityId: vars.entityId,
         propertyDefinitionId: vars.propertyDefinitionId,
         value: null,
@@ -382,7 +389,7 @@ export function useAddEntityPropertyOptionMutation(
       await throwOnErr(
         async () =>
           await propertiesServiceClient.addEntityPropertyOption({
-            entity_type: vars.entityType,
+            entity_type: toPropertyTargetEntityType(vars.entityType),
             entity_id: vars.entityId,
             property_id: getPropertyDefinitionId(vars.property),
             option_id: vars.optionId,
@@ -410,7 +417,7 @@ export function useRemoveEntityPropertyOptionMutation(
       await throwOnErr(
         async () =>
           await propertiesServiceClient.removeEntityPropertyOption({
-            entity_type: vars.entityType,
+            entity_type: toPropertyTargetEntityType(vars.entityType),
             entity_id: vars.entityId,
             property_id: getPropertyDefinitionId(vars.property),
             option_id: vars.optionId,
@@ -541,7 +548,7 @@ export function useBulkSaveEntityPropertiesMutation(
         }
 
         return setEntityProperty({
-          entityType: item.entityType,
+          entityType: toPropertyTargetEntityType(item.entityType),
           entityId: item.entityId,
           propertyDefinitionId: getPropertyDefinitionId(item.property),
           value: propertyValue,

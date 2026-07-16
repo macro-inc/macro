@@ -507,7 +507,7 @@ export const getBulkEntityPropertiesBody = zod
       .array(
         zod
           .object({
-            entity_id: zod.string(),
+            entity_id: zod.string().describe('Entity identifier.'),
             entity_type: zod
               .enum([
                 'CALL_RECORD',
@@ -516,21 +516,14 @@ export const getBulkEntityPropertiesBody = zod
                 'COMPANY',
                 'DOCUMENT',
                 'PROJECT',
-                'TASK',
                 'THREAD',
                 'USER',
               ])
               .describe(
-                'Type of entity that can be referenced by entity properties.'
-              ),
-            specific_message_id: zod
-              .uuid()
-              .nullish()
-              .describe(
-                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                'Canonical type of an entity receiving properties.\n\nTasks are documents at API boundaries. `Task` intentionally does not exist\nhere; task classification is resolved by the properties domain from the\ndocument subtype.'
               ),
           })
-          .describe('Entity reference for entity-type property values.')
+          .describe('Canonical reference to an entity receiving properties.')
       )
       .describe('Array of entity references (entity_id and entity_type pairs)'),
     property_ids: zod
@@ -842,11 +835,10 @@ export const getEntityPropertiesParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
 });
 
@@ -1152,11 +1144,10 @@ export const setEntityPropertyParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
   property_id: zod.uuid().describe('Property ID'),
 });
@@ -1315,11 +1306,10 @@ export const addEntityPropertyOptionParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
   property_id: zod.uuid().describe('Property ID'),
   option_id: zod.uuid().describe('Option ID to add'),
@@ -1340,11 +1330,10 @@ export const removeEntityPropertyOptionParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
   property_id: zod.uuid().describe('Property ID'),
   option_id: zod.uuid().describe('Option ID to remove'),
