@@ -39,7 +39,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import {
   INLINE_AI_EDITING_FLAG,
   INLINE_AI_EDITING_OVERRIDE,
