@@ -27,7 +27,7 @@ fn cap_chunk_content(chunk: &UpsertDocumentArgs) -> &str {
             tracing::warn!(
                 document_id = %chunk.document_id,
                 node_id = %chunk.node_id,
-                content_chars = chunk.content.chars().count(),
+                content_len = chunk.content.len(),
                 "chunk content exceeds indexing cap, truncating"
             );
             &chunk.content[..byte_idx]
