@@ -1,7 +1,7 @@
 use models_opensearch::SearchIndex;
 
 use crate::upsert::properties::IndexedProperty;
-use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
 
 #[cfg(test)]
 mod test;
@@ -24,10 +24,10 @@ pub struct UpsertChatMessageArgs {
     pub user_id: String,
     /// The role of the chat message
     pub role: String,
-    /// The created at time of the chat message
-    pub created_at_seconds: EpochSeconds,
-    /// The updated at time of the chat message
-    pub updated_at_seconds: EpochSeconds,
+    /// The created at time of the chat message, in milliseconds
+    pub created_at_millis: EpochMillis,
+    /// The updated at time of the chat message, in milliseconds
+    pub updated_at_millis: EpochMillis,
     /// The title of the chat message
     pub title: String,
     /// The content of the chat message
@@ -50,7 +50,7 @@ fn parent_doc_body(args: &UpsertChatMessageArgs) -> serde_json::Value {
         "entity_id": &args.chat_id,
         "title": &args.title,
         "user_id": &args.user_id,
-        "updated_at_seconds": args.updated_at_seconds,
+        "updated_at_millis": args.updated_at_millis,
         "chat_relation": PARENT_RELATION,
     });
     if !args.properties.is_empty()
@@ -68,8 +68,8 @@ fn child_doc_body(args: &UpsertChatMessageArgs) -> serde_json::Value {
         "chat_message_id": &args.chat_message_id,
         "content": &args.content,
         "role": &args.role,
-        "created_at_seconds": args.created_at_seconds,
-        "updated_at_seconds": args.updated_at_seconds,
+        "created_at_millis": args.created_at_millis,
+        "updated_at_millis": args.updated_at_millis,
         "chat_relation": {
             "name": CHILD_RELATION,
             "parent": &args.chat_id,

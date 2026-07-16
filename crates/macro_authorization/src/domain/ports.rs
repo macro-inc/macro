@@ -3,7 +3,7 @@ use std::future::Future;
 use model_user::UserContext;
 use rootcause::Report;
 
-use super::models::{MacroAuthorizationError, ValidatedIdentity};
+use super::models::{InternalIdentityClaims, MacroAuthorizationError, ValidatedIdentity};
 
 /// Cryptographic credential validation used by the authorization domain.
 ///
@@ -24,4 +24,14 @@ pub trait MacroAuthorizationService: Clone + Send + Sync + 'static {
         &self,
         jwt: &str,
     ) -> impl Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send;
+
+    /// Authorize an internal service-to-service caller.
+    ///
+    /// Returns `Ok(None)` when the key is valid but no identity is established
+    /// by either the acting-user claim or the configured default.
+    fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> impl Future<Output = Result<Option<UserContext>, Report<MacroAuthorizationError>>> + Send;
 }

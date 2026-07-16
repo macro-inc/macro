@@ -1,8 +1,8 @@
 [package]
-name = "complete_graph"
-version = "0.1.0"
 edition = "2024"
+name = "complete_graph"
 publish = false
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -18,16 +18,22 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "inbound",
 ] }
 graphql_common = { path = "../graphql_common" }
+graphql_email = { path = "../graphql_email" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_soup = { path = "../graphql_soup" }
 model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", features = ["axum"] }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+apollo-compiler = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
+models_soup = { path = "../models_soup" }
+serde = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

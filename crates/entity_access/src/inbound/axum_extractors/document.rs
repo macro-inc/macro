@@ -1,5 +1,8 @@
 //! Document access extractor.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -8,42 +11,42 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
+use macro_authorization::{
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+};
 
 use super::{ExtractorError, RequiredPermission};
-use crate::{
-    domain::{
-        models::{
-            AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-            EntityType,
-        },
-        ports::EntityAccessService,
+use crate::domain::{
+    models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     },
-    inbound::axum_extractors::InternalUser,
+    ports::EntityAccessService,
 };
 use model::document::DocumentBasic;
-use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Validates that the user has at least the required access level to a document.
 ///
 /// Type parameter `T` specifies the required access level (ViewAccessLevel, EditAccessLevel, etc.)
 /// Type parameter `Svc` is the entity access service implementation.
+/// Type parameter `Auth` is the authorization service implementation.
 ///
 /// # Prerequisites
 ///
-/// - User must be authenticated (MacroUserExtractor in extensions)
-/// - Document context must be loaded (DocumentBasic in extensions)
+/// - Document context must be loaded (`DocumentBasic` in extensions)
 #[derive(Debug)]
-pub struct DocumentAccessExtractor<T: RequiredPermission, Svc> {
+pub struct DocumentAccessExtractor<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for DocumentAccessExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for DocumentAccessExtractor<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -52,26 +55,20 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
+        let OptionalMacroAuthorizationExtractor {
+            macro_user_id,
+            is_internal_access,
+            ..
+        } = OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
             .await
-            .map_err(|_| ExtractorError::Internal)?;
+            .map_err(ExtractorError::from)?;
 
         let document_context: Extension<DocumentBasic> = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
-            parts
-                .extract()
-                .await
-                .map_err(|_| ExtractorError::Internal)?
-        } else {
-            None
-        };
-
-        if internal_user.is_some() {
+        if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {

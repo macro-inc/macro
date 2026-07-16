@@ -21,10 +21,11 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use serde::Serialize;
 
 use crate::BackfillServiceImpl;
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use crate::domain::jobs::{BackfillJobs, JobId};
 use crate::domain::models::{
     CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest, DocumentBackfillRequest,
@@ -49,10 +50,11 @@ struct AcceptedReceipt {
     job_id: JobId,
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn calls(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<CallBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -64,10 +66,11 @@ async fn calls(
     .await
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn chats(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<ChatBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -79,10 +82,11 @@ async fn chats(
     .await
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn channels(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<ChannelBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -96,10 +100,11 @@ async fn channels(
     .await
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn documents(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<DocumentBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -113,10 +118,11 @@ async fn documents(
     .await
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn emails(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<EmailBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -130,10 +136,11 @@ async fn emails(
     .await
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn properties(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<PropertiesBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -147,10 +154,11 @@ async fn properties(
     .await
 }
 
-#[tracing::instrument(skip(service, jobs, req))]
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
 async fn projects(
     State(service): State<Arc<BackfillServiceImpl>>,
     State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<ProjectBackfillRequest>,
 ) -> Response {
     spawn_backfill(
@@ -164,8 +172,12 @@ async fn projects(
     .await
 }
 
-#[tracing::instrument(skip(jobs))]
-async fn status(State(jobs): State<BackfillJobs>, Path(job_id): Path<String>) -> Response {
+#[tracing::instrument(skip(jobs, _internal_authorization))]
+async fn status(
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    Path(job_id): Path<String>,
+) -> Response {
     match jobs.snapshot(&JobId::from(job_id)).await {
         Ok(Some(snap)) => axum::Json(snap).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "unknown job id").into_response(),

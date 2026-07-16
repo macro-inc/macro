@@ -1,0 +1,21 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/preview_fly.rs
+name: Fly Preview Cleanup
+'on':
+  pull_request:
+    types:
+    - closed
+    - unlabeled
+jobs:
+  destroy:
+    if: github.event.action == 'closed' || github.event.label.name == 'preview'
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      contents: read
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+    - name: Setup flyctl
+      uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+    - name: Destroy app
+      run: flyctl apps destroy "macro-pr-${{ github.event.pull_request.number }}" --yes || true

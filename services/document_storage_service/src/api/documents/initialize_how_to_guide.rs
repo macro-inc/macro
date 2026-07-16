@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::State,
     response::{IntoResponse, Json, Response},
@@ -7,9 +7,9 @@ use documents_hex::domain::create::{
     MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
 };
 use favorites::domain::ports::FavoritesService;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{ErrorResponse, GenericSuccessResponse};
 use model_entity::EntityType;
-use model_user::axum_extractor::MacroUserExtractor;
 use reqwest::StatusCode;
 
 const HOW_TO_GUIDE_NAME: &str = "Macro how to guide";
@@ -21,7 +21,7 @@ const HOW_TO_GUIDE_TEMPLATE: &str = include_str!("./template/macro_how_to_guide.
 #[tracing::instrument(skip(state, user_context), fields(user_id=?user_context.macro_user_id))]
 pub async fn handler(
     State(state): State<ApiContext>,
-    user_context: MacroUserExtractor,
+    user_context: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
     tracing::info!("initialize how to guide");
 

@@ -3,6 +3,7 @@ import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
 import { groupedCacheVersion } from '@queries/soup/cache';
+import { makeGraphqlGroupedSoupContinuationInput } from '@queries/soup/graphql-ast';
 import {
   parseGroupMeta,
   serializeGroupByField,
@@ -23,6 +24,7 @@ import {
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
+import { fetchGraphqlGroupedSoup } from '@service-storage/graphql-soup';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -57,6 +59,7 @@ type CreateGroupedSoupQueriesArgs = {
     }
   >;
   soupBody: Accessor<SoupAstBody>;
+  transport: Accessor<'rest' | 'graphql' | undefined>;
   queryOptions: Accessor<{
     enabled?: boolean;
     meta?: {
@@ -145,10 +148,50 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
             return initialPage;
           }
 
+          if (args.transport() === 'graphql') {
+            const response = await fetchGraphqlGroupedSoup(
+              makeGraphqlGroupedSoupContinuationInput({
+                groupBy: field,
+                groupKey: group.key,
+                cursor: ctx.pageParam,
+              })
+            );
+            const nextGroup = response.groups.find(
+              (candidate) => candidate.key === group.key
+            );
+            if (!nextGroup) {
+              if (response.groups.length > 0) {
+                throw new Error(
+                  `GraphQL grouped Soup continuation omitted bin ${group.key}`
+                );
+              }
+
+              // The group may have been exhausted by concurrent deletes
+              // between pages. Treat an empty response as a terminal page.
+              return {
+                items: {},
+                group: {
+                  ...group,
+                  itemIds: [],
+                  nextCursor: null,
+                },
+              };
+            }
+
+            return {
+              items: response.items,
+              group: {
+                ...group,
+                itemIds: nextGroup.itemIds,
+                nextCursor: nextGroup.nextCursor,
+              },
+            };
+          }
+
           const response = await throwOnErr(async () =>
             storageServiceClient.getGroupedSoupAstGroupPage({
               params: {
-                cursor: ctx.pageParam ?? undefined,
+                cursor: ctx.pageParam,
                 group_by: serializeGroupByField(field),
                 group_key: group.key,
                 limit: args.soupParams().limit,

@@ -18,7 +18,7 @@ path = "src/doppler_config.rs"
 
 [features]
 default = []
-local_auth = ["macro_middleware/local_auth"]
+local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
 serde = { workspace = true }
@@ -26,6 +26,7 @@ serde_json = { workspace = true }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_config = { path = "../../crates/macro_config" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 sqlx = { workspace = true }
@@ -41,7 +42,6 @@ tokio = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }
 axum = { workspace = true }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 aws-sdk-sqs = { workspace = true }
@@ -61,9 +61,6 @@ macro_cors = { path = "../../crates/macro_cors" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
-] }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 aws-sdk-secretsmanager = { workspace = true }
 

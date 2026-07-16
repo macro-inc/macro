@@ -10,7 +10,7 @@ Open an issue before putting up a PR. This applies to both features and fixes. I
 
 ## AI-assisted contributions
 
-Useful contributions require human effort. You may use whatever tools best 
+Useful contributions require human effort. You may use whatever tools best
 serve you including AI tools, but if you don't understand the work you're
 doing it's probably not useful.
 
@@ -38,7 +38,7 @@ Common types: `feat`, `fix`, `chore`
 ## PR bodies
 
 Keep PR bodies concise and write them yourself. A few sentences covering what
-changed and why, a link to the issue, and anything a reviewer needs to know. 
+changed and why, a link to the issue, and anything a reviewer needs to know.
 No generated boilerplate, no exhaustive file-by-file change lists.
 
 ## Development setup

@@ -22,6 +22,8 @@ clap = { workspace = true }
 macro_aws_config = { path = "../../../../crates/macro_aws_config" }
 macro_queues = { path = "../../../../crates/macro_queues" }
 serde = { workspace = true }
+# Content-address the init snapshots (`stack up` restore/save keys).
+sha2 = { workspace = true }
 tokio = { workspace = true }
 # Source of truth for the declared Kafka topics (local-stack provisioning).
 macro_event_topics = { path = "../../../../crates/macro_event_topics" }

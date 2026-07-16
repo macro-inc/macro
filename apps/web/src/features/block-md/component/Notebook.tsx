@@ -50,6 +50,11 @@ import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import {
+  MARKDOWN_OUTLINE_WIDTH,
+  MarkdownOutline,
+  useMarkdownOutline,
+} from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
@@ -71,6 +76,9 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
+const OutlineEdgeInset = 16;
+const OutlineMinWidth =
+  NoteTargetWidth + 2 * (MARKDOWN_OUTLINE_WIDTH + OutlineEdgeInset);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -120,11 +128,20 @@ export function Notebook(props: {
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
   let contentRef!: HTMLDivElement;
+  // Escape the notebook's isolated stacking context so the menu covers editor
+  // handles, while remaining inside the block so app chrome still covers it.
+  const outlinePortalMount = () =>
+    notebookRef.closest<HTMLElement>('.portal-scope') ?? notebookRef;
 
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
+  const outline = useMarkdownOutline({
+    editor: () => md.editor,
+    enabled: () =>
+      width() >= OutlineMinWidth && !history.isOpen() && !isMobile(),
+  });
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -309,6 +326,22 @@ export function Notebook(props: {
 
   return (
     <div class={containerClasses()} ref={notebookRef}>
+      <Show when={outline.show()}>
+        <div
+          class="pointer-events-none absolute inset-y-0 z-1"
+          style={{
+            left: `${OutlineEdgeInset}px`,
+            width: `${MARKDOWN_OUTLINE_WIDTH}px`,
+          }}
+        >
+          <MarkdownOutline
+            editor={() => md.editor}
+            outline={outline}
+            portalMount={outlinePortalMount}
+            scrollContainer={() => md.scrollContainer}
+          />
+        </div>
+      </Show>
       <div
         class={contentDivClasses()}
         ref={contentRef}

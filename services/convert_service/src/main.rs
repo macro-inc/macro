@@ -1,7 +1,8 @@
 #![recursion_limit = "256"]
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use config::{Config, Environment};
+use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
 use macro_entrypoint::MacroEntrypoint;
 use process::runner::run_worker;
 use sqlx::postgres::PgPoolOptions;
@@ -66,6 +67,14 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        NoopMacroAuthJwtValidator, // we only have internal calls in this service.
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: None,
+        },
+    )));
+
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
@@ -102,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(ApiContext {
         db,
         s3_client,
-        internal_api_key: config.internal_api_key.clone(),
+        authorization_state,
         sqs_client: Arc::new(sqs_client),
         config: Arc::new(config),
     })

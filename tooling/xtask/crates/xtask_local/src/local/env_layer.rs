@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::instance::Instance;
 use super::{Mode, local_env};
@@ -171,23 +171,41 @@ fn pull_aws_credentials(env: &mut BTreeMap<String, String>) {
     }
 }
 
-/// Pull the named Doppler `local`-project config as a flat env overlay (mirrors
-/// the old `just get_environment`). Non-fatal: if Doppler is unavailable in local
-/// mode we proceed on defaults + env-file. Returns whether secrets were loaded.
+/// Pull Doppler secrets as a flat env overlay (mirrors the old
+/// `just get_environment`). Two modes:
+///
+/// - `DOPPLER_TOKEN` in the process env (CI, Fly preview machines) is a
+///   config-scoped service token: download WITHOUT `--project`/`--config` (the
+///   token pins them), and treat failure as fatal — whoever provisioned the
+///   token explicitly asked for these secrets, so proceeding without them
+///   would just move the breakage into the services.
+/// - Otherwise pull the named `local`-project config via the developer's
+///   `doppler login`. Non-fatal: if Doppler is unavailable in local mode we
+///   proceed on defaults + env-file.
+///
+/// Returns whether secrets were loaded.
+// xtask is host tooling, not a service reading APP_SECRETS_JSON, so reading the
+// process environment directly is correct here.
+#[allow(clippy::disallowed_methods)]
 fn pull_doppler(config: &str, env: &mut BTreeMap<String, String>) -> Result<bool> {
-    let output = Command::new("doppler")
-        .args([
-            "secrets",
-            "download",
-            "--project",
-            "local",
-            "--config",
-            config,
-        ])
-        .args(["--format", "json", "--no-file"])
-        .output();
+    let token_scoped = std::env::var("DOPPLER_TOKEN").is_ok_and(|v| !v.is_empty());
+    let mut cmd = Command::new("doppler");
+    cmd.args(["secrets", "download"]);
+    if !token_scoped {
+        cmd.args(["--project", "local", "--config", config]);
+    }
+    cmd.args(["--format", "json", "--no-file"]);
+    let output = cmd.output();
     let output = match output {
         Ok(o) if o.status.success() => o,
+        Ok(o) if token_scoped => bail!(
+            "doppler secrets download failed with DOPPLER_TOKEN set:\n{}",
+            String::from_utf8_lossy(&o.stderr).trim_end()
+        ),
+        Err(e) if token_scoped => {
+            return Err(anyhow::Error::from(e))
+                .context("running doppler with DOPPLER_TOKEN set (is the doppler CLI installed?)");
+        }
         _ => return Ok(false),
     };
     let json: BTreeMap<String, serde_json::Value> =

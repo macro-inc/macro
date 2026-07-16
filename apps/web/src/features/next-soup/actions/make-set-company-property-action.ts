@@ -8,24 +8,18 @@ import type { Property } from '@property/types';
 /** Builtin CRM company fields settable from entity action menus. */
 export type CompanyCrmField = 'stage' | 'owner' | 'revenue';
 
-type MakeSetCompanyPropertyOptions = {
-  // Admin/owner-only on the FE, matching row-level CRM editing; the
-  // backend independently enforces write access on property saves.
-  isTeamAdmin: () => boolean;
-};
-
 /**
  * "Set stage / owner / revenue" for CRM company rows: opens the global
  * property editor (the same one task status/priority/assignee commands
  * use) targeting the builtin CRM property, editing the whole selection.
+ * Available to all team members; the backend enforces write access on
+ * property saves.
  */
-export const makeSetCompanyPropertyAction = (
-  options: MakeSetCompanyPropertyOptions
-) => {
+export const makeSetCompanyPropertyAction = () => {
   const dealStages = useDealStages();
 
   const canExecute = (entity: EntityData): boolean =>
-    entity.type === 'crm_company' && options.isTeamAdmin();
+    entity.type === 'crm_company';
 
   const propertyFor = (field: CompanyCrmField): Property | undefined => {
     // Stage resolves through the active deal-stage set (the team's own

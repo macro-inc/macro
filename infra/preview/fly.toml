@@ -1,0 +1,43 @@
+# Fly config for per-PR preview apps. The workflow overrides the app name
+# (`--app macro-pr-<N>`) and supplies the image (`--image`); this file carries
+# everything else. See infra/preview/README.md.
+app = "macro-preview-template"
+primary_region = "ewr"
+
+# Everything (frontend, APIs, WebSockets, Mailpit) is behind the stack's
+# single-origin Caddy proxy.
+[http_service]
+  internal_port = 8090
+  force_https = true
+  # The whole point: an idle preview suspends to ~zero cost and the fly-proxy
+  # wakes it on the next request.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    # First boot loads the baked images and restores the init snapshot before
+    # the backend answers — give it room.
+    grace_period = "5m"
+    method = "GET"
+    path = "/auth/health"
+
+# The inner Docker store must NOT live on the machine rootfs: Fly's rootfs is
+# an overlay (nested overlayfs forbids the whiteout device nodes layer
+# unpacking needs — every Debian-based image failed with EPERM) and has only
+# a few GB of headroom (ENOSPC mid-load). A volume is real ext4, properly
+# sized, and persists across redeploys — so later pushes reuse the layer
+# store. The deploy step creates the volume if it doesn't exist.
+[[mounts]]
+  source = "docker_data"
+  destination = "/var/lib/docker"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 8
+  memory = "16gb"
+
+[[restart]]
+  policy = "on-failure"

@@ -115,6 +115,29 @@ export function setDoneOverride(
   });
 }
 
+// Client-asserted seen state, the `doneOverrides` twin for `viewed_at`. Seen
+// is monotone (there is no unsee API), so once a mark is initiated no fetch
+// snapshot may present the notification as unread: a full refetch reads its
+// pages over several seconds and a page read before the mark's POST commits
+// resurrects pre-write state when it lands. Entries are removed on mutation
+// failure (that rollback is deliberate) and pruned once the cache confirms
+// the seen state at a quiet moment.
+const [seenOverrides, setSeenOverrides] = createRoot(() =>
+  createSignal<ReadonlyMap<string, string>>(new Map())
+);
+
+function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
+  if (ids.length === 0) return;
+  setSeenOverrides((prev) => {
+    const next = new Map(prev);
+    for (const id of ids) {
+      if (viewedAt === undefined) next.delete(id);
+      else next.set(id, viewedAt);
+    }
+    return next;
+  });
+}
+
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
@@ -129,14 +152,25 @@ export function createNotificationSource(
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
+  // Gate on data presence, not isSuccess: a failed or cancelled background
+  // refetch flips status to error while the cached pages remain, and blanking
+  // every unread surface over a transient refetch is worse than showing the
+  // cached state.
   const notifications = createMemo(() => {
-    if (!notificationsQuery.isSuccess) return [];
     const raw = notificationsQuery.data;
-    const overrides = doneOverrides();
-    if (overrides.size === 0) return raw;
+    if (!raw) return [];
+    const done = doneOverrides();
+    const seen = seenOverrides();
+    if (done.size === 0 && seen.size === 0) return raw;
     return raw.map((n) => {
-      const override = overrides.get(n.id);
-      return override !== undefined ? { ...n, done: override } : n;
+      const doneOverride = done.get(n.id);
+      const seenOverride = n.viewed_at ? undefined : seen.get(n.id);
+      if (doneOverride === undefined && seenOverride === undefined) return n;
+      return {
+        ...n,
+        ...(doneOverride !== undefined ? { done: doneOverride } : {}),
+        ...(seenOverride !== undefined ? { viewed_at: seenOverride } : {}),
+      };
     });
   });
 
@@ -147,8 +181,8 @@ export function createNotificationSource(
   // pre-mutation value and a stale fetch could flip it back before the
   // API lands.
   createEffect(() => {
-    if (!notificationsQuery.isSuccess) return;
     const raw = notificationsQuery.data;
+    if (!raw) return;
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
     const presentIds = new Set(raw.map((n) => n.id));
@@ -157,6 +191,29 @@ export function createNotificationSource(
       if (!presentIds.has(id)) toPrune.push(id);
     }
     if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
+  });
+
+  // Prune seen overrides once they stop being load-bearing: the id left the
+  // cache, or the cache row itself is seen at a quiet moment. Quiet matters —
+  // while a mark is in flight the seen cache row is the optimistic write, and
+  // a fetch that is still running may hold a pre-write snapshot that will
+  // land later; in both cases the override must survive.
+  createEffect(() => {
+    const raw = notificationsQuery.data;
+    if (!raw) return;
+    const seen = seenOverrides();
+    if (seen.size === 0) return;
+    const quiet =
+      !notificationsQuery.isFetching &&
+      !markNotificationsAsSeenMutation.isPending;
+    const byId = new Map(raw.map((n) => [n.id, n]));
+    const toPrune: string[] = [];
+    for (const id of seen.keys()) {
+      const row = byId.get(id);
+      if (!row) toPrune.push(id);
+      else if (row.viewed_at && quiet) toPrune.push(id);
+    }
+    if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });
 
   const notificationsByEntity = createMemo(() => {
@@ -173,7 +230,7 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
-    if (!notificationsQuery.isSuccess) return;
+    if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
     }
@@ -241,16 +298,35 @@ export function createNotificationSource(
     optimisticInsertNotification(parsedNotification);
   });
 
+  // Skip empty batches: entity-level read markers fire on mount regardless
+  // of whether the entity has notifications, and an empty batch would still
+  // POST a no-op mutation.
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {
-    await markNotificationsAsDoneMutation.mutateAsync({
-      notificationIds: notifications.map((n) => n.id),
-    });
+    if (notifications.length === 0) return;
+    const ids = notifications.map((n) => n.id);
+    setDoneOverride(ids, true);
+    try {
+      await markNotificationsAsDoneMutation.mutateAsync({
+        notificationIds: ids,
+      });
+    } catch (err) {
+      setDoneOverride(ids, false);
+      throw err;
+    }
   };
 
   const bulkMarkAsRead = async (notifications: UnifiedNotification[]) => {
-    await markNotificationsAsSeenMutation.mutateAsync({
-      notificationIds: notifications.map((n) => n.id),
-    });
+    if (notifications.length === 0) return;
+    const ids = notifications.map((n) => n.id);
+    setSeenOverride(ids, new Date().toISOString());
+    try {
+      await markNotificationsAsSeenMutation.mutateAsync({
+        notificationIds: ids,
+      });
+    } catch (err) {
+      setSeenOverride(ids, undefined);
+      throw err;
+    }
   };
 
   const markAsDone = async (notification: UnifiedNotification) => {

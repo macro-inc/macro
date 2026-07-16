@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use crate::service::conn_gateway::update_live_comment_state;
 use axum::{
     Json,
@@ -10,6 +10,7 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::annotations::create_anchor::create_unthreaded_anchor;
 use model::{
     annotations::{
@@ -18,7 +19,6 @@ use model::{
     },
     document::DocumentBasic,
     response::ErrorResponse,
-    user::UserContext,
 };
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 use sqlx::PgPool;
@@ -48,10 +48,10 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = crate::api::context::ApiContext)]
 pub async fn create_anchor_handler(
-    _access: DocumentAccessExtractor<CommentAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<CommentAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
     State(connection_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateUnthreadedAnchorRequest>,
@@ -65,7 +65,7 @@ pub async fn create_anchor_handler(
         )
             .into_response());
     }
-    let user_id = user_context.user_id.as_str();
+    let user_id = user.macro_user_id.as_ref();
     let document_id = document_id.as_str();
     match create_unthreaded_anchor(&db, user_id, document_id, req).await {
         Ok(res) => {

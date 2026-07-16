@@ -1,6 +1,7 @@
 use crate::api::context::ApiContext;
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use rayon::prelude::*;
 use std::{
@@ -20,7 +21,6 @@ use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
-    user::UserContext,
 };
 use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 
@@ -49,11 +49,15 @@ static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
         (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user_context, document_context, _access_level), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(state, user, document_context, _access_level), fields(user_id=?user.macro_user_id))]
 pub async fn get_location_handler(
-    _access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _access_level: DocumentAccessExtractor<
+        ViewAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     params: Query<LocationQueryParams>,

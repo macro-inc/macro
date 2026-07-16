@@ -7,9 +7,9 @@
 
 use anyhow::Context;
 use database_env_vars::DatabaseUrl;
+pub use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-pub use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
     /// Auth key used by the document storage / search / lexical clients.

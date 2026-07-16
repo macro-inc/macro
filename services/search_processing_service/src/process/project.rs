@@ -2,7 +2,7 @@ use anyhow::Context;
 use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient,
-    date_format::EpochSeconds,
+    date_format::EpochMillis,
     upsert::{project::UpsertProjectArgs, properties::IndexedProperty},
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
@@ -75,8 +75,8 @@ pub async fn upsert_project(
                 name: project.name,
                 owner_id: project.user_id,
                 parent_project_id: project.parent_id,
-                created_at_seconds: EpochSeconds::new(created_at.timestamp())?,
-                updated_at_seconds: EpochSeconds::new(updated_at.timestamp())?,
+                created_at_millis: EpochMillis::new(created_at.timestamp_millis())?,
+                updated_at_millis: EpochMillis::new(updated_at.timestamp_millis())?,
                 properties,
             },
             index_override,

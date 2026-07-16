@@ -189,7 +189,6 @@ export function ChannelThread(props: ThreadProps) {
     !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
-    !isUnifiedInputMode() &&
     hasReplies() &&
     !!replyAction() &&
     !isReplyingToThread() &&

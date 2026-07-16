@@ -65,8 +65,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
     opaque session tag compared against the binding stored in the same
     database (`__meta:identity`), so compare-and-wipe is atomic with the
     triggering write (no stale-in-flight-write races). A mismatch wipes and
-    rebinds (“silent restart”), all active operations re-execute, and other
-    engine instances get a `reset` broadcast. Eager path: clear on logout.
+    rebinds (“silent restart”) and all active operations re-execute. Eager
+    path: clear on logout.
     Discard on schema/format mismatch (cache is disposable, rebuild from
     network).
 
@@ -78,9 +78,11 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `GraphqlSoupChannelMessage.id`); the build fails on malformed shapes.
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.
-13. **Future** — mutations don't exist in the schema yet; design leaves room
-    for optimistic updates, mutation-driven invalidation, and an offline
-    mutation queue, but none of that is in scope now.
+13. **Durable optimistic mutations** — optimistic GraphQL mutations are
+    persisted with their replay request, restored across restarts, and applied
+    strictly in enqueue order. Retryability is decided by an exchange callback;
+    retryable failures retain their optimistic layer. Each queued network
+    attempt has a one-minute timeout, comfortably inside its five-minute lease.
 
 ### Open questions
 
@@ -125,11 +127,11 @@ One Rust core engine, two hosts:
 │ module in a worker;           │        │ Tauri host process (Rust);      │
 │ IndexedDB via the `idb` crate │        │ no webview storage ever         │
 │ (storage entirely in Rust)    │        │ • naturally shared across ALL   │
-│ • SharedWorker where available│        │   webviews/windows              │
-│   (single engine instance)    │        │ • SQLite (or fs) storage        │
-│ • fallback: worker-per-tab +  │        │ • glue over invoke + channels/  │
-│   Web Locks write serializing │        │   events                        │
-│   + BroadcastChannel fanout   │        │                                 │
+│ • SharedWorker: one engine    │        │   webviews/windows              │
+│   shared by every browser tab │        │ • SQLite (or fs) storage        │
+│ • no SharedWorker: storage-   │        │ • glue over invoke + channels/  │
+│   free no-op cache host       │        │   events                        │
+│                               │        │                                 │
 └───────────────┬───────────────┘        └────────────────┬────────────────┘
                 └──────────────────┬──────────────────────┘
                                    ▼
@@ -156,8 +158,9 @@ One Rust core engine, two hosts:
 ### 4.2 Multi-consumer strategy (browser only)
 
 **Decision: IndexedDB-backed persistence via the [`idb`
-crate](https://docs.rs/idb/latest/idb/), engine in a worker that may or may
-not be a SharedWorker. OPFS is dropped.**
+crate](https://docs.rs/idb/latest/idb/), with one engine in a SharedWorker.
+Browsers without SharedWorker support use a storage-free no-op cache host.
+OPFS is dropped.**
 
 Rationale (see Appendix A):
 
@@ -167,32 +170,27 @@ Rationale (see Appendix A):
 - IDB point-reads measured *faster* than OPFS sync 4 KiB reads in the probe
   (0.35 ms vs 2 ms avg), and batched writes (119 ms / 1000 records / txn)
   are fine for our write rates.
-- IDB is available in window, dedicated workers and SharedWorker, and
-  tolerates concurrent instances — so the same backend works in every
-  topology.
+- IDB is available in SharedWorker on supported browsers.
 - Using the `idb` Rust crate keeps the entire storage layer inside the wasm
   module (no JS-callback storage shim; JS glue is transport only).
 
 Topology:
 
-- **Preferred: SharedWorker** hosting the wasm engine — single instance,
-  no election, trivial routing. (Chromium probe: IDB, Web Locks and
-  BroadcastChannel all available in SharedWorker.)
-- **Fallback (no SharedWorker): dedicated worker per tab**, each with its
-  own engine instance over the same IDB database. Web Locks serialize
-  writes/GC (single writer at a time); BroadcastChannel broadcasts
-  changed-keys so every tab's exchange re-executes affected operations.
-  Cost: N copies of the hot tier — acceptable.
+- **Browser: SharedWorker** hosting the wasm engine — one instance across
+  tabs, no election or cross-engine coordination.
+- **No SharedWorker:** return a no-op `CacheHost` that always misses, ignores
+  writes, and does not initialize wasm or persistent storage. Mutations pass
+  through the exchange without durable optimism.
 - Selection at startup: Tauri detection (`isTauri`) → native transport;
-  otherwise `typeof SharedWorker === 'function'` picks the worker kind. All
-  paths sit behind the same `Storage` trait and `CacheHost` RPC interface.
+  otherwise SharedWorker support selects either the browser cache or no-op
+  host. All paths sit behind the same `CacheHost` interface.
 
 ### 4.3 Storage backends
 
 | Backend    | Host         | Notes                                          |
 |------------|--------------|------------------------------------------------|
-| SQLite     | Tauri native | records + links + meta tables; WAL mode        |
-| IndexedDB  | browser      | via the `idb` crate inside the wasm module; one DB, object stores for records / operation roots / meta |
+| SQLite     | Tauri native | records, mutation queue, optimistic layers, and meta; WAL mode |
+| IndexedDB  | browser      | via the `idb` crate; stable per-scope DB with object stores for records, mutation queue, optimistic layers, and meta |
 
 `Storage` trait (async): `get_batch`, `put_batch`, `delete_batch`,
 `scan_prefix`, `approx_size`. Records serialized with `postcard` (stored as
@@ -246,18 +244,16 @@ apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
 apps/web/src/lib/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
-  worker/                      # SharedWorker/dedicated-worker entries
+  worker/                      # SharedWorker entry + worker core
 ```
 
 ## 6. Phases
 
 **Phase 0 — spike** *(closed)*
 - Browser probe harness built; Chromium results in Appendix A. **Decision
-  made: IDB-backed persistence via the `idb` crate, SharedWorker preferred
-  with dedicated-worker fallback (§4.2).** Safari/Firefox probe runs and
-  the Tauri IPC benchmark were deliberately skipped — the IDB + worker
-  approach is the lowest common denominator and doesn't depend on their
-  results.
+  made: IDB-backed persistence via the `idb` crate in a SharedWorker, with
+  caching disabled when SharedWorker is unavailable (§4.2).** Safari/Firefox
+  probe runs and the Tauri IPC benchmark were deliberately skipped.
 - Wire protocol delivered in Phase 3 (`src/lib/graphql-cache/protocol.ts`).
 - The probe harness (`spikes/graphql-cache-probe/`) and the soup payload
   measurement script (`scripts/measure-soup-payloads.ts`) were removed
@@ -292,10 +288,9 @@ apps/web/src/lib/graphql-cache/ # JS glue
   wasm-bindgen-test. Build: `just build-cache-wasm` →
   `src/lib/graphql-cache/wasm/` (gitignored), ~460 KiB pre-gzip.
 - ~~JS glue~~ (`apps/web/src/lib/graphql-cache/`, alias `@graphql-cache/*`):
-  wire protocol (`protocol.ts`), `CacheWorkerCore` +
-  SharedWorker/dedicated-worker entries (Web Locks write serialization +
-  BroadcastChannel fanout in the fallback topology), `createWorkerCacheHost`
-  implementing `CacheHost`. Type-checked; end-to-end browser exercise
+  wire protocol (`protocol.ts`), `CacheWorkerCore` + SharedWorker entry,
+  and `createWorkerCacheHost` implementing `CacheHost` (with a storage-free
+  no-op host when SharedWorker is unavailable). Type-checked; end-to-end browser exercise
   happens with the Phase 4 exchange integration.
 - ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
   workspace — it needs the patched tauri fork pinned there; path-deps on
@@ -346,8 +341,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
 
 - **Browser storage quirks** (Safari IDB edge cases/private mode, storage
   eviction under pressure) — mitigated by the disposable-cache design
-  (detect → discard → rebuild from network) and the dedicated-worker
-  fallback topology. Tauri is unaffected (native host only).
+  (detect → discard → rebuild from network). Browsers without SharedWorker
+  use the storage-free no-op host. Tauri is unaffected (native host only).
 - **`idb` crate dependency** — maintained third-party wasm bindings; if it
   stalls, the `Storage` trait isolates us (swap for hand-rolled
   `web-sys`-based bindings).
@@ -401,8 +396,7 @@ Takeaways:
 3. RTT is a non-issue: ≤1 ms for 64 KiB payloads, well within the read
    budget.
 
-These takeaways drove the §4.2 decision (IDB via the `idb` crate, engine in
-a worker that may or may not be a SharedWorker). Firefox/Safari probe runs
-and the Tauri IPC benchmark were **skipped by decision** — the chosen
-approach relies only on APIs universally available (IndexedDB, dedicated
-workers, Web Locks, BroadcastChannel).
+These takeaways originally drove the IDB decision. The current §4.2 topology
+requires SharedWorker for browser caching and deliberately falls back to no
+cache when it is unavailable. Firefox/Safari probe runs and the Tauri IPC
+benchmark were **skipped by decision**.

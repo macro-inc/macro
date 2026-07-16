@@ -1,4 +1,7 @@
+use chrono::{DateTime, Utc};
 use doppleganger::Mirror;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_email::email::db;
 use models_email::email::service::link;
 use models_email::service;
 use sqlx::PgPool;
@@ -112,7 +115,6 @@ pub async fn fetch_link_by_macro_id_and_email_address(
 /// inboxes delegated via macro_user_links. The union is the read-side half of the
 /// multi-inbox narrow-graph design — it surfaces both the user's own inboxes
 /// (same macro_id) and inboxes belonging to other macro users they've been delegated.
-#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: &str,
@@ -161,6 +163,123 @@ pub async fn fetch_inboxes_for_macro_id(
         .collect();
 
     Ok(service_links?)
+}
+
+/// An accessible inbox plus the per-inbox details the links list endpoint
+/// renders: settings, latest backfill job status, and the self-contact photo.
+#[derive(Debug, Clone)]
+pub struct InboxDetails {
+    pub link: link::Link,
+    pub settings: service::settings::Settings,
+    pub latest_backfill_status: Option<service::backfill::BackfillJobStatus>,
+    pub photo_url: Option<String>,
+}
+
+struct DbInboxDetailsRow {
+    id: Uuid,
+    macro_id: String,
+    fusionauth_user_id: String,
+    email_address: String,
+    provider: DbUserProvider,
+    is_sync_active: bool,
+    is_primary: bool,
+    needs_reauth: bool,
+    last_sync_error_at: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    signature_on_replies_forwards: Option<bool>,
+    signature: Option<String>,
+    latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
+    photo_url: Option<String>,
+}
+
+/// Single-query variant of [`fetch_inboxes_for_macro_id`] that also joins each
+/// inbox's settings, its most recent backfill job status, and its own photo
+/// (the self-contact's SFS photo, synced from people/me). Inboxes without an
+/// `email_settings` row get default settings.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_inbox_details_for_macro_id(
+    pool: &PgPool,
+    macro_id: &MacroUserIdStr<'_>,
+) -> anyhow::Result<Vec<InboxDetails>> {
+    let macro_id: &str = macro_id.as_ref();
+
+    let rows = sqlx::query_as!(
+        DbInboxDetailsRow,
+        r#"
+        SELECT l.id as "id!", l.macro_id as "macro_id!",
+               l.fusionauth_user_id as "fusionauth_user_id!",
+               l.email_address as "email_address!",
+               l.provider as "provider!: _",
+               l.is_sync_active as "is_sync_active!",
+               l.is_primary as "is_primary!",
+               l.needs_reauth as "needs_reauth!",
+               l.last_sync_error_at,
+               l.created_at as "created_at!",
+               l.updated_at as "updated_at!",
+               s.signature_on_replies_forwards as "signature_on_replies_forwards?",
+               s.signature,
+               bj.status as "latest_backfill_status?: _",
+               c.sfs_photo_url as "photo_url?"
+        FROM (
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
+                   el.last_sync_error_at, el.created_at, el.updated_at
+            FROM email_links el
+            WHERE el.macro_id = $1
+            UNION
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
+                   el.last_sync_error_at, el.created_at, el.updated_at
+            FROM email_links el
+            JOIN macro_user_links mul ON el.id = mul.link_id
+            WHERE mul.primary_macro_id = $1
+        ) l
+        LEFT JOIN email_settings s ON s.link_id = l.id
+        LEFT JOIN LATERAL (
+            SELECT status FROM email_backfill_jobs
+            WHERE link_id = l.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) bj ON true
+        LEFT JOIN email_contacts c
+            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)
+        ORDER BY l.created_at DESC
+        "#,
+        macro_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let settings = service::settings::Settings {
+                link_id: row.id,
+                // Missing settings row → schema default (FALSE).
+                signature_on_replies_forwards: row.signature_on_replies_forwards.unwrap_or(false),
+                signature: row.signature,
+            };
+            let link = link::Link::try_from(DbLink {
+                id: row.id,
+                macro_id: row.macro_id,
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+                is_sync_active: row.is_sync_active,
+                is_primary: row.is_primary,
+                needs_reauth: row.needs_reauth,
+                last_sync_error_at: row.last_sync_error_at,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })?;
+            Ok(InboxDetails {
+                link,
+                settings,
+                latest_backfill_status: row.latest_backfill_status.map(Into::into),
+                photo_url: row.photo_url,
+            })
+        })
+        .collect()
 }
 
 /// fetches email_links given a fusionauth_user_id. a fusionauth_user_id can have multiple email_links, each with a unique macro_id

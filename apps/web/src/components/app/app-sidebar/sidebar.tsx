@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -672,11 +673,20 @@ const SidebarDropdownLink = (
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
   const openInNewSplit = () => {
     if (canOpenInNewSplit()) open(true);
   };
   const openInCurrentSplit = () => open(false);
-  const openFullscreen = () => open(false)?.toggleSpotlight(true);
+  const openFullscreen = () => {
+    analytics.track('sidebar_click', { view: props.id });
+    const handle = layout.replaceAllSplits(
+      { type: 'component', id: props.id, params: props.params },
+      { referredFrom: 'sidebar' }
+    );
+    if (props.id === 'search' && handle) requestSearchFocus(handle.id);
+    globalSplitManager()?.returnFocus();
+  };
 
   const ContextMenuTriggerItem = (
     triggerProps: ComponentProps<typeof ContextMenu.Trigger>
@@ -690,7 +700,9 @@ const SidebarDropdownLink = (
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>
@@ -1398,6 +1410,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView()}>
+          <SidebarActiveCallWidget
+            sidebarState="expanded"
+            class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
+          />
+        </Show>
         <Show when={isExpandedView() && callCtx?.isInCall()}>
           <div data-ui="sidebar-in-call-panel">
             <InCallPanel isSlim={() => false} />
@@ -1511,6 +1529,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
     }) as const;
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
+  const canOpenFullscreen = () => layout.getSplitCount() > 1;
 
   const openInCurrentSplit = () =>
     layout.openWithSplit(content(), {
@@ -1534,8 +1553,11 @@ const SidebarLink = (props: SidebarLinkProps) => {
   };
 
   const openFullscreen = () => {
-    const split = openInCurrentSplit();
-    split?.toggleSpotlight(true);
+    const split = layout.replaceAllSplits(content(), {
+      referredFrom: 'sidebar',
+    });
+    if (props.id === 'search' && split) requestSearchFocus(split.id);
+    globalSplitManager()?.returnFocus();
   };
 
   return (
@@ -1660,7 +1682,9 @@ const SidebarLink = (props: SidebarLinkProps) => {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
-          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <Show when={canOpenFullscreen()}>
+            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
         </ContextMenuContent>
       </ContextMenu.Portal>

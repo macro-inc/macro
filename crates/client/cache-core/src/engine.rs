@@ -6,8 +6,12 @@ use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormaliz
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
+use crate::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
+    NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
+};
 use crate::store::Storage;
-use crate::value::{EntityKey, Record};
+use crate::value::{EntityKey, Record, canonical_json};
 use lru::LruCache;
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -24,6 +28,13 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Denormalize(#[from] DenormalizeError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
+    #[error("stale claim for optimistic transaction {0}")]
+    StaleMutationClaim(OptimisticTransactionId),
+    #[error("invalid queued mutation {id}: {detail}")]
+    InvalidQueuedMutation {
+        id: OptimisticTransactionId,
+        detail: String,
+    },
     #[error("storage: {0}")]
     Storage(#[source] S),
 }
@@ -56,46 +67,15 @@ pub struct WriteResult {
 /// Engine-assigned id of one optimistic mutation transaction. Never reuse
 /// host operation keys: identical concurrent mutations share an urql key,
 /// but each needs its own layer.
-pub type OptimisticTransactionId = u64;
+pub type OptimisticTransactionId = MutationId;
 
-/// One optimistic mutation's contribution to the cache view. Layers are
-/// ordered by creation; later layers override earlier ones field-by-field,
-/// all of them override the durable base. Nothing in a layer is persisted
-/// until the layer settles *and* every earlier layer has settled too
-/// (contiguous-prefix flushing keeps out-of-order settlement correct).
+/// One queued optimistic mutation's contribution to the cache view. Layers
+/// are persisted and ordered by their mutation ids; only the strict queue
+/// head can be claimed and settled.
+#[derive(Clone)]
 struct OptimisticLayer {
     id: OptimisticTransactionId,
-    state: OptimisticLayerState,
-}
-
-enum OptimisticLayerState {
-    /// Awaiting the network result; `updates` normalized from the
-    /// optimistic response.
-    Pending { updates: RecordUpdates },
-    /// Network result arrived; `updates` replaced by the real response.
-    /// Held in-memory until the layer reaches the settled prefix.
-    Succeeded { updates: RecordUpdates },
-    /// Rolled back. Kept as an ordered tombstone (contributing nothing)
-    /// until earlier layers settle, then dropped by the prefix flush.
-    Failed,
-}
-
-impl OptimisticLayer {
-    /// The record updates this layer currently contributes to reads.
-    fn updates(&self) -> Option<&RecordUpdates> {
-        match &self.state {
-            OptimisticLayerState::Pending { updates }
-            | OptimisticLayerState::Succeeded { updates } => Some(updates),
-            OptimisticLayerState::Failed => None,
-        }
-    }
-
-    fn settled(&self) -> bool {
-        matches!(
-            self.state,
-            OptimisticLayerState::Succeeded { .. } | OptimisticLayerState::Failed
-        )
-    }
+    updates: RecordUpdates,
 }
 
 /// Reserved storage key holding the identity bound to this cache. The
@@ -126,10 +106,9 @@ pub struct Engine<S: Storage> {
     docs: HashMap<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
-    /// Ordered optimistic mutation layers (memory-only; see
-    /// [`OptimisticLayer`]).
+    /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
-    next_transaction: OptimisticTransactionId,
+    optimistic_hydrated: bool,
 }
 
 impl<S: Storage> Engine<S> {
@@ -145,8 +124,91 @@ impl<S: Storage> Engine<S> {
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
             optimistic: Vec::new(),
-            next_transaction: 0,
+            optimistic_hydrated: false,
         }
+    }
+
+    /// Hydrates durable optimistic layers before the first operation. Queue
+    /// order is the optimistic composition order.
+    async fn hydrate_optimistic(&mut self) -> Result<(), EngineError<S::Error>> {
+        if self.optimistic_hydrated {
+            return Ok(());
+        }
+        let queued = self
+            .storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?;
+        self.optimistic = Self::normalize_queued_layers(&mut self.docs, queued)?;
+        self.optimistic_hydrated = true;
+        Ok(())
+    }
+
+    /// Reloads durable optimistic layers after another engine sharing this
+    /// storage changes the queue. Returns operations whose effective view
+    /// changed.
+    pub async fn refresh_optimistic_queue(&mut self) -> Result<WriteResult, EngineError<S::Error>> {
+        let queued = self
+            .storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?;
+        let replacement = Self::normalize_queued_layers(&mut self.docs, queued)?;
+        let candidates: BTreeSet<EntityKey> = self
+            .optimistic
+            .iter()
+            .chain(&replacement)
+            .flat_map(|layer| layer.updates.keys().cloned())
+            .collect();
+        let bases = self.load_bases(&candidates).await?;
+        let before = effective_records(&bases, &self.optimistic, &candidates);
+        self.optimistic = replacement;
+        self.optimistic_hydrated = true;
+        let after = effective_records(&bases, &self.optimistic, &candidates);
+        let changed: BTreeSet<EntityKey> = candidates
+            .into_iter()
+            .filter(|key| before.get(key) != after.get(key))
+            .collect();
+        let affected_ops = self.deps.ops_for_keys(changed.iter());
+        Ok(WriteResult {
+            changed,
+            affected_ops,
+            reset: false,
+        })
+    }
+
+    fn normalize_queued_layers(
+        docs: &mut HashMap<String, Document>,
+        queued: Vec<QueuedMutation>,
+    ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
+        queued
+            .into_iter()
+            .map(|queued| {
+                let variables: Json = serde_json::from_str(&queued.mutation.request.variables_json)
+                    .map_err(|error| EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: format!("invalid variables: {error}"),
+                    })?;
+                let Json::Object(variables) = variables else {
+                    return Err(EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: "variables are not an object".to_string(),
+                    });
+                };
+                let data: Json = serde_json::from_str(&queued.optimistic.optimistic_data_json)
+                    .map_err(|error| EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: format!("invalid optimistic response: {error}"),
+                    })?;
+                let document = Self::document(docs, &queued.mutation.request.query)?;
+                let operation =
+                    document.operation(queued.mutation.request.operation_name.as_deref())?;
+                Ok(OptimisticLayer {
+                    id: queued.id,
+                    updates: normalize(operation, &variables, &data)?,
+                })
+            })
+            .collect()
     }
 
     /// The identity binding of this cache, hydrating it from storage on
@@ -197,6 +259,7 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
     ) -> Result<ReadResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         if op.kind != OperationKind::Query {
@@ -308,6 +371,7 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         identity: Option<&str>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         let updates = normalize(op, variables, data)?;
@@ -323,6 +387,7 @@ impl<S: Storage> Engine<S> {
                     // A different user's session: in-flight optimistic
                     // mutations belong to the old identity — discard them.
                     self.optimistic.clear();
+                    self.optimistic_hydrated = true;
                     self.storage.clear().await.map_err(EngineError::Storage)?;
                     self.bind_identity(observed).await?;
                     reset = true;
@@ -412,13 +477,9 @@ impl<S: Storage> Engine<S> {
         Ok(changed)
     }
 
-    /// Installs a new optimistic layer from a mutation's optimistic
-    /// response. Persists nothing. Returns the transaction id plus a
-    /// [`WriteResult`] whose `changed` keys are the entities whose
-    /// *effective visible* data changed (`affected_ops` excludes
-    /// `origin_op`). The layer stays in memory until
-    /// [`commit_optimistic_write`](Self::commit_optimistic_write) or
-    /// [`rollback_optimistic_write`](Self::rollback_optimistic_write).
+    /// Atomically enqueues a mutation together with its optimistic layer.
+    /// The layer is durable before it becomes visible or the caller is
+    /// allowed to forward the mutation to the network.
     pub async fn begin_optimistic_write(
         &mut self,
         origin_op: Option<OpId>,
@@ -426,7 +487,9 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
         data: &Json,
+        created_at_ms: i64,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         let updates = normalize(op, variables, data)?;
@@ -434,18 +497,35 @@ impl<S: Storage> Engine<S> {
         let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
         let bases = self.load_bases(&candidates).await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
-
-        self.next_transaction += 1;
-        let id = self.next_transaction;
-        self.optimistic.push(OptimisticLayer {
-            id,
-            state: OptimisticLayerState::Pending { updates },
-        });
+        let identity = match self.bound_identity().await? {
+            IdentityState::Bound(identity) => Some(identity),
+            IdentityState::NotHydrated | IdentityState::Missing => None,
+        };
+        let id = self
+            .storage
+            .enqueue_mutation(NewQueuedMutation {
+                mutation: StoredMutation::new(
+                    MutationRequest {
+                        query: query.to_string(),
+                        operation_name: operation_name.map(str::to_string),
+                        variables_json: canonical_json(&Json::Object(variables.clone())),
+                        identity,
+                    },
+                    created_at_ms,
+                ),
+                optimistic: PersistedOptimisticLayer {
+                    optimistic_data_json: canonical_json(data),
+                    normalized_updates: updates.clone(),
+                },
+            })
+            .await
+            .map_err(EngineError::Storage)?;
+        self.optimistic.push(OptimisticLayer { id, updates });
 
         let after = effective_records(&bases, &self.optimistic, &candidates);
         let changed: BTreeSet<EntityKey> = candidates
             .into_iter()
-            .filter(|k| before.get(k) != after.get(k))
+            .filter(|key| before.get(key) != after.get(key))
             .collect();
         let mut affected_ops = self.deps.ops_for_keys(changed.iter());
         if let Some(origin) = origin_op {
@@ -461,79 +541,87 @@ impl<S: Storage> Engine<S> {
         ))
     }
 
-    /// Replaces a pending layer's optimistic updates with the normalized
-    /// real network response and marks it succeeded — atomically, so
-    /// dependents never flicker back to pre-optimistic data. Flushes the
-    /// contiguous settled prefix of layers into durable storage.
-    ///
-    /// The returned `changed` keys are the *durably* changed records (for
-    /// cross-instance broadcast); `affected_ops` are the operations whose
-    /// effective visible data changed (for local re-execution).
+    /// Claims the oldest runnable mutation. A leased or backed-off head
+    /// blocks every later mutation.
+    pub async fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        self.storage
+            .claim_next_mutation(request)
+            .await
+            .map_err(EngineError::Storage)
+    }
+
+    /// Releases a retryable mutation while retaining its optimistic layer.
+    pub async fn defer_optimistic_write(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<(), EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        if !self
+            .storage
+            .defer_mutation(transaction, claim, next_attempt_at_ms, error)
+            .await
+            .map_err(EngineError::Storage)?
+        {
+            return Err(EngineError::StaleMutationClaim(transaction));
+        }
+        Ok(())
+    }
+
+    /// Replaces the claimed head's optimistic contribution with the real
+    /// network response without flickering through the pre-mutation value.
+    /// Real records and queue deletion commit in one storage transaction.
     pub async fn commit_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
         query: &str,
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
         data: &Json,
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
-        let updates = normalize(op, variables, data)?;
-        self.settle_layer(transaction, OptimisticLayerState::Succeeded { updates })
-            .await
-    }
-
-    /// Marks a pending layer failed, removing its contribution from the
-    /// effective view, and flushes any now-contiguous settled prefix. The
-    /// failed layer remains an ordered tombstone until all earlier layers
-    /// settle. Result semantics match
-    /// [`commit_optimistic_write`](Self::commit_optimistic_write).
-    pub async fn rollback_optimistic_write(
-        &mut self,
-        transaction: OptimisticTransactionId,
-    ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.settle_layer(transaction, OptimisticLayerState::Failed)
-            .await
-    }
-
-    async fn settle_layer(
-        &mut self,
-        transaction: OptimisticTransactionId,
-        new_state: OptimisticLayerState,
-    ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
         let index = self
             .optimistic
             .iter()
-            .position(|l| l.id == transaction && !l.settled())
+            .position(|layer| layer.id == transaction)
             .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let doc = Self::document(&mut self.docs, query)?;
+        let op = doc.operation(operation_name)?;
+        let updates = normalize(op, variables, data)?;
 
-        // Keys whose effective value may change: everything the old
-        // (optimistic) or new (real) updates touch.
-        let mut candidates: BTreeSet<EntityKey> = self.optimistic[index]
-            .updates()
-            .map(|u| u.keys().cloned().collect())
-            .unwrap_or_default();
-        if let OptimisticLayerState::Succeeded { updates } = &new_state {
-            candidates.extend(updates.keys().cloned());
-        }
-
+        let mut candidates: BTreeSet<EntityKey> =
+            self.optimistic[index].updates.keys().cloned().collect();
+        candidates.extend(updates.keys().cloned());
         let bases = self.load_bases(&candidates).await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
-        self.optimistic[index].state = new_state;
-        let after = effective_records(&bases, &self.optimistic, &candidates);
+        let (durable_changed, entries) = stage_updates(&bases, updates);
+        if !self
+            .storage
+            .complete_mutation(transaction, claim, entries.clone())
+            .await
+            .map_err(EngineError::Storage)?
+        {
+            return Err(EngineError::StaleMutationClaim(transaction));
+        }
+
+        let mut settled_bases = bases;
+        for (key, record) in entries {
+            settled_bases.insert(key.clone(), record.clone());
+            self.hot.put(key, record);
+        }
+        self.optimistic.remove(index);
+        let after = effective_records(&settled_bases, &self.optimistic, &candidates);
         let visible_changed: BTreeSet<EntityKey> = candidates
             .into_iter()
-            .filter(|k| before.get(k) != after.get(k))
+            .filter(|key| before.get(key) != after.get(key))
             .collect();
-
-        // Flush the contiguous settled prefix into durable storage. The
-        // flushed data was already visible through the layers, so this does
-        // not change the effective view and adds no local notifications;
-        // the durably changed keys it returns drive cross-instance
-        // broadcasts.
-        let durable_changed = self.flush_settled_prefix().await?;
-
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
             changed: durable_changed,
@@ -542,33 +630,43 @@ impl<S: Storage> Engine<S> {
         })
     }
 
-    /// Persists and drops the leading run of settled layers. Succeeded
-    /// layers' updates merge into durable storage (in layer order); failed
-    /// layers are dropped. Later pending layers keep overriding the newly
-    /// committed base, preserving order under out-of-order settlement.
-    async fn flush_settled_prefix(&mut self) -> Result<BTreeSet<EntityKey>, EngineError<S::Error>> {
-        let mut merged = RecordUpdates::new();
-        let mut count = 0;
-        for layer in &self.optimistic {
-            if !layer.settled() {
-                break;
-            }
-            if let Some(updates) = layer.updates() {
-                for (key, record) in updates {
-                    merged.entry(key.clone()).or_default().merge(record.clone());
-                }
-            }
-            count += 1;
+    /// Permanently fails the claimed head, atomically removing its queue row
+    /// and optimistic layer.
+    pub async fn rollback_optimistic_write(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        let index = self
+            .optimistic
+            .iter()
+            .position(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let candidates: BTreeSet<EntityKey> =
+            self.optimistic[index].updates.keys().cloned().collect();
+        let bases = self.load_bases(&candidates).await?;
+        let before = effective_records(&bases, &self.optimistic, &candidates);
+        if !self
+            .storage
+            .discard_mutation(transaction, claim)
+            .await
+            .map_err(EngineError::Storage)?
+        {
+            return Err(EngineError::StaleMutationClaim(transaction));
         }
-        if count == 0 {
-            return Ok(BTreeSet::new());
-        }
-        self.optimistic.drain(..count);
-        if merged.is_empty() {
-            // Prefix was all tombstones.
-            return Ok(BTreeSet::new());
-        }
-        self.persist_updates(merged).await
+        self.optimistic.remove(index);
+        let after = effective_records(&bases, &self.optimistic, &candidates);
+        let visible_changed: BTreeSet<EntityKey> = candidates
+            .into_iter()
+            .filter(|key| before.get(key) != after.get(key))
+            .collect();
+        let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        Ok(WriteResult {
+            changed: BTreeSet::new(),
+            affected_ops,
+            reset: false,
+        })
     }
 
     /// Loads current durable records (hot tier, then storage) for `keys`
@@ -608,9 +706,10 @@ impl<S: Storage> Engine<S> {
     pub fn external_reset(&mut self) -> BTreeSet<OpId> {
         self.hot.clear();
         self.docs.clear();
-        // Optimistic layers were normalized against the wiped base.
         self.optimistic.clear();
-        // Another engine may have rebound the shared storage → re-hydrate.
+        // Another engine may have rebound the shared storage and changed the
+        // durable queue, so both identity and optimism must re-hydrate.
+        self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
         self.deps.all_ops()
     }
@@ -641,6 +740,7 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
         self.hot.clear();
         self.optimistic.clear();
+        self.optimistic_hydrated = true;
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
@@ -697,13 +797,39 @@ impl RecordSource for EngineSource<'_> {
 fn merged_optimistic(layers: &[OptimisticLayer]) -> BTreeMap<EntityKey, Record> {
     let mut out: BTreeMap<EntityKey, Record> = BTreeMap::new();
     for layer in layers {
-        if let Some(updates) = layer.updates() {
-            for (key, record) in updates {
-                out.entry(key.clone()).or_default().merge(record.clone());
-            }
+        for (key, record) in &layer.updates {
+            out.entry(key.clone()).or_default().merge(record.clone());
         }
     }
     out
+}
+
+/// Merges partial response updates into already-loaded durable bases without
+/// mutating the hot tier or storage. The caller can then atomically settle a
+/// queued mutation before publishing the staged records in memory.
+fn stage_updates(
+    bases: &HashMap<EntityKey, Record>,
+    updates: RecordUpdates,
+) -> (BTreeSet<EntityKey>, Vec<(EntityKey, Record)>) {
+    let mut changed = BTreeSet::new();
+    let mut entries = Vec::with_capacity(updates.len());
+    for (key, update) in updates {
+        let merged = match bases.get(&key) {
+            Some(existing) => {
+                let mut merged = existing.clone();
+                if merged.merge(update) {
+                    changed.insert(key.clone());
+                }
+                merged
+            }
+            None => {
+                changed.insert(key.clone());
+                update
+            }
+        };
+        entries.push((key, merged));
+    }
+    (changed, entries)
 }
 
 /// Effective visible records for `keys`: durable base + every active layer
@@ -717,7 +843,7 @@ fn effective_records(
         .map(|key| {
             let mut record: Option<Record> = bases.get(key).cloned();
             for layer in layers {
-                if let Some(update) = layer.updates().and_then(|u| u.get(key)) {
+                if let Some(update) = layer.updates.get(key) {
                     record
                         .get_or_insert_with(Record::default)
                         .merge(update.clone());

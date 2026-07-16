@@ -25,13 +25,14 @@ import {
 import { OptionCheckBox } from './OptionCheckBox';
 import type { OptionSelectorConfig, SelectableOption } from './types';
 
-type UseDropdownSearchOptions = {
+export type UseDropdownSearchOptions = {
   itemCount: Accessor<number>;
-  onSelect: (index: number) => void;
+  onSelect: (index: number, event?: KeyboardEvent) => void;
   onClose: () => void;
+  enableNumericHotkeys?: boolean;
 };
 
-const useDropdownSearch = (options: UseDropdownSearchOptions) => {
+export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const keyboardMode = useKeyPressed(100);
@@ -46,7 +47,9 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
   });
 
   const shouldShowHotkeys = () =>
-    !searchQuery().trim() && options.itemCount() <= 9;
+    (options.enableNumericHotkeys ?? true) &&
+    !searchQuery().trim() &&
+    options.itemCount() <= 9;
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -64,7 +67,7 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
       const keyNum = parseInt(e.key);
       // 0 selects index 0 (the clear option when present)
       // 1-9 select indices 1-9 (the actual options)
-      if (keyNum < count) options.onSelect(keyNum);
+      if (keyNum < count) options.onSelect(keyNum, e);
       return;
     }
 
@@ -76,7 +79,7 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
       setSelectedIndex((prev) => (prev - 1 + count) % count);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      options.onSelect(selectedIndex());
+      options.onSelect(selectedIndex(), e);
     }
   };
 
@@ -91,15 +94,16 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
   };
 };
 
-type DropdownSearchInputProps = {
+export type DropdownSearchInputProps = {
   value: string;
   placeholder: string;
   onInput: (value: string) => void;
+  onKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
   inputType?: string;
   inputRef?: (element: HTMLInputElement) => void;
 };
 
-const DropdownSearchInput = (props: DropdownSearchInputProps) => {
+export const DropdownSearchInput = (props: DropdownSearchInputProps) => {
   return (
     <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
       <SearchIcon class="h-4 w-4 text-ink-muted" />
@@ -109,13 +113,14 @@ const DropdownSearchInput = (props: DropdownSearchInputProps) => {
         type={props.inputType ?? 'text'}
         value={props.value}
         onInput={(event) => props.onInput(event.currentTarget.value)}
+        onKeyDown={props.onKeyDown}
         placeholder={props.placeholder}
       />
     </div>
   );
 };
 
-type DropdownSelectableRowProps = {
+export type DropdownSelectableRowProps = {
   isSelected: boolean;
   showHotkey?: boolean;
   hotkeyShortcut?: string;
@@ -124,9 +129,9 @@ type DropdownSelectableRowProps = {
   onMouseEnter?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
-const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
-  props
-) => {
+export const DropdownSelectableRow: ParentComponent<
+  DropdownSelectableRowProps
+> = (props) => {
   return (
     <div
       class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default"
@@ -173,13 +178,20 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const isOptionSelected = (value: string) =>
     props.selectedOptions().has(value);
 
-  const handleAddOption = async () => {
+  const shouldCloseAfterSelect = (
+    event?: KeyboardEvent | MouseEvent
+  ): boolean => !props.config.isMultiSelect || !event?.shiftKey;
+
+  const handleAddOption = async (event?: KeyboardEvent | MouseEvent) => {
     if (!props.onAddOption || !isValidNewOption()) return;
 
     setIsAddingOption(true);
     try {
       await props.onAddOption(dropdown.searchQuery().trim());
       dropdown.setSearchQuery('');
+      if (shouldCloseAfterSelect(event) && props.onClose) {
+        props.onClose();
+      }
     } catch (error) {
       console.error(
         'PropertyOptionsList.handleAddOption:',
@@ -191,18 +203,18 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     }
   };
 
-  const handleSelectableItem = (idx: number) => {
+  const handleSelectableItem = (idx: number, event?: KeyboardEvent) => {
     const item = selectableItems()[idx];
     if (item?.type === 'add') {
-      handleAddOption();
+      handleAddOption(event);
     } else if (item?.type === 'clear') {
       props.clearOption?.onClear();
-      if (!props.config.isMultiSelect && props.onClose) {
+      if (shouldCloseAfterSelect(event) && props.onClose) {
         props.onClose();
       }
     } else if (item?.type === 'option') {
       props.onToggleOption(item.option.id);
-      if (!props.config.isMultiSelect && props.onClose) {
+      if (shouldCloseAfterSelect(event) && props.onClose) {
         props.onClose();
       }
     }
@@ -409,10 +421,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             {(optionItem) => (
                               <DropdownSelectableRow
                                 isSelected={isSelected()}
-                                onClick={() => {
+                                onClick={(event) => {
                                   props.onToggleOption(optionItem().option.id);
                                   if (
-                                    !props.config.isMultiSelect &&
+                                    shouldCloseAfterSelect(event) &&
                                     props.onClose
                                   ) {
                                     props.onClose();
@@ -451,10 +463,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             {(clear) => (
                               <DropdownSelectableRow
                                 isSelected={isSelected()}
-                                onClick={() => {
+                                onClick={(event) => {
                                   clear().onClear();
                                   if (
-                                    !props.config.isMultiSelect &&
+                                    shouldCloseAfterSelect(event) &&
                                     props.onClose
                                   ) {
                                     props.onClose();

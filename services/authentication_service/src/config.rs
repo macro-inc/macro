@@ -2,9 +2,9 @@ use std::sync::LazyLock;
 
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_middleware::auth::internal_access::InternalApiKey;
 
 // BASE_URL config value. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {

@@ -10,14 +10,6 @@ path = "src/bin/backfill_markdown_content_location.rs"
 required-features = ["backfill_binary"]
 
 [features]
-attachment = [
-    "dep:attachment",
-    "dep:ai_toolset",
-    "dep:lexical_client",
-    "dep:model_file_type",
-    "dep:reqwest",
-    "ports",
-]
 ai_tools = [
   "dep:ai_toolset",
   "dep:ai_usage",
@@ -29,27 +21,25 @@ ai_tools = [
   "outbound",
   "ports",
 ]
+attachment = [
+  "dep:ai_toolset",
+  "dep:attachment",
+  "dep:lexical_client",
+  "dep:model_file_type",
+  "dep:reqwest",
+  "ports",
+]
 axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:jsonwebtoken",
   "dep:lexical_client",
+  "dep:macro_authorization",
   "dep:model-error-response",
   "dep:model_user",
   "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
-]
-default = ["ai_tools", "axum", "inbound", "outbound", "ports", "service"]
-document_create = [
-  "dep:base64",
-  "dep:sha2",
-  "ports",
-]
-document_create_adapters = [
-  "dep:reqwest",
-  "document_create",
-  "markdown_init",
 ]
 backfill_binary = [
   "dep:clap",
@@ -59,6 +49,9 @@ backfill_binary = [
   "outbound",
   "ports",
 ]
+default = ["ai_tools", "axum", "inbound", "outbound", "ports", "service"]
+document_create = ["dep:base64", "dep:sha2", "ports"]
+document_create_adapters = ["dep:reqwest", "document_create", "markdown_init"]
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
@@ -102,11 +95,15 @@ entity_access_management = { path = "../entity_access_management", default-featu
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
+macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -115,15 +112,14 @@ model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 s3_key = { path = "../s3_key" }
-macro_service_urls = { path = "../macro_service_urls", optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-jsonwebtoken = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
+jsonwebtoken = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
@@ -157,6 +153,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 dotenvy = { workspace = true }
+embedding = { path = "../embedding" }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_env = { path = "../macro_env" }
@@ -164,6 +161,7 @@ macro_env = { path = "../macro_env" }
 macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
+rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tower = { workspace = true }

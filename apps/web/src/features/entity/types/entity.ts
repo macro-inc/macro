@@ -80,6 +80,18 @@ export type ChannelEntityTarget = {
   threadId?: string;
 };
 
+/**
+ * The resolved click intent for a channel-family row. Either a specific
+ * message to jump to and highlight, or `latest` — open the channel at its
+ * newest message with no highlight. A whole `channel` row with no unread
+ * notification resolves to `latest` so the click lands where the row's
+ * preview points (the latest message, which may be your own send) instead of
+ * an older notification or nothing at all.
+ */
+export type ChannelClickTarget =
+  | { kind: 'message'; messageId: string; threadId?: string }
+  | { kind: 'latest' };
+
 export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'public' | 'team';

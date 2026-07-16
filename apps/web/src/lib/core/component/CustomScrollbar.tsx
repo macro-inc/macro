@@ -12,6 +12,22 @@ interface CustomScrollbarProps {
   enabled?: boolean;
   reverse?: boolean;
   horizontal?: boolean;
+  /**
+   * Reveal the bar when the pointer moves within this many px of the
+   * scrollbar edge, instead of only when hovering the gutter itself.
+   */
+  revealZone?: number;
+  /**
+   * Re-measure when content mounts/unmounts inside the container. Needed
+   * when content loads in after mount without resizing the container.
+   */
+  watchContent?: boolean;
+  /**
+   * Thickness (px) of the interactive gutter for clicking/dragging the bar.
+   * Defaults to 8. The thumb stays anchored to the scrollbar edge, and wheel
+   * events over an enlarged gutter are forwarded to the container.
+   */
+  gutterSize?: number;
 }
 
 const MIN_THUMB_SIZE = 24;
@@ -111,14 +127,46 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Proximity reveal: pointer movement near the scrollbar edge shows the
+    // bar without the gutter needing a click-stealing enlarged hit area.
+    const handleProximity = (e: PointerEvent) => {
+      const zone = props.revealZone;
+      if (zone === undefined) return;
+      const rect = container.getBoundingClientRect();
+      const dist = horiz() ? rect.bottom - e.clientY : rect.right - e.clientX;
+      setIsHovered(dist >= 0 && dist <= zone);
+    };
+    const handleProximityLeave = () => {
+      if (props.revealZone !== undefined) setIsHovered(false);
+    };
+    container.addEventListener('pointermove', handleProximity, {
+      passive: true,
+    });
+    container.addEventListener('pointerleave', handleProximityLeave);
+
     const resizeObserver = new ResizeObserver(updateScrollMetrics);
     resizeObserver.observe(container);
 
+    let mutationObserver: MutationObserver | undefined;
+    if (props.watchContent) {
+      mutationObserver = new MutationObserver(updateScrollMetrics);
+      mutationObserver.observe(container, { childList: true, subtree: true });
+    }
+
     onCleanup(() => {
       container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('pointermove', handleProximity);
+      container.removeEventListener('pointerleave', handleProximityLeave);
       resizeObserver.disconnect();
+      mutationObserver?.disconnect();
     });
   });
+
+  // Where the pointer grabbed the thumb, relative to the thumb's start.
+  // Keeps the grab point under the pointer while dragging instead of
+  // snapping the thumb's center to it.
+  let dragOffset = 0;
 
   const scrollToPointer = (clientPos: number, gutterRect: DOMRect) => {
     const container = props.scrollContainer();
@@ -128,7 +176,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const mt = maxTop();
     if (mt <= 0) return;
     const start = horiz() ? gutterRect.left : gutterRect.top;
-    const localPos = clientPos - start - thumbSize() / 2;
+    const localPos = clientPos - start - dragOffset;
     const clamped = Math.max(0, Math.min(mt, localPos - THUMB_INSET));
     let newPos = (clamped / mt) * max;
     if (props.reverse && !horiz()) newPos = newPos - max;
@@ -148,7 +196,14 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     setIsDragging(true);
     setIsScrolling(true);
     const rect = gutter.getBoundingClientRect();
-    scrollToPointer(horiz() ? e.clientX : e.clientY, rect);
+    const clientPos = horiz() ? e.clientX : e.clientY;
+    const local = clientPos - (horiz() ? rect.left : rect.top);
+    const onThumb =
+      local >= thumbOffset() && local <= thumbOffset() + thumbSize();
+    // Grabbing the thumb holds it in place until dragged; clicking the
+    // track jumps there (centering the thumb on the pointer).
+    dragOffset = onThumb ? local - thumbOffset() : thumbSize() / 2;
+    if (!onThumb) scrollToPointer(clientPos, rect);
   };
 
   const handlePointerMove = (e: PointerEvent) => {
@@ -178,8 +233,31 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
         )}
         style={
           horiz()
-            ? { height: `${GUTTER_SIZE}px`, 'touch-action': 'none' }
-            : { width: `${GUTTER_SIZE}px`, 'touch-action': 'none' }
+            ? {
+                height: `${props.gutterSize ?? GUTTER_SIZE}px`,
+                'touch-action': 'none',
+              }
+            : {
+                width: `${props.gutterSize ?? GUTTER_SIZE}px`,
+                'touch-action': 'none',
+              }
+        }
+        onWheel={
+          props.gutterSize === undefined
+            ? undefined
+            : (e) => {
+                const container = props.scrollContainer();
+                if (!container) return;
+                // Consume the event so ancestors don't also scroll, and
+                // drive only the axis this bar owns.
+                e.preventDefault();
+                if (horiz()) {
+                  container.scrollLeft +=
+                    e.deltaX || (e.shiftKey ? e.deltaY : 0);
+                } else {
+                  container.scrollTop += e.deltaY;
+                }
+              }
         }
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

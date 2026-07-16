@@ -105,6 +105,7 @@ async fn cursor_handler<T: EmailService>(
                         (),
                     )
                     .map_filter(|_| None),
+                include_frecency: true,
                 team_receipt: None,
                 crm_scope: None,
             })

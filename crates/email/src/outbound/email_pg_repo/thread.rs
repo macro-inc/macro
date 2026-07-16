@@ -60,6 +60,53 @@ pub(super) async fn messages_by_thread_id_paginated(
     Ok(rows.into_iter().map(MessageRow::from).collect())
 }
 
+/// Fetch the newest non-draft content message in each thread using an
+/// effective timestamp and deterministic ID tiebreaker.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "runtime lateral query is covered by repository integration tests"
+)]
+pub(super) async fn latest_content_message_rows(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<MessageRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, DbMessageRow>(
+        r#"
+        SELECT
+            message.id, message.provider_id, message.thread_id,
+            message.provider_thread_id, message.replying_to_id,
+            message.global_id, message.link_id, message.provider_history_id,
+            message.internal_date_ts, message.snippet, message.size_estimate,
+            message.subject, message.sent_at, message.has_attachments,
+            message.is_read, message.is_starred, message.is_sent,
+            message.is_draft, message.body_text, message.body_html_sanitized,
+            message.body_macro, message.headers_jsonb, message.created_at,
+            message.updated_at
+        FROM UNNEST($1::uuid[]) AS requested(thread_id)
+        CROSS JOIN LATERAL (
+            SELECT
+                id, provider_id, thread_id, provider_thread_id, replying_to_id,
+                global_id, link_id, provider_history_id, internal_date_ts,
+                snippet, size_estimate, subject, sent_at, has_attachments,
+                is_read, is_starred, is_sent, is_draft, body_text,
+                body_html_sanitized, body_macro, headers_jsonb, created_at,
+                updated_at
+            FROM email_messages
+            WHERE thread_id = requested.thread_id
+              AND is_draft = false
+            ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC,
+                     id DESC
+            LIMIT 1
+        ) AS message
+        "#,
+    )
+    .bind(thread_ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(MessageRow::from).collect())
+}
+
 /// Find macro drafts that reply to any of the given messages but live in a
 /// different thread within one of the accessible inboxes. These are reply drafts
 /// the user moved to another of their inboxes by switching the sender; surfacing

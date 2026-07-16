@@ -59,6 +59,10 @@ type MarkDoneVariables = {
 
 type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
 
+type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
+  nextEntityId?: string;
+};
+
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const splitPanel = useSplitPanel();
@@ -216,7 +220,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     entities: EntityData[],
     soup: SoupState,
     onNavigate?: (entity: EntityData) => void,
-    opts?: MarkDoneExecuteOpts
+    opts?: MarkDoneExecuteWithSoupOpts
   ) => {
     const focusedIdBeforeMarkDone = soup.focus.id();
     const markedEntityIds = new Set(entities.map((entity) => entity.id));
@@ -245,7 +249,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         return candidate.row;
       }
     };
-    const nextRow = adjacentRow(1) ?? adjacentRow(-1);
+    const fallbackNextRow = adjacentRow(1) ?? adjacentRow(-1);
+    const nextRow = opts?.nextEntityId
+      ? (soup.items.get(opts.nextEntityId) ?? fallbackNextRow)
+      : fallbackNextRow;
 
     if (soup.collapseEntity.shouldCollapse()) {
       const collapse = soup.collapseEntity.callback();

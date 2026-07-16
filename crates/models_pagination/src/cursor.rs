@@ -28,6 +28,16 @@ impl<T, U> Paginated<T, U> {
             next_cursor,
         }
     }
+
+    /// Decomposes the page into its items and cursor.
+    pub fn into_parts(self) -> (Vec<T>, Option<U>) {
+        (self.items, self.next_cursor)
+    }
+
+    /// Builds a page from an item vector and cursor.
+    pub fn from_parts(items: Vec<T>, next_cursor: Option<U>) -> Self {
+        Self { items, next_cursor }
+    }
 }
 
 /// Top level cursor information encodes all the required information for paginating by [Cursor]

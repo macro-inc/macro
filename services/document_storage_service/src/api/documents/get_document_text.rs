@@ -1,4 +1,4 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -36,7 +36,7 @@ pub struct Params {
     )]
 #[tracing::instrument(skip(db, _access))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {

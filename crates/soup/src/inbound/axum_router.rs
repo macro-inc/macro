@@ -1,7 +1,8 @@
 use crate::domain::{
     models::{
-        FrecencyQueryInner, FrecencySoupItem, GroupMeta, GroupedSortRequest, IntoSoupReqAst,
-        SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType, build_grouped_response,
+        EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner,
+        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
+        grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
 };
@@ -53,7 +54,6 @@ use models_pagination::{
     CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
     TypeEraseCursor,
 };
-use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
@@ -496,7 +496,7 @@ where
         // whatever membership the extractor resolved.
         let res = self
             .service
-            .get_user_soup(
+            .get_user_soup_with_properties_and_frecency(
                 SoupRequest {
                     soup_type: match params.expand {
                         Some(true) | None => SoupType::Expanded,
@@ -600,17 +600,18 @@ where
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SoupApiItem {
     #[serde(flatten)]
-    item: SoupItem,
+    item: SoupItemWithProperties,
     frecency_score: f64,
     /// Whether the requesting user has favorited this entity.
     is_favorited: bool,
 }
 
 impl SoupApiItem {
-    fn from_frecency_soup_item(item: FrecencySoupItem) -> Self {
-        let FrecencySoupItem {
+    fn from_frecency_soup_item(item: EnrichedSoupItem) -> Self {
+        let EnrichedSoupItem {
             item,
             frecency_score,
+            ..
         } = item;
         SoupApiItem {
             item,
@@ -1186,11 +1187,10 @@ impl ApiEntityFilterAst {
 
         let (email_tree, crm_scope) = match (email_filter, crm) {
             (Some(existing), Some((crm_tree, scope))) => {
-                // The Arc was freshly constructed by serde when this
-                // request body deserialized, and has not been cloned
-                // since — refcount is 1, so `try_unwrap` always succeeds.
-                let existing_owned = Arc::try_unwrap(existing)
-                    .map_err(|_| report!("internal: email_filter Arc was unexpectedly shared"))?;
+                // Callers may hold other clones of this Arc (the soup
+                // service clones the request filters before expansion),
+                // so fall back to cloning the tree when it's shared.
+                let existing_owned = Arc::unwrap_or_clone(existing);
                 (
                     Some(Arc::new(Expr::and(existing_owned, crm_tree))),
                     Some(scope),

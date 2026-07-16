@@ -1,14 +1,14 @@
-use crate::api::context::EntityAccessService;
+use crate::api::context::{AuthorizationService, EntityAccessService};
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document::DocumentBasic;
 use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -34,11 +34,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, document_context, _access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user, document_context, _access), fields(user_id=?user.macro_user_id))]
 pub async fn handler(
-    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService>,
+    _access: DocumentAccessExtractor<OwnerAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> impl IntoResponse {

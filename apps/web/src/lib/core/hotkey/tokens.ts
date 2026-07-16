@@ -241,6 +241,7 @@ export const TOKENS = {
     emailNewSplit: 'create.emailNewSplit',
     message: 'create.message',
     messageNewSplit: 'create.messageNewSplit',
+    channel: 'create.channel',
     chat: 'create.chat',
     chatNewSplit: 'create.chatNewSplit',
     canvas: 'create.canvas',

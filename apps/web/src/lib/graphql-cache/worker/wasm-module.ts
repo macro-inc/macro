@@ -9,6 +9,7 @@
  */
 
 import type {
+  ClaimedMutation,
   OptimisticWriteResult,
   ReadResult,
   WriteResult,
@@ -34,18 +35,36 @@ export interface CacheEngine {
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
-    data: unknown
+    data: unknown,
+    createdAtMs: number
   ): Promise<OptimisticWriteResult>;
+  claimNextMutation(
+    owner: string,
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): Promise<ClaimedMutation | undefined>;
+  deferOptimisticWrite(
+    transactionId: string,
+    leaseOwner: string,
+    leaseGeneration: string,
+    nextAttemptAtMs: number,
+    error: string
+  ): Promise<void>;
   commitOptimisticWrite(
     transactionId: string,
+    leaseOwner: string,
+    leaseGeneration: string,
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown
   ): Promise<WriteResult>;
-  rollbackOptimisticWrite(transactionId: string): Promise<WriteResult>;
+  rollbackOptimisticWrite(
+    transactionId: string,
+    leaseOwner: string,
+    leaseGeneration: string
+  ): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
-  externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
   /** Close the IndexedDB connection; call before destroyCache. */

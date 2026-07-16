@@ -489,6 +489,118 @@ impl ChannelService for ParticipantsService {
     }
 }
 
+#[derive(Clone)]
+struct JoinLinkService {
+    join_code: Uuid,
+    private_channel_id: Uuid,
+    forbidden_channel_ids: Arc<Vec<Uuid>>,
+    requested_channel_ids: Arc<Mutex<Vec<Uuid>>>,
+    joined_users: Arc<Mutex<Vec<Sender>>>,
+}
+
+impl JoinLinkService {
+    fn new(private_channel_id: Uuid, join_code: Uuid, forbidden_channel_ids: Vec<Uuid>) -> Self {
+        Self {
+            join_code,
+            private_channel_id,
+            forbidden_channel_ids: Arc::new(forbidden_channel_ids),
+            requested_channel_ids: Arc::default(),
+            joined_users: Arc::default(),
+        }
+    }
+}
+
+impl ChannelService for JoinLinkService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        unimplemented!()
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        unimplemented!()
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        unimplemented!()
+    }
+
+    async fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> Result<Vec<crate::domain::models::AttachmentEntityReference>, ChannelMessagesErr> {
+        unimplemented!()
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        unimplemented!()
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        unimplemented!()
+    }
+
+    async fn get_channel_join_code(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        self.requested_channel_ids.lock().unwrap().push(channel_id);
+        if self.forbidden_channel_ids.contains(&channel_id) {
+            return Err(ChannelMutationErr::Forbidden(
+                "join links are only available for private channels".to_string(),
+            ));
+        }
+        if channel_id != self.private_channel_id {
+            return Err(ChannelMutationErr::NotFound(
+                "channel not found".to_string(),
+            ));
+        }
+        Ok(ChannelJoinCodeResponse {
+            join_code: self.join_code,
+        })
+    }
+
+    async fn join_channel_by_code(
+        &self,
+        actor: Sender,
+        join_code: Uuid,
+    ) -> Result<(), ChannelMutationErr> {
+        if join_code != self.join_code {
+            return Err(ChannelMutationErr::NotFound(
+                "channel join code not found".to_string(),
+            ));
+        }
+        self.joined_users.lock().unwrap().push(actor);
+        Ok(())
+    }
+}
+
 #[derive(Clone, Default)]
 struct RecordingMutationService {
     posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
@@ -739,6 +851,163 @@ fn not_found_router() -> Router {
         TestAccessService::not_found(),
     ))
     .layer(user_extension())
+}
+
+#[tokio::test]
+async fn active_participant_can_get_persisted_channel_join_code() {
+    let channel_id = Uuid::new_v4();
+    let join_code = Uuid::new_v4();
+    let service = JoinLinkService::new(channel_id, join_code, vec![]);
+    let requested_channel_ids = service.requested_channel_ids.clone();
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri(format!("/{channel_id}/join-link"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({ "join_code": join_code })
+    );
+    assert_eq!(*requested_channel_ids.lock().unwrap(), vec![channel_id]);
+}
+
+#[tokio::test]
+async fn non_participant_cannot_get_channel_join_code() {
+    let channel_id = Uuid::new_v4();
+    let service = JoinLinkService::new(channel_id, Uuid::new_v4(), vec![]);
+    let requested_channel_ids = service.requested_channel_ids.clone();
+    let router = channels_router(ChannelsRouterState::new(service, TestAccessService::deny()))
+        .layer(user_extension());
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri(format!("/{channel_id}/join-link"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(requested_channel_ids.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn non_private_channels_cannot_get_join_codes() {
+    let non_private_channels = [
+        ("public", Uuid::new_v4()),
+        ("direct_message", Uuid::new_v4()),
+        ("team", Uuid::new_v4()),
+    ];
+    let service = JoinLinkService::new(
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        non_private_channels.iter().map(|(_, id)| *id).collect(),
+    );
+    let router = channels_router(ChannelsRouterState::new(
+        service,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    for (channel_type, channel_id) in non_private_channels {
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/{channel_id}/join-link"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "expected {channel_type} channel to be forbidden"
+        );
+    }
+}
+
+#[tokio::test]
+async fn join_channel_by_code_handles_malformed_and_unknown_codes() {
+    let service = JoinLinkService::new(Uuid::new_v4(), Uuid::new_v4(), vec![]);
+    let router = channels_router(ChannelsRouterState::new(service, TestAccessService::deny()))
+        .layer(user_extension());
+
+    let malformed_response = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/join/not-a-uuid")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(malformed_response.status(), StatusCode::BAD_REQUEST);
+
+    let unknown_response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/join/{}", Uuid::new_v4()))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unknown_response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn authenticated_user_can_join_by_code_without_channel_access() {
+    let join_code = Uuid::new_v4();
+    let service = JoinLinkService::new(Uuid::new_v4(), join_code, vec![]);
+    let joined_users = service.joined_users.clone();
+    let router = channels_router(ChannelsRouterState::new(service, TestAccessService::deny()))
+        .layer(user_extension());
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/join/{join_code}"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes()
+            .len(),
+        0
+    );
+    let users = joined_users.lock().unwrap();
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].as_ref(), "macro|test@example.com");
 }
 
 #[tokio::test]

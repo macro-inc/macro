@@ -2,7 +2,11 @@ import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
-import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
+import {
+  IncomingCallWidgetEvents,
+  SidebarActiveCallWidget,
+  useIncomingCallWidgetVisible,
+} from '@app/features/block-call/sidebar/active-call-widget';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -26,6 +30,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
+import { CreateChannelModal } from '@channel/CreateChannelModal';
 import {
   AppSidebar,
   GoToHotkeys,
@@ -74,6 +79,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}onboarding`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
+  `${ROUTER_BASE_CONCAT}offline`,
   `${ROUTER_BASE_CONCAT}welcome`,
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];
@@ -111,12 +117,17 @@ export function Layout(props: RouteSectionProps) {
   );
 }
 
-function CollapsedSidebarCallWidget(props: { visible: boolean }) {
+function DraggableCallWidget(props: {
+  visible: boolean;
+  dragLabel: string;
+  defaultBottomGap?: number;
+  children: JSX.Element;
+}) {
   const EDGE_GAP = 12;
-  const DEFAULT_BOTTOM_GAP = 12;
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const [dragging, setDragging] = createSignal(false);
   const [position, setPosition] = createSignal<{ left: number; top: number }>();
+  const defaultBottomGap = () => props.defaultBottomGap ?? 12;
 
   const clampPosition = (next: { left: number; top: number }) => {
     const el = root();
@@ -137,20 +148,21 @@ function CollapsedSidebarCallWidget(props: { visible: boolean }) {
     };
   };
 
-  const resetToDefaultPosition = () => {
+  const resetToDefaultPosition = (bottomGap = defaultBottomGap()) => {
     const el = root();
     if (!el) return;
     setPosition(
       clampPosition({
         left: Math.round((window.innerWidth - el.offsetWidth) / 2),
-        top: window.innerHeight - el.offsetHeight - DEFAULT_BOTTOM_GAP,
+        top: window.innerHeight - el.offsetHeight - bottomGap,
       })
     );
   };
 
   createEffect(() => {
     if (!props.visible) return;
-    requestAnimationFrame(() => resetToDefaultPosition());
+    const bottomGap = defaultBottomGap();
+    requestAnimationFrame(() => resetToDefaultPosition(bottomGap));
   });
 
   createEffect(() => {
@@ -212,24 +224,50 @@ function CollapsedSidebarCallWidget(props: { visible: boolean }) {
         style={{
           left: position() ? `${position()!.left}px` : '50%',
           top: position() ? `${position()!.top}px` : undefined,
-          bottom: position() ? undefined : `${DEFAULT_BOTTOM_GAP}px`,
+          bottom: position() ? undefined : `${defaultBottomGap()}px`,
           transform: position() ? undefined : 'translateX(-50%)',
         }}
       >
         <div class="relative rounded-xl border border-edge-muted bg-surface shadow-menu p-1">
           <button
             type="button"
-            aria-label="Drag to move active call controls"
+            aria-label={props.dragLabel}
             class={cn(
               'absolute left-1 right-10 top-1 z-10 h-8 rounded-t-lg rounded-b-md bg-transparent select-none',
               dragging() ? 'cursor-grabbing' : 'cursor-grab'
             )}
             onPointerDown={startDrag}
           />
-          <InCallPanel isSlim={() => false} />
+          {props.children}
         </div>
       </div>
     </Show>
+  );
+}
+
+function CollapsedSidebarCallWidget(props: { visible: boolean }) {
+  return (
+    <DraggableCallWidget
+      visible={props.visible}
+      dragLabel="Drag to move active call controls"
+    >
+      <InCallPanel isSlim={() => false} />
+    </DraggableCallWidget>
+  );
+}
+
+function CollapsedSidebarIncomingCallWidget(props: {
+  visible: boolean;
+  activeCallWidgetVisible: boolean;
+}) {
+  return (
+    <DraggableCallWidget
+      visible={props.visible}
+      dragLabel="Drag to move incoming calls"
+      defaultBottomGap={props.activeCallWidgetVisible ? 168 : 12}
+    >
+      <SidebarActiveCallWidget sidebarState="expanded" />
+    </DraggableCallWidget>
   );
 }
 
@@ -241,8 +279,16 @@ function LayoutInner(props: RouteSectionProps) {
   const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
     createSignal(false);
   const callCtx = useCallContextOptional();
+  const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
   const sidebarCollapsed = createMemo(
     () => isSidebarVisible() && sidebarState() === 'slim'
+  );
+  const activeCallWidgetVisible = createMemo(
+    () =>
+      isSidebarVisible() &&
+      sidebarState() === 'slim' &&
+      !!callCtx?.isInCall() &&
+      !callCtx?.isCallPage()
   );
   let sidebarOverlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -325,6 +371,9 @@ function LayoutInner(props: RouteSectionProps) {
               <CommandMenu />
             </Suspense>
           </Show>
+          <Show when={isSidebarVisible()}>
+            <IncomingCallWidgetEvents />
+          </Show>
           <Suspense>
             <PropertyEditorModal />
           </Suspense>
@@ -332,6 +381,7 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
+          <CreateChannelModal />
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>
@@ -390,27 +440,15 @@ function LayoutInner(props: RouteSectionProps) {
           </div>
         </ItemDndProvider>
       </div>
-      <Show when={isSidebarVisible()}>
-        <div
-          class="fixed bottom-3 z-page-overlay w-64 flex flex-col gap-2 transition-[left] duration-[120ms] ease-in-out"
-          style={{
-            left: sidebarState() === 'expanded' ? '15.75rem' : '0.75rem',
-          }}
-        >
-          <SidebarActiveCallWidget
-            sidebarState="expanded"
-            class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
-          />
-        </div>
-      </Show>
-      <CollapsedSidebarCallWidget
+      <CollapsedSidebarIncomingCallWidget
         visible={
           isSidebarVisible() &&
           sidebarState() === 'slim' &&
-          !!callCtx?.isInCall() &&
-          !callCtx?.isCallPage()
+          incomingCallWidgetVisible()
         }
+        activeCallWidgetVisible={activeCallWidgetVisible()}
       />
+      <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />
       <Show
         when={
           isMobile() &&

@@ -9,8 +9,8 @@ ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/inbound",
   "item_filters/schema",
@@ -20,6 +20,7 @@ outbound = [
   "dep:agent",
   "dep:ai_usage",
   "dep:aws-sdk-s3",
+  "dep:cloudfront_sign",
   "channels/outbound",
   "dep:entity_access_db_utils",
   "dep:futures",
@@ -28,6 +29,7 @@ outbound = [
   "dep:macro_aws_config",
   "dep:pgvector",
   "dep:sqlx",
+  "dep:urlencoding",
   "ports",
 ]
 ports = ["dep:entity_access", "dep:tokio"]
@@ -41,6 +43,7 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+cloudfront_sign = { workspace = true, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
@@ -54,6 +57,9 @@ futures = { workspace = true, optional = true }
 item_filters = { path = "../item_filters" }
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
 macro_aws_config = { path = "../macro_aws_config", optional = true, features = [
   "s3",
 ] }
@@ -61,7 +67,6 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
@@ -74,6 +79,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

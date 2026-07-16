@@ -53,7 +53,14 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
 }
 
 /// Build the override (typed model), apply the merge tags, and write it.
-pub fn generate(mode: Mode, instance: &Instance, binaries: &BinariesDir) -> Result<PathBuf> {
+/// `static_frontend` mounts the staged app bundle into the proxy (headless
+/// stacks serve the frontend from Caddy instead of a dev server).
+pub fn generate(
+    mode: Mode,
+    instance: &Instance,
+    binaries: &BinariesDir,
+    static_frontend: bool,
+) -> Result<PathBuf> {
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -80,12 +87,12 @@ pub fn generate(mode: Mode, instance: &Instance, binaries: &BinariesDir) -> Resu
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
     // lives there too).
-    add_proxy_service(&mut services, instance);
+    add_proxy_service(&mut services, instance, static_frontend);
     add_localstack_service(&mut services, instance);
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
-        add_local_infra(&mut services, instance);
+        add_local_infra(&mut services, instance, static_frontend);
     }
 
     let compose = dct::Compose {
@@ -138,19 +145,32 @@ fn add_localstack_service(
 }
 
 /// The single-origin reverse proxy (Caddy). Added in every mode — it's how the
-/// frontend reaches the local service containers.
-fn add_proxy_service(services: &mut IndexMap<String, Option<dct::Service>>, instance: &Instance) {
+/// frontend reaches the local service containers. Headless stacks also mount
+/// the staged app bundle so Caddy serves the frontend itself (see
+/// `proxy::FRONTEND_STATIC`).
+fn add_proxy_service(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    instance: &Instance,
+    static_frontend: bool,
+) {
     let proxy_port = instance.port(Port::Proxy);
+    let mut volumes = vec![dct::Volumes::Simple(format!(
+        "{}:/etc/caddy/Caddyfile:ro",
+        caddyfile_path(instance).display()
+    ))];
+    if static_frontend {
+        volumes.push(dct::Volumes::Simple(format!(
+            "{}:/srv/frontend:ro",
+            super::frontend::static_dir(instance).display()
+        )));
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
             environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
             ports: dct::Ports::Short(vec![format!("{proxy_port}:{proxy_port}")]),
-            volumes: vec![dct::Volumes::Simple(format!(
-                "{}:/etc/caddy/Caddyfile:ro",
-                caddyfile_path(instance).display()
-            ))],
+            volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
             ..Default::default()
         }),
@@ -160,7 +180,11 @@ fn add_proxy_service(services: &mut IndexMap<String, Option<dct::Service>>, inst
 /// Add the local-only companion infra services (FusionAuth override + Mailpit)
 /// and, for named instances, the remapped infra ports. LocalStack is added
 /// separately (it runs in every mode), so it is not included here.
-fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instance: &Instance) {
+fn add_local_infra(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    instance: &Instance,
+    static_frontend: bool,
+) {
     // FusionAuth: repoint at the generated kickstart (volumes replaced via tag).
     let mut fusionauth = dct::Service {
         environment: kv(&[(
@@ -182,15 +206,21 @@ fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instan
     }
     services.insert("fusionauth".to_string(), Some(fusionauth));
 
-    // Mailpit (also on `auth` so FusionAuth can deliver passwordless codes).
+    // Mailpit is also on `auth` so FusionAuth can deliver passwordless codes.
+    // Only headless mode moves its UI under the proxy-friendly /mailpit root;
+    // attached run_local preserves the existing direct UI at port 8025.
+    let mut mailpit_env = vec![
+        ("MP_SMTP_AUTH_ACCEPT_ANY", "1"),
+        ("MP_SMTP_AUTH_ALLOW_INSECURE", "1"),
+    ];
+    if static_frontend {
+        mailpit_env.push(("MP_WEBROOT", "/mailpit"));
+    }
     services.insert(
         "mailpit".to_string(),
         Some(dct::Service {
             image: Some(MAILPIT_IMAGE.to_string()),
-            environment: kv(&[
-                ("MP_SMTP_AUTH_ACCEPT_ANY", "1"),
-                ("MP_SMTP_AUTH_ALLOW_INSECURE", "1"),
-            ]),
+            environment: kv(&mailpit_env),
             ports: dct::Ports::Short(vec![
                 format!("{}:1025", instance.port(Port::MailpitSmtp)),
                 format!("{}:8025", instance.port(Port::MailpitUi)),

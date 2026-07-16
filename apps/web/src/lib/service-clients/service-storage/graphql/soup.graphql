@@ -3,6 +3,15 @@ query Soup($input: SoupInput!) {
 		id
 		soup(input: $input) {
 			items {
+				...SoupItemFields
+			}
+			nextCursor
+			hasMore
+		}
+	}
+}
+
+fragment SoupItemFields on GraphqlSoupItem {
 				id
 				entityType
 				frecencyScore
@@ -114,6 +123,51 @@ query Soup($input: SoupInput!) {
 						notifications {
 							...SoupNotificationFields
 						}
+						latestContentMessage {
+							__typename
+							id
+							threadId
+							linkId
+							subject
+							snippet
+							internalDateTs
+							sentAt
+							isRead
+							isStarred
+							isSent
+							hasAttachments
+							from {
+								email
+								name
+								photoUrl
+							}
+							to {
+								email
+								name
+								photoUrl
+							}
+							cc {
+								email
+								name
+								photoUrl
+							}
+							bcc {
+								email
+								name
+								photoUrl
+							}
+							labels {
+								providerLabelId
+								name
+							}
+							bodyParsed
+							bodyText
+							bodyHtmlSanitized
+							bodyMacro
+							bodyReplyless
+							createdAt
+							updatedAt
+						}
 					}
 					... on GraphqlSoupChannel {
 						id
@@ -213,11 +267,6 @@ query Soup($input: SoupInput!) {
 						}
 					}
 				}
-			}
-			nextCursor
-			hasMore
-		}
-	}
 }
 
 fragment SoupPropertyFields on GraphqlProperty {

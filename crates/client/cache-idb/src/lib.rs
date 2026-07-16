@@ -1,11 +1,10 @@
 //! IndexedDB [`Storage`](cache_core::store::Storage) backend for the browser
 //! host (wasm module in a SharedWorker / dedicated worker).
 //!
-//! One IndexedDB database per cache namespace — the database *name* embeds
-//! scope + schema hash + format version
-//! ([`cache_core::codec::cache_namespace`]), so a schema/format change simply
-//! opens a fresh database. Records live in a single `records` object store
-//! as postcard bytes (`Uint8Array`) under their entity-key string.
+//! One stable IndexedDB database per cache scope. Disposable normalized
+//! records are versioned through metadata, while queued mutations and their
+//! optimistic layers remain discoverable across record-schema changes.
+//! Postcard payloads are stored as `Uint8Array` values.
 //!
 //! wasm32-only; on other targets this crate is an empty shell so workspace
 //! `cargo test` stays green.

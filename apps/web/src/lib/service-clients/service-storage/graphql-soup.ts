@@ -11,12 +11,18 @@ import {
   createTauriCacheHost,
   createWorkerCacheHost,
 } from '@graphql-cache/index';
+import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { type Client, createClient, fetchExchange } from '@urql/core';
 import { match } from 'ts-pattern';
 import type { SoupApiItem, SoupPage } from './generated/schemas';
 import {
+  type GroupedSoupInput,
+  type GroupSoupQuery,
+  GroupSoupDocument as GroupSoupQueryDocument,
+  type GroupSoupQueryVariables,
+  type SoupInitialInput,
   type SoupInput,
   type SoupQuery,
   SoupDocument as SoupQueryDocument,
@@ -94,6 +100,7 @@ export function getGraphqlSoupClient(): Client {
       const host = isTauri()
         ? createTauriCacheHost({ scope })
         : createWorkerCacheHost({ scope });
+      registerCacheHost(host);
       return createClient({
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
@@ -102,7 +109,11 @@ export function getGraphqlSoupClient(): Client {
             // response. A response for a different user silently wipes and
             // rebinds the cache (see @graphql-cache/scope).
             extractIdentity: (data) =>
-              (data as Partial<SoupQuery> | undefined)?.user?.id,
+              (data as Partial<SoupQuery | GroupSoupQuery> | undefined)?.user
+                ?.id,
+            // Transport failures remain queued with their optimistic layer;
+            // GraphQL application errors are permanent and roll back.
+            shouldRetryMutation: (error) => error.networkError != null,
           }),
           fetchExchange,
         ],
@@ -117,6 +128,18 @@ export function getGraphqlSoupClient(): Client {
 }
 
 export type GraphqlSoupInput = SoupInput;
+export type GraphqlSoupInitialInput = SoupInitialInput;
+export type GraphqlGroupedSoupInput = GroupedSoupInput;
+
+export type GraphqlGroupedSoupPage = {
+  items: Record<string, SoupApiItem>;
+  groups: Array<{
+    key: string;
+    totalCount: number;
+    nextCursor: string | null;
+    itemIds: string[];
+  }>;
+};
 
 type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem['entity'];
@@ -557,6 +580,28 @@ export function mapGraphqlSoupPage(data: SoupQuery): SoupPage {
   };
 }
 
+/** Maps grouped GraphQL bins to the normalized item pool used by Soup views. */
+export function mapGraphqlGroupedSoupPage(
+  data: GroupSoupQuery
+): GraphqlGroupedSoupPage {
+  const items: Record<string, SoupApiItem> = {};
+  const groups = data.user.groupSoup.bins.map((bin) => {
+    const itemIds = bin.items.map((item) => {
+      items[item.id] = mapGraphqlSoupItem(item);
+      return item.id;
+    });
+
+    return {
+      key: bin.key,
+      totalCount: bin.totalCount,
+      nextCursor: bin.nextCursor ?? null,
+      itemIds,
+    };
+  });
+
+  return { items, groups };
+}
+
 export async function fetchGraphqlSoup(
   input: GraphqlSoupInput,
   options: FetchGraphqlSoupOptions = {}
@@ -606,4 +651,48 @@ export async function fetchGraphqlSoup(
   }
 
   return mapGraphqlSoupPage(data);
+}
+
+/** Fetch grouped Soup bins through the GraphQL endpoint. */
+export async function fetchGraphqlGroupedSoup(
+  input: GraphqlGroupedSoupInput,
+  options: FetchGraphqlSoupOptions = {}
+): Promise<GraphqlGroupedSoupPage> {
+  const client = getGraphqlSoupClient();
+  const useCache = graphqlCacheEnabled();
+  const variables = { input };
+  const result = await client
+    .query<GroupSoupQuery, GroupSoupQueryVariables>(
+      GroupSoupQueryDocument,
+      variables,
+      {
+        ...(useCache ? { requestPolicy: 'cache-and-network' as const } : {}),
+        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+      }
+    )
+    .toPromise();
+
+  if (result.error) {
+    if (
+      options.allowOfflineFallback !== false &&
+      useCache &&
+      result.error.networkError
+    ) {
+      const cached = await client
+        .query<GroupSoupQuery, GroupSoupQueryVariables>(
+          GroupSoupQueryDocument,
+          variables,
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (cached.data) return mapGraphqlGroupedSoupPage(cached.data);
+    }
+    throw result.error;
+  }
+
+  if (!result.data) {
+    throw new Error('GraphQL grouped Soup query returned no data');
+  }
+
+  return mapGraphqlGroupedSoupPage(result.data);
 }

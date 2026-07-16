@@ -1030,7 +1030,7 @@ fn test_matching_threads_cte_body_single_sender_uses_union_form() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
     let resolved = resolved_with(&[("a@b.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
+    let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Single sender: one UNION branch (no UNION keyword needed), index probe
@@ -1043,10 +1043,12 @@ fn test_matching_threads_cte_body_single_sender_uses_union_form() {
 }
 
 #[test]
-fn test_matching_threads_cte_body_or_of_kinds_emits_one_union_branch_per_literal() {
+fn test_matching_threads_ctes_or_of_kinds_merges_recipient_roles() {
     // Sender OR Cc OR Bcc OR Recipient over the same email — the common
-    // "filter by this address in any role" case. Each leaf becomes its own
-    // index-driven UNION branch instead of a single OR-laden subquery.
+    // "filter by this address in any role" case. Sender keeps its own
+    // branch; TO/CC/BCC merge into one recipient branch. All three roles
+    // cover the whole recipient_type enum, so no type filter is emitted and
+    // the recipients index is probed once instead of three times.
     let id = Uuid::new_v4();
     let expr = Expr::or(
         Expr::or(
@@ -1059,18 +1061,36 @@ fn test_matching_threads_cte_body_or_of_kinds_emits_one_union_branch_per_literal
         Expr::Literal(EmailLiteral::Recipient(complete("x@y.com"))),
     );
     let resolved = resolved_with(&[("x@y.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
+    let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
-    // Three UNIONs join the four branches.
-    assert_eq!(debug.matches("UNION").count(), 3);
-    assert!(debug.contains("recipient_type = 'TO'"));
-    assert!(debug.contains("recipient_type = 'CC'"));
-    assert!(debug.contains("recipient_type = 'BCC'"));
+    // One UNION joins the two branches (sender + merged recipients).
+    assert_eq!(debug.matches("UNION").count(), 1);
+    assert!(!debug.contains("recipient_type"));
+    assert!(debug.contains("email_message_recipients"));
     assert!(debug.contains("m.from_contact_id = "));
     assert!(body.has_bind_uuid(&id));
     // No correlated `m.thread_id = t.id` — uncorrelated branches.
     assert!(!debug.contains("m.thread_id = t.id"));
+}
+
+#[test]
+fn test_matching_threads_ctes_recipient_role_subset_keeps_type_filter() {
+    // Cc OR Bcc (no TO) must not widen to all recipient roles — the merged
+    // branch keeps an IN filter over exactly the requested types.
+    let id = Uuid::new_v4();
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::Cc(complete("x@y.com"))),
+        Expr::Literal(EmailLiteral::Bcc(complete("x@y.com"))),
+    );
+    let resolved = resolved_with(&[("x@y.com", id)]);
+    let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
+    let debug = body.to_debug_sql();
+
+    // Single merged branch — no UNION.
+    assert!(!debug.contains("UNION"));
+    assert!(debug.contains("mr.recipient_type IN ('CC', 'BCC')"));
+    assert!(!debug.contains("recipient_type = "));
 }
 
 #[test]
@@ -1083,7 +1103,7 @@ fn test_matching_threads_cte_body_skips_unresolved_complete_branches() {
         Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
     );
     let resolved = resolved_with(&[("known@x.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
+    let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Only one branch left → no UNION keyword.
@@ -1095,13 +1115,63 @@ fn test_matching_threads_cte_body_skips_unresolved_complete_branches() {
 #[test]
 fn test_matching_threads_cte_body_partial_emits_ilike_branch_with_email_contacts_join() {
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".into())));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
-        .expect("body present");
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
     let debug = body.to_debug_sql();
 
+    // The contact lookup is hoisted into a CTE the branch consumes.
+    assert!(debug.contains("matching_contacts_0 AS MATERIALIZED ("));
     assert!(debug.contains("FROM email_contacts c"));
+    assert!(debug.contains("FROM matching_contacts_0 c"));
     assert!(debug.contains("ILIKE"));
     assert!(body.has_bind_string("%acme%"));
+}
+
+#[test]
+fn test_matching_threads_ctes_domain_all_roles_share_one_contact_scan() {
+    // The CRM ecd shape: one domain across all four roles. email_contacts
+    // must be scanned exactly once (the hoisted CTE), feeding a sender
+    // branch and one merged recipient branch with no type filter.
+    let domain = Email::Domain("acme.com".to_string());
+    let expr = Expr::or(
+        Expr::or(
+            Expr::or(
+                Expr::Literal(EmailLiteral::Sender(domain.clone())),
+                Expr::Literal(EmailLiteral::Cc(domain.clone())),
+            ),
+            Expr::Literal(EmailLiteral::Bcc(domain.clone())),
+        ),
+        Expr::Literal(EmailLiteral::Recipient(domain)),
+    );
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert_eq!(debug.matches("FROM email_contacts").count(), 1);
+    assert_eq!(
+        debug.matches("matching_contacts_0 AS MATERIALIZED").count(),
+        1
+    );
+    assert_eq!(debug.matches("UNION").count(), 1);
+    assert!(!debug.contains("recipient_type"));
+    assert!(debug.contains("FROM matching_contacts_0 c"));
+    assert!(body.has_bind_string("acme.com"));
+}
+
+#[test]
+fn test_matching_threads_ctes_distinct_domains_get_separate_contact_ctes() {
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into()))),
+        Expr::Literal(EmailLiteral::Sender(Email::Domain("globex.com".into()))),
+    );
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("matching_contacts_0 AS MATERIALIZED"));
+    assert!(debug.contains("matching_contacts_1 AS MATERIALIZED"));
+    assert!(body.has_bind_string("acme.com"));
+    assert!(body.has_bind_string("globex.com"));
 }
 
 #[test]
@@ -1110,8 +1180,8 @@ fn test_matching_threads_cte_body_domain_emits_split_part_branch() {
     // own copy of the address-match SQL builder. Domain on this path must
     // also emit the exact-domain predicate, not ILIKE.
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
-        .expect("body present");
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("FROM email_contacts c"));
@@ -1131,8 +1201,8 @@ fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
     // union-branch builder. Verify the predicate shape is consistent across
     // address kinds.
     let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain("acme.com".into())));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
-        .expect("body present");
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("email_message_recipients"));
@@ -1145,8 +1215,8 @@ fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
 #[test]
 fn test_matching_threads_cte_body_domain_lowercases_bind_value() {
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("AcMe.CoM".into())));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
-        .expect("body present");
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
 
     assert!(body.has_bind_string("acme.com"));
     assert!(!body.has_bind_string("AcMe.CoM"));
@@ -1164,7 +1234,7 @@ fn test_matching_threads_cte_body_and_of_conjuncts_uses_combined_predicate_form(
         Expr::Literal(EmailLiteral::Recipient(complete("r@x.com"))),
     );
     let resolved = resolved_with(&[("s@x.com", sender_id), ("r@x.com", recipient_id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
+    let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("SELECT DISTINCT m.thread_id"));
@@ -1186,7 +1256,7 @@ fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
     let resolved = ResolvedFilters::empty()
         .with_contact("a@b.com", contact_id)
         .with_trash(trash_id);
-    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
+    let body = build_matching_threads_ctes(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("ml.label_id = "));
@@ -1199,7 +1269,7 @@ fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
 fn test_matching_threads_cte_body_none_when_no_address_literals() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None);
+    let body = build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None);
     assert!(body.is_none());
 }
 
@@ -1232,6 +1302,123 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
     assert!(
         !candidate_section.contains("m.thread_id = t.id"),
         "stale correlated subquery still present in candidate: {sql}",
+    );
+}
+
+#[test]
+fn test_full_query_team_scoped_domain_filter_hoists_contact_cte() {
+    // Team-scoped CRM domain query (the `ecd` shape): the domain contact
+    // lookup must appear exactly once, as a hoisted CTE ahead of
+    // matching_threads in the WITH chain — not re-scanned per UNION branch.
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let domain = Email::Domain("acme.com".to_string());
+    let expr = Expr::or(
+        Expr::or(
+            Expr::or(
+                Expr::Literal(EmailLiteral::Sender(domain.clone())),
+                Expr::Literal(EmailLiteral::Cc(domain.clone())),
+            ),
+            Expr::Literal(EmailLiteral::Bcc(domain.clone())),
+        ),
+        Expr::Literal(EmailLiteral::Recipient(domain)),
+    );
+    let sql = super::query::debug_build_query_sql_team_scoped(&view, &expr);
+
+    let contacts_pos = sql
+        .find("matching_contacts_0 AS MATERIALIZED (")
+        .expect("hoisted contact CTE missing");
+    let threads_pos = sql
+        .find("matching_threads AS MATERIALIZED (")
+        .expect("matching_threads CTE missing");
+    assert!(
+        contacts_pos < threads_pos,
+        "contact CTE must precede matching_threads: {sql}"
+    );
+    // One contact scan across the whole WITH chain (the lateral's cheap
+    // correlated per-message probes and Step 3's sender join sit after it).
+    let with_chain = &sql[..threads_pos];
+    assert_eq!(
+        with_chain.matches("FROM email_contacts").count(),
+        1,
+        "email_contacts must be scanned once in the WITH chain: {sql}"
+    );
+    let matching_threads_section = &sql[threads_pos..sql.find("SELECT\n").unwrap_or(sql.len())];
+    assert!(
+        !matching_threads_section.contains("recipient_type"),
+        "all-roles domain filter needs no recipient_type filter in matching_threads: {sql}"
+    );
+}
+
+#[test]
+fn test_full_query_team_scoped_uses_resolved_team_links() {
+    // With team links pre-resolved, the candidate WHERE probes the link set
+    // directly and the matching CTEs are scoped to the same links, instead
+    // of matching mail across every mailbox in the table and discarding
+    // non-team threads afterwards. The live membership subquery must remain
+    // alongside the cached probe — it revalidates the cached ids at
+    // execution time so a member removed between resolve_filters and the
+    // main query can't leak threads.
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let team_link = Uuid::new_v4();
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
+    let resolved = ResolvedFilters::empty().with_team_links(vec![team_link]);
+    let sql = super::query::debug_build_query_sql_team_scoped_with_resolved(&view, &expr, resolved);
+
+    assert!(
+        sql.contains("t.link_id = ANY("),
+        "candidate WHERE must probe the resolved link set: {sql}"
+    );
+    assert!(
+        sql.contains("JOIN team_user tu"),
+        "live membership revalidation subquery missing: {sql}"
+    );
+    assert!(
+        sql.contains("c.link_id = ANY("),
+        "contact CTE must be scoped to team links: {sql}"
+    );
+    assert!(
+        sql.contains("m.link_id = ANY("),
+        "matching_threads branches must be scoped to team links: {sql}"
+    );
+}
+
+#[test]
+fn test_full_query_team_scoped_without_resolved_links_falls_back_to_subquery() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
+    let sql = super::query::debug_build_query_sql_team_scoped(&view, &expr);
+
+    assert!(
+        sql.contains("JOIN team_user tu"),
+        "fallback subquery missing: {sql}"
+    );
+    assert!(
+        !sql.contains("c.link_id = ANY("),
+        "CTE must stay unscoped without resolved team links: {sql}"
+    );
+}
+
+#[test]
+fn test_full_query_team_scoped_shared_include_leaves_cte_unscoped() {
+    // Shared candidates pull threads from arbitrary links via entity_access,
+    // so the team-link scope must not be applied to the matching CTEs.
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into()))),
+        Expr::Literal(EmailLiteral::Shared(
+            item_filters::SharedEmailFilter::Include,
+        )),
+    );
+    let resolved = ResolvedFilters::empty().with_team_links(vec![Uuid::new_v4()]);
+    let sql = super::query::debug_build_query_sql_team_scoped_with_resolved(&view, &expr, resolved);
+
+    assert!(
+        !sql.contains("c.link_id = ANY("),
+        "shared-include CTE must stay unscoped: {sql}"
+    );
+    assert!(
+        !sql.contains("m.link_id = ANY("),
+        "shared-include CTE must stay unscoped: {sql}"
     );
 }
 
@@ -1406,7 +1593,7 @@ fn test_matching_threads_partial_branch_is_link_scoped_when_scope_given() {
     // With a scope, both the contact and message sides must be restricted.
     let links = vec![Uuid::new_v4(), Uuid::new_v4()];
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".to_string())));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), Some(&links))
+    let body = build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), Some(&links))
         .expect("body present");
     let debug = body.to_debug_sql();
 
@@ -1421,7 +1608,7 @@ fn test_matching_threads_domain_branch_is_link_scoped_when_scope_given() {
     let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain(
         "acme.com".to_string(),
     )));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), Some(&links))
+    let body = build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), Some(&links))
         .expect("body present");
     let debug = body.to_debug_sql();
 
@@ -1440,8 +1627,7 @@ fn test_matching_threads_combined_fallback_is_link_scoped_when_scope_given() {
         Expr::Literal(EmailLiteral::Recipient(complete("a@b.com"))),
     );
     let resolved = resolved_with(&[("a@b.com", id)]);
-    let body =
-        build_matching_threads_cte_body(&expr, &resolved, Some(&links)).expect("body present");
+    let body = build_matching_threads_ctes(&expr, &resolved, Some(&links)).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("SELECT DISTINCT m.thread_id FROM email_messages m"));
@@ -1453,8 +1639,8 @@ fn test_matching_threads_unscoped_without_link_scope() {
     // Shared/team queries pass None — no link_id predicates may appear,
     // since candidate threads can live on other users' links.
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".to_string())));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
-        .expect("body present");
+    let body =
+        build_matching_threads_ctes(&expr, &ResolvedFilters::empty(), None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(!debug.contains("link_id = ANY("));

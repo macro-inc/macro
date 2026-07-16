@@ -42,6 +42,24 @@ enum Cmd {
     ResetLocal(InstanceArgs),
     /// Remove an instance's containers, networks, and volumes.
     DestroyLocal(InstanceArgs),
+    /// Headless stack orchestration (previews, agents, CI) — no TTY, no
+    /// attached dev server; the proxy serves a static frontend bundle.
+    #[command(subcommand)]
+    Stack(StackCmd),
+}
+
+#[derive(Subcommand)]
+pub enum StackCmd {
+    /// Bring a full local stack up and return (only containers keep running).
+    Up(super::stack::UpArgs),
+    /// Rebuild binaries (and optionally the frontend) and reload what changed.
+    Update(super::stack::UpdateArgs),
+    /// Report the instance's containers, health, and URLs (`--json` for machines).
+    Status(super::stack::StatusArgs),
+    /// Tear the instance down: containers, volumes, and state.
+    Down(super::stack::DownArgs),
+    /// Report the init-snapshot key/location for this instance.
+    Snapshot(super::stack::SnapshotArgs),
 }
 
 #[derive(Args, Clone, Default)]
@@ -85,11 +103,10 @@ pub struct RunArgs {
     pub env: EnvArgs,
     #[command(flatten)]
     pub build: BuildArgs,
-    /// Do not start the frontend dev server.
+    /// Do not start or serve the frontend.
     #[arg(long)]
     pub no_frontend: bool,
-    /// Stream subprocess output and show per-step timings (e.g. on `r`, the
-    /// build vs reload split instead of one folded line).
+    /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
 }
@@ -160,5 +177,12 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::StopLocal(a) => super::stop(&a),
         Cmd::ResetLocal(a) => super::reset(&a),
         Cmd::DestroyLocal(a) => super::destroy(&a),
+        Cmd::Stack(cmd) => match cmd {
+            StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
+            StackCmd::Update(a) => super::stack::update(&a),
+            StackCmd::Status(a) => super::stack::status(&a),
+            StackCmd::Down(a) => super::stack::down(&a),
+            StackCmd::Snapshot(a) => super::stack::snapshot_status(&a),
+        },
     }
 }

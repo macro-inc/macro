@@ -230,6 +230,8 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_begin_optimistic_write,
+            graphql_cache_plugin::commands::graphql_cache_claim_next_mutation,
+            graphql_cache_plugin::commands::graphql_cache_defer_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_commit_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_rollback_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_invalidate,

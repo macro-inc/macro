@@ -397,6 +397,8 @@ const SearchableFilterSubmenu = (props: {
   placeholder?: string;
   open?: Accessor<boolean>;
   onOpenChange?: (v: boolean) => void;
+  /** Keep `options` in their given order instead of pinning selected first. */
+  preserveOrder?: boolean;
 }) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
   const isOpen = () => props.open?.() ?? internalOpen();
@@ -468,6 +470,7 @@ const SearchableFilterSubmenu = (props: {
             onChange={props.onChange}
             options={props.options}
             inputRef={setInputRef}
+            preserveOrder={props.preserveOrder}
           />
         </Dropdown.Group>
       </Dropdown.SubContent>
@@ -765,9 +768,10 @@ export const UnifiedFilterDropdown = (
   };
 
   // Stage options for the Customers view: the team's active deal-stage set
-  // plus a trailing "No stage" row.
+  // (plus retired legacy stages on the default set) and a trailing
+  // "No stage" row.
   const stageOptions = createMemo((): SearchableOption[] => [
-    ...dealStages.stages().map((stage, index) => ({
+    ...dealStages.filterStages().map((stage, index) => ({
       id: stage.id,
       label: stage.label,
       icon: () => (
@@ -781,20 +785,26 @@ export const UnifiedFilterDropdown = (
     },
   ]);
 
-  // The stage submenu reflects what's on screen: an empty filter shows
-  // every stage, so everything reads as checked.
+  // The stage set shown when no filter is active: the active deal stages
+  // plus "No stage" — retired legacy stages only display when filtered in.
+  const defaultStageIds = createMemo(
+    () => new Set([...dealStages.stages().map((stage) => stage.id), NO_STAGE])
+  );
+
+  // The stage submenu reflects what's on screen: an empty filter shows the
+  // default columns, so exactly those read as checked (legacy stages don't).
   const effectiveStageFilter = () =>
-    stageFilter().length > 0
-      ? stageFilter()
-      : stageOptions().map((option) => option.id);
+    stageFilter().length > 0 ? stageFilter() : [...defaultStageIds()];
 
   // Stage filtering is a client-side predicate, mirroring the owner filter.
   const handleStageChange = (ids: string[]) => {
-    // Checking every stage is the same as no filter — store it as empty so
-    // the predicate deactivates.
-    const next = stageOptions().every((option) => ids.includes(option.id))
-      ? []
-      : ids;
+    // Checking exactly the default set is the same as no filter — store it
+    // as empty so the predicate deactivates.
+    const next =
+      ids.length === defaultStageIds().size &&
+      ids.every((id) => defaultStageIds().has(id))
+        ? []
+        : ids;
     batch(() => {
       setStageFilter(next);
       const shouldBeActive = next.length > 0;
@@ -961,6 +971,7 @@ export const UnifiedFilterDropdown = (
                       activeIds={effectiveStageFilter}
                       onChange={handleStageChange}
                       placeholder="Filter stages..."
+                      preserveOrder
                     />
                     <SearchableFilterSubmenu
                       label="Owner"

@@ -329,6 +329,21 @@ async fn returns_none_when_thread_does_not_exist(pool: PgPool) -> anyhow::Result
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn batch_owner_lookup_returns_only_owned_threads(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, owned_thread_id) = create_link_and_thread(&pool, REQUESTER).await;
+    let (_, other_thread_id) = create_link_and_thread(&pool, OWNER).await;
+    let requester = user(REQUESTER);
+
+    let owned =
+        get_owned_email_thread_ids(&pool, &[owned_thread_id, other_thread_id], &requester).await?;
+
+    assert_eq!(owned, vec![owned_thread_id]);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Delegated / shared inboxes (macro_user_links)
 // ---------------------------------------------------------------------------

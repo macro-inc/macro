@@ -705,6 +705,14 @@ pub struct CreateChannelRequest {
     pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
+/// Response containing a channel's reusable join code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ChannelJoinCodeResponse {
+    /// Reusable code for joining the channel.
+    pub join_code: Uuid,
+}
+
 /// Response returned after creating a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -1140,6 +1148,8 @@ pub struct GetChannelsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     /// Optional result limit.
     pub limit: Option<u32>,
+    /// Whether aggregate frecency should be loaded for the returned channels.
+    pub include_frecency: bool,
     /// Cursor, sort, and channel-level filter.
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
 }

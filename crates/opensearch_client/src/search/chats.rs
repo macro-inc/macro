@@ -41,7 +41,8 @@ pub(crate) struct ChatIndex {
     pub entity_id: uuid::Uuid,
     pub user_id: String,
     pub title: String,
-    pub updated_at_seconds: Option<i64>,
+    #[serde(default)]
+    pub updated_at_millis: Option<i64>,
 }
 
 pub(crate) struct ChatSearchConfig;

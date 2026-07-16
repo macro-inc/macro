@@ -1,21 +1,20 @@
 use crate::api::MACRO_INTERNAL_USER_ID;
-use crate::api::context::ApiContext;
-use axum::Extension;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::extract::{Json, State};
 use axum::http::StatusCode;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::document_storage_service_internal::{ValidateItemIDsRequest, ValidateItemIDsResponse};
-use model::user::UserContext;
 
 /// Validates the user has access to the provided list of item ids
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ctx, user), fields(user_id=?user.macro_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<ValidateItemIDsRequest>,
 ) -> Result<(StatusCode, Json<ValidateItemIDsResponse>), (StatusCode, String)> {
     tracing::info!("validate_item_ids");
 
-    let user_id = user_context.user_id.clone();
+    let user_id = user.user_context.user_id.clone();
 
     if matches!(user_id.as_str(), "" | MACRO_INTERNAL_USER_ID) {
         return Err((

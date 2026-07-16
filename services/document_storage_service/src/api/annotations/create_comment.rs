@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     api::annotations::{CommentNotifContext, compute_notification_recipients},
+    api::context::AuthorizationService,
     service::conn_gateway::update_live_comment_state,
 };
 use axum::{
@@ -11,6 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::annotations::create_comment::create_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{
@@ -20,7 +22,6 @@ use model::{
     },
     document::DocumentBasic,
     response::ErrorResponse,
-    user::UserContext,
 };
 use model_notifications::NotificationDocumentSubType;
 use models_properties::service::property_value::PropertyValue;
@@ -59,11 +60,12 @@ pub async fn create_comment_handler(
     State(properties_service): State<Arc<crate::api::context::PropertiesService>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
-    Extension(UserContext { user_id, .. }): Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Json(req): Json<CreateCommentRequest>,
 ) -> Result<Response, Response> {
+    let user_id = user.macro_user_id.to_string();
     if document_context.deleted_at.is_some() {
         return Err((
             StatusCode::BAD_REQUEST,

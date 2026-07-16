@@ -53,6 +53,7 @@ pub enum GraphqlPropertyMatchValue {
 }
 
 impl GraphqlPropertyMatchValue {
+    /// Convert the GraphQL property match value into its domain representation.
     fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
         Ok(match self {
             Self::SelectOption(id) => {

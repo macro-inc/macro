@@ -136,6 +136,35 @@ async fn test_get_team_payment_status(pool: Pool<Postgres>) -> anyhow::Result<()
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_get_team_enterprise_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    let enterprise = team_repo.get_team_enterprise_status(&team_id).await?;
+    assert!(!enterprise);
+
+    sqlx::query!("UPDATE team SET enterprise = TRUE WHERE id = $1", &team_id)
+        .execute(&pool)
+        .await?;
+
+    let enterprise = team_repo.get_team_enterprise_status(&team_id).await?;
+    assert!(enterprise);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let error = team_repo
+        .get_team_enterprise_status(&missing_team_id)
+        .await
+        .expect_err("a missing team should return an error");
+
+    assert!(matches!(error, TeamError::TeamDoesNotExist));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
@@ -148,6 +177,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(result.name, "team1");
     assert_eq!(result.slug, "MACRO");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
+    assert!(!result.enterprise());
 
     // Create team with too large a name
     let err = team_repo
@@ -1291,14 +1321,47 @@ async fn test_patch_team_plan(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_get_team_by_id_includes_slug(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool);
+async fn test_get_team_by_id_hydrates_enterprise_status(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    sqlx::query!("UPDATE team SET enterprise = TRUE WHERE id = $1", &team_id)
+        .execute(&pool)
+        .await?;
 
     let team = team_repo.get_team_by_id(&team_id).await?.team;
 
     assert_eq!(team.name(), "team1");
     assert_eq!(team.slug(), "MACRO");
+    assert!(team.enterprise());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_user_teams_hydrates_enterprise_status(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+
+    sqlx::query!("UPDATE team SET enterprise = TRUE WHERE id = $1", &team_id)
+        .execute(&pool)
+        .await?;
+
+    let teams = team_repo.get_user_teams(&user_id).await?;
+    let team = teams
+        .iter()
+        .find(|team| team.id() == &team_id)
+        .expect("updated team should be returned for the user");
+
+    assert!(team.enterprise());
 
     Ok(())
 }
@@ -1452,6 +1515,213 @@ async fn test_patch_team_user_role(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .unwrap();
 
     assert!(err.to_string().contains("member not found"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_toggle_auto_join_domain(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // First toggle sets the domain of the team owner (macro|user@user.com).
+    let domain = team_repo.toggle_auto_join_domain(&team_id).await?;
+    assert_eq!(domain.as_deref(), Some("user.com"));
+
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT auto_join_domain FROM team WHERE id = $1")
+            .bind(team_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(stored.as_deref(), Some("user.com"));
+
+    // The domain is surfaced on the Team model (read by GET /team).
+    let team = team_repo.get_team_by_id(&team_id).await?.team;
+    assert_eq!(team.auto_join_domain(), Some("user.com"));
+
+    // Second toggle unsets it.
+    let domain = team_repo.toggle_auto_join_domain(&team_id).await?;
+    assert_eq!(domain, None);
+
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT auto_join_domain FROM team WHERE id = $1")
+            .bind(team_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(stored, None);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_toggle_auto_join_domain_rejects_generic_domain(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_id = macro_uuid::string_to_uuid("33333333-3333-3333-3333-333333333333")?;
+    sqlx::query(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ('a5555555-5555-5555-5555-555555555555', 'owner@gmail.com', 'owner@gmail.com', 'cus_gmail_owner')",
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO "User" (id, email, name, macro_user_id) VALUES ('macro|owner@gmail.com', 'owner@gmail.com', 'Gmail Owner', 'a5555555-5555-5555-5555-555555555555')"#,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'gmail team', 'macro|owner@gmail.com')",
+    )
+    .bind(team_id)
+    .execute(&pool)
+    .await?;
+
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let err = team_repo
+        .toggle_auto_join_domain(&team_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(matches!(
+        &err,
+        ToggleAutoJoinDomainError::GenericDomainNotAllowed(domain) if domain.as_str() == "gmail.com"
+    ));
+
+    // The rejected toggle must not have set anything.
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT auto_join_domain FROM team WHERE id = $1")
+            .bind(team_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(stored, None);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_toggle_auto_join_domain_missing_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let missing_team_id = macro_uuid::string_to_uuid("63333333-3333-3333-3333-333333333333")?;
+    let err = team_repo
+        .toggle_auto_join_domain(&missing_team_id)
+        .await
+        .err()
+        .unwrap();
+
+    assert!(err.to_string().contains("does not exist"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_id_by_domain(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // No team has an auto-join domain yet.
+    let found = team_repo
+        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@user.com")?)
+        .await?;
+    assert_eq!(found, None);
+
+    team_repo.toggle_auto_join_domain(&team_id).await?;
+
+    let found = team_repo
+        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@user.com")?)
+        .await?;
+    assert_eq!(found, Some(team_id));
+
+    // Domain matching is case-insensitive on the user's email domain.
+    let found = team_repo
+        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@USER.COM")?)
+        .await?;
+    assert_eq!(found, Some(team_id));
+
+    // Unrelated domains do not match.
+    let found = team_repo
+        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@other.com")?)
+        .await?;
+    assert_eq!(found, None);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_get_team_id_by_domain_prefers_oldest_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    sqlx::query("UPDATE team SET auto_join_domain = 'user.com'")
+        .execute(&pool)
+        .await?;
+
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    // Both fixture teams claim user.com; the one with the lowest id wins.
+    let found = team_repo
+        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@user.com")?)
+        .await?;
+    assert_eq!(
+        found,
+        Some(macro_uuid::string_to_uuid(
+            "11111111-1111-1111-1111-111111111111"
+        )?)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+
+    let seat_count_before = team_repo.get_team_seat_count(&team_id).await?;
+
+    let member = team_repo
+        .add_user_to_team(&team_id, &user_id)
+        .await?
+        .expect("user should have been added");
+
+    assert_eq!(member.team_id, team_id);
+    assert_eq!(member.user_id.as_ref(), user_id.as_ref());
+    assert_eq!(member.role, TeamRole::Member);
+
+    let role = team_repo.get_team_role(&team_id, &user_id).await?;
+    assert_eq!(role, Some(TeamRole::Member));
+
+    let seat_count = team_repo.get_team_seat_count(&team_id).await?;
+    assert_eq!(seat_count, seat_count_before + 1);
+
+    // Adding again is a no-op: no member returned, no extra seat counted.
+    let member = team_repo.add_user_to_team(&team_id, &user_id).await?;
+    assert!(member.is_none());
+
+    let seat_count = team_repo.get_team_seat_count(&team_id).await?;
+    assert_eq!(seat_count, seat_count_before + 1);
 
     Ok(())
 }

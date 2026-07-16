@@ -7,6 +7,24 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
+async fn get_channel_frecency<'a, Frec: AggregateFrecencyStorage>(
+    service: &Frec,
+    include_frecency: bool,
+    user: MacroUserIdStr<'a>,
+    entities: &'a [model_entity::Entity<'a>],
+) -> Result<Vec<AggregateFrecency>, Frec::Err> {
+    if include_frecency {
+        service
+            .get_aggregate_for_user_entities(user, entities)
+            .await
+    } else {
+        Ok(Vec::new())
+    }
+}
+
 use crate::domain::{
     models::{
         Activity, ChannelMessage, ChannelType, ChannelWithLatest, GetChannelsRequest,
@@ -49,6 +67,7 @@ where
         &self,
         req: GetChannelsRequest,
     ) -> Result<Vec<ChannelWithLatest>, rootcause::Report> {
+        let include_frecency = req.include_frecency;
         let params = req.into_params();
         let user = params.user().clone();
 
@@ -74,13 +93,19 @@ where
             })
             .collect();
 
+        let frecency = get_channel_frecency(
+            &self.frecency,
+            include_frecency,
+            user.clone(),
+            channel_entities.as_slice(),
+        );
+
         let (names, latest_messages, activities, frecency) = tokio::join!(
             self.users.get_names_for_ids(participant_ids),
             self.channels
                 .get_latest_channel_messages_batch(&channel_ids),
             self.channels.get_channel_list_activities(user.clone()),
-            self.frecency
-                .get_aggregate_for_user_entities(user.clone(), channel_entities.as_slice())
+            frecency,
         );
 
         let mut activity_lookup: HashMap<Uuid, Activity> = activities

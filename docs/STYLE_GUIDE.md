@@ -211,3 +211,7 @@ TypeScript · `[ui]` UI / UX conventions
   small and free of queries/complex state. (also: AGENTS.md)
 - **FE-27** `[ui]` Don't add `cursor-pointer` to clickable elements. (enforced: ast-grep
   `tsx-no-cursor-pointer`, warning · also: AGENTS.md)
+- **FE-28** `[ui]` Dialogs rely on Kobalte's default autofocus: make the intended
+  target the first tabbable element and preserve focus ownership for restoration.
+  Override `onOpenAutoFocus` only for a proven lifecycle requirement, and verify
+  `document.activeElement` after both opening and reopening in the live app.

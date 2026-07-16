@@ -1,13 +1,16 @@
-use crate::api::context::EntityAccessService;
-use axum::extract::State;
-use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
+use crate::api::context::{AuthorizationService, EntityAccessService};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::document::get_document_version;
 use macro_db_client::user_document_view_location::get::get_user_document_view_location;
 use model::document::response::{GetDocumentResponse, GetDocumentResponseData};
 use model::response::{GenericErrorResponse, GenericResponse};
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -35,11 +38,11 @@ pub struct Params {
             (status = 500, body=GenericErrorResponse),
         )
     )]
-#[tracing::instrument(skip(db, user_context, access), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(db, user, access), fields(user_id=?user.macro_user_id))]
 pub async fn handler(
-    access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
+    access: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService, AuthorizationService>,
     State(db): State<PgPool>,
-    user_context: Extension<UserContext>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Path(Params {
         document_id,
         document_version_id,
@@ -64,7 +67,8 @@ pub async fn handler(
     };
 
     let view_location =
-        match get_user_document_view_location(&db, &user_context.user_id, &document_id).await {
+        match get_user_document_view_location(&db, user.macro_user_id.as_ref(), &document_id).await
+        {
             Ok(view_location) => view_location,
             Err(e) => {
                 tracing::error!(error=?e, "error getting view location");

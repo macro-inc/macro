@@ -24,7 +24,6 @@ path = "src/doppler_config.rs"
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
@@ -33,6 +32,8 @@ email_db_client = { path = "../../crates/email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
@@ -41,9 +42,7 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
-] }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
@@ -65,7 +64,6 @@ properties = { path = "../../crates/properties", default-features = false, featu
 ], optional = true }
 rust-embed = "8.6.0"
 s3_client = { path = "../../crates/s3_client" }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

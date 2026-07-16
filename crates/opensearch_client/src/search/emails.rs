@@ -367,8 +367,9 @@ pub(crate) struct EmailIndex {
     pub user_id: String,
     /// The subject of the email message
     pub subject: Option<String>,
-    /// The sent at time of the email message
-    pub sent_at_seconds: Option<i64>,
+    /// The sent at time of the email message, in milliseconds
+    #[serde(default)]
+    pub sent_at_millis: Option<i64>,
 }
 
 pub struct EmailSearchArgs {

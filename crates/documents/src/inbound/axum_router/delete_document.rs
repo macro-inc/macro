@@ -6,9 +6,9 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use macro_authorization::MacroAuthorizationService;
 use model::document::DocumentBasic;
 use model::response::GenericSuccessResponse;
-use model::user::UserContext;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 
 use super::{DocumentRouterState, Params};
@@ -34,10 +34,13 @@ use crate::domain::ports::DocumentService;
     )
 )]
 #[tracing::instrument(skip(state, access, doc), err)]
-pub async fn delete_document_handler<T: DocumentService, Svc: EntityAccessService>(
-    access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
-    State(state): State<DocumentRouterState<T, Svc>>,
-    user_context: Extension<UserContext>,
+pub async fn delete_document_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: DocumentAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
     doc: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Json<GenericSuccessResponse>, DocumentError> {

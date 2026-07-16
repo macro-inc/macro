@@ -39,6 +39,8 @@ use sqlx::{Executor, PgPool, Postgres};
 #[cfg(feature = "list")]
 use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use std::collections::{HashMap, HashSet};
+
+use indexmap::IndexMap;
 use uuid::Uuid;
 
 /// Postgres-backed repository for channels.
@@ -1925,8 +1927,10 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        // Group by message_id, then fold by emoji within each message.
-        let mut map: HashMap<Uuid, HashMap<String, Vec<String>>> = HashMap::new();
+        // Group by message_id, then fold by emoji within each message. Rows arrive
+        // ordered by created_at ASC, so an IndexMap preserves first-reacted order per
+        // emoji instead of the random order a HashMap would iterate in.
+        let mut map: HashMap<Uuid, IndexMap<String, Vec<String>>> = HashMap::new();
         for r in rows {
             map.entry(r.message_id)
                 .or_default()
@@ -2529,6 +2533,48 @@ impl ChannelRepo for PgChannelsRepo {
         })
     }
 
+    async fn get_or_create_channel_join_code(&self, channel_id: Uuid) -> Result<Uuid, Self::Err> {
+        let candidate_join_code = macro_uuid::generate_uuid_v7();
+        let join_code = sqlx::query_scalar!(
+            r#"
+            UPDATE comms_channels
+            SET join_code = COALESCE(join_code, $2)
+            WHERE id = $1
+            RETURNING join_code AS "join_code!"
+            "#,
+            channel_id,
+            candidate_join_code,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to get or create channel join code")?;
+        Ok(join_code)
+    }
+
+    async fn get_channel_info_by_join_code(
+        &self,
+        join_code: Uuid,
+    ) -> Result<Option<ChannelInfo>, Self::Err> {
+        let row = sqlx::query_as!(
+            ChannelInfoRow,
+            r#"
+            SELECT id, name, channel_type AS "channel_type: ChannelType", org_id, team_id
+            FROM comms_channels
+            WHERE join_code = $1
+            "#,
+            join_code,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| ChannelInfo {
+            id: row.id,
+            name: row.name,
+            channel_type: row.channel_type,
+            org_id: row.org_id,
+            team_id: row.team_id,
+        }))
+    }
+
     async fn get_channel_metadata(
         &self,
         channel_id: Uuid,
@@ -2834,11 +2880,16 @@ impl ChannelRepo for PgChannelsRepo {
         channel_id: Uuid,
         user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
             r#"
             INSERT INTO comms_channel_participants (channel_id, user_id, role)
             VALUES ($1, $2, $3)
+            ON CONFLICT (channel_id, user_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                joined_at = now(),
+                left_at = NULL
+            WHERE comms_channel_participants.left_at IS NOT NULL
             "#,
             channel_id,
             user_id.as_ref(),
@@ -2847,7 +2898,7 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await
         .context("unable to add participant to channel")?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {

@@ -16,6 +16,7 @@ import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
+  batch,
   createMemo,
   createSignal,
   type JSXElement,
@@ -327,7 +328,7 @@ export type SplitManager = {
   /** Replace all splits with a single split containing the given content. */
   replaceAllSplits: (
     content: SplitContent,
-    options?: { referredFrom?: string | null }
+    options?: { referredFrom?: ReferredFrom }
   ) => SplitHandle;
 
   /** Check if a split exists by its split id */
@@ -758,12 +759,14 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
 
-    captureCurrentEntryState(split);
+    batch(() => {
+      captureCurrentEntryState(split);
 
-    const prev = split.history.back();
-    if (!prev) return;
+      const prev = split.history.back();
+      if (!prev) return;
 
-    reattach(split, prev, undefined, 'history-back');
+      reattach(split, prev, undefined, 'history-back');
+    });
   }
 
   function forward(id: SplitId) {
@@ -773,12 +776,14 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
 
-    captureCurrentEntryState(split);
+    batch(() => {
+      captureCurrentEntryState(split);
 
-    const next = split.history.forward();
-    if (!next) return;
+      const next = split.history.forward();
+      if (!next) return;
 
-    reattach(split, next, undefined, 'history-forward');
+      reattach(split, next, undefined, 'history-forward');
+    });
   }
 
   function removeFromHistory(
@@ -813,14 +818,21 @@ export function createSplitLayout(
     const content = attachAliasContext(next);
 
     const split = state.splits[i];
-    captureCurrentEntryState(split);
-    if (mergeHistory) {
-      split.history.merge(content);
-    } else {
-      split.history.push(content);
-    }
+    batch(() => {
+      captureCurrentEntryState(split);
+      if (mergeHistory) {
+        split.history.merge(content);
+      } else {
+        split.history.push(content);
+      }
 
-    reattach(split, content, referredFrom, mergeHistory ? 'replace' : 'fresh');
+      reattach(
+        split,
+        content,
+        referredFrom,
+        mergeHistory ? 'replace' : 'fresh'
+      );
+    });
   }
 
   function reset(id: SplitId) {
@@ -848,6 +860,17 @@ export function createSplitLayout(
   };
 
   function activateSplit(id: SplitId) {
+    // Invariant: an excluded split (the mobile background split) can never
+    // become the active split. Promote it out of exclusion first.
+    const split = findSplitById(id);
+    if (split && isExcluded(split)) {
+      if (import.meta.env.DEV) {
+        console.warn(
+          `activateSplit: refusing to activate excluded split ${id}`
+        );
+      }
+      return;
+    }
     const current = state.activeSplitId;
     setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
@@ -1374,12 +1397,39 @@ export function createSplitLayout(
     content: SplitContent,
     options: { referredFrom?: ReferredFrom } = {}
   ): SplitHandle {
-    reconcileSplits([content]);
-    const handle = getSplitByContent(content.type, content.id);
+    const visibleSplits = state.splits.filter((split) => !isExcluded(split));
+    const splitToKeep =
+      visibleSplits.find((split) => sameContent(split.content, content)) ??
+      visibleSplits[0];
+
+    if (!splitToKeep) {
+      return createNewSplit({
+        content,
+        activate: true,
+        referredFrom: options.referredFrom ?? null,
+      });
+    }
+
+    for (const split of visibleSplits) {
+      if (split.id !== splitToKeep.id) {
+        removeSplit(split.id, false);
+      }
+    }
+
+    const handle = getSplit(splitToKeep.id);
     if (handle) {
+      if (!sameContent(splitToKeep.content, content)) {
+        handle.replace({
+          next: content,
+          mergeHistory: false,
+          referredFrom: options.referredFrom,
+        });
+      }
       handle.activate();
+      unSpotlightSplit();
       return handle;
     }
+
     return createNewSplit({
       content,
       activate: true,

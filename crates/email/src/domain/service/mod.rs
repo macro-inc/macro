@@ -9,10 +9,10 @@ use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
-        GetEmailsRequest, Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
-        UpsertEmailFilterInput,
+        GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread, Thread,
+        UpdateThreadLabelsResult, UpsertEmailFilterInput,
     },
-    ports::{EmailMessageEnqueuer, EmailRepo, EmailService},
+    ports::{EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService},
 };
 use crm::domain::service::CrmService;
 use entity_access::domain::models::{
@@ -23,6 +23,7 @@ use frecency::domain::ports::FrecencyQueryService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use model_entity::EntityType;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -404,5 +405,22 @@ where
             .list_email_filters(link.id)
             .await
             .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+}
+
+impl<T, U, E, CS, Eam> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam>
+where
+    T: EmailRepo,
+    U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
+    CS: CrmService,
+    Eam: EntityAccessManagementService,
+    anyhow::Error: From<T::Err>,
+{
+    async fn get_latest_messages_parsed(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        self.get_latest_messages_parsed_impl(receipts).await
     }
 }

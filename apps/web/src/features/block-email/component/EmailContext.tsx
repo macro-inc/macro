@@ -4,6 +4,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { URL_PARAMS } from '@block-email/constants';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   getPermissions,
@@ -68,6 +69,12 @@ export function markThreadDraftSaved(threadId: string) {
 }
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
+type ArchiveThreadOptions = {
+  silent?: boolean;
+  onUndoHandle?: (handle: UndoHandle) => void;
+  nextEntityId?: string;
+};
+
 type EmailContextValues = {
   registerMessagesList: (list: HTMLElement) => void;
   messagesListRef: Accessor<HTMLElement | undefined>;
@@ -126,10 +133,8 @@ type EmailContextValues = {
     refetch: () => void;
   };
 
-  archiveThread: (opts?: {
-    silent?: boolean;
-    onUndoHandle?: (handle: UndoHandle) => void;
-  }) => boolean;
+  archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -348,6 +353,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   };
 
   const soup = useMaybeSoup();
+  const previewPanel = useMaybePreviewPanel();
   const splitPanel = useSplitPanel();
 
   const userId = useUserId();
@@ -365,14 +371,30 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
-  const archiveThread = (opts?: {
-    silent?: boolean;
-    onUndoHandle?: (handle: UndoHandle) => void;
-  }) => {
+  const getMarkDoneNavigationTargetId = () => {
+    if (!soup) return;
+
+    const focusedId = soup.focus.id();
+    const navigationOptions = {
+      wrapNavigation: false,
+      skipGroupHeaders: true,
+      skipLoadMore: true,
+    };
+    const candidates = [
+      soup.navigate.peekOffset(1, navigationOptions)?.row,
+      soup.navigate.peekOffset(-1, navigationOptions)?.row,
+    ];
+    return candidates.find((row) => row && row.id !== focusedId)?.id;
+  };
+
+  const archiveThread = (opts?: ArchiveThreadOptions) => {
     const thread = threadQuery.data;
     // `=== true` because callers may pass this straight to an event handler.
-    const silent = opts?.silent === true;
-    const markDoneOpts = { silent, onUndoHandle: opts?.onUndoHandle };
+    const markDoneOpts = {
+      silent: opts?.silent === true,
+      onUndoHandle: opts?.onUndoHandle,
+      nextEntityId: opts?.nextEntityId,
+    };
 
     if (!thread?.db_id) return false;
 
@@ -392,7 +414,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         soup,
         (nextEntity) => {
           const splitHandle = splitPanel?.handle;
-          if (!splitHandle) return;
+          if (!splitHandle || previewPanel !== undefined) return;
           void openEntityInSplitFromUnifiedList(nextEntity, {
             splitHandle,
             mergeHistory: true,
@@ -563,13 +585,19 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   // We can't invalidate/refetch while mounted because any query state change
   // triggers SolidQuery's createClientSubscriber → Resource.refetch() → Suspense
   // DOM detach, which resets scroll position.
-  onCleanup(() => {
-    if (draftSavedThreadIds.has(props.threadID)) {
-      draftSavedThreadIds.delete(props.threadID);
-      queryClient.removeQueries({
-        queryKey: emailKeys.threadMessages(props.threadID).queryKey,
-      });
-    }
+  // `props.threadID` chains through the email block's non-keyed
+  // `<Show when={threadId()}>` accessor, which is already stale during
+  // disposal; capture it while mounted instead of reading it in the cleanup.
+  createEffect(() => {
+    const threadID = props.threadID;
+    onCleanup(() => {
+      if (draftSavedThreadIds.has(threadID)) {
+        draftSavedThreadIds.delete(threadID);
+        queryClient.removeQueries({
+          queryKey: emailKeys.threadMessages(threadID).queryKey,
+        });
+      }
+    });
   });
 
   return (
@@ -582,6 +610,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
           archiveThread,
+          getMarkDoneNavigationTargetId,
           blockSender,
           markSenderSignal,
           markSenderNoise,

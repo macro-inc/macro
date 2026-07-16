@@ -395,7 +395,7 @@ fn document_index_deserializes_parent_shape() {
         "document_name": "Q3 Planning",
         "owner_id": "macro|alice@example.com",
         "file_type": "pdf",
-        "updated_at_seconds": 1779000000_i64,
+        "updated_at_millis": 1779000000000_i64,
         "document_relation": "document",
     });
 
