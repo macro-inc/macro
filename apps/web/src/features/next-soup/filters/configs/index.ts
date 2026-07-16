@@ -1,4 +1,3 @@
-export * from './activity';
 export type { FilterContext } from './base';
 export * from './base';
 export * from './company';
@@ -10,7 +9,6 @@ export * from './entity-type';
 export * from './general';
 export * from './task';
 
-import { firehoseFilter, myActivityFilter } from './activity';
 import type { FilterGroupConfig } from './base';
 import { companyOwnerFilter, companyStageFilter } from './company';
 import {
@@ -63,8 +61,6 @@ import {
 
 export const SOUP_FILTERS = [
   inboxFilter,
-  firehoseFilter,
-  myActivityFilter,
   noiseFilterDef,
   explicitNoiseFilterDef,
   unreadFilter,

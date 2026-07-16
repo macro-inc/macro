@@ -1,10 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
 import {
-  getFirehoseFilters,
-  getMyActivityFilters,
-} from '@app/features/next-soup/filters/configs/activity';
-import {
   defineQueryFilters,
   NIL_UUID,
   type Query,
@@ -164,33 +160,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['explicit-noise'] },
         groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
-    },
-  },
-  // Team activity timeline: one date-grouped feed of everything going on in
-  // the team, sorted by recency of update.
-  firehose: {
-    default: 'all',
-    tabs: {
-      all: () => ({
-        filters: getFirehoseFilters(),
-        clientFilters: { and: ['firehose'] },
-        groupBy: 'date',
-      }),
-    },
-  },
-  // Personal activity timeline: a date-grouped feed of everything the user
-  // has done recently.
-  'my-activity': {
-    default: 'all',
-    tabs: {
-      all: (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: getMyActivityFilters(ctx.userId),
-          clientFilters: { and: ['my-activity'] },
-          groupBy: 'date',
-        };
-      },
     },
   },
   agents: {
@@ -532,12 +501,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
 };
 
 /** Views whose default tab requires user context */
-type ContextRequiredView =
-  | 'agents'
-  | 'documents'
-  | 'tasks'
-  | 'folders'
-  | 'my-activity';
+type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'folders';
 
 /** Views whose default tab works without user context */
 type ContextOptionalView = Exclude<ListView, ContextRequiredView>;

@@ -1,3 +1,5 @@
+import { FirehoseView } from '@app/features/activity-timeline/firehose-view';
+import { MyActivityView } from '@app/features/activity-timeline/my-activity-view';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
@@ -161,15 +163,7 @@ registerComponent(
   'firehose',
   withAuth(() => {
     usePageViewTracking('firehose');
-    const preset = getViewPreset('firehose');
-    return (
-      <SoupView
-        viewName="Firehose"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
+    return <FirehoseView />;
   })
 );
 
@@ -177,19 +171,7 @@ registerComponent(
   'my-activity',
   withAuth(() => {
     usePageViewTracking('my-activity');
-    const user = useUserContext();
-    const preset = getViewPreset('my-activity', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    return (
-      <SoupView
-        viewName="Things I did"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
+    return <MyActivityView />;
   })
 );
 

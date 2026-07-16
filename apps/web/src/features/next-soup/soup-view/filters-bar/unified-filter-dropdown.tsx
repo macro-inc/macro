@@ -377,8 +377,6 @@ export function buildContactLabel(
 
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   inbox: INBOX_FILTER_CATEGORIES,
-  firehose: [],
-  'my-activity': [],
   agents: [],
   mail: MAIL_FILTER_CATEGORIES,
   documents: DOCUMENTS_FILTER_CATEGORIES,

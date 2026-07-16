@@ -172,7 +172,7 @@ const SIDEBAR_LINKS = [
   {
     id: 'firehose',
     label: 'Firehose',
-    href: LIST_VIEW_PATHS.firehose,
+    href: '/firehose',
     icon: FireIcon,
     hotkey: 'w',
     hotkeyToken: TOKENS.sidebar.goTo.firehose,
@@ -180,7 +180,7 @@ const SIDEBAR_LINKS = [
   {
     id: 'my-activity',
     label: 'Things I did',
-    href: LIST_VIEW_PATHS['my-activity'],
+    href: '/my-activity',
     icon: ClockCounterClockwiseIcon,
     hotkey: 'm',
     hotkeyToken: TOKENS.sidebar.goTo.myActivity,
