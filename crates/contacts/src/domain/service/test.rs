@@ -71,8 +71,10 @@ async fn explicit_connections_do_not_create_a_complete_graph() {
 
     let connections = service.repository.connections.lock().unwrap();
     assert_eq!(connections.len(), 2);
-    assert!(connections.contains(&(owner.clone(), first)));
-    assert!(connections.contains(&(owner, second)));
+    assert!(connections.contains(&(owner.clone(), first.clone())));
+    assert!(connections.contains(&(owner, second.clone())));
+    assert!(!connections.contains(&(first.clone(), second.clone())));
+    assert!(!connections.contains(&(second, first)));
 }
 
 fn generate_sqs_message() -> aws_sdk_sqs::types::Message {

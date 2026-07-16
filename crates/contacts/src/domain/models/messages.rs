@@ -8,6 +8,7 @@ mod test;
 /// A contacts SQS message carrying the list of user IDs to connect. All users in the set will
 /// get connected with all other users in the set.
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct ContactsNodes {
     /// User IDs whose pairwise connections should be upserted.
     pub users: HashSet<MacroUserIdStr<'static>>,
@@ -31,6 +32,7 @@ impl ContactConnection {
 
 /// A contacts SQS message carrying only explicitly requested relationships.
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContactConnections {
     /// Relationships to upsert.
     pub connections: Vec<ContactConnection>,

@@ -32,6 +32,15 @@ fn consumer_deserializes_existing_nodes_message() {
 }
 
 #[test]
+fn consumer_rejects_message_with_both_shapes() {
+    let message = serde_json::from_str::<ContactsMessage>(
+        r#"{"users":["macro|owner@example.com"],"connections":[]}"#,
+    );
+
+    assert!(message.is_err());
+}
+
+#[test]
 fn consumer_deserializes_explicit_connections_message() {
     let message: ContactsMessage = serde_json::from_str(
         r#"{"connections":[{"first":"macro|owner@example.com","second":"macro|contact@example.com"}]}"#,
