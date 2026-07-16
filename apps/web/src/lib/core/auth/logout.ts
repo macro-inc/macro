@@ -3,14 +3,14 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
-import { authKeys } from '@queries/auth/user-info';
+import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { authServiceClient } from '@service-auth/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 
-const unauthenticatedUserInfo = {
+const unauthenticatedUserInfo: UserInfoData = {
   id: '',
   permissions: [],
   email: '',
@@ -22,6 +22,8 @@ const unauthenticatedUserInfo = {
   authenticated: false,
   userId: '',
   hasTrialed: false,
+  aiDataConsent: false,
+  referralCode: '',
 };
 
 export async function clearLocalAuthSession() {

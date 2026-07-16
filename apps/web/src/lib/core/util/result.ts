@@ -25,9 +25,9 @@ export class ThrownResultError<E extends string = string> extends Error {
 }
 
 /** True when `error` is a ThrownResultError carrying the given error code. */
-export function thrownResultErrorHasCode<E extends string>(
+export function thrownResultErrorHasCode(
   error: unknown,
-  code: E
+  code: string
 ): boolean {
   return (
     error instanceof ThrownResultError &&

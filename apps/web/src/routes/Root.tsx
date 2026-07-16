@@ -221,8 +221,10 @@ function shouldShowNativeOfflineFallback(
 function SessionExpiredRedirect() {
   // Component bodies run once in Solid; the synchronous cookie/storage
   // clearing completes before <Navigate> mounts.
-  void clearLocalAuthSession();
-  return <Navigate href={`/welcome${window.location.search}`} />;
+  void clearLocalAuthSession().catch((error) => {
+    console.error('Failed to clear local auth session', error);
+  });
+  return <Navigate href={`/welcome${getCurrentQueryString()}`} />;
 }
 
 function OfflineFallbackRoute() {
@@ -283,7 +285,10 @@ function BasePathComponent() {
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
       <Match
-        when={thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')}
+        when={
+          hasLoginCookie() &&
+          thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
+        }
       >
         <SessionExpiredRedirect />
       </Match>
@@ -291,12 +296,12 @@ function BasePathComponent() {
         <Navigate href={redirectPath} />
       </Match>
       <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <Navigate href={`${OFFLINE_ROUTE}${window.location.search}`} />
+        <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
       </Match>
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={`/welcome${window.location.search}`} />
+        <Navigate href={`/welcome${queryString}`} />
       </Match>
     </Switch>
   );
