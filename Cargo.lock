@@ -2968,7 +2968,6 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
- "macro_middleware",
  "macro_user_id",
  "mockall",
  "model",

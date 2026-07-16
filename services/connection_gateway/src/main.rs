@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
 
     let config = Arc::new(config);
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_args.clone()),
+        MacroAuthJwtValidator::new(jwt_args),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -132,9 +132,7 @@ async fn main() -> Result<()> {
 
     let app = router(AppState {
         context,
-        internal_api_key: config.internal_api_key.clone(),
         config: Arc::clone(&config),
-        jwt_args,
         authorization_state,
         frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
             PullAggregatorImpl::new(FrecencyPgProcessor::new(pgpool), DefaultTime),
