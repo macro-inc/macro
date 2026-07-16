@@ -37,7 +37,6 @@ mod instructions;
 mod internal;
 mod notification;
 mod pins;
-mod projects;
 mod recents;
 mod user;
 mod user_document_view_location;
@@ -163,10 +162,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/projects",
-            projects::router(state.clone())
-                .merge(projects_hex::inbound::axum_router::projects_router(
-                    state.projects_state.clone(),
-                ))
+            projects_hex::inbound::axum_router::projects_router(state.projects_state.clone())
                 .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
                     |req: Request, next: Next| async move {
                         match req.method() {

@@ -111,11 +111,6 @@ use webhook::{
     },
 };
 
-#[derive(Debug, Clone)]
-pub struct InternalFlag {
-    pub internal: bool,
-}
-
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::companies_repo::CompaniesRepositoryImpl,

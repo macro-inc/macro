@@ -4250,7 +4250,6 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_middleware",
- "macro_project_utils",
  "macro_queues",
  "macro_service_urls",
  "macro_sha_count_client",
@@ -8389,18 +8388,6 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "macro_project_utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "sqlx",
- "sqs_client",
- "tokio",
- "tracing",
  "workspace-hack",
 ]
 
