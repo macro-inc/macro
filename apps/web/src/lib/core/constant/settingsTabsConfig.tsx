@@ -21,7 +21,6 @@ import {
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
-  ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
