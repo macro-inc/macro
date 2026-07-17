@@ -1,16 +1,18 @@
-use super::context::ApiContext;
+use super::{
+    context::{ApiContext, AuthorizationService},
+    jwt_session::JwtSessionContext,
+};
 use crate::api::utils::{create_access_token_cookie, create_refresh_token_cookie};
 use axum::{
-    Extension, Json, Router,
+    Json, Router,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::decode_jwt::JwtContext;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::EmptyResponse;
-use model::user::UserContext;
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
 
@@ -37,11 +39,11 @@ pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
             (status = 200, body= EmptyResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context, jwt_context, cookies), fields(user_id=%user_context.user_id, organization_id=?user_context.organization_id, audience=%jwt_context.audience, tid=%jwt_context.tid))]
+#[tracing::instrument(skip(ctx, authorization, jwt_session, cookies), fields(user_id=%authorization.user_context.user_id, organization_id=?authorization.user_context.organization_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    jwt_context: Extension<JwtContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
+    JwtSessionContext(jwt_session): JwtSessionContext,
     cookies: Cookies,
 ) -> Result<Response, Response> {
     // Remove access token cookie
@@ -54,9 +56,11 @@ pub async fn handler(
     refresh_token_cookie.set_expires(Some(time::OffsetDateTime::now_utc()));
     cookies.add(refresh_token_cookie);
 
-    // Logout of fusionauth
-    if let Err(e) = ctx.auth_client.logout(&jwt_context.tid).await {
-        tracing::warn!(error=%e, "error logging out");
+    // Logout of fusionauth when the request used a FusionAuth session.
+    if let Some(jwt_context) = jwt_session {
+        if let Err(e) = ctx.auth_client.logout(&jwt_context.tid).await {
+            tracing::warn!(error=?e, "error logging out");
+        }
     }
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
