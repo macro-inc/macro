@@ -463,6 +463,7 @@ where
     async fn permanently_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _project: BasicProject,
     ) -> Result<(), ProjectError> {
         let purged = self
             .repo

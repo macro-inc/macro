@@ -304,6 +304,7 @@ pub trait ProjectService: Send + Sync + 'static {
     fn permanently_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project: BasicProject,
     ) -> impl Future<Output = Result<(), ProjectError>> + Send;
 
     /// Restore a soft-deleted project subtree.

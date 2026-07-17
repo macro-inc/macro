@@ -1109,11 +1109,12 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
         None,
     );
 
+    let project_id = Uuid::new_v4();
     service
-        .permanently_delete_project(mutation_receipt::<OwnerAccessLevel>(
-            Uuid::new_v4(),
-            AccessLevel::Owner,
-        ))
+        .permanently_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, true),
+        )
         .await
         .unwrap();
 
@@ -1137,11 +1138,12 @@ async fn permanent_delete_has_no_external_side_effects_when_purge_fails() {
         .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("commit failed")) }));
     let service = service(repo, RecordingBulkUpload::default());
 
+    let project_id = Uuid::new_v4();
     let result = service
-        .permanently_delete_project(mutation_receipt::<OwnerAccessLevel>(
-            Uuid::new_v4(),
-            AccessLevel::Owner,
-        ))
+        .permanently_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, true),
+        )
         .await;
 
     assert!(result.is_err());

@@ -85,11 +85,12 @@ where
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, access), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(skip(state, user, access, project), fields(user_id=?user.macro_user_id), err)]
 pub async fn permanently_delete_project_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
     access: ProjectAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    Extension(project): Extension<BasicProject>,
 ) -> Result<Json<SuccessResponse>, ProjectError>
 where
     T: ProjectService,
@@ -98,7 +99,7 @@ where
 {
     state
         .service
-        .permanently_delete_project(access.entity_access_receipt)
+        .permanently_delete_project(access.entity_access_receipt, project)
         .await?;
 
     Ok(Json(SuccessResponse {

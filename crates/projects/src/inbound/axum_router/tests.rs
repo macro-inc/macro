@@ -55,6 +55,7 @@ const PROJECT_ID: &str = "project-1";
 struct FakeProjectService {
     basic_project: Arc<Mutex<Result<BasicProject, String>>>,
     mutations: Arc<Mutex<Vec<&'static str>>>,
+    permanently_deleted_projects: Arc<Mutex<Vec<BasicProject>>>,
     upload_internal_flags: Arc<Mutex<Vec<bool>>>,
 }
 
@@ -69,6 +70,7 @@ impl FakeProjectService {
                 deleted_at: deleted.then(chrono::Utc::now),
             }))),
             mutations: Arc::new(Mutex::new(Vec::new())),
+            permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -77,6 +79,7 @@ impl FakeProjectService {
         Self {
             basic_project: Arc::new(Mutex::new(Err("missing".to_string()))),
             mutations: Arc::new(Mutex::new(Vec::new())),
+            permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -176,11 +179,16 @@ impl ProjectService for FakeProjectService {
     async fn permanently_delete_project(
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
+        project: BasicProject,
     ) -> Result<(), ProjectError> {
         self.mutations
             .lock()
             .expect("mutation lock poisoned")
             .push("permanent_delete");
+        self.permanently_deleted_projects
+            .lock()
+            .expect("permanently deleted project lock poisoned")
+            .push(project);
         Ok(())
     }
 
@@ -808,6 +816,36 @@ async fn internal_upload_selects_internal_destinations_with_exact_lambda_json() 
                 "destinationMap": {}
             }
         })
+    );
+}
+
+#[tokio::test]
+async fn permanent_delete_forwards_loaded_project() {
+    let service = FakeProjectService::with_project(USER_ID, true);
+    let expected_project = service
+        .basic_project
+        .lock()
+        .expect("basic project lock poisoned")
+        .as_ref()
+        .expect("project should exist")
+        .clone();
+    let deleted_projects = service.permanently_deleted_projects.clone();
+    let response = router(service, Some(AccessLevel::Owner))
+        .oneshot(
+            Request::delete(format!("/{PROJECT_ID}/permanent"))
+                .header("authorization", format!("Bearer {TOKEN}"))
+                .body(Body::empty())
+                .expect("request should be valid"),
+        )
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        *deleted_projects
+            .lock()
+            .expect("permanently deleted project lock poisoned"),
+        vec![expected_project]
     );
 }
 
