@@ -103,14 +103,6 @@ function makeFakeHost(): FakeHost {
         totalCount: null,
       };
     },
-    async searchIndexedItems() {
-      return {
-        items: [],
-        nextCursor: null,
-        hasMore: false,
-        totalCount: null,
-      };
-    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,

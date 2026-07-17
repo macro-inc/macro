@@ -43,6 +43,7 @@ describe('CacheWorkerCore indexed queries', () => {
 
     expect(queryIndexedItems).toHaveBeenCalledWith(
       ['document'],
+      undefined,
       'cursor-1',
       25,
       true

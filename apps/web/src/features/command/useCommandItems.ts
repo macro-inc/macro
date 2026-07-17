@@ -327,7 +327,7 @@ function useQuickAccessBuckets(
 ): Record<CategoryFilter, () => CommandMenuItem[]> {
   const quickAccess = useQuickAccess();
   const commandsList = useCommandsList(commandScopeCommands);
-  const entitiesList = quickAccess.useList(...exclude('person'));
+  const entitiesList = quickAccess.useList(...exclude('person')).items;
 
   const allWithCommands = createMemo((): CommandMenuItem[] =>
     mergeSortedArrays(
@@ -339,13 +339,14 @@ function useQuickAccessBuckets(
 
   return {
     all: allWithCommands,
-    channels: quickAccess.useList('channel'),
-    dms: quickAccess.useList('dm'),
-    documents: quickAccess.useList('note', 'document', 'snippet', 'project'),
-    tasks: quickAccess.useList('task'),
-    chats: quickAccess.useList('chat'),
-    projects: quickAccess.useList('project'),
-    people: quickAccess.useList('person'),
+    channels: quickAccess.useList('channel').items,
+    dms: quickAccess.useList('dm').items,
+    documents: quickAccess.useList('note', 'document', 'snippet', 'project')
+      .items,
+    tasks: quickAccess.useList('task').items,
+    chats: quickAccess.useList('chat').items,
+    projects: quickAccess.useList('project').items,
+    people: quickAccess.useList('person').items,
     commands: commandsList,
   };
 }

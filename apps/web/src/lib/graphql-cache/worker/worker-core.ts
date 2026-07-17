@@ -8,7 +8,6 @@ import type {
   CacheRequest,
   CacheResponse,
   IndexedEntityPage,
-  IndexedEntitySearchPage,
   OptimisticWriteResult,
   ReadResult,
   WriteResult,
@@ -75,17 +74,7 @@ export class CacheWorkerCore {
         const engine = this.requireEngine();
         const result: IndexedEntityPage = await engine.queryIndexedItems(
           request.buckets,
-          request.cursor,
-          request.limit,
-          request.includeTotalCount
-        );
-        return result;
-      }
-      case 'search-indexed-items': {
-        const engine = this.requireEngine();
-        const result: IndexedEntitySearchPage = await engine.searchIndexedItems(
-          request.buckets,
-          request.query,
+          request.searchTerm,
           request.cursor,
           request.limit,
           request.includeTotalCount

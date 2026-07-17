@@ -1,6 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
-import type { EntityItem } from '@core/context/quickAccess';
+import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -59,8 +59,20 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   const analytics = useAnalytics();
 
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const quickAccess = useQuickAccess();
+  let clearSearchTerm: (() => void) | undefined;
+  createEffect(() => {
+    if (!props.menu.isOpen()) {
+      clearSearchTerm?.();
+      clearSearchTerm = undefined;
+      return;
+    }
+    clearSearchTerm?.();
+    clearSearchTerm = quickAccess.setSearchTerm(searchTerm);
+  });
+  onCleanup(() => clearSearchTerm?.());
 
-  const { searchedEntities: snippets } = useEntityMention({
+  const { entities: snippets } = useEntityMention({
     buckets: ['snippet'],
     searchTerm,
   });

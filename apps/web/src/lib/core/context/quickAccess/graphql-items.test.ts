@@ -22,7 +22,7 @@ describe('indexedEntityToQuickAccessItem', () => {
   it('maps indexed document subtypes and preserves index ordering metadata', () => {
     const item = indexedEntityToQuickAccessItem(
       indexed({
-        bucket: 'task',
+        bucket: 'document',
         entity: {
           id: 'entity-1',
           documentName: 'My task',
@@ -71,7 +71,7 @@ describe('indexedEntityToQuickAccessItem', () => {
     const item = indexedEntityToQuickAccessItem(
       indexed({
         id: 'channel-1',
-        bucket: 'dm',
+        bucket: 'channel',
         entity: {
           id: 'channel-1',
           channelName: 'Taylor',

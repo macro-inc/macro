@@ -5,6 +5,7 @@ export type {
   EntityBucket,
   EntityItem,
   QuickAccessItem,
+  QuickAccessList,
   UserItem,
 } from './types';
 export { exclude } from './types';

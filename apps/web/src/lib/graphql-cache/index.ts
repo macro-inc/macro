@@ -19,15 +19,12 @@ export type {
   CacheRequest,
   CacheResponse,
   EntityIndexCursor,
-  EntitySearchCursor,
   IndexedEntityBucket,
   IndexedEntityItem,
   IndexedEntityPage,
-  IndexedEntitySearchPage,
   OptimisticWriteResult,
   QueryIndexedItemsArgs,
   ReadResult,
-  SearchIndexedItemsArgs,
   WriteResult,
 } from './protocol';
 export {

@@ -109,10 +109,7 @@ function snapshotObject(
 function indexedSnapshotToEntity(item: IndexedEntityItem): EntityData {
   const snapshot = item.entity;
   const nameField =
-    item.bucket === 'document' ||
-    item.bucket === 'note' ||
-    item.bucket === 'task' ||
-    item.bucket === 'snippet'
+    item.bucket === 'document'
       ? 'documentName'
       : item.bucket === 'chat'
         ? 'chatName'
@@ -120,7 +117,7 @@ function indexedSnapshotToEntity(item: IndexedEntityItem): EntityData {
           ? 'projectName'
           : item.bucket === 'email'
             ? 'emailName'
-            : item.bucket === 'channel' || item.bucket === 'dm'
+            : item.bucket === 'channel'
               ? 'channelName'
               : 'crmCompanyName';
   const name =
@@ -138,24 +135,18 @@ function indexedSnapshotToEntity(item: IndexedEntityItem): EntityData {
   };
 
   switch (item.bucket) {
-    case 'document':
-    case 'note':
-    case 'task':
-    case 'snippet': {
+    case 'document': {
       const subtype = snapshotObject(snapshot, 'subType');
       const subtypeKind = snapshotString(subtype ?? {}, 'kind')?.toLowerCase();
       const kind =
-        item.bucket === 'task' || item.bucket === 'snippet'
-          ? item.bucket
-          : subtypeKind === 'task' || subtypeKind === 'snippet'
-            ? subtypeKind
-            : undefined;
+        subtypeKind === 'task' || subtypeKind === 'snippet'
+          ? subtypeKind
+          : undefined;
       return {
         ...base,
         type: 'document',
         fileType:
-          snapshotString(snapshot, 'fileType') ??
-          (item.bucket === 'note' || kind ? 'md' : undefined),
+          snapshotString(snapshot, 'fileType') ?? (kind ? 'md' : undefined),
         projectId: snapshotString(snapshot, 'projectId'),
         subType: kind
           ? {
@@ -182,8 +173,7 @@ function indexedSnapshotToEntity(item: IndexedEntityItem): EntityData {
         name: name || 'New Project',
         projectId: snapshotString(snapshot, 'parentId'),
       };
-    case 'channel':
-    case 'dm': {
+    case 'channel': {
       const rawChannelType = snapshotString(
         snapshot,
         'channelType'
@@ -195,9 +185,7 @@ function indexedSnapshotToEntity(item: IndexedEntityItem): EntityData {
         'team',
       ].includes(rawChannelType ?? '')
         ? (rawChannelType as 'direct_message' | 'private' | 'public' | 'team')
-        : item.bucket === 'dm'
-          ? 'direct_message'
-          : 'public';
+        : 'public';
       return {
         ...base,
         type: 'channel',
@@ -263,7 +251,6 @@ export function indexedEntityToQuickAccessItem(
   return item
     ? {
         ...item,
-        bucket: indexedItem.bucket,
         sortTimestamp: indexedItem.sortTimestamp,
       }
     : undefined;

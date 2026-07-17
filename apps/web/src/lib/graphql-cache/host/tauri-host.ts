@@ -12,13 +12,11 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   type ClaimedMutation,
   type IndexedEntityPage,
-  type IndexedEntitySearchPage,
   type MutationClaim,
   normalizeIndexedEntityLimit,
   type OptimisticWriteResult,
   type QueryIndexedItemsArgs,
   type ReadResult,
-  type SearchIndexedItemsArgs,
   type WriteResult,
 } from '../protocol';
 import type { CacheHost, CacheReadArgs, CacheWriteArgs } from './types';
@@ -145,23 +143,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache_query_indexed_items',
         {
           buckets: args.buckets ?? [],
-          cursor: args.cursor,
-          limit,
-          includeTotalCount: args.includeTotalCount ?? false,
-        }
-      );
-    },
-
-    async searchIndexedItems(
-      args: SearchIndexedItemsArgs
-    ): Promise<IndexedEntitySearchPage> {
-      const limit = normalizeIndexedEntityLimit(args.limit);
-      await ready;
-      return await request<IndexedEntitySearchPage>(
-        'graphql_cache_search_indexed_items',
-        {
-          buckets: args.buckets ?? [],
-          query: args.query,
+          ...(args.searchTerm ? { searchTerm: args.searchTerm } : {}),
           cursor: args.cursor,
           limit,
           includeTotalCount: args.includeTotalCount ?? false,

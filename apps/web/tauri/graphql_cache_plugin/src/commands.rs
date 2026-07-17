@@ -20,9 +20,27 @@ use cache_core::entity_index::{
     IndexedEntityPage, IndexedEntitySearchPage,
 };
 use cache_sqlite::SqliteStorage;
+use serde::{Serialize, de::DeserializeOwned};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
+
+/// Unified wire page for indexed browsing and search.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum IndexedEntityPageWire {
+    /// A recency-ordered browse page.
+    Browse(IndexedEntityPage),
+    /// A relevance-ordered search page.
+    Search(IndexedEntitySearchPage),
+}
+
+fn parse_cursor<T: DeserializeOwned>(cursor: Option<String>) -> Result<Option<T>, String> {
+    cursor
+        .map(|value| serde_json::from_value(serde_json::Value::String(value)))
+        .transpose()
+        .map_err(|error| error.to_string())
+}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -91,39 +109,33 @@ pub async fn graphql_cache_read(
 pub async fn graphql_cache_query_indexed_items(
     state: State<'_, CacheState>,
     buckets: Vec<EntityBucket>,
-    cursor: Option<EntityIndexCursor>,
+    search_term: Option<String>,
+    cursor: Option<String>,
     limit: u32,
     include_total_count: bool,
-) -> Result<IndexedEntityPage, String> {
-    engine_handle(&state)?
-        .query_indexed_items(EntityIndexQuery {
-            buckets,
-            cursor,
-            limit: limit as usize,
-            include_total_count,
-        })
-        .await
-}
-
-/// Searches projected durable entity metadata.
-#[tauri::command]
-pub async fn graphql_cache_search_indexed_items(
-    state: State<'_, CacheState>,
-    buckets: Vec<EntityBucket>,
-    query: String,
-    cursor: Option<EntitySearchCursor>,
-    limit: u32,
-    include_total_count: bool,
-) -> Result<IndexedEntitySearchPage, String> {
-    engine_handle(&state)?
-        .search_indexed_items(EntitySearchQuery {
-            buckets,
-            query,
-            cursor,
-            limit: limit as usize,
-            include_total_count,
-        })
-        .await
+) -> Result<IndexedEntityPageWire, String> {
+    let handle = engine_handle(&state)?;
+    match search_term.filter(|term| !term.is_empty()) {
+        Some(query) => handle
+            .search_indexed_items(EntitySearchQuery {
+                buckets,
+                query,
+                cursor: parse_cursor::<EntitySearchCursor>(cursor)?,
+                limit: limit as usize,
+                include_total_count,
+            })
+            .await
+            .map(IndexedEntityPageWire::Search),
+        None => handle
+            .query_indexed_items(EntityIndexQuery {
+                buckets,
+                cursor: parse_cursor::<EntityIndexCursor>(cursor)?,
+                limit: limit as usize,
+                include_total_count,
+            })
+            .await
+            .map(IndexedEntityPageWire::Browse),
+    }
 }
 
 /// Normalizes and stores a network response; broadcasts affected operations

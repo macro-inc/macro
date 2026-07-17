@@ -18,7 +18,7 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
-import type { Accessor, Component } from 'solid-js';
+import type { Component } from 'solid-js';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type { QuickAccessSourceProps } from './context';
 import type {
@@ -28,6 +28,7 @@ import type {
   QuickAccessContextValue,
   QuickAccessEntity,
   QuickAccessItem,
+  QuickAccessList,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
 
@@ -674,8 +675,8 @@ function createLegacyQuickAccessValue(): QuickAccessContextValue {
   // 4. Other combinations = merge-sort bucket lists
   //
   // Items are resolved lazily
-  const useList = <B extends Bucket>(...buckets: B[]): Accessor<any> => {
-    return createLazyMemo(() => {
+  const useList = <B extends Bucket>(...buckets: B[]): QuickAccessList<any> => {
+    const list = createLazyMemo(() => {
       let indices: IndexEntry[];
 
       if (buckets.length === 0) {
@@ -700,7 +701,17 @@ function createLegacyQuickAccessValue(): QuickAccessContextValue {
 
       return resolveEntries(indices);
     });
+    return {
+      items: list,
+      totalCount: () => list().length,
+      hasMore: () => false,
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      loadMore: async () => undefined,
+    };
   };
+
+  const setSearchTerm = () => () => undefined;
 
   // CRM companies are additive — they fold into the list when their query
   // resolves rather than gating quick access on a slower/failing CRM fetch.
@@ -714,6 +725,8 @@ function createLegacyQuickAccessValue(): QuickAccessContextValue {
 
   return {
     useList,
+    setSearchTerm,
+    usesIndexedEntityQuery: () => false,
     isLoading,
     refresh,
     getById,

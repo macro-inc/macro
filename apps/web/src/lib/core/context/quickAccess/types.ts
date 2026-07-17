@@ -131,21 +131,40 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
   ? ItemForBucket<First> | ItemsForBuckets<Rest>
   : never;
 
+export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
+  items: Accessor<T[]>;
+  /** Total matching items, including pages not loaded yet. */
+  totalCount: Accessor<number>;
+  hasMore: Accessor<boolean>;
+  isLoading: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
+};
+
 export type QuickAccessContextValue = {
   /**
    * Get items from specific buckets, cached and reactive.
    * Returns all items if no buckets specified.
    *
    * @example
-   * const channels = quickAccess.useList('channel', 'dm');
-   * const people = quickAccess.useList('person');
-   * const everything = quickAccess.useList();
+   * const channels = quickAccess.useList('channel', 'dm').items;
+   * const people = quickAccess.useList('person').items;
+   * const everything = quickAccess.useList().items;
    */
   useList: {
-    (): Accessor<QuickAccessItem[]>;
-    <B extends Bucket>(...buckets: [B]): Accessor<ItemForBucket<B>[]>;
-    <B extends Bucket[]>(...buckets: B): Accessor<ItemsForBuckets<B>[]>;
+    (): QuickAccessList;
+    <B extends Bucket>(...buckets: [B]): QuickAccessList<ItemForBucket<B>>;
+    <B extends Bucket[]>(...buckets: B): QuickAccessList<ItemsForBuckets<B>>;
   };
+
+  /**
+   * Drives cache-backed search for the active indexed source. The returned
+   * cleanup restores ordinary unfiltered Quick Access browsing.
+   */
+  setSearchTerm: (searchTerm: Accessor<string>) => () => void;
+
+  /** Whether this source uses the cache-backed indexed entity query. */
+  usesIndexedEntityQuery: Accessor<boolean>;
 
   /**
    * Whether any data sources are still loading.

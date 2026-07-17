@@ -191,45 +191,48 @@ fn parse_buckets(buckets: JsValue) -> Result<Vec<EntityBucket>, JsValue> {
     }
 }
 
-fn parse_index_query(
-    buckets: JsValue,
-    cursor: JsValue,
-    limit: u32,
-    include_total_count: bool,
-) -> Result<EntityIndexQuery, JsValue> {
-    let buckets = parse_buckets(buckets)?;
-    let cursor = if cursor.is_undefined() || cursor.is_null() {
-        None
-    } else {
-        Some(serde_wasm_bindgen::from_value::<EntityIndexCursor>(cursor).map_err(err_js)?)
-    };
-    Ok(EntityIndexQuery {
-        buckets,
-        cursor,
-        limit: limit as usize,
-        include_total_count,
-    })
+enum ParsedIndexedQuery {
+    Browse(EntityIndexQuery),
+    Search(EntitySearchQuery),
 }
 
-fn parse_search_query(
+fn parse_indexed_query(
     buckets: JsValue,
-    query: String,
+    search_term: Option<String>,
     cursor: JsValue,
     limit: u32,
     include_total_count: bool,
-) -> Result<EntitySearchQuery, JsValue> {
-    let cursor = if cursor.is_undefined() || cursor.is_null() {
-        None
-    } else {
-        Some(serde_wasm_bindgen::from_value::<EntitySearchCursor>(cursor).map_err(err_js)?)
-    };
-    Ok(EntitySearchQuery {
-        buckets: parse_buckets(buckets)?,
-        query,
-        cursor,
-        limit: limit as usize,
-        include_total_count,
-    })
+) -> Result<ParsedIndexedQuery, JsValue> {
+    let buckets = parse_buckets(buckets)?;
+    match search_term.filter(|term| !term.is_empty()) {
+        Some(query) => {
+            let cursor = if cursor.is_undefined() || cursor.is_null() {
+                None
+            } else {
+                Some(serde_wasm_bindgen::from_value::<EntitySearchCursor>(cursor).map_err(err_js)?)
+            };
+            Ok(ParsedIndexedQuery::Search(EntitySearchQuery {
+                buckets,
+                query,
+                cursor,
+                limit: limit as usize,
+                include_total_count,
+            }))
+        }
+        None => {
+            let cursor = if cursor.is_undefined() || cursor.is_null() {
+                None
+            } else {
+                Some(serde_wasm_bindgen::from_value::<EntityIndexCursor>(cursor).map_err(err_js)?)
+            };
+            Ok(ParsedIndexedQuery::Browse(EntityIndexQuery {
+                buckets,
+                cursor,
+                limit: limit as usize,
+                include_total_count,
+            }))
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -267,36 +270,26 @@ impl CacheEngine {
     pub fn query_indexed_items(
         &self,
         buckets: JsValue,
+        search_term: Option<String>,
         cursor: JsValue,
         limit: u32,
         include_total_count: bool,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         future_to_promise(async move {
-            let query = parse_index_query(buckets, cursor, limit, include_total_count)?;
+            let query =
+                parse_indexed_query(buckets, search_term, cursor, limit, include_total_count)?;
             let mut engine = engine.lock().await;
-            let page = engine.query_indexed_items(&query).await.map_err(err_js)?;
-            to_js(&page)
-        })
-    }
-
-    /// Searches projected durable entity metadata and hydrates only one
-    /// matching page.
-    #[wasm_bindgen(js_name = searchIndexedItems)]
-    pub fn search_indexed_items(
-        &self,
-        buckets: JsValue,
-        query: String,
-        cursor: JsValue,
-        limit: u32,
-        include_total_count: bool,
-    ) -> js_sys::Promise {
-        let engine = self.engine.clone();
-        future_to_promise(async move {
-            let query = parse_search_query(buckets, query, cursor, limit, include_total_count)?;
-            let mut engine = engine.lock().await;
-            let page = engine.search_indexed_items(&query).await.map_err(err_js)?;
-            to_js(&page)
+            match query {
+                ParsedIndexedQuery::Browse(query) => {
+                    let page = engine.query_indexed_items(&query).await.map_err(err_js)?;
+                    to_js(&page)
+                }
+                ParsedIndexedQuery::Search(query) => {
+                    let page = engine.search_indexed_items(&query).await.map_err(err_js)?;
+                    to_js(&page)
+                }
+            }
         })
     }
 

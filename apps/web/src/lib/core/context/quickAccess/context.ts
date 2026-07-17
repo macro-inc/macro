@@ -1,11 +1,11 @@
-import { createLazyMemo } from '@solid-primitives/memo';
 import {
   type Accessor,
   createContext,
+  createMemo,
   createSignal,
   useContext,
 } from 'solid-js';
-import type { Bucket, QuickAccessContextValue, QuickAccessItem } from './types';
+import type { Bucket, QuickAccessContextValue, QuickAccessList } from './types';
 
 const QuickAccessContext = createContext<QuickAccessContextValue>();
 
@@ -43,27 +43,27 @@ export function createQuickAccessContextFacade(): {
     QuickAccessContextValue | undefined
   >();
 
-  const useList = ((...buckets: Bucket[]): Accessor<QuickAccessItem[]> => {
-    const sourceLists = new WeakMap<
-      QuickAccessContextValue,
-      Accessor<QuickAccessItem[]>
-    >();
-
-    return createLazyMemo(() => {
-      const activeSource = source();
-      if (!activeSource) return [];
-
-      let list = sourceLists.get(activeSource);
-      if (!list) {
-        list = activeSource.useList(...buckets);
-        sourceLists.set(activeSource, list);
-      }
-      return list();
-    });
+  const useList = ((...buckets: Bucket[]): QuickAccessList => {
+    const sourceList = createMemo(() => source()?.useList(...buckets));
+    return {
+      items: () => sourceList()?.items() ?? [],
+      totalCount: () => sourceList()?.totalCount() ?? 0,
+      hasMore: () => sourceList()?.hasMore() ?? false,
+      isLoading: () => sourceList()?.isLoading() ?? false,
+      isLoadingMore: () => sourceList()?.isLoadingMore() ?? false,
+      loadMore: async () => {
+        await sourceList()?.loadMore();
+      },
+    };
   }) as QuickAccessContextValue['useList'];
+
+  const setSearchTerm = (searchTerm: Accessor<string>) =>
+    source()?.setSearchTerm(searchTerm) ?? (() => undefined);
 
   const value: QuickAccessContextValue = {
     useList,
+    setSearchTerm,
+    usesIndexedEntityQuery: () => source()?.usesIndexedEntityQuery() ?? false,
     isLoading: () => source()?.isLoading() ?? true,
     refresh: () => source()?.refresh(),
     getById: (id) => source()?.getById(id),

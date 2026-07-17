@@ -8,7 +8,7 @@ export default function QuickAccessAll() {
   const { useList } = useQuickAccess();
 
   // @example const entities = useList('task', 'note', 'document', 'project');
-  const entities = useList();
+  const entities = useList().items;
 
   return (
     <>

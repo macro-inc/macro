@@ -20,10 +20,8 @@ export type IndexedEntityBucket =
   | 'channel'
   | 'crm_company';
 
-/** Opaque exclusive cursor for deterministic indexed pagination. */
+/** Opaque cursor for indexed browsing or relevance-ordered search. */
 export type EntityIndexCursor = string;
-/** Opaque cursor for relevance-ordered indexed search. */
-export type EntitySearchCursor = string;
 
 /** Cache-only indexed entity snapshot. Normalized record links are omitted. */
 export type IndexedEntityItem = {
@@ -49,27 +47,11 @@ export const MAX_INDEXED_ENTITY_PAGE_SIZE = 500;
 export type QueryIndexedItemsArgs = {
   /** Empty or omitted means every indexed entity bucket. */
   buckets?: IndexedEntityBucket[];
+  /** Non-empty values switch the query to relevance-ordered search. */
+  searchTerm?: string;
   cursor?: EntityIndexCursor;
   limit: number;
   /** Request a bucket-wide count without hydrating additional records. */
-  includeTotalCount?: boolean;
-};
-
-export type IndexedEntitySearchPage = {
-  items: IndexedEntityItem[];
-  nextCursor: EntitySearchCursor | null;
-  hasMore: boolean;
-  totalCount: number | null;
-  /** Per-entity-type match totals, present alongside `totalCount`. */
-  bucketCounts?: Partial<Record<IndexedEntityBucket, number>> | null;
-};
-
-export type SearchIndexedItemsArgs = {
-  /** Empty or omitted means every indexed entity bucket. */
-  buckets?: IndexedEntityBucket[];
-  query: string;
-  cursor?: EntitySearchCursor;
-  limit: number;
   includeTotalCount?: boolean;
 };
 
@@ -190,15 +172,8 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'query-indexed-items';
       buckets: IndexedEntityBucket[];
+      searchTerm?: string;
       cursor?: EntityIndexCursor;
-      limit: number;
-      includeTotalCount: boolean;
-    }
-  | {
-      kind: 'search-indexed-items';
-      buckets: IndexedEntityBucket[];
-      query: string;
-      cursor?: EntitySearchCursor;
       limit: number;
       includeTotalCount: boolean;
     }
