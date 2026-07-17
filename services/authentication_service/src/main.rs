@@ -4,6 +4,7 @@ use analytics_client::{
 };
 use anyhow::{Context, anyhow};
 use config::{Config, Environment};
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use foreign_entity::{
@@ -41,7 +42,8 @@ use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
-        customer_repo::CustomerRepositoryImpl, team_analytics::AnalyticsClientTeamAnalytics,
+        contacts_enqueuer::ContactsIngressEnqueuer, customer_repo::CustomerRepositoryImpl,
+        team_analytics::AnalyticsClientTeamAnalytics,
         team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
     },
 };
@@ -287,6 +289,13 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
+    let contacts_ingress = Arc::new(SqsContactsIngress {
+        queue: SqsContactsQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            macro_queues::ContactsQueue::new().to_string(),
+        ),
+    });
+    let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress);
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
@@ -298,7 +307,8 @@ async fn main() -> anyhow::Result<()> {
         crm_enqueuer,
         team_crm_settings_repo_impl,
         team_analytics,
-    );
+    )
+    .with_contacts_enqueuer(contacts_enqueuer);
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
