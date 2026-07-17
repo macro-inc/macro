@@ -302,7 +302,8 @@ pub(crate) type DssChannelsState =
 pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;
 
 /// Type alias for the bots router state.
-pub(crate) type DssBotsState = BotsRouterState<DssBotService, EntityAccessService>;
+pub(crate) type DssBotsState =
+    BotsRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the channel bot webhook router state.
 pub(crate) type DssChannelBotWebhookState =
