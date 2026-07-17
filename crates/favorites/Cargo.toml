@@ -8,8 +8,8 @@ version = "0.1.0"
 default = []
 inbound = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/inbound",
   "ports",
@@ -25,11 +25,11 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 cowlike = { path = "../cowlike" }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true, optional = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
