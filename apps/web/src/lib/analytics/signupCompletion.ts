@@ -124,15 +124,18 @@ export function trackSignupCompletion(
 
   analytics.trackMeta(
     'CompleteRegistration',
+    // Must mirror the server-side payload in create_user_webhook.rs exactly:
+    // the create-user webhook fires this same event through the Conversions
+    // API with the same event id, and Meta keeps whichever of the deduped
+    // pair lands first (almost always the server). Accounts are always free
+    // at creation, so both sides report the flat signup value; the tier-based
+    // value below stays on the Google conversion, which is browser-only.
     {
       content_name: 'account_created',
-      content_category: tier,
-      value,
+      content_category: 'free',
+      value: SIGNUP_LEAD_VALUE_DEFAULT,
       currency: 'USD',
     },
-    // The create-user webhook fires this same event server-side with this
-    // exact event id; Meta keeps one of the pair and merges the browser's
-    // click-id cookies into the match.
     { eventID: `signup:${user.id}` }
   );
   analytics.trackGoogleConversion('signup', {

@@ -190,11 +190,14 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     MetaActionSource::Website,
                     Some(&format!("signup:{user_id}")),
                     serde_json::json!({
+                        // Must mirror the browser payload in the web app's
+                        // signupCompletion.ts: Meta keeps whichever of the
+                        // deduped pair lands first, so diverging payloads
+                        // would report a value that depends on race timing.
+                        // Accounts are always free at creation (value =
+                        // SIGNUP_LEAD_VALUE_DEFAULT in leadValues.ts); paid
+                        // value is tracked separately via the Stripe events.
                         "content_name": "account_created",
-                        // Accounts are always free at creation; paid value is
-                        // tracked separately via the Stripe webhook events.
-                        // Keep value in sync with SIGNUP_LEAD_VALUE_BY_TIER in
-                        // the web app's leadValues.ts.
                         "content_category": "free",
                         "value": 20,
                         "currency": "USD",
