@@ -77,6 +77,8 @@ pub struct MarkedUploadedTree {
     pub parent_id: Option<String>,
     /// Finalized project identifiers, including the root and all descendants.
     pub project_ids: Vec<String>,
+    /// Whether the root project's upload-pending state transitioned to finalized.
+    pub upload_pending_transitioned: bool,
 }
 
 /// Arguments for creating a pending project tree for a folder upload.

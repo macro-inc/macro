@@ -348,11 +348,24 @@ pub(super) async fn mark_projects_uploaded(
             SELECT child.id
             FROM "Project" child
             JOIN project_hierarchy parent ON child."parentId" = parent.id
+        ),
+        updated_projects AS (
+            UPDATE "Project"
+            SET "uploadPending" = false
+            WHERE id IN (SELECT id FROM project_hierarchy)
+              AND "uploadPending" = true
+            RETURNING id
         )
-        UPDATE "Project"
-        SET "uploadPending" = false
-        WHERE id IN (SELECT id FROM project_hierarchy)
-        RETURNING id, name, "userId" AS user_id, "parentId" AS parent_id
+        SELECT
+            project.id,
+            project.name,
+            project."userId" AS user_id,
+            project."parentId" AS parent_id,
+            EXISTS (
+                SELECT 1 FROM updated_projects WHERE id = $1
+            ) AS "upload_pending_transitioned!"
+        FROM "Project" project
+        JOIN project_hierarchy hierarchy ON hierarchy.id = project.id
         "#,
         root_project_id,
     )
@@ -376,6 +389,7 @@ pub(super) async fn mark_projects_uploaded(
         name: root.name.clone(),
         user_id,
         parent_id: root.parent_id.clone(),
+        upload_pending_transitioned: root.upload_pending_transitioned,
         project_ids: rows.into_iter().map(|row| row.id).collect(),
     })
 }

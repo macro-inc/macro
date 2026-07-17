@@ -1882,6 +1882,7 @@ async fn mark_projects_uploaded_publishes_root_metadata_and_returns_subtree_ids(
                     user_id: user_id("macro|owner@example.com"),
                     parent_id: Some("parent-project".to_string()),
                     project_ids,
+                    upload_pending_transitioned: true,
                 })
             })
         });
@@ -1911,6 +1912,36 @@ async fn mark_projects_uploaded_publishes_root_metadata_and_returns_subtree_ids(
             "project_ids": expected_project_ids,
         })
     );
+}
+
+#[tokio::test]
+async fn repeated_mark_projects_uploaded_returns_subtree_ids_without_publishing() {
+    let project_ids = vec!["root-project".to_string(), "child-project".to_string()];
+    let expected_project_ids = project_ids.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_mark_projects_uploaded().return_once(|_| {
+        Box::pin(async move {
+            Ok(MarkedUploadedTree {
+                id: "root-project".to_string(),
+                name: "Uploaded tree".to_string(),
+                user_id: user_id("macro|owner@example.com"),
+                parent_id: None,
+                project_ids,
+                upload_pending_transitioned: false,
+            })
+        })
+    });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
+
+    let result = service
+        .mark_projects_uploaded("root-project")
+        .await
+        .unwrap();
+
+    assert_eq!(result, expected_project_ids);
+    assert!(published.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -1954,6 +1985,7 @@ async fn mark_projects_uploaded_publication_failure_is_non_fatal() {
                 user_id: user_id("macro|owner@example.com"),
                 parent_id: None,
                 project_ids: vec!["root-project".to_string(), "child-project".to_string()],
+                upload_pending_transitioned: true,
             })
         })
     });

@@ -535,6 +535,7 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     assert_eq!(uploaded_tree.name, "Owner pending");
     assert_eq!(uploaded_tree.user_id.as_ref(), "macro|owner@test.com");
     assert_eq!(uploaded_tree.parent_id, None);
+    assert!(uploaded_tree.upload_pending_transitioned);
 
     let mut project_ids = uploaded_tree.project_ids;
     project_ids.sort();
@@ -552,6 +553,14 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     .fetch_one(&pool)
     .await?;
     assert_eq!(pending, 0);
+
+    let repeated = repo
+        .mark_projects_uploaded("10000000-0000-0000-0000-000000000006")
+        .await?;
+    assert!(!repeated.upload_pending_transitioned);
+    let mut repeated_project_ids = repeated.project_ids;
+    repeated_project_ids.sort();
+    assert_eq!(repeated_project_ids, project_ids);
 
     let missing_error = repo.mark_projects_uploaded("missing").await.unwrap_err();
     assert!(matches!(missing_error, sqlx::Error::RowNotFound));
