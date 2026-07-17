@@ -64,6 +64,12 @@ type AskAiItem = {
 /** Combined item type for command menu (quickAccess items + commands) */
 type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem | AskAiItem;
 
+export type PaginationControls = {
+  hasMore: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
+};
+
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
 }
@@ -371,7 +377,16 @@ function useQuickAccessCategory(
     );
   });
 
-  return { commands, items };
+  return {
+    items,
+    pagination: {
+      hasMore: () => activeList()?.hasMore() ?? false,
+      isLoadingMore: () => activeList()?.isLoadingMore() ?? false,
+      loadMore: async () => {
+        await activeList()?.loadMore();
+      },
+    } satisfies PaginationControls,
+  };
 }
 
 export function useCommandItems(
@@ -488,7 +503,10 @@ export function useCommandItems(
     return ranked;
   });
 
-  return filteredItems;
+  return {
+    items: filteredItems,
+    pagination: category.pagination,
+  };
 }
 
 export type { AskAiItem, CommandMenuItem, SearchItem, UserItem };
