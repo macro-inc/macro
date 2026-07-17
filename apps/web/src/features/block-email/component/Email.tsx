@@ -508,6 +508,8 @@ function EmailContent(props: EmailViewProps) {
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       blockSender: context.blockSender,
       markDone: context.archiveThread,
+      markNotDone: context.markThreadNotDone,
+      isThreadDone: context.isThreadDone,
       markSenderSignal: context.markSenderSignal,
       markSenderNoise: context.markSenderNoise,
       navigateToPreviousMessage,

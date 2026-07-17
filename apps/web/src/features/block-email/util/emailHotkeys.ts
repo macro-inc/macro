@@ -7,6 +7,9 @@ interface EmailHotkeyHandlers {
   forwardFocusedMessage: () => boolean;
   blockSender: () => boolean;
   markDone: () => boolean;
+  markNotDone: () => boolean;
+  /** Gates which of Mark done / Mark as not done is active. */
+  isThreadDone: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
   navigateToPreviousMessage: () => boolean;
@@ -52,6 +55,16 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.markDone,
     hotkeyToken: TOKENS.entity.action.markDone,
     displayPriority: 10,
+    condition: () => !handlers.isThreadDone(),
+  });
+  registerHotkey({
+    hotkey: 'shift+e',
+    scopeId,
+    description: 'Mark as not done',
+    keyDownHandler: handlers.markNotDone,
+    hotkeyToken: TOKENS.entity.action.markNotDone,
+    displayPriority: 10,
+    condition: () => handlers.isThreadDone(),
   });
   registerHotkey({
     scopeId: scopeId,

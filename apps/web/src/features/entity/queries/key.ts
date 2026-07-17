@@ -30,6 +30,33 @@ type SearchKeyOptions = {
   infinite: true;
 } & SearchArgs;
 
+/**
+ * Email preview views that are inbox-scoped server-side and so exclude
+ * archived (done) threads. Exhaustive over PreviewViewStandardLabel: adding
+ * a view label won't compile until it's classified here.
+ */
+const EMAIL_VIEW_EXCLUDES_DONE: Record<PreviewViewStandardLabel, boolean> = {
+  inbox: true,
+  important: true,
+  other: true,
+  all: false,
+  starred: false,
+  sent: false,
+  drafts: false,
+};
+
+/**
+ * Whether an email list query key (built by `queryKeys.email`) belongs to a
+ * view that excludes done threads. Owned here because this module owns the
+ * key shape: the options object is the key's final element.
+ */
+export function emailQueryKeyExcludesDone(key: readonly unknown[]): boolean {
+  const options = key.at(-1);
+  if (typeof options !== 'object' || options === null) return false;
+  const view = (options as Partial<EmailKeyOptions>).view;
+  return view !== undefined && EMAIL_VIEW_EXCLUDES_DONE[view] === true;
+}
+
 export const queryKeys = {
   all: {
     ...BASE_ENTITY,

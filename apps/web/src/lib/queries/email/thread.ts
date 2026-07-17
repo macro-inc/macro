@@ -235,19 +235,20 @@ async function threadArchiveOnMutate(params: ArchiveThreadParams) {
 }
 
 /**
- * Cache bookkeeping for an archive performed by another mutation (e.g. the
- * mark-done action, which issues its own /archived request): optimistically
- * flips `inbox_visible`, rolls back if the request fails, and invalidates the
- * thread + preview queries once it settles. Mirrors useArchiveThreadMutation
- * without firing a second request.
+ * Cache bookkeeping for an archive/unarchive performed by another mutation
+ * (e.g. the mark-done and mark-not-done actions, which issue their own
+ * /archived requests): optimistically flips `inbox_visible`, rolls back if
+ * the request fails, and invalidates the thread + preview queries once it
+ * settles. Mirrors useArchiveThreadMutation without firing a second request.
  */
 export async function trackExternalThreadArchive(
   threadId: string,
-  archived: Promise<unknown>
+  archived: Promise<unknown>,
+  archive = true
 ): Promise<void> {
   const { previousData } = await threadArchiveOnMutate({
     threadId,
-    archive: true,
+    archive,
   });
   try {
     await archived;
@@ -279,8 +280,12 @@ export function useArchiveThreadMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: ArchiveThreadParams) =>
-      void throwOnErr(
+    // Must await the PATCH: `void`-ing the promise resolved the mutation
+    // immediately, so onSettled's invalidation refetched before the server
+    // committed (stomping the optimistic update) and errors were swallowed
+    // without ever reaching onError.
+    mutationFn: async (params: ArchiveThreadParams) => {
+      await throwOnErr(
         async () =>
           await emailClient.flagArchived(
             {
@@ -289,7 +294,8 @@ export function useArchiveThreadMutation(
             },
             params.linkId
           )
-      ),
+      );
+    },
     ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
       {
         onMutate: async (params) => await threadArchiveOnMutate(params),

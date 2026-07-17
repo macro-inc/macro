@@ -1,4 +1,7 @@
-import { makeMarkDoneAction } from '@app/features/next-soup/actions';
+import {
+  makeMarkDoneAction,
+  makeMarkNotDoneAction,
+} from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { URL_PARAMS } from '@block-email/constants';
@@ -33,7 +36,11 @@ import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
-import { getSoupEntityById } from '@queries/soup/cache';
+import {
+  getSoupEntityById,
+  invalidateAllSoup,
+  refetchSoupEntity,
+} from '@queries/soup/cache';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { UndoHandle } from '@queries/undo';
 import type {
@@ -135,6 +142,10 @@ type EmailContextValues = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** True when the thread is archived, i.e. currently marked done. */
+  isThreadDone: Accessor<boolean>;
+  /** Unarchives a done thread and restores its notifications. */
+  markThreadNotDone: () => boolean;
   getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
@@ -364,9 +375,17 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     userId,
   });
 
+  const markNotDoneAction = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
+  });
+
   const archiveMutation = useArchiveThreadMutation({
-    onError: () => {
-      toast.failure('Failed to archive thread');
+    onError: (_err, params) => {
+      toast.failure(
+        params.archive
+          ? 'Failed to archive thread'
+          : 'Failed to mark as not done'
+      );
     },
   });
 
@@ -388,6 +407,61 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return candidates.find((row) => row && row.id !== focusedId)?.id;
   };
 
+  const isThreadDone = () => {
+    const thread = threadQuery.data;
+    return thread ? !thread.inbox_visible : false;
+  };
+
+  const markThreadNotDone = () => {
+    const thread = threadQuery.data;
+    if (!thread?.db_id) return false;
+
+    if (thread.inbox_visible) return false;
+
+    // Mark-not-done issues the /archived request itself (plus notification
+    // and soup-cache restore), so the path below skips archiveMutation and
+    // only mirrors its thread-cache handling via trackExternalThreadArchive.
+    const selectedRow = soup?.items.get(thread.db_id);
+    const cachedItem = selectedRow
+      ? undefined
+      : getSoupEntityById(thread.db_id);
+
+    const entity =
+      selectedRow?.original ??
+      (cachedItem && cachedItem.tag !== 'channelThread'
+        ? mapApiSoupItemToEntity(cachedItem)
+        : undefined);
+
+    if (entity && markNotDoneAction.canExecute(entity)) {
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markNotDoneAction.execute([entity]),
+        false
+      );
+    } else {
+      // No soup entity to drive the action from — the mark-done removal
+      // evicted it from the soup caches (or its done state hasn't caught up
+      // with the thread's): unarchive directly, then refetch the thread's
+      // soup item to reinsert its rows and refetch the lists.
+      const threadId = thread.db_id;
+      archiveMutation.mutate(
+        {
+          threadId,
+          archive: false,
+          linkId: toHeaderLinkId(thread.link_id),
+        },
+        {
+          onSuccess: () => {
+            void refetchSoupEntity(threadId, 'emailThread');
+            invalidateAllSoup();
+          },
+        }
+      );
+    }
+
+    return true;
+  };
+
   const archiveThread = (opts?: ArchiveThreadOptions) => {
     const thread = threadQuery.data;
     // `=== true` because callers may pass this straight to an event handler.
@@ -399,16 +473,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!thread?.db_id) return false;
 
-    // Unarchiving ('e' on an already-done thread) is a plain toggle back to
-    // the inbox; the mark-done action doesn't apply.
-    if (!thread.inbox_visible) {
-      archiveMutation.mutate({
-        threadId: thread.db_id,
-        archive: false,
-        linkId: toHeaderLinkId(thread.link_id),
-      });
-      return true;
-    }
+    if (!thread.inbox_visible) return false;
 
     // Mark done issues the /archived request itself (with undo support), so
     // the paths below skip archiveMutation and only mirror its thread-cache
@@ -629,6 +694,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
           archiveThread,
+          isThreadDone,
+          markThreadNotDone,
           getMarkDoneNavigationTargetId,
           blockSender,
           markSenderSignal,
