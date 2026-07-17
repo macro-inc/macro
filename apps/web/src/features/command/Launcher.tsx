@@ -1,10 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
-import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
+import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
