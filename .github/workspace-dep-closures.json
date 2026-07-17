@@ -4331,6 +4331,7 @@
       "crates/ip_extractor",
       "crates/last_online_tracker",
       "crates/macro_auth",
+      "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_service_urls",
