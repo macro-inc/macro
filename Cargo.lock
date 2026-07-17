@@ -4729,7 +4729,6 @@ dependencies = [
  "macro_uuid",
  "model-entity",
  "model-error-response",
- "model_user",
  "models_pagination",
  "non_empty",
  "recursion",

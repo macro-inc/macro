@@ -1,4 +1,4 @@
-use super::{EmailLinkErr, MultiEmailLinkExtractorV2, resolve_target_link};
+use super::{EmailLinkErr, MultiEmailLinkExtractor, resolve_target_link};
 use crate::domain::models::{Link, UserProvider};
 use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
 use chrono::Utc;
@@ -42,10 +42,10 @@ async fn authorization_error_delegates_response() {
 }
 
 #[test]
-fn multi_email_link_extractor_v2_is_cloneable_without_generic_clone_bounds() {
+fn multi_email_link_extractor_is_cloneable_without_generic_clone_bounds() {
     struct NotClone;
 
-    let extractor = MultiEmailLinkExtractorV2::<NotClone, NotClone>(Vec::new(), PhantomData);
+    let extractor = MultiEmailLinkExtractor::<NotClone, NotClone>(Vec::new(), PhantomData);
     let _clone = extractor.clone();
 }
 

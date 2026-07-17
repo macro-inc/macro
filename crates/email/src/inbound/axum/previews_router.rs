@@ -4,8 +4,10 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
     CursorOptionExt, CursorWithValAndFilter, SimpleSortMethod, TypeEraseCursor,
 };
@@ -51,14 +53,15 @@ where
     }
 }
 
-pub fn router<S, T>(state: EmailRouterState<T>) -> Router<S>
+pub fn router<S, T, Auth>() -> Router<S>
 where
-    S: Send + Sync,
+    S: Send + Sync + Clone + 'static,
     T: EmailService,
+    Auth: MacroAuthorizationService,
+    EmailRouterState<T>: axum::extract::FromRef<S>,
+    MacroAuthorizationState<Auth>: axum::extract::FromRef<S>,
 {
-    Router::new()
-        .route("/cursor/{view}", get(cursor_handler))
-        .with_state(state)
+    Router::new().route("/cursor/{view}", get(cursor_handler::<T, Auth>))
 }
 
 /// Get paginated thread previews with cursor-based pagination.
@@ -80,10 +83,10 @@ where
     )
 )]
 #[tracing::instrument(skip(links, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
-async fn cursor_handler<T: EmailService>(
+async fn cursor_handler<T: EmailService, Auth: MacroAuthorizationService>(
     State(service): State<EmailRouterState<T>>,
-    Cached(macro_user): Cached<MacroUserExtractor>,
-    Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T>>,
+    Cached(macro_user): Cached<MacroAuthorizationExtractor<Auth>>,
+    Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T, Auth>>,
     PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
     cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, ()>>,

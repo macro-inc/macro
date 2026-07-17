@@ -5,7 +5,7 @@ use axum::extract::FromRef;
 use axum_extra::extract::Cached;
 use email::{
     domain::ports::EmailService,
-    inbound::axum::{axum_impls::MultiEmailLinkExtractorV2, previews_router::EmailRouterState},
+    inbound::axum::{axum_impls::MultiEmailLinkExtractor, previews_router::EmailRouterState},
 };
 use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
@@ -65,8 +65,8 @@ where
     Edges: SoupEntityEdges,
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
-    let Cached(MultiEmailLinkExtractorV2(links, _)) =
-        extract_part::<Cached<MultiEmailLinkExtractorV2<E, Auth>>, St>(ctx).await?;
+    let Cached(MultiEmailLinkExtractor(links, _)) =
+        extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids = links.into_iter().map(|link| link.id).collect();
     let request = input.into_request(macro_user_id, link_ids)?;
 
