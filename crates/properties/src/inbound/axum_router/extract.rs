@@ -14,22 +14,22 @@ use axum::{
 };
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    RequiredPermission, ViewAccessLevel,
+    EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::user::axum_extractor::{MacroUserExtractor, OptionalMacroUserExtractor};
-use models_properties::EntityType;
+use models_properties::api::PropertyTargetEntityType;
 
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, PropertiesAccessReceipt, ViewReceipt, access_entity_type};
+use crate::domain::model::{EditReceipt, ViewReceipt};
 use crate::domain::service::PropertiesService;
 
 /// Path parameters for entity-scoped properties routes.
 #[derive(serde::Deserialize)]
 struct EntityPathParams {
-    entity_type: EntityType,
+    entity_type: PropertyTargetEntityType,
     entity_id: String,
 }
 
@@ -67,35 +67,43 @@ impl IntoResponse for ReceiptRejection {
     }
 }
 
+/// Convert the target-only transport enum to a canonical access entity type.
+pub(crate) fn target_entity_type(entity_type: PropertyTargetEntityType) -> AccessEntityType {
+    match entity_type {
+        PropertyTargetEntityType::CallRecord => AccessEntityType::Call,
+        PropertyTargetEntityType::Channel => AccessEntityType::Channel,
+        PropertyTargetEntityType::Chat => AccessEntityType::Chat,
+        PropertyTargetEntityType::Company => AccessEntityType::CrmCompany,
+        PropertyTargetEntityType::Document => AccessEntityType::Document,
+        PropertyTargetEntityType::Project => AccessEntityType::Project,
+        PropertyTargetEntityType::Thread => AccessEntityType::EmailThread,
+        PropertyTargetEntityType::User => AccessEntityType::User,
+    }
+}
+
 pub(crate) async fn mint_authenticated_receipt<T, A>(
     entity_access_service: &A,
     user_id: &MacroUserIdStr<'_>,
     entity_id: &str,
-    entity_type: EntityType,
-) -> Result<PropertiesAccessReceipt<T>, PropertiesErr>
+    entity_type: AccessEntityType,
+) -> Result<EntityAccessReceipt<T>, PropertiesErr>
 where
     T: RequiredPermission,
     A: EntityAccessService,
 {
     let receipt = entity_access_service
-        .generate_entity_access_receipt::<T>(
-            user_id,
-            None,
-            entity_id,
-            access_entity_type(entity_type),
-        )
+        .generate_entity_access_receipt::<T>(user_id, None, entity_id, entity_type)
         .await
         .map_err(|_| PropertiesErr::PermissionDenied)?;
 
-    PropertiesAccessReceipt::try_from_entity_access_receipt(receipt, entity_type)
-        .map_err(|_| PropertiesErr::PermissionDenied)
+    Ok(receipt)
 }
 
 pub(crate) async fn mint_view_receipt<A>(
     entity_access_service: &A,
     user_id: Option<&MacroUserIdStr<'_>>,
     entity_id: &str,
-    entity_type: EntityType,
+    entity_type: AccessEntityType,
 ) -> Result<ViewReceipt, PropertiesErr>
 where
     A: EntityAccessService,
@@ -110,23 +118,21 @@ where
         .await;
     }
 
-    let access_entity_type = access_entity_type(entity_type);
     let access_level = entity_access_service
-        .check_public_access(entity_id, access_entity_type, AccessLevel::View)
+        .check_public_access(entity_id, entity_type, AccessLevel::View)
         .await
         .map_err(|_| PropertiesErr::PermissionDenied)?;
     let receipt = EntityAccessReceipt::try_new(
         EntityAccessAuth::Unauthenticated,
         Entity {
             entity_id: entity_id.to_string(),
-            entity_type: access_entity_type,
+            entity_type,
         },
         EntityPermission::AccessLevel { access_level },
     )
     .map_err(|_| PropertiesErr::PermissionDenied)?;
 
-    PropertiesAccessReceipt::try_from_entity_access_receipt(receipt, entity_type)
-        .map_err(|_| PropertiesErr::PermissionDenied)
+    Ok(receipt)
 }
 
 async fn entity_path_params(parts: &mut Parts) -> Result<EntityPathParams, ReceiptRejection> {
@@ -166,7 +172,7 @@ where
             state.entity_access_service.as_ref(),
             user.as_ref(),
             &params.entity_id,
-            params.entity_type,
+            target_entity_type(params.entity_type),
         )
         .await?;
 
@@ -204,7 +210,7 @@ where
             state.entity_access_service.as_ref(),
             &user,
             &params.entity_id,
-            params.entity_type,
+            target_entity_type(params.entity_type),
         )
         .await?;
 

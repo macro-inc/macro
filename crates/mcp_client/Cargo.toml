@@ -18,10 +18,12 @@ base64.workspace = true
 async-openai.workspace = true
 axum.workspace = true
 futures.workspace = true
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
 macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response" }
-model_user = { path = "../model_user", features = ["axum"] }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }

@@ -120,6 +120,7 @@ export function TagPicker(props: {
           registerSave={(handler) => {
             saveAndClose = handler;
           }}
+          suppressInitialOutsideEvents={false}
         />
       </Show>
     </Popover>
@@ -166,6 +167,7 @@ export function TagPickerPopover(props: {
           registerSave={(handler) => {
             saveAndClose = handler;
           }}
+          suppressInitialOutsideEvents
         />
       </Show>
     </Popover>
@@ -176,6 +178,7 @@ function TagPickerBody(props: {
   docTags: DocTags;
   onClose: () => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
+  suppressInitialOutsideEvents: boolean;
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -190,6 +193,10 @@ function TagPickerBody(props: {
   const addOption = useAddPropertyOptionMutation();
   const ensureTagSet = useEnsureTagSetMutation();
   let scrollContainerRef: HTMLDivElement | undefined;
+  const [initialOutsideEventGuard, setInitialOutsideEventGuard] =
+    createSignal(true);
+  const shouldIgnoreOutsideEvent = () =>
+    props.suppressInitialOutsideEvents && initialOutsideEventGuard();
 
   const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
   const initialAppliedIds = createMemo(
@@ -249,26 +256,12 @@ function TagPickerBody(props: {
     });
   };
 
-  const optionScope = (optionId: string): TagScope | undefined =>
-    initialTagState().optionScopes.get(optionId);
-
   const persistSelection = async () => {
     if (saved()) return true;
     setSaved(true);
 
     try {
-      const nextSelectedIds = selectedIds();
-      for (const tag of initialAppliedTags()) {
-        if (!nextSelectedIds.has(tag.optionId)) {
-          await props.docTags.removeTag(tag.scope, tag.optionId);
-        }
-      }
-
-      for (const optionId of nextSelectedIds) {
-        if (initialAppliedIds().has(optionId)) continue;
-        const scope = optionScope(optionId);
-        if (scope) await props.docTags.applyTag(scope, optionId);
-      }
+      await props.docTags.setTagSelection(selectedIds());
       return true;
     } catch (error) {
       setSaved(false);
@@ -282,7 +275,9 @@ function TagPickerBody(props: {
   };
 
   const saveAndClose = async () => {
-    if (await save()) props.onClose();
+    const savePromise = save();
+    props.onClose();
+    await savePromise;
   };
 
   const filteredItems = createMemo(() => {
@@ -491,6 +486,10 @@ function TagPickerBody(props: {
   onMount(() => {
     props.registerSave(saveAndClose);
     document.addEventListener('keydown', handleKeyDown);
+    const timeout = setTimeout(() => {
+      setInitialOutsideEventGuard(false);
+    }, 100);
+    onCleanup(() => clearTimeout(timeout));
   });
 
   onCleanup(() => {
@@ -504,6 +503,12 @@ function TagPickerBody(props: {
         <Popover.Content
           class="z-modal w-64 rounded-xl bg-surface text-sm shadow-menu ring ring-edge-muted menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
+          onFocusOutside={(event) => {
+            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+          }}
         >
           <Show
             when={createStep()}

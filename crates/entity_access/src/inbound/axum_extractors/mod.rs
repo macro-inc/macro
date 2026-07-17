@@ -21,7 +21,7 @@ mod team;
 mod thread;
 
 pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
-pub use channel::{ChannelAccessLevelExtractor, ChannelAccessLevelExtractorV2};
+pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
 pub use entity_permission::EntityPermissionExtractor;

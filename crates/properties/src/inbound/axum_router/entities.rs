@@ -16,18 +16,18 @@ use axum::{
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use model::user::axum_extractor::MacroUserExtractor;
-use models_properties::api::SetPropertyValue;
+use models_properties::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::{EntityReference, EntityType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
-use super::extract::{mint_authenticated_receipt, mint_view_receipt};
+use super::extract::{mint_authenticated_receipt, mint_view_receipt, target_entity_type};
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
+use crate::domain::model::PropertyAccessReceiptExt;
 use crate::domain::service::PropertiesService;
 
 // Re-export EntityQueryParams from models_properties for convenience
@@ -52,7 +52,7 @@ pub struct SetEntityPropertyRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct BulkEntityPropertiesRequest {
     /// Array of entity references (entity_id and entity_type pairs)
-    pub entities: Vec<EntityReference>,
+    pub entities: Vec<PropertyTargetReference>,
     /// Optional: only return properties with these definition IDs. If empty, returns all.
     #[serde(default)]
     pub property_ids: Vec<Uuid>,
@@ -97,7 +97,7 @@ impl IntoResponse for GetEntityPropertiesErr {
     get,
     path = "/properties/entities/{entity_type}/{entity_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("include_metadata" = Option<bool>, Query, description = "Whether to include property metadata (default: false)")
     ),
@@ -259,7 +259,7 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
             state.entity_access_service.as_ref(),
             Some(&user),
             &entity_ref.entity_id,
-            entity_ref.entity_type,
+            target_entity_type(entity_ref.entity_type),
         )
         .await
         {
@@ -337,7 +337,7 @@ impl IntoResponse for SetEntityPropertyErr {
     put,
     path = "/properties/entities/{entity_type}/{entity_id}/{property_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("property_id" = Uuid, Path, description = "Property ID")
     ),
@@ -353,7 +353,7 @@ impl IntoResponse for SetEntityPropertyErr {
 )]
 #[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, entity_type = ?access.0.entity_type(), has_value = request.value.is_some()), err)]
 pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
-    Path((_entity_type, _entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
+    Path((_entity_type, _entity_id, property_uuid)): Path<(PropertyTargetEntityType, String, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
     access: EditReceiptExtractor,
     Json(request): Json<SetEntityPropertyRequest>,
@@ -404,7 +404,7 @@ impl IntoResponse for EntityPropertyOptionErr {
     post,
     path = "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("property_id" = Uuid, Path, description = "Property ID"),
         ("option_id" = Uuid, Path, description = "Option ID to add")
@@ -420,7 +420,7 @@ impl IntoResponse for EntityPropertyOptionErr {
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
 pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
-        EntityType,
+        PropertyTargetEntityType,
         String,
         Uuid,
         Uuid,
@@ -447,7 +447,7 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
     delete,
     path = "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID"),
         ("property_id" = Uuid, Path, description = "Property ID"),
         ("option_id" = Uuid, Path, description = "Option ID to remove")
@@ -462,7 +462,7 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
 pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
-        EntityType,
+        PropertyTargetEntityType,
         String,
         Uuid,
         Uuid,

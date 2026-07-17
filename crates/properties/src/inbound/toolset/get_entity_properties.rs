@@ -1,8 +1,6 @@
 //! GetEntityProperties tool for reading properties attached to an entity.
 
-use crate::domain::model::{
-    EntityPropertyInfo, PropertiesAccessReceipt, PropertyOptionInfo, access_entity_type,
-};
+use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -49,17 +47,46 @@ impl From<ToolEntityType> for EntityType {
     }
 }
 
+/// Canonical entity type accepted when an AI tool targets an entity's properties.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolPropertyTargetEntityType {
+    Document,
+    Project,
+    Chat,
+    Thread,
+    Channel,
+    Call,
+    User,
+    Company,
+}
+
+impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
+    fn from(value: ToolPropertyTargetEntityType) -> Self {
+        match value {
+            ToolPropertyTargetEntityType::Document => Self::Document,
+            ToolPropertyTargetEntityType::Project => Self::Project,
+            ToolPropertyTargetEntityType::Chat => Self::Chat,
+            ToolPropertyTargetEntityType::Thread => Self::EmailThread,
+            ToolPropertyTargetEntityType::Channel => Self::Channel,
+            ToolPropertyTargetEntityType::Call => Self::Call,
+            ToolPropertyTargetEntityType::User => Self::User,
+            ToolPropertyTargetEntityType::Company => Self::CrmCompany,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "GetEntityProperties",
-    description = "Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType \"tag\"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties."
+    description = "Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType \"tag\"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties."
 )]
 pub struct GetEntityProperties {
     #[schemars(description = "The ID of the entity to get properties for.")]
     pub entity_id: String,
 
     #[schemars(description = "The type of entity.")]
-    pub entity_type: ToolEntityType,
+    pub entity_type: ToolPropertyTargetEntityType,
 }
 
 /// A property option in the tool response.
@@ -128,7 +155,7 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Get entity properties");
 
-        let entity_type = EntityType::from(self.entity_type);
+        let entity_type = model_entity::EntityType::from(self.entity_type);
 
         // Prove the requesting user can view the entity before reading anything.
         let entity_access_receipt = service_context
@@ -137,25 +164,16 @@ where
                 &request_context.user_id,
                 None,
                 &self.entity_id,
-                access_entity_type(entity_type),
+                entity_type,
             )
             .await
             .map_err(|e| ToolCallError {
                 description: "You do not have access to this entity".to_string(),
                 internal_error: e.into(),
             })?;
-        let access = PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            entity_type,
-        )
-        .map_err(|e| ToolCallError {
-            description: "Unable to validate entity access".to_string(),
-            internal_error: e.into(),
-        })?;
-
         let props = service_context
             .service
-            .get_entity_properties(&access)
+            .get_entity_properties(&entity_access_receipt)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to get entity properties: {e}"),

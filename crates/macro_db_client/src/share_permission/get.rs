@@ -105,65 +105,6 @@ pub async fn get_share_permission_id(
 }
 
 #[tracing::instrument(skip(db))]
-pub async fn get_project_share_permission(
-    db: &sqlx::Pool<sqlx::Postgres>,
-    project_id: &str,
-) -> anyhow::Result<SharePermissionV2> {
-    let result = sqlx::query!(
-        r#"
-            SELECT
-                sp.id as id,
-                sp."isPublic" as is_public,
-                sp."publicAccessLevel" as "public_access_level?",
-                p."userId" as owner,
-                COALESCE(
-                    json_agg(json_build_object(
-                        'channel_id', csp."channel_id",
-                        'access_level', csp."access_level"
-                    )) FILTER (WHERE csp."channel_id" IS NOT NULL),
-                    '[]'
-                ) as "channel_share_permissions?"
-            FROM
-                "ProjectPermission" pp
-            JOIN "SharePermission" sp ON pp."sharePermissionId" = sp.id
-            JOIN "Project" p ON pp."projectId" = p.id
-            LEFT JOIN "ChannelSharePermission" csp ON csp."share_permission_id" = sp.id
-            WHERE
-                pp."projectId" = $1
-            GROUP BY
-                sp.id, p."userId"
-        "#,
-        project_id,
-    )
-    .fetch_one(db)
-    .await?;
-
-    let channel_share_permissions: Option<Vec<ChannelSharePermission>> =
-        if let Some(channel_share_permissions) = result.channel_share_permissions {
-            let channel_share_permissions: Vec<ChannelSharePermission> =
-                serde_json::from_value(channel_share_permissions)?;
-            match channel_share_permissions.is_empty() {
-                true => None,
-                false => Some(channel_share_permissions),
-            }
-        } else {
-            None
-        };
-
-    let public_access_level: Option<AccessLevel> = result
-        .public_access_level
-        .map(|s| AccessLevel::from_str(&s).unwrap());
-
-    Ok(SharePermissionV2 {
-        id: result.id,
-        is_public: result.is_public,
-        public_access_level,
-        owner: result.owner,
-        channel_share_permissions,
-    })
-}
-
-#[tracing::instrument(skip(db))]
 pub async fn get_document_share_permission(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,
@@ -468,39 +409,6 @@ mod tests {
     use super::*;
     use models_permissions::share_permission::access_level::AccessLevel;
     use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("channel_share_permissions")))]
-    async fn test_get_project_share_permission(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let permission = get_project_share_permission(&pool, "p1").await?;
-        assert_eq!(permission.id, "sp-p1".to_string());
-        assert!(permission.is_public);
-        assert_eq!(permission.public_access_level, Some(AccessLevel::Edit));
-        assert_eq!(permission.owner, "macro|user@user.com".to_string());
-        assert_eq!(
-            permission.channel_share_permissions,
-            Some(vec![
-                ChannelSharePermission {
-                    channel_id: "c1".to_string(),
-                    access_level: AccessLevel::View,
-                },
-                ChannelSharePermission {
-                    channel_id: "c2".to_string(),
-                    access_level: AccessLevel::Edit,
-                }
-            ])
-        );
-
-        let permission = get_project_share_permission(&pool, "p2").await?;
-        assert_eq!(permission.id, "sp-p2".to_string());
-        assert!(!permission.is_public);
-        assert!(permission.public_access_level.is_none());
-        assert_eq!(permission.owner, "macro|user2@user.com".to_string());
-        assert!(permission.channel_share_permissions.is_none());
-
-        Ok(())
-    }
-
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("channel_share_permissions")))]
     async fn test_get_document_share_permission(
         pool: sqlx::Pool<sqlx::Postgres>,

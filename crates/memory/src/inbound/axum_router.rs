@@ -1,12 +1,14 @@
 use crate::domain::MemoryService;
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{FromRef, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+};
 use serde::Serialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -24,14 +26,46 @@ pub struct MemoryErrorBody {
     pub error: String,
 }
 
-pub fn memory_router<T, S>(service: Arc<T>) -> Router<S>
+/// Router state containing the memory service and the authorization state
+/// used to authenticate callers.
+pub struct MemoryRouterState<T, Auth> {
+    /// The memory service implementation.
+    pub service: Arc<T>,
+    /// The authorization state used by the request extractors.
+    pub authorization_state: MacroAuthorizationState<Auth>,
+}
+
+// Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
+impl<T, Auth> Clone for MemoryRouterState<T, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<T, Auth> FromRef<MemoryRouterState<T, Auth>> for Arc<T> {
+    fn from_ref(state: &MemoryRouterState<T, Auth>) -> Self {
+        state.service.clone()
+    }
+}
+
+impl<T, Auth> FromRef<MemoryRouterState<T, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &MemoryRouterState<T, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+pub fn memory_router<T, Auth, S>(state: MemoryRouterState<T, Auth>) -> Router<S>
 where
     T: MemoryService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
-        .route("/memory", get(get_memory_handler::<T>))
-        .with_state(service)
+        .route("/memory", get(get_memory_handler::<T, Auth>))
+        .with_state(state)
 }
 
 /// Get the authenticated user's latest memory.
@@ -50,9 +84,9 @@ where
     tag = "memory"
 )]
 #[tracing::instrument(skip(service, user), fields(user_id = %user.macro_user_id))]
-pub async fn get_memory_handler<T: MemoryService>(
+pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
-    user: MacroUserExtractor,
+    user: MacroAuthorizationExtractor<Auth>,
 ) -> Response {
     match service.get_or_generate_memory(user.macro_user_id).await {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),

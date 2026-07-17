@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            c.id,\n            c.name,\n            c.\"userId\" AS \"user_id\",\n            c.model AS \"model?\",\n            c.\"projectId\" AS \"project_id?\",\n            c.\"tokenCount\" AS \"token_count\",\n            c.\"createdAt\"::timestamptz AS \"created_at\",\n            c.\"updatedAt\"::timestamptz AS \"updated_at\",\n            c.\"deletedAt\"::timestamptz AS \"deleted_at\",\n            c.\"isPersistent\" AS \"is_persistent\"\n        FROM \"Chat\" c\n        WHERE c.\"projectId\" = $1 AND c.\"deletedAt\" IS NULL\n        ORDER BY c.\"createdAt\" ASC, c.id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "model?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "token_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "14d04c75c6870eaee31d5ff6f64e4b8593f0bf6d5d6f97944283aead4d0431e2"
+}

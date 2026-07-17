@@ -211,9 +211,9 @@ just run_local --no-frontend
 ```
 
 Services inside the local compose network receive
-`http://localstack:4566/000000000000/webhook-event-queue.fifo`. The
-`docker/docker-compose.local-e2e.yml` environment supplies the same override. Worker
-polling defaults to 10 messages and a 20-second long poll and can be adjusted
+`http://localstack:4566/000000000000/webhook-event-queue.fifo`. The local E2E
+harness now receives the same override from its xtask-generated instance env.
+Worker polling defaults to 10 messages and a 20-second long poll and can be adjusted
 with `WEBHOOK_QUEUE_MAX_MESSAGES` and `WEBHOOK_QUEUE_WAIT_TIME_SECONDS`.
 
 ### Tracing

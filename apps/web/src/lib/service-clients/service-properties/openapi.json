@@ -395,10 +395,10 @@
           {
             "name": "entity_type",
             "in": "path",
-            "description": "Entity type (user, document, channel, project, thread)",
+            "description": "Canonical entity type; tasks use DOCUMENT",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/EntityType"
+              "$ref": "#/components/schemas/PropertyTargetEntityType"
             }
           },
           {
@@ -455,10 +455,10 @@
           {
             "name": "entity_type",
             "in": "path",
-            "description": "Entity type (user, document, channel, project, thread)",
+            "description": "Canonical entity type; tasks use DOCUMENT",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/EntityType"
+              "$ref": "#/components/schemas/PropertyTargetEntityType"
             }
           },
           {
@@ -520,10 +520,10 @@
           {
             "name": "entity_type",
             "in": "path",
-            "description": "Entity type (user, document, channel, project, thread)",
+            "description": "Canonical entity type; tasks use DOCUMENT",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/EntityType"
+              "$ref": "#/components/schemas/PropertyTargetEntityType"
             }
           },
           {
@@ -580,10 +580,10 @@
           {
             "name": "entity_type",
             "in": "path",
-            "description": "Entity type (user, document, channel, project, thread)",
+            "description": "Canonical entity type; tasks use DOCUMENT",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/EntityType"
+              "$ref": "#/components/schemas/PropertyTargetEntityType"
             }
           },
           {
@@ -796,7 +796,7 @@
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EntityReference"
+              "$ref": "#/components/schemas/PropertyTargetReference"
             },
             "description": "Array of entity references (entity_id and entity_type pairs)"
           },
@@ -1503,6 +1503,35 @@
         "type": "string",
         "description": "Scope filter for property queries",
         "enum": ["user", "team", "system", "all"]
+      },
+      "PropertyTargetEntityType": {
+        "type": "string",
+        "description": "Canonical type of an entity receiving properties.\n\nTasks are documents at API boundaries. `Task` intentionally does not exist\nhere; task classification is resolved by the properties domain from the\ndocument subtype.",
+        "enum": [
+          "CALL_RECORD",
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "THREAD",
+          "USER"
+        ]
+      },
+      "PropertyTargetReference": {
+        "type": "object",
+        "description": "Canonical reference to an entity receiving properties.",
+        "required": ["entity_id", "entity_type"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Entity identifier."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/PropertyTargetEntityType",
+            "description": "Canonical entity type."
+          }
+        }
       },
       "PropertyValue": {
         "oneOf": [

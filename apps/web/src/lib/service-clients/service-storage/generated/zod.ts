@@ -19740,7 +19740,7 @@ export const removePinHandlerResponse = zod.object({
 });
 
 /**
- * @summary Gets all the users projects. This includes projects shared with the user.
+ * @summary List projects visible to the authenticated user.
  */
 export const getProjectsHandlerResponse = zod.object({
   data: zod
@@ -19767,8 +19767,7 @@ export const getProjectsHandlerResponse = zod.object({
 });
 
 /**
- * @summary Creates a new project.
-The project can be created as a sub-project of another project or as a top-level project.
+ * @summary Create a project, optionally beneath an existing project.
  */
 export const createProjectHandlerBody = zod.object({
   name: zod.string().describe('The name of the project.'),
@@ -19799,7 +19798,7 @@ export const createProjectHandlerResponse = zod.object({
 });
 
 /**
- * @summary Gets all the users projects that are pending upload. This includes projects shared with the user.
+ * @summary List pending root projects owned by the authenticated user.
  */
 export const getPendingProjectsHandlerResponse = zod.object({
   data: zod
@@ -19840,6 +19839,9 @@ export const getPendingProjectsHandlerResponse = zod.object({
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
+/**
+ * @summary Get previews for a batch of project IDs.
+ */
 export const getBatchProjectPreviewBody = zod.object({
   projectIds: zod.array(zod.string()),
 });
@@ -19883,8 +19885,7 @@ export const getBatchProjectPreviewResponse = zod.object({
 });
 
 /**
- * @summary Uploads a folder to the user's cloud storage. Mimicing the folder structure
-with projects and placing all documents in the correct location.
+ * @summary Upload a folder tree and create its upload destinations.
  */
 export const uploadFolderHandlerBody = zod.object({
   content: zod
@@ -20844,9 +20845,7 @@ export const uploadFolderHandlerResponse = zod.object({
 });
 
 /**
- * @summary Creates a request id in the dynamodb table for tracking the upload
-Returns a presigned url for uploading a zip file to the staging bucket
-Returns a request id for tracking the upload
+ * @summary Create a request for extracting an uploaded folder archive.
  */
 export const uploadExtractFolderHandlerBody = zod.object({
   name: zod.string().nullish(),
@@ -20864,6 +20863,9 @@ export const uploadExtractFolderHandlerResponse = zod.object({
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
+/**
+ * @summary Get project metadata.
+ */
 export const getProjectHandlerParams = zod.object({
   id: zod.string().describe('ID of the project'),
 });
@@ -20894,8 +20896,7 @@ export const getProjectHandlerResponse = zod.object({
 });
 
 /**
- * @summary Deletes a project.
-Soft deletes the project and all of its children.
+ * @summary Soft-delete a project and all of its children.
  */
 export const deleteProjectHandlerParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -20904,22 +20905,19 @@ export const deleteProjectHandlerParams = zod.object({
 export const deleteProjectHandlerResponse = zod.object({
   data: zod
     .object({
-      chat_ids: zod
-        .array(zod.string())
-        .describe('The ids of the chats that were marked as deleted'),
-      document_ids: zod
-        .array(zod.string())
-        .describe('The ids of the documents that were marked as deleted'),
+      chat_ids: zod.array(zod.string()).describe('Deleted chats.'),
+      document_ids: zod.array(zod.string()).describe('Deleted documents.'),
       project_ids: zod
         .array(zod.string())
-        .describe('The ids of the project that were marked as deleted'),
+        .describe('Deleted projects, including the requested root.'),
     })
+    .describe('Identifiers affected by a recursive project soft deletion.')
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
 /**
- * @summary Gets the user's access level to the project
+ * @summary Get the caller's project access level.
  */
 export const getProjectUserAccessLevelParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -20930,8 +20928,7 @@ export const getProjectUserAccessLevelResponse = zod
   .describe('Ordered from least to most access top -> bottom');
 
 /**
- * @summary Gets the content of a project.
-This includes the projects sub-projects as well as the items in the project.
+ * @summary Get a project's immediate children.
  */
 export const getProjectContentHandlerParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21084,7 +21081,7 @@ export const getProjectContentHandlerResponse = zod.object({
 });
 
 /**
- * @summary Permanently deletes a project and all of it's children.
+ * @summary Permanently delete a soft-deleted project and all of its children.
  */
 export const permanentlyDeleteProjectParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21098,8 +21095,7 @@ export const permanentlyDeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary Gets the current documents share permissions
-Gets the projects share permissions
+ * @summary Get a project's share permissions.
  */
 export const getProjectPermissionsV2Params = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21133,7 +21129,7 @@ export const getProjectPermissionsV2Response = zod.object({
 });
 
 /**
- * @summary Deletes a specific document
+ * @summary Restore a soft-deleted project and its children.
  */
 export const revertDeleteProjectParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21500,7 +21496,7 @@ export const getDocumentPermissionsV2Response = zod.object({
 });
 
 /**
- * @summary Edits a project.
+ * @summary Edit project metadata and sharing settings.
  */
 export const editProjectV2Params = zod.object({
   id: zod.string().describe('ID of the project'),

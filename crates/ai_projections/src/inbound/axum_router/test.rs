@@ -2,10 +2,18 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{Extension, http::StatusCode};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode, header},
+};
 use http_body_util::BodyExt;
+use macro_authorization::{
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
+use rootcause::Report;
 use tower::ServiceExt;
 
 use super::{AiProjectionRouterState, ai_projections_router};
@@ -16,6 +24,39 @@ use crate::domain::{
         UserAiProjection,
     },
 };
+
+/// Fake authorization service accepting the `valid` bearer token as the test
+/// user.
+#[derive(Clone)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        if jwt != "valid" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(test_user_context())
+    }
+
+    async fn authorize_internal(
+        &self,
+        _provided_key: &str,
+        _claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+}
+
+/// Attaches the test user's bearer token to every request, mirroring the
+/// credentials a real client would send.
+async fn attach_bearer(mut req: Request<Body>) -> Request<Body> {
+    req.headers_mut().insert(
+        header::AUTHORIZATION,
+        "Bearer valid".parse().expect("header should be valid"),
+    );
+    req
+}
 
 #[derive(Clone, Default)]
 struct MockService {
@@ -75,8 +116,11 @@ fn build_router(has_permission: bool) -> axum::Router {
 }
 
 fn build_router_with(service: Arc<MockService>) -> axum::Router {
-    let state = AiProjectionRouterState { service };
-    ai_projections_router(state).layer(Extension(test_user_context()))
+    let state = AiProjectionRouterState {
+        service,
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+    };
+    ai_projections_router(state).layer(axum::middleware::map_request(attach_bearer))
 }
 
 fn post_request() -> axum::http::Request<axum::body::Body> {

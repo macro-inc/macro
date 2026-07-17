@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::shared::EntityReference;
-use properties::{PropertiesAccessReceipt, PropertiesService, access_entity_type};
+use properties::PropertiesService;
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
@@ -28,7 +28,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
     /// Set or attach one property on an entity.
     fn set_entity_property(
         &self,
-        entity_type: models_properties::EntityType,
+        entity_type: model_entity::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
@@ -42,7 +42,7 @@ pub struct NoOpEntityPropertyWriter;
 impl EntityPropertyWriter for NoOpEntityPropertyWriter {
     async fn set_entity_property(
         &self,
-        _entity_type: models_properties::EntityType,
+        _entity_type: model_entity::EntityType,
         _entity_id: String,
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
@@ -83,7 +83,7 @@ where
 {
     async fn set_entity_property(
         &self,
-        entity_type: models_properties::EntityType,
+        entity_type: model_entity::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
@@ -94,21 +94,51 @@ where
                 &self.user_id,
                 None,
                 &entity_id,
-                access_entity_type(entity_type),
+                entity_type,
             )
             .await
             .map_err(|err| rootcause::report!(err))?;
-        let access = PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            entity_type,
-        )
-        .map_err(|err| rootcause::report!(err))?;
-
         Ok(self
             .properties_service
-            .set_entity_property(&access, property_definition_id, value)
+            .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
             .map_err(|err| rootcause::report!(err))?)
+    }
+}
+
+/// Canonical entity type accepted for property targets.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlPropertyTargetEntityType {
+    /// Call record target.
+    CallRecord,
+    /// Channel target.
+    Channel,
+    /// Chat target.
+    Chat,
+    /// CRM company target.
+    Company,
+    /// Document target, including tasks and snippets.
+    Document,
+    /// Project target.
+    Project,
+    /// Email thread target.
+    Thread,
+    /// User target.
+    User,
+}
+
+impl From<GraphqlPropertyTargetEntityType> for model_entity::EntityType {
+    fn from(value: GraphqlPropertyTargetEntityType) -> Self {
+        match value {
+            GraphqlPropertyTargetEntityType::CallRecord => Self::Call,
+            GraphqlPropertyTargetEntityType::Channel => Self::Channel,
+            GraphqlPropertyTargetEntityType::Chat => Self::Chat,
+            GraphqlPropertyTargetEntityType::Company => Self::CrmCompany,
+            GraphqlPropertyTargetEntityType::Document => Self::Document,
+            GraphqlPropertyTargetEntityType::Project => Self::Project,
+            GraphqlPropertyTargetEntityType::Thread => Self::EmailThread,
+            GraphqlPropertyTargetEntityType::User => Self::User,
+        }
     }
 }
 
@@ -116,7 +146,7 @@ where
 #[derive(async_graphql::InputObject)]
 struct SetEntityPropertyInput {
     /// Type of entity receiving the property.
-    entity_type: GraphqlPropertyEntityType,
+    entity_type: GraphqlPropertyTargetEntityType,
     /// Identifier of the entity receiving the property.
     entity_id: String,
     /// Identifier of the property definition to assign.
@@ -268,7 +298,7 @@ mod tests {
     }
 
     type CapturedWrite = (
-        models_properties::EntityType,
+        model_entity::EntityType,
         String,
         Uuid,
         Option<SetPropertyValue>,
@@ -283,7 +313,7 @@ mod tests {
     impl EntityPropertyWriter for CapturingWriter {
         async fn set_entity_property(
             &self,
-            entity_type: models_properties::EntityType,
+            entity_type: model_entity::EntityType,
             entity_id: String,
             property_definition_id: Uuid,
             value: Option<SetPropertyValue>,
@@ -344,7 +374,7 @@ mod tests {
                 r#"
                 mutation {{
                     setEntityProperty(input: {{
-                        entityType: TASK,
+                        entityType: DOCUMENT,
                         entityId: "task-1",
                         propertyDefinitionId: "{property_definition_id}",
                         value: {{ selectOption: "{option_id}" }}
@@ -392,7 +422,7 @@ mod tests {
         assert_eq!(
             writer.write.lock().expect("capture mutex poisoned").clone(),
             Some((
-                models_properties::EntityType::Task,
+                model_entity::EntityType::Document,
                 "task-1".to_string(),
                 property_definition_id,
                 Some(SetPropertyValue::SelectOption { option_id }),

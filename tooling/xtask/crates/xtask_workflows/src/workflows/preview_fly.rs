@@ -8,9 +8,13 @@
 //! per-PR Fly app `macro-pr-<N>` — which suspends when idle and wakes on
 //! request. The machine pulls the stack images at boot (layer-level dedup
 //! against its persistent /var/lib/docker volume) instead of shipping them
-//! inside the VM image. Runtime secrets reach the machine as a config-scoped
-//! Doppler service token (`DOPPLER_PREVIEW_TOKEN` → Fly secret
-//! `DOPPLER_TOKEN`), which the stack's env layer pulls at boot.
+//! inside the VM image. A brand-new PR's volume is forked from the newest
+//! template volume on `macro-preview-template` (a warm layer store published
+//! by a previous successful deploy, content-addressed by the image
+//! manifest), so first boots pull only deltas instead of ~6GB cold. Runtime
+//! secrets reach the machine as a config-scoped Doppler service token
+//! (`DOPPLER_PREVIEW_TOKEN` → Fly secret `DOPPLER_TOKEN`), which the
+//! stack's env layer pulls at boot.
 //!
 //! NOTE: never a required status check — previews are opt-in by design.
 
@@ -23,6 +27,13 @@ use crate::workflows::{runners, steps, vars};
 
 /// The per-PR Fly app name; also the preview hostname (`<app>.fly.dev`).
 const APP_NAME: &str = "macro-pr-${{ github.event.pull_request.number }}";
+
+/// The app holding template volumes: warm /var/lib/docker layer stores that
+/// new PR apps fork instead of pulling ~6GB of images onto an empty volume.
+/// Machine-less — it exists purely as a volume namespace. Templates are
+/// published by successful deploys and content-addressed by the preload
+/// manifest, so nothing runs when the image set hasn't changed.
+const TEMPLATE_APP: &str = "macro-preview-template";
 
 /// Build the deploy workflow.
 pub fn preview_fly() -> Workflow {
@@ -67,6 +78,11 @@ fn deploy() -> Job {
         // measured cold on both layers (different --target = disjoint sccache
         // keys, and their volumes never carry a cargo target dir).
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::PREVIEW_CACHE_TAG))
+        // Backstop against hangs: worst honest case is ~15 min cold builds +
+        // ~6 min cold mirror push + the 30 min flyctl wait cap. Anything past
+        // an hour is a stuck step, not a slow deploy (a hung log fetch once
+        // burned 2h26m of runner before someone cancelled it by hand).
+        .timeout_minutes(60u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
@@ -74,6 +90,7 @@ fn deploy() -> Job {
         )
         .add_env(("FLY_API_TOKEN", vars::FLY_API_TOKEN))
         .add_env(("APP_NAME", APP_NAME))
+        .add_env(("TEMPLATE_APP", TEMPLATE_APP))
         // Init snapshots live on the cache volume: an unchanged key skips the
         // whole infra bake and keeps snapshot bytes (→ VM image layer) stable.
         .add_env((
@@ -156,6 +173,7 @@ fn deploy() -> Job {
         .add_step(deploy_to_fly())
         .add_step(dump_fly_diagnostics())
         .add_step(dump_boot_timings())
+        .add_step(publish_template_volume())
         .add_step(comment_preview_url())
 }
 
@@ -166,18 +184,26 @@ fn dump_fly_diagnostics() -> Step<Run> {
     Step::new("Dump Fly diagnostics")
         .run(indoc::indoc! {r#"
             flyctl machine list --app "$APP_NAME" || true
-            flyctl logs --app "$APP_NAME" --no-tail || true
+            # `flyctl logs --no-tail` can hang forever on its NATS fetch
+            # (observed: a healthy deploy stuck 1h53m in the timings dump) —
+            # never call it without a timeout.
+            timeout 60 flyctl logs --app "$APP_NAME" --no-tail || true
         "#})
         .if_condition(Expression::new("failure()"))
 }
 
-/// The entrypoint logs how long each boot phase took (image pulls, stack up),
-/// but Fly's log retention is short and nobody looks at a healthy machine —
-/// surface the `[preview]` lines in CI so every deploy records its boot
-/// breakdown next to the deploy timings.
+/// The entrypoint tees every boot-phase timing (image pulls, per-stage stack
+/// up, auth startup) into a volume-backed file precisely so CI can read it
+/// deterministically after a healthy deploy. `flyctl logs --no-tail` used to
+/// serve this and both hung (unbounded NATS fetch) and silently lost the
+/// early boot lines to Fly's short log retention. On a hot update the machine
+/// never reboots, so the file describes the last real boot — the hot path's
+/// own output already streams into the deploy step via `ssh console`.
 fn dump_boot_timings() -> Step<Run> {
-    Step::new("Dump boot timings")
-        .run(r#"flyctl logs --app "$APP_NAME" --no-tail | grep -E '\[preview\]|✓' || true"#)
+    Step::new("Dump boot timings").run(indoc::indoc! {r#"
+        timeout 120 flyctl ssh console --app "$APP_NAME" --quiet \
+          --command 'cat /var/lib/docker/.macro-preview/boot-timings.log' || true
+    "#})
 }
 
 /// A cold `stack up --infra-only` on the runner runs the real init (migrate,
@@ -380,6 +406,39 @@ fn deploy_to_fly() -> Step<Run> {
                 || flyctl status --app "$APP_NAME" >/dev/null
             fi
 
+            # Seed a first boot's volume from the newest template volume — a
+            # warm /var/lib/docker layer store published by a previous
+            # successful deploy (see the "Publish template volume" step).
+            # Measured cold, an empty volume costs ~11 min of image pulls at
+            # boot; a fork costs a ~2.5 min server-side hydration that runs
+            # concurrently with the mirror push below (the gate before
+            # machine creation waits for it). Cross-app forks need the
+            # Machines API: flyctl resolves volume ids app-locally. The boot
+            # manifest check makes the volume a pure cache, so every failure
+            # path here just falls back to the old empty-volume behavior.
+            fork_pending=
+            if ! flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
+                 | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+              tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
+                | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
+                         | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
+              if [ -n "$tpl_src" ]; then
+                fork_state=$(curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
+                  -H "Authorization: Bearer $FLY_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
+                  | jq -r '.state // empty') || fork_state=
+                if [ -n "$fork_state" ]; then
+                  echo "seeding docker_data from template volume $tpl_src (state: $fork_state)"
+                  fork_pending=1
+                else
+                  echo "template fork failed; falling back to an empty volume" >&2
+                fi
+              else
+                echo "no template volume available; first boot will pull cold"
+              fi
+            fi
+
             # A read-only, app-scoped, time-boxed pull token so the machine's
             # inner dockerd can pull the mirrored stack images from this app's
             # registry repo — and nothing else (PR code can read machine
@@ -526,7 +585,27 @@ fn deploy_to_fly() -> Step<Run> {
             flyctl secrets set --app "$APP_NAME" --stage \
               "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
               "REGISTRY_PULL_TOKEN=$pull_token"
-            if ! flyctl volumes list --app "$APP_NAME" --json \
+            if [ -n "$fork_pending" ]; then
+              # The mirror push above bought most of the hydration time; the
+              # volume must reach "created" before a machine can mount it. A
+              # fork that never lands is replaced by an empty volume rather
+              # than failing the deploy.
+              vol_state=
+              for _ in $(seq 1 60); do
+                vol_state=$(flyctl volumes list --app "$APP_NAME" --json \
+                  | jq -r '[.[] | select(.name == "docker_data")][0].state // empty')
+                [ "$vol_state" = created ] && break
+                sleep 10
+              done
+              echo "seeded volume state: $vol_state"
+              if [ "$vol_state" != created ]; then
+                echo "template fork stuck (state: $vol_state); replacing with an empty volume" >&2
+                vol_id=$(flyctl volumes list --app "$APP_NAME" --json \
+                  | jq -r '[.[] | select(.name == "docker_data")][0].id // empty')
+                [ -z "$vol_id" ] || flyctl volumes destroy "$vol_id" --app "$APP_NAME" --yes || true
+                flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
+              fi
+            elif ! flyctl volumes list --app "$APP_NAME" --json \
                  | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
               flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
             fi
@@ -567,6 +646,59 @@ fn deploy_to_fly() -> Step<Run> {
         // it's not sensitive, but people reasonably reach for secrets first.
         .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
         .add_env(("DOPPLER_PREVIEW_TOKEN", vars::DOPPLER_PREVIEW_TOKEN))
+}
+
+/// After a healthy deploy this PR's volume is, by construction, a fully
+/// warmed layer store for exactly the image set in the preload manifest
+/// (bootstrap pulled it, hot-update reconciled it). Publish it as the
+/// org-wide template that future first boots fork, content-addressed by the
+/// manifest's (image id, tag) pairs — registry refs are excluded because
+/// they embed the per-PR app name. An existing volume under the same key
+/// means the image set is unchanged and nothing runs; there is no scheduled
+/// refresh because the cache warms itself on exactly the deploys that
+/// change it. Purely an optimization, hence continue-on-error: the boot
+/// manifest check keeps forks of any template correct, stale or fresh.
+fn publish_template_volume() -> Step<Run> {
+    Step::new("Publish template volume")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            key=$(awk '{print $1, $2}' preview-ctx/preload/manifest.txt \
+              | LC_ALL=C sort | sha256sum | cut -c1-24)
+            vol_name="tpl$key"
+            flyctl status --app "$TEMPLATE_APP" >/dev/null 2>&1 \
+              || flyctl apps create "$TEMPLATE_APP" --org "$FLY_ORG"
+            vols=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null || echo '[]')
+            if echo "$vols" | jq -e --arg n "$vol_name" \
+                'map(select(.name == $n)) | length > 0' >/dev/null; then
+              echo "template $vol_name already exists; image set unchanged"
+            else
+              src=$(flyctl volumes list --app "$APP_NAME" --json \
+                | jq -r '[.[] | select(.name == "docker_data")][0].id // empty')
+              if [ -n "$src" ]; then
+                # Fire-and-forget: hydration is a server-side block copy;
+                # nothing in this run depends on it finishing.
+                curl -sf -X POST "https://api.machines.dev/v1/apps/$TEMPLATE_APP/volumes" \
+                  -H "Authorization: Bearer $FLY_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"$vol_name\",\"region\":\"ewr\",\"source_volume_id\":\"$src\"}" \
+                  | jq -r '"published \(.name) (\(.id), state: \(.state))"' \
+                  || echo "template publish failed (non-fatal)" >&2
+              fi
+            fi
+            # Prune superseded templates: keep the 3 newest, and never touch
+            # anything younger than 2h — it may still be hydrating or serving
+            # as a concurrent deploy's fork source.
+            cutoff=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            echo "$vols" | jq -r --arg cutoff "$cutoff" \
+              '[.[] | select((.name | startswith("tpl")) and .attached_machine_id == null)]
+               | sort_by(.created_at) | reverse | .[3:]
+               | .[] | select(.created_at < $cutoff) | .id' \
+              | while read -r old; do
+                  [ -z "$old" ] || flyctl volumes destroy "$old" --app "$TEMPLATE_APP" --yes || true
+                done
+        "#})
+        .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
+        .continue_on_error(true)
 }
 
 fn comment_preview_url() -> Step<Use> {

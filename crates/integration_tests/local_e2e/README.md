@@ -7,5 +7,7 @@ just local-e2e-rust
 ```
 
 The tests are `#[ignore]` so normal workspace test runs do not require Docker
-services. They load fixtures through `local_e2e_test_support`, which reads the
-same seed files used by `seed_cli` and Playwright.
+services. The command starts an isolated named stack through the xtask local
+orchestrator, seeds it, and supplies its generated env and proxy URLs to
+`local_e2e_test_support`. The fixtures are the same files used by `seed_cli`
+and Playwright.

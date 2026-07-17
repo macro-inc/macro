@@ -12,7 +12,10 @@ import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@components/app/ResponsiveBlockToolbar';
 import { useSidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
   SplitTitleFileMenu,
@@ -37,6 +40,7 @@ import ProhibitIcon from '@phosphor/prohibit.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { Button } from '@ui';
 import { onCleanup, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 
@@ -80,6 +84,17 @@ export function TopBar(props: {
     const links = linksQuery.data?.links;
     if (!thread || !links) return false;
     return links.some((link) => link.id === thread.link_id);
+  };
+
+  const markDone = () => {
+    // Prefer the active Mark done command so it drives soup navigation and
+    // notifications; fall back to archiving the thread directly.
+    const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
+    if (command) {
+      runCommand(command);
+    } else {
+      emailCtx.archiveThread();
+    }
   };
 
   const trashThread = () => {
@@ -153,14 +168,7 @@ export function TopBar(props: {
     {
       label: 'Mark done',
       icon: CheckIcon,
-      action: () => {
-        const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
-        if (command) {
-          runCommand(command);
-        } else {
-          emailCtx.archiveThread();
-        }
-      },
+      action: markDone,
       condition: isOwnThread,
     },
     {
@@ -235,6 +243,23 @@ export function TopBar(props: {
           />
         </Show>
       </SplitTitleFileMenu>
+
+      {/* Desktop-only Mark done button, sitting just left of the Previous item
+          caret. On mobile this action lives in the bottom reply bar instead. */}
+      <Show when={!isMobile()}>
+        <SplitHeaderRight>
+          <Show when={isOwnThread()}>
+            <Button
+              class="p-1 rounded-lg"
+              label="Mark done"
+              hotkey={TOKENS.entity.action.markDone}
+              onClick={markDone}
+            >
+              <CheckIcon class="size-4" />
+            </Button>
+          </Show>
+        </SplitHeaderRight>
+      </Show>
 
       <ResponsiveBlockToolbar
         tools={tools}
