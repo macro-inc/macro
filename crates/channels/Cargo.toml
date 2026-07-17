@@ -27,7 +27,6 @@ inbound = [
   "dep:entity_access",
   "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/inbound",
   "models_pagination/axum",
@@ -94,7 +93,6 @@ macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
 non_empty = { path = "../non_empty", optional = true }
