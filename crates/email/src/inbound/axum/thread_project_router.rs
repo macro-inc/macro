@@ -4,8 +4,9 @@ use axum::{
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
-    ProjectBodyAccessLevelExtractor, ThreadAccessLevelExtractor,
+    ProjectBodyAccessLevelExtractorV2, ThreadAccessLevelExtractor,
 };
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use thiserror::Error;
 
@@ -77,16 +78,19 @@ impl From<EmailErr> for UpdateThreadProjectError {
 }
 
 /// Create the thread project router with a `PATCH /{thread_id}/project` handler.
-pub fn thread_project_router<S, T, Svc>(state: EmailThreadRouterState<T, Svc>) -> Router<S>
+pub fn thread_project_router<S, T, Svc, Auth>(
+    state: EmailThreadRouterState<T, Svc, Auth>,
+) -> Router<S>
 where
     S: Send + Sync + 'static,
     T: EmailService,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     Router::new()
         .route(
             "/{thread_id}/project",
-            patch(update_thread_project_handler::<T, Svc>),
+            patch(update_thread_project_handler::<T, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -109,17 +113,26 @@ where
     )
 )]
 #[tracing::instrument(err, skip(state, access, project))]
-pub async fn update_thread_project_handler<T: EmailService, Svc: EntityAccessService>(
-    State(state): State<EmailThreadRouterState<T, Svc>>,
-    access: ThreadAccessLevelExtractor<EditAccessLevel, Svc>,
-    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, UpdateThreadProjectRequest, Svc>,
+pub async fn update_thread_project_handler<
+    T: EmailService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<EmailThreadRouterState<T, Svc, Auth>>,
+    access: ThreadAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
+    project: ProjectBodyAccessLevelExtractorV2<
+        EditAccessLevel,
+        UpdateThreadProjectRequest,
+        Svc,
+        Auth,
+    >,
 ) -> Result<Json<UpdateThreadProjectResponse>, UpdateThreadProjectError> {
     let project_receipt = match project {
-        ProjectBodyAccessLevelExtractor::FoundProject {
+        ProjectBodyAccessLevelExtractorV2::FoundProject {
             entity_access_receipt,
             ..
         } => Some(entity_access_receipt),
-        ProjectBodyAccessLevelExtractor::ProjectNotInBody { .. } => None,
+        ProjectBodyAccessLevelExtractorV2::ProjectNotInBody { .. } => None,
     };
 
     let old_project_id = state

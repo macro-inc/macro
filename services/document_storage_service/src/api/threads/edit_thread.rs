@@ -50,7 +50,11 @@ pub struct PatchThreadRequestV2 {
 )]
 #[tracing::instrument(skip(ctx, user, project, thread_access), fields(user_id=?user.macro_user_id))]
 pub async fn edit_thread_handler(
-    thread_access: ThreadAccessLevelExtractor<OwnerAccessLevel, EntityAccessService>,
+    thread_access: ThreadAccessLevelExtractor<
+        OwnerAccessLevel,
+        EntityAccessService,
+        AuthorizationService,
+    >,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService>,
     thread_context: Extension<EmailThreadPermission>,

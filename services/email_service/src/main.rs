@@ -165,6 +165,7 @@ async fn main() -> anyhow::Result<()> {
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
+        authorization_state: authorization_state.clone(),
     };
     let auth_service_client = Arc::new(auth_service_client);
     let redis_conn = redis_client

@@ -57,7 +57,8 @@ pub(crate) struct ApiContext {
     pub internal_api_key: InternalApiKey,
     pub email_service: EmailRouterState<EmailSvc>,
     pub entity_access_service: Arc<EmailEntityAccessService>,
-    pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,
+    pub email_thread_state:
+        EmailThreadRouterState<EmailSvc, EmailEntityAccessService, AuthorizationService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
     pub macro_event_broker: Arc<MacroEventBrokerService<KafkaEventPublisher>>,
 }

@@ -68,6 +68,7 @@ email_db_client = { path = "../email_db_client", optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
