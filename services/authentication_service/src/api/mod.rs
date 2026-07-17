@@ -111,6 +111,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 teams::inbound::axum_router::TeamRouterState {
                     service: state.teams_service.clone(),
                     entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
                 },
             )
             .layer(
@@ -126,6 +127,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 referral::inbound::axum_router::ReferralRouterState {
                     service: state.referral_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
                 },
             )
             .layer(
