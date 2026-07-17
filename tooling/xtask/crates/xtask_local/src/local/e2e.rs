@@ -111,7 +111,7 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
     let instance_name = args
         .instance
         .clone()
-        .or_else(|| std::env::var("LOCAL_E2E_INSTANCE").ok())
+        .or_else(|| macro_env_var::maybe_read_env("LOCAL_E2E_INSTANCE"))
         .unwrap_or_else(|| DEFAULT_INSTANCE.to_string());
     let up_args = stack::UpArgs {
         run: RunArgs {
