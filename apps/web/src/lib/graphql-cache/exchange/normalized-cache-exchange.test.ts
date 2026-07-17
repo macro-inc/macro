@@ -22,6 +22,7 @@ import {
   type NormalizedCacheExchangeOptions,
   normalizedCacheExchange,
 } from './normalized-cache-exchange';
+import { optimisticMutationDispositionOf } from './optimistic';
 
 const QUERY = gql`
   query Soup($input: SoupInput!) {
@@ -66,6 +67,7 @@ function makeFakeHost(): FakeHost {
     args: Parameters<CacheHost['beginOptimisticWrite']>[0];
     attemptCount: number;
     leased: boolean;
+    nextAttemptAtMs?: number;
   }> = [];
   const host: FakeHost = {
     clientId: 'test-client',
@@ -128,10 +130,20 @@ function makeFakeHost(): FakeHost {
     async inspectQuery() {
       return [];
     },
-    async claimNextMutation(_owner): Promise<ClaimedMutation | undefined> {
+    async claimNextMutation(
+      _owner,
+      nowMs
+    ): Promise<ClaimedMutation | undefined> {
       const head = queue[0];
-      if (!head || head.leased) return undefined;
+      if (
+        !head ||
+        head.leased ||
+        (head.nextAttemptAtMs !== undefined && head.nextAttemptAtMs > nowMs)
+      ) {
+        return undefined;
+      }
       head.leased = true;
+      head.nextAttemptAtMs = undefined;
       head.attemptCount += 1;
       host.claims.push(head.transactionId);
       return {
@@ -146,12 +158,15 @@ function makeFakeHost(): FakeHost {
     async deferOptimisticWrite(
       transactionId,
       _claim: MutationClaim,
-      _nextAttemptAtMs,
+      nextAttemptAtMs,
       error
     ) {
       host.defers.push({ transactionId, error });
       const head = queue[0];
-      if (head?.transactionId === transactionId) head.leased = false;
+      if (head?.transactionId === transactionId) {
+        head.leased = false;
+        head.nextAttemptAtMs = nextAttemptAtMs;
+      }
     },
     async commitOptimisticWrite(
       transactionId,
@@ -662,6 +677,10 @@ describe('normalizedCacheExchange', () => {
       // Only the real network result reaches the caller.
       expect(results).toHaveLength(1);
       expect(results[0]?.data).toEqual({ from: 'network' });
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'committed',
+        data: { from: 'network' },
+      });
       // The optimistic path never uses the plain write-through.
       expect(host.writes).toHaveLength(0);
     });
@@ -699,6 +718,10 @@ describe('normalizedCacheExchange', () => {
       expect(host.rollbacks).toEqual(['txn-1']);
       expect(host.commits).toHaveLength(0);
       expect(results[0]?.error).toBe(error);
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'permanently-failed',
+        error,
+      });
     });
 
     it('rolls back on a network error result', async () => {
@@ -734,6 +757,34 @@ describe('normalizedCacheExchange', () => {
       ]);
       expect(host.rollbacks).toHaveLength(0);
       expect(results[0]?.error).toBe(error);
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-1',
+      });
+    });
+
+    it('reports a later mutation as queued while a deferred head blocks it', async () => {
+      const error = new CombinedError({
+        networkError: new Error('offline'),
+      });
+      const { ops, results, forwarded } = harness(
+        host,
+        (op) => (op.kind === 'mutation' ? { error, data: undefined } : {}),
+        { shouldRetryMutation: () => true }
+      );
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+      ops.next(makeMutationOp(2, optimistic));
+      await tick();
+
+      expect(host.claims).toEqual(['txn-1']);
+      expect(forwarded.map((op) => op.key)).toEqual([1]);
+      expect(results).toHaveLength(2);
+      expect(optimisticMutationDispositionOf(results[1])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-2',
+      });
     });
 
     it('forwards queued optimistic mutations strictly in enqueue order', async () => {
@@ -743,7 +794,11 @@ describe('normalizedCacheExchange', () => {
       await tick();
 
       expect(host.claims).toEqual(['txn-1', 'txn-2']);
-      expect(forwarded.map((op) => op.key)).toEqual([1, 2]);
+      // The second caller was released as queued while the first attempt was
+      // in flight, so its eventual send is reconstructed from durable data.
+      expect(forwarded).toHaveLength(2);
+      expect(forwarded[0]?.key).toBe(1);
+      expect(forwarded[1]?.kind).toBe('mutation');
       expect(host.commits.map((entry) => entry.transactionId)).toEqual([
         'txn-1',
         'txn-2',
