@@ -9,6 +9,7 @@ use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
     PersistedOptimisticLayer, StoredMutation,
 };
+use cache_core::record_selection::RecordSelection;
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
 use cache_idb::IdbStorage;
@@ -195,4 +196,10 @@ async fn engine_over_idb() {
         panic!("expected hit");
     };
     assert_eq!(cached, data);
+
+    let selection =
+        RecordSelection::parse("fragment Item on GraphqlSoupItem { id }", "Item").unwrap();
+    let page = engine.read_records(&selection, None, 10).await.unwrap();
+    assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1"})]);
+    assert!(page.next_cursor.is_none());
 }
