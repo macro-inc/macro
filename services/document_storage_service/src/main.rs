@@ -680,6 +680,7 @@ async fn main() -> anyhow::Result<()> {
     let webhook_state = webhook::inbound::axum_router::WebhookRouterState::new(
         webhook_service,
         webhook_rate_limiter,
+        authorization_state.clone(),
     );
 
     let webhook_ingestion_service =

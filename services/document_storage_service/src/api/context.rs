@@ -386,7 +386,8 @@ pub(crate) type DssWebhookRateLimiter =
     rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
 
 /// Type alias for the product webhook router state.
-pub(crate) type DssWebhookState = MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter>;
+pub(crate) type DssWebhookState =
+    MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
