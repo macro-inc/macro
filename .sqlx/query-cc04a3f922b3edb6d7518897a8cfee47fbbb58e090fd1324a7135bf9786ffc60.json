@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE entity_properties\n            SET values = $4, updated_at = NOW()\n            WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc04a3f922b3edb6d7518897a8cfee47fbbb58e090fd1324a7135bf9786ffc60"
+}

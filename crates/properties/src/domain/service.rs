@@ -27,7 +27,8 @@ use uuid::Uuid;
 
 use super::error::PropertiesErr;
 use super::model::{
-    EditReceipt, EntityPropertyInfo, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
+    EditReceipt, EntityPropertyInfo, EntityPropertyOptionSelection,
+    EntityPropertyOptionUpdate, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
 };
 
 /// The caller's team-membership proof, used to scope definition/option/tag
@@ -104,6 +105,21 @@ pub trait PropertiesService: Send + Sync + 'static {
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Apply a complete tag-picker selection across one or more of an entity's
+    /// multi-select properties in a single transaction, returning each
+    /// property's final option ids for cache reconciliation.
+    ///
+    /// Each property change is a delta (options to add / remove) so the whole
+    /// selection composes with concurrent edits under a per-row lock rather than
+    /// clobbering them. Validates that every added option belongs to its
+    /// (multi-select) property before any write; the persistence is
+    /// all-or-nothing, so a failure on any property rolls back the whole batch.
+    fn bulk_update_entity_property_options(
+        &self,
+        access: &EditReceipt,
+        updates: Vec<EntityPropertyOptionUpdate>,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyOptionSelection>, PropertiesErr>> + Send;
 
     /// List property definitions owned by the given team and/or user, sorted by
     /// display name. Set `include_system` to true to also include system properties.

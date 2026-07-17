@@ -468,6 +468,7 @@ export function getEntityPropertyOptionDeltas(
   ];
 }
 
+/** Reverses a single delta on an option-id list (undo an optimistic change). */
 export function rollbackEntityPropertyOptionDelta(
   optionIds: string[],
   delta: EntityPropertyOptionDelta
@@ -490,124 +491,65 @@ type BulkUpdateEntityPropertyOptionsParams = {
   }>;
 };
 
-export type FailedEntityPropertyOptionDelta = {
-  updateIndex: number;
-  delta: EntityPropertyOptionDelta;
+/** A property's reconciled final option ids after a bulk update. */
+export type EntityPropertyOptionSelection = {
+  propertyDefinitionId: string;
+  optionIds: string[];
 };
-
-export class BulkUpdateEntityPropertyOptionsError extends Error {
-  constructor(readonly failedDeltas: FailedEntityPropertyOptionDelta[]) {
-    super('Failed to update some tags');
-    this.name = 'BulkUpdateEntityPropertyOptionsError';
-  }
-}
 
 type BulkUpdateEntityPropertyOptionsContext = {
   soupTxn?: SoupTransaction;
 };
 
-function optionIdsFromSoupProperty(property: SoupProperty | undefined) {
-  return property?.value?.type === 'SelectOption' ? property.value.value : [];
-}
-
-function rollbackFailedOptionDeltas(
-  variables: BulkUpdateEntityPropertyOptionsParams,
-  failedDeltas: FailedEntityPropertyOptionDelta[]
-) {
-  const failedByUpdate = new Map<number, EntityPropertyOptionDelta[]>();
-  for (const { updateIndex, delta } of failedDeltas) {
-    const deltas = failedByUpdate.get(updateIndex) ?? [];
-    deltas.push(delta);
-    failedByUpdate.set(updateIndex, deltas);
-  }
-
-  const current = getSoupEntityById(variables.entityId);
-  const updates: {
-    property: Property | PropertyDefinitionDomain;
-    value: SoupPropertyValue;
-  }[] = [];
-  for (const [updateIndex, deltas] of failedByUpdate) {
-    const update = variables.properties[updateIndex];
-    if (!update) continue;
-    const propertyDefinitionId = getPropertyDefinitionId(update.property);
-    const soupProperty =
-      current &&
-      current.tag !== 'channel' &&
-      current.tag !== 'call' &&
-      current.tag !== 'foreignEntity' &&
-      current.tag !== 'channelThread'
-        ? current.data.properties?.find(
-            (property) => property.definition.id === propertyDefinitionId
-          )
-        : undefined;
-    const optionIds = deltas.reduce(
-      rollbackEntityPropertyOptionDelta,
-      optionIdsFromSoupProperty(soupProperty)
-    );
-    updates.push({
-      property: update.property,
-      value:
-        optionIds.length > 0
-          ? { type: 'SelectOption', value: optionIds }
-          : null,
-    });
-  }
-
-  optimisticUpdateSoupEntityProperties(variables.entityId, updates);
-}
-
 /**
- * Applies a complete multi-select change with one optimistic soup transaction.
- * The service currently exposes only idempotent delta endpoints, so persistence
- * fans out until a true bulk endpoint is available.
+ * Persists a complete multi-select selection across one or more properties in a
+ * single transactional request, then reconciles the soup cache from the final
+ * option ids the server returns (which may differ from the optimistic value if a
+ * concurrent edit merged in). The optimistic soup update is atomic and rolls
+ * back as a whole on failure.
  */
 export function useBulkUpdateEntityPropertyOptionsMutation(
   callbacks?: MutationCallbacks<
-    void,
+    EntityPropertyOptionSelection[],
     Error,
     BulkUpdateEntityPropertyOptionsParams,
     BulkUpdateEntityPropertyOptionsContext
   >
 ) {
   return useMutation(() => ({
-    mutationFn: async (variables: BulkUpdateEntityPropertyOptionsParams) => {
-      const operations = variables.properties.flatMap((update, updateIndex) =>
-        getEntityPropertyOptionDeltas(
-          update.currentOptionIds,
-          update.nextOptionIds
-        ).map((delta) => ({ update, updateIndex, delta }))
-      );
-      const results = await Promise.allSettled(
-        operations.map(({ update, delta }) => {
-          const params = {
-            entity_type: toPropertyTargetEntityType(variables.entityType),
-            entity_id: variables.entityId,
-            property_id: getPropertyDefinitionId(update.property),
-            option_id: delta.optionId,
-          };
-          return throwOnErr(async () =>
-            delta.type === 'add'
-              ? await propertiesServiceClient.addEntityPropertyOption(params)
-              : await propertiesServiceClient.removeEntityPropertyOption(params)
-          );
+    mutationFn: async (
+      variables: BulkUpdateEntityPropertyOptionsParams
+    ): Promise<EntityPropertyOptionSelection[]> => {
+      const response = await throwOnErr(async () =>
+        propertiesServiceClient.bulkUpdateEntityPropertyOptions({
+          entity_type: toPropertyTargetEntityType(variables.entityType),
+          entity_id: variables.entityId,
+          body: {
+            properties: variables.properties.map((update) => {
+              const deltas = getEntityPropertyOptionDeltas(
+                update.currentOptionIds,
+                update.nextOptionIds
+              );
+              return {
+                property_id: getPropertyDefinitionId(update.property),
+                add_option_ids: deltas
+                  .filter((delta) => delta.type === 'add')
+                  .map((delta) => delta.optionId),
+                remove_option_ids: deltas
+                  .filter((delta) => delta.type === 'remove')
+                  .map((delta) => delta.optionId),
+              };
+            }),
+          },
         })
       );
-      const failedDeltas = results.flatMap((result, index) =>
-        result.status === 'rejected'
-          ? [
-              {
-                updateIndex: operations[index].updateIndex,
-                delta: operations[index].delta,
-              },
-            ]
-          : []
-      );
-      if (failedDeltas.length > 0) {
-        throw new BulkUpdateEntityPropertyOptionsError(failedDeltas);
-      }
+      return response.properties.map((property) => ({
+        propertyDefinitionId: property.property_id,
+        optionIds: property.option_ids,
+      }));
     },
     ...withCallbacks<
-      void,
+      EntityPropertyOptionSelection[],
       Error,
       BulkUpdateEntityPropertyOptionsParams,
       BulkUpdateEntityPropertyOptionsContext
@@ -626,12 +568,37 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           );
           return { soupTxn };
         },
-        onError: (error, variables, context) => {
-          if (error instanceof BulkUpdateEntityPropertyOptionsError) {
-            rollbackFailedOptionDeltas(variables, error.failedDeltas);
-          } else {
-            context?.soupTxn?.rollback();
-          }
+        onSuccess: (selections, variables) => {
+          const propertyByDefinitionId = new Map(
+            variables.properties.map((update) => [
+              getPropertyDefinitionId(update.property),
+              update.property,
+            ])
+          );
+          optimisticUpdateSoupEntityProperties(
+            variables.entityId,
+            selections.flatMap((selection) => {
+              const property = propertyByDefinitionId.get(
+                selection.propertyDefinitionId
+              );
+              if (!property) return [];
+              return [
+                {
+                  property,
+                  value:
+                    selection.optionIds.length > 0
+                      ? {
+                          type: 'SelectOption' as const,
+                          value: selection.optionIds,
+                        }
+                      : null,
+                },
+              ];
+            })
+          );
+        },
+        onError: (error, _variables, context) => {
+          context?.soupTxn?.rollback();
           console.error('Failed to update tags', error);
           toast.failure('Failed to update tags');
         },

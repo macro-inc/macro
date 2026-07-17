@@ -446,6 +446,65 @@
         }
       }
     },
+    "/properties/entities/{entity_type}/{entity_id}/options/bulk": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Apply a complete tag-picker selection across an entity's multi-select\nproperties in one request.",
+        "description": "Each property change is expressed as an option delta and applied to the\ncurrent stored value under a per-row lock inside a single transaction, so the\nselection persists atomically and composes with concurrent edits instead of\nclobbering them. Returns the reconciled final option ids per property for\ncache reconciliation.",
+        "operationId": "bulk_update_entity_property_options",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateEntityPropertyOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Options updated; returns final ids per property",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUpdateEntityPropertyOptionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, a property is not multi-select, or an option does not belong to its property"
+          },
+          "403": {
+            "description": "No edit access to the entity"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/properties/entities/{entity_type}/{entity_id}/{property_id}": {
       "put": {
         "tags": ["Properties"],
@@ -810,6 +869,34 @@
           }
         }
       },
+      "BulkUpdateEntityPropertyOptionsRequest": {
+        "type": "object",
+        "description": "Request to apply option deltas across one or more of an entity's multi-select\nproperties in a single transaction.",
+        "required": ["properties"],
+        "properties": {
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityPropertyOptionUpdateRequest"
+            },
+            "description": "The per-property option changes to apply."
+          }
+        }
+      },
+      "BulkUpdateEntityPropertyOptionsResponse": {
+        "type": "object",
+        "description": "Response for a bulk option update: each property's reconciled final ids.",
+        "required": ["properties"],
+        "properties": {
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityPropertyOptionSelectionResponse"
+            },
+            "description": "The final option ids per updated property."
+          }
+        }
+      },
       "CreatePropertyDefinitionRequest": {
         "type": "object",
         "description": "Request to create a new property definition.",
@@ -905,6 +992,54 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "EntityPropertyOptionSelectionResponse": {
+        "type": "object",
+        "description": "The reconciled final option ids stored for one property after a bulk update.",
+        "required": ["property_id", "option_ids"],
+        "properties": {
+          "option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The final option ids the server persisted, in stored order."
+          },
+          "property_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The property definition the options belong to."
+          }
+        }
+      },
+      "EntityPropertyOptionUpdateRequest": {
+        "type": "object",
+        "description": "One property's option changes in a bulk selection update. The change is a\ndelta (options to add / remove) so it composes with concurrent edits rather\nthan replacing the whole value.",
+        "required": ["property_id"],
+        "properties": {
+          "add_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Options to add (deduped against the current value)."
+          },
+          "property_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The multi-select property definition being changed."
+          },
+          "remove_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Options to remove (a no-op if not present)."
           }
         }
       },

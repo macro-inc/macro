@@ -175,6 +175,34 @@ pub struct TagSet {
     pub options: Vec<PropertyOption>,
 }
 
+/// One property's requested option changes in a bulk selection update.
+///
+/// The change is expressed as a delta (options to add, options to remove) rather
+/// than a target set so it composes with concurrent edits under the row lock: a
+/// bulk update only touches the options it names, leaving any options a
+/// concurrent writer added or removed intact.
+#[derive(Debug, Clone)]
+pub struct EntityPropertyOptionUpdate {
+    /// The multi-select property definition being changed.
+    pub property_definition_id: Uuid,
+    /// Options to add to the current stored value (deduped, order-preserving).
+    pub add_option_ids: Vec<Uuid>,
+    /// Options to strip from the current stored value (a no-op if absent).
+    pub remove_option_ids: Vec<Uuid>,
+}
+
+/// The reconciled final option ids for one property after a bulk update. The
+/// caller uses these to reconcile its cache with the value the server actually
+/// persisted (which may differ from the requested delta if a concurrent edit
+/// merged in).
+#[derive(Debug, Clone)]
+pub struct EntityPropertyOptionSelection {
+    /// The property definition the options belong to.
+    pub property_definition_id: Uuid,
+    /// The final option ids stored for the entity's property, in stored order.
+    pub option_ids: Vec<Uuid>,
+}
+
 /// Outcome of an in-place property option update.
 #[derive(Debug, Clone)]
 pub enum UpdatePropertyOptionOutcome {

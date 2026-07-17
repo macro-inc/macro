@@ -156,6 +156,12 @@ where
             post(entities::add_entity_property_option::<S, A, Auth>)
                 .delete(entities::remove_entity_property_option::<S, A, Auth>),
         )
+        // Transactional multi-property option deltas (one tag-picker selection)
+        .route(
+            "/entities/{entity_type}/{entity_id}/options/bulk",
+            post(entities::bulk_update_entity_property_options::<S, A>)
+                .layer(ensure_user_exists.clone()),
+        )
         .route(
             "/entity_properties/{entity_property_id}",
             delete(entities::delete_entity_property::<S, A, Auth>),

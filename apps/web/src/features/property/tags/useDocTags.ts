@@ -1,5 +1,4 @@
 import {
-  BulkUpdateEntityPropertyOptionsError,
   getEntityPropertyOptionDeltas,
   rollbackEntityPropertyOptionDelta,
   useBulkUpdateEntityPropertyOptionsMutation,
@@ -217,23 +216,18 @@ function createDocTags(
     try {
       await persistTagSelection(updates);
     } catch (error) {
-      const failed =
-        error instanceof BulkUpdateEntityPropertyOptionsError
-          ? error.failedDeltas.flatMap(({ updateIndex, delta }) => {
-              const update = updates[updateIndex];
-              return update ? [{ update, delta }] : [];
-            })
-          : updates.flatMap((update) =>
-              getEntityPropertyOptionDeltas(
-                update.currentOptionIds,
-                update.nextOptionIds
-              ).map((delta) => ({ update, delta }))
-            );
-
-      for (const { update, delta } of failed) {
-        updatePendingOptionIds(update.definition.id, (optionIds) =>
-          rollbackEntityPropertyOptionDelta(optionIds, delta)
-        );
+      // The bulk update is atomic, so on failure nothing persisted. Undo each
+      // delta on the optimistic state, preserving any concurrent edit to the
+      // same definition instead of clobbering it with a pre-edit snapshot.
+      for (const update of updates) {
+        for (const delta of getEntityPropertyOptionDeltas(
+          update.currentOptionIds,
+          update.nextOptionIds
+        )) {
+          updatePendingOptionIds(update.definition.id, (optionIds) =>
+            rollbackEntityPropertyOptionDelta(optionIds, delta)
+          );
+        }
       }
       throw error;
     }

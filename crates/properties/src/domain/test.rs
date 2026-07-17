@@ -1502,3 +1502,182 @@ async fn mixed_document_bulk_read_batches_subtypes_and_returns_canonical_keys() 
         })
     );
 }
+
+#[tokio::test]
+async fn test_bulk_update_entity_property_options_happy_path() {
+    use crate::domain::model::{EntityPropertyOptionSelection, EntityPropertyOptionUpdate};
+
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+    let add_id = Uuid::from_u128(0xB2);
+    let remove_id = Uuid::from_u128(0xB3);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, true))) })
+    });
+    // Only the added option is validated; the removed one is not.
+    repo.expect_count_valid_property_options()
+        .withf(move |_, option_ids| option_ids == [add_id])
+        .returning(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_bulk_update_entity_property_options()
+        .withf(move |entity_id, entity_type, updates| {
+            entity_id == "doc1"
+                && *entity_type == EntityType::Document
+                && updates.len() == 1
+                && updates[0].property_definition_id == def_id
+                && updates[0].add_option_ids == [add_id]
+                && updates[0].remove_option_ids == [remove_id]
+        })
+        .returning(move |_, _, _| {
+            Box::pin(async move {
+                Ok(vec![EntityPropertyOptionSelection {
+                    property_definition_id: def_id,
+                    option_ids: vec![add_id],
+                }])
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let selections = service
+        .bulk_update_entity_property_options(
+            &edit_receipt("doc1", EntityType::Document),
+            vec![EntityPropertyOptionUpdate {
+                property_definition_id: def_id,
+                add_option_ids: vec![add_id],
+                remove_option_ids: vec![remove_id],
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(selections.len(), 1);
+    assert_eq!(selections[0].property_definition_id, def_id);
+    assert_eq!(selections[0].option_ids, vec![add_id]);
+}
+
+#[tokio::test]
+async fn test_bulk_update_entity_property_options_rejects_single_select() {
+    use crate::domain::model::EntityPropertyOptionUpdate;
+
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, false))) })
+    });
+    // No write should be attempted for an invalid batch.
+    repo.expect_bulk_update_entity_property_options().never();
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .bulk_update_entity_property_options(
+            &edit_receipt("doc1", EntityType::Document),
+            vec![EntityPropertyOptionUpdate {
+                property_definition_id: def_id,
+                add_option_ids: vec![Uuid::from_u128(0xB2)],
+                remove_option_ids: vec![],
+            }],
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::Validation(_)
+    ));
+}
+
+#[tokio::test]
+async fn test_bulk_update_entity_property_options_rejects_invalid_option() {
+    use crate::domain::model::EntityPropertyOptionUpdate;
+
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, true))) })
+    });
+    // Added option does not belong to the property.
+    repo.expect_count_valid_property_options()
+        .returning(|_, _| Box::pin(async { Ok(0) }));
+    // A validation failure must abort before any persistence runs.
+    repo.expect_bulk_update_entity_property_options().never();
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .bulk_update_entity_property_options(
+            &edit_receipt("doc1", EntityType::Document),
+            vec![EntityPropertyOptionUpdate {
+                property_definition_id: def_id,
+                add_option_ids: vec![Uuid::from_u128(0xB2)],
+                remove_option_ids: vec![],
+            }],
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::Validation(_)
+    ));
+}
+
+#[tokio::test]
+async fn test_bulk_update_entity_property_options_dedupes_added_options() {
+    use crate::domain::model::{EntityPropertyOptionSelection, EntityPropertyOptionUpdate};
+
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+    let add_id = Uuid::from_u128(0xB2);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, true))) })
+    });
+    // A repeated add id is deduped before the validity count, so the single
+    // valid option is not miscounted as invalid.
+    repo.expect_count_valid_property_options()
+        .withf(move |_, option_ids| option_ids == [add_id])
+        .returning(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_bulk_update_entity_property_options()
+        .returning(move |_, _, _| {
+            Box::pin(async move {
+                Ok(vec![EntityPropertyOptionSelection {
+                    property_definition_id: def_id,
+                    option_ids: vec![add_id],
+                }])
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    service
+        .bulk_update_entity_property_options(
+            &edit_receipt("doc1", EntityType::Document),
+            vec![EntityPropertyOptionUpdate {
+                property_definition_id: def_id,
+                add_option_ids: vec![add_id, add_id],
+                remove_option_ids: vec![],
+            }],
+        )
+        .await
+        .unwrap();
+}
