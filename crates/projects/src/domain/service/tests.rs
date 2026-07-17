@@ -487,8 +487,23 @@ fn mutation_receipt<T>(project_id: Uuid, access_level: AccessLevel) -> EntityAcc
 where
     T: entity_access::domain::models::RequiredPermission,
 {
-    EntityAccessReceipt::try_new(
+    mutation_receipt_with_auth(
+        project_id,
+        access_level,
         EntityAccessAuth::Authenticated(user_id("macro|owner@example.com")),
+    )
+}
+
+fn mutation_receipt_with_auth<T>(
+    project_id: Uuid,
+    access_level: AccessLevel,
+    auth: EntityAccessAuth,
+) -> EntityAccessReceipt<T>
+where
+    T: entity_access::domain::models::RequiredPermission,
+{
+    EntityAccessReceipt::try_new(
+        auth,
         Entity {
             entity_id: project_id.to_string(),
             entity_type: EntityType::Project,
@@ -496,6 +511,14 @@ where
         EntityPermission::AccessLevel { access_level },
     )
     .unwrap()
+}
+
+fn assert_project_event(event: &PublishedEvent, key: Uuid, event_type: &str) {
+    assert_eq!(event.topic, "macro.projects");
+    assert_eq!(event.key, key.to_string());
+    assert!(Uuid::parse_str(event.payload["event_id"].as_str().unwrap()).is_ok());
+    assert_eq!(event.payload["schema_version"], 1);
+    assert_eq!(event.payload["event_type"], event_type);
 }
 
 fn patch_request(
@@ -1328,13 +1351,16 @@ async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
         .return_once(|_| Box::pin(async { Ok(()) }));
     let indexer = RecordingIndexer::default();
     let calls = indexer.calls.clone();
-    let service = mutation_service(repo, RecordingEam::default(), indexer);
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service =
+        mutation_service_with_event_broker(repo, RecordingEam::default(), indexer, event_broker);
 
     service
         .soft_delete_project(
             mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
             basic_project(project_id, Some(parent_id), false),
-            "macro|owner@example.com".to_string(),
+            "unused-actor".to_string(),
         )
         .await
         .unwrap();
@@ -1342,10 +1368,27 @@ async fn soft_delete_removes_index_entries_and_bumps_parent_with_upsert() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            IndexCall::Remove(expected_deleted_ids),
+            IndexCall::Remove(expected_deleted_ids.clone()),
             IndexCall::Upsert(vec![parent_id.to_string()]),
         ]
     );
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_project_event(&published[0], project_id, "project.deleted");
+    let metadata = &published[0].payload["metadata"];
+    assert_eq!(metadata["project_id"], project_id.to_string());
+    assert_eq!(metadata["owner"], "macro|owner@example.com");
+    assert_eq!(metadata["actor_user_id"], "macro|owner@example.com");
+    assert_eq!(metadata["parent_project_id"], parent_id.to_string());
+    assert_eq!(
+        metadata["deleted_project_ids"],
+        serde_json::json!(expected_deleted_ids)
+    );
+    assert_eq!(
+        metadata["deleted_document_ids"],
+        serde_json::json!(["document"])
+    );
+    assert_eq!(metadata["deleted_chat_ids"], serde_json::json!(["chat"]));
 }
 
 #[tokio::test]
@@ -1369,11 +1412,18 @@ async fn revert_upserts_every_restored_project() {
         });
     let indexer = RecordingIndexer::default();
     let calls = indexer.calls.clone();
-    let service = mutation_service(repo, RecordingEam::default(), indexer);
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service =
+        mutation_service_with_event_broker(repo, RecordingEam::default(), indexer, event_broker);
 
     service
         .revert_delete_project(
-            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            mutation_receipt_with_auth::<OwnerAccessLevel>(
+                project_id,
+                AccessLevel::Owner,
+                EntityAccessAuth::Internal,
+            ),
             basic_project(project_id, Some(parent_id), true),
         )
         .await
@@ -1381,8 +1431,87 @@ async fn revert_upserts_every_restored_project() {
 
     assert_eq!(
         *calls.lock().unwrap(),
-        vec![IndexCall::Upsert(expected_ids)]
+        vec![IndexCall::Upsert(expected_ids.clone())]
     );
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_project_event(&published[0], project_id, "project.restored");
+    let metadata = &published[0].payload["metadata"];
+    assert_eq!(metadata["project_id"], project_id.to_string());
+    assert_eq!(metadata["owner"], "macro|owner@example.com");
+    assert!(metadata["actor_user_id"].is_null());
+    assert_eq!(metadata["parent_project_id"], parent_id.to_string());
+    assert_eq!(
+        metadata["restored_project_ids"],
+        serde_json::json!(expected_ids)
+    );
+}
+
+#[tokio::test]
+async fn deletion_repository_failures_publish_no_events() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_soft_delete_project()
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("delete failed")) }));
+    repo.expect_revert_delete_project()
+        .return_once(|_, _| Box::pin(async { Err(anyhow::anyhow!("restore failed")) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    let delete_result = service
+        .soft_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            "unused".to_string(),
+        )
+        .await;
+    let restore_result = service
+        .revert_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, true),
+        )
+        .await;
+
+    assert!(delete_result.is_err());
+    assert!(restore_result.is_err());
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn soft_delete_succeeds_when_event_publication_fails() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_soft_delete_project().return_once(move |_| {
+        Box::pin(async move {
+            Ok(SoftDeleteResult {
+                project_ids: vec![project_id.to_string()],
+                document_ids: Vec::new(),
+                chat_ids: Vec::new(),
+            })
+        })
+    });
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::failing(),
+    );
+
+    let result = service
+        .soft_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            "unused".to_string(),
+        )
+        .await;
+
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
@@ -1412,6 +1541,15 @@ impl ShaCounterPort for OrderedSha {
     async fn decrement_counts(&self, _sha_counts: &[(String, i64)]) -> anyhow::Result<()> {
         self.events.lock().unwrap().push("sha");
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FailingSha;
+
+impl ShaCounterPort for FailingSha {
+    async fn decrement_counts(&self, _sha_counts: &[(String, i64)]) -> anyhow::Result<()> {
+        anyhow::bail!("sha counter unavailable")
     }
 }
 
@@ -1576,6 +1714,8 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
                 })
             })
         });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
     let service = ProjectServiceImpl::new(
         repo,
         NullPort,
@@ -1589,14 +1729,15 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
             fail: true,
         },
         None,
-        TestEventBroker::default(),
+        event_broker,
     );
 
     let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
     service
         .permanently_delete_project(
             mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
-            basic_project(project_id, None, true),
+            basic_project(project_id, Some(parent_id), true),
         )
         .await
         .unwrap();
@@ -1612,6 +1753,23 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
             "document_deletes"
         ]
     );
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_project_event(&published[0], project_id, "project.permanently_deleted");
+    let metadata = &published[0].payload["metadata"];
+    assert_eq!(metadata["project_id"], project_id.to_string());
+    assert_eq!(metadata["owner"], "macro|owner@example.com");
+    assert_eq!(metadata["actor_user_id"], "macro|owner@example.com");
+    assert_eq!(metadata["parent_project_id"], parent_id.to_string());
+    assert_eq!(
+        metadata["purged_project_ids"],
+        serde_json::json!(["project"])
+    );
+    assert_eq!(
+        metadata["purged_document_ids"],
+        serde_json::json!(["document"])
+    );
+    assert_eq!(metadata["purged_chat_ids"], serde_json::json!(["chat"]));
 }
 
 #[tokio::test]
@@ -1619,7 +1777,9 @@ async fn permanent_delete_has_no_external_side_effects_when_purge_fails() {
     let mut repo = MockProjectRepo::new();
     repo.expect_purge_deleted_project_tree()
         .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("commit failed")) }));
-    let service = service(repo, RecordingBulkUpload::default());
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
 
     let project_id = Uuid::new_v4();
     let result = service
@@ -1630,6 +1790,45 @@ async fn permanent_delete_has_no_external_side_effects_when_purge_fails() {
         .await;
 
     assert!(result.is_err());
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn permanent_delete_sha_failure_publishes_no_event() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_purge_deleted_project_tree().return_once(|_| {
+        Box::pin(async {
+            Ok(PurgedProjectTree {
+                project_ids: vec!["project".to_string()],
+                chat_ids: Vec::new(),
+                documents: Vec::new(),
+                bom_shas: vec![("sha".to_string(), 1)],
+            })
+        })
+    });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = ProjectServiceImpl::new(
+        repo,
+        NullPort,
+        RecordingBulkUpload::default(),
+        FailingSha,
+        NullPort,
+        RecordingIndexer::default(),
+        None,
+        event_broker,
+    );
+    let project_id = Uuid::new_v4();
+
+    let result = service
+        .permanently_delete_project(
+            mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, true),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert!(published.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

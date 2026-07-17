@@ -25,7 +25,10 @@ use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
-use super::events::{ProjectCreatedMetadata, ProjectMacroEvent, ProjectUpdatedMetadata};
+use super::events::{
+    ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectMacroEvent,
+    ProjectPermanentlyDeletedMetadata, ProjectRestoredMetadata, ProjectUpdatedMetadata,
+};
 use super::models::{
     CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult, UploadFolderRepoArgs,
 };
@@ -516,13 +519,27 @@ where
             self.bump_project_modified(parent_id).await;
         }
 
+        let project_id = receipt.entity().entity_id.clone();
+        self.publish_project_event(&ProjectMacroEvent::deleted(
+            project_id.clone(),
+            ProjectDeletedMetadata {
+                project_id,
+                owner: project.user_id,
+                actor_user_id: event_actor_user_id(receipt.auth()),
+                parent_project_id: project.parent_id,
+                deleted_project_ids: deleted.project_ids.clone(),
+                deleted_document_ids: deleted.document_ids.clone(),
+                deleted_chat_ids: deleted.chat_ids.clone(),
+            },
+        ));
+
         Ok(deleted)
     }
 
     async fn permanently_delete_project(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _project: BasicProject,
+        project: BasicProject,
     ) -> Result<(), ProjectError> {
         let purged = self
             .repo
@@ -536,6 +553,14 @@ where
                 .await
                 .map_err(|error| internal_error(error, "unable to update document references"))?;
         }
+
+        let purged_project_ids = purged.project_ids.clone();
+        let purged_chat_ids = purged.chat_ids.clone();
+        let purged_document_ids = purged
+            .documents
+            .iter()
+            .map(|(document_id, _)| document_id.clone())
+            .collect::<Vec<_>>();
 
         if !purged.project_ids.is_empty() {
             let _ = self
@@ -552,14 +577,9 @@ where
                 .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged chats for search"));
         }
         if !purged.documents.is_empty() {
-            let document_ids = purged
-                .documents
-                .iter()
-                .map(|(document_id, _)| document_id.clone())
-                .collect();
             let _ = self
                 .search_indexer
-                .remove_documents(document_ids)
+                .remove_documents(purged_document_ids.clone())
                 .await
                 .inspect_err(|error| tracing::error!(error = ?error, "unable to enqueue purged documents for search"));
             let _ = self
@@ -571,6 +591,20 @@ where
                 );
         }
 
+        let project_id = receipt.entity().entity_id.clone();
+        self.publish_project_event(&ProjectMacroEvent::permanently_deleted(
+            project_id.clone(),
+            ProjectPermanentlyDeletedMetadata {
+                project_id,
+                owner: project.user_id,
+                actor_user_id: event_actor_user_id(receipt.auth()),
+                parent_project_id: project.parent_id,
+                purged_project_ids,
+                purged_document_ids,
+                purged_chat_ids,
+            },
+        ));
+
         Ok(())
     }
 
@@ -579,21 +613,35 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project: BasicProject,
     ) -> Result<(), ProjectError> {
+        let parent_project_id = project.parent_id.clone();
         let restored = self
             .repo
-            .revert_delete_project(&receipt.entity().entity_id, project.parent_id)
+            .revert_delete_project(&receipt.entity().entity_id, parent_project_id.clone())
             .await
             .map_err(|error| internal_error(error, "unable to revert project"))?;
 
         if !restored.project_ids.is_empty() {
             let _ = self
                 .search_indexer
-                .upsert_projects(restored.project_ids)
+                .upsert_projects(restored.project_ids.clone())
                 .await
                 .inspect_err(|error| {
                     tracing::error!(error = ?error, "unable to enqueue restored projects for search");
                 });
         }
+
+        let project_id = receipt.entity().entity_id.clone();
+        self.publish_project_event(&ProjectMacroEvent::restored(
+            project_id.clone(),
+            ProjectRestoredMetadata {
+                project_id,
+                owner: project.user_id,
+                actor_user_id: event_actor_user_id(receipt.auth()),
+                parent_project_id,
+                restored_project_ids: restored.project_ids,
+            },
+        ));
+
         Ok(())
     }
 
