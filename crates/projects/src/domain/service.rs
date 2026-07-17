@@ -25,7 +25,7 @@ use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
-use super::events::ProjectMacroEvent;
+use super::events::{ProjectCreatedMetadata, ProjectMacroEvent, ProjectUpdatedMetadata};
 use super::models::{
     CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult, UploadFolderRepoArgs,
 };
@@ -364,6 +364,17 @@ where
             self.bump_project_modified(&parent_id.to_string()).await;
         }
 
+        self.publish_project_event(&ProjectMacroEvent::created(
+            project.id.clone(),
+            ProjectCreatedMetadata {
+                project_id: project.id.clone(),
+                owner: actor,
+                name: project.name.clone(),
+                parent_project_id: project.parent_id.clone(),
+                created_at: project.created_at,
+            },
+        ));
+
         Ok(project)
     }
 
@@ -379,6 +390,10 @@ where
         if let Some(name) = args.name.as_deref() {
             validate_project_name(name)?;
         }
+
+        let requested_name = args.name.clone();
+        let requested_parent_id = args.project_parent_id.clone();
+        let share_permission_updated = args.share_permission.is_some();
 
         let is_owner = receipt_is_owner(&receipt);
         if args.project_parent_id.is_some() && !is_owner {
@@ -458,6 +473,20 @@ where
         if let Some(parent_id) = new_parent_id {
             self.bump_project_modified(parent_id).await;
         }
+
+        let project_id = receipt.entity().entity_id.clone();
+        self.publish_project_event(&ProjectMacroEvent::updated(
+            project_id.clone(),
+            ProjectUpdatedMetadata {
+                project_id,
+                owner: project.user_id,
+                actor_user_id: event_actor_user_id(receipt.auth()),
+                name: requested_name,
+                previous_parent_id: project.parent_id,
+                parent_id: requested_parent_id,
+                share_permission_updated,
+            },
+        ));
 
         Ok(())
     }

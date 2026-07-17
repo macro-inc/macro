@@ -282,6 +282,23 @@ fn mutation_service(
     RecordingIndexer,
     TestEventBroker,
 > {
+    mutation_service_with_event_broker(repo, eam, indexer, TestEventBroker::default())
+}
+
+fn mutation_service_with_event_broker(
+    repo: MockProjectRepo,
+    eam: RecordingEam,
+    indexer: RecordingIndexer,
+    event_broker: TestEventBroker,
+) -> ProjectServiceImpl<
+    MockProjectRepo,
+    NullPort,
+    RecordingBulkUpload,
+    NullPort,
+    RecordingEam,
+    RecordingIndexer,
+    TestEventBroker,
+> {
     ProjectServiceImpl::new(
         repo,
         NullPort,
@@ -290,7 +307,7 @@ fn mutation_service(
         eam,
         indexer,
         None,
-        TestEventBroker::default(),
+        event_broker,
     )
 }
 
@@ -704,6 +721,248 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
 }
 
 #[tokio::test]
+async fn create_project_publishes_repository_metadata_after_success() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let created_at = chrono::Utc::now();
+    let expected_created_at = serde_json::to_value(created_at).unwrap();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_create_project().return_once(move |_| {
+        Box::pin(async move {
+            let mut created = project(
+                &project_id.to_string(),
+                "ignored-repository-owner",
+                Some(&parent_id.to_string()),
+            );
+            created.name = "Repository name".to_string();
+            created.created_at = Some(created_at);
+            Ok(created)
+        })
+    });
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    let result = service
+        .create_project(
+            user_id("macro|actor@example.com"),
+            CreateProjectRequest {
+                name: "Requested name".to_string(),
+                project_parent_id: Some(parent_id),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.name, "Repository name");
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.projects");
+    assert_eq!(published[0].key, project_id.to_string());
+    let metadata = &published[0].payload["metadata"];
+    assert_eq!(metadata["project_id"], project_id.to_string());
+    assert_eq!(metadata["owner"], "macro|actor@example.com");
+    assert_eq!(metadata["name"], "Repository name");
+    assert_eq!(metadata["parent_project_id"], parent_id.to_string());
+    assert_eq!(metadata["created_at"], expected_created_at);
+}
+
+#[tokio::test]
+async fn create_project_failures_publish_no_event() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_create_project()
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    let validation_error = service
+        .create_project(
+            user_id("macro|actor@example.com"),
+            CreateProjectRequest {
+                name: "x".repeat(101),
+                project_parent_id: None,
+            },
+        )
+        .await;
+    let repository_error = service
+        .create_project(
+            user_id("macro|actor@example.com"),
+            CreateProjectRequest {
+                name: "Project".to_string(),
+                project_parent_id: None,
+            },
+        )
+        .await;
+
+    assert!(validation_error.is_err());
+    assert!(repository_error.is_err());
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_project_succeeds_when_event_publication_fails() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_create_project().return_once(move |_| {
+        Box::pin(async move {
+            Ok(project(
+                &project_id.to_string(),
+                "macro|actor@example.com",
+                None,
+            ))
+        })
+    });
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::failing(),
+    );
+
+    let result = service
+        .create_project(
+            user_id("macro|actor@example.com"),
+            CreateProjectRequest {
+                name: "Project".to_string(),
+                project_parent_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.id, project_id.to_string());
+}
+
+#[tokio::test]
+async fn edit_project_publishes_requested_update_metadata() {
+    struct Case {
+        name: Option<&'static str>,
+        old_parent: Option<Uuid>,
+        requested_parent: Option<String>,
+        sharing: bool,
+    }
+
+    let cases = [
+        Case {
+            name: Some("Renamed"),
+            old_parent: None,
+            requested_parent: None,
+            sharing: false,
+        },
+        Case {
+            name: None,
+            old_parent: None,
+            requested_parent: Some(Uuid::new_v4().to_string()),
+            sharing: false,
+        },
+        Case {
+            name: None,
+            old_parent: Some(Uuid::new_v4()),
+            requested_parent: Some(String::new()),
+            sharing: false,
+        },
+        Case {
+            name: None,
+            old_parent: None,
+            requested_parent: None,
+            sharing: true,
+        },
+        Case {
+            name: Some("Combined"),
+            old_parent: Some(Uuid::new_v4()),
+            requested_parent: Some(Uuid::new_v4().to_string()),
+            sharing: true,
+        },
+    ];
+
+    for case in cases {
+        let project_id = Uuid::new_v4();
+        let mut repo = MockProjectRepo::new();
+        if case
+            .requested_parent
+            .as_deref()
+            .is_some_and(|parent| !parent.is_empty())
+        {
+            repo.expect_is_project_recursively_nested()
+                .return_once(|_, _| Box::pin(async { Ok(false) }));
+        }
+        repo.expect_edit_project().return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    None,
+                ))
+            })
+        });
+        let bump_count = 1
+            + usize::from(case.old_parent.is_some())
+            + usize::from(
+                case.requested_parent
+                    .as_deref()
+                    .is_some_and(|parent| !parent.is_empty()),
+            );
+        repo.expect_update_project_modified()
+            .times(bump_count)
+            .returning(|_| Box::pin(async { Ok(()) }));
+        let event_broker = TestEventBroker::default();
+        let published = event_broker.published();
+        let service = mutation_service_with_event_broker(
+            repo,
+            RecordingEam::default(),
+            RecordingIndexer::default(),
+            event_broker,
+        );
+        let mut request = patch_request(
+            case.requested_parent.clone(),
+            case.sharing.then(share_update),
+        );
+        request.name = case.name.map(str::to_string);
+
+        service
+            .edit_project(
+                mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+                basic_project(project_id, case.old_parent, false),
+                request,
+            )
+            .await
+            .unwrap();
+
+        let published = published.lock().unwrap();
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0].key, project_id.to_string());
+        assert_eq!(published[0].payload["event_type"], "project.updated");
+        let metadata = &published[0].payload["metadata"];
+        assert_eq!(metadata["project_id"], project_id.to_string());
+        assert_eq!(metadata["owner"], "macro|owner@example.com");
+        assert_eq!(metadata["actor_user_id"], "macro|owner@example.com");
+        assert_eq!(metadata["name"], serde_json::json!(case.name));
+        assert_eq!(
+            metadata["previous_parent_id"],
+            serde_json::json!(case.old_parent.map(|id| id.to_string()))
+        );
+        assert_eq!(
+            metadata["parent_id"],
+            serde_json::json!(case.requested_parent)
+        );
+        assert_eq!(metadata["share_permission_updated"], case.sharing);
+    }
+}
+
+#[tokio::test]
 async fn edit_requires_owner_for_moves_and_share_changes() {
     let project_id = Uuid::new_v4();
     let parent_id = Uuid::new_v4();
@@ -786,6 +1045,102 @@ async fn edit_rejects_deleted_self_recursive_and_invalid_parents() {
     assert!(matches!(self_parent, ProjectError::BadRequest(_)));
     assert!(matches!(invalid_parent, ProjectError::BadRequest(_)));
     assert!(matches!(recursive, ProjectError::RecursiveNesting));
+}
+
+#[tokio::test]
+async fn edit_project_failures_publish_no_event() {
+    let project_id = Uuid::new_v4();
+    let recursive_parent = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_is_project_recursively_nested()
+        .return_once(|_, _| Box::pin(async { Ok(true) }));
+    repo.expect_edit_project()
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    let mut invalid_name = patch_request(None, None);
+    invalid_name.name = Some("x".repeat(101));
+    let validation_error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            invalid_name,
+        )
+        .await;
+    let authorization_error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            patch_request(Some(Uuid::new_v4().to_string()), None),
+        )
+        .await;
+    let recursive_error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(Some(recursive_parent.to_string()), None),
+        )
+        .await;
+    let mut rename = patch_request(None, None);
+    rename.name = Some("Renamed".to_string());
+    let repository_error = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            rename,
+        )
+        .await;
+
+    assert!(validation_error.is_err());
+    assert!(authorization_error.is_err());
+    assert!(matches!(
+        recursive_error,
+        Err(ProjectError::RecursiveNesting)
+    ));
+    assert!(repository_error.is_err());
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn edit_project_succeeds_when_event_publication_fails() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_edit_project().return_once(move |_| {
+        Box::pin(async move {
+            Ok(project(
+                &project_id.to_string(),
+                "macro|owner@example.com",
+                None,
+            ))
+        })
+    });
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::failing(),
+    );
+    let mut request = patch_request(None, None);
+    request.name = Some("Renamed".to_string());
+
+    let result = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Edit),
+            basic_project(project_id, None, false),
+            request,
+        )
+        .await;
+
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
