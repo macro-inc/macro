@@ -1,20 +1,18 @@
 use std::borrow::Cow;
 
 use axum::{
-    Extension, Json,
+    Json,
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_middleware::tracking::ClientIp;
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    user::UserContext,
-};
+use model::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -35,14 +33,15 @@ pub struct Params {
             (status = 500, body=ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, user_context, ip_context), fields(client_ip=%ip_context, fusion_user_id=%user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, ip_context), fields(client_ip=%ip_context, fusion_user_id=%authorization.user_context.fusion_user_id), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     extract::Path(Params { code }): extract::Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("verify_merge_request");
+    let user_context = &authorization.user_context;
 
     let (account_merge_request_id, to_merge_macro_user_id) =
         macro_db_client::account_merge_request::get_merge_request_info(
