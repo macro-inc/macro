@@ -375,20 +375,22 @@ function ResultsContainer(props: {
       <Show when={showFullTextSearchButton()}>
         <button
           onClick={props.onFullTextSearch}
-          class="flex items-center px-2 text-sm gap-2 h-10"
+          class="flex w-full min-w-0 items-center px-2 text-sm gap-2 h-10"
         >
-          <SearchIcon class="size-5 p-0.5" />
-          {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
+          <SearchIcon class="size-5 p-0.5 shrink-0" />
+          <span class="truncate">
+            {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
+          </span>
         </button>
       </Show>
 
       <Show when={showAskAiButton()}>
         <button
           onClick={() => props.onAskAi(props.query())}
-          class="flex items-center px-2 text-sm gap-2 h-10"
+          class="flex w-full min-w-0 items-center px-2 text-sm gap-2 h-10"
         >
-          <WideStar class="size-5 p-0.5" />
-          {`Ask AI about "${props.query()}"`}
+          <WideStar class="size-5 p-0.5 shrink-0" />
+          <span class="truncate">{`Ask AI about "${props.query()}"`}</span>
         </button>
       </Show>
     </div>
