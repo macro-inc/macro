@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod test;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{borrow::Cow, fmt, marker::PhantomData, sync::Arc};
 
 use ::axum::{
     Json,
     extract::{FromRef, FromRequestParts, Query},
     http::{HeaderMap, StatusCode, header, request::Parts},
+    response::{IntoResponse, Response},
 };
 use macro_auth::headers::AccessTokenExtractor;
 #[cfg(feature = "local_auth")]
@@ -36,7 +37,28 @@ pub const LEGACY_DSS_INTERNAL_API_KEY_HEADER: &str = "x-document-storage-service
 pub const LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER: &str = "x-document-storage-service-user-id";
 
 /// Rejection returned when request credentials cannot authorize a user.
-pub type MacroAuthorizationRejection = (StatusCode, Json<ErrorResponse<'static>>);
+#[derive(Clone, Debug)]
+pub struct MacroAuthorizationRejection {
+    /// HTTP status returned to the client.
+    pub status: StatusCode,
+    /// Client-safe error message returned in the response body.
+    pub message: Cow<'static, str>,
+}
+
+impl fmt::Display for MacroAuthorizationRejection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for MacroAuthorizationRejection {}
+
+impl IntoResponse for MacroAuthorizationRejection {
+    fn into_response(self) -> Response {
+        let Self { status, message } = self;
+        (status, Json(ErrorResponse { message })).into_response()
+    }
+}
 
 /// Axum state containing the service used by authorization extractors.
 pub struct MacroAuthorizationState<Svc> {
@@ -431,10 +453,8 @@ fn internal_authorization_rejection(
 }
 
 fn rejection(message: &'static str) -> MacroAuthorizationRejection {
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(ErrorResponse {
-            message: message.into(),
-        }),
-    )
+    MacroAuthorizationRejection {
+        status: StatusCode::UNAUTHORIZED,
+        message: message.into(),
+    }
 }

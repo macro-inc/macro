@@ -112,7 +112,7 @@ impl From<AccessError> for ExtractorError {
 }
 
 impl From<MacroAuthorizationRejection> for ExtractorError {
-    fn from((status, Json(ErrorResponse { message })): MacroAuthorizationRejection) -> Self {
+    fn from(MacroAuthorizationRejection { status, message }: MacroAuthorizationRejection) -> Self {
         Self::Authorization { status, message }
     }
 }
