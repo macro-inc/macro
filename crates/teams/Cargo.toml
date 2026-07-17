@@ -96,3 +96,4 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true }
