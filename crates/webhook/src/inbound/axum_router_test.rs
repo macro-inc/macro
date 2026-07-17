@@ -7,14 +7,24 @@ use crate::domain::{
 };
 use axum::{
     body::{Body, to_bytes},
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header},
+};
+use macro_authorization::{
+    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
+use rootcause::Report;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use tower::ServiceExt;
+
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone, Default)]
 struct FakeService {
@@ -55,6 +65,48 @@ impl Clone for ServiceCall {
             Self::Validate(user, id) => Self::Validate(user.clone(), id.clone()),
             Self::Delete(user, id) => Self::Delete(user.clone(), id.clone()),
         }
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeAuthorizationService {
+    calls: Arc<AtomicUsize>,
+}
+
+impl FakeAuthorizationService {
+    fn calls(&self) -> usize {
+        self.calls.load(Ordering::SeqCst)
+    }
+}
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if jwt != "valid" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(UserContext {
+            user_id: user_id().to_string(),
+            ..UserContext::default()
+        })
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.map(|user_id| UserContext {
+            user_id,
+            fusion_user_id: claims.fusion_user_id.unwrap_or_default(),
+            organization_id: claims.organization_id,
+            permissions: None,
+        }))
     }
 }
 
@@ -244,9 +296,12 @@ async fn patch_passes_authenticated_user_path_and_body_to_service() {
 async fn validate_passes_authenticated_user_and_path_to_service() {
     let service = FakeService::default();
     let limiter = FakeRateLimiter::default();
-    let response = send(
+    let authorization = FakeAuthorizationService::default();
+    let response = send_request(
         service.clone(),
         limiter.clone(),
+        authorization.clone(),
+        Some("Bearer valid"),
         "POST",
         "/webhooks/wh_123/validate",
         json!({}),
@@ -254,6 +309,7 @@ async fn validate_passes_authenticated_user_and_path_to_service() {
     .await;
 
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(authorization.calls(), 1);
     assert_eq!(limiter.checks(), 1);
     match &service.calls()[0] {
         ServiceCall::Validate(user, webhook_id) => {
@@ -309,7 +365,27 @@ async fn validation_rate_limit_exceeded_maps_to_429_and_skips_service() {
 }
 
 #[tokio::test]
-async fn create_and_patch_are_not_rate_limited() {
+async fn missing_credentials_are_rejected_before_rate_limit_and_service_calls() {
+    let service = FakeService::default();
+    let limiter = FakeRateLimiter::default();
+    let response = send_request(
+        service.clone(),
+        limiter.clone(),
+        FakeAuthorizationService::default(),
+        None,
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(limiter.checks(), 0);
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn create_patch_and_delete_are_not_rate_limited() {
     let service = FakeService::default();
     let limiter = FakeRateLimiter::exceeded();
 
@@ -322,16 +398,25 @@ async fn create_and_patch_are_not_rate_limited() {
     )
     .await;
     let patch_response = send(
-        service,
+        service.clone(),
         limiter.clone(),
         "PATCH",
         "/webhooks/wh_123",
         json!({"name":"Renamed"}),
     )
     .await;
+    let delete_response = send(
+        service,
+        limiter.clone(),
+        "DELETE",
+        "/webhooks/wh_123",
+        json!({}),
+    )
+    .await;
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
     assert_eq!(patch_response.status(), StatusCode::OK);
+    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
     assert_eq!(limiter.checks(), 0);
 }
 
@@ -378,20 +463,44 @@ async fn send(
     uri: &str,
     body: serde_json::Value,
 ) -> axum::response::Response {
-    let router = webhook_router::<_, _, ()>(WebhookRouterState::new(service, limiter));
+    send_request(
+        service,
+        limiter,
+        FakeAuthorizationService::default(),
+        Some("Bearer valid"),
+        method,
+        uri,
+        body,
+    )
+    .await
+}
+
+async fn send_request(
+    service: FakeService,
+    limiter: FakeRateLimiter,
+    authorization: FakeAuthorizationService,
+    authorization_header: Option<&str>,
+    method: &str,
+    uri: &str,
+    body: serde_json::Value,
+) -> axum::response::Response {
+    let authorization_state = MacroAuthorizationState::new(Arc::new(authorization));
+    let router = webhook_router::<_, _, _, ()>(WebhookRouterState::new(
+        service,
+        limiter,
+        authorization_state,
+    ));
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json");
+    let request = match authorization_header {
+        Some(value) => request.header(header::AUTHORIZATION, value),
+        None => request,
+    };
+
     router
-        .oneshot(
-            Request::builder()
-                .method(method)
-                .uri(uri)
-                .extension(UserContext {
-                    user_id: user_id().to_string(),
-                    ..UserContext::default()
-                })
-                .header("content-type", "application/json")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
         .await
         .unwrap()
 }
