@@ -10,11 +10,14 @@ import {
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity } from '@entity';
 import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
+import TagIcon from '@phosphor/tag-simple.svg';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
+import { TagDot } from '@property/tags/TagDot';
 import type {
   Property,
   PropertyApiValues,
@@ -25,9 +28,17 @@ import {
   PropertyDataTypeIcon,
   toPropertyApiValue,
 } from '@property/utils';
-import { useEntityPropertiesQuery } from '@queries/properties/entity';
+import {
+  useAddEntityPropertyOptionMutation,
+  useEntityPropertiesQuery,
+  useRemoveEntityPropertyOptionMutation,
+} from '@queries/properties/entity';
+import { useTagsQuery } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
+import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
+import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
   CommandMenuEmptyState,
@@ -71,7 +82,7 @@ function ListItem(props: {
   id: string;
   isSelected: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  onClick: (event: MouseEvent) => void;
   onMouseEnter: () => void;
   children: JSX.Element;
   class?: string;
@@ -88,6 +99,70 @@ function ListItem(props: {
       {props.children}
     </CommandMenuListItem>
   );
+}
+
+type TagOptionItem = {
+  scope: TagScope;
+  definition: PropertyDefinitionDetailResponse;
+  option: PropertyOptionResponse;
+};
+
+type EntityTagIdsByDefinition = Map<string, Map<string, string[]>>;
+
+function tagOptionLabel(option: PropertyOptionResponse): string {
+  return option.value.type === 'string' ? option.value.value : '';
+}
+
+function tagDefinitionDomain(
+  definition: PropertyDefinitionDetailResponse
+): PropertyDefinitionDomain {
+  return {
+    id: definition.id,
+    displayName: definition.displayName,
+    valueType: 'SELECT_STRING',
+    isMultiSelect: true,
+    isMetadata: definition.isMetadata,
+    isSystem: definition.isSystem,
+    owner: definition,
+    createdAt: definition.createdAt ?? new Date().toISOString(),
+    updatedAt: definition.updatedAt ?? new Date().toISOString(),
+  };
+}
+
+function entityTagIdsByDefinition(
+  entities: EntityData[]
+): EntityTagIdsByDefinition {
+  const byEntity = new Map<string, Map<string, string[]>>();
+
+  for (const entity of entities) {
+    const byDefinition = new Map<string, string[]>();
+    const properties = 'properties' in entity ? entity.properties : undefined;
+    for (const property of properties ?? []) {
+      if (property.value?.type === 'SelectOption') {
+        byDefinition.set(property.definition.id, property.value.value);
+      }
+    }
+    byEntity.set(entity.id, byDefinition);
+  }
+
+  return byEntity;
+}
+
+function getTagIds(
+  byEntity: EntityTagIdsByDefinition,
+  entityId: string,
+  definitionId: string
+) {
+  return byEntity.get(entityId)?.get(definitionId) ?? [];
+}
+
+function canAssignTags(entity: EntityData): boolean {
+  try {
+    macroEntityToPropertyEntityType(entity);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function PropertyEditorModal() {
@@ -196,6 +271,17 @@ export function PropertyEditorModal() {
                 onSave={handlePropertySave}
               />
             </Match>
+            <Match when={propertyEditorState.mode === 'tag'}>
+              <TagAssignmentEditor
+                entities={propertyEditorState.selectedEntities}
+                searchValue={searchValue}
+                selectedIndex={selectedIndex}
+                setSelectedIndex={setSelectedIndex}
+                setSelectedIndexFromMouse={setSelectedIndexFromMouse}
+                setKeybindings={keybindings}
+                setPlaceholder={setPlaceholder}
+              />
+            </Match>
           </Switch>
         </CommandMenuShell.Body>
       </CommandMenuShell>
@@ -252,6 +338,17 @@ function PropertyList(props: {
     () => props.searchTerm
   );
 
+  const showTagAssignmentOption = createMemo(() => {
+    const query = props.searchTerm.toLowerCase().trim();
+    return (
+      propertyEditorState.selectedEntities.every(canAssignTags) &&
+      (!query || 'tags'.includes(query) || 'label'.includes(query))
+    );
+  });
+
+  const rowCount = () =>
+    filteredProperties().length + (showTagAssignmentOption() ? 1 : 0);
+
   createEffect(() => {
     props.searchTerm;
     props.setFocusedIndex(0);
@@ -259,15 +356,25 @@ function PropertyList(props: {
 
   props.setKeybindings({
     next: () => {
-      const len = filteredProperties().length;
+      const len = rowCount();
+      if (len === 0) return;
       props.setFocusedIndex((prev) => (prev + 1) % len);
     },
     previous: () => {
-      const len = filteredProperties().length;
+      const len = rowCount();
+      if (len === 0) return;
       props.setFocusedIndex((prev) => (prev - 1 + len) % len);
     },
     select: () => {
-      const focusedProperty = filteredProperties()[props.focusedIndex()];
+      if (showTagAssignmentOption() && props.focusedIndex() === 0) {
+        setPropertyEditorMode('tag');
+        return;
+      }
+
+      const focusedProperty =
+        filteredProperties()[
+          props.focusedIndex() - (showTagAssignmentOption() ? 1 : 0)
+        ];
       if (focusedProperty) {
         setProperty(focusedProperty);
       }
@@ -276,7 +383,11 @@ function PropertyList(props: {
 
   createEffect(() => {
     const index = props.focusedIndex();
-    const elem = document.getElementById(`property-editor-option-${index}`);
+    const elem = document.getElementById(
+      showTagAssignmentOption() && index === 0
+        ? 'property-editor-option-tags'
+        : `property-editor-option-${index}`
+    );
     if (elem) {
       elem.scrollIntoView({ block: 'nearest' });
     }
@@ -291,7 +402,7 @@ function PropertyList(props: {
 
   return (
     <Show
-      when={filteredProperties().length > 0}
+      when={rowCount() > 0}
       fallback={
         <CommandMenuEmptyState>
           No matching properties found
@@ -302,13 +413,33 @@ function PropertyList(props: {
         ref={containerRef}
         class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2"
       >
+        <Show when={showTagAssignmentOption()}>
+          <ListItem
+            id="property-editor-option-tags"
+            isSelected={selector(0)}
+            onClick={() => setPropertyEditorMode('tag')}
+            onMouseEnter={() => props.setFocusedIndexFromMouse(0)}
+            class="scroll-m-2"
+          >
+            <TagIcon class="size-4 text-ink-muted opacity-50" />
+            <div class="flex-1 text-left flex">
+              <p class="text-sm font-medium">Tags</p>
+            </div>
+          </ListItem>
+        </Show>
         <For each={filteredProperties()}>
           {(property, index) => (
             <ListItem
-              id={`property-editor-option-${index()}`}
-              isSelected={selector(index())}
+              id={`property-editor-option-${index() + (showTagAssignmentOption() ? 1 : 0)}`}
+              isSelected={selector(
+                index() + (showTagAssignmentOption() ? 1 : 0)
+              )}
               onClick={() => setProperty(property)}
-              onMouseEnter={() => props.setFocusedIndexFromMouse(index())}
+              onMouseEnter={() =>
+                props.setFocusedIndexFromMouse(
+                  index() + (showTagAssignmentOption() ? 1 : 0)
+                )
+              }
               class="scroll-m-2"
             >
               <PropertyDataTypeIcon property={property} class="opacity-50" />
@@ -350,6 +481,209 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         </div>
       </Show>
     </div>
+  );
+}
+
+function TagAssignmentEditor(props: {
+  entities: EntityData[];
+  searchValue: Accessor<string>;
+  selectedIndex: Accessor<number>;
+  setSelectedIndex: Setter<number>;
+  setSelectedIndexFromMouse: (index: number) => void;
+  setKeybindings: (binding: ListNavActions) => void;
+  setPlaceholder: Setter<string>;
+}) {
+  const tagsQuery = useTagsQuery();
+  const currentTeamQuery = useCurrentTeamQuery();
+  const addOption = useAddEntityPropertyOptionMutation();
+  const removeOption = useRemoveEntityPropertyOptionMutation();
+  const [localTagIds, setLocalTagIds] = createSignal<EntityTagIdsByDefinition>(
+    entityTagIdsByDefinition(props.entities)
+  );
+
+  createEffect(() => {
+    props.setPlaceholder('Add or remove tags...');
+  });
+
+  createEffect(
+    on(
+      () => props.entities.map((entity) => entity.id).join('\0'),
+      () => setLocalTagIds(entityTagIdsByDefinition(props.entities))
+    )
+  );
+
+  const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
+
+  const tagItems = createMemo<TagOptionItem[]>(() => {
+    const items: TagOptionItem[] = [];
+    for (const set of tagsQuery.data ?? []) {
+      if (!set.definition) continue;
+      const sortedOptions = [...set.options].sort(
+        (a, b) => a.displayOrder - b.displayOrder
+      );
+      for (const option of sortedOptions) {
+        items.push({ scope: set.scope, definition: set.definition, option });
+      }
+    }
+    return items;
+  });
+
+  const isFullyApplied = (item: TagOptionItem) => {
+    if (props.entities.length === 0) return false;
+    return props.entities.every((entity) =>
+      getTagIds(localTagIds(), entity.id, item.definition.id).includes(
+        item.option.id
+      )
+    );
+  };
+
+  const filteredItems = createMemo(() => {
+    const query = props.searchValue().trim().toLowerCase();
+    const matchesQuery = (item: TagOptionItem) =>
+      !query || tagOptionLabel(item.option).toLowerCase().includes(query);
+
+    const matchingItems = tagItems().filter(matchesQuery);
+    const applied = matchingItems.filter(isFullyApplied);
+    const remaining = matchingItems.filter((item) => !isFullyApplied(item));
+
+    return [...applied, ...remaining];
+  });
+
+  createEffect(() => {
+    props.searchValue();
+    props.setSelectedIndex(0);
+  });
+
+  createEffect(() => {
+    const index = props.selectedIndex();
+    const elem = document.getElementById(`tag-assignment-option-${index}`);
+    elem?.scrollIntoView({ block: 'nearest' });
+  });
+
+  const updateLocalOption = (item: TagOptionItem, remove: boolean) => {
+    setLocalTagIds((prev) => {
+      const next = new Map(prev);
+      for (const entity of props.entities) {
+        const byDefinition = new Map(next.get(entity.id) ?? []);
+        const current = byDefinition.get(item.definition.id) ?? [];
+        byDefinition.set(
+          item.definition.id,
+          remove
+            ? current.filter((id) => id !== item.option.id)
+            : current.includes(item.option.id)
+              ? current
+              : [...current, item.option.id]
+        );
+        next.set(entity.id, byDefinition);
+      }
+      return next;
+    });
+  };
+
+  const toggleTag = async (
+    item: TagOptionItem,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    const remove = isFullyApplied(item);
+    const previousTagIds = localTagIds();
+    updateLocalOption(item, remove);
+
+    try {
+      await Promise.all(
+        props.entities.map(async (entity) => {
+          const entityType = macroEntityToPropertyEntityType(entity);
+          const current = getTagIds(
+            previousTagIds,
+            entity.id,
+            item.definition.id
+          );
+          const hasOption = current.includes(item.option.id);
+
+          if (remove && !hasOption) return;
+          if (!remove && hasOption) return;
+
+          const optimisticOptionIds = remove
+            ? current.filter((id) => id !== item.option.id)
+            : [...current, item.option.id];
+          const mutation = remove ? removeOption : addOption;
+
+          await mutation.mutateAsync({
+            entityId: entity.id,
+            entityType,
+            property: tagDefinitionDomain(item.definition),
+            optionId: item.option.id,
+            optimisticOptionIds,
+          });
+        })
+      );
+
+      if (!event?.shiftKey) closePropertyEditor();
+    } catch (error) {
+      setLocalTagIds(entityTagIdsByDefinition(props.entities));
+      console.error('Failed to update tags', error);
+    }
+  };
+
+  props.setKeybindings({
+    next: () => {
+      const len = filteredItems().length;
+      if (len === 0) return;
+      props.setSelectedIndex((prev) => (prev + 1) % len);
+    },
+    previous: () => {
+      const len = filteredItems().length;
+      if (len === 0) return;
+      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
+    },
+    select: (event) => {
+      const item = filteredItems()[props.selectedIndex()];
+      if (item) void toggleTag(item, event);
+    },
+  });
+
+  const selector = createSelector(props.selectedIndex);
+
+  return (
+    <Show
+      when={!tagsQuery.isLoading}
+      fallback={<CommandMenuEmptyState>Loading tags...</CommandMenuEmptyState>}
+    >
+      <Show
+        when={filteredItems().length > 0}
+        fallback={
+          <CommandMenuEmptyState>
+            {(tagsQuery.data ?? []).length === 0
+              ? 'No tags available'
+              : 'No tags match your search'}
+          </CommandMenuEmptyState>
+        }
+      >
+        <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
+          <For each={filteredItems()}>
+            {(item, index) => (
+              <ListItem
+                id={`tag-assignment-option-${index()}`}
+                isSelected={selector(index())}
+                onClick={(event) => void toggleTag(item, event)}
+                onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+                class="scroll-m-2"
+              >
+                <OptionCheckBox checked={isFullyApplied(item)} multiselect />
+                <TagDot color={item.option.color ?? undefined} />
+                <span class="min-w-0 flex-1 truncate">
+                  {tagOptionLabel(item.option)}
+                </span>
+                <Show when={item.scope === 'team'}>
+                  <span class="max-w-30 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
+                    {teamName()}
+                  </span>
+                </Show>
+              </ListItem>
+            )}
+          </For>
+        </div>
+      </Show>
+    </Show>
   );
 }
 

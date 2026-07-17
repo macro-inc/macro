@@ -3,7 +3,7 @@ import type { EntityData } from '@entity';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createStore, reconcile } from 'solid-js/store';
 
-type PropertyEditorMode = 'selector' | 'direct';
+type PropertyEditorMode = 'selector' | 'direct' | 'tag';
 
 export const [propertyEditorOpen, setPropertyEditorOpen] =
   createControlledOpenSignal(false, { id: 'property-edit' });
