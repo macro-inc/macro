@@ -42,6 +42,9 @@ axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
+contacts = { path = "../../crates/contacts", default-features = false, features = [
+  "outbound",
+] }
 cookie = { workspace = true }
 decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }

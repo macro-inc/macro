@@ -1,8 +1,8 @@
 use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
-use sqlx::types::Uuid;
 use std::collections::HashSet;
+use uuid::Uuid;
 
 /// Port trait for accessing the contacts data store.
 pub trait ContactsRepository: Send + Sync + 'static {

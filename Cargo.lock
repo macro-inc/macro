@@ -966,6 +966,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "comms_db_client",
+ "contacts",
  "cookie",
  "cool_asserts",
  "database_env_vars",
@@ -3108,6 +3109,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -14063,6 +14065,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "contacts",
  "entity_access",
  "macro_authorization",
  "macro_db_migrator",

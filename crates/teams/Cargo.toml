@@ -26,6 +26,7 @@ default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = [
   "dep:analytics_client",
+  "dep:contacts",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:models_email",
@@ -50,6 +51,7 @@ async-stripe = { workspace = true, default-features = false, features = [
 ] }
 async-trait = { workspace = true, optional = true }
 chrono = { workspace = true }
+contacts = { path = "../contacts", default-features = false, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }
