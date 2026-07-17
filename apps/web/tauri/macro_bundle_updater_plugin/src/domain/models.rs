@@ -76,11 +76,6 @@ impl BundleRoot {
         self.0.as_deref()
     }
 
-    /// Clear the bundle root, reverting to the built-in assets.
-    pub(crate) fn clear(&mut self) {
-        self.0 = None;
-    }
-
     /// Read the bundle manifest inside the bundle root.
     pub(crate) async fn manifest(&self, fs: &impl FsRepo) -> Option<BundleManifest> {
         let manifest_path = self.0.as_ref()?.join("bundle-manifest.json");

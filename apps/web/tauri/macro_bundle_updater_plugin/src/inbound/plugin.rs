@@ -364,12 +364,16 @@ pub async fn clear_bundle<R: Runtime>(
         result
     };
 
-    if apply_result == ApplyUpdateResult::ReloadNeeded
-        && let Some(webview) = app_handle.webview_windows().values().next()
-        && let Err(error) = webview.eval("window.location.reload();")
-    {
-        tracing::warn!(error=?error, "[bundle-update] failed to reload after clearing bundle");
-        service.lock().await.unmark_update_reload_dispatched();
+    if apply_result == ApplyUpdateResult::ReloadNeeded {
+        if let Some(webview) = app_handle.webview_windows().values().next() {
+            if let Err(error) = webview.eval("window.location.reload();") {
+                tracing::warn!(error=?error, "[bundle-update] failed to reload after clearing bundle");
+                service.lock().await.unmark_update_reload_dispatched();
+            }
+        } else {
+            tracing::warn!("[bundle-update] bundle cleared but no webview was available to reload");
+            service.lock().await.unmark_update_reload_dispatched();
+        }
     }
     Ok(())
 }

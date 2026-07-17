@@ -26,6 +26,12 @@ enum RequestPathError {
     Unsafe(InvalidBundleAssetPath),
 }
 
+enum TimedAssetResolution {
+    Resolved(Result<BundleAssetResolution, BundleAssetReadError>),
+    TaskFailed(tauri::Error),
+    TimedOut,
+}
+
 /// Strip the `/app` or `/app/` prefix used as the frontend base path.
 /// Only strips when `/app` is a complete path segment (not e.g. `/app.css`).
 fn strip_app_prefix(path: &str) -> &str {
@@ -73,7 +79,11 @@ fn rewrite_uri(uri: &str) -> String {
         if let Some(rest) = uri.strip_prefix(prefix) {
             // Only match bare "/app" when rest is empty or starts with a
             // path separator — avoid rewriting "/app.css" etc.
-            if !prefix.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
+            if !prefix.ends_with('/')
+                && !rest.is_empty()
+                && !rest.starts_with('/')
+                && !rest.starts_with('?')
+            {
                 continue;
             }
             let origin = prefix.trim_end_matches("/app/").trim_end_matches("/app");
@@ -123,6 +133,23 @@ fn delegate_to_embedded(
     );
 }
 
+async fn resolve_asset_with_timeout<Assets: BundleAssetRepo>(
+    resolver: BundleAssetResolver<Assets>,
+    asset_path: BundleAssetPath,
+    timeout: Duration,
+) -> TimedAssetResolution {
+    // Keep resolution in an independently owned task. If the timeout elapses,
+    // dropping its join handle detaches rather than cancels it, so its route
+    // read lease remains held until any in-flight filesystem read completes.
+    let resolution_task =
+        tauri::async_runtime::spawn(async move { resolver.resolve(&asset_path).await });
+    match tokio::time::timeout(timeout, resolution_task).await {
+        Ok(Ok(resolution)) => TimedAssetResolution::Resolved(resolution),
+        Ok(Err(error)) => TimedAssetResolution::TaskFailed(error),
+        Err(_) => TimedAssetResolution::TimedOut,
+    }
+}
+
 async fn resolve_request<Assets: BundleAssetRepo>(
     resolver: BundleAssetResolver<Assets>,
     upstream: &ProtocolHandlerFn,
@@ -153,14 +180,15 @@ async fn resolve_request<Assets: BundleAssetRepo>(
         }
     };
 
-    let resolution = match tokio::time::timeout(
+    let resolution = match resolve_asset_with_timeout(
+        resolver,
+        asset_path.clone(),
         ASSET_RESOLUTION_TIMEOUT,
-        resolver.resolve(&asset_path),
     )
     .await
     {
-        Ok(Ok(resolution)) => resolution,
-        Ok(Err(BundleAssetReadError::OutsideBundleRoot)) => {
+        TimedAssetResolution::Resolved(Ok(resolution)) => resolution,
+        TimedAssetResolution::Resolved(Err(BundleAssetReadError::OutsideBundleRoot)) => {
             respond_status(
                 responder,
                 StatusCode::FORBIDDEN,
@@ -169,7 +197,7 @@ async fn resolve_request<Assets: BundleAssetRepo>(
             );
             return;
         }
-        Ok(Err(BundleAssetReadError::Io(error))) => {
+        TimedAssetResolution::Resolved(Err(BundleAssetReadError::Io(error))) => {
             tracing::error!(error=?error, path=?asset_path.as_path(), "failed to read OTA asset");
             respond_status(
                 responder,
@@ -179,7 +207,17 @@ async fn resolve_request<Assets: BundleAssetRepo>(
             );
             return;
         }
-        Err(_) => {
+        TimedAssetResolution::TaskFailed(error) => {
+            tracing::error!(error=?error, path=?asset_path.as_path(), "bundle asset resolver task failed");
+            respond_status(
+                responder,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &origin,
+                "failed to resolve bundle asset",
+            );
+            return;
+        }
+        TimedAssetResolution::TimedOut => {
             tracing::error!(path=?asset_path.as_path(), "timed out resolving bundle asset");
             respond_status(
                 responder,

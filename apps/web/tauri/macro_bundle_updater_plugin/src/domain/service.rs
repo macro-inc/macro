@@ -832,8 +832,11 @@ impl<Fs: FsRepo> Service<Fs> {
     /// currently loaded document until reload acknowledgement.
     async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
         self.clear_pending_bundle(cache_dir).await?;
-        self.bundle_root.clear();
-        self.bundle_root.persist(cache_dir, &self.fs_repo).await?;
+        let cleared_bundle_root = BundleRoot::new();
+        cleared_bundle_root
+            .persist(cache_dir, &self.fs_repo)
+            .await?;
+        self.bundle_root = cleared_bundle_root;
         self.bundle_routes
             .transition_to(BundleSource::embedded(self.embedded_bundle_build))
             .await;
@@ -960,6 +963,8 @@ impl<Fs: FsRepo> Service<Fs> {
 }
 
 #[cfg(test)]
+mod persistence_test;
+#[cfg(test)]
 mod reload_test;
 #[cfg(test)]
 mod tests {
@@ -1020,6 +1025,7 @@ mod tests {
         removed_dirs: Vec<PathBuf>,
         unzip_target: Option<PathBuf>,
         checksum_should_fail: bool,
+        remove_file_failure: Option<PathBuf>,
     }
 
     impl FakeFs {
@@ -1040,7 +1046,11 @@ mod tests {
             self.state.lock().unwrap().unzip_target = Some(path.into());
         }
 
-        fn file_exists(&self, path: impl AsRef<Path>) -> bool {
+        pub(super) fn fail_remove_file(&self, path: impl Into<PathBuf>) {
+            self.state.lock().unwrap().remove_file_failure = Some(path.into());
+        }
+
+        pub(super) fn file_exists(&self, path: impl AsRef<Path>) -> bool {
             self.state.lock().unwrap().files.contains_key(path.as_ref())
         }
 
@@ -1160,7 +1170,11 @@ mod tests {
         }
 
         async fn remove_file(&self, path: &Path) -> Result<(), std::io::Error> {
-            self.state.lock().unwrap().files.remove(path);
+            let mut state = self.state.lock().unwrap();
+            if state.remove_file_failure.as_deref() == Some(path) {
+                return Err(std::io::Error::other("remove failed"));
+            }
+            state.files.remove(path);
             Ok(())
         }
     }
@@ -1259,7 +1273,7 @@ mod tests {
         )
     }
 
-    fn cache_dir() -> PathBuf {
+    pub(super) fn cache_dir() -> PathBuf {
         PathBuf::from("/cache")
     }
 
@@ -1269,7 +1283,7 @@ mod tests {
         )
     }
 
-    fn seed_bundle(
+    pub(super) fn seed_bundle(
         fs: &FakeFs,
         cache_dir: &Path,
         dir_name: &str,
@@ -1286,7 +1300,7 @@ mod tests {
         dir
     }
 
-    fn seed_persisted_bundle_root(fs: &FakeFs, cache_dir: &Path, bundle_dir: &Path) {
+    pub(super) fn seed_persisted_bundle_root(fs: &FakeFs, cache_dir: &Path, bundle_dir: &Path) {
         fs.write_file(
             cache_dir.join("bundle_root"),
             bundle_dir.to_string_lossy().to_string(),
@@ -1318,7 +1332,7 @@ mod tests {
         service_with_status_fs_and_embedded_build(status, FakeFs::default(), 0)
     }
 
-    fn service_with_status_and_fs(
+    pub(super) fn service_with_status_and_fs(
         status: UpdateStatus,
         fs_repo: FakeFs,
     ) -> (Service<FakeFs>, StartRx) {
@@ -1405,7 +1419,7 @@ mod tests {
         })
     }
 
-    fn clear_required_status() -> UpdateStatus {
+    pub(super) fn clear_required_status() -> UpdateStatus {
         UpdateStatus::ClearRequired(ClearRequiredStatus {
             reason: "bundle_revoked".to_string(),
         })
