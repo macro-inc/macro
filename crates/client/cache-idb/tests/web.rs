@@ -6,7 +6,9 @@
 
 use cache_core::codec::cache_database_name;
 use cache_core::engine::{Engine, ReadResult};
-use cache_core::entity_index::{EntityBucket, EntityIndexCursor, EntityIndexQuery};
+use cache_core::entity_index::{
+    EntityBucket, EntityIndexCursor, EntityIndexQuery, EntitySearchQuery,
+};
 use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
     PersistedOptimisticLayer, StoredMutation,
@@ -31,15 +33,19 @@ fn key(s: &str) -> EntityKey {
     EntityKey(s.to_string())
 }
 
-fn indexed_document(viewed_at: &str, file_type: Option<&str>, subtype: Option<&str>) -> Record {
-    let mut record = record("Document");
-    record.fields.insert(
-        "__typename".into(),
-        CacheValue::String("GraphqlSoupDocument".into()),
-    );
+fn indexed_entity(typename: &str, name: &str, viewed_at: &str) -> Record {
+    let mut record = record(name);
+    record
+        .fields
+        .insert("__typename".into(), CacheValue::String(typename.into()));
     record
         .fields
         .insert("viewedAt".into(), CacheValue::String(viewed_at.into()));
+    record
+}
+
+fn indexed_document(viewed_at: &str, file_type: Option<&str>, subtype: Option<&str>) -> Record {
+    let mut record = indexed_entity("GraphqlSoupDocument", "Document", viewed_at);
     if let Some(file_type) = file_type {
         record
             .fields
@@ -102,6 +108,70 @@ async fn put_get_delete_roundtrip() {
 
     s.clear().await.unwrap();
     assert!(s.get_batch(&[key("B:2")]).await.unwrap()[0].is_none());
+}
+
+#[wasm_bindgen_test]
+async fn searches_only_requested_bucket_ranges() {
+    let scope = "test-index-search-buckets";
+    IdbStorage::destroy(scope).await.unwrap();
+    let mut storage = IdbStorage::open(scope).await.unwrap();
+    let document_key = key("GraphqlSoupDocument:doc-1");
+    let channel_key = key("GraphqlSoupChannel:channel-1");
+    let chat_key = key("GraphqlSoupChat:chat-1");
+    storage
+        .put_batch(vec![
+            (
+                document_key.clone(),
+                indexed_entity(
+                    "GraphqlSoupDocument",
+                    "Shared result",
+                    "1970-01-01T00:00:02Z",
+                ),
+            ),
+            (
+                channel_key.clone(),
+                indexed_entity(
+                    "GraphqlSoupChannel",
+                    "Shared result",
+                    "1970-01-01T00:00:03Z",
+                ),
+            ),
+            (
+                chat_key,
+                indexed_entity("GraphqlSoupChat", "Shared result", "1970-01-01T00:00:04Z"),
+            ),
+        ])
+        .await
+        .unwrap();
+
+    let result = storage
+        .search_entity_index(&EntitySearchQuery {
+            buckets: vec![EntityBucket::Document, EntityBucket::Channel],
+            query: "shared".into(),
+            cursor: None,
+            limit: 10,
+            include_total_count: true,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.total_count, Some(2));
+    assert_eq!(
+        result
+            .entries
+            .into_iter()
+            .map(|entry| entry.entity_key)
+            .collect::<Vec<_>>(),
+        vec![channel_key, document_key]
+    );
+    assert_eq!(
+        result.bucket_counts,
+        Some(
+            [(EntityBucket::Document, 1), (EntityBucket::Channel, 1),]
+                .into_iter()
+                .collect()
+        )
+    );
 }
 
 #[wasm_bindgen_test]

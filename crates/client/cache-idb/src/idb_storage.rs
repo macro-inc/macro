@@ -18,7 +18,7 @@ use idb::{
     CursorDirection, Database, DatabaseEvent, Factory, Index, IndexParams, KeyPath, KeyRange,
     ObjectStoreParams, Query, TransactionMode,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -202,10 +202,11 @@ async fn collect_index_entries(
 
 async fn search_index_entries(
     index: &Index,
+    range: Option<KeyRange>,
     query: &EntitySearchQuery,
 ) -> Result<EntitySearchIndexResult, IdbStorageError> {
     let Some(cursor) = index
-        .open_cursor(None, Some(CursorDirection::Next))?
+        .open_cursor(range.map(Query::from), Some(CursorDirection::Next))?
         .await?
     else {
         return Ok(EntitySearchIndexResult {
@@ -573,13 +574,52 @@ impl Storage for IdbStorage {
         &self,
         query: &EntitySearchQuery,
     ) -> Result<EntitySearchIndexResult, Self::Error> {
-        let tx = self
-            .db
-            .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
-        let index = tx
-            .object_store(RECORDS_STORE)?
-            .index(RECORDS_BY_SORT_INDEX)?;
-        search_index_entries(&index, query).await
+        let buckets: BTreeSet<_> = query.buckets.iter().copied().collect();
+        if buckets.is_empty() || buckets.len() == EntityBucket::ALL.len() {
+            let tx = self
+                .db
+                .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
+            let index = tx
+                .object_store(RECORDS_STORE)?
+                .index(RECORDS_BY_SORT_INDEX)?;
+            return search_index_entries(&index, None, query).await;
+        }
+
+        let mut entries = Vec::with_capacity(query.bounded_storage_limit());
+        let mut total_count = 0_u64;
+        let mut bucket_counts = BTreeMap::new();
+        for bucket in buckets {
+            // Use a separate transaction per range so IndexedDB cannot
+            // auto-commit between finishing one bucket cursor and opening the
+            // next one.
+            let tx = self
+                .db
+                .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
+            let index = tx
+                .object_store(RECORDS_STORE)?
+                .index(RECORDS_BY_BUCKET_SORT_INDEX)?;
+            let lower = compound_key([JsValue::from_str(bucket.as_str())]);
+            let upper = compound_key([
+                JsValue::from_str(bucket.as_str()),
+                js_sys::Array::new().into(),
+            ]);
+            let range = KeyRange::bound(&lower, &upper, None, Some(true))?;
+            let result = search_index_entries(&index, Some(range), query).await?;
+            entries.extend(result.entries);
+            total_count = total_count.saturating_add(result.total_count.unwrap_or(0));
+            if let Some(counts) = result.bucket_counts {
+                for (result_bucket, count) in counts {
+                    *bucket_counts.entry(result_bucket).or_default() += count;
+                }
+            }
+        }
+        sort_search_entries(&mut entries);
+        entries.truncate(query.bounded_storage_limit());
+        Ok(EntitySearchIndexResult {
+            entries,
+            total_count: query.include_total_count.then_some(total_count),
+            bucket_counts: query.include_total_count.then_some(bucket_counts),
+        })
     }
 
     async fn enqueue_mutation(
