@@ -296,7 +296,8 @@ function ResultsContainer(props: {
   const actionsApply = () =>
     !SearchState.isFullTextMode() && !SearchState.isInCommandScope();
   // "Ask AI about" needs something to ask about.
-  const wantAskAiButton = () => actionsApply() && props.query().trim().length > 0;
+  const wantAskAiButton = () =>
+    actionsApply() && props.query().trim().length > 0;
   const actionButtonCount = () =>
     (actionsApply() ? 1 : 0) + (wantAskAiButton() ? 1 : 0);
 
