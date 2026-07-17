@@ -67,7 +67,7 @@ export function Dialog(props: DialogProps) {
       <KobalteDialog.Portal>
         <KobalteDialog.Overlay
           class={cn(
-            'hidden fixed inset-0 z-modal bg-modal-overlay',
+            'invisible fixed inset-0 z-modal bg-modal-overlay',
             animateOnOpen() && 'dialog-overlay-open-animation',
             Boolean(props.visibleScrim) && 'visible'
           )}

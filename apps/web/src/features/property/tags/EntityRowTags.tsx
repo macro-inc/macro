@@ -1,11 +1,17 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn, HoverCard, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
+import {
+  type EditableTag,
+  TagEditorDialog,
+  type TagEditorDialogMode,
+} from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
 import { type ResolvedTag, useDocTags, useSoupDocTags } from './useDocTags';
 
@@ -23,53 +29,126 @@ const chipClass = cn(
 function HoverTagRow(props: {
   tag: ResolvedTag;
   onFilter?: (id: string) => void;
+  onEdit: (tag: ResolvedTag) => void;
 }) {
   return (
-    <Show
-      when={props.onFilter}
-      fallback={
-        <span class="flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 text-ink">
-          <TagDot color={props.tag.color} />
-          <span class="min-w-0 truncate">{props.tag.label}</span>
-        </span>
-      }
-    >
-      {(onFilter) => (
-        <button
-          type="button"
-          class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-left text-ink hover:bg-hover"
-          onClick={() => onFilter()(props.tag.optionId)}
-        >
-          <TagDot color={props.tag.color} />
-          <span class="min-w-0 truncate">{props.tag.label}</span>
-        </button>
-      )}
-    </Show>
+    <div class="flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-ink hover:bg-hover">
+      <Show
+        when={props.onFilter}
+        fallback={
+          <span class="flex min-w-0 flex-1 items-center gap-1.5">
+            <TagDot color={props.tag.color} />
+            <span class="min-w-0 truncate">{props.tag.label}</span>
+          </span>
+        }
+      >
+        {(onFilter) => (
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+            onClick={() => onFilter()(props.tag.optionId)}
+          >
+            <TagDot color={props.tag.color} />
+            <span class="min-w-0 truncate">{props.tag.label}</span>
+          </button>
+        )}
+      </Show>
+      <button
+        type="button"
+        aria-label={`Edit ${props.tag.label}`}
+        class="flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted hover:bg-hover hover:text-ink"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onEdit(props.tag);
+        }}
+      >
+        <PencilIcon class="size-3.5" />
+      </button>
+    </div>
   );
+}
+
+function TagHoverContent(props: {
+  tag: ResolvedTag;
+  onFilterByTag?: (id: string) => void;
+  onEdit: (tag: ResolvedTag) => void;
+}) {
+  return (
+    <div class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink hover:bg-hover">
+      <Show
+        when={props.onFilterByTag}
+        fallback={
+          <span class="flex min-w-0 flex-1 items-center gap-1.5">
+            <TagDot color={props.tag.color} />
+            <span class="min-w-0 truncate">{props.tag.label}</span>
+          </span>
+        }
+      >
+        {(onFilterByTag) => (
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left"
+            onClick={() => onFilterByTag()(props.tag.optionId)}
+          >
+            <FilterIcon class="size-3.5 shrink-0 text-ink-muted" />
+            <span>
+              Filter by <span class="font-medium">{props.tag.label}</span>
+            </span>
+          </button>
+        )}
+      </Show>
+      <button
+        type="button"
+        aria-label={`Edit ${props.tag.label}`}
+        class="flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted hover:bg-hover hover:text-ink"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onEdit(props.tag);
+        }}
+      >
+        <PencilIcon class="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function editableTagFromResolved(
+  docTags: DocTags,
+  tag: ResolvedTag
+): EditableTag | undefined {
+  const set = docTags.tagSets().find((tagSet) => tagSet.scope === tag.scope);
+  const option = set?.options.find(
+    (candidate) => candidate.id === tag.optionId
+  );
+  if (!set?.definition || !option) return undefined;
+
+  return {
+    scope: tag.scope,
+    propertyDefinitionId: set.definition.id,
+    option,
+  };
 }
 
 function TagChip(props: {
   tag: ResolvedTag;
   docTags: DocTags;
   onFilterByTag?: (id: string) => void;
+  onEdit: (tag: ResolvedTag) => void;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   return (
     <Layer depth={2}>
       <HoverCard
         placement="bottom-start"
-        disabled={pickerOpen() || !props.onFilterByTag}
+        disabled={pickerOpen()}
         content={
-          <button
-            type="button"
-            class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-ink hover:bg-hover"
-            onClick={() => props.onFilterByTag?.(props.tag.optionId)}
-          >
-            <FilterIcon class="size-3.5 text-ink-muted" />
-            <span>
-              Filter by <span class="font-medium">{props.tag.label}</span>
-            </span>
-          </button>
+          <TagHoverContent
+            tag={props.tag}
+            onFilterByTag={props.onFilterByTag}
+            onEdit={props.onEdit}
+          />
         }
       >
         <TagPicker
@@ -90,6 +169,7 @@ function TagOverflow(props: {
   tags: ResolvedTag[];
   docTags: DocTags;
   onFilterByTag?: (id: string) => void;
+  onEdit: (tag: ResolvedTag) => void;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
@@ -105,7 +185,11 @@ function TagOverflow(props: {
           <div class="flex flex-col gap-0.5">
             <For each={props.tags}>
               {(tag) => (
-                <HoverTagRow tag={tag} onFilter={props.onFilterByTag} />
+                <HoverTagRow
+                  tag={tag}
+                  onFilter={props.onFilterByTag}
+                  onEdit={props.onEdit}
+                />
               )}
             </For>
           </div>
@@ -157,6 +241,15 @@ export function EntityRowTags(props: {
   const maxVisible = () => props.maxVisible ?? DEFAULT_MAX_VISIBLE;
   const visible = () => docTags.appliedTags().slice(0, maxVisible());
   const hidden = () => docTags.appliedTags().slice(maxVisible());
+  const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
+    null
+  );
+
+  const openEdit = (tag: ResolvedTag) => {
+    const editable = editableTagFromResolved(docTags, tag);
+    if (!editable) return;
+    setEditorMode({ type: 'edit', tag: editable });
+  };
 
   return (
     <Show when={docTags.appliedTags().length > 0}>
@@ -170,6 +263,7 @@ export function EntityRowTags(props: {
               tag={tag}
               docTags={docTags}
               onFilterByTag={props.onFilterByTag}
+              onEdit={openEdit}
             />
           )}
         </For>
@@ -178,8 +272,17 @@ export function EntityRowTags(props: {
             tags={hidden()}
             docTags={docTags}
             onFilterByTag={props.onFilterByTag}
+            onEdit={openEdit}
           />
         </Show>
+        <TagEditorDialog
+          open={editorMode() !== null}
+          mode={editorMode()}
+          teamAvailable={Boolean(
+            docTags.tagSets().some((set) => set.scope === 'team')
+          )}
+          onClose={() => setEditorMode(null)}
+        />
       </div>
     </Show>
   );
