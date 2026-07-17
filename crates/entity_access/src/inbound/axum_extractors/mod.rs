@@ -31,10 +31,7 @@ pub use pin::PinAccessLevelExtractor;
 pub use project::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2,
 };
-pub use team::{
-    MacroUserTeamExtractor, MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractor,
-    OptionalMacroUserTeamExtractorV2,
-};
+pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
 pub use thread::ThreadAccessLevelExtractor;
 
 use std::borrow::Cow;

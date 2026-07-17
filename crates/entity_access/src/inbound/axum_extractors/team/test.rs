@@ -39,7 +39,6 @@ type V2Extractor = OptionalMacroUserTeamExtractorV2<
 >;
 type RequiredV2Extractor =
     MacroUserTeamExtractorV2<AdminTeamRole, FakeEntityAccessService, FakeAuthorizationService>;
-type V1RequiredExtractor = MacroUserTeamExtractor<AdminTeamRole, FakeEntityAccessService>;
 
 #[derive(Clone, Debug, Default)]
 struct FakeEntityAccessService {
@@ -255,15 +254,6 @@ async fn extract_required_v2(
 ) -> Result<RequiredV2Extractor, ExtractorError> {
     let (mut parts, _) = request.into_parts();
     RequiredV2Extractor::from_request_parts(&mut parts, state).await
-}
-
-async fn extract_v1_required(
-    mut request: Request<Body>,
-    state: &TestState,
-) -> Result<V1RequiredExtractor, ExtractorError> {
-    request.extensions_mut().insert(user_context(USER_ID));
-    let (mut parts, _) = request.into_parts();
-    V1RequiredExtractor::from_request_parts(&mut parts, state).await
 }
 
 async fn response_parts(response: Response) -> (StatusCode, String) {
@@ -549,33 +539,6 @@ async fn identity_less_internal_request_is_unauthorized() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, r#"{"message":"unauthorized"}"#);
-}
-
-#[tokio::test]
-async fn v1_required_extractor_preserves_team_failure_messages() {
-    let no_team_state = state(
-        FakeEntityAccessService::default(),
-        FakeAuthorizationService::default(),
-    );
-    let no_team_error = extract_v1_required(request(), &no_team_state)
-        .await
-        .expect_err("required V1 extraction should reject absent membership");
-    assert!(matches!(
-        no_team_error,
-        ExtractorError::UnauthorizedWithMessage("not in a team")
-    ));
-
-    let insufficient_role_state = state(
-        FakeEntityAccessService::default().with_membership(USER_ID, TeamRole::Member),
-        FakeAuthorizationService::default(),
-    );
-    let insufficient_role_error = extract_v1_required(request(), &insufficient_role_state)
-        .await
-        .expect_err("required V1 extraction should reject an insufficient role");
-    assert!(matches!(
-        insufficient_role_error,
-        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
-    ));
 }
 
 #[test]
