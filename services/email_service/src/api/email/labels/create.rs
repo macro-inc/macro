@@ -1,10 +1,10 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use models_email::service;
 use models_email::service::link::Link;
 use utoipa::ToSchema;
@@ -36,10 +36,10 @@ pub struct CreateLabelResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link, gmail_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, link, gmail_token), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     link: Extension<Link>,
     gmail_token: Extension<String>,
     Json(request_body): Json<CreateLabelRequest>,
