@@ -40,8 +40,6 @@ jobs:
       run: rm -rf target/*/debug/incremental target/debug/incremental
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
-    - name: Build compose service images (fail fast)
-      run: docker compose --project-directory . -p macro -f docker/docker-compose.yml build search sync_service websocket_service lexical_service ai_editing_worker
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup dev shell + web deps
@@ -60,23 +58,78 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
-    - name: Build service binaries
-      run: |
-        cargo x zigbuild
-        sccache --show-stats
-    - name: Build xtask_local (runs inside the preview VM)
-      run: cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local
-    - name: Build frontend bundle (same-origin)
-      run: bun run --bun build
-      env:
-        MODE: development
-        NODE_ENV: production
-        VITE_LOCAL_SERVERS: ALL
-        VITE_LOCAL_BACKEND_ORIGIN: same-origin
-      working-directory: apps/web
-    - name: Bake init snapshot
+    - name: Setup flyctl
+      uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+    - name: Build artifacts (parallel lanes)
       run: |
         set -euo pipefail
+        lanes="$RUNNER_TEMP/lanes"
+        mkdir -p "$lanes"
+
+        cat > "$lanes/cargo.sh" <<'LANE'
+        set -euo pipefail
+        cargo x zigbuild
+        sccache --show-stats
+        cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local
+        LANE
+
+        cat > "$lanes/web.sh" <<'LANE'
+        set -euo pipefail
+        cd apps/web
+        export MODE=development NODE_ENV=production
+        export VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin
+        bun run --bun build
+        LANE
+
+        cat > "$lanes/images.sh" <<'LANE'
+        set -euo pipefail
+        docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
+          search sync_service websocket_service lexical_service ai_editing_worker
+        # Premirror: content-addressed refs, identical scheme to the deploy
+        # step's mirror loop, so its manifest-existence check skips these.
+        # Best effort by design — anything skipped here (images only the
+        # bake produces, like macro-local-runtime:dev) is pushed there.
+        flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
+          || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+          || flyctl status --app "$APP_NAME" >/dev/null
+        flyctl auth docker
+        registry="registry.fly.io/$APP_NAME"
+        for img in $(docker compose --project-directory . -p macro \
+            -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+          if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
+            echo "premirror: skipping $img (not local, not pullable)"
+            continue
+          fi
+          id=$(docker image inspect -f '{{.Id}}' "$img")
+          ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
+          docker tag "$img" "$ref"
+          if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
+            for _ in 1 2 3; do
+              docker push "$ref" && break
+              echo "premirror push of $ref failed, retrying" >&2
+              sleep 15
+            done
+          fi
+        done
+        LANE
+
+        # A cold `stack up --infra-only` runs the real init (migrate,
+        # kickstart, Kafka topics, indices) and saves the content-addressed
+        # snapshot the VM restores from. Infra only: the app services need
+        # the Doppler-sourced env to boot, which this runner deliberately
+        # lacks — the snapshot captures only the infra volumes anyway. Via
+        # `just` (not the bare `cargo x` alias) because the justfile
+        # enables the `local-stack` feature the Kafka provisioning needs.
+        # The store lives on the cache volume for a zero-copy hit; every
+        # snapshot is also stored as one tar in Namespace artifact storage
+        # keyed by the same hash, so cache-volume onboarding misses
+        # download the exact snapshot instead of paying for a full init.
+        # Artifact access is an optimization: failures fall back to the
+        # volume/cold-bake behavior. The final `snapshot --json` line lands
+        # in $RUNNER_TEMP for the stage step.
+        cat > "$lanes/bake.sh" <<'LANE'
+        set -euo pipefail
+        export CARGO_TARGET_DIR="$PWD/target/bake"
         mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
         status=$(just stack snapshot --json | tail -n 1)
         key=$(echo "$status" | jq -r '.key')
@@ -137,6 +190,38 @@ jobs:
             || echo "warning: failed to upload init snapshot artifact" >&2
         fi
         echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
+        LANE
+
+        declare -a pids=() names=()
+        for name in cargo web images bake; do
+          bash "$lanes/$name.sh" > "$lanes/$name.log" 2>&1 &
+          pids+=($!)
+          names+=("$name")
+        done
+        fail=
+        for _ in "${pids[@]}"; do
+          # Bare `wait -n`: any child; explicit pids would error once a
+          # job has already been reaped.
+          if ! wait -n; then
+            fail=1
+            break
+          fi
+        done
+        if [ -n "$fail" ]; then
+          kill "${pids[@]}" 2>/dev/null || true
+          wait || true
+        fi
+        for i in "${!names[@]}"; do
+          echo "::group::lane: ${names[$i]}"
+          cat "$lanes/${names[$i]}.log" || true
+          echo "::endgroup::"
+        done
+        if [ -n "$fail" ]; then
+          echo "a build lane failed (first failure aborts the rest); see lane logs above" >&2
+          exit 1
+        fi
+      env:
+        FLY_ORG: ${{ vars.FLY_ORG || secrets.FLY_ORG }}
     - name: Dump stack diagnostics
       if: failure()
       run: |
@@ -208,8 +293,6 @@ jobs:
         cp -p infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp -p infra/preview/Dockerfile "$ctx/Dockerfile"
         cp -p infra/preview/update.Dockerfile "$ctx/update.Dockerfile"
-    - name: Setup flyctl
-      uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
     - name: Deploy to Fly
       run: |
         set -euo pipefail

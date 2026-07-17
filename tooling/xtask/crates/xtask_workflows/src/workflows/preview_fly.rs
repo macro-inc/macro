@@ -124,52 +124,15 @@ fn deploy() -> Job {
                 "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
             ), // v0.0.23
         )
-        // Fail fast: the Docker-built images are the most fragile part of a
-        // fresh bring-up (stale local images mask their rot) and need nothing
-        // from nix/cargo — build them before the expensive toolchain setup so
-        // a broken Dockerfile fails in ~2 minutes, not ~12. This is also the
-        // ONLY thing that builds them now: the infra-only bake never starts
-        // the app layer, so the registry mirror ships exactly what's built here.
-        .add_step(Step::new("Build compose service images (fail fast)").run(
-            "docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
-             search sync_service websocket_service lexical_service ai_editing_worker",
-        ))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
         .add_step(steps::configure_namespace_sccache(
             vars::PREVIEW_SCCACHE_NAME,
         ))
-        .add_step(Step::new("Build service binaries").run(indoc::indoc! {r#"
-                    cargo x zigbuild
-                    sccache --show-stats
-                "#}))
-        .add_step(
-            // xtask_local, not the dependency-free `xtask` launcher (which
-            // just re-invokes cargo — useless in the VM). Deliberately WITHOUT
-            // the `local-stack` feature: the VM restores the baked snapshot,
-            // whose Kafka volume already carries the topics, so it never
-            // provisions Kafka — and skipping rdkafka means no
-            // dynamically-linked librdkafka to ship into the VM. zigbuild,
-            // not a host build: the nix dev shell links the /nix/store ELF
-            // interpreter, which doesn't exist in the VM image (exit 127,
-            // "required file not found").
-            Step::new("Build xtask_local (runs inside the preview VM)").run(
-                "cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local",
-            ),
-        )
-        .add_step(
-            Step::new("Build frontend bundle (same-origin)")
-                .run("bun run --bun build")
-                .working_directory(xtask_paths::repo_dir!("apps/web"))
-                .add_env(("MODE", "development"))
-                .add_env(("NODE_ENV", "production"))
-                .add_env(("VITE_LOCAL_SERVERS", "ALL"))
-                .add_env(("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")),
-        )
-        .add_step(bake_snapshot())
+        .add_step(setup_flyctl())
+        .add_step(build_artifacts())
         .add_step(dump_stack_diagnostics())
         .add_step(stage_context())
-        .add_step(setup_flyctl())
         .add_step(deploy_to_fly())
         .add_step(dump_fly_diagnostics())
         .add_step(dump_boot_timings())
@@ -206,87 +169,194 @@ fn dump_boot_timings() -> Step<Run> {
     "#})
 }
 
-/// A cold `stack up --infra-only` on the runner runs the real init (migrate,
-/// kickstart, Kafka topics, indices) and saves the content-addressed snapshot
-/// the VM restores from. Infra only: the app services need the Doppler-sourced
-/// env to boot, which this runner deliberately lacks — the snapshot captures
-/// only the infra volumes anyway. Via `just` (not the bare `cargo x` alias)
-/// because the justfile enables the `local-stack` feature the Kafka
-/// provisioning needs.
+/// Every build artifact in one step, four lanes in parallel. The lanes are
+/// independent by construction:
 ///
-/// The store lives on the cache volume (MACRO_STACK_SNAPSHOT_DIR) for a
-/// zero-copy hit. Every content-addressed snapshot is also stored as one tar in
-/// Namespace artifact storage, keyed by the same hash. Cache-volume onboarding
-/// misses therefore download the exact snapshot instead of paying for a full
-/// init again. Artifact access is an optimization: download/upload failures
-/// fall back to the existing volume/cold-bake behavior.
+/// - `cargo`: service binaries then xtask_local, sequential because they
+///   share the workspace target dir (cargo's build-dir lock would serialize
+///   them anyway). xtask_local deliberately WITHOUT the `local-stack`
+///   feature (the VM restores the baked snapshot so it never provisions
+///   Kafka; skipping rdkafka means no dynamically-linked librdkafka in the
+///   VM) and via zigbuild, not a host build (the nix dev shell links the
+///   /nix/store ELF interpreter, which doesn't exist in the VM image).
+/// - `web`: the same-origin frontend bundle.
+/// - `images`: the compose-built app images (the most fragile part of a
+///   fresh bring-up — a broken Dockerfile still fails the step early via
+///   fail-fast wait), then a best-effort premirror push to the app's Fly
+///   registry so the network transfer overlaps the cargo lane instead of
+///   serializing after it. The deploy step's mirror loop stays
+///   authoritative: its manifest-existence check skips whatever was
+///   premirrored here and pushes the rest (e.g. the bake-built runtime
+///   image).
+/// - `bake`: the init snapshot (see the lane script header for details),
+///   under its own CARGO_TARGET_DIR so its host xtask build doesn't take
+///   the workspace build-dir lock the cargo lane holds.
 ///
-/// The final `snapshot --json` line lands in $RUNNER_TEMP for the stage step,
-/// which ships exactly that key's directory.
-fn bake_snapshot() -> Step<Run> {
-    Step::new("Bake init snapshot").run(indoc::indoc! {r#"
-        set -euo pipefail
-        mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
-        status=$(just stack snapshot --json | tail -n 1)
-        key=$(echo "$status" | jq -r '.key')
-        root=$(echo "$status" | jq -r '.root')
-        artifact="macro-preview/init-snapshots/${key}.tar"
-        archive="$RUNNER_TEMP/init-snapshot-${key}.tar"
-        artifact_hit=
+/// Lanes log to files and are dumped as collapsible groups afterwards;
+/// `wait -n` fails the step on the first lane failure and kills the rest.
+fn build_artifacts() -> Step<Run> {
+    Step::new("Build artifacts (parallel lanes)")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            lanes="$RUNNER_TEMP/lanes"
+            mkdir -p "$lanes"
 
-        # The Namespace cache-volume pool has an onboarding period where a
-        # runner can receive an empty fork. Artifact storage is the durable
-        # fallback: restore into a temporary directory and only publish it to
-        # the live store after validating the embedded manifest through xtask.
-        if ! echo "$status" | jq -e '.present' >/dev/null; then
-          restored="$RUNNER_TEMP/restored-init-snapshot"
-          rm -rf "$restored"
-          mkdir -p "$restored"
-          if nsc artifact download "$artifact" "$archive" \
-              && tar -xf "$archive" -C "$restored" \
-              && [ -f "$restored/$key/manifest.json" ]; then
-            rm -rf "$root/$key"
-            cp -a "$restored/$key" "$root/$key"
+            cat > "$lanes/cargo.sh" <<'LANE'
+            set -euo pipefail
+            cargo x zigbuild
+            sccache --show-stats
+            cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local
+            LANE
+
+            cat > "$lanes/web.sh" <<'LANE'
+            set -euo pipefail
+            cd apps/web
+            export MODE=development NODE_ENV=production
+            export VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin
+            bun run --bun build
+            LANE
+
+            cat > "$lanes/images.sh" <<'LANE'
+            set -euo pipefail
+            docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
+              search sync_service websocket_service lexical_service ai_editing_worker
+            # Premirror: content-addressed refs, identical scheme to the deploy
+            # step's mirror loop, so its manifest-existence check skips these.
+            # Best effort by design — anything skipped here (images only the
+            # bake produces, like macro-local-runtime:dev) is pushed there.
+            flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
+                  || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+              || flyctl status --app "$APP_NAME" >/dev/null
+            flyctl auth docker
+            registry="registry.fly.io/$APP_NAME"
+            for img in $(docker compose --project-directory . -p macro \
+                -f docker/docker-compose.yml config --images | sort -u) alpine:3; do
+              if ! docker image inspect "$img" >/dev/null 2>&1 && ! docker pull "$img"; then
+                echo "premirror: skipping $img (not local, not pullable)"
+                continue
+              fi
+              id=$(docker image inspect -f '{{.Id}}' "$img")
+              ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
+              docker tag "$img" "$ref"
+              if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
+                for _ in 1 2 3; do
+                  docker push "$ref" && break
+                  echo "premirror push of $ref failed, retrying" >&2
+                  sleep 15
+                done
+              fi
+            done
+            LANE
+
+            # A cold `stack up --infra-only` runs the real init (migrate,
+            # kickstart, Kafka topics, indices) and saves the content-addressed
+            # snapshot the VM restores from. Infra only: the app services need
+            # the Doppler-sourced env to boot, which this runner deliberately
+            # lacks — the snapshot captures only the infra volumes anyway. Via
+            # `just` (not the bare `cargo x` alias) because the justfile
+            # enables the `local-stack` feature the Kafka provisioning needs.
+            # The store lives on the cache volume for a zero-copy hit; every
+            # snapshot is also stored as one tar in Namespace artifact storage
+            # keyed by the same hash, so cache-volume onboarding misses
+            # download the exact snapshot instead of paying for a full init.
+            # Artifact access is an optimization: failures fall back to the
+            # volume/cold-bake behavior. The final `snapshot --json` line lands
+            # in $RUNNER_TEMP for the stage step.
+            cat > "$lanes/bake.sh" <<'LANE'
+            set -euo pipefail
+            export CARGO_TARGET_DIR="$PWD/target/bake"
+            mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
             status=$(just stack snapshot --json | tail -n 1)
-            if echo "$status" | jq -e '.present' >/dev/null; then
-              artifact_hit=1
-              echo "init snapshot artifact hit: $status"
-            else
-              rm -rf "$root/$key"
-              echo "downloaded init snapshot failed validation; baking cold" >&2
+            key=$(echo "$status" | jq -r '.key')
+            root=$(echo "$status" | jq -r '.root')
+            artifact="macro-preview/init-snapshots/${key}.tar"
+            archive="$RUNNER_TEMP/init-snapshot-${key}.tar"
+            artifact_hit=
+
+            # The Namespace cache-volume pool has an onboarding period where a
+            # runner can receive an empty fork. Artifact storage is the durable
+            # fallback: restore into a temporary directory and only publish it to
+            # the live store after validating the embedded manifest through xtask.
+            if ! echo "$status" | jq -e '.present' >/dev/null; then
+              restored="$RUNNER_TEMP/restored-init-snapshot"
+              rm -rf "$restored"
+              mkdir -p "$restored"
+              if nsc artifact download "$artifact" "$archive" \
+                      && tar -xf "$archive" -C "$restored" \
+                  && [ -f "$restored/$key/manifest.json" ]; then
+                rm -rf "$root/$key"
+                cp -a "$restored/$key" "$root/$key"
+                status=$(just stack snapshot --json | tail -n 1)
+                if echo "$status" | jq -e '.present' >/dev/null; then
+                  artifact_hit=1
+                  echo "init snapshot artifact hit: $status"
+                else
+                  rm -rf "$root/$key"
+                  echo "downloaded init snapshot failed validation; baking cold" >&2
+                fi
+              else
+                echo "init snapshot artifact miss; baking cold" >&2
+              fi
             fi
-          else
-            echo "init snapshot artifact miss; baking cold" >&2
-          fi
-        fi
 
-        if echo "$status" | jq -e '.present' >/dev/null; then
-          echo "init snapshot cache hit: $status"
-          cargo run --quiet --manifest-path Cargo.toml \
-            -p xtask_local --features local-stack -- gen-compose
-          # The cold path builds the runtime image inside `stack up`; on a
-          # hit nothing else does, and the registry mirror needs it in the
-          # local daemon (its pull fallback only covers public images —
-          # macro-local-runtime:dev is not on Docker Hub).
-          cargo run --quiet --manifest-path Cargo.toml \
-            -p xtask_local --features local-stack -- runtime-image
-        else
-          just stack up --infra-only --no-doppler --no-build
-          status=$(just stack snapshot --json | tail -n 1)
-          echo "$status" | jq -e '.present' >/dev/null
-        fi
+            if echo "$status" | jq -e '.present' >/dev/null; then
+              echo "init snapshot cache hit: $status"
+              cargo run --quiet --manifest-path Cargo.toml \
+                -p xtask_local --features local-stack -- gen-compose
+              # The cold path builds the runtime image inside `stack up`; on a
+              # hit nothing else does, and the registry mirror needs it in the
+              # local daemon (its pull fallback only covers public images —
+              # macro-local-runtime:dev is not on Docker Hub).
+              cargo run --quiet --manifest-path Cargo.toml \
+                -p xtask_local --features local-stack -- runtime-image
+            else
+              just stack up --infra-only --no-doppler --no-build
+              status=$(just stack snapshot --json | tail -n 1)
+              echo "$status" | jq -e '.present' >/dev/null
+            fi
 
-        # Seed artifact storage from either a volume hit or a cold bake. Avoid
-        # uploading another version when the artifact already exists; a race
-        # between concurrent PRs is harmless and must not fail the preview.
-        if [ -z "$artifact_hit" ] && ! nsc artifact describe "$artifact" >/dev/null 2>&1; then
-          snap_dir=$(echo "$status" | jq -r '.dir')
-          tar -cf "$archive" -C "$root" "$(basename "$snap_dir")"
-          nsc artifact upload "$archive" "$artifact" --expires_in 720h \
-            || echo "warning: failed to upload init snapshot artifact" >&2
-        fi
-        echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
+            # Seed artifact storage from either a volume hit or a cold bake. Avoid
+            # uploading another version when the artifact already exists; a race
+            # between concurrent PRs is harmless and must not fail the preview.
+            if [ -z "$artifact_hit" ] && ! nsc artifact describe "$artifact" >/dev/null 2>&1; then
+              snap_dir=$(echo "$status" | jq -r '.dir')
+              tar -cf "$archive" -C "$root" "$(basename "$snap_dir")"
+              nsc artifact upload "$archive" "$artifact" --expires_in 720h \
+                || echo "warning: failed to upload init snapshot artifact" >&2
+            fi
+            echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
+            LANE
+
+            declare -a pids=() names=()
+            for name in cargo web images bake; do
+              bash "$lanes/$name.sh" > "$lanes/$name.log" 2>&1 &
+              pids+=($!)
+              names+=("$name")
+            done
+            fail=
+            for _ in "${pids[@]}"; do
+              # Bare `wait -n`: any child; explicit pids would error once a
+              # job has already been reaped.
+              if ! wait -n; then
+                fail=1
+                break
+              fi
+            done
+            if [ -n "$fail" ]; then
+              kill "${pids[@]}" 2>/dev/null || true
+              wait || true
+            fi
+            for i in "${!names[@]}"; do
+              echo "::group::lane: ${names[$i]}"
+              cat "$lanes/${names[$i]}.log" || true
+              echo "::endgroup::"
+            done
+            if [ -n "$fail" ]; then
+              echo "a build lane failed (first failure aborts the rest); see lane logs above" >&2
+              exit 1
+            fi
     "#})
+        .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
 }
 
 /// When the bake dies (typically the backend health gate), the answer is in
