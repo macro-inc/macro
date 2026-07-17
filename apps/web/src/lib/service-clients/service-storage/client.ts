@@ -155,6 +155,29 @@ import {
   getDocxExpandedParts,
 } from './util/getDocxFile';
 
+// Hand-written until `just gen-api cloud-storage` regenerates the DSS
+// schemas; swap for the generated crmTeamSettings* types afterward.
+/** Minimum team role required for a CRM capability. */
+export type CrmPermissionRole = 'admin' | 'owner';
+/** Response of GET/PUT /crm/settings. */
+export type CrmTeamSettingsResponse = {
+  edit_stages_role: CrmPermissionRole;
+  move_closed_deals_role: CrmPermissionRole;
+  delete_records_role: CrmPermissionRole;
+  closed_stage_ids?: string[] | null;
+  team_views: unknown;
+  default_team_view_id?: string | null;
+};
+/** Body of PUT /crm/settings — omitted fields keep current values; null clears nullable fields. */
+export type UpdateCrmTeamSettingsRequest = {
+  edit_stages_role?: CrmPermissionRole;
+  move_closed_deals_role?: CrmPermissionRole;
+  delete_records_role?: CrmPermissionRole;
+  closed_stage_ids?: string[] | null;
+  team_views?: unknown;
+  default_team_view_id?: string | null;
+};
+
 function normalizeLocationResponseV3(response: LocationResponseV3) {
   return response;
 }
@@ -2325,6 +2348,17 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
       method: 'PUT',
       body: JSON.stringify({ email_sync: emailSync }),
+    });
+  },
+  async getCrmTeamSettings() {
+    return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
+      method: 'GET',
+    });
+  },
+  async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {
+    return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
+      method: 'PUT',
+      body: JSON.stringify(body),
     });
   },
   crmComments: {

@@ -327,6 +327,8 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::comments::create_handler,
         crm::inbound::axum_router::comments::edit_handler,
         crm::inbound::axum_router::comments::delete_handler,
+        crm::inbound::axum_router::team_settings::get_handler,
+        crm::inbound::axum_router::team_settings::update_handler,
     ),
     components(
         schemas(
@@ -609,6 +611,9 @@ use utoipa::OpenApi;
             crm::domain::comment::CrmComment,
             crm::domain::comment::CrmCommentThread,
             crm::domain::comment::DeleteCrmCommentResult,
+            crm::inbound::axum_router::team_settings::CrmTeamSettingsResponse,
+            crm::inbound::axum_router::team_settings::UpdateCrmTeamSettingsRequest,
+            crm::domain::model::CrmPermissionRole,
         ),
     ),
     tags(

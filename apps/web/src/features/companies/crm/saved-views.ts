@@ -207,12 +207,15 @@ export function useTeamCrmViews() {
   const defaultView = () => views().find((view) => view.id === defaultViewId());
 
   const setDefault = (id: string | undefined) => {
-    update.mutate((current) => ({ ...current, defaultTeamViewId: id }), {
-      onError: (error: Error) => {
-        console.error('Failed to set default team view', error);
-        toast.failure('Failed to set default team view');
-      },
-    });
+    update.mutate(
+      { defaultTeamViewId: id ?? null },
+      {
+        onError: (error: Error) => {
+          console.error('Failed to set default team view', error);
+          toast.failure('Failed to set default team view');
+        },
+      }
+    );
   };
 
   const add = (name: string, viewConfig: CrmViewConfig) => {
@@ -224,10 +227,7 @@ export function useTeamCrmViews() {
       createdAt: new Date().toISOString(),
     };
     update.mutate(
-      (current) => ({
-        ...current,
-        teamViews: [...(current.teamViews ?? []), view],
-      }),
+      { teamViews: [...(config().teamViews ?? []), view] },
       {
         onError: (error: Error) => {
           console.error('Failed to save team view', error);
@@ -238,16 +238,15 @@ export function useTeamCrmViews() {
   };
 
   const remove = (id: string) => {
+    const current = config();
     update.mutate(
-      (current) => ({
-        ...current,
+      {
         teamViews: (current.teamViews ?? []).filter((view) => view.id !== id),
         // A deleted view can't stay the team default.
-        defaultTeamViewId:
-          current.defaultTeamViewId === id
-            ? undefined
-            : current.defaultTeamViewId,
-      }),
+        ...(current.defaultTeamViewId === id
+          ? { defaultTeamViewId: null }
+          : {}),
+      },
       {
         onError: (error: Error) => {
           console.error('Failed to delete team view', error);

@@ -5,7 +5,7 @@ use crate::domain::comment::{
 };
 use crate::domain::model::{
     CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-    DomainMetadata,
+    CrmTeamSettings, CrmTeamSettingsPatch, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -488,4 +488,21 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         &self,
         comment_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
+
+    /// Read the team's CRM configuration from `team_crm_settings`.
+    /// A missing row yields [`CrmTeamSettings::default`].
+    fn get_team_settings(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
+
+    /// Field-wise partial upsert of the team's CRM configuration.
+    /// Unprovided fields keep their current values (or column defaults
+    /// on insert); `team_views` is replaced whole. Never touches
+    /// `crm_enabled`. Returns the resulting row.
+    fn update_team_settings(
+        &self,
+        team_id: &uuid::Uuid,
+        patch: &CrmTeamSettingsPatch,
+    ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
 }

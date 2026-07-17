@@ -23,6 +23,10 @@ pub mod get_company;
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
 
+/// Team-level CRM configuration (permission thresholds, closed stages,
+/// team saved views).
+pub mod team_settings;
+
 use std::sync::Arc;
 
 use axum::{
@@ -136,6 +140,11 @@ where
             patch(comments::edit_handler::<C, Eas, Auth>)
                 .delete(comments::delete_handler::<C, Eas, Auth>),
         )
+        .route(
+            "/settings",
+            get(team_settings::get_handler::<C, Eas, Auth>)
+                .put(team_settings::update_handler::<C, Eas, Auth>),
+        )
         .with_state(state)
 }
 
@@ -182,6 +191,14 @@ impl IntoResponse for CrmError {
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
                     message: "querying hidden crm entities requires admin/owner team role".into(),
+                }),
+            ),
+            CrmError::SettingsAdminRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message:
+                        "changing crm permission or stage settings requires admin/owner team role"
+                            .into(),
                 }),
             ),
             CrmError::CompanyHidden => (

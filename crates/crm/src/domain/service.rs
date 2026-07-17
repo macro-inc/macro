@@ -1,12 +1,18 @@
 //! The CrmService trait and its default implementation.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     auth::{CrmCommentReceipt, CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     comment::{CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
-    model::{CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck},
+    model::{
+        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
+        CrmTeamSettings, CrmTeamSettingsPatch,
+    },
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
@@ -274,6 +280,28 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         comment_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
+
+    /// Read the team's CRM configuration. Any team member may read;
+    /// a team without a settings row gets the defaults. See
+    /// [`CompaniesRepository::get_team_settings`].
+    fn get_team_settings(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
+
+    /// Field-wise partial update of the team's CRM configuration.
+    /// Any team member may update the views fields (`team_views`,
+    /// `default_team_view_id`); the governance fields (permission
+    /// thresholds, `closed_stage_ids`) require an admin/owner role on
+    /// the receipt ([`CrmError::SettingsAdminRequired`] otherwise).
+    /// `team_views` is replaced whole (last-wins). Returns the
+    /// resulting settings. See
+    /// [`CompaniesRepository::update_team_settings`].
+    fn update_team_settings(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        patch: CrmTeamSettingsPatch,
+    ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -665,6 +693,63 @@ where
             .get_comment_entity(comment_id)
             .await
     }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn get_team_settings(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        self.companies_repository
+            .get_team_settings(&access.team_id())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access, patch), err)]
+    async fn update_team_settings(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        patch: CrmTeamSettingsPatch,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        // Members may manage team views; the governance fields require
+        // admin/owner. Checked against the receipt's actual role, so the
+        // service — not the caller — enforces the gate.
+        let touches_governance = patch.edit_stages_role.is_some()
+            || patch.move_closed_deals_role.is_some()
+            || patch.delete_records_role.is_some()
+            || patch.closed_stage_ids.is_some();
+        if touches_governance && !access.has_admin_role() {
+            return Err(CrmError::SettingsAdminRequired);
+        }
+
+        // team_views is an opaque blob, but it must at least be an array
+        // and stay within a sane size.
+        if let Some(views) = &patch.team_views {
+            if !views.is_array() {
+                return Err(CrmError::InvalidRequest(
+                    "team_views must be a JSON array".into(),
+                ));
+            }
+            const MAX_TEAM_VIEWS_BYTES: usize = 256 * 1024;
+            let serialized_len = serde_json::to_string(views)
+                .map(|s| s.len())
+                .unwrap_or(usize::MAX);
+            if serialized_len > MAX_TEAM_VIEWS_BYTES {
+                return Err(CrmError::InvalidRequest(
+                    "team_views exceeds the maximum size".into(),
+                ));
+            }
+        }
+        const MAX_CLOSED_STAGE_IDS: usize = 200;
+        if let Some(Some(ids)) = &patch.closed_stage_ids
+            && ids.len() > MAX_CLOSED_STAGE_IDS
+        {
+            return Err(CrmError::InvalidRequest("too many closed stage ids".into()));
+        }
+
+        self.companies_repository
+            .update_team_settings(&access.team_id(), &patch)
+            .await
+    }
 }
 
 /// No-op [`CrmService`] for binaries that need to satisfy the bound
@@ -820,5 +905,20 @@ impl CrmService for NoOpCrmService {
         _comment_id: &uuid::Uuid,
     ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
         Ok(None)
+    }
+
+    async fn get_team_settings(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        unimplemented!("NoOpCrmService.get_team_settings")
+    }
+
+    async fn update_team_settings(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _patch: CrmTeamSettingsPatch,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        unimplemented!("NoOpCrmService.update_team_settings")
     }
 }
