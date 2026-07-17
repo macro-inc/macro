@@ -133,7 +133,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     const splitManager = globalSplitManager();
     return (
       !!splitManager &&
-      openSingleStackNotification(validNotifs, splitManager, newSplit)
+      openSingleStackNotification(
+        validNotifs,
+        splitManager,
+        newSplit,
+        splitHandle
+      )
     );
   };
 
@@ -194,6 +199,15 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     description: 'Focus Preview',
     keyDownHandler: () => {
+      // Split-level preview mode: deliberate hand-off of focus to the viewer.
+      const manager = globalSplitManager();
+      const viewerId = splitHandle.viewerId();
+      if (splitHandle.isPreviewEngaged() && viewerId && manager) {
+        manager.activateSplit(viewerId);
+        manager.returnFocus();
+        return true;
+      }
+
       const preview = previewState();
       const entity = soup.focus.item();
       if (!entity) return false;

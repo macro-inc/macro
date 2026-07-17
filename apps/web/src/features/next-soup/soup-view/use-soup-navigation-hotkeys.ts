@@ -1,11 +1,18 @@
 import { isListViewID } from '@app/constants/list-views';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import type {
+  SplitContent,
+  SplitEvent,
+  SplitEventPayload,
+  SplitHandle,
+} from '@components/app/split-layout/layoutManager';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 
@@ -46,7 +53,24 @@ export const useSoupNavigationHotkeys = (
     return isListViewID(referredFrom) ? referredFrom : undefined;
   });
 
+  // Row focus moves instantly on every keypress; the (expensive) block swap in
+  // the viewer split trails the last press. mergeHistory keeps the viewer's
+  // history at a single scanning entry while holding j/k.
+  const openInViewerDebounced = debounce((entity: EntityData) => {
+    openEntityInSplitFromUnifiedList(entity, {
+      splitHandle,
+      mergeHistory: true,
+      referredFrom: navigationReferredFrom(),
+    });
+  }, 150);
+  onCleanup(() => openInViewerDebounced.clear());
+
   const openEntity = (entity: EntityData) => {
+    if (splitHandle.isPreviewEngaged()) {
+      openInViewerDebounced(entity);
+      return;
+    }
+
     const handleContent = splitHandle.content().type;
 
     if (handleContent === 'component' || handleContent === 'project') return;
@@ -57,6 +81,47 @@ export const useSoupNavigationHotkeys = (
       referredFrom: navigationReferredFrom(),
     });
   };
+
+  /**
+   * The row this preview-split content corresponds to, if it lives in this
+   * list. Channel messages/threads open as their channel, so those rows are
+   * matched through their channelId.
+   */
+  const rowForPreviewContent = (content: SplitContent) =>
+    soup.rows().find((row) => {
+      if (row.getIsGrouped() || row.getIsLoadMore()) return false;
+      const entity = row.original as EntityData & { channelId?: string };
+      if (!entity) return false;
+      return entity.id === content.id || entity.channelId === content.id;
+    });
+
+  // Preview history → list selection: stepping the preview split's history
+  // back or forward to content that was opened from this list re-selects the
+  // corresponding row.
+  createEffect(() => {
+    const viewerId = splitHandle.viewerId();
+    if (!viewerId) return;
+    const viewer = globalSplitManager()?.getSplit(viewerId);
+    if (!viewer) return;
+
+    const syncSelection = (
+      payload: SplitEventPayload[SplitEvent.ContentChange]
+    ) => {
+      if (
+        payload.cause !== 'history-back' &&
+        payload.cause !== 'history-forward'
+      ) {
+        return;
+      }
+      const row = rowForPreviewContent(payload.newContent);
+      if (!row) return;
+      const result = soup.navigate.toId(row.id);
+      if (result) scrollTo(result.index);
+    };
+
+    viewer.registerContentChangeListener(syncSelection);
+    onCleanup(() => viewer.unregisterContentChangeListener(syncSelection));
+  });
 
   const navigateAndSelectEntity = (offset: number) => {
     const nextRow = soup.navigate.by(offset);

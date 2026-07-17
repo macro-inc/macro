@@ -61,6 +61,7 @@ import {
 } from '@app/features/next-soup/utils';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
@@ -351,13 +352,6 @@ export const SoupView = (props: SoupViewProps) => {
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
 
-  const persistedPreviewEntity = entryState?.[SOUP_PREVIEW_ENTITY_ENTRY_KEY] as
-    | string
-    | undefined;
-  const persistedPreviewOpen = entryState?.[SOUP_PREVIEW_OPEN_ENTRY_KEY] as
-    | boolean
-    | undefined;
-
   const searchTags = useSearchTagsFlag();
 
   // The search view must not initialize with tag filters while the rollout
@@ -427,13 +421,11 @@ export const SoupView = (props: SoupViewProps) => {
     if (init) return;
     init = true;
     batch(() => {
-      soup.setPreviewEntity(persistedPreviewEntity);
-      // Existing entries only stored the symbolic entity id. Treat one as an
-      // open pane. The new-inbox default is applied reactively below because
-      // its PostHog flag can resolve after this one-time initialization.
-      soupView.setPreviewOpen(
-        persistedPreviewOpen ?? persistedPreviewEntity !== undefined
-      );
+      // The inner preview pane is superseded by split-level preview mode
+      // (see layoutManager previewLinks): never resurrect it from persisted
+      // entry state.
+      soup.setPreviewEntity(undefined);
+      soupView.setPreviewOpen(false);
 
       soupView.initialize({
         initialQuery: stripGatedTagFilters(
@@ -497,19 +489,16 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Production resolves the new-inbox flag asynchronously, so wait for it
-  // before applying the default instead of locking in the initial false value.
-  if (
-    persistedPreviewOpen === undefined &&
-    persistedPreviewEntity === undefined
-  ) {
-    let previewDefaulted = false;
-    createRenderEffect(() => {
-      if (previewDefaulted || !isNewInboxEnabled()) return;
-      previewDefaulted = true;
-      soupView.setPreviewOpen(true);
-    });
-  }
+  // Inbox starts in preview mode. Only on fresh arrivals — back/forward
+  // re-visits keep whatever the user last chose for this split — and never
+  // for a split that is itself some controller's viewer (e.g. goHome inside
+  // the viewer). engagePreviewMode no-ops on mobile and when already engaged.
+  onMount(() => {
+    if (contentId !== 'inbox') return;
+    if (panel.handle.lastNavigationCause() !== 'fresh') return;
+    if (globalSplitManager()?.controllerOf(panel.handle.id)) return;
+    panel.handle.engagePreview();
+  });
 
   const previewEntityCaptorTeardown = panel.handle.registerEntryStateCaptor(
     SOUP_PREVIEW_ENTITY_ENTRY_KEY,
@@ -1031,6 +1020,22 @@ export const SoupViewList = (props: SoupViewListProps) => {
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
       openEntityInNewTab({ entity, location });
+      return;
+    }
+
+    if (panel.handle.isPreviewEngaged() && type === 'entity') {
+      // Single click: focus the row AND open it in the viewer split. The
+      // openWithSplit redirect keeps the viewer unfocused so keyboard
+      // navigation stays in this list.
+      if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
+      else soup.focus.set(entity.id);
+
+      await openEntityInSplitFromUnifiedList(entity, {
+        location,
+        splitHandle: panel.handle,
+        referredFrom: currentView(),
+        // no openInNewSplit: even shift+click lands in the viewer while engaged
+      });
       return;
     }
 

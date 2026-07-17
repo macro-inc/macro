@@ -4,8 +4,6 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { usePreviewPaneVisiblity } from '@app/features/next-soup/soup-view/use-preview-pane-visibility';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -24,7 +22,6 @@ import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import { Button, Tooltip } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
-import { useSoup } from '../../soup-context';
 
 export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
   const { resetToTabDefaults, consolidatedFiltersList } =
@@ -34,22 +31,22 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
 
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
-  const soup = useSoup();
-  const { setPreviewOpen } = useSoupView();
 
-  const { isWideSplitPanel, previewOpen, selectedEntity } =
-    usePreviewPaneVisiblity();
+  const previewEngaged = () => panel.handle.isPreviewEngaged();
+  const canEngage = () => panel.handle.canEngagePreview();
 
   const togglePreview = () => {
-    if (previewOpen()) {
-      setPreviewOpen(false);
-      soup.setPreviewEntity(undefined);
+    if (previewEngaged()) {
+      // The viewer split stays open as a normal split; only the link goes.
+      panel.handle.disengagePreview();
       return;
     }
+    if (!canEngage()) return;
 
     analytics.track('preview_panel_use');
-    soup.setPreviewEntity(selectedEntity()?.id);
-    setPreviewOpen(true);
+    // Eagerly opens the viewer split with its empty state and pins this
+    // split to its compact width (see engagePreviewMode).
+    panel.handle.engagePreview();
   };
 
   registerHotkey({
@@ -110,10 +107,8 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
       </SplitToolbarLeft>
       <SplitToolbarRight>
         <Tooltip
-          hotkey={
-            isWideSplitPanel() ? TOKENS.unifiedList.togglePreview : undefined
-          }
-          label={isWideSplitPanel() ? 'Preview' : 'No space for preview'}
+          hotkey={canEngage() ? TOKENS.unifiedList.togglePreview : undefined}
+          label={canEngage() ? 'Preview' : 'No space for preview'}
         >
           <Button
             onClick={togglePreview}
@@ -121,9 +116,9 @@ export function SoupFiltersBar(props: { variant?: 'default' | 'tag' } = {}) {
             size="sm"
             depth={2}
             class="bg-surface"
-            disabled={!isWideSplitPanel()}
+            disabled={!canEngage()}
           >
-            {previewOpen() ? <EyeSlashIcon /> : <EyeIcon />}
+            {previewEngaged() ? <EyeSlashIcon /> : <EyeIcon />}
             <span>Preview</span>
           </Button>
         </Tooltip>

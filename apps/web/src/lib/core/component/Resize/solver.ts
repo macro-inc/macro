@@ -19,6 +19,7 @@ type ResizeSolver = {
   solve: () => LayoutResult;
   reset: () => void;
   moveHandle: (index: number, delta: number) => void;
+  resizePanel: (id: PanelId, px: number) => void;
   order: () => PanelId[];
   hasPanel: (id: PanelId) => boolean;
   canFitPanel: (panel: PanelConfig) => boolean;
@@ -488,11 +489,34 @@ export function createResizeSolver(params: {
     setDirty();
   }
 
+  /**
+   * Resize a panel to a target pixel size by moving its adjacent handle —
+   * same constraint solving as a drag, so neighbor min/max sizes may clamp
+   * the result. Prefers the handle on the panel's trailing edge; the last
+   * panel uses its leading handle instead.
+   */
+  function resizePanel(id: PanelId, px: number) {
+    const ids = untrack(order);
+    const index = ids.indexOf(id);
+    if (index < 0) return;
+    const current = untrack(layout).sizes.get(id);
+    if (current === undefined) return;
+    const delta = px - current;
+    if (!Number.isFinite(delta) || Math.abs(delta) < 1) return;
+
+    if (index < ids.length - 1) {
+      moveHandle(index, delta);
+    } else if (index > 0) {
+      moveHandle(index - 1, -delta);
+    }
+  }
+
   return {
     direction: params.direction,
     addPanel,
     dropPanel,
     updatePanel,
+    resizePanel,
     solve: layout,
     reset: () => {
       const panels = panelsInOrder();

@@ -25,7 +25,9 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import { EmptyStatePanel } from '@ui';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -369,6 +371,20 @@ registerComponent(
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
+// Placeholder a preview viewer split opens with before its controller has
+// navigated anywhere (see layoutManager engagePreviewMode).
+registerComponent('preview-empty', () => {
+  const panel = useSplitPanelOrThrow();
+  onMount(() => panel.handle.setDisplayName('Preview'));
+  return (
+    <EmptyStatePanel
+      graphic={EmptyStatePreviewIcon}
+      title="No content selected"
+      description="Select an item from the connected list to preview it here"
+      centered
+    />
+  );
+});
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;

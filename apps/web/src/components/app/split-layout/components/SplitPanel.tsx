@@ -100,6 +100,10 @@ export function SplitPanel(props: SplitPanelProps) {
   createEffect(
     on([panelRef], () => {
       if (isMobile()) return;
+      // Only the active split may claim focus on mount. A preview viewer split
+      // is created with activate:false while its controller stays active, and
+      // must not steal the keyboard from it.
+      if (!props.active) return;
       panelRef()?.focus();
     })
   );
@@ -157,6 +161,43 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitUnfocusedStyling = () =>
     !isMobile() && !props.active && multipleSplits();
 
+  const gutterSize = () =>
+    globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
+
+  /**
+   * This split is a preview viewer sitting immediately right of its
+   * controller: the pane slides left across the gutter so it sits flush
+   * against the controller, reading as tucked behind it.
+   */
+  const tuckedBehindController = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager || isMobile()) return false;
+    if (props.handle.isSpotLight()) return false;
+    const controllerId = manager.controllerOf(props.split.id);
+    if (!controllerId) return false;
+    const splits = manager.splits();
+    const index = splits.findIndex((s) => s.id === props.split.id);
+    if (index <= 0 || splits[index - 1].id !== controllerId) return false;
+    return !manager.getSplit(controllerId)?.isSpotLight();
+  });
+
+  /**
+   * This split is a preview controller with its viewer tucked flush against
+   * its right edge: paint above the viewer so the controller's card and
+   * shadow read as being in front.
+   */
+  const hasTuckedViewer = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager || isMobile()) return false;
+    if (props.handle.isSpotLight()) return false;
+    const viewerId = manager.viewerOf(props.split.id);
+    if (!viewerId) return false;
+    const splits = manager.splits();
+    const index = splits.findIndex((s) => s.id === props.split.id);
+    if (splits[index + 1]?.id !== viewerId) return false;
+    return !manager.getSplit(viewerId)?.isSpotLight();
+  });
+
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
@@ -205,6 +246,7 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile
               // search overlay paints over it.
               'relative size-full mobile:isolate': !props.handle.isSpotLight(),
+              'z-10': hasTuckedViewer(),
             }}
             style={{
               '--split-header-height': `${
@@ -214,6 +256,14 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
+              // Slide the preview pane left across the gutter so it sits
+              // flush against the controller, keeping its right edge in
+              // place. The gutter's drag hit-area still paints (and
+              // hit-tests) above this extension, so resizing works.
+              ...(tuckedBehindController() && {
+                'margin-left': `-${gutterSize()}px`,
+                width: `calc(100% + ${gutterSize()}px)`,
+              }),
             }}
             ref={(ref) => {
               setPanelRef(ref);
@@ -237,6 +287,12 @@ export function SplitPanel(props: SplitPanelProps) {
                   'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
                     splitUnfocusedStyling(),
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
+                  // Drawer look: the preview split meets its controller with
+                  // a square, borderless left edge (the ! beats Surface's
+                  // inline border shorthand)...
+                  'rounded-l-none border-l-0!': tuckedBehindController(),
+                  // ...and the controller squares its right edge to match.
+                  'rounded-r-none': hasTuckedViewer(),
                 }
               )}
               depth={isMobile() ? 0 : 1}
