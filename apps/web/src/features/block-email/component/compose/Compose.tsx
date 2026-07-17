@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
   createEmailFormState,
@@ -28,7 +29,10 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_EMAIL_SIGNATURES } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -157,6 +161,9 @@ export function EmailCompose(props: EmailComposeProps) {
   // message. The backend injects it on send (see include_signature below); the
   // FE only renders the preview and signals an explicit dismiss.
   const signature = useEmailSignature(() => link()?.id);
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   const [includeSignature, setIncludeSignature] = createSignal(true);
 
   const hasLinkError = createMemo(() => {
@@ -768,7 +775,11 @@ export function EmailCompose(props: EmailComposeProps) {
     // dismiss. Shown only when the sending inbox has a signature and it hasn't
     // been dismissed.
     signaturePreview: () => (
-      <Show when={ENABLE_EMAIL_SIGNATURES && includeSignature() && signature()}>
+      <Show
+        when={
+          emailSignaturesFlag().enabled && includeSignature() && signature()
+        }
+      >
         {(html) => (
           <SignaturePreview
             html={html()}
