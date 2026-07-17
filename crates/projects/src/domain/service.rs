@@ -8,6 +8,7 @@ use entity_access::domain::models::{
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::folder::{UploadFolderRequest, UploadFolderResponseData};
 use model::item::{Item, ItemWithUserAccessLevel};
@@ -24,6 +25,7 @@ use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
+use super::events::ProjectMacroEvent;
 use super::models::{
     CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult, UploadFolderRepoArgs,
 };
@@ -38,8 +40,19 @@ mod tests;
 
 const MAX_PROJECT_NAME_GRAPHEMES: usize = 100;
 
+/// The user id to attribute a project lifecycle event to, when the caller is an
+/// authenticated user.
+fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
+    match auth {
+        EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
+        EntityAccessAuth::Bot(_)
+        | EntityAccessAuth::Unauthenticated
+        | EntityAccessAuth::Internal => None,
+    }
+}
+
 /// Concrete project service backed by repository and external-system ports.
-pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx>
+pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -47,6 +60,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    B: MacroEventBroker,
 {
     /// Project repository.
     pub repo: R,
@@ -60,11 +74,13 @@ where
     pub entity_access_management_service: Eam,
     /// Search and deletion queue publisher.
     pub search_indexer: Idx,
+    /// Project lifecycle event broker.
+    pub macro_event_broker: B,
     /// Optional deterministic upload request ID used by local development.
     pub fixed_upload_request_id: Option<Uuid>,
 }
 
-impl<R, U, D, Sha, Eam, Idx> ProjectServiceImpl<R, U, D, Sha, Eam, Idx>
+impl<R, U, D, Sha, Eam, Idx, B> ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -72,6 +88,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    B: MacroEventBroker,
 {
     /// Create a project service from its repository and external-system ports.
     #[allow(clippy::too_many_arguments)]
@@ -83,6 +100,7 @@ where
         entity_access_management_service: Eam,
         search_indexer: Idx,
         fixed_upload_request_id: Option<Uuid>,
+        macro_event_broker: B,
     ) -> Self {
         Self {
             repo,
@@ -91,8 +109,19 @@ where
             sha_counter,
             entity_access_management_service,
             search_indexer,
+            macro_event_broker,
             fixed_upload_request_id,
         }
+    }
+
+    /// Publish a project lifecycle event; failures are logged and dropped.
+    fn publish_project_event(&self, event: &ProjectMacroEvent) {
+        let _ = self
+            .macro_event_broker
+            .send_event(event)
+            .inspect_err(|error| {
+                tracing::error!(error=?error, "failed to publish project event");
+            });
     }
 
     async fn bump_project_modified(&self, project_id: &str) {
@@ -121,7 +150,7 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx> ProjectService for ProjectServiceImpl<R, U, D, Sha, Eam, Idx>
+impl<R, U, D, Sha, Eam, Idx, B> ProjectService for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -129,6 +158,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    B: MacroEventBroker,
 {
     async fn list_projects(
         &self,

@@ -6,6 +6,7 @@ use entity_access::domain::models::{
 };
 use entity_access_management::domain::models::EntityAccessManagementError;
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentMetadata, FileType};
 use model::folder::{
@@ -27,8 +28,54 @@ use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};
 use crate::domain::models::PurgedProjectTree;
 use crate::domain::ports::MockProjectRepo;
+
+/// A project lifecycle event recorded by [`TestEventBroker`].
+#[derive(Clone, Debug)]
+struct PublishedEvent {
+    topic: &'static str,
+    key: String,
+    payload: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct TestEventBroker {
+    published: Arc<Mutex<Vec<PublishedEvent>>>,
+    fail: bool,
+}
+
+impl TestEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail: true,
+            ..Self::default()
+        }
+    }
+
+    fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
+        Arc::clone(&self.published)
+    }
+}
+
+impl MacroEventBroker for TestEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail {
+            return Err(EventBrokerError::Publish("test failure".to_string()));
+        }
+
+        self.published.lock().unwrap().push(PublishedEvent {
+            topic: event.topic().as_str(),
+            key: event.key().to_string(),
+            payload: serde_json::to_value(event.event())?,
+        });
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
 
 #[derive(Clone, Copy)]
 struct NullPort;
@@ -233,6 +280,7 @@ fn mutation_service(
     NullPort,
     RecordingEam,
     RecordingIndexer,
+    TestEventBroker,
 > {
     ProjectServiceImpl::new(
         repo,
@@ -242,6 +290,7 @@ fn mutation_service(
         eam,
         indexer,
         None,
+        TestEventBroker::default(),
     )
 }
 
@@ -286,7 +335,17 @@ impl BulkUploadRequestPort for RecordingBulkUpload {
 fn service<D: BulkUploadRequestPort>(
     repo: MockProjectRepo,
     bulk_upload_service: D,
-) -> ProjectServiceImpl<MockProjectRepo, NullPort, D, NullPort, NullPort, NullPort> {
+) -> ProjectServiceImpl<MockProjectRepo, NullPort, D, NullPort, NullPort, NullPort, TestEventBroker>
+{
+    service_with_event_broker(repo, bulk_upload_service, TestEventBroker::default())
+}
+
+fn service_with_event_broker<D: BulkUploadRequestPort>(
+    repo: MockProjectRepo,
+    bulk_upload_service: D,
+    event_broker: TestEventBroker,
+) -> ProjectServiceImpl<MockProjectRepo, NullPort, D, NullPort, NullPort, NullPort, TestEventBroker>
+{
     ProjectServiceImpl::new(
         repo,
         NullPort,
@@ -295,11 +354,79 @@ fn service<D: BulkUploadRequestPort>(
         NullPort,
         NullPort,
         None,
+        event_broker,
     )
 }
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
+}
+
+#[test]
+fn event_actor_user_id_only_maps_authenticated_users() {
+    let user_id = user_id("macro|actor@example.com");
+
+    assert_eq!(
+        event_actor_user_id(&EntityAccessAuth::Authenticated(user_id.clone())),
+        Some(user_id)
+    );
+    assert_eq!(
+        event_actor_user_id(&EntityAccessAuth::Unauthenticated),
+        None
+    );
+    assert_eq!(event_actor_user_id(&EntityAccessAuth::Internal), None);
+}
+
+#[tokio::test]
+async fn publish_project_event_records_the_serialized_envelope() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(
+        MockProjectRepo::new(),
+        RecordingBulkUpload::default(),
+        event_broker,
+    );
+    let event = ProjectMacroEvent::created(
+        "project-id",
+        ProjectCreatedMetadata {
+            project_id: "project-id".to_string(),
+            owner: user_id("macro|owner@example.com"),
+            name: "Project".to_string(),
+            parent_project_id: None,
+            created_at: None,
+        },
+    );
+
+    service.publish_project_event(&event);
+
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.projects");
+    assert_eq!(published[0].key, "project-id");
+    assert_eq!(published[0].payload["schema_version"], 1);
+    assert_eq!(published[0].payload["event_type"], "project.created");
+    assert_eq!(published[0].payload["metadata"]["name"], "Project");
+}
+
+#[test]
+fn publish_project_event_errors_are_non_fatal() {
+    let service = service_with_event_broker(
+        MockProjectRepo::new(),
+        RecordingBulkUpload::default(),
+        TestEventBroker::failing(),
+    );
+    let event = ProjectMacroEvent::created(
+        "project-id",
+        ProjectCreatedMetadata {
+            project_id: "project-id".to_string(),
+            owner: user_id("macro|owner@example.com"),
+            name: "Project".to_string(),
+            parent_project_id: None,
+            created_at: None,
+        },
+    );
+
+    service.publish_project_event(&event);
 }
 
 fn project(id: &str, owner: &str, parent_id: Option<&str>) -> Project {
@@ -1107,6 +1234,7 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
             fail: true,
         },
         None,
+        TestEventBroker::default(),
     );
 
     let project_id = Uuid::new_v4();
@@ -1209,6 +1337,7 @@ async fn upload_folder_compensates_after_destination_failure() {
         NullPort,
         NullPort,
         None,
+        TestEventBroker::default(),
     );
 
     let result = service
@@ -1251,6 +1380,7 @@ async fn upload_extract_uses_fixed_request_id() {
         NullPort,
         NullPort,
         Some(fixed_id),
+        TestEventBroker::default(),
     );
 
     let response = service

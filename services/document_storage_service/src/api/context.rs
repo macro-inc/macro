@@ -263,6 +263,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     ShaCountAdapter,
     EntityAccessManagementService,
     SqsProjectSearchIndexer,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
 /// Type alias for the projects router state.

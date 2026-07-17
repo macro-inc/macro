@@ -442,6 +442,7 @@ async fn main() -> anyhow::Result<()> {
         } else {
             None
         },
+        macro_event_broker.clone(),
     ));
 
     let document_service = Arc::new(
