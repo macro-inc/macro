@@ -43,6 +43,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  ENABLE_ACTIVITY,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
@@ -174,14 +175,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedInboxIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
-  },
-  {
-    id: 'activity',
-    label: 'Activity',
-    href: '/activity',
-    icon: AnimatedActivityIcon,
-    hotkey: 'y',
-    hotkeyToken: TOKENS.sidebar.goTo.activity,
   },
   {
     id: 'search',
@@ -959,17 +952,35 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+const ACTIVITY_LINK: SidebarItem = {
+  id: 'activity',
+  label: 'Activity',
+  href: '/activity',
+  icon: AnimatedActivityIcon,
+  hotkey: 'y',
+  hotkeyToken: TOKENS.sidebar.goTo.activity,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus Home and the
- * flag-gated Calls and CRM entries in their correct positions. Shared by the
- * rendered sidebar (`AppSidebar.visibleLinks`) and the always-mounted
- * `GoToHotkeys` registrar so their link sets can't drift. Call from a reactive
- * context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`. Rendered sections
- * additionally drop `hiddenFromSidebar` entries, which have hotkeys but no
- * sidebar row.
+ * flag-gated Activity, Calls, and CRM entries in their correct positions.
+ * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
+ * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
+ * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
+ * Rendered sections additionally drop `hiddenFromSidebar` entries, which have
+ * hotkeys but no sidebar row.
  */
 const buildSidebarLinks = (): SidebarItem[] => {
   let links: SidebarItem[] = [DASHBOARD_LINK, ...SIDEBAR_LINKS];
+
+  if (ENABLE_ACTIVITY) {
+    const idx = links.findIndex((link) => link.id === 'inbox');
+    links = [
+      ...links.slice(0, idx + 1),
+      ACTIVITY_LINK,
+      ...links.slice(idx + 1),
+    ];
+  }
 
   if (ENABLE_CALLS()) {
     const idx = links.findIndex((l) => l.id === 'channels');

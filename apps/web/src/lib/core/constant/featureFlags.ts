@@ -122,6 +122,14 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
+// Activity timeline: the Activity sidebar entry and the combined Firehose /
+// My Activity view. Keep it dev-only by default while the feature is under
+// development; override with VITE_ENABLE_ACTIVITY for controlled testing.
+export const ENABLE_ACTIVITY = resolveFeatureFlag(
+  'ENABLE_ACTIVITY',
+  DEV_MODE_ENV
+);
+
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
 // previews, and the per-message include toggle. PostHog-gated with a dev-mode
 // default; override with VITE_ENABLE_EMAIL_SIGNATURES.
