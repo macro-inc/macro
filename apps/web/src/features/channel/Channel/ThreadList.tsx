@@ -531,10 +531,10 @@ export function ThreadList(props: ThreadListProps) {
       });
       requestAnimationFrame(() => {
         const offsetBeforeRetry = handle.scrollOffset;
-        const retryScrolled = scrollToInitialTarget(
-          handle,
-          initialScrollTarget
-        );
+        const retryScrolled =
+          initialScrollTarget.tag === 'bottom'
+            ? pinToBottom(handle)
+            : scrollToInitialTarget(handle, initialScrollTarget);
         if (!retryScrolled) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
