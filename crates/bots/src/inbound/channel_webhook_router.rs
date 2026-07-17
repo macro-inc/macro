@@ -27,7 +27,7 @@ use entity_access::{
         models::{AdminParticipantRole, EntityAccessReceipt},
         ports::EntityAccessService,
     },
-    inbound::axum_extractors::ChannelAccessLevelExtractorV2,
+    inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -204,7 +204,7 @@ fn caller_from_receipt(
 #[tracing::instrument(err, skip_all)]
 pub async fn create_channel_scoped_bot_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
-    access: ChannelAccessLevelExtractorV2<AdminParticipantRole, AccessSvc, Auth>,
+    access: ChannelAccessLevelExtractor<AdminParticipantRole, AccessSvc, Auth>,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>

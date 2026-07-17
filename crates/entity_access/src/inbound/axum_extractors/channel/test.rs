@@ -238,17 +238,17 @@ impl FromRef<TestState> for MacroAuthorizationState<FakeAuthorizationService> {
     }
 }
 
-type V2Member = ChannelAccessLevelExtractorV2<
+type MemberExtractor = ChannelAccessLevelExtractor<
     MemberParticipantRole,
     FakeEntityAccessService,
     FakeAuthorizationService,
 >;
-type V2Admin = ChannelAccessLevelExtractorV2<
+type AdminExtractor = ChannelAccessLevelExtractor<
     AdminParticipantRole,
     FakeEntityAccessService,
     FakeAuthorizationService,
 >;
-type V2Owner = ChannelAccessLevelExtractorV2<
+type OwnerExtractor = ChannelAccessLevelExtractor<
     OwnerParticipantRole,
     FakeEntityAccessService,
     FakeAuthorizationService,
@@ -305,12 +305,12 @@ fn assert_member_receipt(receipt: &EntityAccessReceipt<MemberParticipantRole>) {
     ));
 }
 
-async fn member_handler(extractor: V2Member) -> StatusCode {
+async fn member_handler(extractor: MemberExtractor) -> StatusCode {
     assert_member_receipt(&extractor.entity_access_receipt);
     StatusCode::OK
 }
 
-async fn authenticated_member_handler(extractor: V2Member) -> StatusCode {
+async fn authenticated_member_handler(extractor: MemberExtractor) -> StatusCode {
     let receipt = extractor.entity_access_receipt;
     assert_member_receipt(&receipt);
     assert!(matches!(
@@ -320,11 +320,11 @@ async fn authenticated_member_handler(extractor: V2Member) -> StatusCode {
     StatusCode::OK
 }
 
-async fn admin_handler(_extractor: V2Admin) -> StatusCode {
+async fn admin_handler(_extractor: AdminExtractor) -> StatusCode {
     StatusCode::OK
 }
 
-async fn owner_handler(extractor: V2Owner) -> StatusCode {
+async fn owner_handler(extractor: OwnerExtractor) -> StatusCode {
     assert!(matches!(
         extractor.entity_access_receipt.auth(),
         EntityAccessAuth::Internal
@@ -464,38 +464,4 @@ async fn default_internal_identity_uses_ordinary_acl_evaluation() {
         FakeAuthorizationService::with_default_internal_user(),
     );
     assert_internal_identity_uses_acl(state, internal_request(None), DEFAULT_INTERNAL_ID).await;
-}
-
-async fn v1_handler(
-    _extractor: crate::inbound::axum_extractors::ChannelAccessLevelExtractor<
-        MemberParticipantRole,
-        FakeEntityAccessService,
-    >,
-) -> StatusCode {
-    StatusCode::OK
-}
-
-#[tokio::test]
-async fn v1_remains_exported_and_uses_middleware_user_context() {
-    let state = TestState::new(EntityPermission::ChannelRole {
-        role: ParticipantRole::Member,
-    });
-    let mut request = request(None);
-    request
-        .extensions_mut()
-        .insert(user_context(USER_ID, Some(ORGANIZATION_ID)));
-    let response = app(state.clone(), v1_handler)
-        .oneshot(request)
-        .await
-        .expect("request should complete");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        state.entity_access.calls()[0].user_id.as_deref(),
-        Some(USER_ID)
-    );
-    assert_eq!(
-        state.entity_access.calls()[0].organization_id,
-        Some(i64::from(ORGANIZATION_ID))
-    );
 }
