@@ -73,11 +73,15 @@ fn deploy() -> Job {
             "github.event.pull_request.head.repo.full_name == github.repository && \
              contains(github.event.pull_request.labels.*.name, 'preview')",
         ))
-        // Dedicated cache volume pool (nix store + cargo target + snapshots):
-        // see PREVIEW_CACHE_TAG for why sharing the check/test jobs' pool was
-        // measured cold on both layers (different --target = disjoint sccache
-        // keys, and their volumes never carry a cargo target dir).
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::PREVIEW_CACHE_TAG))
+        // linux-mid for the extra cores: five build lanes (zigbuild, compose
+        // image builds, frontend, snapshot bake) genuinely contend on the
+        // 8-core rust-ci shape. The cache volume follows the explicit tag,
+        // not the profile, so this keeps the dedicated preview pool (nix
+        // store + cargo target + snapshots) it has always used: see
+        // PREVIEW_CACHE_TAG for why sharing the check/test jobs' pool was
+        // measured cold on both layers (different --target = disjoint
+        // sccache keys, and their volumes never carry a cargo target dir).
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::PREVIEW_CACHE_TAG))
         // Backstop against hangs: worst honest case is ~15 min cold builds +
         // ~6 min cold mirror push + the 30 min flyctl wait cap. Anything past
         // an hour is a stuck step, not a slow deploy (a hung log fetch once
