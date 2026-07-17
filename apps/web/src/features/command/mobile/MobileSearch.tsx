@@ -69,6 +69,7 @@ function MobileSearchInner() {
   const filteredItems = useCommandItems(query, SearchState.categoryFilter, {
     showSearchRow: false,
     commandScopeCommands: SearchState.commandScopeCommands,
+    searchActive: SearchState.isOpen,
   });
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);

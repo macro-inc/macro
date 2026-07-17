@@ -30,9 +30,10 @@ export function useEntityMention(
   options: UseEntityMentionOptions
 ): UseEntityMentionResult {
   const quickAccess = useQuickAccess();
-  const entityList = quickAccess.useList(
-    ...options.buckets
-  ) as QuickAccessList<EntityItem>;
+  const entityList = quickAccess.useList({
+    buckets: options.buckets,
+    searchTerm: options.searchTerm,
+  }) as QuickAccessList<EntityItem>;
   const entities = createLazyMemo(() => {
     if (quickAccess.usesIndexedEntityQuery()) return entityList.items();
     return searchQuickAccessEntities(entityList.items(), options.searchTerm());

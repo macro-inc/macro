@@ -138,7 +138,9 @@ export function CommandMenuInner(props: {
 
   const defaultFilteredItems = props.items
     ? undefined
-    : useCommandItems(query, CommandState.categoryFilter);
+    : useCommandItems(query, CommandState.categoryFilter, {
+        searchActive: CommandState.isOpen,
+      });
   const filteredItems = props.items ?? defaultFilteredItems!;
   const [shouldScrollSelectedIntoView, setShouldScrollSelectedIntoView] =
     createSignal(false);

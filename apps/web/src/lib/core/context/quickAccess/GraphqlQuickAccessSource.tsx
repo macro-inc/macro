@@ -30,7 +30,7 @@ import {
 import { createLazyMemo } from '@solid-primitives/memo';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQueryClient } from '@tanstack/solid-query';
-import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   graphqlEntityToQuickAccessItem,
   userToQuickAccessItem,
@@ -45,6 +45,7 @@ import type {
   QuickAccessContextValue,
   QuickAccessItem,
   QuickAccessList,
+  QuickAccessListOptions,
 } from './types';
 
 const QUICK_ACCESS_LIMIT = 500;
@@ -135,8 +136,6 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
   const cacheHost = getGraphqlSoupCacheHost();
 
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTermSignal] = createSignal<Accessor<string>>();
-  const activeSearchTerm = createMemo(() => searchTerm()?.().trim() ?? '');
   const invalidateIndexedQueries = () =>
     queryClient.invalidateQueries({ queryKey: QUICK_ACCESS_INDEX_QUERY_KEY });
   const scheduleIndexedRefresh = debounce(() => {
@@ -226,11 +225,28 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     return items;
   });
 
-  const useList = ((...buckets: Bucket[]): QuickAccessList => {
+  const useList = ((
+    ...args: Bucket[] | [QuickAccessListOptions]
+  ): QuickAccessList => {
+    const first = args[0];
+    const options =
+      typeof first === 'object'
+        ? first
+        : {
+            buckets: args as Bucket[],
+            searchTerm: undefined,
+            enabled: undefined,
+          };
+    const buckets = [...options.buckets];
+    const listEnabled = () => options.enabled?.() ?? true;
+    const activeSearchTerm = createMemo(
+      () => options.searchTerm?.().trim() ?? ''
+    );
     const indexed = createIndexedQuickAccessItems({
       cacheHost,
       buckets,
       searchTerm: activeSearchTerm,
+      enabled: listEnabled,
       pageSize: DEFAULT_SEARCH_PAGE_SIZE,
       localItems,
       instructionsId: () => instructionsIdQuery.data ?? undefined,
@@ -241,6 +257,7 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
       },
     });
     const items = createMemo(() => {
+      if (!listEnabled()) return [];
       const candidates = indexed.items();
       if (buckets.length === 0) return candidates;
       const requested = new Set(buckets);
@@ -253,6 +270,7 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
         : undefined;
     });
     const totalCount = createMemo(() => {
+      if (!listEnabled()) return 0;
       const counts = indexed.query.data?.pages[0]?.bucketCounts;
       const indexedBuckets = countBuckets();
       if (!counts || !indexedBuckets) return items().length;
@@ -274,12 +292,19 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     return {
       items,
       totalCount,
-      hasMore: () => indexed.query.hasNextPage,
+      hasMore: () => listEnabled() && indexed.query.hasNextPage,
       isLoading: () =>
-        indexed.query.isFetching && !indexed.query.isFetchingNextPage,
-      isLoadingMore: () => indexed.query.isFetchingNextPage,
+        listEnabled() &&
+        indexed.query.isPending &&
+        indexed.query.data === undefined,
+      isLoadingMore: () => listEnabled() && indexed.query.isFetchingNextPage,
       loadMore: async () => {
-        if (!indexed.query.hasNextPage || indexed.query.isFetching) return;
+        if (
+          !listEnabled() ||
+          !indexed.query.hasNextPage ||
+          indexed.query.isFetching
+        )
+          return;
         await indexed.query.fetchNextPage();
       },
     };
@@ -288,16 +313,6 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
   const getById = (id: string): QuickAccessItem | undefined => {
     localItems();
     return itemsById.get(id) ?? indexedItemsById.get(id);
-  };
-
-  let searchTermRegistration = 0;
-  const setSearchTerm = (term: Accessor<string>) => {
-    const registration = ++searchTermRegistration;
-    setSearchTermSignal(() => term);
-    return () => {
-      if (registration !== searchTermRegistration) return;
-      setSearchTermSignal(undefined);
-    };
   };
 
   const refresh = () => {
@@ -309,7 +324,6 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
 
   return {
     useList,
-    setSearchTerm,
     usesIndexedEntityQuery: () => true,
     isLoading: () => retainedQueryData() === undefined && query.fetching(),
     refresh,

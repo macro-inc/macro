@@ -91,22 +91,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
 
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
 
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
-  let clearSearchTerm: (() => void) | undefined;
-  createEffect(() => {
-    if (!props.menu.isOpen()) {
-      clearSearchTerm?.();
-      clearSearchTerm = undefined;
-      return;
-    }
-    clearSearchTerm?.();
-    clearSearchTerm = quickAccess?.setSearchTerm(searchTerm);
-  });
-  onCleanup(() => clearSearchTerm?.());
-
   const allItems = props.entities ?? quickAccess!.useList().items;
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -149,7 +138,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     customDocs ??
     useEntityMention({
       buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
-      searchTerm,
+      searchTerm: activeSearchTerm,
     });
   const docs = docsMention.entities;
 
@@ -157,7 +146,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     customChannels ??
     useEntityMention({
       buckets: ['channel', 'dm'],
-      searchTerm,
+      searchTerm: activeSearchTerm,
     });
   const channels = channelsMention.entities;
 
@@ -167,25 +156,29 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     ? (customCompanies ??
       useEntityMention({
         buckets: ['crm_company'],
-        searchTerm,
+        searchTerm: activeSearchTerm,
       }))
     : undefined;
   const companies = () => companyMention?.entities() ?? [];
 
-  const { emails, emailSearchQuery: emailUnifiedSearchInfiniteQuery } =
-    hasCustomEntities()
-      ? {
-          emails: () => [],
-          emailSearchQuery: {
-            hasNextPage: false,
-            isFetching: false,
-            fetchNextPage: () => {},
-          } as any,
-        }
-      : useEmailSearchMention({
-          searchTerm,
-          enabled: () => !props.sources || props.sources.includes('emails'),
-        });
+  const {
+    emails,
+    totalCount: totalEmailCount,
+    hasMore: hasMoreEmails,
+    isLoadingMore: isLoadingMoreEmails,
+    loadMore: loadMoreEmails,
+  } = hasCustomEntities()
+    ? {
+        emails: () => [],
+        totalCount: () => 0,
+        hasMore: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+      }
+    : useEmailSearchMention({
+        searchTerm: activeSearchTerm,
+        enabled: () => !props.sources || props.sources.includes('emails'),
+      });
 
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {
@@ -268,26 +261,24 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             docsMention.totalCount() +
             channelsMention.totalCount() +
             (companyMention?.totalCount() ?? 0) +
-            (emails()?.length ?? 0) +
+            totalEmailCount() +
             (dates()?.length ?? 0),
           hasMore: () =>
             docsMention.hasMore() ||
             channelsMention.hasMore() ||
             (companyMention?.hasMore() ?? false) ||
-            Boolean(emailUnifiedSearchInfiniteQuery.hasNextPage),
+            hasMoreEmails(),
           isLoadingMore: () =>
             docsMention.isLoadingMore() ||
             channelsMention.isLoadingMore() ||
             (companyMention?.isLoadingMore() ?? false) ||
-            emailUnifiedSearchInfiniteQuery.isFetching,
+            isLoadingMoreEmails(),
           loadMore: async () => {
             await Promise.all([
               docsMention.loadMore(),
               channelsMention.loadMore(),
               companyMention?.loadMore(),
-              emailUnifiedSearchInfiniteQuery.hasNextPage
-                ? emailUnifiedSearchInfiniteQuery.fetchNextPage()
-                : undefined,
+              loadMoreEmails(),
             ]);
           },
         },
@@ -332,14 +323,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         id: 'emails',
         label: 'Emails',
         getData: () => emails() ?? [],
-        getFullCount: () => emails()?.length ?? 0,
-        hasMore: () => Boolean(emailUnifiedSearchInfiniteQuery.hasNextPage),
-        isLoadingMore: () => emailUnifiedSearchInfiniteQuery.isFetching,
-        loadMore: async () => {
-          if (emailUnifiedSearchInfiniteQuery.hasNextPage) {
-            await emailUnifiedSearchInfiniteQuery.fetchNextPage();
-          }
-        },
+        getFullCount: totalEmailCount,
+        hasMore: hasMoreEmails,
+        isLoadingMore: isLoadingMoreEmails,
+        loadMore: loadMoreEmails,
       },
       {
         id: 'dates',

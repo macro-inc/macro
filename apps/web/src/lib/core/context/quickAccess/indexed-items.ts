@@ -71,6 +71,7 @@ export function createIndexedQuickAccessQuery(options: {
   cacheHost: Accessor<CacheHost | undefined>;
   buckets: Accessor<IndexedEntityBucket[]>;
   searchTerm: Accessor<string>;
+  enabled: Accessor<boolean>;
   pageSize: Accessor<number>;
 }) {
   return createInfiniteQuery<
@@ -114,7 +115,8 @@ export function createIndexedQuickAccessQuery(options: {
       initialPageParam: null,
       getNextPageParam: (lastPage) =>
         lastPage.hasMore ? (lastPage.nextCursor ?? null) : null,
-      enabled: cacheHost !== undefined && buckets.length > 0,
+      enabled:
+        options.enabled() && cacheHost !== undefined && buckets.length > 0,
       placeholderData: keepPreviousData,
       staleTime: Infinity,
     };

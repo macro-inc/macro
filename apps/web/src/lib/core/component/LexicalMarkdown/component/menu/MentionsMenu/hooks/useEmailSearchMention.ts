@@ -1,5 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import type { EntityItem } from '@core/context/quickAccess';
+import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
 import {
   type SearchSoupQueryArgs,
@@ -15,18 +15,29 @@ type UseEmailSearchMentionOptions = {
 
 type UseEmailSearchMentionResult = {
   emails: Accessor<EntityItem[]>;
-  emailSearchQuery: ReturnType<typeof useSearchSoupQuery>;
+  totalCount: Accessor<number>;
+  hasMore: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
 };
 
 /**
- * Hook for managing email mentions in the mentions menu with query-based search.
+ * Provides cache-backed email mentions for the indexed Quick Access source and
+ * preserves the remote unified-search path for the legacy source.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
 ): UseEmailSearchMentionResult {
   const { searchTerm, enabled } = options;
+  const listEnabled = () => enabled?.() !== false;
+  const quickAccess = useQuickAccess();
+  const indexedEmails = quickAccess.useList({
+    buckets: ['email'],
+    searchTerm,
+    enabled: listEnabled,
+  });
+  const usesIndexedSearch = quickAccess.usesIndexedEntityQuery;
 
-  // Build search query args for remote email search
   const args = createLazyMemo((): SearchSoupQueryArgs => {
     return {
       params: {
@@ -46,10 +57,10 @@ export function useEmailSearchMention(
   });
 
   const emailSearchQuery = useSearchSoupQuery(args, () => ({
-    enabled: enabled?.(),
+    enabled: !usesIndexedSearch() && listEnabled(),
   }));
 
-  const emailList = createLazyMemo((): EntityItem[] => {
+  const remoteEmailList = createLazyMemo((): EntityItem[] => {
     if (emailSearchQuery.status !== 'success') return [];
     return emailSearchQuery.data
       .filter((e) => e.type === 'email')
@@ -76,13 +87,32 @@ export function useEmailSearchMention(
   });
 
   const emails = createLazyMemo((): EntityItem[] => {
+    if (usesIndexedSearch()) return indexedEmails.items();
+
     const term = searchTerm();
-    if (!term) return emailList();
-    return emailSearch(emailList(), term).map(({ item }) => item);
+    const remoteEmails = remoteEmailList();
+    if (!term) return remoteEmails;
+    return emailSearch(remoteEmails, term).map(({ item }) => item);
   });
 
   return {
     emails,
-    emailSearchQuery,
+    totalCount: () =>
+      usesIndexedSearch() ? indexedEmails.totalCount() : emails().length,
+    hasMore: () =>
+      usesIndexedSearch()
+        ? indexedEmails.hasMore()
+        : Boolean(emailSearchQuery.hasNextPage),
+    isLoadingMore: () =>
+      usesIndexedSearch()
+        ? indexedEmails.isLoadingMore()
+        : emailSearchQuery.isFetching,
+    loadMore: async () => {
+      if (usesIndexedSearch()) {
+        await indexedEmails.loadMore();
+      } else if (emailSearchQuery.hasNextPage) {
+        await emailSearchQuery.fetchNextPage();
+      }
+    },
   };
 }

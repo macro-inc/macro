@@ -141,27 +141,38 @@ export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   loadMore: () => Promise<void>;
 };
 
+export type QuickAccessListOptions<
+  B extends readonly Bucket[] = readonly Bucket[],
+> = {
+  buckets: B;
+  /** Search only this list; omitted values retain ordinary browse ordering. */
+  searchTerm?: Accessor<string>;
+  /** Disable this list without affecting other Quick Access consumers. */
+  enabled?: Accessor<boolean>;
+};
+
 export type QuickAccessContextValue = {
   /**
    * Get items from specific buckets, cached and reactive.
-   * Returns all items if no buckets specified.
+   * Returns all items if no buckets specified. Passing options scopes search
+   * to that list without affecting other Quick Access consumers.
    *
    * @example
    * const channels = quickAccess.useList('channel', 'dm').items;
    * const people = quickAccess.useList('person').items;
-   * const everything = quickAccess.useList().items;
+   * const results = quickAccess.useList({
+   *   buckets: ['document'],
+   *   searchTerm,
+   * }).items;
    */
   useList: {
     (): QuickAccessList;
     <B extends Bucket>(...buckets: [B]): QuickAccessList<ItemForBucket<B>>;
     <B extends Bucket[]>(...buckets: B): QuickAccessList<ItemsForBuckets<B>>;
+    <const B extends readonly Bucket[]>(
+      options: QuickAccessListOptions<B>
+    ): QuickAccessList<ItemForBucket<B[number]>>;
   };
-
-  /**
-   * Drives cache-backed search for the active indexed source. The returned
-   * cleanup restores ordinary unfiltered Quick Access browsing.
-   */
-  setSearchTerm: (searchTerm: Accessor<string>) => () => void;
 
   /** Whether this source uses the cache-backed indexed entity query. */
   usesIndexedEntityQuery: Accessor<boolean>;

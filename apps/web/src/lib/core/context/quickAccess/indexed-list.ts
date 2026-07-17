@@ -99,6 +99,7 @@ export function createIndexedQuickAccessItems(options: {
   cacheHost: CacheHost | undefined;
   buckets: Bucket[];
   searchTerm: Accessor<string>;
+  enabled: Accessor<boolean>;
   pageSize: number;
   localItems: Accessor<QuickAccessItem[]>;
   instructionsId: Accessor<string | undefined>;
@@ -121,6 +122,7 @@ export function createIndexedQuickAccessItems(options: {
     cacheHost: () => options.cacheHost,
     buckets: indexedBuckets,
     searchTerm: options.searchTerm,
+    enabled: options.enabled,
     pageSize: () => options.pageSize,
   });
 

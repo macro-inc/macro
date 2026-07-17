@@ -27,6 +27,7 @@ import type {
   QuickAccessEntity,
   QuickAccessItem,
   QuickAccessList,
+  QuickAccessListOptions,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
 
@@ -673,8 +674,14 @@ export function createLegacyQuickAccessValue(): QuickAccessContextValue {
   // 4. Other combinations = merge-sort bucket lists
   //
   // Items are resolved lazily
-  const useList = <B extends Bucket>(...buckets: B[]): QuickAccessList<any> => {
+  const useList = ((
+    ...args: Bucket[] | [QuickAccessListOptions]
+  ): QuickAccessList => {
+    const first = args[0];
+    const options = typeof first === 'object' ? first : undefined;
+    const buckets = options ? [...options.buckets] : (args as Bucket[]);
     const list = createLazyMemo(() => {
+      if (options?.enabled?.() === false) return [];
       let indices: IndexEntry[];
 
       if (buckets.length === 0) {
@@ -707,9 +714,7 @@ export function createLegacyQuickAccessValue(): QuickAccessContextValue {
       isLoadingMore: () => false,
       loadMore: async () => undefined,
     };
-  };
-
-  const setSearchTerm = () => () => undefined;
+  }) as QuickAccessContextValue['useList'];
 
   // CRM companies are additive — they fold into the list when their query
   // resolves rather than gating quick access on a slower/failing CRM fetch.
@@ -723,7 +728,6 @@ export function createLegacyQuickAccessValue(): QuickAccessContextValue {
 
   return {
     useList,
-    setSearchTerm,
     usesIndexedEntityQuery: () => false,
     isLoading,
     refresh,
