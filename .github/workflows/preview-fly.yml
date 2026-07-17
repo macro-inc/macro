@@ -293,8 +293,12 @@ jobs:
             # A suspended preview needs demand before SSH is reachable.
             curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
             for _ in $(seq 1 12); do
+              # `--command` is exec'd directly, NOT run through a shell —
+              # a bare `if [ -f ...` dies with `exec: "if": not found`, so
+              # the marker never parsed and every push silently rehydrated
+              # (~7 min) instead of going hot (~3 min). Hence the sh -c.
               marker=$(flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
-                --quiet --command 'if [ -f /var/lib/docker/.macro-preview/deployment.json ]; then cat /var/lib/docker/.macro-preview/deployment.json; else echo __NO_MARKER__; fi' \
+                --quiet --command 'sh -c "if [ -f /var/lib/docker/.macro-preview/deployment.json ]; then cat /var/lib/docker/.macro-preview/deployment.json; else echo __NO_MARKER__; fi"' \
                 2>/dev/null || true)
               if echo "$marker" | jq -e \
                   --arg key "$snapshot_key" \
