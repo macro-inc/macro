@@ -77,8 +77,10 @@ ai_toolset = { path = "../ai_toolset" }
 chrono = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
 
 [package.metadata.sqlx]
 offline = true

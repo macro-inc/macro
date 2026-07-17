@@ -7,6 +7,9 @@
 //! The composition root supplies the concrete services and request
 //! authorization state via [`PropertiesRouterState`].
 
+#[cfg(test)]
+mod test;
+
 pub mod definitions;
 pub mod entities;
 pub mod extract;
