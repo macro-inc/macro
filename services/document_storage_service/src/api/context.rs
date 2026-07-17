@@ -348,7 +348,8 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 
 /// Type alias for the favorites router state.
-pub(crate) type DssFavoritesState = FavoritesRouterState<FavoritesServiceType, EntityAccessService>;
+pub(crate) type DssFavoritesState =
+    FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;

@@ -857,6 +857,7 @@ async fn main() -> anyhow::Result<()> {
         favorites_state: FavoritesRouterState::new(
             favorites_service.clone(),
             entity_access_service.clone(),
+            authorization_state.clone(),
         ),
         favorites_service,
         #[cfg(feature = "graphql")]
