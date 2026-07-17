@@ -138,7 +138,7 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -153,7 +153,7 @@ impl TeamRepositoryImpl {
             id,
             team_name,
             user_id.as_ref(),
-            subscription_id.to_string(),
+            subscription_id.map(|s| s.to_string()),
         )
         .try_map(|row| {
             Ok(Team {
@@ -376,7 +376,7 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));

@@ -170,7 +170,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
     let result = team_repo
-        .create_team(&user_id, "team1", &"sub_test".parse().unwrap())
+        .create_team(&user_id, "team1", Some(&"sub_test".parse().unwrap()))
         .await?;
 
     assert!(!result.id.to_string().is_empty());
@@ -181,7 +181,7 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", &"sub_test".parse().unwrap())
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", Some(&"sub_test".parse().unwrap()))
         .await
         .err()
         .unwrap();
@@ -220,7 +220,11 @@ async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
     .await?;
 
     let team = team_repo
-        .create_team(&user_id, "GitHub Owner Team", &"sub_test".parse().unwrap())
+        .create_team(
+            &user_id,
+            "GitHub Owner Team",
+            Some(&"sub_test".parse().unwrap()),
+        )
         .await?;
     let team_id = team.id().to_string();
 
@@ -337,7 +341,11 @@ async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
     .await?;
 
     let team = team_repo
-        .create_team(&user_id, "GitHub Owner Team", &"sub_test".parse().unwrap())
+        .create_team(
+            &user_id,
+            "GitHub Owner Team",
+            Some(&"sub_test".parse().unwrap()),
+        )
         .await?;
 
     team_repo

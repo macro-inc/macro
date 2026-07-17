@@ -64,12 +64,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
-    /// Creates a new team
+    /// Creates a new team. `subscription_id` is `None` for free teams
+    /// (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Moves any user-owned GitHub App installation rows to the given team.
@@ -318,12 +319,13 @@ pub trait TeamMembersService: Clone + Send + Sync + 'static {
 
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
-    /// Creates a new team
+    /// Creates a new team. `subscription_id` is `None` for free teams
+    /// (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Returns the user's active stripe subscription id when the user is premium.
@@ -334,10 +336,11 @@ pub trait TeamService: Clone + Send + Sync + 'static {
 
     /// Invites users to a team
     /// This will also handle the teams subscription.
+    /// Any team member may invite; removals stay admin-only.
     /// Returns the team invites created.
     fn invite_users_to_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 

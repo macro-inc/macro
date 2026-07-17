@@ -12,7 +12,7 @@ use axum::{
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, AdminTeamRole, BotId, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        EntityPermission, EntityType, MemberTeamRole, RequiredPermission, TeamRole, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -212,7 +212,7 @@ impl TeamService for FakeTeamService {
         &self,
         _user_id: &MacroUserIdStr<'_>,
         _team_name: &str,
-        _subscription_id: &stripe::SubscriptionId,
+        _subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         panic!("unexpected create_team call")
     }
@@ -226,7 +226,7 @@ impl TeamService for FakeTeamService {
 
     async fn invite_users_to_team(
         &self,
-        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
         _invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         panic!("unexpected invite_users_to_team call")

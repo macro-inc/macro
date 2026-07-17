@@ -51,6 +51,11 @@ impl TeamPlan {
     }
 }
 
+/// Maximum number of members (including the owner) a team may have without a
+/// Stripe subscription. Teams at or under this size are free; growing past it
+/// requires the owner to subscribe.
+pub const FREE_TEAM_MAX_MEMBERS: i32 = 5;
+
 #[derive(
     Eq,
     PartialEq,
@@ -641,6 +646,9 @@ pub enum JoinTeamError {
     #[error("Underlying user roles and permissions error")]
     /// Underlying user roles and permissions error
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
+    /// The team has no subscription and is already at the free member limit
+    #[error("Team is at the free member limit of {FREE_TEAM_MAX_MEMBERS}")]
+    FreeTeamLimitReached,
 }
 
 /// Errors for toggling a team's auto-join domain

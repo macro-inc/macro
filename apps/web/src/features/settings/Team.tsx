@@ -1,7 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
-import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
@@ -71,12 +68,6 @@ import {
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
-
-function useRequiresPaidUpgrade() {
-  const hasPaidAccess = useHasPaidAccess();
-  const newPricingFlag = useFeatureFlag('enable-new-pricing');
-  return createMemo(() => newPricingFlag().enabled && !hasPaidAccess());
-}
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -469,8 +460,6 @@ function UserInviteRow(props: {
   onDecline: () => void;
   isAccepting: boolean;
   isDeclining: boolean;
-  requiresUpgrade: boolean;
-  onUpgrade: () => void;
 }) {
   return (
     <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
@@ -516,8 +505,6 @@ function TeamInvites() {
   const userInvitesQuery = useUserInvitesQuery();
   const joinTeamMutation = useJoinTeamMutation();
   const rejectMutation = useRejectInvitationMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
-  const { showPaywall } = usePaywallState();
 
   const invites = () => userInvitesQuery.data?.invites ?? [];
 
@@ -548,8 +535,6 @@ function TeamInvites() {
                   }
                   isAccepting={isAccepting(invite.id)}
                   isDeclining={isDeclining(invite.id)}
-                  requiresUpgrade={requiresUpgrade()}
-                  onUpgrade={() => showPaywall()}
                 />
               )}
             </For>
@@ -584,7 +569,6 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
   );
 
   const createTeamMutation = useCreateTeamWithInvitesMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
 
   const charCountColor = () => {
     const len = teamName().trim().length;
@@ -681,19 +665,17 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
             </Show>
           </div>
-          <Show when={!requiresUpgrade()}>
-            <div class="flex flex-col gap-1">
-              <label class="text-sm text-ink-muted">
-                Invite members (optional)
-              </label>
-              <InviteEmailsInput
-                invites={invites()}
-                onChange={setInvites}
-                errors={inviteErrors()}
-                onErrorsChange={setInviteErrors}
-              />
-            </div>
-          </Show>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm text-ink-muted">
+              Invite members (optional)
+            </label>
+            <InviteEmailsInput
+              invites={invites()}
+              onChange={setInvites}
+              errors={inviteErrors()}
+              onErrorsChange={setInviteErrors}
+            />
+          </div>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -726,8 +708,6 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
 
 function EmptyTeamState() {
   const [showCreateModal, setShowCreateModal] = createSignal(false);
-  const hasPaidAccess = useHasPaidAccess();
-  const { showPaywall } = usePaywallState();
 
   return (
     <SettingsPage title="Team">
@@ -738,37 +718,18 @@ function EmptyTeamState() {
               <UsersIcon class="size-6 text-accent" />
             </div>
             <h3 class="text-sm font-medium text-ink mb-1">No team yet</h3>
-            <Show
-              when={hasPaidAccess()}
-              fallback={
-                <>
-                  <p class="text-xs text-ink-muted max-w-xs mb-4">
-                    Teams are available on paid plans. Upgrade to create and
-                    manage teams.
-                  </p>
-                  <Button
-                    variant="active"
-                    class="rounded-xs"
-                    onClick={() => showPaywall(PaywallKey.TEAMS)}
-                  >
-                    Upgrade
-                  </Button>
-                </>
-              }
+            <p class="text-xs text-ink-muted max-w-xs mb-4">
+              Create a team to collaborate with others and manage access
+              together.
+            </p>
+            <Button
+              variant="active"
+              class="rounded-xs"
+              onClick={() => setShowCreateModal(true)}
             >
-              <p class="text-xs text-ink-muted max-w-xs mb-4">
-                Create a team to collaborate with others and manage access
-                together.
-              </p>
-              <Button
-                variant="active"
-                class="rounded-xs"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <PlusIcon class="size-4" />
-                Create Team
-              </Button>
-            </Show>
+              <PlusIcon class="size-4" />
+              Create Team
+            </Button>
           </div>
         </SettingsCard>
       </SettingsSection>
@@ -858,8 +819,6 @@ function TeamManagement(props: {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
-  const requiresUpgrade = useRequiresPaidUpgrade();
-  const { showPaywall } = usePaywallState();
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
@@ -1303,24 +1262,16 @@ function TeamManagement(props: {
         <SettingsSection
           title="Members"
           actions={
-            <Show when={canManageMemberRemovals()}>
-              <Button
-                variant="base"
-                size="sm"
-                class="rounded-xs"
-                tooltip={
-                  requiresUpgrade()
-                    ? 'Inviting members requires a paid plan'
-                    : undefined
-                }
-                onClick={() =>
-                  requiresUpgrade() ? showPaywall() : setShowInviteModal(true)
-                }
-              >
-                <PlusIcon class="size-4" />
-                Invite
-              </Button>
-            </Show>
+            // Any team member can invite; removals stay admin-only.
+            <Button
+              variant="base"
+              size="sm"
+              class="rounded-xs"
+              onClick={() => setShowInviteModal(true)}
+            >
+              <PlusIcon class="size-4" />
+              Invite
+            </Button>
           }
         >
           <Show when={showMemberSearch()}>

@@ -272,6 +272,13 @@ impl IntoResponse for JoinTeamError {
                     message: "internal server error".into(),
                 }),
             ),
+            JoinTeamError::FreeTeamLimitReached => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "team is at the free member limit — upgrade to add more members"
+                        .into(),
+                }),
+            ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
