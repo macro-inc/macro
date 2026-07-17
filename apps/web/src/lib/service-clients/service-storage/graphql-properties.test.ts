@@ -30,7 +30,11 @@ const restSetEntityProperty = vi.mocked(
 );
 const flag = vi.mocked(ENABLE_GRAPHQL_SOUP);
 
-type MutationResult = { data?: unknown; error?: unknown };
+type MutationResult = {
+  data?: unknown;
+  error?: unknown;
+  extensions?: Record<string, unknown>;
+};
 
 function mockGraphqlClient(result: MutationResult) {
   const mutation = vi.fn(() => ({
@@ -129,7 +133,9 @@ describe('setEntityProperty', () => {
     restSetEntityProperty.mockResolvedValue(okRestResult);
     const mutation = mockGraphqlClient({ data: undefined });
 
-    await setEntityProperty(args);
+    await expect(setEntityProperty(args)).resolves.toEqual({
+      kind: 'committed',
+    });
 
     expect(restSetEntityProperty).toHaveBeenCalledWith({
       entity_type: 'DOCUMENT',
@@ -140,13 +146,18 @@ describe('setEntityProperty', () => {
     expect(mutation).not.toHaveBeenCalled();
   });
 
-  it('propagates REST errors as throws', async () => {
+  it('returns permanently-failed for REST errors', async () => {
     restSetEntityProperty.mockResolvedValue({
       isErr: () => true,
       error: [{ code: 'boom', message: 'boom' }],
     } as never);
 
-    await expect(setEntityProperty(args)).rejects.toThrow();
+    const result = await setEntityProperty(args);
+
+    expect(result.kind).toBe('permanently-failed');
+    if (result.kind === 'permanently-failed') {
+      expect(result.error).toBeInstanceOf(Error);
+    }
   });
 
   it('executes the GraphQL mutation when the flag is enabled', async () => {
@@ -174,7 +185,7 @@ describe('setEntityProperty', () => {
       },
     });
     expect(context).toBeUndefined();
-    expect(result).toBe(property);
+    expect(result).toEqual({ kind: 'committed', property });
   });
 
   it('attaches the optimistic response to the mutation context', async () => {
@@ -200,10 +211,32 @@ describe('setEntityProperty', () => {
     });
   });
 
-  it('throws on GraphQL errors', async () => {
+  it('returns queued when the durable exchange retains the mutation', async () => {
     flag.mockReturnValue(true);
-    mockGraphqlClient({ error: new Error('mutation failed') });
+    const optimistic = { id: 'prop-1' } as SoupPropertyFieldsFragment;
+    mockGraphqlClient({
+      data: { setEntityProperty: optimistic },
+      extensions: {
+        normalizedCacheMutationDisposition: {
+          kind: 'queued',
+          transactionId: 'txn-1',
+        },
+      },
+    });
 
-    await expect(setEntityProperty(args)).rejects.toThrow('mutation failed');
+    await expect(
+      setEntityProperty({ ...args, optimisticProperty: optimistic })
+    ).resolves.toEqual({ kind: 'queued', transactionId: 'txn-1' });
+  });
+
+  it('returns permanently-failed for GraphQL errors', async () => {
+    flag.mockReturnValue(true);
+    const error = new Error('mutation failed');
+    mockGraphqlClient({ error });
+
+    await expect(setEntityProperty(args)).resolves.toEqual({
+      kind: 'permanently-failed',
+      error,
+    });
   });
 });
