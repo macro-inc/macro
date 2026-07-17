@@ -21,8 +21,8 @@ use model::project::{
 use sqlx::PgPool;
 
 use crate::domain::models::{
-    CreateProjectArgs, EditProjectArgs, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult,
-    UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, PurgedProjectTree, RevertDeleteResult,
+    SoftDeleteResult, UploadFolderRepoArgs,
 };
 use crate::domain::ports::ProjectRepo;
 
@@ -325,12 +325,12 @@ impl ProjectRepo for PgProjectRepo {
     async fn mark_projects_uploaded(
         &self,
         root_project_id: &str,
-    ) -> Result<Vec<String>, Self::Err> {
+    ) -> Result<MarkedUploadedTree, Self::Err> {
         let mut transaction = self.pool.begin().await?;
-        let project_ids =
+        let uploaded_tree =
             upload_folder::mark_projects_uploaded(&mut transaction, root_project_id).await?;
         transaction.commit().await?;
-        Ok(project_ids)
+        Ok(uploaded_tree)
     }
 
     #[tracing::instrument(err, skip(self))]

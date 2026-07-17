@@ -636,10 +636,12 @@ where
         &self,
         root_project_id: &str,
     ) -> Result<Vec<String>, ProjectError> {
-        self.repo
+        let uploaded_tree = self
+            .repo
             .mark_projects_uploaded(root_project_id)
             .await
-            .map_err(|error| internal_error(error, "unable to mark projects uploaded"))
+            .map_err(|error| internal_error(error, "unable to mark projects uploaded"))?;
+        Ok(uploaded_tree.project_ids)
     }
 
     async fn get_batch_preview(

@@ -64,6 +64,21 @@ pub struct PurgedProjectTree {
     pub bom_shas: Vec<(String, i64)>,
 }
 
+/// Metadata for a project tree finalized after upload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkedUploadedTree {
+    /// Root project identifier.
+    pub id: String,
+    /// Root project name.
+    pub name: String,
+    /// Root project owner.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Optional parent of the root project.
+    pub parent_id: Option<String>,
+    /// Finalized project identifiers, including the root and all descendants.
+    pub project_ids: Vec<String>,
+}
+
 /// Arguments for creating a pending project tree for a folder upload.
 #[derive(Debug)]
 pub struct UploadFolderRepoArgs {

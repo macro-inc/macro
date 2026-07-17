@@ -11,7 +11,7 @@ use model::project::Project;
 use models_permissions::share_permission::SharePermissionV2;
 use sqlx::{Postgres, Transaction};
 
-use crate::domain::models::UploadFolderRepoArgs;
+use crate::domain::models::{MarkedUploadedTree, UploadFolderRepoArgs};
 
 use super::share;
 
@@ -339,8 +339,8 @@ async fn insert_tree_history(
 pub(super) async fn mark_projects_uploaded(
     transaction: &mut Transaction<'_, Postgres>,
     root_project_id: &str,
-) -> Result<Vec<String>, sqlx::Error> {
-    let project_ids = sqlx::query_scalar!(
+) -> Result<MarkedUploadedTree, sqlx::Error> {
+    let rows = sqlx::query!(
         r#"
         WITH RECURSIVE project_hierarchy AS (
             SELECT id FROM "Project" WHERE id = $1
@@ -352,14 +352,30 @@ pub(super) async fn mark_projects_uploaded(
         UPDATE "Project"
         SET "uploadPending" = false
         WHERE id IN (SELECT id FROM project_hierarchy)
-        RETURNING id
+        RETURNING id, name, "userId" AS user_id, "parentId" AS parent_id
         "#,
         root_project_id,
     )
     .fetch_all(transaction.as_mut())
     .await?;
-    if project_ids.is_empty() {
+    if rows.is_empty() {
         return Err(sqlx::Error::RowNotFound);
     }
-    Ok(project_ids)
+
+    let root = rows
+        .iter()
+        .find(|row| row.id == root_project_id)
+        .ok_or_else(|| {
+            sqlx::Error::Protocol("updated project tree did not include its root".to_owned())
+        })?;
+    let user_id = MacroUserIdStr::try_from(root.user_id.clone())
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+
+    Ok(MarkedUploadedTree {
+        id: root.id.clone(),
+        name: root.name.clone(),
+        user_id,
+        parent_id: root.parent_id.clone(),
+        project_ids: rows.into_iter().map(|row| row.id).collect(),
+    })
 }

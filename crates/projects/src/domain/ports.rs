@@ -28,8 +28,8 @@ use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, MutatedProject, ProjectError, PurgedProjectTree,
-    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, MutatedProject, ProjectError,
+    PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 
 /// Repository for reading project data from persistent storage.
@@ -138,7 +138,7 @@ pub trait ProjectRepo: Send + Sync + 'static {
     fn mark_projects_uploaded(
         &self,
         root_project_id: &str,
-    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<MarkedUploadedTree, Self::Err>> + Send;
 
     /// Update the project's modified timestamp.
     fn update_project_modified(

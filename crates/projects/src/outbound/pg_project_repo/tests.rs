@@ -528,10 +528,23 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = PgProjectRepo::new(pool.clone());
-    let project_ids = repo
+    let uploaded_tree = repo
         .mark_projects_uploaded("10000000-0000-0000-0000-000000000006")
         .await?;
-    assert_eq!(project_ids.len(), 2);
+    assert_eq!(uploaded_tree.id, "10000000-0000-0000-0000-000000000006");
+    assert_eq!(uploaded_tree.name, "Owner pending");
+    assert_eq!(uploaded_tree.user_id.as_ref(), "macro|owner@test.com");
+    assert_eq!(uploaded_tree.parent_id, None);
+
+    let mut project_ids = uploaded_tree.project_ids;
+    project_ids.sort();
+    assert_eq!(
+        project_ids,
+        [
+            "10000000-0000-0000-0000-000000000006".to_owned(),
+            "10000000-0000-0000-0000-000000000008".to_owned(),
+        ]
+    );
     let pending = sqlx::query_scalar!(
         r#"SELECT COUNT(*) AS "count!" FROM "Project" WHERE id = ANY($1) AND "uploadPending""#,
         &project_ids,
@@ -539,6 +552,8 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     .fetch_one(&pool)
     .await?;
     assert_eq!(pending, 0);
-    assert!(repo.mark_projects_uploaded("missing").await.is_err());
+
+    let missing_error = repo.mark_projects_uploaded("missing").await.unwrap_err();
+    assert!(matches!(missing_error, sqlx::Error::RowNotFound));
     Ok(())
 }
