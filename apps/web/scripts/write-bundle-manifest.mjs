@@ -38,3 +38,14 @@ const manifest = {
 const outPath = join(packageDir, 'dist', 'bundle-manifest.json');
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+const indexPath = join(packageDir, 'dist', 'index.html');
+const bundleBuildPlaceholder = '__MACRO_BUNDLE_BUILD__';
+const indexHtml = readFileSync(indexPath, 'utf8');
+if (!indexHtml.includes(bundleBuildPlaceholder)) {
+  throw new Error(`${indexPath} is missing ${bundleBuildPlaceholder}`);
+}
+writeFileSync(
+  indexPath,
+  indexHtml.replaceAll(bundleBuildPlaceholder, String(manifest.bundleBuild))
+);

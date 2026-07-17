@@ -288,6 +288,7 @@ pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Resu
 pub async fn ack_bundle_update_reload<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
     app_handle: tauri::AppHandle<R>,
+    loaded_bundle_build: u64,
 ) -> Result<bool, String> {
     let cache_dir = app_handle
         .path()
@@ -296,7 +297,7 @@ pub async fn ack_bundle_update_reload<R: Runtime>(
     service
         .lock()
         .await
-        .acknowledge_update_reload(&cache_dir)
+        .acknowledge_update_reload(&cache_dir, loaded_bundle_build)
         .await
         .map_err(|e| e.to_string())
 }
@@ -453,8 +454,11 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
             if acknowledge_setup_apply {
                 match app.path().app_cache_dir() {
                     Ok(cache_dir) => {
+                        let loaded_bundle_build =
+                            tauri::async_runtime::block_on(service.bundle_build())
+                                .unwrap_or(service.embedded_bundle_build());
                         if let Err(e) = tauri::async_runtime::block_on(
-                            service.acknowledge_update_reload(&cache_dir),
+                            service.acknowledge_update_reload(&cache_dir, loaded_bundle_build),
                         ) {
                             tracing::warn!(
                                 "[bundle-update] failed to acknowledge plugin-initialized bundle apply: {e}"

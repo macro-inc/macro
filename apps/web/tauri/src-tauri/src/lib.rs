@@ -1,10 +1,13 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::domain::bundle_routes::BundleRoutes;
+use macro_bundle_updater_plugin::domain::{
+    asset_service::BundleAssetResolver, bundle_routes::BundleRoutes,
+};
 use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
 #[cfg(feature = "auto_apply_update")]
 use macro_bundle_updater_plugin::inbound::plugin::{
     allow_update_reload_retry, apply_completed_update_from, start_update_check,
 };
+use macro_bundle_updater_plugin::outbound::fs::FileSystem;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -132,6 +135,7 @@ pub fn run() {
 
     let embedded_bundle_build = embedded_bundle_build();
     let bundle_routes = BundleRoutes::new(embedded_bundle_build);
+    let bundle_asset_resolver = BundleAssetResolver::new(bundle_routes.clone(), FileSystem);
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -222,7 +226,7 @@ pub fn run() {
             move |ctx, request, responder| {
                 let h = handler.get_or_init(|| {
                     let app = ctx.app_handle();
-                    tauri_protocol::get(app.clone(), &window_origin)
+                    tauri_protocol::get(app.clone(), &window_origin, bundle_asset_resolver.clone())
                 });
                 h(ctx.webview_label(), request, responder);
             }
