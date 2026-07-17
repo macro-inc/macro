@@ -36,11 +36,11 @@ import {
   graphqlEntityToQuickAccessItem,
   userToQuickAccessItem,
 } from './graphql-items';
-import { createRecordSelectionQuickAccessItems } from './record-selection-list';
 import {
   createQuickAccessRecordSelectionQuery,
   QUICK_ACCESS_RECORD_SELECTION_QUERY_KEY,
 } from './record-selection-items';
+import { createRecordSelectionQuickAccessItems } from './record-selection-list';
 import type {
   Bucket,
   EntityItem,
@@ -146,9 +146,8 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     void invalidateRecordSelection();
   }, CACHE_REFRESH_DEBOUNCE_MS);
 
-  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(
-    scheduleCacheRefresh
-  );
+  const unsubscribeCacheChanges =
+    cacheHost?.onCacheChanged(scheduleCacheRefresh);
   onCleanup(() => {
     unsubscribeCacheChanges?.();
     scheduleCacheRefresh.clear();

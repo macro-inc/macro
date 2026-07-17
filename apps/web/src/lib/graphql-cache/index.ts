@@ -10,12 +10,6 @@ export {
   selectAll,
 } from './exchange/inspection';
 export {
-  readRecords,
-  type RecordSelection,
-  type SelectedRecordPage,
-  selectRecords,
-} from './exchange/record-selection';
-export {
   executeOptimisticMutation,
   type LinkDiff,
   type ListSelection,
@@ -28,6 +22,12 @@ export {
   select,
   update,
 } from './exchange/optimistic';
+export {
+  type RecordSelection,
+  readRecords,
+  type SelectedRecordPage,
+  selectRecords,
+} from './exchange/record-selection';
 export { createTauriCacheHost } from './host/tauri-host';
 export type {
   CacheHost,

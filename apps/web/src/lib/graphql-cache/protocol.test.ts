@@ -7,9 +7,9 @@ import {
 describe('validateRecordSelectionLimit', () => {
   it('accepts bounded positive integers', () => {
     expect(validateRecordSelectionLimit(1)).toBe(1);
-    expect(
-      validateRecordSelectionLimit(MAX_RECORD_SELECTION_PAGE_SIZE)
-    ).toBe(MAX_RECORD_SELECTION_PAGE_SIZE);
+    expect(validateRecordSelectionLimit(MAX_RECORD_SELECTION_PAGE_SIZE)).toBe(
+      MAX_RECORD_SELECTION_PAGE_SIZE
+    );
   });
 
   it.each([

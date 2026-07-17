@@ -141,9 +141,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async readRecords(
-      args: ReadRecordsArgs
-    ): Promise<SelectedRecordPageWire> {
+    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
       const limit = validateRecordSelectionLimit(args.limit);
       await ready;
       return await request<SelectedRecordPageWire>(

@@ -1,6 +1,6 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { stringifyDocument } from '@urql/core';
-import { Kind, type FragmentDefinitionNode } from 'graphql';
+import { type FragmentDefinitionNode, Kind } from 'graphql';
 import type { CacheHost } from '../host/types';
 import type { RecordCursor } from '../protocol';
 
@@ -55,10 +55,7 @@ function validatePage(value: unknown): SelectedRecordPage<unknown> {
   if (!isRecord(value) || !Array.isArray(value.records)) {
     throw new Error('invalid cache record-selection page');
   }
-  if (
-    value.nextCursor !== null &&
-    typeof value.nextCursor !== 'string'
-  ) {
+  if (value.nextCursor !== null && typeof value.nextCursor !== 'string') {
     throw new Error('invalid cache record-selection cursor');
   }
   if (value.records.some((record) => !isRecord(record))) {

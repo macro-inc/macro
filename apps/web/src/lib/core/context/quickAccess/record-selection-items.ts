@@ -1,8 +1,8 @@
 import {
+  type CacheHost,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   readRecords,
   selectRecords,
-  type CacheHost,
 } from '@graphql-cache/index';
 import {
   type SoupItemFieldsFragment,
@@ -52,7 +52,9 @@ export function createQuickAccessRecordSelectionQuery(options: {
     return {
       queryKey: QUICK_ACCESS_RECORD_SELECTION_QUERY_KEY,
       queryFn: () =>
-        cacheHost ? readCachedQuickAccessRecords(cacheHost) : Promise.resolve([]),
+        cacheHost
+          ? readCachedQuickAccessRecords(cacheHost)
+          : Promise.resolve([]),
       enabled: cacheHost !== undefined,
       placeholderData: keepPreviousData,
       staleTime: Infinity,

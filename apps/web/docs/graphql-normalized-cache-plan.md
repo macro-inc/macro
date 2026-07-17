@@ -193,13 +193,12 @@ Topology:
 | IndexedDB  | browser      | via the `idb` crate; stable per-scope DB with object stores for records, mutation queue, optimistic layers, and meta |
 
 Normalized records are serialized with `postcard`. SQLite stores the bytes in
-`records.value`; IndexedDB stores them in the `value` property of a record
-envelope. Both backends persist optional `bucket` and `sort_timestamp`
-metadata alongside supported Soup entities, with global and per-bucket sort
-indexes. `Storage::query_entity_index` performs deterministic keyset reads;
-`Engine::query_indexed_items` batch-loads those records and returns durable
-scalar/embedded-field snapshots. Note: wasm futures are not `Send`, so the
-`Storage` trait's futures
+`records.value`; IndexedDB stores the bytes directly in the records object
+store. Both backends implement schema-neutral, entity-key-ordered record scans.
+`Storage::scan_records` selects concrete normalized types by their key ranges;
+`Engine::read_records` applies a validated named fragment, loads linked records
+in batches, includes optimistic layers, and omits incomplete projections.
+Note: wasm futures are not `Send`, so the `Storage` trait's futures
 are bound by `MaybeSend` (`crates/maybe_send`):
 `Send` on native targets — the Tauri host drives the engine directly from its
 multi-threaded runtime — and unbounded on wasm, implementable by `idb`.

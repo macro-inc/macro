@@ -77,7 +77,8 @@ export function createRecordSelectionQuickAccessItems(options: {
     const itemsById = new Map<string, QuickAccessItem>();
     const addVisibleItem = (item: QuickAccessItem, replaceOnTie = false) => {
       if (requested && !requested.has(item.bucket)) return;
-      if (item.bucket === 'note' && item.id === options.instructionsId()) return;
+      if (item.bucket === 'note' && item.id === options.instructionsId())
+        return;
       if (item.bucket === 'snippet' && !options.snippetsEnabled()) return;
       if (item.bucket === 'crm_company' && !options.crmEnabled()) return;
       addItem(itemsById, item, replaceOnTie);
@@ -93,9 +94,7 @@ export function createRecordSelectionQuickAccessItems(options: {
     const result = term
       ? [
           ...searchQuickAccessEntities(
-            values.filter(
-              (item): item is EntityItem => item.kind === 'entity'
-            ),
+            values.filter((item): item is EntityItem => item.kind === 'entity'),
             term
           ),
           ...values

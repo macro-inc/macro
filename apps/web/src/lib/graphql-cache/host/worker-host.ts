@@ -176,9 +176,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as ReadResult;
     },
 
-    async readRecords(
-      args: ReadRecordsArgs
-    ): Promise<SelectedRecordPageWire> {
+    async readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire> {
       const limit = validateRecordSelectionLimit(args.limit);
       await ready;
       return (await request({

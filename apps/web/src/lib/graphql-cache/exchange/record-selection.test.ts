@@ -1,7 +1,7 @@
 import {
+  SoupDocument,
   type SoupItemFieldsFragment,
   SoupItemFieldsFragmentDoc,
-  SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CacheHost } from '../host/types';
@@ -44,9 +44,9 @@ describe('typed record selection', () => {
       const host = {
         readRecords: async () => result,
       } as unknown as CacheHost;
-      await expect(
-        readRecords(host, selection, { limit: 1 })
-      ).rejects.toThrow('invalid cache');
+      await expect(readRecords(host, selection, { limit: 1 })).rejects.toThrow(
+        'invalid cache'
+      );
     }
   });
 });
