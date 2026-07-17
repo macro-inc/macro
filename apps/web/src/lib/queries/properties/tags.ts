@@ -345,10 +345,34 @@ export function useDeletePropertyOptionMutation(
   callbacks?: MutationCallbacks<
     { success: boolean },
     Error,
-    DeletePropertyOptionParams
+    DeletePropertyOptionParams,
+    TagsMutationContext
   >
 ) {
   return useMutation(() => ({
+    onMutate: async (vars): Promise<TagsMutationContext> => {
+      await queryClient.cancelQueries({
+        queryKey: propertiesKeys.tags.queryKey,
+      });
+      const previousTags = queryClient.getQueryData<TagSetResponse[]>(
+        propertiesKeys.tags.queryKey
+      );
+
+      updateTagsCache((sets) =>
+        sets.map((set) =>
+          set.definition?.id === vars.propertyDefinitionId
+            ? {
+                ...set,
+                options: set.options.filter(
+                  (option) => option.id !== vars.optionId
+                ),
+              }
+            : set
+        )
+      );
+
+      return { previousTags };
+    },
     mutationFn: async (vars: DeletePropertyOptionParams) =>
       await throwOnErr(
         async () =>
@@ -357,9 +381,20 @@ export function useDeletePropertyOptionMutation(
             option_id: vars.optionId,
           })
       ),
-    ...withCallbacks<{ success: boolean }, Error, DeletePropertyOptionParams>(
+    ...withCallbacks<
+      { success: boolean },
+      Error,
+      DeletePropertyOptionParams,
+      TagsMutationContext
+    >(
       {
-        onError(error) {
+        onError(error, _variables, context) {
+          if (context?.previousTags) {
+            queryClient.setQueryData(
+              propertiesKeys.tags.queryKey,
+              context.previousTags
+            );
+          }
           console.error('Failed to delete label', error);
           toast.failure('Failed to delete label');
         },

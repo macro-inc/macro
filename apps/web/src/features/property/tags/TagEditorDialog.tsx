@@ -1,9 +1,11 @@
 import { TabsInset } from '@core/component/TabsInset';
 import TagIcon from '@phosphor/tag-simple.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
 import {
   type CreateTagResult,
   useCreateTagMutation,
+  useDeletePropertyOptionMutation,
   useUpdatePropertyOptionMutation,
 } from '@queries/properties/tags';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
@@ -74,6 +76,7 @@ export function TagEditorDialog(props: {
   const [scope, setScope] = createSignal<TagScope>('user');
   const createTag = useCreateTagMutation();
   const updateTag = useUpdatePropertyOptionMutation();
+  const deleteTag = useDeletePropertyOptionMutation();
   let nameInputRef: HTMLInputElement | undefined;
 
   createEffect(() => {
@@ -98,7 +101,8 @@ export function TagEditorDialog(props: {
 
   const title = () =>
     props.mode?.type === 'create' ? 'Create tag' : 'Edit tag';
-  const pending = () => createTag.isPending || updateTag.isPending;
+  const pending = () =>
+    createTag.isPending || updateTag.isPending || deleteTag.isPending;
   const trimmedLabel = () => label().trim();
 
   const dirty = createMemo(() => {
@@ -107,9 +111,7 @@ export function TagEditorDialog(props: {
     if (mode.type === 'create') return trimmedLabel().length > 0;
 
     return (
-      trimmedLabel() !== initialLabel(mode) ||
-      color() !== initialColor(mode) ||
-      scope() !== initialScope(mode)
+      trimmedLabel() !== initialLabel(mode) || color() !== initialColor(mode)
     );
   });
 
@@ -151,6 +153,19 @@ export function TagEditorDialog(props: {
         propertyDefinitionId: mode.tag.propertyDefinitionId,
         optionId: mode.tag.option.id,
         body,
+      },
+      { onSuccess: props.onClose }
+    );
+  };
+
+  const remove = () => {
+    const mode = props.mode;
+    if (!mode || mode.type !== 'edit' || pending()) return;
+
+    deleteTag.mutate(
+      {
+        propertyDefinitionId: mode.tag.propertyDefinitionId,
+        optionId: mode.tag.option.id,
       },
       { onSuccess: props.onClose }
     );
@@ -250,26 +265,40 @@ export function TagEditorDialog(props: {
             </Show>
           </div>
         </CommandMenuShell.Body>
-        <CommandMenuShell.Footer class="justify-end gap-2 border-t-0 py-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            class="rounded-lg"
-            disabled={pending()}
-            onClick={close}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant={canSubmit() ? 'active' : 'ghost'}
-            depth={3}
-            class="gap-3 rounded-lg border-0"
-            disabled={!canSubmit() || pending()}
-            onClick={submit}
-          >
-            Save
-            <Hotkey shortcut="cmd+enter" theme="current" />
-          </Button>
+        <CommandMenuShell.Footer class="gap-2 border-t-0 py-3">
+          <Show when={props.mode?.type === 'edit'}>
+            <Button
+              variant="danger"
+              size="sm"
+              class="rounded-lg"
+              disabled={pending()}
+              onClick={remove}
+            >
+              <TrashIcon class="size-4" />
+              Delete
+            </Button>
+          </Show>
+          <div class="ml-auto flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              class="rounded-lg"
+              disabled={pending()}
+              onClick={close}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={canSubmit() ? 'active' : 'ghost'}
+              depth={3}
+              class="gap-3 rounded-lg border-0"
+              disabled={!canSubmit() || pending()}
+              onClick={submit}
+            >
+              Save
+              <Hotkey shortcut="cmd+enter" theme="current" />
+            </Button>
+          </div>
         </CommandMenuShell.Footer>
       </CommandMenuShell>
     </Dialog>

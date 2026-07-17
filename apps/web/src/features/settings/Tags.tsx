@@ -1,12 +1,16 @@
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import { TagDot } from '@property/tags/TagDot';
 import {
   type EditableTag,
   TagEditorDialog,
   type TagEditorDialogMode,
 } from '@property/tags/TagEditorDialog';
-import { useTagsQuery } from '@queries/properties/tags';
+import {
+  useDeletePropertyOptionMutation,
+  useTagsQuery,
+} from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
@@ -52,6 +56,8 @@ function TagListSection(props: {
   set: TagSetResponse | undefined;
   onCreate: (scope: TagScope) => void;
   onEdit: (tag: EditableTag) => void;
+  onDelete: (tag: EditableTag) => void;
+  deleting?: boolean;
 }) {
   const options = createMemo(() => sortedOptions(props.set));
   const editable = () => Boolean(props.set?.definition);
@@ -86,21 +92,36 @@ function TagListSection(props: {
                     {optionLabel(option)}
                   </div>
                 </div>
-                <Show when={editable()}>
-                  <Tooltip label="Edit tag">
-                    <button
-                      type="button"
-                      aria-label={`Edit ${optionLabel(option)}`}
-                      class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:border focus-visible:border-accent"
-                      onClick={() => {
-                        const set = props.set;
-                        if (!set) return;
-                        props.onEdit(tagForOption(props.scope, set, option));
-                      }}
-                    >
-                      <PencilIcon class="size-4" />
-                    </button>
-                  </Tooltip>
+                <Show when={editable() && props.set}>
+                  {(set) => {
+                    const tag = () => tagForOption(props.scope, set(), option);
+                    return (
+                      <div class="flex shrink-0 items-center gap-1">
+                        <Tooltip label="Edit tag">
+                          <button
+                            type="button"
+                            aria-label={`Edit ${optionLabel(option)}`}
+                            class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:border focus-visible:border-accent"
+                            disabled={props.deleting}
+                            onClick={() => props.onEdit(tag())}
+                          >
+                            <PencilIcon class="size-4" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Delete tag">
+                          <button
+                            type="button"
+                            aria-label={`Delete ${optionLabel(option)}`}
+                            class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-failure/10 hover:text-failure focus-visible:border focus-visible:border-failure disabled:opacity-30"
+                            disabled={props.deleting}
+                            onClick={() => props.onDelete(tag())}
+                          >
+                            <TrashIcon class="size-4" />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    );
+                  }}
                 </Show>
               </div>
             )}
@@ -114,6 +135,7 @@ function TagListSection(props: {
 export function Tags() {
   const tagsQuery = useTagsQuery();
   const teamQuery = useCurrentTeamQuery();
+  const deleteTag = useDeletePropertyOptionMutation();
   const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
     null
   );
@@ -131,6 +153,13 @@ export function Tags() {
 
   const openEdit = (tag: EditableTag) => {
     setEditorMode({ type: 'edit', tag });
+  };
+
+  const removeTag = (tag: EditableTag) => {
+    deleteTag.mutate({
+      propertyDefinitionId: tag.propertyDefinitionId,
+      optionId: tag.option.id,
+    });
   };
 
   return (
@@ -155,6 +184,8 @@ export function Tags() {
         set={tagSet('user')}
         onCreate={openCreate}
         onEdit={openEdit}
+        onDelete={removeTag}
+        deleting={deleteTag.isPending}
       />
       <Show when={hasTeam()}>
         <TagListSection
@@ -164,6 +195,8 @@ export function Tags() {
           set={tagSet('team')}
           onCreate={openCreate}
           onEdit={openEdit}
+          onDelete={removeTag}
+          deleting={deleteTag.isPending}
         />
       </Show>
 
