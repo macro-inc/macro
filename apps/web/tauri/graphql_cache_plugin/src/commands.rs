@@ -12,30 +12,17 @@
 use crate::engine::{
     ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
 };
-use crate::{CacheState, InitializedCache, emit_entity_index_changed, emit_ops_affected};
-use cache_core::entity_index::{
-    EntityBucket, EntityIndexCursor, EntityIndexQuery, EntitySearchCursor, EntitySearchQuery,
-    IndexedEntityPage, IndexedEntitySearchPage,
-};
+use crate::{CacheState, InitializedCache, emit_cache_changed, emit_ops_affected};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::CachedQueryInstance;
+use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
 use cache_sqlite::SqliteStorage;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
-/// Unified wire page for indexed browsing and search.
-#[derive(Serialize)]
-#[serde(untagged)]
-pub enum IndexedEntityPageWire {
-    /// A recency-ordered browse page.
-    Browse(IndexedEntityPage),
-    /// A relevance-ordered search page.
-    Search(IndexedEntitySearchPage),
-}
-
-fn parse_cursor<T: DeserializeOwned>(cursor: Option<String>) -> Result<Option<T>, String> {
+fn parse_record_cursor(cursor: Option<String>) -> Result<Option<RecordCursor>, String> {
     cursor
         .map(|value| serde_json::from_value(serde_json::Value::String(value)))
         .transpose()
@@ -104,38 +91,18 @@ pub async fn graphql_cache_read(
         .await
 }
 
-/// Lists durable normalized entities through the secondary index.
+/// Projects normalized records through a named GraphQL fragment.
 #[tauri::command]
-pub async fn graphql_cache_query_indexed_items(
+pub async fn graphql_cache_read_records(
     state: State<'_, CacheState>,
-    buckets: Vec<EntityBucket>,
-    search_term: Option<String>,
+    document: String,
+    fragment_name: String,
     cursor: Option<String>,
     limit: u32,
-    include_total_count: bool,
-) -> Result<IndexedEntityPageWire, String> {
-    let handle = engine_handle(&state)?;
-    match search_term.filter(|term| !term.is_empty()) {
-        Some(query) => handle
-            .search_indexed_items(EntitySearchQuery {
-                buckets,
-                query,
-                cursor: parse_cursor::<EntitySearchCursor>(cursor)?,
-                limit: limit as usize,
-                include_total_count,
-            })
-            .await
-            .map(IndexedEntityPageWire::Search),
-        None => handle
-            .query_indexed_items(EntityIndexQuery {
-                buckets,
-                cursor: parse_cursor::<EntityIndexCursor>(cursor)?,
-                limit: limit as usize,
-                include_total_count,
-            })
-            .await
-            .map(IndexedEntityPageWire::Browse),
-    }
+) -> Result<SelectedRecordPage, String> {
+    engine_handle(&state)?
+        .read_records(document, fragment_name, parse_record_cursor(cursor)?, limit)
+        .await
 }
 
 /// Normalizes and stores a network response; broadcasts affected operations
@@ -162,7 +129,7 @@ pub async fn graphql_cache_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
-    emit_entity_index_changed(&app);
+    emit_cache_changed(&app);
     Ok(result)
 }
 
@@ -194,6 +161,7 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
+    emit_cache_changed(&app);
     Ok(result)
 }
 
@@ -280,7 +248,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
-    emit_entity_index_changed(&app);
+    emit_cache_changed(&app);
     Ok(result)
 }
 
@@ -297,6 +265,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
         .rollback_optimistic_write(transaction_id, lease_owner, lease_generation)
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_cache_changed(&app);
     Ok(result)
 }
 
@@ -310,7 +279,7 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
 ) -> Result<Vec<String>, String> {
     let affected = engine_handle(&state)?.invalidate(keys.clone()).await?;
     emit_ops_affected(&app, &affected, &keys);
-    emit_entity_index_changed(&app);
+    emit_cache_changed(&app);
     Ok(affected)
 }
 
@@ -330,6 +299,6 @@ pub async fn graphql_cache_clear<R: Runtime>(
     state: State<'_, CacheState>,
 ) -> Result<(), String> {
     engine_handle(&state)?.clear().await?;
-    emit_entity_index_changed(&app);
+    emit_cache_changed(&app);
     Ok(())
 }

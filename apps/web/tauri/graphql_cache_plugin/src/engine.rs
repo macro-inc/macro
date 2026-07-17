@@ -13,12 +13,10 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
-use cache_core::entity_index::{
-    EntityIndexQuery, EntitySearchQuery, IndexedEntityPage, IndexedEntitySearchPage,
-};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
+use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
 use serde::Serialize;
@@ -209,32 +207,23 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Lists durable normalized entities through the secondary index.
-    pub async fn query_indexed_items(
+    /// Projects normalized records through a named GraphQL fragment.
+    pub async fn read_records(
         &self,
-        query: EntityIndexQuery,
-    ) -> Result<IndexedEntityPage, String> {
+        document: String,
+        fragment_name: String,
+        cursor: Option<RecordCursor>,
+        limit: u32,
+    ) -> Result<SelectedRecordPage, String> {
+        let selection = RecordSelection::parse(&document, &fragment_name)
+            .map_err(|error| error.to_string())?;
         self.inner
             .lock()
             .await
             .engine
-            .query_indexed_items(&query)
+            .read_records(&selection, cursor.as_ref(), limit as usize)
             .await
-            .map_err(|e| e.to_string())
-    }
-
-    /// Searches projected metadata and hydrates one matching page.
-    pub async fn search_indexed_items(
-        &self,
-        query: EntitySearchQuery,
-    ) -> Result<IndexedEntitySearchPage, String> {
-        self.inner
-            .lock()
-            .await
-            .engine
-            .search_indexed_items(&query)
-            .await
-            .map_err(|e| e.to_string())
+            .map_err(|error| error.to_string())
     }
 
     /// Enumerates cached variants of one generated query field.

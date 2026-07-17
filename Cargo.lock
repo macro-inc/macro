@@ -2249,7 +2249,6 @@ version = "0.1.0"
 dependencies = [
  "apollo-compiler",
  "apollo-parser",
- "chrono",
  "lru",
  "maybe_send",
  "pollster",

@@ -1,12 +1,10 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
-use cache_core::entity_index::{
-    EntityBucket, EntityIndexCursor, EntityIndexQuery, EntitySearchCursor, EntitySearchQuery,
-};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
+use cache_core::record_selection::{RecordCursor, RecordSelection};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
 use serde::{Deserialize, Serialize};
@@ -192,55 +190,13 @@ fn parse_variables(
     serde_wasm_bindgen::from_value(variables).map_err(err_js)
 }
 
-fn parse_buckets(buckets: JsValue) -> Result<Vec<EntityBucket>, JsValue> {
-    if buckets.is_undefined() || buckets.is_null() {
-        Ok(Vec::new())
+fn parse_record_cursor(cursor: JsValue) -> Result<Option<RecordCursor>, JsValue> {
+    if cursor.is_undefined() || cursor.is_null() {
+        Ok(None)
     } else {
-        serde_wasm_bindgen::from_value::<Vec<EntityBucket>>(buckets).map_err(err_js)
-    }
-}
-
-enum ParsedIndexedQuery {
-    Browse(EntityIndexQuery),
-    Search(EntitySearchQuery),
-}
-
-fn parse_indexed_query(
-    buckets: JsValue,
-    search_term: Option<String>,
-    cursor: JsValue,
-    limit: u32,
-    include_total_count: bool,
-) -> Result<ParsedIndexedQuery, JsValue> {
-    let buckets = parse_buckets(buckets)?;
-    match search_term.filter(|term| !term.is_empty()) {
-        Some(query) => {
-            let cursor = if cursor.is_undefined() || cursor.is_null() {
-                None
-            } else {
-                Some(serde_wasm_bindgen::from_value::<EntitySearchCursor>(cursor).map_err(err_js)?)
-            };
-            Ok(ParsedIndexedQuery::Search(EntitySearchQuery {
-                buckets,
-                query,
-                cursor,
-                limit: limit as usize,
-                include_total_count,
-            }))
-        }
-        None => {
-            let cursor = if cursor.is_undefined() || cursor.is_null() {
-                None
-            } else {
-                Some(serde_wasm_bindgen::from_value::<EntityIndexCursor>(cursor).map_err(err_js)?)
-            };
-            Ok(ParsedIndexedQuery::Browse(EntityIndexQuery {
-                buckets,
-                cursor,
-                limit: limit as usize,
-                include_total_count,
-            }))
-        }
+        serde_wasm_bindgen::from_value(cursor)
+            .map(Some)
+            .map_err(err_js)
     }
 }
 
@@ -281,31 +237,26 @@ impl CacheEngine {
         })
     }
 
-    /// Lists durable normalized entities through the secondary index.
-    #[wasm_bindgen(js_name = queryIndexedItems)]
-    pub fn query_indexed_items(
+    /// Projects normalized records through a named GraphQL fragment.
+    #[wasm_bindgen(js_name = readRecords)]
+    pub fn read_records(
         &self,
-        buckets: JsValue,
-        search_term: Option<String>,
+        document: String,
+        fragment_name: String,
         cursor: JsValue,
         limit: u32,
-        include_total_count: bool,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         future_to_promise(async move {
-            let query =
-                parse_indexed_query(buckets, search_term, cursor, limit, include_total_count)?;
-            let mut engine = engine.lock().await;
-            match query {
-                ParsedIndexedQuery::Browse(query) => {
-                    let page = engine.query_indexed_items(&query).await.map_err(err_js)?;
-                    to_js(&page)
-                }
-                ParsedIndexedQuery::Search(query) => {
-                    let page = engine.search_indexed_items(&query).await.map_err(err_js)?;
-                    to_js(&page)
-                }
-            }
+            let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
+            let cursor = parse_record_cursor(cursor)?;
+            let page = engine
+                .lock()
+                .await
+                .read_records(&selection, cursor.as_ref(), limit as usize)
+                .await
+                .map_err(err_js)?;
+            to_js(&page)
         })
     }
 

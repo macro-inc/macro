@@ -2,13 +2,11 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
-use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormalize};
+use crate::denormalize::{
+    DenormalizeError, ReadOutcome, RecordSource, denormalize, denormalize_record,
+};
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
-use crate::entity_index::{
-    EntityBucket, EntityIndexCursor, EntityIndexEntry, EntityIndexQuery, EntitySearchCursor,
-    EntitySearchQuery, IndexedEntityPage, IndexedEntitySearchPage, indexed_entity_item,
-};
 use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
     deduplicate_patches, missing_patch_record,
@@ -22,6 +20,9 @@ use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, OptimisticSource, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
     decode_optimistic_source, encode_optimistic_source,
+};
+use crate::record_selection::{
+    RecordCursor, RecordSelection, RecordSelectionError, SelectedRecordPage, validate_limit,
 };
 use crate::store::Storage;
 use crate::value::{EntityKey, Record, canonical_json};
@@ -43,6 +44,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
     LinkPatch(#[from] LinkPatchError),
     #[error(transparent)]
     QueryInspection(#[from] QueryInspectionError),
+    #[error(transparent)]
+    RecordSelection(#[from] RecordSelectionError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
@@ -52,8 +55,6 @@ pub enum EngineError<S: std::error::Error + 'static> {
         id: OptimisticTransactionId,
         detail: String,
     },
-    #[error("indexed record `{0}` is missing or has no string id")]
-    InvalidIndexedRecord(EntityKey),
     #[error("storage: {0}")]
     Storage(#[source] S),
 }
@@ -422,167 +423,192 @@ impl<S: Storage> Engine<S> {
         Ok(outcome)
     }
 
-    /// Lists decoded normalized entities through the durable secondary index.
+    /// Reads complete cached records selected by a named fragment.
     ///
-    /// This is a cache-only durable read. An empty bucket list includes every
-    /// indexed bucket, and the cursor is exclusive. Optimistic layers are not
-    /// applied because their bucket/order projection is not indexed. Record
-    /// links are omitted from snapshots; callers receive scalar and embedded
-    /// fields only.
-    pub async fn query_indexed_items(
+    /// Durable and optimistic-only records are merged in ascending entity-key
+    /// order. Incomplete projections are omitted, and one complete record is
+    /// read ahead before a continuation cursor is returned.
+    pub async fn read_records(
         &mut self,
-        query: &EntityIndexQuery,
-    ) -> Result<IndexedEntityPage, EngineError<S::Error>> {
-        let bucket_counts = if query.include_total_count {
-            let buckets: BTreeSet<_> = if query.buckets.is_empty() {
-                EntityBucket::ALL.into_iter().collect()
-            } else {
-                query.buckets.iter().copied().collect()
-            };
-            let mut counts = BTreeMap::new();
-            for bucket in buckets {
-                let count = self
-                    .storage
-                    .count_entity_index(&[bucket])
-                    .await
-                    .map_err(EngineError::Storage)?;
-                counts.insert(bucket, count);
+        selection: &RecordSelection,
+        cursor: Option<&RecordCursor>,
+        limit: usize,
+    ) -> Result<SelectedRecordPage, EngineError<S::Error>> {
+        validate_limit(limit)?;
+        self.hydrate_optimistic().await?;
+
+        const SCAN_BATCH_SIZE: usize = 128;
+        let after = cursor.map(RecordCursor::entity_key).cloned();
+        let type_names: BTreeSet<_> = selection.type_names().iter().map(String::as_str).collect();
+        let optimistic = merged_optimistic(&self.optimistic);
+        let mut optimistic_candidates: BTreeSet<_> = optimistic
+            .keys()
+            .filter(|key| {
+                after.as_ref().is_none_or(|after| *key > after)
+                    && record_key_type(key).is_some_and(|name| type_names.contains(name))
+            })
+            .cloned()
+            .collect();
+        let mut storage_after = after;
+        let mut selected = Vec::new();
+        let target = limit.saturating_add(1);
+
+        loop {
+            let rows = self
+                .storage
+                .scan_records(
+                    selection.type_names(),
+                    storage_after.as_ref(),
+                    SCAN_BATCH_SIZE,
+                )
+                .await
+                .map_err(EngineError::Storage)?;
+            let storage_exhausted = rows.len() < SCAN_BATCH_SIZE;
+            let high_key = rows.last().map(|(key, _)| key.clone());
+            if let Some(high_key) = &high_key {
+                storage_after = Some(high_key.clone());
             }
-            Some(counts)
-        } else {
-            None
-        };
-        let total_count = bucket_counts
-            .as_ref()
-            .map(|counts| counts.values().copied().sum());
-        let page_limit = query.bounded_limit();
-        if page_limit == 0 {
-            return Ok(IndexedEntityPage {
-                items: Vec::new(),
-                next_cursor: None,
-                has_more: total_count.is_some_and(|count| count > 0),
-                total_count,
-                bucket_counts,
-            });
+
+            let mut candidates: BTreeMap<EntityKey, Option<Record>> = rows
+                .into_iter()
+                .map(|(key, record)| (key, Some(record)))
+                .collect();
+            let optimistic_in_batch: Vec<_> = if storage_exhausted {
+                optimistic_candidates.iter().cloned().collect()
+            } else {
+                optimistic_candidates
+                    .iter()
+                    .take_while(|key| high_key.as_ref().is_some_and(|high| *key <= high))
+                    .cloned()
+                    .collect()
+            };
+            for key in optimistic_in_batch {
+                optimistic_candidates.remove(&key);
+                candidates.entry(key).or_insert(None);
+            }
+
+            let projected = self
+                .project_record_batch(selection, candidates, &optimistic)
+                .await?;
+            selected.extend(projected);
+            if selected.len() >= target || storage_exhausted {
+                break;
+            }
         }
 
-        let storage_query = EntityIndexQuery {
-            buckets: query.buckets.clone(),
-            cursor: query.cursor.clone(),
-            limit: page_limit.saturating_add(1),
-            include_total_count: false,
-        };
-        let mut entries = self
-            .storage
-            .query_entity_index(&storage_query)
-            .await
-            .map_err(EngineError::Storage)?;
-        let has_more = entries.len() > page_limit;
-        entries.truncate(page_limit);
+        let has_more = selected.len() > limit;
+        selected.truncate(limit);
         let next_cursor = has_more.then(|| {
-            let last = entries
-                .last()
-                .expect("a page with more entries contains a last item");
-            EntityIndexCursor {
-                sort_timestamp: last.sort_timestamp,
-                entity_key: last.entity_key.clone(),
-            }
+            RecordCursor::new(
+                selected
+                    .last()
+                    .expect("a page with lookahead contains a record")
+                    .0
+                    .clone(),
+            )
         });
-
-        let keys: BTreeSet<_> = entries
-            .iter()
-            .map(|entry| entry.entity_key.clone())
-            .collect();
-        let bases = self.load_bases(&keys).await?;
-        let items = entries
-            .into_iter()
-            .map(|entry| {
-                let entity_key = entry.entity_key.clone();
-                let record = bases
-                    .get(&entity_key)
-                    .ok_or_else(|| EngineError::InvalidIndexedRecord(entity_key.clone()))?;
-                indexed_entity_item(entry, record)
-                    .ok_or(EngineError::InvalidIndexedRecord(entity_key))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(IndexedEntityPage {
-            items,
+        Ok(SelectedRecordPage {
+            records: selected.into_iter().map(|(_, record)| record).collect(),
             next_cursor,
-            has_more,
-            total_count,
-            bucket_counts,
         })
     }
 
-    /// Searches durable projected metadata and hydrates only the matching
-    /// normalized records returned by the requested page.
-    pub async fn search_indexed_items(
+    async fn project_record_batch(
         &mut self,
-        query: &EntitySearchQuery,
-    ) -> Result<IndexedEntitySearchPage, EngineError<S::Error>> {
-        let page_limit = query.bounded_limit();
-        let mut result = self
-            .storage
-            .search_entity_index(query)
-            .await
-            .map_err(EngineError::Storage)?;
-        if page_limit == 0 {
-            return Ok(IndexedEntitySearchPage {
-                items: Vec::new(),
-                next_cursor: None,
-                has_more: result.total_count.is_some_and(|count| count > 0),
-                total_count: result.total_count,
-                bucket_counts: result.bucket_counts,
-            });
-        }
-        let has_more = result.entries.len() > page_limit;
-        result.entries.truncate(page_limit);
-        let next_cursor = has_more.then(|| {
-            let last = result
-                .entries
-                .last()
-                .expect("a search page with more entries contains a last item");
-            EntitySearchCursor {
-                score: last.score,
-                sort_timestamp: last.sort_timestamp,
-                entity_key: last.entity_key.clone(),
-            }
-        });
-
-        let keys: BTreeSet<_> = result
-            .entries
-            .iter()
-            .map(|entry| entry.entity_key.clone())
-            .collect();
-        let bases = self.load_bases(&keys).await?;
-        let items = result
-            .entries
+        selection: &RecordSelection,
+        candidates: BTreeMap<EntityKey, Option<Record>>,
+        optimistic: &BTreeMap<EntityKey, Record>,
+    ) -> Result<Vec<(EntityKey, Json)>, EngineError<S::Error>> {
+        let candidate_keys: Vec<_> = candidates.keys().cloned().collect();
+        let mut fetched_base: HashMap<_, _> = candidates
             .into_iter()
-            .map(|entry| {
-                let entity_key = entry.entity_key.clone();
-                let record = bases
-                    .get(&entity_key)
-                    .ok_or_else(|| EngineError::InvalidIndexedRecord(entity_key.clone()))?;
-                indexed_entity_item(
-                    EntityIndexEntry {
-                        entity_key: entry.entity_key,
-                        bucket: entry.bucket,
-                        sort_timestamp: entry.sort_timestamp,
-                    },
-                    record,
-                )
-                .ok_or(EngineError::InvalidIndexedRecord(entity_key))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .filter_map(|(key, record)| record.map(|record| (key, record)))
+            .collect();
+        let mut composed = HashMap::new();
+        for (key, update) in optimistic {
+            let base = fetched_base.get(key).or_else(|| self.hot.peek(key));
+            let mut effective = base.cloned().unwrap_or_default();
+            effective.merge(update.clone());
+            composed.insert(key.clone(), effective);
+        }
 
-        Ok(IndexedEntitySearchPage {
-            items,
-            next_cursor,
-            has_more,
-            total_count: result.total_count,
-            bucket_counts: result.bucket_counts,
-        })
+        let variables = serde_json::Map::new();
+        let mut pending: BTreeSet<_> = candidate_keys.iter().cloned().collect();
+        let mut completed = BTreeMap::new();
+        let mut known_absent = BTreeSet::new();
+        while !pending.is_empty() {
+            let mut missing = BTreeSet::new();
+            let source = EngineSource {
+                hot: &self.hot,
+                fetched: &fetched_base,
+                composed: &composed,
+            };
+            let current: Vec<_> = pending.iter().cloned().collect();
+            for key in current {
+                let type_name = record_key_type(&key).unwrap_or_default();
+                let mut dependencies = BTreeSet::new();
+                match denormalize_record(
+                    &key,
+                    type_name,
+                    selection.selection_set(),
+                    &variables,
+                    &source,
+                    &mut dependencies,
+                )? {
+                    ReadOutcome::Complete(record) => {
+                        pending.remove(&key);
+                        completed.insert(key, record);
+                    }
+                    ReadOutcome::Miss { .. } => {
+                        pending.remove(&key);
+                    }
+                    ReadOutcome::NeedRecords(keys) => missing.extend(keys),
+                }
+            }
+            if pending.is_empty() {
+                break;
+            }
+
+            let to_fetch: Vec<_> = missing
+                .into_iter()
+                .filter(|key| {
+                    !known_absent.contains(key)
+                        && !fetched_base.contains_key(key)
+                        && !composed.contains_key(key)
+                })
+                .collect();
+            if to_fetch.is_empty() {
+                break;
+            }
+            let fetched = self
+                .storage
+                .get_batch(&to_fetch)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, record) in to_fetch.into_iter().zip(fetched) {
+                match record {
+                    Some(record) => {
+                        if let Some(update) = optimistic.get(&key) {
+                            let mut effective = record.clone();
+                            effective.merge(update.clone());
+                            composed.insert(key.clone(), effective);
+                        }
+                        fetched_base.insert(key, record);
+                    }
+                    None => {
+                        known_absent.insert(key);
+                    }
+                }
+            }
+        }
+
+        for (key, record) in fetched_base {
+            self.hot.put(key, record);
+        }
+        Ok(candidate_keys
+            .into_iter()
+            .filter_map(|key| completed.remove(&key).map(|record| (key, record)))
+            .collect())
     }
 
     /// Normalizes and stores a network response. Returns changed records and
@@ -1267,6 +1293,10 @@ fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey> {
         .iter()
         .flat_map(|layer| layer.updates.keys().cloned())
         .collect()
+}
+
+fn record_key_type(key: &EntityKey) -> Option<&str> {
+    key.0.split_once(':').map(|(type_name, _)| type_name)
 }
 
 fn deduplicate_revalidations(

@@ -6,11 +6,6 @@
 //! from a multi-threaded runtime), unbounded on wasm — wasm futures aren't
 //! `Send`.
 
-use crate::entity_index::{
-    EntityIndexEntry, EntityIndexQuery, EntitySearchEntry, EntitySearchIndexResult,
-    EntitySearchQuery, entity_search_entry_after_cursor, entity_search_score,
-    push_bounded_search_entry, record_index_metadata, record_search_text, sort_search_entries,
-};
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -43,27 +38,14 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Lists indexed entities in `sort_timestamp DESC, entity_key ASC`
-    /// order. The cursor is exclusive and an empty bucket list means all
-    /// indexed buckets.
-    fn query_entity_index(
+    /// Scans normalized records of the requested concrete types in ascending
+    /// entity-key order. `after` is exclusive.
+    fn scan_records(
         &self,
-        query: &EntityIndexQuery,
-    ) -> impl Future<Output = Result<Vec<EntityIndexEntry>, Self::Error>> + MaybeSend;
-
-    /// Counts indexed entities across the selected buckets. An empty bucket
-    /// list means all indexed entities.
-    fn count_entity_index(
-        &self,
-        buckets: &[crate::entity_index::EntityBucket],
-    ) -> impl Future<Output = Result<u64, Self::Error>> + MaybeSend;
-
-    /// Searches projected entity metadata without hydrating non-matching
-    /// normalized records.
-    fn search_entity_index(
-        &self,
-        query: &EntitySearchQuery,
-    ) -> impl Future<Output = Result<EntitySearchIndexResult, Self::Error>> + MaybeSend;
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<(EntityKey, Record)>, Self::Error>> + MaybeSend;
 
     /// Atomically appends a mutation and its optimistic layer to the queue.
     fn enqueue_mutation(
@@ -165,98 +147,31 @@ impl Storage for InMemoryStorage {
         Ok(())
     }
 
-    async fn query_entity_index(
+    async fn scan_records(
         &self,
-        query: &EntityIndexQuery,
-    ) -> Result<Vec<EntityIndexEntry>, Self::Error> {
-        let buckets: std::collections::HashSet<_> = query.buckets.iter().copied().collect();
-        let mut entries: Vec<_> = self
-            .records
-            .iter()
-            .filter_map(|(entity_key, record)| {
-                let metadata = record_index_metadata(entity_key, record)?;
-                if !buckets.is_empty() && !buckets.contains(&metadata.bucket) {
-                    return None;
-                }
-                Some(EntityIndexEntry {
-                    entity_key: entity_key.clone(),
-                    bucket: metadata.bucket,
-                    sort_timestamp: metadata.sort_timestamp,
-                })
-            })
-            .filter(|entry| {
-                query.cursor.as_ref().is_none_or(|cursor| {
-                    entry.sort_timestamp < cursor.sort_timestamp
-                        || (entry.sort_timestamp == cursor.sort_timestamp
-                            && entry.entity_key > cursor.entity_key)
-                })
-            })
-            .collect();
-        entries.sort_by(|left, right| {
-            right
-                .sort_timestamp
-                .cmp(&left.sort_timestamp)
-                .then_with(|| left.entity_key.cmp(&right.entity_key))
-        });
-        entries.truncate(query.bounded_storage_limit());
-        Ok(entries)
-    }
-
-    async fn count_entity_index(
-        &self,
-        buckets: &[crate::entity_index::EntityBucket],
-    ) -> Result<u64, Self::Error> {
-        let buckets: std::collections::HashSet<_> = buckets.iter().copied().collect();
-        Ok(self
-            .records
-            .iter()
-            .filter(|(entity_key, record)| {
-                record_index_metadata(entity_key, record).is_some_and(|metadata| {
-                    buckets.is_empty() || buckets.contains(&metadata.bucket)
-                })
-            })
-            .count() as u64)
-    }
-
-    async fn search_entity_index(
-        &self,
-        query: &EntitySearchQuery,
-    ) -> Result<EntitySearchIndexResult, Self::Error> {
-        let buckets: std::collections::HashSet<_> = query.buckets.iter().copied().collect();
-        let mut entries = Vec::with_capacity(query.bounded_storage_limit());
-        let mut total_count = 0_u64;
-        let mut bucket_counts = BTreeMap::new();
-        for (entity_key, record) in &self.records {
-            let Some(metadata) = record_index_metadata(entity_key, record) else {
-                continue;
-            };
-            if !buckets.is_empty() && !buckets.contains(&metadata.bucket) {
-                continue;
-            }
-            let Some(search_text) = record_search_text(record) else {
-                continue;
-            };
-            let Some(score) = entity_search_score(&search_text, &query.query) else {
-                continue;
-            };
-            total_count = total_count.saturating_add(1);
-            *bucket_counts.entry(metadata.bucket).or_default() += 1;
-            let entry = EntitySearchEntry {
-                entity_key: entity_key.clone(),
-                bucket: metadata.bucket,
-                sort_timestamp: metadata.sort_timestamp,
-                score,
-            };
-            if entity_search_entry_after_cursor(&entry, query.cursor.as_ref()) {
-                push_bounded_search_entry(&mut entries, entry, query.bounded_storage_limit());
-            }
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+        if limit == 0 || type_names.is_empty() {
+            return Ok(Vec::new());
         }
-        sort_search_entries(&mut entries);
-        Ok(EntitySearchIndexResult {
-            entries,
-            total_count: query.include_total_count.then_some(total_count),
-            bucket_counts: query.include_total_count.then_some(bucket_counts),
-        })
+        let type_names: std::collections::HashSet<_> =
+            type_names.iter().map(String::as_str).collect();
+        let mut records: Vec<_> = self
+            .records
+            .iter()
+            .filter(|(key, _)| after.is_none_or(|after| *key > after))
+            .filter(|(key, _)| {
+                key.0
+                    .split_once(':')
+                    .is_some_and(|(type_name, _)| type_names.contains(type_name))
+            })
+            .map(|(key, record)| (key.clone(), record.clone()))
+            .collect();
+        records.sort_by(|(left, _), (right, _)| left.cmp(right));
+        records.truncate(limit);
+        Ok(records)
     }
 
     async fn enqueue_mutation(

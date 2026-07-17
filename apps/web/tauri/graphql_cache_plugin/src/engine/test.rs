@@ -1,5 +1,4 @@
 use super::*;
-use cache_core::entity_index::EntityBucket;
 use pollster::block_on;
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
@@ -80,7 +79,7 @@ fn write_then_read_round_trips() {
 }
 
 #[test]
-fn indexed_query_returns_native_cache_entities() {
+fn record_selection_returns_native_cache_entities() {
     let handle = spawn_handle();
     let query = r#"query Soup($input: SoupInput!) {
         user {
@@ -134,16 +133,15 @@ fn indexed_query_returns_native_cache_entities() {
     ))
     .unwrap();
 
-    let page = block_on(handle.query_indexed_items(EntityIndexQuery {
-        buckets: vec![EntityBucket::Document],
-        cursor: None,
-        limit: 10,
-        include_total_count: true,
-    }))
+    let page = block_on(handle.read_records(
+        "fragment Document on GraphqlSoupDocument { id name }".to_string(),
+        "Document".to_string(),
+        None,
+        10,
+    ))
     .unwrap();
-    assert_eq!(page.items.len(), 1);
-    assert_eq!(page.items[0].id, "doc-1");
-    assert_eq!(page.items[0].bucket, EntityBucket::Document);
+    assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1", "name": "A note"})]);
+    assert!(page.next_cursor.is_none());
 }
 
 #[test]

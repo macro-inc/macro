@@ -16,12 +16,6 @@
 use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
-use cache_core::entity_index::{
-    EntityBucket, EntityIndexEntry, EntityIndexQuery, EntitySearchEntry, EntitySearchIndexResult,
-    EntitySearchQuery, ParseEntityBucketError, entity_search_entry_after_cursor,
-    entity_search_score, push_bounded_search_entry, record_index_metadata, record_search_text,
-    sort_search_entries,
-};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
@@ -29,7 +23,6 @@ use cache_core::queue::{
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
 use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
@@ -46,9 +39,6 @@ pub enum SqliteStorageError {
     /// Durable queue metadata violated an invariant.
     #[error("invalid mutation queue state: {0}")]
     QueueInvariant(String),
-    /// Persisted record metadata contained an unknown bucket.
-    #[error(transparent)]
-    InvalidEntityBucket(#[from] ParseEntityBucketError),
 }
 
 /// [`Storage`] backend over a SQLite database (Tauri native host).
@@ -57,30 +47,6 @@ pub struct SqliteStorage {
     /// `Sync` so borrowing futures are `Send`. Never contended in practice —
     /// the engine serializes storage access.
     conn: Mutex<Connection>,
-}
-
-fn ensure_record_index_schema(conn: &Connection) -> Result<(), SqliteStorageError> {
-    let mut columns = conn.prepare("PRAGMA table_info(records)")?;
-    let column_names = columns
-        .query_map([], |row| row.get::<_, String>(1))?
-        .collect::<Result<Vec<_>, _>>()?;
-    drop(columns);
-
-    if !column_names.iter().any(|name| name == "bucket") {
-        conn.execute("ALTER TABLE records ADD COLUMN bucket TEXT", [])?;
-    }
-    if !column_names.iter().any(|name| name == "sort_timestamp") {
-        conn.execute("ALTER TABLE records ADD COLUMN sort_timestamp INTEGER", [])?;
-    }
-    conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS records_by_sort
-             ON records(sort_timestamp DESC, key ASC)
-             WHERE bucket IS NOT NULL;
-         CREATE INDEX IF NOT EXISTS records_by_bucket_sort
-             ON records(bucket, sort_timestamp DESC, key ASC)
-             WHERE bucket IS NOT NULL;",
-    )?;
-    Ok(())
 }
 
 impl SqliteStorage {
@@ -107,9 +73,7 @@ impl SqliteStorage {
              );
              CREATE TABLE IF NOT EXISTS records (
                  key TEXT PRIMARY KEY,
-                 value BLOB NOT NULL,
-                 bucket TEXT,
-                 sort_timestamp INTEGER
+                 value BLOB NOT NULL
              );
              CREATE TABLE IF NOT EXISTS mutation_queue (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,7 +96,6 @@ impl SqliteStorage {
                  FOREIGN KEY(mutation_id) REFERENCES mutation_queue(id) ON DELETE CASCADE
              );",
         )?;
-        ensure_record_index_schema(&conn)?;
 
         let expected_namespace = cache_namespace(scope);
         let stored_scope: Option<String> = conn
@@ -281,20 +244,11 @@ impl Storage for SqliteStorage {
         let tx = conn.transaction()?;
         {
             let mut stmt = tx.prepare_cached(
-                "INSERT INTO records (key, value, bucket, sort_timestamp) VALUES (?1, ?2, ?3, ?4)
-                 ON CONFLICT(key) DO UPDATE SET
-                     value = excluded.value,
-                     bucket = excluded.bucket,
-                     sort_timestamp = excluded.sort_timestamp",
+                "INSERT INTO records (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             )?;
             for (key, record) in &entries {
-                let metadata = record_index_metadata(key, record);
-                stmt.execute(params![
-                    key.0,
-                    encode_record(record),
-                    metadata.map(|value| value.bucket.as_str()),
-                    metadata.map(|value| value.sort_timestamp),
-                ])?;
+                stmt.execute(params![key.0, encode_record(record)])?;
             }
         }
         tx.commit()?;
@@ -314,131 +268,45 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
-    async fn query_entity_index(
+    async fn scan_records(
         &self,
-        query: &EntityIndexQuery,
-    ) -> Result<Vec<EntityIndexEntry>, Self::Error> {
-        let mut sql = String::from(
-            "SELECT key, bucket, sort_timestamp FROM records WHERE bucket IS NOT NULL",
-        );
-        let mut values = Vec::<rusqlite::types::Value>::new();
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+        if type_names.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
 
-        if !query.buckets.is_empty() {
-            sql.push_str(" AND bucket IN (");
-            sql.push_str(&vec!["?"; query.buckets.len()].join(", "));
-            sql.push(')');
-            values.extend(
-                query
-                    .buckets
-                    .iter()
-                    .map(|bucket| bucket.as_str().to_string().into()),
-            );
+        let mut sql = String::from("SELECT key, value FROM records WHERE ");
+        let mut values = Vec::<rusqlite::types::Value>::new();
+        if let Some(after) = after {
+            sql.push_str("key > ? AND ");
+            values.push(after.0.clone().into());
         }
-        if let Some(cursor) = &query.cursor {
-            sql.push_str(" AND (sort_timestamp < ? OR (sort_timestamp = ? AND key > ?))");
-            values.push(cursor.sort_timestamp.into());
-            values.push(cursor.sort_timestamp.into());
-            values.push(cursor.entity_key.0.clone().into());
+        sql.push('(');
+        for (index, type_name) in type_names.iter().enumerate() {
+            if index > 0 {
+                sql.push_str(" OR ");
+            }
+            sql.push_str("(key >= ? AND key < ?)");
+            values.push(format!("{type_name}:").into());
+            values.push(format!("{type_name};").into());
         }
-        sql.push_str(" ORDER BY sort_timestamp DESC, key ASC LIMIT ?");
-        values.push(
-            i64::try_from(query.bounded_storage_limit())
-                .unwrap_or(i64::MAX)
-                .into(),
-        );
+        sql.push_str(") ORDER BY key ASC LIMIT ?");
+        values.push(i64::try_from(limit).unwrap_or(i64::MAX).into());
 
         let conn = self.conn();
         let mut statement = conn.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(values.iter()), |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-            ))
+            Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
         })?;
-        let mut entries = Vec::new();
+        let mut records = Vec::new();
         for row in rows {
-            let (entity_key, bucket, sort_timestamp) = row?;
-            entries.push(EntityIndexEntry {
-                entity_key: EntityKey(entity_key),
-                bucket: bucket.parse::<EntityBucket>()?,
-                sort_timestamp,
-            });
+            let (key, value) = row?;
+            records.push((EntityKey(key), decode_record(&value)?));
         }
-        Ok(entries)
-    }
-
-    async fn count_entity_index(&self, buckets: &[EntityBucket]) -> Result<u64, Self::Error> {
-        let mut sql = String::from("SELECT COUNT(*) FROM records WHERE bucket IS NOT NULL");
-        let mut values = Vec::<rusqlite::types::Value>::new();
-        if !buckets.is_empty() {
-            sql.push_str(" AND bucket IN (");
-            sql.push_str(&vec!["?"; buckets.len()].join(", "));
-            sql.push(')');
-            values.extend(
-                buckets
-                    .iter()
-                    .map(|bucket| bucket.as_str().to_string().into()),
-            );
-        }
-
-        Ok(self
-            .conn()
-            .query_row(&sql, params_from_iter(values.iter()), |row| row.get(0))?)
-    }
-
-    async fn search_entity_index(
-        &self,
-        query: &EntitySearchQuery,
-    ) -> Result<EntitySearchIndexResult, Self::Error> {
-        let mut sql = String::from(
-            "SELECT key, bucket, sort_timestamp, value
-             FROM records WHERE bucket IS NOT NULL",
-        );
-        let mut values = Vec::<rusqlite::types::Value>::new();
-        if !query.buckets.is_empty() {
-            sql.push_str(" AND bucket IN (");
-            sql.push_str(&vec!["?"; query.buckets.len()].join(", "));
-            sql.push(')');
-            values.extend(
-                query
-                    .buckets
-                    .iter()
-                    .map(|bucket| bucket.as_str().to_string().into()),
-            );
-        }
-
-        let conn = self.conn();
-        let mut statement = conn.prepare(&sql)?;
-        let mut rows = statement.query(params_from_iter(values.iter()))?;
-        let mut entries = Vec::with_capacity(query.bounded_storage_limit());
-        let mut total_count = 0_u64;
-        let mut bucket_counts = BTreeMap::new();
-        while let Some(row) = rows.next()? {
-            let record = decode_record(&row.get::<_, Vec<u8>>(3)?)?;
-            let search_text = record_search_text(&record).unwrap_or_default();
-            let Some(score) = entity_search_score(&search_text, &query.query) else {
-                continue;
-            };
-            total_count = total_count.saturating_add(1);
-            let bucket = row.get::<_, String>(1)?.parse::<EntityBucket>()?;
-            *bucket_counts.entry(bucket).or_default() += 1;
-            let entry = EntitySearchEntry {
-                entity_key: EntityKey(row.get(0)?),
-                bucket,
-                sort_timestamp: row.get(2)?,
-                score,
-            };
-            if entity_search_entry_after_cursor(&entry, query.cursor.as_ref()) {
-                push_bounded_search_entry(&mut entries, entry, query.bounded_storage_limit());
-            }
-        }
-        sort_search_entries(&mut entries);
-        Ok(EntitySearchIndexResult {
-            entries,
-            total_count: query.include_total_count.then_some(total_count),
-            bucket_counts: query.include_total_count.then_some(bucket_counts),
-        })
+        Ok(records)
     }
 
     async fn enqueue_mutation(
@@ -640,20 +508,11 @@ impl Storage for SqliteStorage {
         }
         {
             let mut stmt = tx.prepare_cached(
-                "INSERT INTO records (key, value, bucket, sort_timestamp) VALUES (?1, ?2, ?3, ?4)
-                 ON CONFLICT(key) DO UPDATE SET
-                     value = excluded.value,
-                     bucket = excluded.bucket,
-                     sort_timestamp = excluded.sort_timestamp",
+                "INSERT INTO records (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             )?;
             for (key, record) in &entries {
-                let metadata = record_index_metadata(key, record);
-                stmt.execute(params![
-                    key.0,
-                    encode_record(record),
-                    metadata.map(|value| value.bucket.as_str()),
-                    metadata.map(|value| value.sort_timestamp),
-                ])?;
+                stmt.execute(params![key.0, encode_record(record)])?;
             }
         }
         tx.execute("DELETE FROM mutation_queue WHERE id = ?1", params![sql_id])?;
@@ -732,6 +591,45 @@ mod tests {
 
             s.clear().await.unwrap();
             assert_eq!(s.record_count().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn scans_selected_record_types_in_key_order() {
+        block_on(async {
+            let mut storage = SqliteStorage::open_in_memory("user-1").unwrap();
+            storage
+                .put_batch(vec![
+                    (key("TypeB:2"), record("b2")),
+                    (key("Other:1"), record("other")),
+                    (key("TypeA:2"), record("a2")),
+                    (key("TypeA:1"), record("a1")),
+                ])
+                .await
+                .unwrap();
+
+            let first = storage
+                .scan_records(&["TypeB".into(), "TypeA".into()], None, 2)
+                .await
+                .unwrap();
+            assert_eq!(
+                first
+                    .iter()
+                    .map(|(key, _)| key.0.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["TypeA:1", "TypeA:2"]
+            );
+            let second = storage
+                .scan_records(&["TypeA".into(), "TypeB".into()], Some(&first[1].0), 2)
+                .await
+                .unwrap();
+            assert_eq!(
+                second
+                    .iter()
+                    .map(|(key, _)| key.0.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["TypeB:2"]
+            );
         });
     }
 
