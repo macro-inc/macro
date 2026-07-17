@@ -28,6 +28,7 @@ use uuid::Uuid;
 use super::events::{
     ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectMacroEvent,
     ProjectPermanentlyDeletedMetadata, ProjectRestoredMetadata, ProjectUpdatedMetadata,
+    ProjectUploadedMetadata,
 };
 use super::models::{
     CreateProjectArgs, EditProjectArgs, ProjectError, SoftDeleteResult, UploadFolderRepoArgs,
@@ -749,6 +750,18 @@ where
             .mark_projects_uploaded(root_project_id)
             .await
             .map_err(|error| internal_error(error, "unable to mark projects uploaded"))?;
+
+        self.publish_project_event(&ProjectMacroEvent::uploaded(
+            uploaded_tree.id.clone(),
+            ProjectUploadedMetadata {
+                root_project_id: uploaded_tree.id,
+                owner: uploaded_tree.user_id,
+                name: uploaded_tree.name,
+                parent_project_id: uploaded_tree.parent_id,
+                project_ids: uploaded_tree.project_ids.clone(),
+            },
+        ));
+
         Ok(uploaded_tree.project_ids)
     }
 

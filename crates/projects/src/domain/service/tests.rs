@@ -29,7 +29,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};
-use crate::domain::models::PurgedProjectTree;
+use crate::domain::models::{MarkedUploadedTree, PurgedProjectTree};
 use crate::domain::ports::MockProjectRepo;
 
 /// A project lifecycle event recorded by [`TestEventBroker`].
@@ -1860,6 +1860,115 @@ async fn destination_maps_preserve_internal_external_and_docx_behavior() {
         Some(S3Destination::External(_))
     ));
     assert!(!external.contains_key("docx"));
+}
+
+#[tokio::test]
+async fn mark_projects_uploaded_publishes_root_metadata_and_returns_subtree_ids() {
+    let root_project_id = "root-project";
+    let project_ids = vec![
+        root_project_id.to_string(),
+        "child-project".to_string(),
+        "grandchild-project".to_string(),
+    ];
+    let expected_project_ids = project_ids.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_mark_projects_uploaded()
+        .withf(move |id| id == root_project_id)
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(MarkedUploadedTree {
+                    id: root_project_id.to_string(),
+                    name: "Uploaded tree".to_string(),
+                    user_id: user_id("macro|owner@example.com"),
+                    parent_id: Some("parent-project".to_string()),
+                    project_ids,
+                })
+            })
+        });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
+
+    let result = service
+        .mark_projects_uploaded(root_project_id)
+        .await
+        .unwrap();
+
+    assert_eq!(result, expected_project_ids);
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.projects");
+    assert_eq!(published[0].key, root_project_id);
+    assert_eq!(published[0].payload["schema_version"], 1);
+    assert_eq!(published[0].payload["event_type"], "project.uploaded");
+    assert_eq!(
+        published[0].payload["metadata"],
+        serde_json::json!({
+            "root_project_id": root_project_id,
+            "owner": "macro|owner@example.com",
+            "name": "Uploaded tree",
+            "parent_project_id": "parent-project",
+            "project_ids": expected_project_ids,
+        })
+    );
+}
+
+#[tokio::test]
+async fn mark_projects_uploaded_missing_root_publishes_no_event() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_mark_projects_uploaded()
+        .return_once(|_| Box::pin(async { Err(anyhow::Error::new(sqlx::Error::RowNotFound)) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
+
+    let result = service.mark_projects_uploaded("missing-project").await;
+
+    assert!(matches!(result, Err(ProjectError::Internal(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mark_projects_uploaded_repository_failure_publishes_no_event() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_mark_projects_uploaded()
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
+
+    let result = service.mark_projects_uploaded("root-project").await;
+
+    assert!(matches!(result, Err(ProjectError::Internal(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mark_projects_uploaded_publication_failure_is_non_fatal() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_mark_projects_uploaded().return_once(|_| {
+        Box::pin(async {
+            Ok(MarkedUploadedTree {
+                id: "root-project".to_string(),
+                name: "Uploaded tree".to_string(),
+                user_id: user_id("macro|owner@example.com"),
+                parent_id: None,
+                project_ids: vec!["root-project".to_string(), "child-project".to_string()],
+            })
+        })
+    });
+    let service = service_with_event_broker(
+        repo,
+        RecordingBulkUpload::default(),
+        TestEventBroker::failing(),
+    );
+
+    let result = service
+        .mark_projects_uploaded("root-project")
+        .await
+        .unwrap();
+
+    assert_eq!(result, vec!["root-project", "child-project"]);
 }
 
 #[tokio::test]
