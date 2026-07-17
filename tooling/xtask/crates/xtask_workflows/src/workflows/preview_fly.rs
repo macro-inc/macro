@@ -169,9 +169,13 @@ fn dump_boot_timings() -> Step<Run> {
     "#})
 }
 
-/// Every build artifact in one step, four lanes in parallel. The lanes are
+/// Every build artifact in one step, five lanes in parallel. The lanes are
 /// independent by construction:
 ///
+/// - `fly`: app create, template-volume fork kick, and pull-token mint —
+///   nothing here needs build output, and the fork's ~2 min server-side
+///   hydration must start within seconds to finish inside the compose
+///   build instead of gating machine creation.
 /// - `cargo`: service binaries then xtask_local, sequential because they
 ///   share the workspace target dir (cargo's build-dir lock would serialize
 ///   them anyway). xtask_local deliberately WITHOUT the `local-stack`
@@ -216,6 +220,48 @@ fn build_artifacts() -> Step<Run> {
             bun run --bun build
             LANE
 
+            # Instant lane: everything Fly-side that needs no build output.
+            # The template fork must fire within seconds of the job starting —
+            # its ~2 min server-side hydration then finishes inside the compose
+            # build. (It previously sat after the premirror pushes, which put
+            # it at the END of the build phase and re-gated the deploy.)
+            cat > "$lanes/fly.sh" <<'LANE'
+            set -euo pipefail
+            flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
+              || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+              || flyctl status --app "$APP_NAME" >/dev/null
+            # Kick the template-volume fork (see the deploy step's
+            # volume-state block, which stays the authoritative fallback).
+            if ! flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
+                 | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+              tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
+                | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
+                         | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
+              if [ -n "$tpl_src" ]; then
+                curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
+                  -H "Authorization: Bearer $FLY_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
+                  | jq -r '"early template fork: \(.id // "failed") (\(.state // "-"))"' \
+                  || echo "early template fork failed; deploy step will fall back" >&2
+              fi
+            fi
+            # Mint the machine's app-scoped read-only registry pull token
+            # (macaroon attenuation, see the deploy step for the why) so the
+            # deploy preamble doesn't pay the round-trips serially.
+            app_id=$(curl -sf https://api.fly.io/graphql \
+              -H "Authorization: Bearer $FLY_API_TOKEN" \
+              -H "content-type: application/json" \
+              -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
+              | jq -re '.data.app.internalNumericId')
+            now=$(date +%s)
+            printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
+              "$app_id" $((now - 60)) $((now + 604800)) \
+              | flyctl tokens attenuate > "$RUNNER_TEMP/registry-pull-token.next"
+            chmod 600 "$RUNNER_TEMP/registry-pull-token.next"
+            mv "$RUNNER_TEMP/registry-pull-token.next" "$RUNNER_TEMP/registry-pull-token"
+            LANE
+
             cat > "$lanes/images.sh" <<'LANE'
             set -euo pipefail
             docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
@@ -224,8 +270,9 @@ fn build_artifacts() -> Step<Run> {
             # step's mirror loop, so its manifest-existence check skips these.
             # Best effort by design — anything skipped here (images only the
             # bake produces, like macro-local-runtime:dev) is pushed there.
+            # The fly lane created the app long ago; the guard is a fallback.
             flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
-                  || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+              || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
               || flyctl status --app "$APP_NAME" >/dev/null
             flyctl auth docker
             registry="registry.fly.io/$APP_NAME"
@@ -246,40 +293,6 @@ fn build_artifacts() -> Step<Run> {
                 done
               fi
             done
-            # Kick the template-volume fork the moment the app exists: the
-            # ~2 min server-side hydration then overlaps the whole cargo lane
-            # and the deploy preamble instead of gating machine creation.
-            # Best effort — the deploy step retries/falls back if this didn't
-            # land (see its volume-state block, which stays authoritative).
-            if ! flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
-                 | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
-              tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
-                | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
-                         | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
-              if [ -n "$tpl_src" ]; then
-                curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
-                  -H "Authorization: Bearer $FLY_API_TOKEN" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
-                  | jq -r '"early template fork: \(.id // "failed") (\(.state // "-"))"' \
-                  || echo "early template fork failed; deploy step will fall back" >&2
-              fi
-            fi
-            # Mint the machine's app-scoped read-only registry pull token here
-            # too (macaroon attenuation, see the deploy step for the why) so
-            # the deploy preamble doesn't pay the GraphQL + attenuate
-            # round-trips serially.
-            app_id=$(curl -sf https://api.fly.io/graphql \
-              -H "Authorization: Bearer $FLY_API_TOKEN" \
-              -H "content-type: application/json" \
-              -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
-              | jq -re '.data.app.internalNumericId')
-            now=$(date +%s)
-            printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
-              "$app_id" $((now - 60)) $((now + 604800)) \
-              | flyctl tokens attenuate > "$RUNNER_TEMP/registry-pull-token.next"
-            chmod 600 "$RUNNER_TEMP/registry-pull-token.next"
-            mv "$RUNNER_TEMP/registry-pull-token.next" "$RUNNER_TEMP/registry-pull-token"
             LANE
 
             # A cold `stack up --infra-only` runs the real init (migrate,
@@ -362,7 +375,7 @@ fn build_artifacts() -> Step<Run> {
             LANE
 
             declare -a pids=() names=()
-            for name in cargo web images bake; do
+            for name in fly cargo web images bake; do
               bash "$lanes/$name.sh" > "$lanes/$name.log" 2>&1 &
               pids+=($!)
               names+=("$name")
