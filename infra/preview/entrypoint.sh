@@ -47,11 +47,25 @@ if [ -f /srv/macro/preload/manifest.txt ]; then
   fi
   log "pulling stack images (parallel, warm store aware)"
   t0=$(date +%s)
+  # The manifest's IDs are the RUNNER's view of each image (for hub images
+  # under the containerd store, the source registry's index digest). Pulling
+  # the mirror yields a different manifest and therefore a different local
+  # .Id, so the inspect check below never matches mirrored images and every
+  # boot re-pulled all 16 (66s of pure round-trips on a fully warm volume).
+  # The receipt is our own volume-persisted record of which (runner id, tag)
+  # pairs this store already satisfied — written only after a fully
+  # successful pass, carried along by template-volume forks, and at worst
+  # stale in the direction of one redundant pull.
+  receipt="$state_dir/pulled.txt"
   pids=""
   while read -r id tag ref; do
     have=$(docker image inspect -f '{{.Id}}' "$tag" 2>/dev/null || true)
     if [ "$have" = "$id" ]; then
       log "already present: $tag"
+      continue
+    fi
+    if [ -n "$have" ] && grep -qxF "$id $tag" "$receipt" 2>/dev/null; then
+      log "already present (receipt): $tag"
       continue
     fi
     (docker pull -q "$ref" && docker tag "$ref" "$tag" && docker rmi "$ref" >/dev/null) &
@@ -60,6 +74,8 @@ if [ -f /srv/macro/preload/manifest.txt ]; then
   rc=0
   for pid in $pids; do wait "$pid" || rc=1; done
   [ "$rc" = 0 ] || { log "image pull failed"; exit 1; }
+  awk '{print $1, $2}' /srv/macro/preload/manifest.txt > "$receipt.next" \
+    && mv "$receipt.next" "$receipt"
   log "images pulled in $(($(date +%s) - t0))s"
 fi
 

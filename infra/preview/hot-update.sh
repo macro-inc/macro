@@ -108,6 +108,11 @@ install -m 0755 "$staging/xtask" /srv/macro/bin/xtask.next
 mv -f /srv/macro/bin/xtask.next /srv/macro/bin/xtask
 install -m 0644 "$staging/deployment.json" "$STATE_FILE.next"
 mv -f "$STATE_FILE.next" "$STATE_FILE"
+# The aux refreshes above satisfied the carrier manifest, so record it in the
+# boot pull receipt — otherwise the next real boot re-pulls what this update
+# already delivered (see the receipt logic in entrypoint.sh).
+awk '{print $1, $2}' "$staging/manifest.txt" > "$STATE_DIR/pulled.txt.next" \
+  && mv "$STATE_DIR/pulled.txt.next" "$STATE_DIR/pulled.txt"
 
 # Retain the current carrier's layers for the next incremental pull, but remove
 # older carrier tags and their now-unreferenced layers from the persistent store.
