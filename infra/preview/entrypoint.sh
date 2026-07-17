@@ -34,6 +34,17 @@ if ! docker info >/dev/null 2>&1; then
 fi
 log "dockerd ready in $(($(date +%s) - t_boot))s"
 
+# A template-forked volume carries the source deploy's containers; any with a
+# restart policy auto-start with dockerd and can answer :8090 with the OLD
+# stack — fly-proxy then reports the machine healthy before the real stack
+# exists, and a visitor gets the stale app followed by a teardown blackout.
+# Kill them before anything can serve; `stack up` recreates properly.
+stale=$(docker ps -q)
+if [ -n "$stale" ]; then
+  log "killing $(echo "$stale" | wc -l) auto-started containers from the volume source"
+  echo "$stale" | xargs -r docker kill >/dev/null 2>&1 || true
+fi
+
 # Pull the stack images from the app's Fly registry repo (CI mirrored them
 # there at deploy time). /var/lib/docker is a persistent volume, so the
 # manifest (image ID per tag) lets redeploys skip every image already in the
