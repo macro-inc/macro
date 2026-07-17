@@ -234,6 +234,61 @@ where
             .ok();
     }
 
+    async fn enqueue_joining_user_contacts(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) {
+        let Some(team_with_members) = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    team_id = %team_id,
+                    user_id = %user_id,
+                    "failed to load team roster for contact connections"
+                );
+            })
+            .ok()
+        else {
+            return;
+        };
+
+        let joining_user = user_id.clone().into_owned();
+        let teammates: HashSet<_> = std::iter::once(team_with_members.team.owner_id)
+            .chain(
+                team_with_members
+                    .members
+                    .into_iter()
+                    .map(|member| member.user_id),
+            )
+            .filter(|teammate| teammate != &joining_user)
+            .collect();
+        let connections = teammates
+            .into_iter()
+            .map(|teammate| (joining_user.clone(), teammate))
+            .collect::<Vec<_>>();
+
+        if connections.is_empty() {
+            return;
+        }
+
+        self.contacts_enqueuer
+            .enqueue_contact_connections(connections)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    team_id = %team_id,
+                    user_id = %user_id,
+                    "failed to enqueue team contact connections"
+                );
+            })
+            .ok();
+    }
+
     /// Gets the teams subscription id
     /// If the team doesn't have a subscription yet, it will convert the owners personal subscription into a team subscription
     #[tracing::instrument(skip(self), err)]
@@ -1147,6 +1202,9 @@ where
             );
         }
 
+        self.enqueue_joining_user_contacts(&team_member.team_id, user_id)
+            .await;
+
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamJoined {
             team_id: team_member.team_id,
             team_invite_id: accepted_invite.invite.id,
@@ -1595,6 +1653,8 @@ where
                 "Failed to enqueue PopulateCrmForUser after team auto-join; CRM tables will not be seeded from sent-mail history (per-message fan-out will still cover future sends)"
             );
         }
+
+        self.enqueue_joining_user_contacts(&team_id, user_id).await;
 
         // NOTE: no TeamJoined analytics event here — that event is tied to
         // the team invite that was accepted, and a domain auto-join has none.
