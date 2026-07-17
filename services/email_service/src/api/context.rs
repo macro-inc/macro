@@ -16,11 +16,15 @@ use entity_access_management::domain::service::EntityAccessManagementServiceImpl
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::InternalApiKey;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+};
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =
     EntityAccessManagementServiceImpl<entity_access_management::outbound::PgRepository>;
@@ -47,6 +51,7 @@ pub(crate) struct ApiContext {
     pub sfs_client: Arc<StaticFileServiceClient>,
     pub dss_client: Arc<DocumentStorageServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
