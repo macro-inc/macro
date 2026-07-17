@@ -25,7 +25,18 @@ Boot on a fresh machine ≈ image pulls + snapshot restore + JVM startup
 (a couple of minutes); wake from suspend ≈ seconds. Pushes to the PR choose one
 of three paths from the durable deployment marker on the Docker volume:
 
-- **bootstrap** — no app/machine yet: create everything and restore the snapshot;
+- **bootstrap** — no app/machine yet: create everything and restore the
+  snapshot. The new volume is forked (Machines API `source_volume_id`) from
+  the newest **template volume** on `macro-preview-template` — a warm
+  `/var/lib/docker` layer store published by a previous successful deploy —
+  so the first boot pulls only image deltas instead of ~6GB cold (measured:
+  ~11 min of a ~19 min cold boot was image pulls). Templates are
+  content-addressed by the preload manifest's (image id, tag) pairs: after
+  any successful deploy, if no template exists for the current image set,
+  the deploy publishes its own volume as one (`tpl<hash>`), and old
+  templates are pruned. The template volume is a pure cache — the boot-time
+  manifest check pulls whatever a stale or missing template lacks, and every
+  fork failure falls back to the old empty-volume path;
 - **hot update** — the snapshot key, staged-runtime hash, and update protocol
   are unchanged: pull a layer-deduplicated artifact carrier, atomically replace
   changed binaries/frontend, and restart only affected containers without
@@ -83,8 +94,9 @@ config its token is scoped to.
 ## Known costs & future optimizations
 
 - The stack images are mirrored into the per-PR app's registry repo, so the
-  first deploy of a PR pushes (and its first boot pulls) the full set; after
-  that both sides move only changed layers. There is no cross-PR sharing —
+  first deploy of a PR pushes the full set; after that pushes move only
+  changed layers. The **pull** side of that cost is gone (template volume
+  forks, above), but there is still no cross-PR sharing on the push side —
   a shared registry (GHCR/Namespace) would fix that at the cost of new
   org-level credentials.
 - The aux images (sync/websocket/lexical) rebuild in CI on every preview

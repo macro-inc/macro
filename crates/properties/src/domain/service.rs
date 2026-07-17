@@ -5,13 +5,14 @@
 //! access, and owner-scoped methods take the caller's identity plus their
 //! team-membership receipt. User-facing callers mint receipts through the
 //! entity access service at the inbound edge; internal (machine) callers mint
-//! via [`PropertiesAccessReceipt::dangerously_assert_internal`](super::model::PropertiesAccessReceipt::dangerously_assert_internal),
-//! which makes unchecked paths explicit and greppable.
+//! via [`EntityAccessReceipt::dangerously_assert_internal_user`], which makes
+//! unchecked paths explicit and greppable.
 
 use std::collections::HashMap;
 
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
@@ -21,13 +22,12 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityPropertyReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, TagScope, TagSet, ViewReceipt,
+    EditReceipt, EntityPropertyInfo, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
 };
 
 /// The caller's team-membership proof, used to scope definition/option/tag
@@ -238,7 +238,7 @@ pub trait PropertiesService: Send + Sync + 'static {
         property_ids: Vec<Uuid>,
     ) -> impl Future<
         Output = Result<
-            HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>,
+            HashMap<PropertyTargetKey, Vec<EntityPropertyWithDefinition>>,
             PropertiesErr,
         >,
     > + Send;
@@ -255,7 +255,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn lookup_entity_property(
         &self,
         entity_property_id: Uuid,
-    ) -> impl Future<Output = Result<Option<EntityPropertyReference>, PropertiesErr>> + Send;
+    ) -> impl Future<Output = Result<Option<PropertyTargetKey>, PropertiesErr>> + Send;
 
     /// Delete a single entity property by its ID. The receipt must be for the
     /// entity the property is attached to. Fails when the property doesn't

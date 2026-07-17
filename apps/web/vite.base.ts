@@ -198,6 +198,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         watch: {
           usePolling: true,
           interval: 100,
+          ignored: /(^|[\\/])target([\\/]|$)/,
         },
         fs: {
           allow: [

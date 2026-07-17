@@ -1,3 +1,4 @@
+use contacts::domain::models::messages::ContactConnection;
 use contacts::domain::ports::ContactsIngress;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -25,17 +26,16 @@ pub async fn process_macro_id(
         return Ok(());
     }
 
-    let users: std::collections::HashSet<MacroUserIdStr<'static>> =
-        std::iter::once(Ok(link.macro_id.clone()))
-            .chain(
-                contact_emails
-                    .iter()
-                    .map(|email| MacroUserIdStr::try_from_email(email)),
-            )
-            .collect::<Result<_, _>>()?;
+    let connections = contact_emails
+        .iter()
+        .map(|email| {
+            MacroUserIdStr::try_from_email(email)
+                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     contacts_ingress
-        .enqueue_contacts(users)
+        .enqueue_contact_connections(connections)
         .await
         .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 

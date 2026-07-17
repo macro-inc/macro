@@ -1,13 +1,17 @@
+use analytics_client::{MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use rand::Rng;
 
-use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
+use crate::{
+    api::context::{ApiContext, AuthorizationService},
+    rate_limit_config::RATE_LIMIT_CONFIG,
+};
 use authentication_service::service::user::create_user::create_user;
 use fusionauth::error::FusionAuthClientError;
 use macro_user_id::{email::Email, user_id::MacroUserIdStr};
@@ -15,10 +19,10 @@ use model::authentication::webhooks::FusionAuthUserWebhook;
 use teams::domain::team_repo::TeamService;
 
 /// FusionAuth create user webhook
-#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
+#[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<FusionAuthUserWebhook>,
 ) -> Result<Response, Response> {
     tracing::info!("create_user_webhook");
@@ -147,14 +151,21 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .await
         .inspect_err(|e| tracing::error!(error=?e, "unable to mark user as just signed up"));
 
-    // Authoritative product-analytics signup event: fired here so every
-    // creation path (SSO, passwordless, iOS) counts exactly once, even if the
-    // user never returns to the app. The browser fires the ad-platform
-    // conversions instead — it holds the click-id cookies. Uses the same
-    // distinct id ("macro|{email}") the app identifies with. Fire-and-forget.
+    // Authoritative signup analytics: fired here so every creation path
+    // (SSO, passwordless, iOS) counts exactly once, even if the user never
+    // returns to the app. Meta's CompleteRegistration fires here too
+    // (Conversions API) — only a minority of new accounts ever load the web
+    // app with the `signed_up=true` marker, so the browser pixel alone
+    // misses most signups. The browser still fires the same event with the
+    // shared `signup:{user_id}` event id purely to contribute click-id
+    // cookies for attribution; Meta dedupes the pair on that id (see the
+    // web app's signupCompletion.ts). Uses the same distinct id
+    // ("macro|{email}") the app identifies with. Fire-and-forget.
     tokio::spawn({
         let analytics_client = ctx.analytics_client.clone();
         let user_id = user_id.clone();
+        let email = email.clone();
+        let ip_address = ip_address.clone();
         let verified = req.event.user.verified;
         let has_organization = organization_id.is_some();
         async move {
@@ -169,6 +180,36 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 )
                 .await
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
+
+            let user_data = MetaUserData {
+                email: Some(email),
+                client_ip_address: Some(ip_address),
+                ..Default::default()
+            };
+            let _ = analytics_client
+                .track_meta(
+                    "CompleteRegistration",
+                    &user_data,
+                    MetaActionSource::Website,
+                    Some(&format!("signup:{user_id}")),
+                    serde_json::json!({
+                        // Must mirror the browser payload in the web app's
+                        // signupCompletion.ts: Meta keeps whichever of the
+                        // deduped pair lands first, so diverging payloads
+                        // would report a value that depends on race timing.
+                        // Accounts are always free at creation (value =
+                        // SIGNUP_LEAD_VALUE_DEFAULT in leadValues.ts); paid
+                        // value is tracked separately via the Stripe events.
+                        "content_name": "account_created",
+                        "content_category": "free",
+                        "value": 20,
+                        "currency": "USD",
+                    }),
+                )
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, "failed to track Meta CompleteRegistration");
+                });
         }
     });
 

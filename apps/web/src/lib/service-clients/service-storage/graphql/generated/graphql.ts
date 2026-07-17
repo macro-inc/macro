@@ -568,6 +568,25 @@ export type GraphqlPropertyMatchValue =
   |  { entityRef?: never;   /** Select option id to match. */
   selectOption: string | number; };
 
+/** Canonical entity type accepted for property targets. */
+export type GraphqlPropertyTargetEntityType =
+  /** Call record target. */
+  | 'CALL_RECORD'
+  /** Channel target. */
+  | 'CHANNEL'
+  /** Chat target. */
+  | 'CHAT'
+  /** CRM company target. */
+  | 'COMPANY'
+  /** Document target, including tasks and snippets. */
+  | 'DOCUMENT'
+  /** Project target. */
+  | 'PROJECT'
+  /** Email thread target. */
+  | 'THREAD'
+  /** User target. */
+  | 'USER';
+
 /** A typed value accepted when setting an entity property. */
 export type GraphqlSetPropertyValue =
   {   /** A Boolean value. */
@@ -674,7 +693,7 @@ export type SetEntityPropertyInput = {
   /** Identifier of the entity receiving the property. */
   entityId: string;
   /** Type of entity receiving the property. */
-  entityType: GraphqlPropertyEntityType;
+  entityType: GraphqlPropertyTargetEntityType;
   /** Identifier of the property definition to assign. */
   propertyDefinitionId: string | number;
   /** Omit or pass null to attach the property without a value. */

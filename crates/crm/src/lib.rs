@@ -14,7 +14,7 @@
 pub mod domain;
 
 /// The inbound module contains the inbound adapters for CRM
-#[cfg(any(feature = "inbound", feature = "ai_tools"))]
+#[cfg(any(feature = "inbound", feature = "ai_tools", all(test, feature = "axum")))]
 pub mod inbound;
 
 /// The outbound module contains the outbound adapters for CRM

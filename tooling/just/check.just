@@ -14,7 +14,7 @@
 check *ARGS:
     #!/usr/bin/env bash
     set -uo pipefail
-    cd {{ justfile_directory() }}/../..
+    cd {{ justfile_directory() }}
 
     base="${CHECK_BASE:-$(git merge-base HEAD origin/main 2>/dev/null || true)}"
     if [ -z "$base" ]; then

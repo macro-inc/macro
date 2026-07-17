@@ -326,9 +326,20 @@ export function ThreadList(props: ThreadListProps) {
 
     let rafId = 0;
     const start = performance.now();
+    const virtualContent = Array.from(el.children).find(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.style.contain.includes('size')
+    );
+    const resizeObserver = virtualContent
+      ? new ResizeObserver(() => {
+          if (getDistanceFromBottom(handle) > 1) el.scrollTop = el.scrollHeight;
+        })
+      : undefined;
+    if (virtualContent) resizeObserver?.observe(virtualContent);
 
     const stop = () => {
       if (rafId) cancelAnimationFrame(rafId);
+      resizeObserver?.disconnect();
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('pointerdown', onPointerDown);
       if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
@@ -418,7 +429,10 @@ export function ThreadList(props: ThreadListProps) {
       viewportSize: handle.viewportSize,
     });
 
-    const didScroll = scrollToInitialTarget(handle, target);
+    const didScroll =
+      target.tag === 'bottom'
+        ? pinToBottom(handle)
+        : scrollToInitialTarget(handle, target);
 
     if (!didScroll) {
       // Empty list or target not found — nothing to verify.
@@ -462,26 +476,33 @@ export function ThreadList(props: ThreadListProps) {
     );
   }
 
+  const getInitialScrollTarget = (): InitialScrollTarget => {
+    const snapshot = props.initialScrollSnapshot;
+    if (snapshot) {
+      return snapshot.isNearBottom
+        ? DEFAULT_INITIAL_SCROLL_TARGET
+        : { tag: 'offset', scrollOffset: snapshot.scrollOffset };
+    }
+
+    return props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+  };
+
+  // Virtua publishes its handle before ResizeObserver has populated
+  // `viewportSize`. Waiting for that measurement before doing anything leaves
+  // an overflowing channel visibly parked at scrollTop=0 for one or more
+  // frames. A bottom target is safe to issue immediately: with a zero viewport
+  // Virtua overshoots the final offset and the browser clamps it to the DOM's
+  // current maximum, putting the first painted frame at the bottom. The normal
+  // measured pass below still corrects the exact end alignment afterwards.
+  const prepositionInitialBottom = (handle: VirtualizerHandle) => {
+    const target = getInitialScrollTarget();
+    if (target.tag === 'bottom') pinToBottom(handle);
+  };
+
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
-
-    const snapshot = props.initialScrollSnapshot;
-    if (snapshot) {
-      if (snapshot.isNearBottom) {
-        beginInitialTargetScroll(handle, DEFAULT_INITIAL_SCROLL_TARGET);
-      } else {
-        beginInitialTargetScroll(handle, {
-          tag: 'offset',
-          scrollOffset: snapshot.scrollOffset,
-        });
-      }
-
-      return;
-    }
-
-    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-    beginInitialTargetScroll(handle, target);
+    beginInitialTargetScroll(handle, getInitialScrollTarget());
   }
 
   const handleScrollEnd = () => {
@@ -510,10 +531,10 @@ export function ThreadList(props: ThreadListProps) {
       });
       requestAnimationFrame(() => {
         const offsetBeforeRetry = handle.scrollOffset;
-        const retryScrolled = scrollToInitialTarget(
-          handle,
-          initialScrollTarget
-        );
+        const retryScrolled =
+          initialScrollTarget.tag === 'bottom'
+            ? pinToBottom(handle)
+            : scrollToInitialTarget(handle, initialScrollTarget);
         if (!retryScrolled) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
@@ -649,6 +670,7 @@ export function ThreadList(props: ThreadListProps) {
               props.onNavigationReady(createNavigation(ref));
             }
             resetInitialScroll();
+            prepositionInitialBottom(ref);
             scrollOnMountWhenMeasured(ref);
           }}
           scrollRef={scrollRef}

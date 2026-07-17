@@ -15,6 +15,7 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { macroEntityToPropertyEntityType } from '@property/utils';
 import { createEffect, onCleanup } from 'solid-js';
 import {
   makeCopyAction,
@@ -79,6 +80,14 @@ export const useBlockEntityCommands = () => {
     const entity = getEntity();
     if (entity) {
       openPropertyEditor([entity], mode, property);
+    }
+  };
+  const canAssignTags = (entity: EntityData) => {
+    try {
+      macroEntityToPropertyEntityType(entity);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -336,6 +345,26 @@ export const useBlockEntityCommands = () => {
       condition: () => {
         const entity = getEntity();
         return entity !== undefined && isTaskEntity(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Assign tags - 't'
+    registerHotkey({
+      hotkey: ['t'],
+      hotkeyToken: TOKENS.entity.action.tags,
+      scopeId,
+      description: 'Tag item',
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity) return false;
+        openPropertyEditor([entity], 'tag');
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && canAssignTags(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],

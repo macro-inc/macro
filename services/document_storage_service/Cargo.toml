@@ -120,7 +120,6 @@ macro_middleware = { path = "../../crates/macro_middleware", default-features = 
   "cloud_storage",
   "user_permissions",
 ] }
-macro_project_utils = { path = "../../crates/macro_project_utils" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_sha_count_client = { path = "../../crates/macro_sha_count_client" }
@@ -146,6 +145,7 @@ notification = { path = "../../crates/notification" }
 opensearch_client = { path = "../../crates/opensearch_client" }
 properties = { path = "../../crates/properties" }
 properties_service = { path = "../../crates/properties_service" }
+projects_hex = { path = "../../crates/projects", package = "projects" }
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = [
   "axum",
 ] }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"UserHistory\" (\"userId\", \"itemId\", \"itemType\", \"createdAt\", \"updatedAt\")\n        VALUES ($1, $2, 'project', NOW(), NOW())\n        ON CONFLICT (\"userId\", \"itemId\", \"itemType\") DO UPDATE\n        SET \"updatedAt\" = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8f34fe33771813859b548d69d19f4b4d0b1b972d34c935de0919fbda84cce6c"
+}

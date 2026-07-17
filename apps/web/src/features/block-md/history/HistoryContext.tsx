@@ -121,10 +121,22 @@ export function HistoryProvider(props: {
       ? MACRO_AGENT_BOT_ID
       : (peers.get(peer) ?? 'unknown');
 
+  // Non-suspending reads of the loaded doc and peer map. Reading the resource
+  // (`historyDoc()`) or the query.data while they're still pending bubbles
+  // a Suspense trigger. This Provider is mounted above places where a simple
+  // suspense on the history UI would work.
+  const loadedDoc = (): LoroDoc | undefined =>
+    historyDoc.state === 'ready' || historyDoc.state === 'refreshing'
+      ? historyDoc.latest
+      : undefined;
+  const loadedPeers = (): Map<string, string> | undefined =>
+    peerMap.isSuccess ? peerMap.data : undefined;
+
   // One stable useDisplayName per unique userId — batched into a single fetch.
-  const uniqueUserIds = createMemo(() =>
-    peerMap.data ? [...new Set(peerMap.data.values())] : []
-  );
+  const uniqueUserIds = createMemo(() => {
+    const peers = loadedPeers();
+    return peers ? [...new Set(peers.values())] : [];
+  });
   const userEntries = mapArray(uniqueUserIds, (userId) => {
     const [displayName] = useDisplayName(tryMacroId(userId), {
       emailFallback: 'local-part',
@@ -138,18 +150,18 @@ export function HistoryProvider(props: {
       color: userColor(userId),
     };
   const userByPeer = (peerId: string): HistoryUser =>
-    userById(resolvePeerUser(peerMap.data ?? new Map(), peerId));
+    userById(resolvePeerUser(loadedPeers() ?? new Map(), peerId));
 
   const historyIndex = createMemo(() => {
-    const doc = historyDoc();
+    const doc = loadedDoc();
     return doc ? buildTimestampIndex(doc) : null;
   });
 
   // Sessions derived locally from the oplog: one edit event per change, grouped
   // per user.
   const sessions = createMemo<readonly HistorySession[]>(() => {
-    const doc = historyDoc();
-    const peers = peerMap.data;
+    const doc = loadedDoc();
+    const peers = loadedPeers();
     if (!doc || !peers) return [];
 
     const events: { userId: string; tMs: number }[] = [];
@@ -197,8 +209,8 @@ export function HistoryProvider(props: {
     if (!before.root.children?.length || !after.root.children?.length)
       return null;
     try {
-      const doc = historyDoc();
-      const peers = peerMap.data;
+      const doc = loadedDoc();
+      const peers = loadedPeers();
       const whoMap =
         doc && peers
           ? buildWhoMap(doc, (peer) => resolvePeerUser(peers, peer))
@@ -225,8 +237,8 @@ export function HistoryProvider(props: {
     requestLoad,
     sessions,
     loading: {
-      sessions: () => historyDoc() == null || peerMap.isPending,
-      doc: () => historyDoc() == null,
+      sessions: () => loadedDoc() == null || peerMap.isPending,
+      doc: () => loadedDoc() == null,
     },
     checkoutAt,
     versionIdAt,

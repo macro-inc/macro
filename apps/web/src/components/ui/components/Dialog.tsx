@@ -1,6 +1,12 @@
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import type { JSX, Ref } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { cn } from '../utils/classname';
+
+const DIALOG_HANDOFF_WINDOW_MS = 180;
+
+let openDialogCount = 0;
+let lastAllDialogsClosedAt = Number.NEGATIVE_INFINITY;
 
 export type DialogProps = {
   onEscapeKeyDown?: (event: KeyboardEvent) => void /* Forwarded to Kobalte */;
@@ -14,13 +20,58 @@ export type DialogProps = {
   children: JSX.Element /* Content children     */;
   class?: string /* classes for content  */;
   open: boolean /* if dialog is open    */;
+  visibleScrim?: boolean /* if the scrim is visible */;
 };
 
 export function Dialog(props: DialogProps) {
+  const [animateOnOpen, setAnimateOnOpen] = createSignal(false);
+  let countedOpen = false;
+
+  createEffect(() => {
+    if (props.open) {
+      if (!countedOpen) {
+        const isDialogHandoff =
+          openDialogCount > 0 ||
+          performance.now() - lastAllDialogsClosedAt < DIALOG_HANDOFF_WINDOW_MS;
+
+        setAnimateOnOpen(!isDialogHandoff);
+        openDialogCount += 1;
+        countedOpen = true;
+      }
+      return;
+    }
+
+    if (countedOpen) {
+      openDialogCount = Math.max(0, openDialogCount - 1);
+      countedOpen = false;
+      setAnimateOnOpen(false);
+
+      if (openDialogCount === 0) {
+        lastAllDialogsClosedAt = performance.now();
+      }
+    }
+  });
+
+  onCleanup(() => {
+    if (!countedOpen) return;
+
+    openDialogCount = Math.max(0, openDialogCount - 1);
+
+    if (openDialogCount === 0) {
+      lastAllDialogsClosedAt = performance.now();
+    }
+  });
+
   return (
     <KobalteDialog onOpenChange={props.onOpenChange} open={props.open} modal>
       <KobalteDialog.Portal>
-        <KobalteDialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <KobalteDialog.Overlay
+          class={cn(
+            'hidden fixed inset-0 z-modal bg-modal-overlay',
+            animateOnOpen() && 'dialog-overlay-open-animation',
+            Boolean(props.visibleScrim) && 'visible'
+          )}
+        />
         <div
           class={cn(
             'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal flex',
@@ -37,13 +88,21 @@ export function Dialog(props: DialogProps) {
           <KobalteDialog.Content
             ref={props.contentRef}
             class={cn(
-              'overflow-hidden portal-scope isolate',
+              'portal-scope isolate rounded-xl',
               props.fullscreen ? 'size-full' : 'w-200 max-w-[calc(100vw-16px)]',
+              animateOnOpen() &&
+                (props.fullscreen
+                  ? 'dialog-fullscreen-open-animation'
+                  : 'dialog-content-open-animation'),
               props.class
             )}
             onCloseAutoFocus={props.onCloseAutoFocus}
             onEscapeKeyDown={props.onEscapeKeyDown}
             onOpenAutoFocus={props.onOpenAutoFocus}
+            style={{
+              'box-shadow':
+                '0 5px 40px rgba(0, 0, 0, 0.1), 0 5px 50px rgba(0,0,0,0.03)',
+            }}
           >
             {props.children}
           </KobalteDialog.Content>

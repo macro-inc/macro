@@ -8,9 +8,11 @@ version = "0.1.0"
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 macro_uuid = { path = "../macro_uuid" }
-model_user = { path = "../model_user", features = ["axum"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

@@ -37,7 +37,6 @@ mod instructions;
 mod internal;
 mod notification;
 mod pins;
-mod projects;
 mod recents;
 mod user;
 mod user_document_view_location;
@@ -163,23 +162,24 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/projects",
-            projects::router(state.clone()).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(|req: Request, next: Next| async move {
-                    match req.method() {
-                        &Method::PUT | &Method::POST | &Method::PATCH | &Method::DELETE => {
-                            let uri = req.uri().to_string();
-                            // We do not want the upload a folder in the background
-                            // If a user cancels the call we need to make sure we aren't
-                            // creating documents/projects
-                            if !uri.contains("/upload") {
-                                return next.run(req).await;
+            projects_hex::inbound::axum_router::projects_router(state.projects_state.clone())
+                .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+                    |req: Request, next: Next| async move {
+                        match req.method() {
+                            &Method::PUT | &Method::POST | &Method::PATCH | &Method::DELETE => {
+                                let uri = req.uri().to_string();
+                                // We do not want the upload a folder in the background
+                                // If a user cancels the call we need to make sure we aren't
+                                // creating documents/projects
+                                if !uri.contains("/upload") {
+                                    return next.run(req).await;
+                                }
+                                tokio::task::spawn(next.run(req)).await.unwrap()
                             }
-                            tokio::task::spawn(next.run(req)).await.unwrap()
+                            _ => next.run(req).await,
                         }
-                        _ => next.run(req).await,
-                    }
-                }),
-            )),
+                    },
+                ))),
         )
         .nest(
             "/annotations",

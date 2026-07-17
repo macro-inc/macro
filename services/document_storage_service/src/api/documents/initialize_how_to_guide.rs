@@ -6,6 +6,7 @@ use axum::{
 use documents_hex::domain::create::{
     MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
 };
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use favorites::domain::ports::FavoritesService;
 use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{ErrorResponse, GenericSuccessResponse};
@@ -48,12 +49,29 @@ pub async fn handler(
                 .into_response()
         })?;
 
+    let receipt = state
+        .entity_access_service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_context.macro_user_id,
+            user_context.user_context.organization_id.map(i64::from),
+            created.document_id(),
+            EntityType::Document,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to authorize how to guide document favorite");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to favorite how to guide document".into(),
+                }),
+            )
+                .into_response()
+        })?;
+
     state
         .favorites_service
-        .add_favorite(
-            &user_context.macro_user_id,
-            &EntityType::Document.with_entity_str(created.document_id()),
-        )
+        .add_favorite(&receipt)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to favorite how to guide document");

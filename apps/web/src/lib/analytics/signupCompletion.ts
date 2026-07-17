@@ -7,14 +7,21 @@
  * sends people). The ad-platform conversions were even further off: they fired
  * when the (now optional) interactive tutorial modal closed.
  *
- * The authoritative product-analytics `sign_up` (PostHog) is emitted
- * server-side from the create-user webhook, so every creation path counts
- * exactly once even if the user never returns to the app. What remains here
- * is the browser-only half: the ad-platform conversions (Meta pixel, Google
- * Ads) plus the GA sign_up event, which need the click-id cookies and consent
- * context that only exist in the browser. The auth service appends
- * `signed_up=true` to the post-auth redirect; this module consumes that param
- * once and fires them, regardless of which page or device started the flow.
+ * The authoritative signup events are emitted server-side from the
+ * create-user webhook, so every creation path counts exactly once even if
+ * the user never returns to the app: `sign_up` (PostHog) and
+ * `CompleteRegistration` (Meta Conversions API). Only a minority of new
+ * accounts ever load the web app with the `signed_up=true` marker, so a
+ * browser-only Meta fire undercounts badly — and Meta's delivery algorithm
+ * starves when spend scales past the trickle it can see.
+ *
+ * What remains here is the browser half: the GA sign_up event and Google Ads
+ * conversion (browser-only), plus a duplicate Meta CompleteRegistration that
+ * exists to contribute the click-id cookies (_fbc/_fbp) only the browser
+ * holds — Meta dedupes it against the server fire via the shared
+ * `signup:{user_id}` event id. The auth service appends `signed_up=true` to
+ * the post-auth redirect; this module consumes that param once and fires
+ * them, regardless of which page or device started the flow.
  */
 import type { AnalyticsInterface } from './analytics';
 import {
@@ -115,12 +122,22 @@ export function trackSignupCompletion(
     'free';
   const value = SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT;
 
-  analytics.trackMeta('CompleteRegistration', {
-    content_name: 'account_created',
-    content_category: tier,
-    value,
-    currency: 'USD',
-  });
+  analytics.trackMeta(
+    'CompleteRegistration',
+    // Must mirror the server-side payload in create_user_webhook.rs exactly:
+    // the create-user webhook fires this same event through the Conversions
+    // API with the same event id, and Meta keeps whichever of the deduped
+    // pair lands first (almost always the server). Accounts are always free
+    // at creation, so both sides report the flat signup value; the tier-based
+    // value below stays on the Google conversion, which is browser-only.
+    {
+      content_name: 'account_created',
+      content_category: 'free',
+      value: SIGNUP_LEAD_VALUE_DEFAULT,
+      currency: 'USD',
+    },
+    { eventID: `signup:${user.id}` }
+  );
   analytics.trackGoogleConversion('signup', {
     value,
     currency: 'USD',

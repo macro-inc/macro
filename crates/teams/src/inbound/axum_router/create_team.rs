@@ -1,5 +1,6 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::MacroAuthorizationService;
 
 use crate::domain::{model::Team, team_repo::TeamService};
 
@@ -25,9 +26,9 @@ pub struct CreateTeamRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    State(state): State<TeamRouterState<T, Eas>>,
-    user: PremiumUserExtractor,
+pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<TeamRouterState<T, Eas, Auth>>,
+    user: PremiumUserExtractor<Auth>,
     Json(req): Json<CreateTeamRequest>,
 ) -> Result<Json<Team>, crate::domain::model::CreateTeamError> {
     let team = state

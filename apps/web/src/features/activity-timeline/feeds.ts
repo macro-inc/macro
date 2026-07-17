@@ -6,16 +6,25 @@ import {
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import { useUserNotificationsQuery } from '@queries/notification/user-notifications';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 import { entitySortTs } from './entity-events';
 import type { TimelineFeed, TimelineItem } from './timeline-types';
 
 const PAGE_SIZE = 50;
 
-/** Notification event types that are plumbing rather than team activity. */
+/**
+ * Notification event types the timeline skips: plumbing rather than team
+ * activity, plus email arrivals — notifications carry no signal/noise flag
+ * client-side, so Firehose sources email activity from signal-filtered soup
+ * feeds instead (`Importance(true)` compiles to the thread's `is_signal`).
+ */
 const EXCLUDED_NOTIFICATION_TAGS: ReadonlySet<string> = new Set([
   'inbox_reauth_required',
+  'new_email',
 ]);
 
 /**
@@ -87,13 +96,23 @@ export function createSoupTimelineFeed(args: {
   query: () => Query;
   map: (entity: EntityData) => TimelineItem[];
   enabled?: () => boolean;
+  /**
+   * Mirror of the server query for the websocket cache layer: optimistic
+   * inserts bypass the server AST, so without this gate any entity the user
+   * touches (e.g. an auto-ingested attachment doc bumped by viewing it) gets
+   * prepended into this feed's cache.
+   */
+  itemFilter?: SoupApiItemFilter;
 }): TimelineFeed {
   const query = useSoupAstItemsQuery(
     () => ({
       params: { limit: PAGE_SIZE, sort_method: 'updated_at' },
       body: compileToAst(queryStateFrom(args.query())),
     }),
-    () => ({ enabled: args.enabled?.() ?? true })
+    () => ({
+      enabled: args.enabled?.() ?? true,
+      meta: args.itemFilter ? { itemFilter: args.itemFilter } : undefined,
+    })
   );
 
   const entities = createMemo((): EntityData[] => query.data?.entities ?? []);

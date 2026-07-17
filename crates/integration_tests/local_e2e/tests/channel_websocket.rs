@@ -14,7 +14,7 @@ use tokio_tungstenite::tungstenite::{Error as WebsocketError, Message as Websock
 const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway and document_storage_service"]
 async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Result<()> {
     let config = LocalE2eConfig::load()?;
     let seed = LocalE2eSeed::from_config(&config)?;

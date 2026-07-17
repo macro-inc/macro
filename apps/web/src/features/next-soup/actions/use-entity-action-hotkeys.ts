@@ -13,6 +13,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { macroEntityToPropertyEntityType } from '@property/utils';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -126,6 +127,14 @@ export const useEntityActionHotkeys = (
     const entities = getEntitiesForAction();
     if (entities.length > 0) {
       openPropertyEditor(entities, mode, property);
+    }
+  };
+  const canAssignTags = (entity: EntityData) => {
+    try {
+      macroEntityToPropertyEntityType(entity);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -403,6 +412,30 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(isTaskEntity);
+    },
+    scopeId,
+  }).withGroup(group);
+
+  // Assign tags - t
+  registerHotkey({
+    hotkey: ['t'],
+    hotkeyToken: TOKENS.entity.action.tags,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: () => {
+      const count = getEntitiesForAction().length;
+      return count > 1 ? 'Tag items' : 'Tag item';
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      openPropertyEditor(entities, 'tag');
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(canAssignTags);
     },
     scopeId,
   }).withGroup(group);

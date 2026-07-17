@@ -162,7 +162,8 @@ const createAnalytics = () => {
   const sendEvent = (
     provider: AnalyticsProvider,
     event: EventName,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    options?: { eventID?: string }
   ) => {
     if (disabled) return;
 
@@ -181,7 +182,12 @@ const createAnalytics = () => {
           const fbqMethod = META_STANDARD_EVENTS.has(event)
             ? 'track'
             : 'trackCustom';
-          fbq(fbqMethod, event, enriched);
+          fbq(
+            fbqMethod,
+            event,
+            enriched,
+            options?.eventID ? { eventID: options.eventID } : undefined
+          );
         })
         .with('posthog', () => {
           posthog.capture(event, enriched);
@@ -219,12 +225,18 @@ const createAnalytics = () => {
    *
    * For the rare event with no standard equivalent, fall back to
    * `track(event, data, ['meta-pixel'])` — that path uses `trackCustom`.
+   *
+   * Pass `options.eventID` when the backend fires the same event through the
+   * Conversions API — Meta dedupes browser and server fires that share an
+   * event name + event id, so the pair counts once while keeping the
+   * browser's click-id cookies for attribution.
    */
   const trackMeta = (
     event: MetaStandardEvent,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
+    options?: { eventID?: string }
   ) => {
-    sendEvent('meta-pixel', event, data);
+    sendEvent('meta-pixel', event, data, options);
   };
 
   /**
@@ -339,7 +351,11 @@ const createAnalytics = () => {
 export type AnalyticsInterface = {
   posthog: PostHog;
   track: TrackFn;
-  trackMeta: (event: MetaStandardEvent, data?: Record<string, unknown>) => void;
+  trackMeta: (
+    event: MetaStandardEvent,
+    data?: Record<string, unknown>,
+    options?: { eventID?: string }
+  ) => void;
   trackGoogleConversion: (
     action: GoogleConversionAction,
     data?: { value?: number; currency?: string; transaction_id?: string }

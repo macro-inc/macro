@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.id AS \"document_id\",\n            d.owner,\n            d.name AS \"document_name\",\n            COALESCE(bom.id, instance.id) AS \"document_version_id!\",\n            d.\"fileType\" AS \"file_type?\",\n            d.\"createdAt\"::timestamptz AS \"created_at\",\n            d.\"updatedAt\"::timestamptz AS \"updated_at\",\n            d.\"projectId\" AS \"project_id?\",\n            subtype.sub_type AS \"sub_type?: DocumentSubType\",\n            CASE\n                WHEN subtype.sub_type = 'task'\n                    AND status.values->'value' ? $2\n                THEN true\n                WHEN subtype.sub_type = 'task' THEN false\n                ELSE NULL\n            END AS \"is_completed\"\n        FROM \"Document\" d\n        LEFT JOIN document_sub_type subtype ON subtype.document_id = d.id\n        LEFT JOIN entity_properties status\n            ON subtype.sub_type = 'task'\n            AND status.entity_id = d.id\n            AND status.entity_type = 'TASK'\n            AND status.property_definition_id = $3\n        LEFT JOIN LATERAL (\n            SELECT b.id\n            FROM \"DocumentBom\" b\n            WHERE b.\"documentId\" = d.id\n            ORDER BY b.\"createdAt\" DESC\n            LIMIT 1\n        ) bom ON d.\"fileType\" = 'docx'\n        LEFT JOIN LATERAL (\n            SELECT i.id\n            FROM \"DocumentInstance\" i\n            WHERE i.\"documentId\" = d.id\n            ORDER BY i.\"updatedAt\" DESC\n            LIMIT 1\n        ) instance ON d.\"fileType\" IS DISTINCT FROM 'docx'\n        WHERE d.\"projectId\" = $1 AND d.\"deletedAt\" IS NULL\n        ORDER BY d.\"createdAt\" ASC, d.id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "document_version_id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "file_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "project_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "sub_type?: DocumentSubType",
+        "type_info": {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task",
+                "snippet"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "is_completed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      true,
+      null,
+      null,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "43aedaff60665c1bf3dea9dc3e58908fd19aa1f6dd274803963698d6b95760ce"
+}

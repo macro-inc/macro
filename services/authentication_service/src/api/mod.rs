@@ -7,7 +7,6 @@ use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use native_app_service::inbound::RouterState;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -27,11 +26,13 @@ mod github_pull_requests;
 mod health;
 mod internal;
 mod jwt;
+mod jwt_session;
 mod login;
 mod logout;
 mod oauth;
 mod oauth2;
 mod permissions;
+mod permissions_extractor;
 mod session;
 mod user;
 mod webhooks;
@@ -81,43 +82,22 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             },
         ))
         .nest("/internal", internal::router())
-        .nest("/permissions", permissions::router(state.jwt_args.clone()))
+        .nest("/permissions", permissions::router())
         .nest("/login", login::router(state.clone()))
-        .nest("/logout", logout::router(state.jwt_args.clone()))
+        .nest("/logout", logout::router())
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
-        .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
-        .nest(
-            "/link",
-            link::router(state.clone()).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                ),
-            )),
-        )
-        .nest(
-            "/github_pull_requests",
-            github_pull_requests::router().layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                ),
-            )),
-        )
+        .nest("/user", user::router())
+        .nest("/link", link::router())
+        .nest("/github_pull_requests", github_pull_requests::router())
         .nest(
             "/team",
             teams::inbound::axum_router::teams_router(
                 teams::inbound::axum_router::TeamRouterState {
                     service: state.teams_service.clone(),
                     entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
                 },
-            )
-            .layer(
-                ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
             ),
         )
         .nest(
@@ -126,22 +106,17 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 referral::inbound::axum_router::ReferralRouterState {
                     service: state.referral_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
                 },
-            )
-            .layer(
-                ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
-                    state.jwt_args.clone(),
-                    macro_middleware::auth::decode_jwt::handler,
-                )),
             ),
         )
-        .nest("/jwt", jwt::router(state.jwt_args.clone()))
+        .nest("/jwt", jwt::router())
         .nest("/session", session::router())
         .merge(mobile_welcome_email::router(state.clone()))
         .nest(
             "/webhooks",
-            webhooks::router().layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+            webhooks::router().layer(axum::middleware::from_fn(
                 macro_middleware::connection_drop_prevention_handler,
-            ))),
+            )),
         )
 }

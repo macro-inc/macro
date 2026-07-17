@@ -20,7 +20,6 @@ import { emailClient } from '@service-email/client';
 import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BottomReplyButtons } from './BottomReplyButtons';
 
@@ -356,15 +355,7 @@ export function MessageContainer(props: MessageContainerProps) {
               </Show>
             </div>
             <Show when={showInlineReplyArea()}>
-              <div
-                class={cn(
-                  'relative -mx-4 mb-0 border-t border-ink/20',
-                  (visibleAttachments().length > 0 ||
-                    draftAttachments().length > 0 ||
-                    forwardedAttachments().length > 0) &&
-                    'mt-2'
-                )}
-              >
+              <div class="relative -mx-4 mb-0 border-t border-ink/20 mt-4">
                 <Show when={props.isLastMessage && !isMobile()}>
                   <FloatingInputLoader
                     isLoading={context.query.isFetching}
