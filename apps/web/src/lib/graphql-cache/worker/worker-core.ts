@@ -148,6 +148,13 @@ export class CacheWorkerCore {
           request.data
         );
         this.fanOut(result, true);
+        this.push({
+          kind: 'mutation-settled',
+          settlement: {
+            transactionId: request.transactionId,
+            status: 'committed',
+          },
+        });
         return result;
       })
       .with({ kind: 'rollback-optimistic-write' }, async (request) => {
@@ -158,6 +165,14 @@ export class CacheWorkerCore {
           request.leaseGeneration
         );
         this.fanOut(result, true);
+        this.push({
+          kind: 'mutation-settled',
+          settlement: {
+            transactionId: request.transactionId,
+            status: 'permanently-failed',
+            error: request.error,
+          },
+        });
         return result;
       })
       .with({ kind: 'invalidate' }, async (request) => {

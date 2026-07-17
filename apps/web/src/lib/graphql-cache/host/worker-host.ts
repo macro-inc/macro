@@ -10,6 +10,7 @@ import {
   type ClaimedMutation,
   isCachePush,
   type MutationClaim,
+  type MutationSettlement,
   type OptimisticWriteResult,
   type ReadRecordsArgs,
   type ReadResult,
@@ -62,6 +63,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const pending = new Map<number, Pending>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const cacheChangeSubscribers = new Set<() => void>();
+  const settlementSubscribers = new Set<
+    (settlement: MutationSettlement) => void
+  >();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let nextRequestId = 1;
@@ -74,6 +78,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-changed') {
         for (const cb of cacheChangeSubscribers) cb();
+        return;
+      }
+      if (msg.kind === 'mutation-settled') {
+        for (const cb of settlementSubscribers) cb(msg.settlement);
         return;
       }
       const prefix = `${clientId}:`;
@@ -281,7 +289,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async rollbackOptimisticWrite(
       transactionId: string,
-      claim: MutationClaim
+      claim: MutationClaim,
+      error: string
     ): Promise<WriteResult> {
       await ready;
       return (await request({
@@ -289,6 +298,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         transactionId,
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
+        error,
       })) as WriteResult;
     },
 
@@ -317,9 +327,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => cacheChangeSubscribers.delete(cb);
     },
 
+    onMutationSettled(
+      cb: (settlement: MutationSettlement) => void
+    ): () => void {
+      settlementSubscribers.add(cb);
+      return () => settlementSubscribers.delete(cb);
+    },
+
     dispose() {
       affectedSubscribers.clear();
       cacheChangeSubscribers.clear();
+      settlementSubscribers.clear();
       dispose();
     },
   };

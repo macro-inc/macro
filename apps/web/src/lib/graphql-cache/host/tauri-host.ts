@@ -13,6 +13,7 @@ import {
   type CachedQueryInstanceWire,
   type ClaimedMutation,
   type MutationClaim,
+  type MutationSettlement,
   type OptimisticWriteResult,
   type ReadRecordsArgs,
   type ReadResult,
@@ -32,6 +33,8 @@ import type {
 const OPS_AFFECTED_EVENT = 'graphql-cache://ops-affected';
 /** Keep in sync with `CACHE_CHANGED_EVENT` in the native plugin. */
 const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
+/** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
+const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
@@ -59,6 +62,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const cacheChangeSubscribers = new Set<() => void>();
+  const settlementSubscribers = new Set<
+    (settlement: MutationSettlement) => void
+  >();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
@@ -87,9 +93,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   // Failure tolerated: reads/writes still work, only push-driven
   // re-execution is lost — same degradation as a broken worker port.
-  const unlisten: Promise<UnlistenFn | undefined> = listen<OpsAffectedPayload>(
-    OPS_AFFECTED_EVENT,
-    (event) => {
+  const unlistenOps: Promise<UnlistenFn | undefined> =
+    listen<OpsAffectedPayload>(OPS_AFFECTED_EVENT, (event) => {
       const prefix = `${clientId}:`;
       const opKeys = event.payload.opIds
         .filter((id) => id.startsWith(prefix))
@@ -98,11 +103,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (opKeys.length > 0) {
         for (const cb of affectedSubscribers) cb(opKeys);
       }
-    }
-  ).catch((error) => {
-    console.warn('graphql cache ops-affected listener failed', error);
-    return undefined;
-  });
+    }).catch((error) => {
+      console.warn('graphql cache ops-affected listener failed', error);
+      return undefined;
+    });
+  const unlistenSettlements: Promise<UnlistenFn | undefined> =
+    listen<MutationSettlement>(MUTATION_SETTLED_EVENT, (event) => {
+      for (const cb of settlementSubscribers) cb(event.payload);
+    }).catch((error) => {
+      console.warn('graphql cache mutation-settled listener failed', error);
+      return undefined;
+    });
 
   const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
     listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, () => {
@@ -250,7 +261,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async rollbackOptimisticWrite(
       transactionId: string,
-      claim: MutationClaim
+      claim: MutationClaim,
+      error: string
     ): Promise<WriteResult> {
       await ready;
       return await request<WriteResult>(
@@ -259,6 +271,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           transactionId,
           leaseOwner: claim.owner,
           leaseGeneration: claim.generation,
+          error,
         }
       );
     },
@@ -288,11 +301,20 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return () => cacheChangeSubscribers.delete(cb);
     },
 
+    onMutationSettled(
+      cb: (settlement: MutationSettlement) => void
+    ): () => void {
+      settlementSubscribers.add(cb);
+      return () => settlementSubscribers.delete(cb);
+    },
+
     dispose() {
       affectedSubscribers.clear();
       cacheChangeSubscribers.clear();
-      void unlisten.then((fn) => fn?.());
+      settlementSubscribers.clear();
+      void unlistenOps.then((fn) => fn?.());
       void unlistenCacheChanges.then((fn) => fn?.());
+      void unlistenSettlements.then((fn) => fn?.());
     },
   };
 }

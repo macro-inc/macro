@@ -123,6 +123,15 @@ export type MutationClaim = {
   generation: string;
 };
 
+/** Final settlement of a previously queued optimistic mutation. */
+export type MutationSettlement =
+  | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'permanently-failed';
+      error: string;
+    };
+
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | {
@@ -189,6 +198,7 @@ export type CacheRequest = { id: number } & (
       transactionId: string;
       leaseOwner: string;
       leaseGeneration: string;
+      error: string;
     }
   | {
       kind: 'read-records';
@@ -240,15 +250,11 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | {
-      kind: 'cache-changed';
-    };
+  | { kind: 'cache-changed' }
+  | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
 
 export function isCachePush(msg: WorkerMessage): msg is CachePush {
-  return (
-    'kind' in msg &&
-    (msg.kind === 'ops-affected' || msg.kind === 'cache-changed')
-  );
+  return 'kind' in msg;
 }

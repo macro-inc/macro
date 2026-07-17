@@ -196,6 +196,9 @@ function makeFakeHost(): FakeHost {
     onCacheChanged() {
       return () => undefined;
     },
+    onMutationSettled() {
+      return () => undefined;
+    },
     dispose() {},
   };
   return host;

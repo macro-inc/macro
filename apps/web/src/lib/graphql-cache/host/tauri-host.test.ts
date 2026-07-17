@@ -175,13 +175,14 @@ describe('createTauriCacheHost', () => {
       })
     );
 
-    await host.rollbackOptimisticWrite('1', claim);
+    await host.rollbackOptimisticWrite('1', claim, 'invalid property');
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_rollback_optimistic_write',
       {
         transactionId: '1',
         leaseOwner: 'runner',
         leaseGeneration: '2',
+        error: 'invalid property',
       }
     );
   });
@@ -247,6 +248,24 @@ describe('createTauriCacheHost', () => {
 
     eventCallbacks.get('graphql-cache://cache-changed')?.({ payload: {} });
     expect(calls).toBe(1);
+  });
+
+  it('delivers queued mutation settlements from the broadcast event', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const seen: unknown[] = [];
+    host.onMutationSettled((settlement) => seen.push(settlement));
+    await Promise.resolve();
+
+    const settlement = {
+      transactionId: '12',
+      status: 'permanently-failed' as const,
+      error: 'invalid property',
+    };
+    eventCallbacks.get('graphql-cache://mutation-settled')?.({
+      payload: settlement,
+    });
+
+    expect(seen).toEqual([settlement]);
   });
 
   it('normalizes string command errors to Error rejections', async () => {

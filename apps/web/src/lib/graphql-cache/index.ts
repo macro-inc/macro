@@ -43,6 +43,7 @@ export type {
   CachePush,
   CacheRequest,
   CacheResponse,
+  MutationSettlement,
   OptimisticWriteResult,
   ReadRecordsArgs,
   ReadResult,

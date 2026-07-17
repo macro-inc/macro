@@ -12,7 +12,9 @@
 use crate::engine::{
     ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
 };
-use crate::{CacheState, InitializedCache, emit_cache_changed, emit_ops_affected};
+use crate::{
+    CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
+};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::CachedQueryInstance;
 use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
@@ -236,6 +238,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
 ) -> Result<WriteResultWire, String> {
+    let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .commit_optimistic_write(
             transaction_id,
@@ -249,6 +252,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     emit_cache_changed(&app);
+    emit_mutation_settled(&app, settlement_transaction_id, "committed", None);
     Ok(result)
 }
 
@@ -260,12 +264,20 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     transaction_id: String,
     lease_owner: String,
     lease_generation: String,
+    error: String,
 ) -> Result<WriteResultWire, String> {
+    let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .rollback_optimistic_write(transaction_id, lease_owner, lease_generation)
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     emit_cache_changed(&app);
+    emit_mutation_settled(
+        &app,
+        settlement_transaction_id,
+        "permanently-failed",
+        Some(error),
+    );
     Ok(result)
 }
 

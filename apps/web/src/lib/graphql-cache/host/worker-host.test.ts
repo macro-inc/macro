@@ -77,6 +77,45 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('delivers queued mutation settlements pushed by the worker', async () => {
+    let push: (message: unknown) => void = () => {
+      throw new Error('worker not initialized');
+    };
+    class FakeSharedWorker {
+      port = {
+        onmessage: null as ((event: MessageEvent) => void) | null,
+        start() {},
+        close() {},
+        postMessage: (request: { id?: number }) => {
+          if (request.id === undefined) return;
+          queueMicrotask(() => {
+            this.port.onmessage?.({
+              data: { id: request.id, ok: true, result: null },
+            } as MessageEvent);
+          });
+        },
+      };
+
+      constructor() {
+        push = (message) =>
+          this.port.onmessage?.({ data: message } as MessageEvent);
+      }
+    }
+    vi.stubGlobal('SharedWorker', FakeSharedWorker);
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const seen: unknown[] = [];
+    host.onMutationSettled((settlement) => seen.push(settlement));
+    const settlement = {
+      transactionId: '12',
+      status: 'committed' as const,
+    };
+
+    push({ kind: 'mutation-settled', settlement });
+
+    expect(seen).toEqual([settlement]);
+    host.dispose();
+  });
+
   it('times out reads without timing out durable mutations', async () => {
     vi.useFakeTimers();
     const requests: Array<{ id?: number; kind: string }> = [];

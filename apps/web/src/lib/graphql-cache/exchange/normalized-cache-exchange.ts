@@ -323,11 +323,15 @@ export function normalizedCacheExchange(
                 }
               );
               void replay.toPromise();
-            } catch {
-              await host.rollbackOptimisticWrite(claimed.transactionId, {
-                owner: queueOwner,
-                generation: claimed.leaseGeneration,
-              });
+            } catch (error) {
+              await host.rollbackOptimisticWrite(
+                claimed.transactionId,
+                {
+                  owner: queueOwner,
+                  generation: claimed.leaseGeneration,
+                },
+                error instanceof Error ? error.message : String(error)
+              );
               attemptInFlight = false;
               scheduleDrain();
             }
@@ -523,7 +527,8 @@ export function normalizedCacheExchange(
                 } else {
                   await host.rollbackOptimisticWrite(
                     attempt.transactionId,
-                    claim
+                    claim,
+                    result.error?.message ?? 'mutation returned no data'
                   );
                   disposition = 'permanently-failed';
                 }

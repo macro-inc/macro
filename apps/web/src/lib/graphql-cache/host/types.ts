@@ -9,6 +9,7 @@ import type {
   CachedQueryInstanceWire,
   ClaimedMutation,
   MutationClaim,
+  MutationSettlement,
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
   QueryRevalidationWire,
@@ -83,7 +84,8 @@ export interface CacheHost {
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
     transactionId: string,
-    claim: MutationClaim
+    claim: MutationClaim,
+    error: string
   ): Promise<WriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<string[]>;
@@ -101,6 +103,9 @@ export interface CacheHost {
 
   /** Subscribes whenever the effective normalized-cache view changes. */
   onCacheChanged(cb: () => void): () => void;
+
+  /** Subscribes to final commit/rollback events for queued mutations. */
+  onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;
 
   dispose(): void;
 }

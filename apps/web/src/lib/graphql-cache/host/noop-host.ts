@@ -61,6 +61,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     onCacheChanged() {
       return () => undefined;
     },
+    onMutationSettled() {
+      return () => undefined;
+    },
     dispose() {},
   };
 }
