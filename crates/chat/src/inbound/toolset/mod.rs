@@ -10,6 +10,7 @@ use ai_toolset::AsyncToolCollection;
 use entity_access::domain::ports::EntityAccessService;
 use read_chat::ReadChat;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Service context for chat AI tools.
 pub struct ChatToolContext<CSvc, ESvc>
@@ -21,6 +22,10 @@ where
     pub service: Arc<CSvc>,
     /// The entity access service — used to generate access receipts.
     pub entity_access_service: Arc<ESvc>,
+    /// Entity id of the chat this request belongs to, when the request is an
+    /// interactive chat session. `None` for every other feature, in which
+    /// case reads are never blocked as "the current chat".
+    pub self_chat_id: Option<Uuid>,
 }
 
 impl<CSvc, ESvc> Clone for ChatToolContext<CSvc, ESvc>
@@ -32,6 +37,7 @@ where
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            self_chat_id: self.self_chat_id,
         }
     }
 }
@@ -46,6 +52,7 @@ where
         Self {
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
+            self_chat_id: None,
         }
     }
 }
