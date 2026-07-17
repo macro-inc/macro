@@ -48,10 +48,10 @@ pub async fn handler(
     cookies.add(refresh_token_cookie);
 
     // Logout of fusionauth when the request used a FusionAuth session.
-    if let Some(jwt_context) = jwt_session {
-        if let Err(e) = ctx.auth_client.logout(&jwt_context.tid).await {
-            tracing::warn!(error=?e, "error logging out");
-        }
+    if let Some(jwt_context) = jwt_session
+        && let Err(e) = ctx.auth_client.logout(&jwt_context.tid).await
+    {
+        tracing::warn!(error=?e, "error logging out");
     }
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())

@@ -123,20 +123,20 @@ pub async fn process_message(
                 let touched_nodes = session_storage
                     .append_pending_operation(update, document_state)
                     .await?;
-                if !touched_nodes.is_empty() {
-                    if let Some(peer_id) = peer_id {
-                        dss.push_blame_events(
-                            touched_nodes
-                                .into_iter()
-                                .map(|node_id| crate::d1::BlameEvent {
-                                    document_id: document_id.to_string(),
-                                    node_id,
-                                    peer_id,
-                                    timestamp_ms: now_ms,
-                                })
-                                .collect(),
-                        );
-                    }
+                if !touched_nodes.is_empty()
+                    && let Some(peer_id) = peer_id
+                {
+                    dss.push_blame_events(
+                        touched_nodes
+                            .into_iter()
+                            .map(|node_id| crate::d1::BlameEvent {
+                                document_id: document_id.to_string(),
+                                node_id,
+                                peer_id,
+                                timestamp_ms: now_ms,
+                            })
+                            .collect(),
+                    );
                 }
             }
 
