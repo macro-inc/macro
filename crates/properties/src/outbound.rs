@@ -6,6 +6,8 @@ pub mod entity_properties_get_query;
 mod entity_properties_values_test;
 pub mod entity_property_queries;
 pub mod metadata_queries;
+#[cfg(test)]
+mod metadata_queries_test;
 pub mod notification_service;
 #[cfg(test)]
 mod options_test;

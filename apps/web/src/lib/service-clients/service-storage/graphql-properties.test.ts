@@ -6,6 +6,7 @@ import type { SoupPropertyFieldsFragment } from './graphql/generated/graphql';
 import {
   setEntityProperty,
   toGraphqlPropertyEntityType,
+  toGraphqlPropertyTargetEntityType,
   toGraphqlSetPropertyValue,
 } from './graphql-properties';
 import { getGraphqlSoupClient } from './graphql-soup';
@@ -97,12 +98,17 @@ describe('toGraphqlSetPropertyValue', () => {
   });
 });
 
-describe('toGraphqlPropertyEntityType', () => {
-  it('maps every REST entity type', () => {
-    expect(toGraphqlPropertyEntityType('DOCUMENT')).toBe('DOCUMENT');
+describe('property entity type conversion', () => {
+  it('keeps TASK for referenced property values', () => {
     expect(toGraphqlPropertyEntityType('TASK')).toBe('TASK');
-    expect(toGraphqlPropertyEntityType('COMPANY')).toBe('COMPANY');
-    expect(toGraphqlPropertyEntityType('CALL_RECORD')).toBe('CALL_RECORD');
+  });
+
+  it('maps canonical property targets without TASK', () => {
+    expect(toGraphqlPropertyTargetEntityType('DOCUMENT')).toBe('DOCUMENT');
+    expect(toGraphqlPropertyTargetEntityType('COMPANY')).toBe('COMPANY');
+    expect(toGraphqlPropertyTargetEntityType('CALL_RECORD')).toBe(
+      'CALL_RECORD'
+    );
   });
 });
 
@@ -188,6 +194,8 @@ describe('setEntityProperty', () => {
     expect(context).toEqual({
       normalizedCacheOptimistic: {
         optimisticResponse: { setEntityProperty: optimistic },
+        linkPatches: [],
+        revalidations: [],
       },
     });
   });

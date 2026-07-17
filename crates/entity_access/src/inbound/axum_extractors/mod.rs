@@ -12,6 +12,7 @@ mod call;
 mod channel;
 mod chat;
 mod document;
+mod entity_body;
 mod entity_permission;
 mod foreign_entity;
 mod history;
@@ -24,6 +25,7 @@ pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
+pub use entity_body::EntityBodyAccessLevelExtractor;
 pub use entity_permission::EntityPermissionExtractor;
 pub use foreign_entity::ForeignEntityAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
@@ -32,7 +34,8 @@ pub use project::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2,
 };
 pub use team::{
-    MacroUserTeamExtractor, OptionalMacroUserTeamExtractor, OptionalMacroUserTeamExtractorV2,
+    MacroUserTeamExtractor, MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractor,
+    OptionalMacroUserTeamExtractorV2,
 };
 pub use thread::ThreadAccessLevelExtractor;
 

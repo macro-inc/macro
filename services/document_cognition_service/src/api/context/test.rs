@@ -404,13 +404,32 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
     );
 
+    let authorization_state =
+        MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+            MacroAuthJwtValidator::new(
+                macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
+            ),
+            macro_authorization::InternalAuthConfig {
+                api_key: "testing".to_string(),
+                default_user_id: None,
+            },
+        )));
+
+    let user_permissions_service = Arc::new(
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+        ),
+    );
+
     let api_context = ApiContext {
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         search_service_client,
         email_service_client_external,
-        jwt_args: JwtValidationArgs::new_testing(),
+        authorization_state: authorization_state.clone(),
+        user_permissions_service,
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),
         notification_ingress_service,
@@ -480,7 +499,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 "http://localhost/mcp/servers/auth/callback".to_string(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
-            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
+            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth, authorization_state)
         },
     };
     Arc::new(api_context)

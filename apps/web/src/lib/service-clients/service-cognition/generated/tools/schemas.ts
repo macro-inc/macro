@@ -783,7 +783,6 @@ export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
     'document',
-    'task',
     'project',
     'chat',
     'thread',
@@ -2753,7 +2752,6 @@ export const SetEntityProperty = z.object({
     .optional(),
   entity_type: z.enum([
     'document',
-    'task',
     'project',
     'chat',
     'thread',

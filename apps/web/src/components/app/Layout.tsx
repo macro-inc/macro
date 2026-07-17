@@ -79,6 +79,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}onboarding`,
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
+  `${ROUTER_BASE_CONCAT}offline`,
   `${ROUTER_BASE_CONCAT}welcome`,
   `${ROUTER_BASE_CONCAT}team-invite`,
 ];

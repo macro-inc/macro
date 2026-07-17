@@ -1209,6 +1209,44 @@ input GraphqlPropertyMatchValue @oneOf {
 }
 
 """
+Canonical entity type accepted for property targets.
+"""
+enum GraphqlPropertyTargetEntityType {
+	"""
+	Call record target.
+	"""
+	CALL_RECORD
+	"""
+	Channel target.
+	"""
+	CHANNEL
+	"""
+	Chat target.
+	"""
+	CHAT
+	"""
+	CRM company target.
+	"""
+	COMPANY
+	"""
+	Document target, including tasks and snippets.
+	"""
+	DOCUMENT
+	"""
+	Project target.
+	"""
+	PROJECT
+	"""
+	Email thread target.
+	"""
+	THREAD
+	"""
+	User target.
+	"""
+	USER
+}
+
+"""
 A property value represented by a type-safe GraphQL union.
 """
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
@@ -2470,7 +2508,7 @@ input SetEntityPropertyInput {
 	"""
 	Type of entity receiving the property.
 	"""
-	entityType: GraphqlPropertyEntityType!
+	entityType: GraphqlPropertyTargetEntityType!
 	"""
 	Identifier of the entity receiving the property.
 	"""

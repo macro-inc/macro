@@ -1,0 +1,109 @@
+[package]
+edition = "2024"
+name = "projects"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/axum",
+]
+default = ["axum", "inbound", "outbound", "ports", "service"]
+inbound = ["axum", "ports"]
+outbound = [
+  "dep:async-recursion",
+  "dep:aws-sdk-s3",
+  "dep:base64",
+  "dep:document_sub_type",
+  "dep:dynamodb_client",
+  "dep:entity_access_db_utils",
+  "dep:hex",
+  "dep:macro_sha_count_client",
+  "dep:sqlx",
+  "dep:sqs_client",
+  "dep:system_properties",
+  "ports",
+]
+ports = ["dep:tokio"]
+service = [
+  "dep:entity_access_management",
+  "macro_event_broker/ports",
+  "ports",
+]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
+uuid = { workspace = true }
+
+# Domain models (always included)
+entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+  "outbound",
+  "ports",
+], optional = true }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_env_var = { path = "../macro_env_var" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+models_bulk_upload = { path = "../models_bulk_upload" }
+models_permissions = { path = "../models_permissions" }
+s3_key = { path = "../s3_key" }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
+model-error-response = { path = "../model-error-response", optional = true }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+async-recursion = { version = "1.1.1", optional = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+document_sub_type = { path = "../document_sub_type", optional = true }
+dynamodb_client = { path = "../dynamodb_client", optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+hex = { workspace = true, optional = true }
+macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }
+sqlx = { workspace = true, optional = true }
+sqs_client = { path = "../sqs_client", optional = true }
+system_properties = { path = "../system_properties", optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+dotenvy = { workspace = true }
+http-body-util = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env = { path = "../macro_env" }
+# Examples need the Kafka adapter (outbound); the library itself only uses ports.
+macro_event_broker = { path = "../macro_event_broker" }
+mockall = { workspace = true }
+rdkafka = { workspace = true }
+model_user = { path = "../model_user" }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tower = { workspace = true }
+tracing-subscriber = { workspace = true }

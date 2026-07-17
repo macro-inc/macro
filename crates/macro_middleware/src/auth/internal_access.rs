@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use macro_env_var::env_vars;
+use macro_auth::InternalApiKey;
 use model::user::UserContext;
 use std::borrow::Cow;
 
@@ -13,13 +13,6 @@ static INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
 static INTERNAL_MACRO_USER_ID_HEADER: &str = "x-internal-macro-user-id";
 static INTERNAL_MACRO_ORGANIZATION_ID_HEADER: &str = "x-internal-macro-organization-id";
 static INTERNAL_FUSIONAUTH_USER_ID_HEADER: &str = "x-internal-fusionauth-user-id";
-
-env_vars!(
-    /// The internal api secret key for the service.
-    /// NOTE: this value may be different depending on the service that is using this middleware.
-    #[derive(Clone)]
-    pub struct InternalApiKey;
-);
 
 /// Sentinel value which represensts that we were able to validate the internal auth key in the header of the request
 #[derive(Debug)]

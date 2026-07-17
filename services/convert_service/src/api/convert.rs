@@ -8,6 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::{
     convert::ConvertRequest,
     document::FileType,
@@ -24,7 +25,7 @@ use crate::{
     utils::{cleanup_folder, get_lok_filter_from_file_types},
 };
 
-use super::context::ApiContext;
+use super::context::{ApiContext, AuthorizationService};
 
 /// Convert call
 #[utoipa::path(
@@ -41,9 +42,10 @@ use super::context::ApiContext;
             (status = 500, description = "internal server error", body = ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<ConvertRequest>,
 ) -> Result<Response, Response> {
     let job_id = macro_uuid::generate_uuid_v7().to_string();

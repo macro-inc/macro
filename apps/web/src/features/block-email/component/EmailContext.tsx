@@ -29,6 +29,7 @@ import {
   blockSenderWithToast,
   markSenderNoiseWithToast,
   markSenderSignalWithToast,
+  trackExternalThreadArchive,
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
@@ -398,44 +399,62 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!thread?.db_id) return false;
 
-    archiveMutation.mutate({
-      threadId: thread.db_id,
-      archive: thread.inbox_visible,
-      linkId: toHeaderLinkId(thread.link_id),
-    });
+    // Unarchiving ('e' on an already-done thread) is a plain toggle back to
+    // the inbox; the mark-done action doesn't apply.
+    if (!thread.inbox_visible) {
+      archiveMutation.mutate({
+        threadId: thread.db_id,
+        archive: false,
+        linkId: toHeaderLinkId(thread.link_id),
+      });
+      return true;
+    }
 
-    if (!props) return false;
-
+    // Mark done issues the /archived request itself (with undo support), so
+    // the paths below skip archiveMutation and only mirror its thread-cache
+    // handling via trackExternalThreadArchive.
     const selectedRow = soup?.items.get(thread.db_id);
+    const cachedItem = selectedRow
+      ? undefined
+      : getSoupEntityById(thread.db_id);
 
     if (soup && selectedRow) {
-      markAsDoneAction.executeWithSoup(
-        [selectedRow.original],
-        soup,
-        (nextEntity) => {
-          const splitHandle = splitPanel?.handle;
-          if (!splitHandle || previewPanel !== undefined) return;
-          void openEntityInSplitFromUnifiedList(nextEntity, {
-            splitHandle,
-            mergeHistory: true,
-            referredFrom: splitHandle.referredFrom(),
-          });
-        },
-        markDoneOpts
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markAsDoneAction.executeWithSoup(
+          [selectedRow.original],
+          soup,
+          (nextEntity) => {
+            const splitHandle = splitPanel?.handle;
+            if (!splitHandle || previewPanel !== undefined) return;
+            void openEntityInSplitFromUnifiedList(nextEntity, {
+              splitHandle,
+              mergeHistory: true,
+              referredFrom: splitHandle.referredFrom(),
+            });
+          },
+          markDoneOpts
+        )
       );
-    } else {
+    } else if (cachedItem && cachedItem.tag !== 'channelThread') {
       // Not rendered inside a soup list (e.g. thread opened in a split): no
       // row to drive the action from, so mark done via the cached soup entity
-      // so soup views drop the thread and its notifications settle. The
-      // archive itself already ran above.
-      const cachedItem = getSoupEntityById(thread.db_id);
-      if (cachedItem && cachedItem.tag !== 'channelThread') {
-        void markAsDoneAction.execute(
+      // so soup views drop the thread and its notifications settle.
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markAsDoneAction.execute(
           [mapApiSoupItemToEntity(cachedItem)],
           undefined,
           markDoneOpts
-        );
-      }
+        )
+      );
+    } else {
+      // No soup entity to drive mark-done from: archive directly.
+      archiveMutation.mutate({
+        threadId: thread.db_id,
+        archive: true,
+        linkId: toHeaderLinkId(thread.link_id),
+      });
     }
 
     return true;

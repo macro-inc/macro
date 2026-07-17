@@ -8,6 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+use std::collections::HashSet;
 
 /// Database-backed implementation of [`ContactsRepository`].
 pub struct DbContactsRepository {
@@ -49,17 +50,25 @@ impl ContactsRepository for DbContactsRepository {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> Result<(), Report> {
-        let (users1, users2): (Vec<_>, Vec<_>) = connections
+        // Contacts are undirected: discard self-edges and canonicalize endpoint
+        // order so A-B and B-A deduplicate before reaching PostgreSQL.
+        let connections: HashSet<_> = connections
             .into_iter()
             .filter(|(a, b)| a.as_ref() != b.as_ref())
             .map(|(a, b)| {
-                if a.as_ref() <= b.as_ref() {
+                if a.as_ref() < b.as_ref() {
                     (a, b)
                 } else {
                     (b, a)
                 }
             })
-            .unzip();
+            .collect();
+
+        if connections.is_empty() {
+            return Ok(());
+        }
+
+        let (users1, users2): (Vec<_>, Vec<_>) = connections.into_iter().unzip();
 
         let u1: Vec<&str> = users1.iter().map(|u| u.as_ref()).collect();
         let u2: Vec<&str> = users2.iter().map(|u| u.as_ref()).collect();

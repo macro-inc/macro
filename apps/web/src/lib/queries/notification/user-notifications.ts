@@ -124,9 +124,9 @@ function normalizeLimit(limit?: number): number {
 
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
-function userNotificationsQueryOptions(limit: number) {
+function userNotificationsQueryOptions(limit: number, done?: boolean) {
   return {
-    queryKey: notificationKeys.user({ limit }).queryKey,
+    queryKey: notificationKeys.user({ limit, done }).queryKey,
     queryFn: async ({
       pageParam,
     }: {
@@ -137,6 +137,7 @@ function userNotificationsQueryOptions(limit: number) {
           await notificationServiceClient.userNotifications({
             limit: pageParam.limit,
             cursor: pageParam.cursor,
+            done,
           })
       );
     },
@@ -148,12 +149,22 @@ function userNotificationsQueryOptions(limit: number) {
   };
 }
 
-/** Paginated query for all notifications for the current user. */
-export function useUserNotificationsQuery(args?: { limit?: number }) {
+/**
+ * Paginated query for all notifications for the current user.
+ *
+ * `done` filters by done status. Omitted, the server returns only active
+ * (not-done) notifications; `done: true` pages through the done ones —
+ * surfaces that need the complete stream (e.g. the activity timeline) run
+ * one query per done state and merge.
+ */
+export function useUserNotificationsQuery(args?: {
+  limit?: number;
+  done?: boolean;
+}) {
   const limit = normalizeLimit(args?.limit);
 
   return useInfiniteQuery(() => ({
-    ...userNotificationsQueryOptions(limit),
+    ...userNotificationsQueryOptions(limit, args?.done),
     select: (
       data: InfiniteData<
         GetAllUserNotificationsResponse,

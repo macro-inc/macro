@@ -7,19 +7,21 @@ pub(crate) mod swagger;
 use super::config::Config;
 use super::service::dynamodb::client::DynamodbClient;
 use super::service::s3::client::S3Client;
-use crate::api::context::AppState;
+use crate::api::context::{AppState, AuthorizationService};
 use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use std::sync::Arc;
-use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 static MAX_REQUEST_SIZE: usize = 4096;
+
+/// Identity assumed for internal service callers that don't forward an acting user.
+pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub async fn setup_and_serve(
     config: Config,
@@ -44,12 +46,20 @@ pub async fn setup_and_serve(
         config.static_storage_bucket.as_ref().to_owned(),
     );
 
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_validation_args),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.as_ref().to_string(),
+            default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
+        },
+    )));
+
     let state = AppState {
         metadata_client,
         storage_client: Arc::new(storage_client),
         sqs_client,
-        internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
+        authorization_state,
     };
 
     let state_clone = state.clone();
@@ -59,36 +69,18 @@ pub async fn setup_and_serve(
 
     let port = state.config.port;
     let environment = state.config.environment;
+    // Authentication is enforced per-handler by `MacroAuthorizationExtractor`,
+    // which accepts user credentials (JWT) as well as the internal service key.
     let app = Router::new()
         .nest(
             "/api", // needed for cdn routing
-            Router::new()
-                .merge(
-                    file::router().layer(
-                        ServiceBuilder::new()
-                            .layer(axum::middleware::from_fn_with_state(
-                                jwt_validation_args.clone(),
-                                macro_middleware::auth::decode_jwt::handler,
-                            ))
-                            .layer(cors.clone()),
-                    ),
-                )
-                .merge(health::router().layer(cors.clone())),
+            Router::new().merge(file::router()).merge(health::router()),
         )
         .nest(
             "/internal",
-            // Create a copy of the file router, but use internal auth middleware
-            // instead of jwt auth
-            file::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_extractor_with_state::<
-                        ValidInternalKey,
-                        _,
-                    >(state.clone()))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::initialize_user_context::handler,
-                    )),
-            ),
+            // Same file router; internal callers authenticate with the internal
+            // service key headers instead of a jwt
+            file::router(),
         )
         .with_state(state)
         .merge(

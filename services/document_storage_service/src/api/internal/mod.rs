@@ -1,8 +1,7 @@
 use super::{
-    context::{ApiContext, AuthorizationService, EntityAccessService},
+    context::ApiContext,
     documents::{export_document, get_document_version},
     history::upsert_history,
-    projects::upload_folder,
 };
 use super::{documents::get_document_access_level, user::delete_user_items};
 use super::{documents::save_document, history::delete_history};
@@ -14,7 +13,9 @@ use super::{
     },
     user::populate_items,
 };
-use crate::api::context::DocumentService;
+use crate::api::context::{
+    AuthorizationService, DocumentService, EntityAccessService, ProjectService,
+};
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
 use crate::api::{documents::get_documents_metadata, items::validate_item_ids};
@@ -158,11 +159,23 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // Project routes
         .route(
             "/projects/upload",
-            post(upload_folder::upload_folder_handler),
+            post(
+                projects_hex::inbound::axum_router::upload_folder::upload_folder_handler::<
+                    ProjectService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
         )
         .route(
             "/projects/mark_uploaded",
-            post(upload_folder::mark_uploaded_handler),
+            post(
+                projects_hex::inbound::axum_router::upload_folder::mark_uploaded_handler::<
+                    ProjectService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))
         .route("/validate_item_ids", post(validate_item_ids::handler))

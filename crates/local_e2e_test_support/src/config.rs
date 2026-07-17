@@ -6,9 +6,10 @@ use std::{
 use anyhow::Context;
 
 const SEED_DIR_MARKER: &str = "tooling/seed_cli/seed";
+const ENV_FILE_OVERRIDE: &str = "LOCAL_E2E_ENV_FILE";
 
-/// Local E2E runtime configuration loaded from the repository `.env` plus the
-/// process environment.
+/// Local E2E runtime configuration loaded from the selected dotenv file plus
+/// the process environment.
 #[derive(Clone, Debug)]
 pub struct LocalE2eConfig {
     repo_root: PathBuf,
@@ -26,8 +27,17 @@ impl LocalE2eConfig {
 
     /// Load configuration using an explicit repository root.
     pub fn from_repo_root(repo_root: PathBuf) -> anyhow::Result<Self> {
+        let dotenv_path = std::env::var_os(ENV_FILE_OVERRIDE)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repo_root.join(".env"));
+        Self::from_repo_root_and_env_file(repo_root, dotenv_path)
+    }
+
+    fn from_repo_root_and_env_file(
+        repo_root: PathBuf,
+        dotenv_path: PathBuf,
+    ) -> anyhow::Result<Self> {
         let mut values = HashMap::new();
-        let dotenv_path = repo_root.join(".env");
 
         if dotenv_path.exists() {
             for item in dotenvy::from_path_iter(&dotenv_path)
@@ -74,3 +84,6 @@ fn find_repo_root() -> anyhow::Result<PathBuf> {
         .map(Path::to_path_buf)
         .context("CARGO_MANIFEST_DIR must be under crates/<crate>")
 }
+
+#[cfg(test)]
+mod test;

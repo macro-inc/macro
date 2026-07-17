@@ -256,16 +256,11 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                 &user_id,
                 None,
                 entity_id,
-                properties::access_entity_type(models_properties::EntityType::Task),
+                model_entity::EntityType::Document,
             )
             .await?;
-        let access = properties::PropertiesAccessReceipt::try_from_entity_access_receipt(
-            entity_access_receipt,
-            models_properties::EntityType::Task,
-        )?;
-
         self.properties
-            .set_entity_property(&access, property_definition_id, value)
+            .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
             .map(|_| ())
             .map_err(Into::into)
@@ -681,6 +676,10 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
+    /// Built per-request via a manual `FromRef` below so it can carry the
+    /// running chat's id — the derive's field-clone would freeze it at
+    /// startup with no chat id set.
+    #[from_ref(skip)]
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
     pub team_tool_context: ToolTeamToolContext,
@@ -706,6 +705,26 @@ impl FromRef<ToolServiceContext> for SoupToolContext<ToolSoupService, ToolEmailS
         SoupToolContext {
             service: ctx.soup_service.clone(),
             email_service: ctx.email_service.clone(),
+            self_chat_id: self_chat_id(ctx),
         }
     }
+}
+
+impl FromRef<ToolServiceContext> for ToolChatToolContext {
+    fn from_ref(ctx: &ToolServiceContext) -> Self {
+        ChatToolContext {
+            service: ctx.chat_tool_context.service.clone(),
+            entity_access_service: ctx.chat_tool_context.entity_access_service.clone(),
+            self_chat_id: self_chat_id(ctx),
+        }
+    }
+}
+
+/// Entity id of the chat this request belongs to, when the request is an
+/// interactive chat session. `None` for every other feature, in which case
+/// nothing about the running chat should be excluded/blocked.
+fn self_chat_id(ctx: &ToolServiceContext) -> Option<uuid::Uuid> {
+    matches!(ctx.usage_context.feature, ai_usage::AiFeature::Chat)
+        .then_some(ctx.usage_context.entity)
+        .flatten()
 }

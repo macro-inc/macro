@@ -2,10 +2,15 @@ import { itemToSafeName } from '@core/constant/allBlocks';
 
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
+import type { ApiThread } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { formatDocumentName } from '@service-storage/util/filename';
+import type { InfiniteData } from '@tanstack/solid-query';
 import { normalizeMessageSender } from '../channel/message-sender';
+import { queryClient } from '../client';
+import { emailKeys } from '../email/keys';
+import { threadQueryOptions } from '../email/thread';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchChannelPreviews(
@@ -278,30 +283,61 @@ async function fetchCrmCompanyPreviews(
   );
 }
 
+/**
+ * Reuse the thread-messages query the email block fetches on open: returns
+ * cached data (any staleness — previews tolerate 24h), or joins an in-flight
+ * fetch, so the preview doesn't issue a separate getThread request.
+ */
+async function threadFromOpenThreadQuery(
+  threadId: string
+): Promise<ApiThread | undefined> {
+  const queryKey = emailKeys.threadMessages(threadId).queryKey;
+  const cached =
+    queryClient.getQueryData<InfiniteData<ApiThread, number>>(queryKey);
+  if (cached?.pages[0]) return cached.pages[0];
+
+  if (queryClient.getQueryState(queryKey)?.fetchStatus !== 'fetching') {
+    return undefined;
+  }
+  try {
+    const data = await queryClient.fetchInfiniteQuery(
+      threadQueryOptions(threadId)
+    );
+    return data.pages[0];
+  } catch {
+    // Fall through to the limit=1 fetch so access errors map per-id.
+    return undefined;
+  }
+}
+
 async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
   const results = await Promise.all(
     threadIds.map(async (threadId) => {
-      const result = await emailClient.getThread({
-        thread_id: threadId,
-        offset: 0,
-        limit: 1,
-      });
-
       const base = {
         id: threadId,
         type: 'email',
       } as const;
 
-      if (result.isErr()) {
-        return {
-          ...base,
-          access: 'no_access' as const,
-          loading: false as const,
-        };
+      let thread = await threadFromOpenThreadQuery(threadId);
+
+      if (!thread) {
+        const result = await emailClient.getThread({
+          thread_id: threadId,
+          offset: 0,
+          limit: 1,
+        });
+
+        if (result.isErr()) {
+          return {
+            ...base,
+            access: 'no_access' as const,
+            loading: false as const,
+          };
+        }
+        thread = result.value.thread;
       }
 
-      const data = result.value;
-      const firstMessage = data.thread.messages[0];
+      const firstMessage = thread.messages[0];
       const subject = firstMessage?.subject ?? 'No Subject';
       const sender =
         firstMessage?.from?.email ?? firstMessage?.from?.name ?? undefined;
@@ -313,7 +349,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         rawName: subject,
         name: subject,
         owner: sender as string | undefined,
-        updatedAt: data.thread.updated_at,
+        updatedAt: thread.updated_at,
       };
     })
   );

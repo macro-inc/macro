@@ -43,6 +43,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async beginOptimisticWrite(): Promise<OptimisticWriteResult> {
       throw new Error('normalized GraphQL cache is unavailable');
     },
+    async inspectQuery() {
+      return [];
+    },
     async claimNextMutation() {
       return undefined;
     },

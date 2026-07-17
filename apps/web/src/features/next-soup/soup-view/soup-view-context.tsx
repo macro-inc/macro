@@ -226,11 +226,11 @@ export const SoupViewContextProvider: FlowComponent<
 
   const panel = useSplitPanelOrThrow();
 
-  const activeListView = (): ListView | undefined => {
+  const activeListView = createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
     if (content.type !== 'component') return;
     return isListViewID(content.id) ? content.id : undefined;
-  };
+  });
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';

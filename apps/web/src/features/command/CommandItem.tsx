@@ -10,7 +10,7 @@ import {
   enqueueDocumentWakeup,
   isWakeableDocument,
 } from '@queries/preview';
-import { cn, Hotkey } from '@ui';
+import { CommandMenuListItem, Hotkey } from '@ui';
 import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { DisplayHotkeyStep } from './types';
@@ -31,7 +31,7 @@ interface CommandItemProps {
   index: number;
   selected: boolean;
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onHover?: (index: number) => void;
+  onMouseMove?: (index: number) => void;
 }
 
 function CommandItemHotkey(props: { item: CommandMenuItem }) {
@@ -221,15 +221,10 @@ function ItemDisplay(props: { item: CommandMenuItem }) {
 
 export function CommandItem(props: CommandItemProps) {
   return (
-    <div
-      class={cn(
-        'rounded-md group flex items-center h-10 px-2 text-sm font-semibold relative',
-        {
-          'bg-active': props.selected,
-          'hover:bg-hover/50': !props.selected,
-        }
-      )}
-      onMouseMove={() => props.onHover?.(props.index)}
+    <CommandMenuListItem
+      as="div"
+      selected={props.selected}
+      onMouseMove={() => props.onMouseMove?.(props.index)}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -240,6 +235,6 @@ export function CommandItem(props: CommandItemProps) {
       <div class="ml-auto">
         <CommandItemHotkey item={props.item} />
       </div>
-    </div>
+    </CommandMenuListItem>
   );
 }

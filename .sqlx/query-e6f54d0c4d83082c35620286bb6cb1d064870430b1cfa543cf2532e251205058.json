@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id,\n                p.name,\n                p.\"userId\" AS \"user_id\",\n                p.\"parentId\" AS \"parent_id\",\n                p.\"createdAt\"::timestamptz AS \"created_at\",\n                p.\"updatedAt\"::timestamptz AS \"updated_at\",\n                p.\"uploadRequestId\" AS \"upload_request_id\"\n            FROM \"Project\" p\n            WHERE p.\"userId\" = $1\n                AND p.\"deletedAt\" IS NULL\n                AND p.\"uploadPending\" = true\n                AND p.\"parentId\" IS NULL\n            ORDER BY p.\"updatedAt\" DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "upload_request_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "e6f54d0c4d83082c35620286bb6cb1d064870430b1cfa543cf2532e251205058"
+}

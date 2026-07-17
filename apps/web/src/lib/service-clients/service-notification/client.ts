@@ -74,12 +74,19 @@ export const documentMentionMetadata = z.object({
 
 type NotificationParams = { cursor?: string; limit?: number };
 
+/**
+ * Params for the user-notifications list. `done` filters by done status —
+ * the server defaults to `false` (active notifications only) when omitted;
+ * pass `true` to page through already-done notifications instead.
+ */
+type UserNotificationParams = NotificationParams & { done?: boolean };
+
 export const notificationServiceClient = {
-  async userNotifications(args: NotificationParams) {
-    const { limit, cursor } = args;
+  async userNotifications(args: UserNotificationParams) {
+    const { limit, cursor, done } = args;
     return (
       await notificationFetch<GetAllUserNotificationsResponse>(
-        `/user_notifications?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+        `/user_notifications?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}${done !== undefined ? `&done=${done}` : ''}`,
         {
           method: 'GET',
         }

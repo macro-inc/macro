@@ -1,10 +1,6 @@
 use models_opensearch::SearchIndex;
 
-use crate::{
-    Result,
-    date_format::{EpochMillis, EpochSeconds},
-    error::OpensearchClientError,
-};
+use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
 
 /// The arguments for upserting a channel message into the opensearch index.
 /// Threadless messages are indexed with `thread_id == message_id`.
@@ -19,8 +15,6 @@ pub struct UpsertChannelMessageArgs {
     pub sender_id: String,
     pub mentions: Vec<String>,
     pub content: String,
-    pub created_at_seconds: EpochSeconds,
-    pub updated_at_seconds: EpochSeconds,
     pub created_at_millis: EpochMillis,
     pub updated_at_millis: EpochMillis,
 }

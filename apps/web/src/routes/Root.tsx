@@ -11,6 +11,7 @@ import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxCo
 import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
+import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
@@ -32,8 +33,8 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -57,6 +58,7 @@ import {
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -191,27 +193,56 @@ function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
   );
 }
 
+const OFFLINE_ROUTE = '/offline';
+
+function getCurrentQueryString() {
+  const params = new URLSearchParams(window.location.search);
+  return params.toString().length > 0 ? `?${params.toString()}` : '';
+}
+
+function shouldShowNativeOfflineFallback(
+  userInfoQuery: ReturnType<typeof useUserInfoQuery>
+) {
+  return (
+    userInfoQuery.isError &&
+    hasLoginCookie() &&
+    isNativeMobilePlatform() &&
+    !thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
+  );
+}
+
+function SessionExpiredRedirect() {
+  void clearLocalAuthSession().catch((error) => {
+    console.error('Failed to clear local auth session', error);
+  });
+  return <Navigate href={`/welcome${getCurrentQueryString()}`} />;
+}
+
+function OfflineFallbackRoute() {
+  const userInfoQuery = useUserInfoQuery();
+
+  // Once the query settles into anything other than a genuine connectivity
+  // failure, bounce to the base path.
+  return (
+    <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
+      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
+        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+      </Match>
+    </Switch>
+  );
+}
+
 function BasePathComponent() {
-  const analytics = useAnalytics();
-
   const [searchParams] = useSearchParams();
+  const userInfoQuery = useUserInfoQuery();
+  const checkoutRefreshPending = useCheckoutCompletionListener();
 
-  const subscriptionSuccess = searchParams.subscriptionSuccess;
-  const type = searchParams.type;
-  if (subscriptionSuccess === 'true') {
-    toast.success('Your plan has been activated!');
-    analytics.track('subscription_success', { type });
-    // Invalidate user info to refresh trial status and subscription data
-    invalidateUserInfo();
-  }
-
-  if (searchParams.subscriptionCancel === 'true') {
-    analytics.track('subscription_cancel', { tier: searchParams.tier });
-  }
-
-  if (searchParams.upgrade === 'true') {
-    sessionStorage.setItem('showUpgradeModal', 'true');
-  }
+  onMount(() => {
+    if (searchParams.upgrade === 'true') {
+      sessionStorage.setItem('showUpgradeModal', 'true');
+    }
+  });
 
   // check session storage for redirect url
   const redirectUrl = sessionStorage.getItem('redirectUrl');
@@ -222,31 +253,33 @@ function BasePathComponent() {
     return;
   }
 
-  const userInfoQuery = useUserInfoQuery();
-
   // Preserve existing query parameters when redirecting
-  const params = new URLSearchParams(window.location.search);
-  const queryString =
-    params.toString().length > 0 ? `?${params.toString()}` : '';
+  const queryString = getCurrentQueryString();
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
   return (
     <Switch>
-      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={userInfoQuery.isLoading || checkoutRefreshPending()}>
+        {null}
+      </Match>
       <Match
         when={
-          userInfoQuery.isError && hasLoginCookie() && isNativeMobilePlatform()
+          hasLoginCookie() &&
+          thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
         }
       >
-        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
+        <SessionExpiredRedirect />
+      </Match>
+      <Match when={userInfoQuery.data?.authenticated}>
+        <Navigate href={redirectPath} />
+      </Match>
+      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
+        <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
       </Match>
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={`/welcome${window.location.search}`} />
-      </Match>
-      <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
+        <Navigate href={`/welcome${queryString}`} />
       </Match>
     </Switch>
   );
@@ -270,6 +303,10 @@ const ROUTES: RouteDefinition[] = [
   /** BEGIN - APP ROUTES */
   {
     path: '/inbox',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/activity',
     component: LAYOUT_ROUTE.component,
   },
   {
@@ -359,6 +396,10 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => <Login />,
+  },
+  {
+    path: OFFLINE_ROUTE,
+    component: OfflineFallbackRoute,
   },
   {
     path: '/welcome',

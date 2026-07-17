@@ -63,6 +63,41 @@ export function normalizeIndexedEntityLimit(limit: number): number {
   return Math.min(limit, MAX_INDEXED_ENTITY_PAGE_SIZE);
 }
 
+export type QueryRevalidationWire = {
+  query: string;
+  operationName?: string;
+  /** Canonical JSON object, kept as text in the durable queue. */
+  variablesJson: string;
+};
+
+export type EmbeddedLinkPathSegment =
+  | { field: string }
+  | {
+      listItem: {
+        whereField: string;
+        equals: string | number | boolean | null;
+      };
+    };
+
+export type OptimisticLinkPatchWire = {
+  /** Generated GraphQL operation used as the typed graph entrypoint. */
+  query: string;
+  operationName?: string;
+  /** Variables for the entrypoint operation. */
+  variablesJson: string;
+  /** Response-key path beginning at the query root. */
+  path: EmbeddedLinkPathSegment[];
+  operation:
+    | { kind: 'remove'; entityKey: string }
+    | { kind: 'prependUnique'; entityKey: string };
+};
+
+export type CachedQueryInstanceWire = {
+  variables: Record<string, unknown>;
+  /** Selected value; omitted when the reconstructed query is a cache miss. */
+  value?: unknown;
+};
+
 export type WriteResult = {
   /** Entity keys whose records changed. */
   changed: string[];
@@ -74,6 +109,8 @@ export type WriteResult = {
    * then contains every registered operation except the origin.
    */
   reset: boolean;
+  /** Present on successful optimistic settlement; empty otherwise. */
+  revalidations?: QueryRevalidationWire[];
 };
 
 /**
@@ -135,6 +172,8 @@ export type CacheRequest = { id: number } & (
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
+      linkPatches?: OptimisticLinkPatchWire[];
+      revalidations?: QueryRevalidationWire[];
       createdAtMs: number;
     }
   | {
@@ -176,6 +215,13 @@ export type CacheRequest = { id: number } & (
       cursor?: EntityIndexCursor;
       limit: number;
       includeTotalCount: boolean;
+    }
+  | {
+      kind: 'inspect-query';
+      query: string;
+      operationName?: string;
+      /** Response-key field path from the query root. */
+      path: Array<{ field: string }>;
     }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */

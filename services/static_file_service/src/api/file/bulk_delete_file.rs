@@ -1,13 +1,13 @@
+use crate::api::context::AuthorizationService;
 use crate::model::api::{BulkDeleteRequest, BulkDeleteResponse, DeleteResult};
 use crate::service::dynamodb::client::DynamodbClient;
 use crate::service::s3::client::S3Client;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
-use model::user::UserContext;
 use std::sync::Arc;
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -52,12 +52,11 @@ impl IntoResponse for BulkDeleteError {
     )
   )
 ]
-#[tracing::instrument(skip(metadata_client, storage_client, usr, internal_key), fields(user_id = usr.user_id), err)]
+#[tracing::instrument(skip(metadata_client, storage_client, user), fields(user_id = ?user.macro_user_id), err)]
 pub async fn handle_bulk_delete_file(
     State(metadata_client): State<DynamodbClient>,
     State(storage_client): State<Arc<S3Client>>,
-    usr: Extension<UserContext>,
-    internal_key: Option<ValidInternalKey>,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
     Json(req): Json<BulkDeleteRequest>,
 ) -> Result<Json<BulkDeleteResponse>, BulkDeleteError> {
     // Validate request
@@ -89,7 +88,7 @@ pub async fn handle_bulk_delete_file(
         match metadata_results.get(file_id) {
             Some(metadata) => {
                 // Skip owner check for internal requests
-                if internal_key.is_none() && metadata.owner_id != usr.user_id {
+                if !user.is_internal_access && metadata.owner_id != user.macro_user_id.as_ref() {
                     tracing::warn!(file_id = file_id, "delete requested by non-owner");
                     results.push(DeleteResult {
                         file_id: file_id.clone(),

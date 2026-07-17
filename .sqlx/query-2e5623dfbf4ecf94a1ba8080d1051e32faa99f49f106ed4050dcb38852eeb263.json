@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"SharePermission\"\n        SET\n            \"isPublic\" = CASE WHEN $2 THEN $3 ELSE \"isPublic\" END,\n            \"publicAccessLevel\" = CASE WHEN $4 THEN $5 ELSE \"publicAccessLevel\" END,\n            \"updatedAt\" = NOW()\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e5623dfbf4ecf94a1ba8080d1051e32faa99f49f106ed4050dcb38852eeb263"
+}

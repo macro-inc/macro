@@ -424,10 +424,44 @@ const PROJECTS_BODY = {
   },
 };
 
+// Splits addresses into positioned segment tokens for the `.parts`
+// sub-fields: `Jane.Doe@Mail.Foo.com` -> [jane, doe, mail, foo, com].
+// Same-width space replacements keep highlight offsets aligned, and the
+// positions make dotted query phrases require in-order adjacent segments.
+const EMAIL_PARTS_ANALYSIS = {
+  char_filter: {
+    email_separators: {
+      type: 'mapping',
+      mappings: ['@ => \\u0020', '. => \\u0020', '+ => \\u0020'],
+    },
+  },
+  analyzer: {
+    email_parts: {
+      type: 'custom',
+      char_filter: ['email_separators'],
+      tokenizer: 'standard',
+      filter: ['lowercase'],
+    },
+  },
+};
+
+const EMAIL_ADDRESS_FIELD = {
+  type: 'keyword',
+  index: true,
+  doc_values: true,
+  fields: {
+    parts: {
+      type: 'text',
+      analyzer: 'email_parts',
+    },
+  },
+};
+
 const EMAIL_BODY = {
   settings: {
     ...SHARD_SETTINGS,
     refresh_interval: '2s',
+    analysis: EMAIL_PARTS_ANALYSIS,
   },
   mappings: {
     dynamic: 'false',
@@ -440,31 +474,11 @@ const EMAIL_BODY = {
         index: true,
         doc_values: true,
       },
-      sender: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      reply_to: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      recipients: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      cc: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      bcc: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
+      sender: EMAIL_ADDRESS_FIELD,
+      reply_to: EMAIL_ADDRESS_FIELD,
+      recipients: EMAIL_ADDRESS_FIELD,
+      cc: EMAIL_ADDRESS_FIELD,
+      bcc: EMAIL_ADDRESS_FIELD,
       sender_name: {
         type: 'text',
         analyzer: 'standard',

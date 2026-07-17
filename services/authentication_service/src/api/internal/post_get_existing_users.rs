@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 use axum::{
     Json,
@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use model::response::ErrorResponse;
 use utoipa::ToSchema;
@@ -62,10 +62,10 @@ impl IntoResponse for GetExistingUsersError {
             (status = 500, body = ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, _valid_access))]
+#[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _valid_access: ValidInternalKey,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(GetExistingUsersRequest { user_ids }): extract::Json<GetExistingUsersRequest>,
 ) -> Result<Json<GetExistingUsersResponse>, GetExistingUsersError> {
     tracing::info!("internal_get_existing_users");

@@ -12,6 +12,8 @@ use crate::entity::{channel, channel_message, document};
 const LOCAL_E2E_MANIFEST_JSON: &str = include_str!("../../../seed/local_e2e/manifest.json");
 const LOCAL_E2E_RESET_SQL: &str = include_str!("../../../seed/local_e2e/reset.sql");
 const LOCAL_E2E_USERS_JSON: &str = include_str!("../../../seed/local_e2e/users.json");
+const LOCAL_E2E_CHANNEL_MESSAGES_SQL: &str =
+    include_str!("../../../seed/local_e2e/channel_messages.sql");
 
 #[derive(Debug, Deserialize)]
 struct LocalE2eManifest {
@@ -230,14 +232,12 @@ fn validate_local_e2e_database_url(database_url: &str) -> anyhow::Result<()> {
     let host = parsed.host_str().unwrap_or_default();
     let username = parsed.username();
     let database = parsed.path().trim_start_matches('/');
-    let port = parsed.port_or_known_default();
-
     let is_local_host = matches!(host, "localhost" | "127.0.0.1" | "::1" | "postgres");
-    let is_local_compose_db = username == "user" && database == "macrodb" && port == Some(5432);
+    let is_local_compose_db = username == "user" && database == "macrodb";
 
     ensure!(
         is_local_host && is_local_compose_db,
-        "refusing to run local-e2e-smoke seed against DATABASE_URL host={host:?} user={username:?} database={database:?}; expected local docker database postgres://user:...@(localhost|127.0.0.1|postgres):5432/macrodb"
+        "refusing to run local-e2e-smoke seed against DATABASE_URL host={host:?} user={username:?} database={database:?}; expected a local database postgres://user:...@(localhost|127.0.0.1|postgres):<port>/macrodb"
     );
 
     Ok(())
@@ -250,6 +250,8 @@ mod tests {
     #[test]
     fn local_e2e_database_url_accepts_localhost_compose_db() {
         validate_local_e2e_database_url("postgres://user:password@localhost:5432/macrodb").unwrap();
+        validate_local_e2e_database_url("postgres://user:password@localhost:31000/macrodb")
+            .unwrap();
         validate_local_e2e_database_url("postgres://user:password@127.0.0.1:5432/macrodb").unwrap();
         validate_local_e2e_database_url("postgres://user:password@postgres:5432/macrodb").unwrap();
     }
@@ -344,6 +346,11 @@ async fn local_e2e_smoke(ctx: &SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("seeding local e2e smoke channel messages");
     let channel_messages_path = seed_path("seed/channel_messages.json");
     channel_message::seed_from_file_ref(ctx, &channel_messages_path).await?;
+
+    tracing::info!("seeding 5,000 local e2e messages per channel");
+    ctx.db
+        .execute_sql_script(LOCAL_E2E_CHANNEL_MESSAGES_SQL)
+        .await?;
 
     println!("Local e2e smoke seed data ready for {local_e2e_user_id}");
     Ok(())

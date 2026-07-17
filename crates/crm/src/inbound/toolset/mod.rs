@@ -15,14 +15,14 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use entity_access::domain::{
     models::{
         AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
-        TeamRole,
+        TeamRole, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
+use models_properties::DataType;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityType as PropertyEntityType};
 use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -309,10 +309,10 @@ pub(crate) fn company_view_receipts(
     company_ids
         .into_iter()
         .map(|id| {
-            properties::PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                 user_id.clone(),
                 &id.to_string(),
-                PropertyEntityType::Company,
+                EntityType::CrmCompany,
             )
         })
         .collect()

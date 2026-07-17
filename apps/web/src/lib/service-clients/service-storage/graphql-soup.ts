@@ -7,8 +7,8 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import type { CacheHost } from '@graphql-cache/host/types';
 import {
-  type CacheHost,
   createTauriCacheHost,
   createWorkerCacheHost,
 } from '@graphql-cache/index';
@@ -85,6 +85,11 @@ export function graphqlCacheEnabled(): boolean {
 
 let cachedClient: Client | undefined;
 let cachedCacheHost: CacheHost | undefined;
+
+/** Returns the persistent normalized-cache host after client initialization. */
+export function getGraphqlCacheHost(): CacheHost | undefined {
+  return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
+}
 
 /**
  * Resolves the urql client, lazily assembling the cached client on first

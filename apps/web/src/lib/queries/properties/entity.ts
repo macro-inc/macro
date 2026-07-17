@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
@@ -16,9 +17,14 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { setEntityProperty } from '../../service-clients/service-storage/graphql-properties';
+import {
+  getGraphqlCacheHost,
+  getGraphqlSoupClient,
+} from '../../service-clients/service-storage/graphql-soup';
 import { queryClient } from '../client';
 import {
   getSoupEntityById,
@@ -26,9 +32,19 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
+import {
+  buildOptimisticGroupedPropertyUpdates,
+  groupedPropertyKeys,
+} from '../soup/grouped/graphql-optimistic';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
+
+function toPropertyTargetEntityType(
+  entityType: EntityType | PropertyTargetEntityType
+): PropertyTargetEntityType {
+  return entityType === 'TASK' ? 'DOCUMENT' : entityType;
+}
 
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
@@ -43,15 +59,16 @@ export function useEntityPropertiesQuery(
         queryKey: propertiesKeys.entity({
           entityType: type,
           entityId: id,
-          includeMetadata,
         }).queryKey,
         queryFn: async () => {
+          // Always fetch with metadata so consumers with different
+          // `includeMetadata` values share one cache entry and one request.
           const data = await throwOnErr(
             async () =>
               await propertiesServiceClient.getEntityProperties({
-                entity_type: type,
+                entity_type: toPropertyTargetEntityType(type),
                 entity_id: id,
-                query: { include_metadata: includeMetadata },
+                query: { include_metadata: true },
               })
           );
           return data.properties.flatMap((property) => {
@@ -63,6 +80,10 @@ export function useEntityPropertiesQuery(
             }
           });
         },
+        select: (properties: Property[]) =>
+          includeMetadata
+            ? properties
+            : properties.filter((property) => property.isMetadata !== true),
         staleTime: 0,
       };
     },
@@ -71,7 +92,7 @@ export function useEntityPropertiesQuery(
 }
 
 function invalidatePropertiesForEntity(
-  entityType: EntityType,
+  entityType: EntityType | PropertyTargetEntityType,
   entityId: string
 ) {
   queryClient.invalidateQueries({
@@ -87,10 +108,12 @@ function getPropertyDefinitionId(
     : property.id;
 }
 
-function optimisticUpdateSoupEntityProperty(
+function optimisticUpdateSoupEntityProperties(
   entityId: string,
-  property: Property | PropertyDefinitionDomain,
-  value: SoupPropertyValue
+  updates: {
+    property: Property | PropertyDefinitionDomain;
+    value: SoupPropertyValue;
+  }[]
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
   // channel / call / foreign entities are property-less.
@@ -105,36 +128,29 @@ function optimisticUpdateSoupEntityProperty(
     return undefined;
   }
 
-  const propertyDefinitionId = getPropertyDefinitionId(property);
-  const existing = current.data.properties;
-  const existingProp = existing.find(
-    (prop) => prop.definition.id === propertyDefinitionId
-  );
+  const nextProperties = [...current.data.properties];
+  for (const { property, value } of updates) {
+    const propertyDefinitionId = getPropertyDefinitionId(property);
+    const index = nextProperties.findIndex(
+      (prop) => prop.definition.id === propertyDefinitionId
+    );
+    const existingProp = nextProperties[index];
+    const nextProp: SoupProperty = existingProp
+      ? {
+          ...existingProp,
+          definition: {
+            ...existingProp.definition,
+            // HACK (seamus): we need to change something other than value in
+            // order to get normy to update the cache. Changing
+            // definition.updated_at is INCORRECT, but it's currently harmless.
+            updated_at: new Date().toISOString(),
+          },
+          value,
+        }
+      : buildSoupProperty(property, value);
 
-  const nextProp: SoupProperty = existingProp
-    ? {
-        ...existingProp,
-        definition: {
-          ...existingProp.definition,
-          // HACK (seamus): we need to change something other than value in
-          // order to get normy to update the cache. Changing
-          // definition.updated_at is INCORRECT, but it's currently harmless.
-          updated_at: new Date().toISOString(),
-        },
-        value,
-      }
-    : buildSoupProperty(property, value);
-
-  const nextProperties = existing.map((prop) =>
-    prop.definition.id === nextProp.definition.id ? nextProp : prop
-  );
-
-  if (
-    nextProperties.every(
-      (prop) => prop.definition.id !== nextProp.definition.id
-    )
-  ) {
-    nextProperties.push(nextProp);
+    if (index === -1) nextProperties.push(nextProp);
+    else nextProperties[index] = nextProp;
   }
 
   return optimisticUpdateSoupEntity({
@@ -145,6 +161,14 @@ function optimisticUpdateSoupEntityProperty(
     },
     frecency_score: current.frecency_score,
   });
+}
+
+function optimisticUpdateSoupEntityProperty(
+  entityId: string,
+  property: Property | PropertyDefinitionDomain,
+  value: SoupPropertyValue
+): SoupTransaction | undefined {
+  return optimisticUpdateSoupEntityProperties(entityId, [{ property, value }]);
 }
 
 function buildSoupProperty(
@@ -254,7 +278,7 @@ export function useDeleteEntityPropertyMutation(
 
 type AddEntityPropertyParams = {
   entityId: string;
-  entityType: EntityType;
+  entityType: EntityType | PropertyTargetEntityType;
   propertyDefinitionId: string;
 };
 
@@ -267,7 +291,7 @@ export function useAddEntityPropertyMutation(
       // New attachments have no assignment id until the server responds, so
       // this write is never optimistic; onSettled invalidation refetches.
       await setEntityProperty({
-        entityType: vars.entityType,
+        entityType: toPropertyTargetEntityType(vars.entityType),
         entityId: vars.entityId,
         propertyDefinitionId: vars.propertyDefinitionId,
         value: null,
@@ -293,7 +317,7 @@ export function useAddEntityPropertyMutation(
 
 type EntityPropertyOptionParams = {
   entityId: string;
-  entityType: EntityType;
+  entityType: EntityType | PropertyTargetEntityType;
   property: Property | PropertyDefinitionDomain;
   optionId: string;
   /**
@@ -368,7 +392,7 @@ export function useAddEntityPropertyOptionMutation(
       await throwOnErr(
         async () =>
           await propertiesServiceClient.addEntityPropertyOption({
-            entity_type: vars.entityType,
+            entity_type: toPropertyTargetEntityType(vars.entityType),
             entity_id: vars.entityId,
             property_id: getPropertyDefinitionId(vars.property),
             option_id: vars.optionId,
@@ -396,7 +420,7 @@ export function useRemoveEntityPropertyOptionMutation(
       await throwOnErr(
         async () =>
           await propertiesServiceClient.removeEntityPropertyOption({
-            entity_type: vars.entityType,
+            entity_type: toPropertyTargetEntityType(vars.entityType),
             entity_id: vars.entityId,
             property_id: getPropertyDefinitionId(vars.property),
             option_id: vars.optionId,
@@ -404,6 +428,207 @@ export function useRemoveEntityPropertyOptionMutation(
       );
     },
     ...entityPropertyOptionCallbacks('Failed to remove tag', callbacks),
+  }));
+}
+
+export type EntityPropertyOptionDelta = {
+  type: 'add' | 'remove';
+  optionId: string;
+};
+
+export function getEntityPropertyOptionDeltas(
+  currentOptionIds: string[],
+  nextOptionIds: string[]
+): EntityPropertyOptionDelta[] {
+  const current = new Set(currentOptionIds);
+  const next = new Set(nextOptionIds);
+  return [
+    ...currentOptionIds
+      .filter((optionId) => !next.has(optionId))
+      .map((optionId) => ({ type: 'remove' as const, optionId })),
+    ...nextOptionIds
+      .filter((optionId) => !current.has(optionId))
+      .map((optionId) => ({ type: 'add' as const, optionId })),
+  ];
+}
+
+export function rollbackEntityPropertyOptionDelta(
+  optionIds: string[],
+  delta: EntityPropertyOptionDelta
+): string[] {
+  if (delta.type === 'add') {
+    return optionIds.filter((id) => id !== delta.optionId);
+  }
+  return optionIds.includes(delta.optionId)
+    ? optionIds
+    : [...optionIds, delta.optionId];
+}
+
+type BulkUpdateEntityPropertyOptionsParams = {
+  entityId: string;
+  entityType: EntityType;
+  properties: Array<{
+    property: Property | PropertyDefinitionDomain;
+    currentOptionIds: string[];
+    nextOptionIds: string[];
+  }>;
+};
+
+export type FailedEntityPropertyOptionDelta = {
+  updateIndex: number;
+  delta: EntityPropertyOptionDelta;
+};
+
+export class BulkUpdateEntityPropertyOptionsError extends Error {
+  constructor(readonly failedDeltas: FailedEntityPropertyOptionDelta[]) {
+    super('Failed to update some tags');
+    this.name = 'BulkUpdateEntityPropertyOptionsError';
+  }
+}
+
+type BulkUpdateEntityPropertyOptionsContext = {
+  soupTxn?: SoupTransaction;
+};
+
+function optionIdsFromSoupProperty(property: SoupProperty | undefined) {
+  return property?.value?.type === 'SelectOption' ? property.value.value : [];
+}
+
+function rollbackFailedOptionDeltas(
+  variables: BulkUpdateEntityPropertyOptionsParams,
+  failedDeltas: FailedEntityPropertyOptionDelta[]
+) {
+  const failedByUpdate = new Map<number, EntityPropertyOptionDelta[]>();
+  for (const { updateIndex, delta } of failedDeltas) {
+    const deltas = failedByUpdate.get(updateIndex) ?? [];
+    deltas.push(delta);
+    failedByUpdate.set(updateIndex, deltas);
+  }
+
+  const current = getSoupEntityById(variables.entityId);
+  const updates: {
+    property: Property | PropertyDefinitionDomain;
+    value: SoupPropertyValue;
+  }[] = [];
+  for (const [updateIndex, deltas] of failedByUpdate) {
+    const update = variables.properties[updateIndex];
+    if (!update) continue;
+    const propertyDefinitionId = getPropertyDefinitionId(update.property);
+    const soupProperty =
+      current &&
+      current.tag !== 'channel' &&
+      current.tag !== 'call' &&
+      current.tag !== 'foreignEntity' &&
+      current.tag !== 'channelThread'
+        ? current.data.properties?.find(
+            (property) => property.definition.id === propertyDefinitionId
+          )
+        : undefined;
+    const optionIds = deltas.reduce(
+      rollbackEntityPropertyOptionDelta,
+      optionIdsFromSoupProperty(soupProperty)
+    );
+    updates.push({
+      property: update.property,
+      value:
+        optionIds.length > 0
+          ? { type: 'SelectOption', value: optionIds }
+          : null,
+    });
+  }
+
+  optimisticUpdateSoupEntityProperties(variables.entityId, updates);
+}
+
+/**
+ * Applies a complete multi-select change with one optimistic soup transaction.
+ * The service currently exposes only idempotent delta endpoints, so persistence
+ * fans out until a true bulk endpoint is available.
+ */
+export function useBulkUpdateEntityPropertyOptionsMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    BulkUpdateEntityPropertyOptionsParams,
+    BulkUpdateEntityPropertyOptionsContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (variables: BulkUpdateEntityPropertyOptionsParams) => {
+      const operations = variables.properties.flatMap((update, updateIndex) =>
+        getEntityPropertyOptionDeltas(
+          update.currentOptionIds,
+          update.nextOptionIds
+        ).map((delta) => ({ update, updateIndex, delta }))
+      );
+      const results = await Promise.allSettled(
+        operations.map(({ update, delta }) => {
+          const params = {
+            entity_type: toPropertyTargetEntityType(variables.entityType),
+            entity_id: variables.entityId,
+            property_id: getPropertyDefinitionId(update.property),
+            option_id: delta.optionId,
+          };
+          return throwOnErr(async () =>
+            delta.type === 'add'
+              ? await propertiesServiceClient.addEntityPropertyOption(params)
+              : await propertiesServiceClient.removeEntityPropertyOption(params)
+          );
+        })
+      );
+      const failedDeltas = results.flatMap((result, index) =>
+        result.status === 'rejected'
+          ? [
+              {
+                updateIndex: operations[index].updateIndex,
+                delta: operations[index].delta,
+              },
+            ]
+          : []
+      );
+      if (failedDeltas.length > 0) {
+        throw new BulkUpdateEntityPropertyOptionsError(failedDeltas);
+      }
+    },
+    ...withCallbacks<
+      void,
+      Error,
+      BulkUpdateEntityPropertyOptionsParams,
+      BulkUpdateEntityPropertyOptionsContext
+    >(
+      {
+        onMutate: (variables) => {
+          const soupTxn = optimisticUpdateSoupEntityProperties(
+            variables.entityId,
+            variables.properties.map((update) => ({
+              property: update.property,
+              value:
+                update.nextOptionIds.length > 0
+                  ? { type: 'SelectOption', value: update.nextOptionIds }
+                  : null,
+            }))
+          );
+          return { soupTxn };
+        },
+        onError: (error, variables, context) => {
+          if (error instanceof BulkUpdateEntityPropertyOptionsError) {
+            rollbackFailedOptionDeltas(variables, error.failedDeltas);
+          } else {
+            context?.soupTxn?.rollback();
+          }
+          console.error('Failed to update tags', error);
+          toast.failure('Failed to update tags');
+        },
+        onSettled: (_data, _error, variables) => {
+          invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          );
+          invalidateSoupEntity(variables.entityId);
+        },
+      },
+      callbacks
+    ),
   }));
 }
 
@@ -465,7 +690,7 @@ function trackTaskPropertySave(
 type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
-    entityType: EntityType;
+    entityType: EntityType | PropertyTargetEntityType;
     property: Property | PropertyDefinitionDomain;
     apiValues: PropertyApiValues;
   }>;
@@ -486,29 +711,65 @@ export function useBulkSaveEntityPropertiesMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: BulkSaveEntityPropertiesParams) => {
-      await Promise.all(
-        vars.properties.map((item) => {
-          const propertyValue = propertyValueToApi(
-            item.apiValues,
-            item.property.isMultiSelect
-          );
+      const save = async (
+        item: BulkSaveEntityPropertiesParams['properties'][number]
+      ) => {
+        const propertyValue = propertyValueToApi(
+          item.apiValues,
+          item.property.isMultiSelect
+        );
+        const optimisticProperty = buildOptimisticSetEntityProperty(
+          item.property,
+          item.apiValues
+        );
+        let optimisticCache;
 
-          return setEntityProperty({
-            entityType: item.entityType,
-            entityId: item.entityId,
-            propertyDefinitionId: getPropertyDefinitionId(item.property),
-            value: propertyValue,
-            // GraphQL path only: updates the normalized property record
-            // referenced by soup query results. The TanStack optimistic
-            // transaction below stays until soup consumers move to
-            // reactive urql queries.
-            optimisticProperty: buildOptimisticSetEntityProperty(
-              item.property,
-              item.apiValues
-            ),
-          });
-        })
-      );
+        if (ENABLE_GRAPHQL_SOUP() && isInstantiatedProperty(item.property)) {
+          // Client construction owns host selection; force it before asking
+          // for the host used by inspect-driven relation discovery.
+          getGraphqlSoupClient();
+          const host = getGraphqlCacheHost();
+          if (host) {
+            try {
+              const oldGroupKeys = groupedPropertyKeys(item.property);
+              const newGroupKeys = groupedPropertyKeys(item.apiValues);
+              optimisticCache = await buildOptimisticGroupedPropertyUpdates({
+                host,
+                entityId: item.entityId,
+                propertyDefinitionId: item.property.propertyDefinitionId,
+                oldGroupKeys: oldGroupKeys ?? [],
+                newGroupKeys: newGroupKeys ?? [],
+                revalidateOnly:
+                  oldGroupKeys === undefined || newGroupKeys === undefined,
+              });
+            } catch (error) {
+              // Relation discovery is an optimization. Property writes still
+              // proceed with normalized entity optimism when cache inspection
+              // is unavailable.
+              console.warn('Failed to build grouped Soup optimism', error);
+            }
+          }
+        }
+
+        return setEntityProperty({
+          entityType: toPropertyTargetEntityType(item.entityType),
+          entityId: item.entityId,
+          propertyDefinitionId: getPropertyDefinitionId(item.property),
+          value: propertyValue,
+          // The TanStack optimistic transaction below stays as a transitional
+          // render mirror until grouped Soup is a live urql subscription.
+          optimisticProperty,
+          optimisticCache,
+        });
+      };
+
+      if (ENABLE_GRAPHQL_SOUP()) {
+        // Begin each durable layer sequentially so later relation recipes see
+        // the effective result of earlier property edits.
+        for (const item of vars.properties) await save(item);
+      } else {
+        await Promise.all(vars.properties.map(save));
+      }
     },
     ...withCallbacks<
       void,

@@ -12,6 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::annotations::create_comment::create_document_comment;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -110,9 +111,9 @@ pub async fn create_comment_handler(
                 // outside the commenting user's session. The comment itself was
                 // already authorized by the document middleware.
                 let task_properties_access =
-                    properties::PropertiesAccessReceipt::dangerously_assert_internal(
+                    EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_internal_user(
                         &document_id,
-                        models_properties::EntityType::Task,
+                        model_entity::EntityType::Document,
                     );
                 let task_assignee_ids: Vec<String> = match properties_service
                     .get_system_property_value(

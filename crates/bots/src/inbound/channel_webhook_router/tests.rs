@@ -4,9 +4,9 @@ use crate::domain::models::{
     CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use axum::{
-    Extension, Router,
+    Router,
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header},
 };
 use channels::domain::models::PostMessageResponse;
 use entity_access::domain::{
@@ -16,13 +16,19 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use macro_authorization::{
+    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState, ValidatedIdentity,
+};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model_user::UserContext;
+use rootcause::Report;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
+
+const DEFAULT_BEARER_TOKEN: &str = "macro|bot-admin@example.com";
 
 #[derive(Clone)]
 enum TestCreateMode {
@@ -406,13 +412,39 @@ impl ChannelMessagePoster for TestChannelPoster {
     }
 }
 
-fn user_extension() -> Extension<UserContext> {
-    Extension(UserContext {
-        user_id: "macro|bot-admin@example.com".to_string(),
-        fusion_user_id: "fusion-user".to_string(),
-        permissions: None,
-        organization_id: None,
-    })
+#[derive(Clone, Default)]
+struct FakeJwtValidator;
+
+impl JwtValidator for FakeJwtValidator {
+    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+        Ok(ValidatedIdentity {
+            user_id: jwt.to_string(),
+            fusion_user_id: "fusion-user".to_string(),
+            organization_id: None,
+            permissions: None,
+        })
+    }
+}
+
+type TestAuthorizationService = MacroAuthorizationServiceImpl<FakeJwtValidator>;
+
+fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".to_string(),
+            default_user_id: None,
+        },
+    );
+    MacroAuthorizationState::new(Arc::new(service))
+}
+
+async fn attach_default_bearer(mut request: Request<Body>) -> Request<Body> {
+    request.headers_mut().insert(
+        header::AUTHORIZATION,
+        format!("Bearer {DEFAULT_BEARER_TOKEN}").parse().unwrap(),
+    );
+    request
 }
 
 fn router(
@@ -424,8 +456,9 @@ fn router(
         service,
         poster,
         TestAccessService::new(role),
+        authorization_state(),
     ))
-    .layer(user_extension())
+    .layer(axum::middleware::map_request(attach_default_bearer))
 }
 
 fn webhook_router(service: TestBotService, poster: TestChannelPoster) -> Router {
@@ -433,6 +466,7 @@ fn webhook_router(service: TestBotService, poster: TestChannelPoster) -> Router 
         service,
         poster,
         TestAccessService::new(EntityParticipantRole::Member),
+        authorization_state(),
     ))
 }
 

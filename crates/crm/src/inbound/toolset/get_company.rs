@@ -10,9 +10,9 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use models_properties::DataType;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::{DataType, EntityType as PropertyEntityType};
 use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -208,10 +208,10 @@ where
         // Asserted rather than minted: view access to this company was just
         // verified above via `get_crm_entity_permission_with_team`.
         let properties_access =
-            properties::PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                 request_context.user_id.clone(),
                 &company_id,
-                PropertyEntityType::Company,
+                EntityType::CrmCompany,
             );
         let properties = service_context
             .properties

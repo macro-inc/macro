@@ -330,12 +330,13 @@
     "esbuild",
   ],
   "patchedDependencies": {
+    "@lexical/table@0.45.0": "apps/web/patches/@lexical%2Ftable@0.45.0.patch",
+    "@tanstack/solid-query@5.90.3": "apps/web/patches/@tanstack%2Fsolid-query@5.90.3.patch",
+    "solid-gesture@0.0.3": "apps/web/patches/solid-gesture@0.0.3.patch",
     "@kobalte/core@0.13.11": "apps/web/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "apps/web/patches/virtua@0.48.8.patch",
-    "@tanstack/solid-query@5.90.3": "apps/web/patches/@tanstack%2Fsolid-query@5.90.3.patch",
     "@lexical/markdown@0.45.0": "apps/web/patches/@lexical%2Fmarkdown@0.45.0.patch",
     "@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
-    "solid-gesture@0.0.3": "apps/web/patches/solid-gesture@0.0.3.patch",
   },
   "overrides": {
     "@kobalte/core": "0.13.11",
