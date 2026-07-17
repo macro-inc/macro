@@ -41,7 +41,7 @@ import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
 import { propertiesKeys } from './keys';
 
 function toPropertyTargetEntityType(
-  entityType: EntityType
+  entityType: EntityType | PropertyTargetEntityType
 ): PropertyTargetEntityType {
   return entityType === 'TASK' ? 'DOCUMENT' : entityType;
 }
@@ -92,7 +92,7 @@ export function useEntityPropertiesQuery(
 }
 
 function invalidatePropertiesForEntity(
-  entityType: EntityType,
+  entityType: EntityType | PropertyTargetEntityType,
   entityId: string
 ) {
   queryClient.invalidateQueries({
@@ -278,7 +278,7 @@ export function useDeleteEntityPropertyMutation(
 
 type AddEntityPropertyParams = {
   entityId: string;
-  entityType: EntityType;
+  entityType: EntityType | PropertyTargetEntityType;
   propertyDefinitionId: string;
 };
 
@@ -317,7 +317,7 @@ export function useAddEntityPropertyMutation(
 
 type EntityPropertyOptionParams = {
   entityId: string;
-  entityType: EntityType;
+  entityType: EntityType | PropertyTargetEntityType;
   property: Property | PropertyDefinitionDomain;
   optionId: string;
   /**
@@ -690,7 +690,7 @@ function trackTaskPropertySave(
 type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
-    entityType: EntityType;
+    entityType: EntityType | PropertyTargetEntityType;
     property: Property | PropertyDefinitionDomain;
     apiValues: PropertyApiValues;
   }>;

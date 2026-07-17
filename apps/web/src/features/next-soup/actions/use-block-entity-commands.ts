@@ -350,9 +350,9 @@ export const useBlockEntityCommands = () => {
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Assign tags - 'shift+cmd+t'
+    // Assign tags - 't'
     registerHotkey({
-      hotkey: ['shift+cmd+t'],
+      hotkey: ['t'],
       hotkeyToken: TOKENS.entity.action.tags,
       scopeId,
       description: 'Tag item',

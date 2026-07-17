@@ -119,7 +119,7 @@ function tagDefinitionDomain(
   return {
     id: definition.id,
     displayName: definition.displayName,
-    valueType: 'SELECT_STRING',
+    valueType: 'TAG',
     isMultiSelect: true,
     isMetadata: definition.isMetadata,
     isSystem: definition.isSystem,
@@ -130,18 +130,29 @@ function tagDefinitionDomain(
 }
 
 function entityTagIdsByDefinition(
-  entities: EntityData[]
+  entities: EntityData[],
+  fetchedProperties?: { entityId: string; properties: Property[] }
 ): EntityTagIdsByDefinition {
   const byEntity = new Map<string, Map<string, string[]>>();
 
   for (const entity of entities) {
     const byDefinition = new Map<string, string[]>();
-    const properties = 'properties' in entity ? entity.properties : undefined;
-    for (const property of properties ?? []) {
-      if (property.value?.type === 'SelectOption') {
-        byDefinition.set(property.definition.id, property.value.value);
+
+    if (fetchedProperties?.entityId === entity.id) {
+      for (const property of fetchedProperties.properties) {
+        if (property.valueType === 'SELECT_STRING' && property.value) {
+          byDefinition.set(property.propertyDefinitionId, property.value);
+        }
+      }
+    } else {
+      const properties = 'properties' in entity ? entity.properties : undefined;
+      for (const property of properties ?? []) {
+        if (property.value?.type === 'SelectOption') {
+          byDefinition.set(property.definition.id, property.value.value);
+        }
       }
     }
+
     byEntity.set(entity.id, byDefinition);
   }
 
@@ -497,18 +508,56 @@ function TagAssignmentEditor(props: {
   const currentTeamQuery = useCurrentTeamQuery();
   const addOption = useAddEntityPropertyOptionMutation();
   const removeOption = useRemoveEntityPropertyOptionMutation();
-  const [localTagIds, setLocalTagIds] = createSignal<EntityTagIdsByDefinition>(
-    entityTagIdsByDefinition(props.entities)
+  const singleEntity = () =>
+    props.entities.length === 1 ? props.entities[0] : undefined;
+  const entityPropertiesQuery = useEntityPropertiesQuery(
+    () => {
+      const entity = singleEntity();
+      return entity ? macroEntityToPropertyEntityType(entity) : 'DOCUMENT';
+    },
+    () => singleEntity()?.id ?? '',
+    false
   );
+  const currentEntityTagIds = () =>
+    entityTagIdsByDefinition(
+      props.entities,
+      singleEntity() && entityPropertiesQuery.data
+        ? {
+            entityId: singleEntity()!.id,
+            properties: entityPropertiesQuery.data,
+          }
+        : undefined
+    );
+  const initialEntityTagIds = currentEntityTagIds();
+  const [orderedTagIds, setOrderedTagIds] =
+    createSignal<EntityTagIdsByDefinition>(initialEntityTagIds);
+  const [localTagIds, setLocalTagIds] =
+    createSignal<EntityTagIdsByDefinition>(initialEntityTagIds);
+  const [hasEditedTags, setHasEditedTags] = createSignal(false);
+  let syncedEntityIds = props.entities.map((entity) => entity.id).join('\0');
 
   createEffect(() => {
-    props.setPlaceholder('Add or remove tags...');
+    props.setPlaceholder('Change or add tags...');
   });
 
   createEffect(
     on(
-      () => props.entities.map((entity) => entity.id).join('\0'),
-      () => setLocalTagIds(entityTagIdsByDefinition(props.entities))
+      () => ({
+        entityIds: props.entities.map((entity) => entity.id).join('\0'),
+        properties: entityPropertiesQuery.data,
+      }),
+      ({ entityIds }) => {
+        const entityIdsChanged = entityIds !== syncedEntityIds;
+        if (entityIdsChanged) {
+          syncedEntityIds = entityIds;
+          setHasEditedTags(false);
+        }
+        if (hasEditedTags() && !entityIdsChanged) return;
+
+        const nextTagIds = currentEntityTagIds();
+        setOrderedTagIds(nextTagIds);
+        setLocalTagIds(nextTagIds);
+      }
     )
   );
 
@@ -537,17 +586,31 @@ function TagAssignmentEditor(props: {
     );
   };
 
+  const wasFullyAppliedWhenOpened = (item: TagOptionItem) => {
+    if (props.entities.length === 0) return false;
+    return props.entities.every((entity) =>
+      getTagIds(orderedTagIds(), entity.id, item.definition.id).includes(
+        item.option.id
+      )
+    );
+  };
+
   const filteredItems = createMemo(() => {
     const query = props.searchValue().trim().toLowerCase();
     const matchesQuery = (item: TagOptionItem) =>
       !query || tagOptionLabel(item.option).toLowerCase().includes(query);
 
     const matchingItems = tagItems().filter(matchesQuery);
-    const applied = matchingItems.filter(isFullyApplied);
-    const remaining = matchingItems.filter((item) => !isFullyApplied(item));
+    const applied = matchingItems.filter(wasFullyAppliedWhenOpened);
+    const remaining = matchingItems.filter(
+      (item) => !wasFullyAppliedWhenOpened(item)
+    );
 
     return [...applied, ...remaining];
   });
+  const selectedGroupSize = createMemo(
+    () => filteredItems().filter(wasFullyAppliedWhenOpened).length
+  );
 
   createEffect(() => {
     props.searchValue();
@@ -585,11 +648,13 @@ function TagAssignmentEditor(props: {
     event?: KeyboardEvent | MouseEvent
   ) => {
     const remove = isFullyApplied(item);
+    const shouldClose = !event?.shiftKey;
     const previousTagIds = localTagIds();
+    setHasEditedTags(true);
     updateLocalOption(item, remove);
 
     try {
-      await Promise.all(
+      const update = Promise.all(
         props.entities.map(async (entity) => {
           const entityType = macroEntityToPropertyEntityType(entity);
           const current = getTagIds(
@@ -617,9 +682,12 @@ function TagAssignmentEditor(props: {
         })
       );
 
-      if (!event?.shiftKey) closePropertyEditor();
+      if (shouldClose) closePropertyEditor();
+      await update;
     } catch (error) {
-      setLocalTagIds(entityTagIdsByDefinition(props.entities));
+      if (!shouldClose) {
+        setLocalTagIds(previousTagIds);
+      }
       console.error('Failed to update tags', error);
     }
   };
@@ -661,24 +729,33 @@ function TagAssignmentEditor(props: {
         <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
           <For each={filteredItems()}>
             {(item, index) => (
-              <ListItem
-                id={`tag-assignment-option-${index()}`}
-                isSelected={selector(index())}
-                onClick={(event) => void toggleTag(item, event)}
-                onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
-                class="scroll-m-2"
-              >
-                <OptionCheckBox checked={isFullyApplied(item)} multiselect />
-                <TagDot color={item.option.color ?? undefined} />
-                <span class="min-w-0 flex-1 truncate">
-                  {tagOptionLabel(item.option)}
-                </span>
-                <Show when={item.scope === 'team'}>
-                  <span class="max-w-30 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
-                    {teamName()}
-                  </span>
+              <>
+                <Show
+                  when={
+                    index() === selectedGroupSize() && selectedGroupSize() > 0
+                  }
+                >
+                  <div class="mx-2 my-1 h-px bg-edge-muted/50" />
                 </Show>
-              </ListItem>
+                <ListItem
+                  id={`tag-assignment-option-${index()}`}
+                  isSelected={selector(index())}
+                  onClick={(event) => void toggleTag(item, event)}
+                  onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+                  class="scroll-m-2"
+                >
+                  <OptionCheckBox checked={isFullyApplied(item)} multiselect />
+                  <TagDot color={item.option.color ?? undefined} />
+                  <span class="min-w-0 flex-1 truncate">
+                    {tagOptionLabel(item.option)}
+                  </span>
+                  <Show when={item.scope === 'team'}>
+                    <span class="max-w-30 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
+                      {teamName()}
+                    </span>
+                  </Show>
+                </ListItem>
+              </>
             )}
           </For>
         </div>
@@ -822,7 +899,7 @@ function SelectPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
       <Show
         when={filteredOptions().length > 0}
         fallback={
@@ -838,6 +915,7 @@ function SelectPropertyEditor(props: {
               isSelected={selector(index())}
               onClick={() => props.onSubmit(option.id)}
               onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+              class="scroll-m-2"
             >
               <PropertyValueIcon optionId={option.id} />
               <div class="flex-1 text-left">
@@ -936,7 +1014,7 @@ function EntityPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
       <Show
         when={entities().length > 0}
         fallback={
@@ -952,6 +1030,7 @@ function EntityPropertyEditor(props: {
             <ListItem
               id={`entity-option-${index()}`}
               isSelected={selector(index())}
+              class='scroll-m-2'
               onClick={() => {
                 const entityRef: EntityReference = {
                   entity_id: entity.id,
@@ -1126,7 +1205,7 @@ function DirectEditPropertyEditor(props: {
   };
 
   return (
-    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
       <ListItem
         id="property-value-option-0"
         isSelected={true}
@@ -1200,7 +1279,7 @@ function DatePropertyEditor(props: {
 
   return (
     <>
-      <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+      <div class="p-2 max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden">
         <Show
           when={dateOptions().length > 0}
           fallback={
@@ -1225,6 +1304,7 @@ function DatePropertyEditor(props: {
                 isSelected={selector(index())}
                 onClick={() => props.onSubmit(option.date)}
                 onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+                class="scroll-m-2"
               >
                 <div class="flex-1 text-left">
                   <p class="text-sm font-medium">{option.displayText}</p>
@@ -1238,7 +1318,7 @@ function DatePropertyEditor(props: {
         </Show>
       </div>
 
-      <div class="px-2 py-1.5 border-t border-edge-muted">
+      <div class="p-4 border-t border-edge-muted">
         <div class="text-xs text-ink-muted">
           <span>Use queries like </span>
           <code class="bg-active px-1">3d</code>,{' '}

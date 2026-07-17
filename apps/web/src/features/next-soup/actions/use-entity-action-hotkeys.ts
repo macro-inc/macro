@@ -416,9 +416,9 @@ export const useEntityActionHotkeys = (
     scopeId,
   }).withGroup(group);
 
-  // Assign tags - shift+cmd+t
+  // Assign tags - t
   registerHotkey({
-    hotkey: ['shift+cmd+t'],
+    hotkey: ['t'],
     hotkeyToken: TOKENS.entity.action.tags,
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
