@@ -26,6 +26,10 @@ impl RecordSelection {
     /// Parses and validates a named fragment document.
     pub fn parse(document: &str, fragment_name: &str) -> Result<Self, RecordSelectionError> {
         let document = Document::parse(document)?;
+        for fragment in &document.fragments {
+            concrete_type_names(&fragment.type_condition)?;
+            validate_selections(&fragment.selection_set, &fragment.type_condition)?;
+        }
         let fragment = document.fragment(fragment_name)?;
         let type_names = concrete_type_names(&fragment.type_condition)?;
         if type_names.is_empty() {
@@ -40,7 +44,6 @@ impl RecordSelection {
                 return Err(RecordSelectionError::NotNormalized(type_name.clone()));
             }
         }
-        validate_selections(&fragment.selection_set, &fragment.type_condition)?;
         Ok(Self {
             type_names,
             selection_set: fragment.selection_set.clone(),

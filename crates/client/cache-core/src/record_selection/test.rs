@@ -81,6 +81,13 @@ fn rejects_unknown_fragment_and_type() {
         RecordSelection::parse("fragment Item on MissingType { id }", "Item"),
         Err(RecordSelectionError::UnknownType(_))
     ));
+    assert!(matches!(
+        RecordSelection::parse(
+            "fragment Item on GraphqlSoupItem { id } fragment Unused on MissingType { id }",
+            "Item",
+        ),
+        Err(RecordSelectionError::UnknownType(_))
+    ));
 }
 
 #[test]
