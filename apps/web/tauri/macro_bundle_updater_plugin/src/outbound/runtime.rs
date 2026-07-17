@@ -5,7 +5,7 @@ use crate::domain::ports::TaskSpawner;
 pub struct TauriTaskSpawner;
 
 impl TaskSpawner for TauriTaskSpawner {
-    fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) {
+    fn spawn(task: impl Future<Output = ()> + Send + 'static) {
         drop(tauri::async_runtime::spawn(task));
     }
 }

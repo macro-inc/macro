@@ -10,9 +10,9 @@ use crate::domain::{
 use std::path::{Path, PathBuf};
 
 /// Port for spawning detached domain background tasks.
-pub trait TaskSpawner: Clone + Send + Sync + 'static {
+pub trait TaskSpawner: Send + Sync + 'static {
     /// Spawn a task onto the host application's asynchronous runtime.
-    fn spawn(&self, task: impl Future<Output = ()> + Send + 'static);
+    fn spawn(task: impl Future<Output = ()> + Send + 'static);
 }
 
 /// Port for reading binary assets from an OTA bundle directory.

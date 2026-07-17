@@ -389,11 +389,10 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let native_build = native_build();
         let system_info = SystemInfo::new(app.clone(), native_build);
 
-        let mut service = Service::new(
+        let mut service = Service::new::<_, _, TauriTaskSpawner>(
             client,
             fs,
             system_info,
-            TauriTaskSpawner,
             self.embedded_bundle_build,
             native_build,
             self.bundle_routes.clone(),

@@ -9,6 +9,7 @@ use crate::domain::{
 };
 use rootcause::{Report, prelude::ResultExt, report};
 use std::{
+    marker::PhantomData,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -54,7 +55,7 @@ struct Worker<U, Fs, Q, S> {
     fs_repo: Fs,
     system_query: Q,
     bundle_routes: BundleRoutes,
-    task_spawner: S,
+    _task_spawner: PhantomData<S>,
     status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
     start_rx: StartRx,
 }
@@ -75,7 +76,6 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
         fs_repo: Fs,
         system_query: Q,
         bundle_routes: BundleRoutes,
-        task_spawner: S,
     ) -> WorkerHandle {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
         let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
@@ -85,7 +85,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
             fs_repo,
             system_query,
             bundle_routes,
-            task_spawner,
+            _task_spawner: PhantomData::<S>,
             status_tx: status_tx.clone(),
             start_rx,
         }
@@ -99,8 +99,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
     }
 
     fn run_background(self) {
-        let task_spawner = self.task_spawner.clone();
-        task_spawner.spawn(async move {
+        S::spawn(async move {
             let mut worker = self;
             // Run the checker loop once on startup, then again each time we
             // receive a restart signal from the main thread.
@@ -270,14 +269,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                 let (req, rx) = status.update.into_download_request(&download_filename);
 
                 let status_tx = self.status_tx.clone();
-                self.task_spawner
-                    .spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
-                        UpdateStatus::DownloadingBundle(download) => {
-                            download.progress = progress;
-                            true
-                        }
-                        _ => false,
-                    }));
+                S::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
+                    UpdateStatus::DownloadingBundle(download) => {
+                        download.progress = progress;
+                        true
+                    }
+                    _ => false,
+                }));
 
                 let () = self
                     .update_repo
@@ -307,14 +305,13 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                 let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
                 let status_tx = self.status_tx.clone();
-                self.task_spawner
-                    .spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
-                        UpdateStatus::UnzippingBundle(zip) => {
-                            zip.progress = progress;
-                            true
-                        }
-                        _ => false,
-                    }));
+                S::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
+                    UpdateStatus::UnzippingBundle(zip) => {
+                        zip.progress = progress;
+                        true
+                    }
+                    _ => false,
+                }));
 
                 let bundle_dir = self.fs_repo.unzip(req).await.context(UpdateError::Unzip)?;
                 validate_bundle_dir(
@@ -518,17 +515,15 @@ impl<Fs: FsRepo> Service<Fs> {
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
-        task_spawner: S,
         embedded_bundle_build: u64,
         native_build: u64,
         bundle_routes: BundleRoutes,
     ) -> Self {
-        let handle = Worker::new_handle(
+        let handle = Worker::<U, Fs, Q, S>::new_handle(
             update_repo,
             fs_repo.clone(),
             system_query,
             bundle_routes.clone(),
-            task_spawner,
         );
         Service {
             handle,
@@ -1174,7 +1169,7 @@ mod tests {
     struct TestTaskSpawner;
 
     impl TaskSpawner for TestTaskSpawner {
-        fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) {
+        fn spawn(task: impl Future<Output = ()> + Send + 'static) {
             drop(tokio::spawn(task));
         }
     }
@@ -1308,11 +1303,10 @@ mod tests {
     fn service_with_network(network_type: &str) -> (Service<FakeFs>, FakeSystemQuery) {
         let system_query = FakeSystemQuery::new(network_type);
         let (update_repo, _) = fake_update_repo(Some(BundleAction::Update(bundle_update())), true);
-        let service = Service::new(
+        let service = Service::new::<_, _, TestTaskSpawner>(
             update_repo,
             FakeFs::default(),
             system_query.clone(),
-            TestTaskSpawner,
             0,
             0,
             BundleRoutes::new(0),
@@ -1375,7 +1369,7 @@ mod tests {
                 native_build,
             ),
             bundle_routes: BundleRoutes::new(0),
-            task_spawner: TestTaskSpawner,
+            _task_spawner: PhantomData::<TestTaskSpawner>,
             status_tx,
             start_rx,
         }
