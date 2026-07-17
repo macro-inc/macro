@@ -1,5 +1,6 @@
 //! Domain models, ports, and project service definitions.
 
+pub mod events;
 pub mod models;
 pub mod response;
 
