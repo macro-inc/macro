@@ -4,8 +4,6 @@
 // 1. Strips the `/app/` base path prefix before embedded asset resolution.
 // 2. Resolves OTA assets through the bundle updater's domain service.
 
-use std::{sync::Arc, time::Duration};
-
 use http::{Response as HttpResponse, StatusCode, header::CONTENT_TYPE};
 use macro_bundle_updater_plugin::domain::{
     asset_service::{
@@ -14,6 +12,7 @@ use macro_bundle_updater_plugin::domain::{
     },
     ports::BundleAssetRepo,
 };
+use std::time::Duration;
 use tauri::{Runtime, UriSchemeResponder};
 
 const ASSET_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -126,7 +125,7 @@ fn delegate_to_embedded(
 
 async fn resolve_request<Assets: BundleAssetRepo>(
     resolver: BundleAssetResolver<Assets>,
-    upstream: Arc<ProtocolHandlerFn>,
+    upstream: &ProtocolHandlerFn,
     webview_id: String,
     request: http::Request<Vec<u8>>,
     responder: UriSchemeResponder,
@@ -232,14 +231,14 @@ where
     R: Runtime,
     Assets: BundleAssetRepo,
 {
-    let upstream: Arc<ProtocolHandlerFn> =
-        Arc::from(tauri::protocol::tauri::get(app_handle, window_origin, None));
+    let upstream = &*Box::leak(tauri::protocol::tauri::get(app_handle, window_origin, None));
+
     let origin = window_origin.to_string();
 
     Box::new(move |webview_id, request, responder| {
         tauri::async_runtime::spawn(resolve_request(
             resolver.clone(),
-            upstream.clone(),
+            upstream,
             webview_id.to_owned(),
             request,
             responder,
