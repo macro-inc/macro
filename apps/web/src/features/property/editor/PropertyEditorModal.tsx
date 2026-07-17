@@ -4,12 +4,12 @@ import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fuzzyFilter } from '@core/util/fuzzy';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type ListNavActions,
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity } from '@entity';
+import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -29,7 +29,15 @@ import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
-import { cn, Dialog, Hotkey, Surface } from '@ui';
+import {
+  CommandMenuEmptyState,
+  CommandMenuListItem,
+  CommandMenuSearchInput,
+  CommandMenuShell,
+  cn,
+  Dialog,
+  Hotkey,
+} from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -66,24 +74,19 @@ function ListItem(props: {
   onClick: () => void;
   onMouseEnter: () => void;
   children: JSX.Element;
+  class?: string;
 }) {
   return (
-    <button
-      type="button"
+    <CommandMenuListItem
       id={props.id}
+      selected={props.isSelected}
       disabled={props.disabled}
-      class={cn(
-        'rounded-md group w-full flex items-center h-10 px-2 gap-2 text-sm font-semibold relative scroll-m-1',
-        {
-          'bg-active': props.isSelected,
-          'hover:bg-hover/50': !props.isSelected,
-        }
-      )}
       onClick={props.onClick}
-      onMouseEnter={props.onMouseEnter}
+      onMouseMove={props.onMouseEnter}
+      class={props.class}
     >
       {props.children}
-    </button>
+    </CommandMenuListItem>
   );
 }
 
@@ -135,9 +138,7 @@ export function PropertyEditorModal() {
     })
   );
 
-  const { isKeypressActive } = useIsKeyPressActive();
   const setSelectedIndexFromMouse = (index: number) => {
-    if (isKeypressActive()) return;
     setSelectedIndex(index);
   };
 
@@ -149,55 +150,55 @@ export function PropertyEditorModal() {
       onOpenChange={togglePropertyEditor}
       contentRef={mergeRefs(attach, setDialogRef)}
     >
-      <Surface depth={2} class="rounded-xl">
-        <div class="*:max-h-[75vh]">
-          <div class="flex flex-col max-h-108 overflow-hidden text-sm">
-            <div class="flex items-center gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
-              <span class="pl-2 pointer-events-none">❯</span>
-              <SearchInput
-                placeHolder={placeholder() || defaultPlaceholder}
-                value={searchValue}
-                setValue={setSearchValue}
-                focusedIndex={selectedIndex}
-                setFocusedIndex={setSelectedIndex}
-                inputType={inputType()}
-              />
-            </div>
-            <div class="p-2 border-b border-edge-muted">
-              <EditingEntityPreview
-                entities={propertyEditorState.selectedEntities}
-              />
-            </div>
-            <Switch>
-              <Match when={propertyEditorState.mode === 'selector'}>
-                <div class="overflow-scroll scrollbar-hidden">
-                  <PropertyList
-                    searchTerm={searchValue()}
-                    focusedIndex={selectedIndex}
-                    setFocusedIndex={setSelectedIndex}
-                    setFocusedIndexFromMouse={setSelectedIndexFromMouse}
-                    setKeybindings={keybindings}
-                  />
-                </div>
-              </Match>
-              <Match when={propertyEditorState.mode === 'direct'}>
-                <PropertyValueEditor
-                  property={propertyEditorState.targetProperty}
-                  searchValue={searchValue}
-                  setSearchValue={setSearchValue}
-                  selectedIndex={selectedIndex}
-                  setSelectedIndex={setSelectedIndex}
-                  setSelectedIndexFromMouse={setSelectedIndexFromMouse}
+      <CommandMenuShell depth={2} class="rounded-xl max-h-108 text-sm">
+        <CommandMenuShell.Header>
+          <span class="pl-2 text-ink-extra-muted/55 pointer-events-none">
+            <PropertiesIcon class="size-3" />
+          </span>
+          <SearchInput
+            placeHolder={placeholder() || defaultPlaceholder}
+            value={searchValue}
+            setValue={setSearchValue}
+            focusedIndex={selectedIndex}
+            setFocusedIndex={setSelectedIndex}
+            inputType={inputType()}
+          />
+        </CommandMenuShell.Header>
+        <CommandMenuShell.Toolbar class="p-3 py-2 border-b-0">
+          <EditingEntityPreview
+            entities={propertyEditorState.selectedEntities}
+          />
+        </CommandMenuShell.Toolbar>
+        <CommandMenuShell.Body>
+          <Switch>
+            <Match when={propertyEditorState.mode === 'selector'}>
+              <div class="overflow-scroll scrollbar-hidden">
+                <PropertyList
+                  searchTerm={searchValue()}
+                  focusedIndex={selectedIndex}
+                  setFocusedIndex={setSelectedIndex}
+                  setFocusedIndexFromMouse={setSelectedIndexFromMouse}
                   setKeybindings={keybindings}
-                  setPlaceholder={setPlaceholder}
-                  setInputType={setInputType}
-                  onSave={handlePropertySave}
                 />
-              </Match>
-            </Switch>
-          </div>
-        </div>
-      </Surface>
+              </div>
+            </Match>
+            <Match when={propertyEditorState.mode === 'direct'}>
+              <PropertyValueEditor
+                property={propertyEditorState.targetProperty}
+                searchValue={searchValue}
+                setSearchValue={setSearchValue}
+                selectedIndex={selectedIndex}
+                setSelectedIndex={setSelectedIndex}
+                setSelectedIndexFromMouse={setSelectedIndexFromMouse}
+                setKeybindings={keybindings}
+                setPlaceholder={setPlaceholder}
+                setInputType={setInputType}
+                onSave={handlePropertySave}
+              />
+            </Match>
+          </Switch>
+        </CommandMenuShell.Body>
+      </CommandMenuShell>
     </Dialog>
   );
 }
@@ -218,10 +219,10 @@ function SearchInput(props: {
   });
 
   return (
-    <input
+    <CommandMenuSearchInput
       ref={inputRef}
       type={props.inputType ?? 'text'}
-      class="flex-1 text-base border-0 outline-none! focus:outline-none ring-0! focus:ring-0"
+      class="text-base"
       placeholder={props.placeHolder}
       value={props.value()}
       onInput={(e) => props.setValue(e.target.value)}
@@ -292,14 +293,14 @@ function PropertyList(props: {
     <Show
       when={filteredProperties().length > 0}
       fallback={
-        <div class="text-center py-4 text-ink-muted text-sm">
+        <CommandMenuEmptyState>
           No matching properties found
-        </div>
+        </CommandMenuEmptyState>
       }
     >
       <div
         ref={containerRef}
-        class="max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
+        class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2"
       >
         <For each={filteredProperties()}>
           {(property, index) => (
@@ -308,6 +309,7 @@ function PropertyList(props: {
               isSelected={selector(index())}
               onClick={() => setProperty(property)}
               onMouseEnter={() => props.setFocusedIndexFromMouse(index())}
+              class="scroll-m-2"
             >
               <PropertyDataTypeIcon property={property} class="opacity-50" />
               <div class="flex-1 text-left flex">
@@ -486,13 +488,13 @@ function SelectPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="max-h-52 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={filteredOptions().length > 0}
         fallback={
-          <div class="text-center py-4 text-ink-muted text-sm">
+          <CommandMenuEmptyState>
             No matching options found
-          </div>
+          </CommandMenuEmptyState>
         }
       >
         <For each={filteredOptions()}>
@@ -600,15 +602,15 @@ function EntityPropertyEditor(props: {
   const selector = createSelector(props.selectedIndex);
 
   return (
-    <div class="p-1 max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <Show
         when={entities().length > 0}
         fallback={
-          <div class="text-center py-4 text-ink-muted text-sm">
+          <CommandMenuEmptyState>
             {props.searchValue().trim()
               ? 'No matching entities found'
               : 'No entities available'}
-          </div>
+          </CommandMenuEmptyState>
         }
       >
         <For each={entities()}>
@@ -790,7 +792,7 @@ function DirectEditPropertyEditor(props: {
   };
 
   return (
-    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
+    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden">
       <ListItem
         id="property-value-option-0"
         isSelected={true}
@@ -871,14 +873,14 @@ function DatePropertyEditor(props: {
             <Show
               when={props.searchValue().trim()}
               fallback={
-                <div class="text-center py-4 text-ink-muted text-sm">
+                <CommandMenuEmptyState>
                   Enter a date or duration
-                </div>
+                </CommandMenuEmptyState>
               }
             >
-              <div class="text-center py-4 text-ink-muted text-sm">
+              <CommandMenuEmptyState>
                 No dates match "{props.searchValue()}"
-              </div>
+              </CommandMenuEmptyState>
             </Show>
           }
         >
