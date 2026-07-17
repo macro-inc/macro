@@ -257,7 +257,8 @@ pub(crate) type DssChannelListService =
     ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>;
 
 /// Type alias for the legacy channel list router state.
-pub(crate) type DssChannelListState = ChannelListRouterState<DssChannelListService>;
+pub(crate) type DssChannelListState =
+    ChannelListRouterState<DssChannelListService, AuthorizationService>;
 
 /// Type alias for the channels service wired into DSS.
 pub(crate) type DssChannelService = ChannelServiceImpl<
@@ -277,7 +278,8 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
 >;
 
 /// Type alias for the channels router state.
-pub(crate) type DssChannelsState = ChannelsRouterState<DssChannelService, EntityAccessService>;
+pub(crate) type DssChannelsState =
+    ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;

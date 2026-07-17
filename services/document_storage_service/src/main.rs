@@ -356,11 +356,14 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage.clone(),
     );
     // Create the legacy channel list router state for routes mounted under /comms.
-    let channel_list_state = ChannelListRouterState::new(ChannelListServiceImpl::new(
-        PgChannelsRepo::new(db.clone()),
-        PgChannelsRepo::new(db.clone()),
-        frecency_storage.clone(),
-    ));
+    let channel_list_state = ChannelListRouterState::new(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(db.clone()),
+            PgChannelsRepo::new(db.clone()),
+            frecency_storage.clone(),
+        ),
+        authorization_state.clone(),
+    );
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -873,6 +876,7 @@ async fn main() -> anyhow::Result<()> {
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
+            authorization_state.clone(),
         ),
         bots_state: bots::inbound::axum_router::BotsRouterState::new(
             bots_service.clone(),
