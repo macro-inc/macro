@@ -22,6 +22,7 @@ use model_notifications::InviteToTeamMetadata;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
 use crate::domain::{
+    contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
     model::{
@@ -39,8 +40,17 @@ use crate::domain::{
 
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
-pub struct TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA = NoOpTeamAnalytics>
-where
+pub struct TeamServiceImpl<
+    TR,
+    CR,
+    TCR,
+    URPS,
+    NI,
+    CE,
+    TCRMS,
+    TA = NoOpTeamAnalytics,
+    CNE = NoOpContactsEnqueuer,
+> where
     TR: TeamRepository,
     CR: CustomerRepository,
     TCR: TeamChannelsRepository,
@@ -49,6 +59,7 @@ where
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
+    CNE: ContactsEnqueuer,
 {
     /// The underlying team repository
     team_repository: TR,
@@ -69,10 +80,12 @@ where
     team_crm_settings_repository: TCRMS,
     /// Outbound port for best-effort team lifecycle analytics events.
     team_analytics: TA,
+    /// Outbound port for contact connections created through team membership.
+    contacts_enqueuer: CNE,
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> Clone
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE> Clone
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -82,6 +95,7 @@ where
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
+    CNE: ContactsEnqueuer,
 {
     fn clone(&self) -> Self {
         Self {
@@ -93,12 +107,13 @@ where
             crm_enqueuer: self.crm_enqueuer.clone(),
             team_crm_settings_repository: self.team_crm_settings_repository.clone(),
             team_analytics: self.team_analytics.clone(),
+            contacts_enqueuer: self.contacts_enqueuer.clone(),
         }
     }
 }
 
 impl<TR, CR, TCR, URPS, NI, CE, TCRMS>
-    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, NoOpTeamAnalytics>
+    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, NoOpTeamAnalytics, NoOpContactsEnqueuer>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -131,7 +146,8 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
+    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, NoOpContactsEnqueuer>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -166,6 +182,42 @@ where
             crm_enqueuer,
             team_crm_settings_repository,
             team_analytics,
+            contacts_enqueuer: NoOpContactsEnqueuer,
+        }
+    }
+}
+
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
+    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
+where
+    TR: TeamRepository,
+    CR: CustomerRepository,
+    TCR: TeamChannelsRepository,
+    URPS: UserRolesAndPermissionsService,
+    NI: NotificationIngress,
+    CE: CrmEnqueuer,
+    TCRMS: TeamCrmSettingsRepository,
+    TA: TeamAnalytics,
+    CNE: ContactsEnqueuer,
+{
+    /// Replaces the contacts enqueuer while preserving every other service dependency.
+    pub fn with_contacts_enqueuer<CNE2>(
+        self,
+        contacts_enqueuer: CNE2,
+    ) -> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE2>
+    where
+        CNE2: ContactsEnqueuer,
+    {
+        TeamServiceImpl {
+            team_repository: self.team_repository,
+            customer_repository: self.customer_repository,
+            team_channels_repository: self.team_channels_repository,
+            user_roles_and_permissions_service: self.user_roles_and_permissions_service,
+            notification_ingress: self.notification_ingress,
+            crm_enqueuer: self.crm_enqueuer,
+            team_crm_settings_repository: self.team_crm_settings_repository,
+            team_analytics: self.team_analytics,
+            contacts_enqueuer,
         }
     }
 
@@ -372,8 +424,8 @@ impl GetTeamSubscriptionError {
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> TeamMembersService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE> TeamMembersService
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -383,6 +435,7 @@ where
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
+    CNE: ContactsEnqueuer,
 {
     #[tracing::instrument(skip(self), err)]
     async fn list_team_members(
@@ -399,8 +452,8 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA> TeamService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE> TeamService
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -410,6 +463,7 @@ where
     CE: CrmEnqueuer,
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
+    CNE: ContactsEnqueuer,
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_team(
