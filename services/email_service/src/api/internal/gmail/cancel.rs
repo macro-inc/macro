@@ -1,9 +1,10 @@
-use crate::api::ApiContext;
+use crate::api::{ApiContext, context::AuthorizationService};
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::BackfillJobStatus;
 use sqlx::types::Uuid;
@@ -18,6 +19,7 @@ pub struct BackfillCancelParams {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
     Json(req_body): Json<BackfillCancelParams>,
 ) -> Result<Response, Response> {
     let job = email_db_client::backfill::job::get::get_backfill_job(&ctx.db, req_body.job_id)
