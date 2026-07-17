@@ -49,11 +49,12 @@ type StartTx = tokio::sync::mpsc::Sender<WorkerCommand>;
 /// Worker receives on this to know when to run the checker loop.
 type StartRx = tokio::sync::mpsc::Receiver<WorkerCommand>;
 
-struct Worker<U, Fs, Q> {
+struct Worker<U, Fs, Q, S> {
     update_repo: U,
     fs_repo: Fs,
     system_query: Q,
     bundle_routes: BundleRoutes,
+    task_spawner: S,
     status_tx: tokio::sync::watch::Sender<Result<UpdateStatus, Report<UpdateError>>>,
     start_rx: StartRx,
 }
@@ -68,8 +69,8 @@ struct WorkerHandle {
 const ENTRYPOINT_NAME: &str = "index.html";
 const PENDING_BUNDLE_ROOT_FILE: &str = "pending_bundle_root";
 
-impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
-    fn new_handle<S: TaskSpawner>(
+impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q, S> {
+    fn new_handle(
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
@@ -84,10 +85,11 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             fs_repo,
             system_query,
             bundle_routes,
+            task_spawner,
             status_tx: status_tx.clone(),
             start_rx,
         }
-        .run_background(task_spawner);
+        .run_background();
 
         WorkerHandle {
             status_rx,
@@ -96,7 +98,8 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         }
     }
 
-    fn run_background(self, task_spawner: impl TaskSpawner) {
+    fn run_background(self) {
+        let task_spawner = self.task_spawner.clone();
         task_spawner.spawn(async move {
             let mut worker = self;
             // Run the checker loop once on startup, then again each time we
@@ -267,13 +270,14 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 let (req, rx) = status.update.into_download_request(&download_filename);
 
                 let status_tx = self.status_tx.clone();
-                tokio::task::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
-                    UpdateStatus::DownloadingBundle(download) => {
-                        download.progress = progress;
-                        true
-                    }
-                    _ => false,
-                }));
+                self.task_spawner
+                    .spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
+                        UpdateStatus::DownloadingBundle(download) => {
+                            download.progress = progress;
+                            true
+                        }
+                        _ => false,
+                    }));
 
                 let () = self
                     .update_repo
@@ -303,13 +307,14 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
                 let status_tx = self.status_tx.clone();
-                tokio::task::spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
-                    UpdateStatus::UnzippingBundle(zip) => {
-                        zip.progress = progress;
-                        true
-                    }
-                    _ => false,
-                }));
+                self.task_spawner
+                    .spawn(glue_channels(rx, status_tx, |cur, progress| match cur {
+                        UpdateStatus::UnzippingBundle(zip) => {
+                            zip.progress = progress;
+                            true
+                        }
+                        _ => false,
+                    }));
 
                 let bundle_dir = self.fs_repo.unzip(req).await.context(UpdateError::Unzip)?;
                 validate_bundle_dir(
@@ -1357,7 +1362,7 @@ mod tests {
         update: Option<BundleAction>,
         update_dir: PathBuf,
         native_build: u64,
-    ) -> Worker<FakeUpdateRepo, FakeFs, FakeSystemQuery> {
+    ) -> Worker<FakeUpdateRepo, FakeFs, FakeSystemQuery, TestTaskSpawner> {
         let (status_tx, _status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
         let (_start_tx, start_rx) = tokio::sync::mpsc::channel(1);
         let (update_repo, _) = fake_update_repo(update, false);
@@ -1370,6 +1375,7 @@ mod tests {
                 native_build,
             ),
             bundle_routes: BundleRoutes::new(0),
+            task_spawner: TestTaskSpawner,
             status_tx,
             start_rx,
         }
