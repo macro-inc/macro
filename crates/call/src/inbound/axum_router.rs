@@ -27,8 +27,10 @@ use entity_access::{
         ChannelAccessLevelExtractor,
     },
 };
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 use uuid::Uuid;
 
 use crate::domain::models::{
@@ -43,33 +45,46 @@ use crate::domain::ports::CallService;
 // ---------------------------------------------------------------------------
 
 /// Router state for authenticated call operations.
-pub struct CallRouterState<S, Svc> {
+pub struct CallRouterState<S, Svc, Auth> {
     service: Arc<S>,
     access_service: Arc<Svc>,
+    authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, Svc> Clone for CallRouterState<S, Svc> {
+impl<S, Svc, Auth> Clone for CallRouterState<S, Svc, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S: CallService, Svc: EntityAccessService> CallRouterState<S, Svc> {
+impl<S: CallService, Svc: EntityAccessService, Auth> CallRouterState<S, Svc, Auth> {
     /// Create a new router state from shared service references.
-    pub fn new(service: Arc<S>, access_service: Arc<Svc>) -> Self {
+    pub fn new(
+        service: Arc<S>,
+        access_service: Arc<Svc>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             service,
             access_service,
+            authorization_state,
         }
     }
 }
 
-impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
-    fn from_ref(state: &CallRouterState<S, Svc>) -> Self {
+impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for Arc<Svc> {
+    fn from_ref(state: &CallRouterState<S, Svc, Auth>) -> Self {
         state.access_service.clone()
+    }
+}
+
+impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &CallRouterState<S, Svc, Auth>) -> Self {
+        state.authorization_state.clone()
     }
 }
 
@@ -85,38 +100,40 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 /// - `DELETE /record/{call_id}` — delete a call record
 /// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
 /// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
-pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
+pub fn call_router<S, Svc, Auth, T>(state: CallRouterState<S, Svc, Auth>) -> Router<T>
 where
     S: CallService,
     Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
     T: Send + Sync,
 {
     Router::new()
         .route(
             "/{channel_id}",
-            get(get_or_create_call_handler::<S, Svc>).delete(leave_or_end_call_handler::<S, Svc>),
+            get(get_or_create_call_handler::<S, Svc, Auth>)
+                .delete(leave_or_end_call_handler::<S, Svc, Auth>),
         )
         .route(
             "/{channel_id}/active",
-            get(check_active_call_handler::<S, Svc>),
+            get(check_active_call_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/preview",
-            post(get_batch_call_record_preview_handler::<S, Svc>),
+            post(get_batch_call_record_preview_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}",
-            get(get_call_record_handler::<S, Svc>)
-                .patch(edit_call_record_handler::<S, Svc>)
-                .delete(delete_call_record_handler::<S, Svc>),
+            get(get_call_record_handler::<S, Svc, Auth>)
+                .patch(edit_call_record_handler::<S, Svc, Auth>)
+                .delete(delete_call_record_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}/transcript",
-            patch(edit_call_transcript_handler::<S, Svc>),
+            patch(edit_call_transcript_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}/share-with-team/toggle",
-            post(toggle_share_with_team_handler::<S, Svc>),
+            post(toggle_share_with_team_handler::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -266,10 +283,14 @@ where
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
+pub async fn get_or_create_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
@@ -300,9 +321,13 @@ pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+pub async fn check_active_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
 ) -> Result<axum::response::Response, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
@@ -333,9 +358,13 @@ pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+pub async fn get_call_record_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
 ) -> Result<Json<CallRecord>, CallError> {
     let record = state
         .service
@@ -363,9 +392,13 @@ pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+pub async fn delete_call_record_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
@@ -394,9 +427,13 @@ pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+pub async fn edit_call_record_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
     state
@@ -428,9 +465,13 @@ pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn edit_call_transcript_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+pub async fn edit_call_transcript_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
     Json(request): Json<EditCallTranscriptRequest>,
 ) -> Result<StatusCode, CallError> {
     state
@@ -459,9 +500,13 @@ pub async fn edit_call_transcript_handler<S: CallService, Svc: EntityAccessServi
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+pub async fn toggle_share_with_team_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
 ) -> Result<Json<bool>, CallError> {
     let new_value = state
         .service
@@ -489,9 +534,13 @@ pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessSer
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    user: MacroUserExtractor,
+pub async fn get_batch_call_record_preview_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth>,
     Json(request): Json<GetBatchCallRecordPreviewRequest>,
 ) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
     if request.call_ids.len() > MAX_BATCH_CALL_IDS {
@@ -523,10 +572,14 @@ pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAc
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>(
-    State(state): State<CallRouterState<S, Svc>>,
-    access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc>,
-    user: MacroUserExtractor,
+pub async fn leave_or_end_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallWithChannelIdAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
     let channel_id = access.channel_id;
 

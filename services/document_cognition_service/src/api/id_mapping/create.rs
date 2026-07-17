@@ -1,11 +1,13 @@
 //! Handler for creating ID mappings.
 
+use crate::api::context::DcsAuthorizationService;
 use crate::service::id_mapping::create_id_mapping;
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -44,9 +46,10 @@ pub struct CreateIdMappingResponse {
         (status = 500, body = String),
     )
 )]
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, _user))]
 pub async fn create_id_mapping_handler(
     State(db): State<PgPool>,
+    _user: MacroAuthorizationExtractor<DcsAuthorizationService>,
     Path(Params { source_id }): Path<Params>,
     Json(req): Json<CreateIdMappingRequest>,
 ) -> Result<(StatusCode, Json<CreateIdMappingResponse>), (StatusCode, String)> {

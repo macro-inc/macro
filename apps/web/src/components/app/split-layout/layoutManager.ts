@@ -16,6 +16,7 @@ import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
+  batch,
   createMemo,
   createSignal,
   type JSXElement,
@@ -668,15 +669,26 @@ export function createSplitLayout(
     };
   }
 
+  /**
+   * `deliverParams` marks a fresh forward navigation, which delivers the
+   * one-shot `content.params` to the new mount. History-driven reattaches
+   * (back/forward, removeFromHistory, reset) leave it unset so re-visiting an
+   * entry doesn't re-fire its params (e.g. re-target a channel message).
+   */
   function reattach(
     split: SplitState,
     next: SplitContent,
     referredFrom?: ReferredFrom,
-    cause: NavigationCause = 'fresh'
+    cause: NavigationCause = 'fresh',
+    deliverParams = false
   ) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
     let content = attachAliasContext(next);
-    if (!content.preserveParams && content.params !== undefined) {
+    if (
+      !deliverParams &&
+      !content.preserveParams &&
+      content.params !== undefined
+    ) {
       content = { ...content, params: undefined };
     }
     if (isDuplicateSplit(otherSplits, next)) return;
@@ -758,12 +770,14 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
 
-    captureCurrentEntryState(split);
+    batch(() => {
+      captureCurrentEntryState(split);
 
-    const prev = split.history.back();
-    if (!prev) return;
+      const prev = split.history.back();
+      if (!prev) return;
 
-    reattach(split, prev, undefined, 'history-back');
+      reattach(split, prev, undefined, 'history-back');
+    });
   }
 
   function forward(id: SplitId) {
@@ -773,12 +787,14 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
 
-    captureCurrentEntryState(split);
+    batch(() => {
+      captureCurrentEntryState(split);
 
-    const next = split.history.forward();
-    if (!next) return;
+      const next = split.history.forward();
+      if (!next) return;
 
-    reattach(split, next, undefined, 'history-forward');
+      reattach(split, next, undefined, 'history-forward');
+    });
   }
 
   function removeFromHistory(
@@ -813,14 +829,22 @@ export function createSplitLayout(
     const content = attachAliasContext(next);
 
     const split = state.splits[i];
-    captureCurrentEntryState(split);
-    if (mergeHistory) {
-      split.history.merge(content);
-    } else {
-      split.history.push(content);
-    }
+    batch(() => {
+      captureCurrentEntryState(split);
+      if (mergeHistory) {
+        split.history.merge(content);
+      } else {
+        split.history.push(content);
+      }
 
-    reattach(split, content, referredFrom, mergeHistory ? 'replace' : 'fresh');
+      reattach(
+        split,
+        content,
+        referredFrom,
+        mergeHistory ? 'replace' : 'fresh',
+        true
+      );
+    });
   }
 
   function reset(id: SplitId) {

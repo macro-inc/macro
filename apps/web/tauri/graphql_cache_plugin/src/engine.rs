@@ -12,7 +12,9 @@
 //! internally — the same scheme as the `cache-wasm` shell.
 
 use cache_core::deps::OpId;
-use cache_core::engine::{Engine, ReadResult, WriteResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
+use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::query_inspection::{CachedQueryInstance, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
@@ -45,6 +47,8 @@ pub struct WriteResultWire {
     /// True when the identity witness wiped and rebound the cache before
     /// this write (silent restart).
     pub reset: bool,
+    /// Queries to fetch after successful optimistic settlement.
+    pub revalidations: Vec<QueryRevalidation>,
 }
 
 /// Mirrors `OptimisticWriteResult` in
@@ -151,6 +155,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         changed: result.changed.into_iter().map(|k| k.0).collect(),
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
+        revalidations: result.revalidations,
     }
 }
 
@@ -201,6 +206,26 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
+    /// Enumerates cached variants of one generated query field.
+    pub async fn inspect_query(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        path: Vec<String>,
+    ) -> Result<Vec<CachedQueryInstance>, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .inspect_query(&QueryInspection {
+                query,
+                operation_name,
+                path,
+            })
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Normalizes and stores a network response.
     pub async fn write(
         &self,
@@ -236,6 +261,8 @@ impl EngineHandle {
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
+        link_patches: Vec<OptimisticLinkPatch>,
+        revalidations: Vec<QueryRevalidation>,
         created_at_ms: i64,
     ) -> Result<OptimisticWriteResultWire, String> {
         let mut state = self.inner.lock().await;
@@ -244,11 +271,15 @@ impl EngineHandle {
         engine
             .begin_optimistic_write(
                 origin,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-                created_at_ms,
+                BeginOptimisticWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    link_patches: &link_patches,
+                    revalidations: &revalidations,
+                    created_at_ms,
+                },
             )
             .await
             .map(|(transaction, result)| OptimisticWriteResultWire {

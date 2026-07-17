@@ -4,6 +4,7 @@
  */
 
 import {
+  type CachedQueryInstanceWire,
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
@@ -15,11 +16,18 @@ import {
   type WriteResult,
 } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
-import type { CacheHost, CacheReadArgs, CacheWriteArgs } from './types';
+import type {
+  BeginOptimisticWriteArgs,
+  CacheHost,
+  CacheReadArgs,
+  CacheWriteArgs,
+  InspectQueryArgs,
+} from './types';
 
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
+  timer?: ReturnType<typeof setTimeout>;
 };
 
 /** `Omit` that distributes over union members. */
@@ -31,8 +39,9 @@ export interface WorkerHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Per-request timeout in ms (default 10s). A hung worker rejects the
-   * pending call; the exchange degrades rejected reads to the network.
+   * Read-only request timeout in ms (default 10s). A hung worker rejects
+   * cache reads; mutating requests remain pending so callers cannot retry an
+   * operation that may already have completed durably.
    */
   requestTimeoutMs?: number;
 }
@@ -45,10 +54,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   }
 
   const clientId = crypto.randomUUID();
-  const pending = new Map<
-    number,
-    Pending & { timer: ReturnType<typeof setTimeout> }
-  >();
+  const pending = new Map<number, Pending>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
@@ -73,7 +79,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const entry = pending.get(msg.id);
     if (!entry) return;
     pending.delete(msg.id);
-    clearTimeout(entry.timer);
+    if (entry.timer !== undefined) clearTimeout(entry.timer);
     if (msg.ok) {
       entry.resolve(msg.result);
     } else {
@@ -112,12 +118,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   ): Promise<unknown> {
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        if (pending.delete(id)) {
-          reject(new Error(`cache worker timeout: ${msg.kind}`));
-        }
-      }, requestTimeoutMs);
-      pending.set(id, { resolve, reject, timer });
+      const entry: Pending = { resolve, reject };
+      if (msg.kind === 'read' || msg.kind === 'inspect-query') {
+        entry.timer = setTimeout(() => {
+          if (pending.delete(id)) {
+            reject(new Error(`cache worker timeout: ${msg.kind}`));
+          }
+        }, requestTimeoutMs);
+      }
+      pending.set(id, entry);
       post({ ...msg, id } as CacheRequest);
     });
   }
@@ -158,7 +167,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async beginOptimisticWrite(
-      args: CacheWriteArgs
+      args: BeginOptimisticWriteArgs
     ): Promise<OptimisticWriteResult> {
       await ready;
       return (await request({
@@ -168,8 +177,22 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
+        linkPatches: args.linkPatches,
+        revalidations: args.revalidations,
         createdAtMs: Date.now(),
       })) as OptimisticWriteResult;
+    },
+
+    async inspectQuery(
+      args: InspectQueryArgs
+    ): Promise<CachedQueryInstanceWire[]> {
+      await ready;
+      return (await request({
+        kind: 'inspect-query',
+        query: args.query,
+        operationName: args.operationName,
+        path: args.path,
+      })) as CachedQueryInstanceWire[];
     },
 
     async claimNextMutation(

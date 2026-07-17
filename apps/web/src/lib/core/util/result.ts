@@ -24,6 +24,17 @@ export class ThrownResultError<E extends string = string> extends Error {
   }
 }
 
+/** True when `error` is a ThrownResultError carrying the given error code. */
+export function thrownResultErrorHasCode(
+  error: unknown,
+  code: string
+): boolean {
+  return (
+    error instanceof ThrownResultError &&
+    error.errors.some((e) => e.code === code)
+  );
+}
+
 /** Wraps a result-returning async function to throw on error. */
 export async function throwOnErr<E extends string, T>(
   fn: () => Promise<Result<T, ResultError<E>[]>>

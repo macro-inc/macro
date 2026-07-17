@@ -34,6 +34,88 @@ const DEFAULT_NOTIFICATION_LIMIT = 20;
 const NOTIFICATION_STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const NOTIFICATION_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
+// Websocket-inserted notifications young enough that a fetch snapshot may
+// predate them: a full refetch reads its pages over several seconds and
+// commits atomically, so a snapshot begun before the insert lands without
+// the row and would silently drop it from the cache. A query-cache
+// subscription re-prepends tracked rows after every non-manual success
+// commit (solid-query hard-disables structuralSharing, so a commit-time
+// merge hook is not available). Entries retire by TTL, realtime delete, or
+// done removal — not by cache containment, since our own optimistic writes
+// also contain the row and are not server confirmation.
+const UNCONFIRMED_INSERT_TTL_MS = 5 * 60 * 1000;
+const MAX_UNCONFIRMED_INSERTS = 200;
+const unconfirmedInserts = new Map<
+  string,
+  { item: NotificationItem; insertedAt: number }
+>();
+
+let unconfirmedInsertsSubscribed = false;
+
+// Subscribed lazily on the first tracked insert so importing this module
+// never touches the query client (test setups mock it after import).
+function ensureUnconfirmedInsertReapply() {
+  if (unconfirmedInsertsSubscribed || typeof window === 'undefined') return;
+  unconfirmedInsertsSubscribed = true;
+  queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated') return;
+    const action = event.action as { type: string; manual?: boolean };
+    if (action.type !== 'success' || action.manual) return;
+    const key = event.query.queryKey;
+    if (!Array.isArray(key) || key[0] !== 'notification' || key[1] !== 'user')
+      return;
+    reapplyUnconfirmedInserts(key);
+  });
+}
+
+function trackUnconfirmedInsert(item: NotificationItem) {
+  ensureUnconfirmedInsertReapply();
+  unconfirmedInserts.delete(item.id);
+  unconfirmedInserts.set(item.id, { item, insertedAt: Date.now() });
+  while (unconfirmedInserts.size > MAX_UNCONFIRMED_INSERTS) {
+    const oldest = unconfirmedInserts.keys().next().value;
+    if (oldest === undefined) break;
+    unconfirmedInserts.delete(oldest);
+  }
+}
+
+function retireUnconfirmedInserts(ids: Iterable<string>) {
+  for (const id of ids) unconfirmedInserts.delete(id);
+}
+
+function pruneExpiredUnconfirmedInserts() {
+  const now = Date.now();
+  for (const [id, entry] of unconfirmedInserts) {
+    if (now - entry.insertedAt > UNCONFIRMED_INSERT_TTL_MS) {
+      unconfirmedInserts.delete(id);
+    }
+  }
+}
+
+function reapplyUnconfirmedInserts(queryKey: readonly unknown[]) {
+  pruneExpiredUnconfirmedInserts();
+  if (unconfirmedInserts.size === 0) return;
+  queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(
+    queryKey,
+    (data) => {
+      if (!data?.pages?.length) return data;
+      const presentIds = new Set(
+        data.pages.flatMap((page) => page.items.map((n) => n.id))
+      );
+      const missing = [...unconfirmedInserts.values()]
+        .map((entry) => entry.item)
+        .filter((item) => !presentIds.has(item.id));
+      if (missing.length === 0) return data;
+      return {
+        ...data,
+        pages: data.pages.map((page, index) =>
+          index === 0 ? { ...page, items: [...missing, ...page.items] } : page
+        ),
+      };
+    }
+  );
+}
+
 function normalizeLimit(limit?: number): number {
   return limit && limit > 0 && limit <= 500
     ? limit
@@ -42,9 +124,9 @@ function normalizeLimit(limit?: number): number {
 
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
-function userNotificationsQueryOptions(limit: number) {
+function userNotificationsQueryOptions(limit: number, done?: boolean) {
   return {
-    queryKey: notificationKeys.user({ limit }).queryKey,
+    queryKey: notificationKeys.user({ limit, done }).queryKey,
     queryFn: async ({
       pageParam,
     }: {
@@ -55,6 +137,7 @@ function userNotificationsQueryOptions(limit: number) {
           await notificationServiceClient.userNotifications({
             limit: pageParam.limit,
             cursor: pageParam.cursor,
+            done,
           })
       );
     },
@@ -66,12 +149,22 @@ function userNotificationsQueryOptions(limit: number) {
   };
 }
 
-/** Paginated query for all notifications for the current user. */
-export function useUserNotificationsQuery(args?: { limit?: number }) {
+/**
+ * Paginated query for all notifications for the current user.
+ *
+ * `done` filters by done status. Omitted, the server returns only active
+ * (not-done) notifications; `done: true` pages through the done ones —
+ * surfaces that need the complete stream (e.g. the activity timeline) run
+ * one query per done state and merge.
+ */
+export function useUserNotificationsQuery(args?: {
+  limit?: number;
+  done?: boolean;
+}) {
   const limit = normalizeLimit(args?.limit);
 
   return useInfiniteQuery(() => ({
-    ...userNotificationsQueryOptions(limit),
+    ...userNotificationsQueryOptions(limit, args?.done),
     select: (
       data: InfiniteData<
         GetAllUserNotificationsResponse,
@@ -281,15 +374,17 @@ function notificationsMutationSuccessCallback<T>(
   });
 }
 
-/** Creates an optimistic update handler that snapshots previous data for rollback. */
+/**
+ * Creates an optimistic update handler that snapshots previous data for
+ * rollback. In-flight fetches are deliberately left alone: seen/done
+ * overrides and unconfirmed-insert preservation make a completing stale
+ * snapshot harmless, so refetches always run to completion and freshness is
+ * never sacrificed for write consistency.
+ */
 function createNotificationsMutateFn(
   updaterFn: NotificationsUpdater
 ): NotificationsOnMutateFn {
   return async (params) => {
-    await queryClient.cancelQueries({
-      queryKey: notificationKeys.user._def,
-    });
-
     const previousData = queryClient.getQueriesData<
       NotificationData<UserNotificationsPageParam>
     >({
@@ -391,6 +486,10 @@ const filterOutDoneNotifications = (
   );
 };
 
+const markNotificationsAsDoneMutateFn = createNotificationsMutateFn(
+  filterOutDoneNotifications
+);
+
 /** Marks notifications as done (removes from list) with optimistic update. */
 export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
   async (params: NotificationsMutationParams) =>
@@ -398,7 +497,10 @@ export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
       notificationIds: params.notificationIds,
     }),
   {
-    onMutate: createNotificationsMutateFn(filterOutDoneNotifications),
+    onMutate: async (params) => {
+      retireUnconfirmedInserts(params.notificationIds);
+      return await markNotificationsAsDoneMutateFn(params);
+    },
     onError: notificationsMutationErrorFn,
   }
 );
@@ -488,6 +590,8 @@ export function applyNotificationStatusUpdate(
       .map((patch) => patch.id)
   );
   const removeIds = new Set([...deleteIds, ...doneIds]);
+
+  retireUnconfirmedInserts(removeIds);
 
   queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
     { queryKey: notificationKeys.user._def },
@@ -623,6 +727,8 @@ export function optimisticInsertNotification(
 ) {
   const item = notification as NotificationItem;
   const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
+
+  trackUnconfirmedInsert(item);
 
   queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
     { queryKey: notificationKeys.user._def },

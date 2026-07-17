@@ -1,39 +1,169 @@
 /**
- * Typed entry point for optimistic GraphQL mutations through the
- * normalized cache exchange.
+ * Typed entry point for durable optimistic GraphQL mutations.
  *
- * The optimistic response rides in a private urql operation-context slot;
- * the exchange installs it as an in-memory cache layer before the mutation
- * is forwarded to the network, commits the layer with the real response on
- * success, and rolls it back on error. Construction is strongly typed
- * against the generated operation (`TData` must exactly match the mutation
- * selection), while the exchange boundary reads the slot as `unknown`.
+ * Callers describe relation changes through generated query documents. The
+ * fluent selection is compiled to a constrained serializable recipe before
+ * it crosses SharedWorker, Tauri IPC, WASM, or durable queue boundaries.
  */
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import type {
-  AnyVariables,
-  Client,
-  Operation,
-  OperationResult,
-  OperationResultSource,
+import {
+  type AnyVariables,
+  type Client,
+  type Operation,
+  type OperationResult,
+  type OperationResultSource,
+  stringifyDocument,
 } from '@urql/core';
+import type {
+  EmbeddedLinkPathSegment,
+  OptimisticLinkPatchWire,
+  QueryRevalidationWire,
+} from '../protocol';
+import {
+  documentOperationName,
+  type Present,
+  type StringKey,
+} from './generated-selection';
 
-/** Private operation-context field carrying the optimistic response. */
+/** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+declare const selectionType: unique symbol;
+declare const optimisticUpdateType: unique symbol;
+
+type JsonScalar = string | number | boolean | null;
+type ScalarKey<T> = {
+  [K in StringKey<T>]-?: Present<T[K]> extends JsonScalar ? K : never;
+}[StringKey<T>];
+type SelectionState = {
+  readonly document: TypedDocumentNode<unknown, AnyVariables>;
+  readonly variables: AnyVariables;
+  readonly path: readonly EmbeddedLinkPathSegment[];
+};
+
+/** A type-generated path through one query result. */
+export type Selection<T> = SelectionState & {
+  /** Phantom result type retained across fluent path operations. */
+  readonly [selectionType]: T;
+} & (Present<T> extends readonly (infer TItem)[]
+    ? {
+        /** Selects exactly one list item by one generated scalar field. */
+        item<K extends ScalarKey<Present<TItem>>>(
+          field: K,
+          equals: Present<Present<TItem>[K]>
+        ): Selection<Present<TItem>>;
+      }
+    : Present<T> extends object
+      ? {
+          /** Selects a generated response field on the current object. */
+          field<K extends StringKey<Present<T>>>(
+            field: K
+          ): Selection<Present<T>[K]>;
+        }
+      : object);
+
+/** A generated selection whose current value is a list. */
+export type ListSelection<TItem extends object> = Selection<readonly TItem[]>;
+
+/** An idempotent change to a normalized-link list. */
+export type LinkDiff =
+  | { kind: 'remove'; entityKey: string }
+  | { kind: 'prependUnique'; entityKey: string };
+
+/** Opaque serializable cache update produced only by {@link update}. */
+export type OptimisticUpdate = OptimisticLinkPatchWire & {
+  readonly [optimisticUpdateType]: true;
+};
+
+export type QueryRevalidation = {
+  document: TypedDocumentNode<unknown, AnyVariables>;
+  variables: AnyVariables;
+};
+
+export type OptimisticMutationOptions = {
+  updates?: readonly OptimisticUpdate[];
+  /** Relevant queries that cannot safely be updated still revalidate on success. */
+  revalidations?: readonly QueryRevalidation[];
+};
 
 export type OptimisticMutationContext<TData = unknown> = {
   optimisticResponse: TData;
+  linkPatches: OptimisticLinkPatchWire[];
+  revalidations: QueryRevalidationWire[];
 };
 
+function serializeRevalidation(
+  revalidation: QueryRevalidation
+): QueryRevalidationWire {
+  return {
+    query: stringifyDocument(revalidation.document),
+    operationName: documentOperationName(revalidation.document),
+    variablesJson: JSON.stringify(revalidation.variables ?? {}),
+  };
+}
+
+function createSelection<T>(state: SelectionState): Selection<T> {
+  const selection = {
+    ...state,
+    field(field: string) {
+      return createSelection({
+        ...state,
+        path: [...state.path, { field }],
+      });
+    },
+    item(field: string, equals: JsonScalar) {
+      return createSelection({
+        ...state,
+        path: [...state.path, { listItem: { whereField: field, equals } }],
+      });
+    },
+  };
+  return selection as unknown as Selection<T>;
+}
+
 /**
- * Executes `document` as a mutation whose `optimisticData` is applied to
- * the normalized cache immediately. Dependent cached queries update right
- * away; the returned source still resolves only with the real network
- * result (never the optimistic one).
- *
- * On clients without the normalized cache exchange the context slot is
- * ignored and this behaves exactly like `client.mutation`.
+ * Starts a strongly typed graph selection at a generated query operation.
+ * Variables and every subsequent path segment are inferred from the
+ * `TypedDocumentNode` generated by GraphQL Code Generator.
+ */
+export function select<TData, TVariables extends AnyVariables>(
+  document: TypedDocumentNode<TData, TVariables>,
+  variables: TVariables
+): Selection<TData> {
+  return createSelection<TData>({
+    document: document as TypedDocumentNode<unknown, AnyVariables>,
+    variables,
+    path: [],
+  });
+}
+
+/** Removes every occurrence of one normalized entity from a selected list. */
+export function remove(entityKey: string): LinkDiff {
+  return { kind: 'remove', entityKey };
+}
+
+/** Uniquely prepends one normalized entity to a selected list. */
+export function prependUnique(entityKey: string): LinkDiff {
+  return { kind: 'prependUnique', entityKey };
+}
+
+/** Compiles a generated graph selection and list diff into a durable update. */
+export function update<TItem extends object>(
+  selection: ListSelection<TItem>,
+  operation: LinkDiff
+): OptimisticUpdate {
+  return {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation,
+  } as OptimisticUpdate;
+}
+
+/**
+ * Executes `document` with one durable optimistic entity/link transaction.
+ * The source resolves only with the real network result.
  */
 export function executeOptimisticMutation<
   TData,
@@ -42,20 +172,20 @@ export function executeOptimisticMutation<
   client: Client,
   document: TypedDocumentNode<TData, TVariables>,
   variables: TVariables,
-  optimisticData: TData
+  optimisticData: TData,
+  options: OptimisticMutationOptions = {}
 ): OperationResultSource<OperationResult<TData, TVariables>> {
   const context: OptimisticMutationContext<TData> = {
     optimisticResponse: optimisticData,
+    linkPatches: [...(options.updates ?? [])],
+    revalidations: (options.revalidations ?? []).map(serializeRevalidation),
   };
   return client.mutation(document, variables, {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
   });
 }
 
-/**
- * Reads the optimistic context off an operation at the exchange boundary,
- * where the payload is necessarily `unknown`.
- */
+/** Reads and defensively validates the private context at the exchange edge. */
 export function optimisticContextOf(
   op: Operation
 ): OptimisticMutationContext | undefined {
@@ -65,7 +195,18 @@ export function optimisticContextOf(
     typeof value === 'object' &&
     'optimisticResponse' in value
   ) {
-    return value as OptimisticMutationContext;
+    const context = value as Partial<OptimisticMutationContext> & {
+      optimisticResponse: unknown;
+    };
+    return {
+      optimisticResponse: context.optimisticResponse,
+      linkPatches: Array.isArray(context.linkPatches)
+        ? context.linkPatches
+        : [],
+      revalidations: Array.isArray(context.revalidations)
+        ? context.revalidations
+        : [],
+    };
   }
   return undefined;
 }

@@ -353,7 +353,7 @@ async fn create_public_contract_channel(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service"]
 async fn get_or_create_dm_returns_existing_dm_and_rejects_self_dm() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_get_or_create_dm_access_control_contract(&ctx).await
@@ -397,7 +397,7 @@ async fn assert_get_or_create_dm_access_control_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service"]
 async fn get_or_create_private_persists_expected_participants() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_get_or_create_private_access_control_contract(&ctx).await
@@ -435,7 +435,7 @@ async fn assert_get_or_create_private_access_control_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service"]
 async fn public_channel_allows_join_and_leave_for_non_participant() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_public_join_leave_access_control_contract(&ctx).await
@@ -491,7 +491,7 @@ async fn assert_public_join_leave_access_control_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service and contacts_service workers"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service and contacts_service workers"]
 async fn create_private_channel_persists_channel_participants_and_contacts() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_private_channel_create_side_effect_contract(&ctx).await
@@ -530,7 +530,7 @@ async fn assert_private_channel_create_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service, contacts_service, and notification_service workers"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service, contacts_service, and notification_service workers"]
 async fn adding_and_removing_participant_updates_membership_notifications_and_contacts()
 -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
@@ -592,7 +592,7 @@ async fn assert_participant_invite_remove_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service and contacts_service workers"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service and contacts_service workers"]
 async fn public_join_and_leave_updates_membership_and_contacts() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_public_join_leave_side_effect_contract(&ctx).await
@@ -643,7 +643,7 @@ async fn assert_public_join_leave_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service"]
 async fn delete_channel_removes_channel() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_channel_delete_side_effect_contract(&ctx).await
@@ -666,7 +666,7 @@ async fn assert_channel_delete_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus document_storage_service"]
 async fn channel_rename_persists_name() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_channel_rename_side_effect_contract(&ctx).await
@@ -691,7 +691,7 @@ async fn assert_channel_rename_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway, document_storage_service, and notification_service workers"]
 async fn message_with_document_attachment_updates_channel_share_permissions_and_side_effects()
 -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
@@ -821,7 +821,7 @@ async fn assert_document_attachment_share_permission_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway, document_storage_service, and notification_service workers"]
 async fn follow_up_message_persists_message_emits_realtime_and_sends_notifications()
 -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
@@ -918,7 +918,7 @@ async fn assert_follow_up_message_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway and document_storage_service"]
 async fn typing_emits_realtime() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_typing_side_effect_contract(&ctx).await
@@ -967,7 +967,7 @@ async fn assert_typing_side_effect_contract(ctx: &ChannelContractContext) -> any
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway and document_storage_service"]
 async fn reaction_persists_reaction_and_emits_realtime() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_reaction_side_effect_contract(&ctx).await
@@ -1034,7 +1034,7 @@ async fn assert_reaction_side_effect_contract(ctx: &ChannelContractContext) -> a
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway, document_storage_service, and notification_service workers"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway, document_storage_service, and notification_service workers"]
 async fn thread_reply_persists_thread_id_emits_realtime_and_notifies_parent_author()
 -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
@@ -1129,7 +1129,7 @@ async fn assert_thread_reply_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway and document_storage_service"]
 async fn message_edit_persists_content_and_emits_realtime() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_message_edit_side_effect_contract(&ctx).await
@@ -1203,7 +1203,7 @@ async fn assert_message_edit_side_effect_contract(
 }
 
 #[tokio::test]
-#[ignore = "requires `just local-e2e-seed` plus connection_gateway and document_storage_service"]
+#[ignore = "requires `just local-e2e-rust` plus connection_gateway and document_storage_service"]
 async fn message_delete_persists_tombstone_and_emits_realtime() -> anyhow::Result<()> {
     let ctx = ChannelContractContext::load().await?;
     assert_message_delete_side_effect_contract(&ctx).await

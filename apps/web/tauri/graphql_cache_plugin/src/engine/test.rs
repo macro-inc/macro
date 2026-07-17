@@ -79,6 +79,36 @@ fn write_then_read_round_trips() {
 }
 
 #[test]
+fn query_inspection_serializes_generated_variables_and_value() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+
+    let instances = block_on(handle.inspect_query(
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        vec!["user".to_string(), "soup".to_string()],
+    ))
+    .unwrap();
+    assert_eq!(instances.len(), 1);
+    assert_eq!(instances[0].variables, variables());
+    assert_eq!(
+        instances[0].value.as_ref().unwrap()["hasMore"],
+        serde_json::json!(false)
+    );
+    assert_eq!(
+        serde_json::to_value(&instances).unwrap(),
+        serde_json::json!([{
+            "variables": {"input": {"limit": 1}},
+            "value": {
+                "nextCursor": null,
+                "hasMore": false,
+                "items": [{"id": "doc-1"}]
+            }
+        }])
+    );
+}
+
+#[test]
 fn registered_op_is_affected_by_later_writes() {
     let handle = spawn_handle();
     write(&handle, None, soup_data(false), None);
@@ -118,6 +148,8 @@ fn optimistic_layer_commits_durably() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        vec![],
+        vec![],
         0,
     ))
     .unwrap();
@@ -159,6 +191,8 @@ fn rollback_drops_optimistic_contribution() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        vec![],
+        vec![],
         0,
     ))
     .unwrap();

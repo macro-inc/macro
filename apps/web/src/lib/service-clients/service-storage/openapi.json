@@ -7965,7 +7965,7 @@
     "/projects": {
       "get": {
         "tags": ["project"],
-        "summary": "Gets all the users projects. This includes projects shared with the user.",
+        "summary": "List projects visible to the authenticated user.",
         "operationId": "get_projects_handler",
         "responses": {
           "200": {
@@ -8002,7 +8002,7 @@
       },
       "post": {
         "tags": ["project"],
-        "summary": "Creates a new project.\nThe project can be created as a sub-project of another project or as a top-level project.",
+        "summary": "Create a project, optionally beneath an existing project.",
         "operationId": "create_project_handler",
         "requestBody": {
           "content": {
@@ -8051,7 +8051,7 @@
     "/projects/pending": {
       "get": {
         "tags": ["project"],
-        "summary": "Gets all the users projects that are pending upload. This includes projects shared with the user.",
+        "summary": "List pending root projects owned by the authenticated user.",
         "operationId": "get_pending_projects_handler",
         "responses": {
           "200": {
@@ -8124,6 +8124,7 @@
     "/projects/preview": {
       "post": {
         "tags": ["project"],
+        "summary": "Get previews for a batch of project IDs.",
         "operationId": "get_batch_project_preview",
         "requestBody": {
           "content": {
@@ -8171,8 +8172,8 @@
     },
     "/projects/upload": {
       "post": {
-        "tags": ["projects::upload_folder"],
-        "summary": "Uploads a folder to the user's cloud storage. Mimicing the folder structure\nwith projects and placing all documents in the correct location.",
+        "tags": ["projects_hex::inbound::axum_router::upload_folder"],
+        "summary": "Upload a folder tree and create its upload destinations.",
         "operationId": "upload_folder_handler",
         "requestBody": {
           "content": {
@@ -8257,7 +8258,7 @@
     "/projects/upload_extract": {
       "post": {
         "tags": ["project"],
-        "summary": "Creates a request id in the dynamodb table for tracking the upload\nReturns a presigned url for uploading a zip file to the staging bucket\nReturns a request id for tracking the upload",
+        "summary": "Create a request for extracting an uploaded folder archive.",
         "operationId": "upload_extract_folder_handler",
         "requestBody": {
           "content": {
@@ -8339,7 +8340,8 @@
     },
     "/projects/{id}": {
       "get": {
-        "tags": ["projects::get_project"],
+        "tags": ["projects_hex::inbound::axum_router::get_project"],
+        "summary": "Get project metadata.",
         "operationId": "get_project_handler",
         "parameters": [
           {
@@ -8387,7 +8389,7 @@
       },
       "delete": {
         "tags": ["project"],
-        "summary": "Deletes a project.\nSoft deletes the project and all of its children.",
+        "summary": "Soft-delete a project and all of its children.",
         "operationId": "delete_project_handler",
         "parameters": [
           {
@@ -8413,6 +8415,7 @@
                       "oneOf": [
                         {
                           "type": "object",
+                          "description": "Identifiers affected by a recursive project soft deletion.",
                           "required": [
                             "project_ids",
                             "document_ids",
@@ -8424,21 +8427,21 @@
                               "items": {
                                 "type": "string"
                               },
-                              "description": "The ids of the chats that were marked as deleted"
+                              "description": "Deleted chats."
                             },
                             "document_ids": {
                               "type": "array",
                               "items": {
                                 "type": "string"
                               },
-                              "description": "The ids of the documents that were marked as deleted"
+                              "description": "Deleted documents."
                             },
                             "project_ids": {
                               "type": "array",
                               "items": {
                                 "type": "string"
                               },
-                              "description": "The ids of the project that were marked as deleted"
+                              "description": "Deleted projects, including the requested root."
                             }
                           }
                         }
@@ -8480,7 +8483,7 @@
     "/projects/{id}/access_level": {
       "get": {
         "tags": ["project"],
-        "summary": "Gets the user's access level to the project",
+        "summary": "Get the caller's project access level.",
         "operationId": "get_project_user_access_level",
         "parameters": [
           {
@@ -8540,7 +8543,7 @@
     "/projects/{id}/content": {
       "get": {
         "tags": ["project"],
-        "summary": "Gets the content of a project.\nThis includes the projects sub-projects as well as the items in the project.",
+        "summary": "Get a project's immediate children.",
         "operationId": "get_project_content_handler",
         "parameters": [
           {
@@ -8590,7 +8593,7 @@
     "/projects/{id}/permanent": {
       "delete": {
         "tags": ["project"],
-        "summary": "Permanently deletes a project and all of it's children.",
+        "summary": "Permanently delete a soft-deleted project and all of its children.",
         "operationId": "permanently_delete_project",
         "parameters": [
           {
@@ -8650,7 +8653,7 @@
     "/projects/{id}/permissions": {
       "get": {
         "tags": ["project"],
-        "summary": "Gets the current documents share permissions\nGets the projects share permissions",
+        "summary": "Get a project's share permissions.",
         "operationId": "get_project_permissions_v2",
         "parameters": [
           {
@@ -8700,7 +8703,7 @@
     "/projects/{id}/revert_delete": {
       "put": {
         "tags": ["project"],
-        "summary": "Deletes a specific document",
+        "summary": "Restore a soft-deleted project and its children.",
         "operationId": "revert_delete_project",
         "parameters": [
           {
@@ -9341,7 +9344,7 @@
     "/v2/projects/{id}": {
       "patch": {
         "tags": ["project"],
-        "summary": "Edits a project.",
+        "summary": "Edit project metadata and sharing settings.",
         "operationId": "edit_project_v2",
         "parameters": [
           {
@@ -17434,6 +17437,7 @@
       },
       "ProjectDeleteResponseData": {
         "type": "object",
+        "description": "Identifiers affected by a recursive project soft deletion.",
         "required": ["project_ids", "document_ids", "chat_ids"],
         "properties": {
           "chat_ids": {
@@ -17441,21 +17445,21 @@
             "items": {
               "type": "string"
             },
-            "description": "The ids of the chats that were marked as deleted"
+            "description": "Deleted chats."
           },
           "document_ids": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "The ids of the documents that were marked as deleted"
+            "description": "Deleted documents."
           },
           "project_ids": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "The ids of the project that were marked as deleted"
+            "description": "Deleted projects, including the requested root."
           }
         }
       },

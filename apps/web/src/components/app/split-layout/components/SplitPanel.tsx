@@ -202,7 +202,9 @@ export function SplitPanel(props: SplitPanelProps) {
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
-              'relative size-full': !props.handle.isSpotLight(),
+              // mobile:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile
+              // search overlay paints over it.
+              'relative size-full mobile:isolate': !props.handle.isSpotLight(),
             }}
             style={{
               '--split-header-height': `${

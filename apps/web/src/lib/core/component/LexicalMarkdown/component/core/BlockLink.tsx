@@ -59,7 +59,7 @@ export function openDocument(
   }
 
   openWithSplit(
-    { type: targetBlock, id },
+    { type: targetBlock, id, params },
     {
       preferNewSplit: inNewSplit,
       reopen: targetBlock === 'channel' && !hasParams ? 'latest' : undefined,

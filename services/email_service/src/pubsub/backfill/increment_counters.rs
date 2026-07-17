@@ -1,7 +1,6 @@
-use std::collections::HashSet;
-
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
+use contacts::domain::models::messages::ContactConnection;
 use contacts::domain::ports::ContactsIngress;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
@@ -189,13 +188,13 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         link.macro_id
     );
 
-    let users: HashSet<MacroUserIdStr<'static>> = std::iter::once(Ok(link.macro_id.clone()))
-        .chain(
-            email_addresses
-                .iter()
-                .map(|email| MacroUserIdStr::try_from_email(email)),
-        )
-        .collect::<Result<_, _>>()
+    let connections = email_addresses
+        .iter()
+        .map(|email| {
+            MacroUserIdStr::try_from_email(email)
+                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact))
+        })
+        .collect::<Result<Vec<_>, _>>()
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
@@ -204,7 +203,7 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         })?;
 
     ctx.contacts_ingress
-        .enqueue_contacts(users)
+        .enqueue_contact_connections(connections)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {

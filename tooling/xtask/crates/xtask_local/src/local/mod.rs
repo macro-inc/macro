@@ -19,6 +19,7 @@ pub mod cli;
 pub mod db;
 pub mod docker;
 pub mod doctor;
+pub mod e2e;
 pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
@@ -767,7 +768,7 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);

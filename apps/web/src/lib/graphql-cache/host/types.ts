@@ -6,9 +6,12 @@
  */
 
 import type {
+  CachedQueryInstanceWire,
   ClaimedMutation,
   MutationClaim,
+  OptimisticLinkPatchWire,
   OptimisticWriteResult,
+  QueryRevalidationWire,
   ReadResult,
   WriteResult,
 } from '../protocol';
@@ -21,10 +24,23 @@ export interface CacheReadArgs {
   variables?: Record<string, unknown>;
 }
 
+export interface InspectQueryArgs {
+  query: string;
+  operationName?: string;
+  /** Response-key field path from the query root. */
+  path: Array<{ field: string }>;
+}
+
 export interface CacheWriteArgs extends CacheReadArgs {
   data: unknown;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+}
+
+export interface BeginOptimisticWriteArgs extends CacheWriteArgs {
+  linkPatches?: OptimisticLinkPatchWire[];
+  /** Revalidations for relevant cached fields that could not be patched. */
+  revalidations?: QueryRevalidationWire[];
 }
 
 export interface CacheHost {
@@ -36,7 +52,11 @@ export interface CacheHost {
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
-  beginOptimisticWrite(args: CacheWriteArgs): Promise<OptimisticWriteResult>;
+  beginOptimisticWrite(
+    args: BeginOptimisticWriteArgs
+  ): Promise<OptimisticWriteResult>;
+  /** Enumerates cached variants of one generated query field selection. */
+  inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(
     owner: string,

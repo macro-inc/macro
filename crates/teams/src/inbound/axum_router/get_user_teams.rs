@@ -1,7 +1,7 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model_error_response::ErrorResponse;
-use model_user::axum_extractor::MacroUserExtractor;
 
 use crate::domain::{
     model::{Team, TeamError},
@@ -23,13 +23,13 @@ use super::TeamRouterState;
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    State(state): State<TeamRouterState<T, Eas>>,
-    user_context: MacroUserExtractor,
+pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<TeamRouterState<T, Eas, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<Vec<Team>>, TeamError> {
     let teams = state
         .service
-        .get_user_teams(&user_context.macro_user_id)
+        .get_user_teams(&authorization.macro_user_id)
         .await?;
     Ok(Json(teams))
 }

@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -48,9 +49,9 @@ pub struct SetEmailSyncRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id, email_sync = req.email_sync))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmCompanyAccessLevelExtractor<EditAccessLevel, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: CrmCompanyAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetEmailSyncRequest>,
 ) -> Result<StatusCode, CrmError> {

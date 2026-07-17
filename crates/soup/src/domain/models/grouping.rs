@@ -203,12 +203,18 @@ pub mod entity_type_labels {
 pub struct BinData<T = ()> {
     data: Vec<SoupItem<T>>,
     group_total_size: usize,
+    next_cursor: Option<String>,
 }
 
 impl<T> BinData<T> {
     /// The total number of items in this group across all pages.
     pub fn group_total_size(&self) -> usize {
         self.group_total_size
+    }
+
+    /// Return the cursor for the next page in this bin, when one exists.
+    pub fn next_cursor(&self) -> Option<&str> {
+        self.next_cursor.as_deref()
     }
 
     /// Consume the bin and return its items in their group order.
@@ -224,6 +230,36 @@ impl<Bin, T> NestedSoupGroups<T, Bin> {
     /// Consume the nested groups and iterate over their bins.
     pub fn into_bins(self) -> impl Iterator<Item = (Bin, BinData<T>)> {
         self.0.into_iter()
+    }
+}
+
+impl<T> NestedSoupGroups<T> {
+    /// Attach an opaque continuation cursor to every truncated bin.
+    pub fn with_next_cursors(
+        mut self,
+        sort_method: SimpleSortMethod,
+        filters: EntityFilterAst,
+    ) -> Self {
+        let mut get_cursor_val = SoupItem::sort_on(sort_method);
+
+        for bin in self.0.values_mut() {
+            if bin.data.len() >= bin.group_total_size {
+                continue;
+            }
+
+            bin.next_cursor = bin.data.last().map(|item| {
+                let cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst> =
+                    CursorWithValAndFilter {
+                        id: item.id(),
+                        limit: bin.data.len(),
+                        val: get_cursor_val(item),
+                        filter: filters.clone(),
+                    };
+                Base64Str::encode_json(cursor).type_erase()
+            });
+        }
+
+        self
     }
 }
 
@@ -257,6 +293,7 @@ where
             let entry = out.entry(key).or_insert_with(|| BinData {
                 data: Vec::new(),
                 group_total_size: total_group_count,
+                next_cursor: None,
             });
             entry.data.push(item);
         }

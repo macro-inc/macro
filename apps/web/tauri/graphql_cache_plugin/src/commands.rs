@@ -13,7 +13,10 @@ use crate::engine::{
     ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
 };
 use crate::{CacheState, InitializedCache, emit_ops_affected};
+use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::query_inspection::CachedQueryInstance;
 use cache_sqlite::SqliteStorage;
+use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 type Variables = serde_json::Map<String, serde_json::Value>;
@@ -118,6 +121,8 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     operation_name: Option<String>,
     variables: Option<Variables>,
     data: serde_json::Value,
+    link_patches: Option<Vec<OptimisticLinkPatch>>,
+    revalidations: Option<Vec<QueryRevalidation>>,
     created_at_ms: i64,
 ) -> Result<OptimisticWriteResultWire, String> {
     let result = engine_handle(&state)?
@@ -127,11 +132,37 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
             operation_name,
             variables.unwrap_or_default(),
             data,
+            link_patches.unwrap_or_default(),
+            revalidations.unwrap_or_default(),
             created_at_ms,
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
     Ok(result)
+}
+
+/// One field-only response-key path segment for query inspection.
+#[derive(Debug, Deserialize)]
+pub struct InspectionPathSegment {
+    /// Generated GraphQL response key (alias when present).
+    pub field: String,
+}
+
+/// Enumerates cached variants of one generated query field.
+#[tauri::command]
+pub async fn graphql_cache_inspect_query(
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    path: Vec<InspectionPathSegment>,
+) -> Result<Vec<CachedQueryInstance>, String> {
+    engine_handle(&state)?
+        .inspect_query(
+            query,
+            operation_name,
+            path.into_iter().map(|segment| segment.field).collect(),
+        )
+        .await
 }
 
 /// Claims the oldest runnable queued mutation.

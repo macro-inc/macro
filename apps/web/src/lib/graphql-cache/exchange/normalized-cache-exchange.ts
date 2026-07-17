@@ -56,6 +56,7 @@ import {
   tap,
 } from 'wonka';
 import type { CacheHost } from '../host/types';
+import type { OptimisticWriteResult, QueryRevalidationWire } from '../protocol';
 import { optimisticContextOf } from './optimistic';
 
 /**
@@ -293,6 +294,37 @@ export function normalizedCacheExchange(
         }
       }
 
+      function revalidateAfterCommit(
+        revalidations: QueryRevalidationWire[],
+        mutation: Operation
+      ): void {
+        for (const revalidation of revalidations) {
+          try {
+            const variables: unknown = JSON.parse(revalidation.variablesJson);
+            if (
+              variables === null ||
+              typeof variables !== 'object' ||
+              Array.isArray(variables)
+            ) {
+              throw new Error('cache revalidation variables are not an object');
+            }
+            void client
+              .query(
+                replayDocument(revalidation.query, revalidation.operationName),
+                variables as Record<string, unknown>,
+                { requestPolicy: 'network-only' }
+              )
+              .toPromise()
+              .then((result) => {
+                if (result.error) throw result.error;
+              })
+              .catch((error) => options.onCacheError?.(error, mutation));
+          } catch (error) {
+            options.onCacheError?.(error, mutation);
+          }
+        }
+      }
+
       async function readThenRoute(
         op: Operation
       ): Promise<OperationResult | undefined> {
@@ -345,12 +377,36 @@ export function normalizedCacheExchange(
           return;
         }
         try {
-          const begin = await host.beginOptimisticWrite({
+          const args = {
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
             data: optimistic.optimisticResponse,
-          });
+            linkPatches: optimistic.linkPatches,
+            revalidations: optimistic.revalidations,
+          };
+          let begin: OptimisticWriteResult;
+          try {
+            begin = await host.beginOptimisticWrite(args);
+          } catch (error) {
+            // A cached bin/page may disappear between inspect and begin. Do
+            // not expose a partial relation move: retain entity optimism and
+            // the post-success revalidation descriptors instead.
+            if (args.linkPatches.length === 0) throw error;
+            options.onCacheError?.(error, op);
+            begin = await host.beginOptimisticWrite({
+              ...args,
+              linkPatches: [],
+              revalidations: [
+                ...args.revalidations,
+                ...args.linkPatches.map((patch) => ({
+                  query: patch.query,
+                  operationName: patch.operationName,
+                  variablesJson: patch.variablesJson,
+                })),
+              ],
+            });
+          }
           liveQueuedOps.set(begin.transactionId, op);
           scheduleDrain();
         } catch (error) {
@@ -409,14 +465,19 @@ export function normalizedCacheExchange(
                   );
                 }
               } else {
-                await host.commitOptimisticWrite(attempt.transactionId, claim, {
-                  query: queryText(op),
-                  operationName: operationName(op),
-                  variables: op.variables as
-                    | Record<string, unknown>
-                    | undefined,
-                  data: result.data,
-                });
+                const committed = await host.commitOptimisticWrite(
+                  attempt.transactionId,
+                  claim,
+                  {
+                    query: queryText(op),
+                    operationName: operationName(op),
+                    variables: op.variables as
+                      | Record<string, unknown>
+                      | undefined,
+                    data: result.data,
+                  }
+                );
+                revalidateAfterCommit(committed.revalidations ?? [], op);
               }
             } catch (error) {
               options.onCacheError?.(error, op);

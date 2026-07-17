@@ -71,35 +71,6 @@ update-node-modules-hash:
 check-node-modules-nix:
   nix build .#js-node-modules --no-link
 
-# Start the local stack, seed deterministic data, and run the Playwright smoke suite.
-local-e2e *ARGS:
-  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
-  just local-e2e-seed
-  cd apps/web && LOCAL_E2E=true bunx playwright test {{ ARGS }}
-
-# Start the local stack, seed deterministic data, and run ignored Rust local E2E integration tests.
-local-e2e-rust *ARGS:
-  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
-  just local-e2e-seed
-  SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture {{ ARGS }}
-
-# Start the local stack once, seed deterministic data, and run Rust + Playwright local E2E tests.
-local-e2e-all *ARGS:
-  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
-  just local-e2e-seed
-  SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture
-  cd apps/web && LOCAL_E2E=true bunx playwright test {{ ARGS }}
-
-# Start the local stack, seed deterministic data, and open Playwright UI mode.
-local-e2e-ui *ARGS:
-  AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.local-e2e.yml bash tooling/scripts/run-local.sh -d --wait {{ local-e2e-services }}
-  just local-e2e-seed
-  cd apps/web && LOCAL_E2E=true bunx playwright test --ui {{ ARGS }}
-
 # Patches .env with local FusionAuth values if the Pulumi stack exists.
 # Requires FusionAuth to be running — starts it temporarily if needed.
 patch_local_fusionauth_env:

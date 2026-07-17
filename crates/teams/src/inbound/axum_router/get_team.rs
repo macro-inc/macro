@@ -6,8 +6,9 @@ use axum::{
 };
 use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::OptionalMacroUserTeamExtractor,
+    inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
 };
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -32,9 +33,9 @@ use super::TeamRouterState;
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    access: OptionalMacroUserTeamExtractor<MemberTeamRole, Eas>,
-    State(state): State<TeamRouterState<T, Eas>>,
+pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    State(state): State<TeamRouterState<T, Eas, Auth>>,
 ) -> Result<Response, TeamError> {
     let Some(receipt) = access.entity_access_receipt else {
         return Ok(StatusCode::NO_CONTENT.into_response());

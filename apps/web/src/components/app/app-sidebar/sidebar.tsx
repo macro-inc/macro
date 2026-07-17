@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/features/channel/sidebar/channels-unread-widget';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
@@ -61,6 +62,7 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import LogoIcon from '@icon/macro-logo.svg';
+import { AnimatedActivityIcon } from '@icon/wide-activity';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedCompanyIcon } from '@icon/wide-company';
@@ -165,6 +167,14 @@ const SIDEBAR_LINKS = [
     icon: AnimatedInboxIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
+  },
+  {
+    id: 'activity',
+    label: 'Activity',
+    href: '/activity',
+    icon: AnimatedActivityIcon,
+    hotkey: 'y',
+    hotkeyToken: TOKENS.sidebar.goTo.activity,
   },
   {
     id: 'search',
@@ -1142,7 +1152,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   const topLinks = createMemo(() =>
-    ['home', 'inbox']
+    ['home', 'inbox', 'activity']
       .map((id) => findLink(id))
       .filter((link): link is SidebarItem => link !== undefined)
   );
@@ -1409,6 +1419,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="shrink-0 w-full pt-2 flex flex-col gap-2">
+        <Show when={isExpandedView()}>
+          <SidebarActiveCallWidget
+            sidebarState="expanded"
+            class="rounded-xl border border-edge-muted bg-surface shadow-menu p-1"
+          />
+        </Show>
         <Show when={isExpandedView() && callCtx?.isInCall()}>
           <div data-ui="sidebar-in-call-panel">
             <InCallPanel isSlim={() => false} />

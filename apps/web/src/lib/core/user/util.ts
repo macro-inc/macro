@@ -1,4 +1,4 @@
-import { useDisplayName } from './displayName';
+import { getDisplayName } from './displayName';
 import { tryMacroId } from './macroId';
 import type { IUser } from './types';
 
@@ -20,11 +20,9 @@ export function emailToId(email: string): string {
 }
 
 export function idToDisplayName(id: string): string {
-  const macroId = tryMacroId(id);
-  const [displayName] = useDisplayName(macroId, {
+  return getDisplayName(tryMacroId(id), {
     emailFallback: 'local-part',
   });
-  return displayName();
 }
 
 export function channelParticipantInfo(participant: {

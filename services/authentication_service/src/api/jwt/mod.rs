@@ -2,7 +2,6 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 
@@ -14,7 +13,7 @@ use super::middleware;
 pub(in crate::api) mod macro_api_token;
 pub(in crate::api) mod refresh;
 
-pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
+pub fn router() -> Router<ApiContext> {
     Router::new()
         .route(
             "/refresh",
@@ -26,14 +25,5 @@ pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
                     .layer(CookieManagerLayer::new()),
             ),
         )
-        .route(
-            "/macro_api_token",
-            get(macro_api_token::handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    jwt_args,
-                    macro_middleware::auth::decode_jwt::handler, // Decodes the JWT to create
-                                                                 // user context
-                ),
-            )),
-        )
+        .route("/macro_api_token", get(macro_api_token::handler))
 }

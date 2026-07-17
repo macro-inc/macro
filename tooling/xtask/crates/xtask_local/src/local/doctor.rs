@@ -43,6 +43,7 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
         ),
         ("rust target", check_rust_target()),
         ("ports", check_ports(&instance)),
+        ("port forwarding", check_port_forwarding(&instance)),
     ];
 
     let mut failed = false;
@@ -137,6 +138,89 @@ fn check_rust_target() -> Status {
                 "add {} to rust-toolchain.toml `targets` and re-enter `nix develop`",
                 target.triple
             )),
+        }
+    }
+}
+
+/// Docker Desktop's VM can wedge so that a container's host port bindings are
+/// configured (`HostConfig.PortBindings`) but never activated
+/// (`NetworkSettings.Ports` stays empty): the container is healthy inside the
+/// VM while nothing on the host can reach it, and health probes hang instead
+/// of failing. Only a Docker Desktop restart recovers it.
+fn check_port_forwarding(instance: &Instance) -> Status {
+    let names: Vec<String> = match Command::new("docker")
+        .args([
+            "ps",
+            "--filter",
+            &format!(
+                "label=com.docker.compose.project={}",
+                instance.project_name()
+            ),
+            "--format",
+            "{{.Names}}",
+        ])
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+        _ => return Status::Warn("could not list this instance's containers".into()),
+    };
+    if names.is_empty() {
+        return Status::Ok("no running containers for this instance".into());
+    }
+
+    let mut cmd = Command::new("docker");
+    cmd.args([
+        "inspect",
+        "--format",
+        "{{.Name}}\t{{json .HostConfig.PortBindings}}\t{{json .NetworkSettings.Ports}}",
+    ])
+    .args(&names);
+    let out = match cmd.output() {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => return Status::Warn("docker inspect failed".into()),
+    };
+
+    let non_empty_array = |v: Option<&serde_json::Value>| -> bool {
+        v.and_then(|v| v.as_array()).is_some_and(|a| !a.is_empty())
+    };
+    let mut wedged: Vec<String> = Vec::new();
+    for line in out.lines() {
+        let mut parts = line.splitn(3, '\t');
+        let (Some(name), Some(configured), Some(active)) =
+            (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        let configured: serde_json::Value = serde_json::from_str(configured).unwrap_or_default();
+        let active: serde_json::Value = serde_json::from_str(active).unwrap_or_default();
+        let Some(configured) = configured.as_object() else {
+            continue;
+        };
+        for (port, bindings) in configured {
+            if non_empty_array(Some(bindings)) && !non_empty_array(active.get(port)) {
+                wedged.push(format!("{} {port}", name.trim_start_matches('/')));
+            }
+        }
+    }
+
+    if wedged.is_empty() {
+        Status::Ok(format!(
+            "{} running container(s) publish their configured ports",
+            names.len()
+        ))
+    } else {
+        Status::Fail {
+            msg: format!(
+                "host bindings configured but inactive: {}",
+                wedged.join(", ")
+            ),
+            hint: Some(
+                "Docker Desktop's VM port forwarding is wedged — restart Docker Desktop".into(),
+            ),
         }
     }
 }

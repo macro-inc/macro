@@ -10,14 +10,14 @@ use crate::{
             exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::{Keys, TermCombine},
+        utils::millis_to_datetime,
     },
 };
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use models_opensearch::{OpenSearchEntityType, SearchEntityType, SearchIndex};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_query_builder::*;
-use tracing::Instrument;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
@@ -29,8 +29,10 @@ pub(crate) struct ChannelMessageIndex {
     pub thread_id: uuid::Uuid,
     pub sender_id: String,
     pub mentions: Vec<String>,
-    pub created_at_seconds: i64,
-    pub updated_at_seconds: i64,
+    #[serde(default)]
+    pub created_at_millis: Option<i64>,
+    #[serde(default)]
+    pub updated_at_millis: Option<i64>,
 }
 
 #[derive(Default)]
@@ -203,6 +205,7 @@ fn build_channel_search_request(
     };
     let highlight = Highlight::new()
         .require_field_match(true)
+        .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
         .field("content", em_field().number_of_fragments(1));
     request_builder.highlight(highlight);
 
@@ -225,34 +228,27 @@ pub(crate) async fn search_channel(
     exclude_source_content(&mut search_request);
 
     let index = SearchIndex::Channels.as_ref();
-    let response = async {
-        client
-            .search(opensearch::SearchParts::Index(&[index]))
-            .body(search_request)
-            .send()
-            .await
-            .map_client_error()
-            .await
-    }
-    .instrument(tracing::info_span!("opensearch_http_request"))
-    .await?;
+    let response = client
+        .search(opensearch::SearchParts::Index(&[index]))
+        .body(search_request)
+        .send()
+        .await
+        .map_client_error()
+        .await?;
 
-    let bytes = async {
-        response
-            .bytes()
-            .await
-            .map_err(|e| OpensearchClientError::HttpBytesError {
-                details: e.to_string(),
-            })
-    }
-    .instrument(tracing::info_span!("opensearch_read_response_body"))
-    .await?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
+            details: e.to_string(),
+        })?;
 
     let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
         .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
             details: e.to_string(),
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
+    result.warn_on_shard_failures("search_channel");
 
     let total = result.hits.total.value;
 
@@ -307,10 +303,10 @@ fn channel_hit_to_search_hit(hit: Hit<ChannelMessageIndex>) -> SearchHit {
             channel_message_id: a.message_id,
             thread_id: (a.thread_id != a.message_id).then_some(a.thread_id),
             sender_id: a.sender_id,
-            created_at: DateTime::from_timestamp(a.created_at_seconds, 0).unwrap_or_default(),
-            updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0).unwrap_or_default(),
+            created_at: millis_to_datetime(a.created_at_millis).unwrap_or_default(),
+            updated_at: millis_to_datetime(a.updated_at_millis).unwrap_or_default(),
         })),
-        updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0),
+        updated_at: millis_to_datetime(a.updated_at_millis),
     }
 }
 

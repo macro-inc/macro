@@ -12,15 +12,20 @@
 
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
-import { executeOptimisticMutation } from '@graphql-cache/index';
+import {
+  executeOptimisticMutation,
+  type OptimisticMutationOptions,
+} from '@graphql-cache/index';
 import { match } from 'ts-pattern';
 import { propertiesServiceClient } from '../service-properties/client';
 import type { EntityReference } from '../service-properties/generated/schemas/entityReference';
 import type { EntityType } from '../service-properties/generated/schemas/entityType';
+import type { PropertyTargetEntityType } from '../service-properties/generated/schemas/propertyTargetEntityType';
 import type { SetPropertyValue } from '../service-properties/generated/schemas/setPropertyValue';
 import {
   type GraphqlEntityReferenceInput,
   type GraphqlPropertyEntityType,
+  type GraphqlPropertyTargetEntityType,
   type GraphqlSetPropertyValue,
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
@@ -50,6 +55,26 @@ export function toGraphqlPropertyEntityType(
   entityType: EntityType
 ): GraphqlPropertyEntityType {
   return ENTITY_TYPE_TO_GRAPHQL[entityType];
+}
+
+const TARGET_ENTITY_TYPE_TO_GRAPHQL: Record<
+  PropertyTargetEntityType,
+  GraphqlPropertyTargetEntityType
+> = {
+  CALL_RECORD: 'CALL_RECORD',
+  CHANNEL: 'CHANNEL',
+  CHAT: 'CHAT',
+  COMPANY: 'COMPANY',
+  DOCUMENT: 'DOCUMENT',
+  PROJECT: 'PROJECT',
+  THREAD: 'THREAD',
+  USER: 'USER',
+};
+
+export function toGraphqlPropertyTargetEntityType(
+  entityType: PropertyTargetEntityType
+): GraphqlPropertyTargetEntityType {
+  return TARGET_ENTITY_TYPE_TO_GRAPHQL[entityType];
 }
 
 function toGraphqlEntityReference(
@@ -122,7 +147,7 @@ export function toGraphqlSetPropertyValue(
 }
 
 export type SetEntityPropertyArgs = {
-  entityType: EntityType;
+  entityType: PropertyTargetEntityType;
   entityId: string;
   propertyDefinitionId: string;
   /** REST-shaped value; `null` attaches the property without a value. */
@@ -134,6 +159,8 @@ export type SetEntityPropertyArgs = {
    * responds, so those run without optimism and rely on invalidation.
    */
   optimisticProperty?: SoupPropertyFieldsFragment | undefined;
+  /** Mutation-scoped persistent normalized-cache relation recipes. */
+  optimisticCache?: OptimisticMutationOptions;
 };
 
 /**
@@ -160,7 +187,7 @@ export async function setEntityProperty(
   const client = getGraphqlSoupClient();
   const variables: SetEntityPropertyMutationVariables = {
     input: {
-      entityType: toGraphqlPropertyEntityType(args.entityType),
+      entityType: toGraphqlPropertyTargetEntityType(args.entityType),
       entityId: args.entityId,
       propertyDefinitionId: args.propertyDefinitionId,
       value: toGraphqlSetPropertyValue(args.value),
@@ -173,7 +200,8 @@ export async function setEntityProperty(
         variables,
         {
           setEntityProperty: args.optimisticProperty,
-        } satisfies SetEntityPropertyMutation
+        } satisfies SetEntityPropertyMutation,
+        args.optimisticCache
       ).toPromise()
     : await client.mutation(SetEntityPropertyDocument, variables).toPromise();
   if (result.error) {

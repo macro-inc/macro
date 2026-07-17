@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    context::{ApiContext, AppState},
+    context::{ApiContext, AppState, AuthorizationService},
     model::{
         connection::ConnectionContext, message::OutgoingMessage, tracking::EntityConnectionExt,
     },
@@ -9,18 +9,18 @@ use anyhow::Result;
 use axum::{
     Router,
     extract::{
-        Extension, State,
+        State,
         ws::{Message as AxumWebsocketMessage, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::get,
 };
-use cowlike::CowLike;
 use futures::{
     FutureExt,
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::handle_websocket_stream;
 use model::user::UserContext;
@@ -35,15 +35,21 @@ pub fn router() -> Router<AppState> {
 }
 
 /// Handle upgrading the https connection to a websocket connection
-#[tracing::instrument(skip(ws, ctx, user_context, config), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(ws, authorization, ctx, config), fields(user_id=?authorization.macro_user_id))]
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     State(ctx): State<ApiContext>,
     State(config): State<Arc<Config>>,
-    user_context: Extension<UserContext>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| {
-        handle_websocket_connection(socket, ctx, config, user_context.clone())
+        handle_websocket_connection(
+            socket,
+            ctx,
+            config,
+            authorization.macro_user_id,
+            authorization.user_context,
+        )
     })
 }
 
@@ -51,23 +57,20 @@ pub async fn ws_handler(
 /// Should create a new connection in the connection manager,
 /// and spawn tasks for both forwarding of messages, and reading incoming messages from the client.
 /// If any part of forwarding or reading fails, then the connection should be removed from the connection manager.
-#[tracing::instrument(skip(socket, ctx, user_context, config), fields(user_id=?user_context.user_id))]
+#[tracing::instrument(skip(socket, ctx, config, macro_user_id, user_context), fields(user_id=?macro_user_id))]
 async fn handle_websocket_connection(
     socket: WebSocket,
     ctx: ApiContext,
     config: Arc<Config>,
-    user_context: Extension<UserContext>,
+    macro_user_id: MacroUserIdStr<'static>,
+    user_context: UserContext,
 ) {
     let (sink, stream) = socket.split();
     let (sender, receiver) = tokio::sync::mpsc::channel::<OutgoingMessage>(100);
     let connection_id = uuid::Uuid::new_v4().to_string();
-    let Ok(user_id) = MacroUserIdStr::parse_from_str(&user_context.user_id) else {
-        return;
-    };
-    let user_id = user_id.into_owned();
 
     // Create guard that records last online time when websocket connection closes
-    let last_online_guard = ctx.last_online_worker.new_guard(user_id.clone());
+    let last_online_guard = ctx.last_online_worker.new_guard(macro_user_id.clone());
 
     let sender_task = tokio::spawn(async move { forwarder(sink, receiver).await });
 
@@ -75,9 +78,9 @@ async fn handle_websocket_connection(
         .connection_manager
         .add_connection(
             EntityType::User
-                .with_entity_str(user_id.as_ref())
+                .with_entity_str(macro_user_id.as_ref())
                 .with_connection_str(&connection_id)
-                .with_user_str(user_id.as_ref()),
+                .with_user_str(macro_user_id.as_ref()),
             sender.clone(),
             sender_task.abort_handle(),
         )

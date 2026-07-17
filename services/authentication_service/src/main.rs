@@ -19,6 +19,7 @@ use github::{
 };
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::AppServiceUrl;
 use macro_service_urls::DocumentStorageServiceUrl;
@@ -51,8 +52,8 @@ use referral::{
 };
 
 use crate::api::context::{
-    ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
-    MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+    ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
+    MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
 use std::sync::Arc;
 
@@ -182,6 +183,13 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args.clone()),
+        InternalAuthConfig {
+            api_key: internal_api_key.to_string(),
+            default_user_id: None,
+        },
+    )));
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
         .context("failed to create redis client")?;
@@ -339,6 +347,7 @@ async fn main() -> anyhow::Result<()> {
             environment: config.environment,
             rate_limit_service: rate_limit,
             jwt_args,
+            authorization_state,
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,
                 macro_api_token_private_key,

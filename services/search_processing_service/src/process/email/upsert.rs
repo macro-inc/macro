@@ -3,7 +3,7 @@ use chrono::Utc;
 use models_email::service::label::system_labels;
 use models_properties::EntityType;
 use opensearch_client::{
-    OpensearchClient, date_format::EpochSeconds, upsert::email::UpsertEmailArgs,
+    OpensearchClient, date_format::EpochMillis, upsert::email::UpsertEmailArgs,
 };
 use properties::outbound::entity_properties_get_query::{
     get_entity_properties_for_index, get_entity_properties_for_index_batch,
@@ -52,13 +52,13 @@ pub async fn process_upsert_message(
         return Ok(());
     };
 
-    let now = EpochSeconds::new(Utc::now().timestamp())?;
+    let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
 
-    let updated_at = message_info
+    let updated_at_millis = message_info
         .internal_date_ts
-        .map(|date| EpochSeconds::new(date.timestamp()))
+        .map(|date| EpochMillis::new(date.timestamp_millis()))
         .transpose()?
-        .unwrap_or(now);
+        .unwrap_or(now_millis);
 
     // A full index overwrites the doc, so thread properties must ride along
     // or a reindex would drop them. A fetch failure propagates (retry)
@@ -123,10 +123,10 @@ pub async fn process_upsert_message(
             .map(|label| label.name.clone())
             .collect(),
         content,
-        updated_at_seconds: updated_at,
-        sent_at_seconds: message_info
+        updated_at_millis,
+        sent_at_millis: message_info
             .internal_date_ts
-            .map(|date| EpochSeconds::new(date.timestamp()))
+            .map(|date| EpochMillis::new(date.timestamp_millis()))
             .transpose()?,
         properties,
     };
@@ -152,7 +152,7 @@ pub async fn process_upsert_thread_message(
         .parse()
         .context("failed to parse thread_id as UUID")?;
 
-    let now = EpochSeconds::new(Utc::now().timestamp())?;
+    let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
 
     // A full index overwrites each doc, so thread properties must ride along
     // or a reindex would drop them.
@@ -190,16 +190,16 @@ pub async fn process_upsert_thread_message(
             }
 
             if let Some(content) = message.body_parsed_linkless {
-                let sent_at = message
+                let sent_at_millis = message
                     .internal_date_ts
-                    .map(|date| EpochSeconds::new(date.timestamp()))
+                    .map(|date| EpochMillis::new(date.timestamp_millis()))
                     .transpose()?;
 
-                let updated_at = message
+                let updated_at_millis = message
                     .internal_date_ts
-                    .map(|date| EpochSeconds::new(date.timestamp()))
+                    .map(|date| EpochMillis::new(date.timestamp_millis()))
                     .transpose()?
-                    .unwrap_or(now);
+                    .unwrap_or(now_millis);
 
                 upsert_email_message_args.push(UpsertEmailArgs {
                     message_id: message.db_id.to_string(),
@@ -242,8 +242,8 @@ pub async fn process_upsert_thread_message(
                         .map(|label| label.name.clone())
                         .collect(),
                     content,
-                    updated_at_seconds: updated_at,
-                    sent_at_seconds: sent_at,
+                    updated_at_millis,
+                    sent_at_millis,
                     properties: properties.clone(),
                 });
             } else {
@@ -286,7 +286,7 @@ pub async fn process_upsert_thread_batch_message(
         .map(|id| id.parse().context("failed to parse thread_id as UUID"))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let now = EpochSeconds::new(Utc::now().timestamp())?;
+    let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
 
     let messages =
         email_db_client::messages::get_parsed_search::get_parsed_search_messages_by_thread_ids(
@@ -317,16 +317,16 @@ pub async fn process_upsert_thread_batch_message(
         }
 
         if let Some(content) = message.body_parsed_linkless {
-            let sent_at = message
+            let sent_at_millis = message
                 .internal_date_ts
-                .map(|date| EpochSeconds::new(date.timestamp()))
+                .map(|date| EpochMillis::new(date.timestamp_millis()))
                 .transpose()?;
 
-            let updated_at = message
+            let updated_at_millis = message
                 .internal_date_ts
-                .map(|date| EpochSeconds::new(date.timestamp()))
+                .map(|date| EpochMillis::new(date.timestamp_millis()))
                 .transpose()?
-                .unwrap_or(now);
+                .unwrap_or(now_millis);
 
             upsert_email_message_args.push(UpsertEmailArgs {
                 message_id: message.db_id.to_string(),
@@ -369,8 +369,8 @@ pub async fn process_upsert_thread_batch_message(
                     .map(|label| label.name.clone())
                     .collect(),
                 content,
-                updated_at_seconds: updated_at,
-                sent_at_seconds: sent_at,
+                updated_at_millis,
+                sent_at_millis,
                 properties: properties_by_thread
                     .get(&message.thread_db_id.to_string())
                     .cloned()

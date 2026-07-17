@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use models_properties::EntityType;
 use models_properties::api::CreatePropertyDefinitionRequest;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -98,14 +98,18 @@ pub enum PropertyDefinitionResponse {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), err)]
-pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
+pub async fn list_properties<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Query(query): Query<ListPropertiesQuery>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    }: MacroAuthorizationExtractor<Auth>,
+    team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
     let callers_team = team.entity_access_receipt.as_ref();
 
@@ -197,13 +201,17 @@ impl IntoResponse for CreatePropertyDefinitionErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, user, team), err)]
-pub async fn create_property_definition<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+pub async fn create_property_definition<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    }: MacroAuthorizationExtractor<Auth>,
+    team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
     tracing::info!(scope = ?request.scope, "creating property definition");
@@ -259,14 +267,18 @@ impl IntoResponse for DeletePropertyDefinitionError {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), err)]
-pub async fn delete_property_definition<S: PropertiesService, A: EntityAccessService>(
+pub async fn delete_property_definition<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path(property_uuid): Path<Uuid>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    }: MacroAuthorizationExtractor<Auth>,
+    team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
     tracing::info!("deleting property definition");
 

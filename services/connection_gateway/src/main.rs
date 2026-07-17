@@ -7,7 +7,10 @@ mod model;
 mod service;
 use std::{sync::Arc, time::Duration};
 
-use crate::{api::router, context::AppState};
+use crate::{
+    api::router,
+    context::{AppState, AuthorizationService},
+};
 use anyhow::{Context, Result};
 use axum::http::{
     Method,
@@ -29,6 +32,7 @@ use last_online_tracker::{
     outbound::{redis::RedisLastOnlineRepo, time::DefaultTime as LastOnlineDefaultTime},
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use service::dynamodb::create_dynamo_db_connection_manager;
@@ -118,12 +122,18 @@ async fn main() -> Result<()> {
     tokio::spawn(poll_messages(context.clone()));
 
     let config = Arc::new(config);
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: None,
+        },
+    )));
 
     let app = router(AppState {
         context,
-        internal_api_key: config.internal_api_key.clone(),
         config: Arc::clone(&config),
-        jwt_args,
+        authorization_state,
         frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
             PullAggregatorImpl::new(FrecencyPgProcessor::new(pgpool), DefaultTime),
             Duration::from_secs(60),

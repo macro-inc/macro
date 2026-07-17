@@ -9,8 +9,8 @@ ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
+  "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/inbound",
   "item_filters/schema",
@@ -57,6 +57,9 @@ futures = { workspace = true, optional = true }
 item_filters = { path = "../item_filters" }
 livekit-api = { workspace = true, optional = true }
 livekit-protocol = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+  "axum",
+] }
 macro_aws_config = { path = "../macro_aws_config", optional = true, features = [
   "s3",
 ] }
@@ -64,7 +67,6 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }

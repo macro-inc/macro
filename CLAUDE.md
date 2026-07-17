@@ -56,7 +56,8 @@ camelCased rather than snake_cased (use `/dump-schema` or check the migration fi
 When a column is camelCased, you need to cast it as the snake_cased version when reading from the database. E.g.
 `SELECT "userId" as "user_id" FROM "UserInsights"`.
 Any time you make changes to the SQL code in rust, you need to run `just prepare_db` to
-update the `.sqlx` directory. Run it **only** from the repository root — do not run it from
+update the `.sqlx` directory. Always run it inside `nix develop` and **only** from the
+repository root (for example, `nix develop --command just prepare_db`) — do not run it from
 individual crate directories anymore. The workspace-level recipe handles every crate that
 has sqlx queries.
 

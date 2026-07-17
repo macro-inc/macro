@@ -72,6 +72,19 @@ async fn write_then_read_through_js_boundary() {
     assert_eq!(read["kind"], "hit");
     assert_eq!(read["data"], data);
 
+    // Generated-query inspection crosses the wasm boundary with one wire
+    // shape and recovers the operation variables from the normalized field.
+    let inspected = JsFuture::from(engine.inspect_query(
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!([{"field": "user"}, {"field": "soup"}])),
+    ))
+    .await
+    .unwrap();
+    let inspected: serde_json::Value = serde_wasm_bindgen::from_value(inspected).unwrap();
+    assert_eq!(inspected[0]["variables"], vars);
+    assert_eq!(inspected[0]["value"], data["user"]["soup"]);
+
     // Cross-instance invalidation path: evict + report local dependents.
     let affected =
         JsFuture::from(engine.invalidate_keys(vec!["GraphqlSoupItem:doc-1".to_string()]))
@@ -151,6 +164,8 @@ async fn optimistic_write_round_trip() {
         Some("SetEntityProperty".into()),
         js(mutation_vars.clone()),
         js(serde_json::json!({ "setEntityProperty": { "id": "prop-1", "displayName": "Stage" } })),
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         123.0,
     ))
     .await

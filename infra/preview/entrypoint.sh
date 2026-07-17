@@ -6,13 +6,19 @@
 # starts.
 set -euo pipefail
 
-log() { echo "[preview] $*"; }
+state_dir=/var/lib/docker/.macro-preview
+mkdir -p "$state_dir"
+# Fly's log stream is short-retention and `flyctl logs --no-tail` can hang
+# forever, so the boot breakdown also lands in a volume-backed file that CI
+# reads back with a plain `ssh cat`. Truncated here, not appended: the file
+# always describes the most recent real boot.
+timings="$state_dir/boot-timings.log"
+: > "$timings"
+log() { echo "[preview] $*" | tee -a "$timings"; }
 
 t_boot=$(date +%s)
 # A hard loss during a hot update cannot run its EXIT trap. The full immutable
 # boot is the recovery boundary, so clear any abandoned volume-backed lock.
-state_dir=/var/lib/docker/.macro-preview
-mkdir -p "$state_dir"
 rmdir "$state_dir/update.lock" 2>/dev/null || true
 log "starting inner dockerd"
 dockerd >/var/log/dockerd.log 2>&1 &
@@ -68,22 +74,24 @@ fi
 
 log "bringing the stack up (snapshot restore)"
 t0=$(date +%s)
+# tee the per-stage timings into the boot log; pipefail keeps a stack-up
+# failure fatal through the pipe.
 /srv/macro/bin/xtask stack up \
   "${doppler_args[@]}" \
   --no-build \
   --binaries-dir /srv/macro/artifacts/binaries \
   --frontend-dist /srv/macro/artifacts/frontend-dist \
-  --json
+  --json 2>&1 | tee -a "$timings"
 
 log "stack up took $(($(date +%s) - t0))s (boot total $(($(date +%s) - t_boot))s)"
 # The backend health gate is the longest stack-up phase; surface the auth
 # service's step timings plus its timestamped tail so the wait is attributable
-# from the CI boot-timings step (which greps [preview] out of `flyctl logs`).
+# from the CI boot-timings step (which ssh-cats the timings file).
 docker logs -t macro-authentication-service-1 2>&1 \
   | grep 'authentication startup step' \
-  | sed 's/^/[preview][auth-startup] /' || true
+  | sed 's/^/[preview][auth-startup] /' | tee -a "$timings" || true
 docker logs -t --tail 40 macro-authentication-service-1 2>&1 \
-  | sed 's/^/[preview][auth] /' || true
+  | sed 's/^/[preview][auth] /' | tee -a "$timings" || true
 
 # Commit the compatibility marker only after the restored stack is healthy.
 # It lives beside (not inside) Docker's own data on the persistent volume, so

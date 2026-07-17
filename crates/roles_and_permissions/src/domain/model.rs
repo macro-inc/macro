@@ -109,6 +109,24 @@ impl Display for RoleId {
     }
 }
 
+impl RoleId {
+    /// Whether this role represents an active paid Macro subscription.
+    pub fn is_paid_subscription(&self) -> bool {
+        matches!(
+            self,
+            Self::ProfessionalSubscriber
+                | Self::TeamSubscriber
+                | Self::Corporate
+                | Self::SubHaiku
+                | Self::SubSonnet
+                | Self::SubOpus
+        )
+    }
+}
+
+#[cfg(test)]
+mod test;
+
 /// All valid permissions that exist in our system
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PermissionId {

@@ -125,6 +125,23 @@ async fn test_get_user_names_with_email_not_found(pool: Pool<Postgres>) -> anyho
     Ok(())
 }
 
+#[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_names_with_email")))]
+async fn deduplicates_requested_user_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_profile_ids = parse_user_ids(vec![
+        "macro|user_profile_1@macro.com",
+        "macro|user_profile_1@macro.com",
+    ])?;
+
+    let names =
+        get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", user_profile_ids)
+            .await?;
+
+    assert_eq!(names.len(), 1);
+    assert_eq!(names[0].id, "macro|user_profile_1@macro.com");
+
+    Ok(())
+}
+
 /// only fallback to using email contact names if the user has neither first nor last name set
 /// in macro. don't use the email contact last name with the macro first name if exists.
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_names_with_email")))]

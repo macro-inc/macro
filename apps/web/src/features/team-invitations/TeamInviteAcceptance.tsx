@@ -1,7 +1,5 @@
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
 import { tryMacroId, useDisplayName } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
@@ -14,23 +12,11 @@ import {
   useUserInvitesQuery,
 } from '@queries/team/invitations';
 import { useTeamQuery } from '@queries/team/teams';
-import { Navigate, useNavigate, useSearchParams } from '@solidjs/router';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Surface } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 
 export function TeamInviteAcceptance() {
-  return (
-    <ShowFeatureFlag
-      key="enable-teams-settings"
-      enabledOverride={ENABLE_TEAMS_OVERRIDE}
-      fallback={<Navigate href="/" />}
-    >
-      <TeamInviteAcceptanceContent />
-    </ShowFeatureFlag>
-  );
-}
-
-function TeamInviteAcceptanceContent() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const userInfo = useUserInfo();

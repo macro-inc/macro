@@ -1,0 +1,128 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT l.id as \"id!\", l.macro_id as \"macro_id!\",\n               l.fusionauth_user_id as \"fusionauth_user_id!\",\n               l.email_address as \"email_address!\",\n               l.provider as \"provider!: _\",\n               l.is_sync_active as \"is_sync_active!\",\n               l.is_primary as \"is_primary!\",\n               l.needs_reauth as \"needs_reauth!\",\n               l.last_sync_error_at,\n               l.created_at as \"created_at!\",\n               l.updated_at as \"updated_at!\",\n               s.signature_on_replies_forwards as \"signature_on_replies_forwards?\",\n               s.signature,\n               bj.status as \"latest_backfill_status?: _\",\n               c.sfs_photo_url as \"photo_url?\"\n        FROM (\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,\n                   el.last_sync_error_at, el.created_at, el.updated_at\n            FROM email_links el\n            WHERE el.macro_id = $1\n            UNION\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,\n                   el.last_sync_error_at, el.created_at, el.updated_at\n            FROM email_links el\n            JOIN macro_user_links mul ON el.id = mul.link_id\n            WHERE mul.primary_macro_id = $1\n        ) l\n        LEFT JOIN email_settings s ON s.link_id = l.id\n        LEFT JOIN LATERAL (\n            SELECT status FROM email_backfill_jobs\n            WHERE link_id = l.id\n            ORDER BY created_at DESC\n            LIMIT 1\n        ) bj ON true\n        LEFT JOIN email_contacts c\n            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)\n        ORDER BY l.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "fusionauth_user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider!: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_sync_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_primary!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "needs_reauth!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_sync_error_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "signature_on_replies_forwards?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "latest_backfill_status?: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_backfill_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Cancelled",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "photo_url?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "d1a0fe539e47a9394246dcebcdf0b01463fe872365d6ded02c64a40a498a4295"
+}

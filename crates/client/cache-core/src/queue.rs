@@ -5,8 +5,11 @@
 //! credentials and urql operation context are deliberately excluded: replay
 //! reconstructs an operation using the current client configuration.
 
+use crate::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use crate::normalize::RecordUpdates;
+use crate::value::canonical_json;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as Json;
 
 /// Durable, monotonically increasing mutation identifier and queue position.
 pub type MutationId = u64;
@@ -61,11 +64,80 @@ impl StoredMutation {
     }
 }
 
+/// Current version of the durable optimistic source envelope.
+pub const OPTIMISTIC_SOURCE_VERSION: u8 = 2;
+
+const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:";
+
+/// Durable source needed to reconstruct one optimistic layer statefully.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptimisticSource {
+    /// Optimistic GraphQL mutation response.
+    pub mutation_data: Json,
+    /// Ordered constrained relation recipes.
+    #[serde(default)]
+    pub link_patches: Vec<OptimisticLinkPatch>,
+    /// Revalidations for relevant fields that could not be patched.
+    #[serde(default)]
+    pub revalidations: Vec<QueryRevalidation>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OptimisticSourceEnvelope {
+    version: u8,
+    mutation_data: Json,
+    #[serde(default)]
+    link_patches: Vec<OptimisticLinkPatch>,
+    #[serde(default)]
+    revalidations: Vec<QueryRevalidation>,
+}
+
+/// Encodes an optimistic source with a reserved prefix and versioned JSON envelope.
+pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
+    let envelope = canonical_json(
+        &serde_json::to_value(OptimisticSourceEnvelope {
+            version: OPTIMISTIC_SOURCE_VERSION,
+            mutation_data: source.mutation_data.clone(),
+            link_patches: source.link_patches.clone(),
+            revalidations: source.revalidations.clone(),
+        })
+        .expect("optimistic source serializes"),
+    );
+    format!("{OPTIMISTIC_SOURCE_ENVELOPE_PREFIX}{envelope}")
+}
+
+/// Decodes a versioned optimistic source, treating legacy raw JSON as the
+/// optimistic mutation response with no relation recipes.
+pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String> {
+    let Some(envelope) = value.strip_prefix(OPTIMISTIC_SOURCE_ENVELOPE_PREFIX) else {
+        return Ok(OptimisticSource {
+            mutation_data: serde_json::from_str(value).map_err(|error| error.to_string())?,
+            link_patches: Vec::new(),
+            revalidations: Vec::new(),
+        });
+    };
+    let envelope: OptimisticSourceEnvelope =
+        serde_json::from_str(envelope).map_err(|error| error.to_string())?;
+    if envelope.version != OPTIMISTIC_SOURCE_VERSION {
+        return Err(format!(
+            "unsupported optimistic source version {}",
+            envelope.version
+        ));
+    }
+    Ok(OptimisticSource {
+        mutation_data: envelope.mutation_data,
+        link_patches: envelope.link_patches,
+        revalidations: envelope.revalidations,
+    })
+}
+
 /// One durable optimistic layer paired one-to-one with a queued mutation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersistedOptimisticLayer {
-    /// Canonical JSON optimistic response, retained for re-normalization after
-    /// a record-schema change.
+    /// Encoded optimistic source, retained for re-normalization after a
+    /// record-schema change.
     pub optimistic_data_json: String,
     /// Normalized contribution used to hydrate the effective cache view.
     pub normalized_updates: RecordUpdates,

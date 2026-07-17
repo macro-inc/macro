@@ -73,54 +73,42 @@ fn api_router(api_context: ApiContext) -> Router {
     let memory_service = api_context.memory_service.clone();
     let usage_service = api_context.usage_service.clone();
     let ai_projections_service = api_context.ai_projections_service.clone();
+    let authorization_state = api_context.authorization_state.clone();
 
     let mcp_state = api_context.mcp_state.clone();
 
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
-        .nest("/stream", stream::router(api_context.clone()))
+        .nest("/stream", stream::router())
         .route(
             "/structured-completion",
-            post(structured_completion::structured_completion).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        api_context.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    )),
-            ),
+            post(structured_completion::structured_completion),
         )
+        .route("/chat/completions", post(completions::handler))
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())
         .nest("/id_mapping", id_mapping::router())
-        .merge(memory::inbound::axum_router::memory_router(memory_service))
-        .merge(ai_usage::inbound::ai_usage_router(usage_service))
+        .merge(memory::inbound::axum_router::memory_router(
+            memory::inbound::axum_router::MemoryRouterState {
+                service: memory_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(ai_usage::inbound::ai_usage_router(
+            ai_usage::inbound::AiUsageRouterState {
+                service: usage_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
         .merge(ai_projections::inbound::axum_router::ai_projections_router(
             ai_projections::inbound::axum_router::AiProjectionRouterState {
                 service: ai_projections_service,
+                authorization_state,
             },
         ))
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
-        .with_state(api_context.clone())
-        .route(
-            "/chat/completions",
-            post(completions::handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler),
-            )),
-        )
-        .layer(
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::auth::initialize_user_context::handler,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    api_context.jwt_args.clone(),
-                    macro_middleware::auth::attach_user::handler,
-                )),
-        );
+        .with_state(api_context.clone());
 
     Router::new()
         .nest("/{version}", internal_router.clone())

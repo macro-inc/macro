@@ -1,10 +1,36 @@
 use cache_core::queue::{
-    MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
-    PersistedOptimisticLayer, StoredMutation,
+    MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation, OptimisticSource,
+    PersistedOptimisticLayer, StoredMutation, decode_optimistic_source, encode_optimistic_source,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
+use serde_json::json;
+
+#[test]
+fn optimistic_source_supports_versioned_and_legacy_json() {
+    let source = OptimisticSource {
+        mutation_data: json!({"rename": {"name": "next"}}),
+        link_patches: Vec::new(),
+        revalidations: Vec::new(),
+    };
+    assert_eq!(
+        decode_optimistic_source(&encode_optimistic_source(&source)).unwrap(),
+        source
+    );
+    assert_eq!(
+        decode_optimistic_source(
+            r#"{"version":2,"mutationData":{"name":"collision"},"rename":{"name":"legacy"}}"#
+        )
+        .unwrap()
+        .mutation_data,
+        json!({
+            "version": 2,
+            "mutationData": {"name": "collision"},
+            "rename": {"name": "legacy"}
+        })
+    );
+}
 
 fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
     let mut update = Record::default();

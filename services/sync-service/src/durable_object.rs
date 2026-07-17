@@ -378,7 +378,7 @@ impl DocumentSyncSession {
                                 .url()?
                                 .query_pairs()
                                 .find(|(k, _)| k == "include_ai")
-                                .map_or(true, |(_, v)| !matches!(v.as_ref(), "false" | "0"));
+                                .is_none_or(|(_, v)| !matches!(v.as_ref(), "false" | "0"));
                             return self.active_peer_ids_handler(include_ai).await;
                         }
                         path::INITIALIZE => {
@@ -1043,16 +1043,15 @@ impl DurableObject for DocumentSyncSession {
             .context("failed to broadcast awareness")?;
         }
 
-        if self.state.get_websockets().len() == 1 {
-            if let Ok(document_id) = self.document_id().await
-                && let Ok(state) = self.document_state().await
-                && let Ok(snapshot) = state.export_shallow_snapshot()
-            {
-                let env = self.env.clone();
-                self.state.wait_until(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env).await;
-                });
-            }
+        if self.state.get_websockets().len() == 1
+            && let Ok(document_id) = self.document_id().await
+            && let Ok(state) = self.document_state().await
+            && let Ok(snapshot) = state.export_shallow_snapshot()
+        {
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                report_new_doc_state(&document_id, &snapshot, &env).await;
+            });
         }
         Ok(())
     }

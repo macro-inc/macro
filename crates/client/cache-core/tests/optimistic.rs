@@ -1,7 +1,7 @@
 //! Durable optimistic mutation tests: enqueue/read/claim/retry/commit/fail,
 //! strict ordering, and lifecycle resets.
 
-use cache_core::engine::{Engine, EngineError, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, EngineError, ReadResult};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey};
@@ -190,11 +190,15 @@ fn begin_persists_mutation_and_optimistic_layer() {
         let (transaction, result) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-                123,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("doing"),
+                    data: &mutation_response("Status", "doing"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 123,
+                },
             )
             .await
             .unwrap();
@@ -223,11 +227,15 @@ fn claimed_success_atomically_commits_real_response() {
         let (transaction, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("doing"),
+                    data: &mutation_response("Status", "doing"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();
@@ -270,22 +278,30 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
         let (first, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("a"),
-                &mutation_response("Status", "a"),
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("a"),
+                    data: &mutation_response("Status", "a"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();
         let (second, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("b"),
-                &mutation_response("Status", "b"),
-                1,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("b"),
+                    data: &mutation_response("Status", "b"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
             )
             .await
             .unwrap();
@@ -323,22 +339,30 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
         let (first, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("a"),
-                &mutation_response("Status", "a"),
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("a"),
+                    data: &mutation_response("Status", "a"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();
         engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("b"),
-                &mutation_response("Status", "b"),
-                1,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("b"),
+                    data: &mutation_response("Status", "b"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
             )
             .await
             .unwrap();
@@ -365,11 +389,15 @@ fn stale_claim_cannot_settle_mutation() {
         let (transaction, _) = engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("doing"),
+                    data: &mutation_response("Status", "doing"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();
@@ -409,11 +437,15 @@ fn clear_and_identity_reset_drop_durable_queue() {
         engine
             .begin_optimistic_write(
                 None,
-                MUTATION,
-                Some("SetEntityProperty"),
-                &mutation_vars("doing"),
-                &mutation_response("Status", "doing"),
-                0,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("doing"),
+                    data: &mutation_response("Status", "doing"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
             )
             .await
             .unwrap();

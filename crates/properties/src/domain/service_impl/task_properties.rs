@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use entity_access::domain::models::EntityAccessAuth;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
@@ -11,7 +12,7 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, TaskAssignedNotification};
+use crate::domain::model::{EditReceipt, PropertyAccessReceiptExt, TaskAssignedNotification};
 use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 use crate::domain::service_impl::PropertiesServiceImpl;
 
@@ -31,17 +32,24 @@ where
         access: &EditReceipt,
         referenced_task_ids: &[Uuid],
     ) -> Result<(), PropertiesErr> {
+        let user_id = match access.auth() {
+            EntityAccessAuth::Internal => return Ok(()),
+            EntityAccessAuth::Authenticated(user_id) => user_id,
+            EntityAccessAuth::Bot(_) | EntityAccessAuth::Unauthenticated => {
+                return Err(PropertiesErr::PermissionDenied);
+            }
+        };
         if referenced_task_ids.is_empty() {
             return Ok(());
         }
-        let Some(user_id) = access.authenticated_user() else {
-            // Internal callers operate outside a user session and are trusted.
-            return Ok(());
-        };
         let permission_service = self.permission_service()?;
         for task_id in referenced_task_ids {
             permission_service
-                .mint_edit_receipt(user_id, &task_id.to_string(), EntityType::Task)
+                .mint_edit_receipt(
+                    user_id,
+                    &task_id.to_string(),
+                    entity_access::domain::models::EntityType::Document,
+                )
                 .await
                 .map_err(|_| PropertiesErr::PermissionDenied)?;
         }

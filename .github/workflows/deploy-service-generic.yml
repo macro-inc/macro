@@ -52,7 +52,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy ${{ inputs.service }}
-    uses: ./.github/workflows/reusable-deploy-service.yml
+    uses: ./.github/workflows/reusable_deploy_service.yml
     with:
       environment: ${{ inputs.environment }}
       service-name: ${{ inputs.service }}

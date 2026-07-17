@@ -1,4 +1,5 @@
 import { Popover } from '@kobalte/core/popover';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
@@ -119,6 +120,7 @@ export function TagPicker(props: {
           registerSave={(handler) => {
             saveAndClose = handler;
           }}
+          suppressInitialOutsideEvents={false}
         />
       </Show>
     </Popover>
@@ -165,6 +167,7 @@ export function TagPickerPopover(props: {
           registerSave={(handler) => {
             saveAndClose = handler;
           }}
+          suppressInitialOutsideEvents
         />
       </Show>
     </Popover>
@@ -175,6 +178,7 @@ function TagPickerBody(props: {
   docTags: DocTags;
   onClose: () => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
+  suppressInitialOutsideEvents: boolean;
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -189,6 +193,10 @@ function TagPickerBody(props: {
   const addOption = useAddPropertyOptionMutation();
   const ensureTagSet = useEnsureTagSetMutation();
   let scrollContainerRef: HTMLDivElement | undefined;
+  const [initialOutsideEventGuard, setInitialOutsideEventGuard] =
+    createSignal(true);
+  const shouldIgnoreOutsideEvent = () =>
+    props.suppressInitialOutsideEvents && initialOutsideEventGuard();
 
   const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
   const initialAppliedIds = createMemo(
@@ -248,26 +256,12 @@ function TagPickerBody(props: {
     });
   };
 
-  const optionScope = (optionId: string): TagScope | undefined =>
-    initialTagState().optionScopes.get(optionId);
-
   const persistSelection = async () => {
     if (saved()) return true;
     setSaved(true);
 
     try {
-      const nextSelectedIds = selectedIds();
-      for (const tag of initialAppliedTags()) {
-        if (!nextSelectedIds.has(tag.optionId)) {
-          await props.docTags.removeTag(tag.scope, tag.optionId);
-        }
-      }
-
-      for (const optionId of nextSelectedIds) {
-        if (initialAppliedIds().has(optionId)) continue;
-        const scope = optionScope(optionId);
-        if (scope) await props.docTags.applyTag(scope, optionId);
-      }
+      await props.docTags.setTagSelection(selectedIds());
       return true;
     } catch (error) {
       setSaved(false);
@@ -281,7 +275,9 @@ function TagPickerBody(props: {
   };
 
   const saveAndClose = async () => {
-    if (await save()) props.onClose();
+    const savePromise = save();
+    props.onClose();
+    await savePromise;
   };
 
   const filteredItems = createMemo(() => {
@@ -332,7 +328,12 @@ function TagPickerBody(props: {
   };
   const showCreateRow = () =>
     createLabel().length >= 2 && !exactTagMatchExists();
+  const showClearAllRow = () =>
+    selectedIds().size > 0 && !search().trim() && !createStep();
+  const itemIndex = (item: TagOptionItem) => filteredItems().indexOf(item);
   const createRowIndex = () => filteredItems().length;
+  const clearAllRowIndex = () =>
+    filteredItems().length + (showCreateRow() ? 1 : 0);
   const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
     { scope: 'user', label: 'Personal' },
@@ -428,10 +429,19 @@ function TagPickerBody(props: {
   };
 
   const dropdown = useDropdownSearch({
-    itemCount: () => filteredItems().length + (showCreateRow() ? 1 : 0),
+    itemCount: () =>
+      filteredItems().length +
+      (showCreateRow() ? 1 : 0) +
+      (showClearAllRow() ? 1 : 0),
     onSelect: (index, event) => {
       if (showCreateRow() && index === createRowIndex()) {
         beginCreate();
+        return;
+      }
+
+      if (showClearAllRow() && index === clearAllRowIndex()) {
+        setSelectedIds(new Set<string>());
+        void saveAndClose();
         return;
       }
 
@@ -476,6 +486,10 @@ function TagPickerBody(props: {
   onMount(() => {
     props.registerSave(saveAndClose);
     document.addEventListener('keydown', handleKeyDown);
+    const timeout = setTimeout(() => {
+      setInitialOutsideEventGuard(false);
+    }, 100);
+    onCleanup(() => clearTimeout(timeout));
   });
 
   onCleanup(() => {
@@ -489,6 +503,12 @@ function TagPickerBody(props: {
         <Popover.Content
           class="z-modal w-64 rounded-xl bg-surface text-sm shadow-menu ring ring-edge-muted menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
+          onFocusOutside={(event) => {
+            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+          }}
         >
           <Show
             when={createStep()}
@@ -509,7 +529,11 @@ function TagPickerBody(props: {
                     style={{ 'max-height': `${MAX_LIST_HEIGHT}px` }}
                   >
                     <Show
-                      when={filteredItems().length > 0 || showCreateRow()}
+                      when={
+                        showClearAllRow() ||
+                        filteredItems().length > 0 ||
+                        showCreateRow()
+                      }
                       fallback={
                         <div class="px-2 py-4 text-center text-ink-muted">
                           {initialTagState().items.length === 0
@@ -522,12 +546,11 @@ function TagPickerBody(props: {
                         {(item) => (
                           <TagPickerRow
                             item={item}
-                            index={filteredItems().indexOf(item)}
+                            index={itemIndex(item)}
                             teamName={teamName()}
                             checked={isSelected(item.option.id)}
                             selected={
-                              dropdown.selectedIndex() ===
-                              filteredItems().indexOf(item)
+                              dropdown.selectedIndex() === itemIndex(item)
                             }
                             onSelect={(event) => {
                               toggleSelected(item.option.id);
@@ -535,9 +558,7 @@ function TagPickerBody(props: {
                             }}
                             onMouseEnter={() => {
                               if (!dropdown.keyboardMode()) {
-                                dropdown.setSelectedIndex(
-                                  filteredItems().indexOf(item)
-                                );
+                                dropdown.setSelectedIndex(itemIndex(item));
                               }
                             }}
                           />
@@ -558,12 +579,11 @@ function TagPickerBody(props: {
                             {(item) => (
                               <TagPickerRow
                                 item={item}
-                                index={filteredItems().indexOf(item)}
+                                index={itemIndex(item)}
                                 teamName={teamName()}
                                 checked={isSelected(item.option.id)}
                                 selected={
-                                  dropdown.selectedIndex() ===
-                                  filteredItems().indexOf(item)
+                                  dropdown.selectedIndex() === itemIndex(item)
                                 }
                                 onSelect={(event) => {
                                   toggleSelected(item.option.id);
@@ -571,9 +591,7 @@ function TagPickerBody(props: {
                                 }}
                                 onMouseEnter={() => {
                                   if (!dropdown.keyboardMode()) {
-                                    dropdown.setSelectedIndex(
-                                      filteredItems().indexOf(item)
-                                    );
+                                    dropdown.setSelectedIndex(itemIndex(item));
                                   }
                                 }}
                               />
@@ -595,6 +613,32 @@ function TagPickerBody(props: {
                             }
                           }}
                         />
+                      </Show>
+                      <Show when={showClearAllRow()}>
+                        <div class="my-1 border-t border-edge-muted" />
+                        <div data-tag-index={clearAllRowIndex()}>
+                          <DropdownSelectableRow
+                            isSelected={
+                              dropdown.selectedIndex() === clearAllRowIndex()
+                            }
+                            onClick={() => {
+                              setSelectedIds(new Set<string>());
+                              void saveAndClose();
+                            }}
+                            onMouseEnter={() => {
+                              if (!dropdown.keyboardMode()) {
+                                dropdown.setSelectedIndex(clearAllRowIndex());
+                              }
+                            }}
+                          >
+                            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                            <div class="min-w-0 flex-1 text-left">
+                              <p class="truncate text-ink-muted">
+                                Clear all tags
+                              </p>
+                            </div>
+                          </DropdownSelectableRow>
+                        </div>
                       </Show>
                     </Show>
                   </div>

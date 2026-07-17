@@ -18,10 +18,6 @@ use crate::{
             },
         },
         entity, health, history, instructions, pins,
-        projects::{
-            self,
-            delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
-        },
         recents::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
@@ -125,6 +121,9 @@ use models_soup::email_thread::{
 };
 use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::project::SoupProject;
+use projects_hex::inbound::axum_router::delete_project::{
+    ProjectDeleteResponse, ProjectDeleteResponseData,
+};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -274,20 +273,20 @@ use utoipa::OpenApi;
         pins::get_pins::get_pins_handler,
 
         // projects
-        projects::get_projects::get_projects_handler,
-        projects::get_projects::get_pending_projects_handler,
-        projects::get_project::get_project_content_handler,
-        projects::create_project::create_project_handler,
-        projects::edit_project::edit_project_handler_v2,
-        projects::delete_project::delete_project_handler,
-        projects::delete_project::permanently_delete_project_handler,
-        projects::upload_folder::upload_folder_handler,
-        projects::upload_folder::upload_extract_folder_handler,
-        projects::project_permission::get_project_permissions_handler,
-        projects::project_permission::get_project_access_level_handler,
-        projects::get_batch_preview::get_batch_preview_handler,
-        projects::get_project::get_project_handler,
-        projects::revert_delete_project::handler,
+        projects_hex::inbound::axum_router::get_projects::get_projects_handler,
+        projects_hex::inbound::axum_router::get_projects::get_pending_projects_handler,
+        projects_hex::inbound::axum_router::get_project::get_project_content_handler,
+        projects_hex::inbound::axum_router::create_project::create_project_handler,
+        projects_hex::inbound::axum_router::edit_project::edit_project_handler,
+        projects_hex::inbound::axum_router::delete_project::delete_project_handler,
+        projects_hex::inbound::axum_router::delete_project::permanently_delete_project_handler,
+        projects_hex::inbound::axum_router::upload_folder::upload_folder_handler,
+        projects_hex::inbound::axum_router::upload_folder::upload_extract_folder_handler,
+        projects_hex::inbound::axum_router::project_permission::get_project_permissions_handler,
+        projects_hex::inbound::axum_router::project_permission::get_project_access_level_handler,
+        projects_hex::inbound::axum_router::get_batch_preview::get_batch_preview_handler,
+        projects_hex::inbound::axum_router::get_project::get_project_handler,
+        projects_hex::inbound::axum_router::revert_delete_project::revert_delete_project_handler,
 
         entity::get_entity_permission::handler,
 

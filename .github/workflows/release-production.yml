@@ -13,7 +13,7 @@ env:
 jobs:
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
-    uses: ./.github/workflows/deploy-all-services.yml
+    uses: ./.github/workflows/deploy_all_services.yml
     with:
       environment: prod
     secrets:

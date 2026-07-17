@@ -1,4 +1,8 @@
-import { navigateChannelEntityToTarget } from '@app/features/next-soup/utils';
+import {
+  getChannelEntityTarget,
+  navigateChannelEntityToTarget,
+} from '@app/features/next-soup/utils';
+import { getChannelParams } from '@block-channel/utils/link';
 import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
@@ -20,6 +24,7 @@ import {
   on,
   Show,
   Suspense,
+  untrack,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -111,8 +116,21 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       blockId = props.selectedEntity.id;
     }
 
+    // Sample the target untracked so notification churn can't remount the
+    // block. Mounting a channel with its target params makes the first
+    // messages fetch the load_around one, instead of latest-page (visible
+    // flash) followed by the id-keyed re-target below.
+    const channelTarget =
+      blockType === 'channel'
+        ? untrack(() => getChannelEntityTarget(props.selectedEntity))
+        : undefined;
+
     return props.orchestrator.createBlockInstance(blockType, blockId, {
       aliasContext,
+      params:
+        channelTarget?.kind === 'message'
+          ? getChannelParams(channelTarget.messageId, channelTarget.threadId)
+          : undefined,
     });
   };
   const [interactedWith, setInteractedWith] = createSignal(false);

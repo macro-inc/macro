@@ -43,7 +43,11 @@ const MUTATION = gql`
 type FakeHost = CacheHost & {
   reads: Array<{ opKey?: number; query: string; variables?: object }>;
   writes: Array<{ opKey?: number; data: unknown; identity?: string }>;
-  begins: Array<{ query: string; data: unknown }>;
+  begins: Array<{
+    query: string;
+    data: unknown;
+    linkPatches?: unknown[];
+  }>;
   commits: Array<{ transactionId: string; query: string; data: unknown }>;
   rollbacks: string[];
   defers: Array<{ transactionId: string; error: string }>;
@@ -104,7 +108,11 @@ function makeFakeHost(): FakeHost {
       return { changed: [], affectedOps: [], reset: false };
     },
     async beginOptimisticWrite(args): Promise<OptimisticWriteResult> {
-      host.begins.push({ query: args.query, data: args.data });
+      host.begins.push({
+        query: args.query,
+        data: args.data,
+        linkPatches: args.linkPatches,
+      });
       const transactionId = `txn-${host.begins.length}`;
       queue.push({ transactionId, args, attemptCount: 0, leased: false });
       return {
@@ -113,6 +121,9 @@ function makeFakeHost(): FakeHost {
         affectedOps: [],
         reset: false,
       };
+    },
+    async inspectQuery() {
+      return [];
     },
     async claimNextMutation(_owner): Promise<ClaimedMutation | undefined> {
       const head = queue[0];
@@ -216,6 +227,9 @@ function harness(
   const ops = makeSubject<Operation>();
   const client = {
     reexecuteOperation: vi.fn(),
+    query: vi.fn((_query, _variables, _context) => ({
+      toPromise: () => Promise.resolve({ data: {} }),
+    })),
     mutation: vi.fn((query, variables, context) => ({
       toPromise: () => {
         const request = createRequest(query, variables);
@@ -519,6 +533,79 @@ describe('normalizedCacheExchange', () => {
       expect(results[0]?.data).toEqual({ from: 'network' });
     });
 
+    it('passes declarative link patches into the durable begin call', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const patch = {
+        query: 'query Group { user { groupSoup { bins { items { id } } } } }',
+        operationName: 'Group',
+        variablesJson: '{}',
+        path: [
+          { field: 'user' },
+          { field: 'groupSoup' },
+          { field: 'bins' },
+          { field: 'items' },
+        ],
+        operation: {
+          kind: 'remove' as const,
+          entityKey: 'GraphqlSoupItem:task-1',
+        },
+      };
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          optimisticResponse: optimistic,
+          linkPatches: [patch],
+          revalidations: [],
+        },
+      });
+      const { ops } = harness(host);
+      ops.next(op);
+      await tick();
+
+      expect(host.begins[0]?.linkPatches).toEqual([patch]);
+    });
+
+    it('falls back to property-only optimism when patched setup becomes stale', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'query Group { user { groupSoup { bins { items { id } } } } }',
+              operationName: 'Group',
+              variablesJson: '{}',
+              path: [
+                { field: 'user' },
+                { field: 'groupSoup' },
+                { field: 'bins' },
+              ],
+              operation: {
+                kind: 'remove',
+                entityKey: 'GraphqlSoupItem:task-1',
+              },
+            },
+          ],
+          revalidations: [],
+        },
+      });
+      const begin = host.beginOptimisticWrite.bind(host);
+      host.beginOptimisticWrite = async (args) => {
+        if (args.linkPatches?.length) throw new Error('stale bin');
+        return begin(args);
+      };
+      const onCacheError = vi.fn();
+      const { ops } = harness(host, undefined, { onCacheError });
+      ops.next(op);
+      await tick();
+
+      expect(onCacheError).toHaveBeenCalledOnce();
+      expect(host.begins[0]?.linkPatches).toEqual([]);
+      expect(host.commits).toHaveLength(1);
+    });
+
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
       const existingSignal = new AbortController().signal;
@@ -571,6 +658,28 @@ describe('normalizedCacheExchange', () => {
       expect(results[0]?.data).toEqual({ from: 'network' });
       // The optimistic path never uses the plain write-through.
       expect(host.writes).toHaveLength(0);
+    });
+
+    it('fires commit revalidations with network-only policy', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{"input":{"limit":2}}',
+          },
+        ],
+      });
+      const { ops, client } = harness(host);
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(vi.mocked(client.query)).toHaveBeenCalledOnce();
+      expect(vi.mocked(client.query).mock.calls[0]?.[2]).toEqual({
+        requestPolicy: 'network-only',
+      });
     });
 
     it('rolls back on a GraphQL error result', async () => {

@@ -75,7 +75,11 @@ export function createQuerySignal<TData, TVariables extends AnyVariables>(
         }),
         subscribe((result) => {
           batch(() => {
-            setData(() => result.data);
+            // GraphQL responses may contain `data: null` at runtime when a
+            // non-null field error propagates to the operation root, even
+            // though urql's static type only includes `undefined`. Keep the
+            // last valid result and expose the CombinedError to the caller.
+            if (result.data != null) setData(() => result.data);
             setError(result.error);
             setStale(result.stale);
             setFetching(false);

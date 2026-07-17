@@ -93,11 +93,27 @@ describe('createTauriCacheHost', () => {
       return Promise.resolve(null);
     });
 
+    const patch = {
+      query: 'query { user { groupSoup { bins { items { id } } } } }',
+      variablesJson: '{}',
+      path: [
+        { field: 'user' },
+        { field: 'groupSoup' },
+        { field: 'bins' },
+        { field: 'items' },
+      ],
+      operation: { kind: 'remove' as const, entityKey: 'Thing:1' },
+    };
     const begun = await host.beginOptimisticWrite({
       query: 'mutation { m }',
       data: { m: 1 },
+      linkPatches: [patch],
     });
     expect(begun).toEqual(optimistic);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_begin_optimistic_write',
+      expect.objectContaining({ linkPatches: [patch] })
+    );
 
     const claim = { owner: 'runner', generation: '2' };
     await host.commitOptimisticWrite('1', claim, {
@@ -122,6 +138,33 @@ describe('createTauriCacheHost', () => {
         leaseOwner: 'runner',
         leaseGeneration: '2',
       }
+    );
+  });
+
+  it('inspects generated query variants through the native command', async () => {
+    const instances = [
+      {
+        variables: { input: { initial: { limit: 20 } } },
+        value: { bins: [] },
+      },
+    ];
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(
+        command === 'graphql_cache_inspect_query' ? instances : null
+      )
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const request = {
+      query:
+        'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
+      operationName: 'Views',
+      path: [{ field: 'user' }, { field: 'groupSoup' }],
+    };
+
+    await expect(host.inspectQuery(request)).resolves.toEqual(instances);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_inspect_query',
+      request
     );
   });
 

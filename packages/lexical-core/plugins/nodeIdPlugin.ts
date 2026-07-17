@@ -186,14 +186,17 @@ function registerNodeIdPlugin(editor: LexicalEditor, props: NodeIdProps) {
   return mergeRegister(
     ...cleanupHandlers,
 
+    // Invalidate ids on pasted nodes so the transforms assign fresh ones,
+    // but do NOT claim the command: lower-priority handlers (notably
+    // @lexical/table's grid-aware paste) and @lexical/clipboard's own
+    // insertNodes fallback perform the actual insertion.
     editor.registerCommand(
       SELECTION_INSERT_CLIPBOARD_NODES_COMMAND,
-      ({ nodes, selection }) => {
+      ({ nodes }) => {
         nodes.forEach((node) => {
           $invalidateId(node);
         });
-        selection.insertNodes(nodes);
-        return true;
+        return false;
       },
       COMMAND_PRIORITY_CRITICAL
     ),

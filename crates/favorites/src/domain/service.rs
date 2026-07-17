@@ -1,7 +1,11 @@
 //! Favorites service implementation.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
@@ -46,10 +50,16 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn add_favorite(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        receipt: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Favorite, FavoritesError> {
-        validate_entity(entity)?;
+        let user_id = receipt
+            .get_authenticated_user()
+            .map_err(|_| FavoritesError::Unauthorized)?;
+        let receipt_entity = receipt.entity();
+        let entity = receipt_entity
+            .entity_type
+            .with_entity_str(&receipt_entity.entity_id);
+        validate_entity(&entity)?;
         // Cap the collection at add time. Enforcing it here (rather than only
         // in `reorder_favorites`) keeps table growth bounded and guarantees a
         // reorder payload can never exceed the limit and be rejected. Re-adding
@@ -67,7 +77,7 @@ where
         }
         Ok(self
             .repo
-            .add_favorite(user_id, entity)
+            .add_favorite(user_id, &entity)
             .await
             .map_err(anyhow::Error::from)?)
     }

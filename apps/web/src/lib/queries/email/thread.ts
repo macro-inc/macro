@@ -47,7 +47,7 @@ type UseThreadQueryOptions = Omit<
 /**
  * Shared infinite query options for thread fetching.
  */
-function threadQueryOptions(threadId: string) {
+export function threadQueryOptions(threadId: string) {
   return {
     queryKey: emailKeys.threadMessages(threadId).queryKey,
     queryFn: async ({ pageParam }: { pageParam: number }) => {
@@ -232,6 +232,38 @@ async function threadArchiveOnMutate(params: ArchiveThreadParams) {
   );
 
   return { previousData };
+}
+
+/**
+ * Cache bookkeeping for an archive performed by another mutation (e.g. the
+ * mark-done action, which issues its own /archived request): optimistically
+ * flips `inbox_visible`, rolls back if the request fails, and invalidates the
+ * thread + preview queries once it settles. Mirrors useArchiveThreadMutation
+ * without firing a second request.
+ */
+export async function trackExternalThreadArchive(
+  threadId: string,
+  archived: Promise<unknown>
+): Promise<void> {
+  const { previousData } = await threadArchiveOnMutate({
+    threadId,
+    archive: true,
+  });
+  try {
+    await archived;
+  } catch {
+    if (previousData) {
+      queryClient.setQueryData(
+        emailKeys.threadMessages(threadId).queryKey,
+        previousData
+      );
+    }
+  } finally {
+    queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadId).queryKey,
+    });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+  }
 }
 
 /**

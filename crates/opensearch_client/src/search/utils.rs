@@ -1,4 +1,10 @@
+use chrono::{DateTime, Utc};
 use opensearch_query_builder::{BoolQueryBuilder, QueryType, WildcardQuery};
+
+/// Convert an epoch-millisecond timestamp to a `DateTime<Utc>`.
+pub(crate) fn millis_to_datetime(millis: Option<i64>) -> Option<DateTime<Utc>> {
+    millis.and_then(DateTime::from_timestamp_millis)
+}
 
 pub fn should_wildcard_field_query_builder<'a>(
     field: &'a str,

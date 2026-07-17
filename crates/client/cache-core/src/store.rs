@@ -90,7 +90,7 @@ pub trait Storage: MaybeSend {
 }
 
 /// Hash-map storage for tests and as the Phase 1 default.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct InMemoryStorage {
     records: HashMap<EntityKey, Record>,
     mutations: BTreeMap<

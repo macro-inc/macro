@@ -373,11 +373,6 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
   true
 );
 
-// skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
-// can also be overridden via VITE_ENABLE_TEAMS env var
-export const ENABLE_TEAMS_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TEAMS', DEV_MODE_ENV) || undefined;
-
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 

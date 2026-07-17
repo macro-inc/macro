@@ -4,13 +4,37 @@ use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;
-use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+use crate::{Result, date_format::EpochMillis, error::OpensearchClientError};
 
 /// Relation name for parent docs in the join field.
 const PARENT_RELATION: &str = "document";
 
 /// Relation name for child (chunk) docs in the join field.
 const CHILD_RELATION: &str = "chunk";
+
+/// Cap on indexed chunk `content`, in characters. Markdown chunks are
+/// node-sized and pdf/docx chunks page-sized, but formats without block
+/// structure (code files, plain text) arrive as one whole-file chunk
+/// that can run to many megabytes. Oversized chunks bloat the index and can
+/// never be fully highlighted (`index.highlight.max_analyzed_offset` is
+/// 1,000,000), so the tail is dropped at write time.
+const MAX_CHUNK_CONTENT_CHARS: usize = 100_000;
+
+/// Truncate chunk content to [`MAX_CHUNK_CONTENT_CHARS`] on a char boundary.
+fn cap_chunk_content(chunk: &UpsertDocumentArgs) -> &str {
+    match chunk.content.char_indices().nth(MAX_CHUNK_CONTENT_CHARS) {
+        Some((byte_idx, _)) => {
+            tracing::warn!(
+                document_id = %chunk.document_id,
+                node_id = %chunk.node_id,
+                content_len = chunk.content.len(),
+                "chunk content exceeds indexing cap, truncating"
+            );
+            &chunk.content[..byte_idx]
+        }
+        None => &chunk.content,
+    }
+}
 
 /// The arguments for upserting a document into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -37,8 +61,8 @@ pub struct UpsertDocumentArgs {
     pub raw_content: Option<String>,
     /// The content of the document
     pub content: String,
-    /// The updated at time of the document
-    pub updated_at_seconds: EpochSeconds,
+    /// The updated at time of the document, in milliseconds
+    pub updated_at_millis: EpochMillis,
     /// The sub type of the document (e.g. task)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<String>,
@@ -63,7 +87,7 @@ fn parent_doc_body(any_chunk: &UpsertDocumentArgs) -> serde_json::Value {
         "document_name": &any_chunk.document_name,
         "owner_id": &any_chunk.owner_id,
         "file_type": &any_chunk.file_type,
-        "updated_at_seconds": any_chunk.updated_at_seconds,
+        "updated_at_millis": any_chunk.updated_at_millis,
         "document_relation": PARENT_RELATION,
     });
     if let Some(sub_type) = &any_chunk.sub_type {
@@ -82,7 +106,7 @@ fn child_doc_body(chunk: &UpsertDocumentArgs) -> serde_json::Value {
     let mut doc = serde_json::json!({
         "entity_id": &chunk.document_id,
         "node_id": &chunk.node_id,
-        "content": &chunk.content,
+        "content": cap_chunk_content(chunk),
         "document_relation": {
             "name": CHILD_RELATION,
             "parent": &chunk.document_id,
