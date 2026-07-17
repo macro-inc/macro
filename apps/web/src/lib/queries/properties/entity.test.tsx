@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const setEntityPropertyMock = vi.hoisted(() => vi.fn());
 const rollbackMock = vi.hoisted(() => vi.fn());
+const optimisticUpdateSoupEntityMock = vi.hoisted(() => vi.fn());
 const invalidateSoupEntityMock = vi.hoisted(() => vi.fn());
+const graphqlSoupEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
 const settlementCallbacks = vi.hoisted(
@@ -29,7 +31,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: vi.fn(() => true),
+  ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
 }));
 
 vi.mock('@property/api/converters', () => ({
@@ -87,7 +89,9 @@ vi.mock('../soup/cache', () => ({
     frecency_score: 0,
   })),
   invalidateSoupEntity: invalidateSoupEntityMock,
-  optimisticUpdateSoupEntity: vi.fn(() => ({ rollback: rollbackMock })),
+  optimisticUpdateSoupEntity: optimisticUpdateSoupEntityMock.mockImplementation(
+    () => ({ rollback: rollbackMock })
+  ),
 }));
 
 vi.mock('../soup/grouped/graphql-optimistic', () => ({
@@ -99,10 +103,14 @@ vi.mock('./graphql-optimistic', () => ({
   buildOptimisticSetEntityProperty: vi.fn(() => ({ id: 'assignment-1' })),
 }));
 
-import { useBulkSaveEntityPropertiesMutation } from './entity';
+import {
+  useAddEntityPropertyMutation,
+  useBulkSaveEntityPropertiesMutation,
+} from './entity';
 
 let testQueryClient: QueryClient;
 let mutation: ReturnType<typeof useBulkSaveEntityPropertiesMutation>;
+let addMutation: ReturnType<typeof useAddEntityPropertyMutation>;
 let dispose: (() => void) | undefined;
 
 const property = {
@@ -133,6 +141,7 @@ function renderMutation(): void {
       <QueryClientProvider client={testQueryClient}>
         {(() => {
           mutation = useBulkSaveEntityPropertiesMutation();
+          addMutation = useAddEntityPropertyMutation();
           return null as unknown as JSX.Element;
         })()}
       </QueryClientProvider>
@@ -144,6 +153,8 @@ function renderMutation(): void {
 describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    optimisticUpdateSoupEntityMock.mockReturnValue({ rollback: rollbackMock });
+    graphqlSoupEnabledMock.mockReturnValue(true);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     settlementCallbacks.clear();
     testQueryClient = new QueryClient({
@@ -152,6 +163,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
         mutations: { retry: false },
       },
     });
+    vi.spyOn(testQueryClient, 'invalidateQueries');
     renderMutation();
   });
 
@@ -161,16 +173,22 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps optimism and resolves successfully when the write is queued', async () => {
-    setEntityPropertyMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'txn-1',
-    });
+  it('uses only GraphQL optimism when writes are queued', async () => {
+    setEntityPropertyMock
+      .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-1' })
+      .mockResolvedValueOnce({ kind: 'queued', transactionId: 'txn-2' });
 
     await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
+    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
 
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
     expect(rollbackMock).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
     expect(toastFailureMock).not.toHaveBeenCalled();
+    expect(setEntityPropertyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ optimisticProperty: { id: 'assignment-1' } })
+    );
   });
 
   it('reports a queued write that later permanently fails', async () => {
@@ -188,11 +206,13 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       });
     }
 
-    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to save properties');
   });
 
-  it('rolls back and rejects only permanently failed submissions', async () => {
+  it('reports GraphQL permanent failures without touching TanStack caches', async () => {
     setEntityPropertyMock.mockResolvedValue({
       kind: 'permanently-failed',
       error: new Error('invalid property'),
@@ -202,7 +222,41 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       'One or more properties permanently failed to save'
     );
 
+    expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
+    expect(rollbackMock).not.toHaveBeenCalled();
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
+    expect(toastFailureMock).toHaveBeenCalledOnce();
+  });
+
+  it('does not invalidate TanStack property queries for GraphQL attachments', async () => {
+    setEntityPropertyMock.mockResolvedValue({ kind: 'committed' });
+
+    await addMutation.mutateAsync({
+      entityId: 'task-1',
+      entityType: 'TASK',
+      propertyDefinitionId: 'status-def',
+    });
+
+    expect(testQueryClient.invalidateQueries).not.toHaveBeenCalled();
+    expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing TanStack lifecycle when GraphQL Soup is disabled', async () => {
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    setEntityPropertyMock.mockResolvedValue({
+      kind: 'permanently-failed',
+      error: new Error('invalid property'),
+    });
+
+    await expect(mutation.mutateAsync(variables)).rejects.toThrow(
+      'One or more properties permanently failed to save'
+    );
+
+    expect(optimisticUpdateSoupEntityMock).toHaveBeenCalledOnce();
     expect(rollbackMock).toHaveBeenCalledOnce();
-    expect(toastFailureMock).toHaveBeenCalledWith('Failed to save properties');
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
+    expect(toastFailureMock).toHaveBeenCalledOnce();
   });
 });

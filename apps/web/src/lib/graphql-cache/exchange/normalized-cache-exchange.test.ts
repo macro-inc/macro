@@ -727,6 +727,23 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it('keeps the disposition queued when permanent settlement is uncertain', async () => {
+      const error = new CombinedError({ graphQLErrors: ['nope'] });
+      host.rollbackOptimisticWrite = async () => {
+        throw new Error('lost rollback response');
+      };
+      const { ops, results } = harness(host, (op) =>
+        op.kind === 'mutation' ? { error, data: undefined } : {}
+      );
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-1',
+      });
+    });
+
     it('rolls back on a network error result', async () => {
       const error = new CombinedError({
         networkError: new Error('offline'),

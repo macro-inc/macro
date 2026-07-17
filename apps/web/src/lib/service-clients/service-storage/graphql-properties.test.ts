@@ -165,6 +165,9 @@ describe('setEntityProperty', () => {
     const property = { id: 'prop-1' } as SoupPropertyFieldsFragment;
     const mutation = mockGraphqlClient({
       data: { setEntityProperty: property },
+      extensions: {
+        normalizedCacheMutationDisposition: { kind: 'committed' },
+      },
     });
 
     const result = await setEntityProperty(args);
@@ -216,6 +219,7 @@ describe('setEntityProperty', () => {
     const optimistic = { id: 'prop-1' } as SoupPropertyFieldsFragment;
     mockGraphqlClient({
       data: { setEntityProperty: optimistic },
+      error: new Error('offline'),
       extensions: {
         normalizedCacheMutationDisposition: {
           kind: 'queued',
@@ -229,7 +233,26 @@ describe('setEntityProperty', () => {
     ).resolves.toEqual({ kind: 'queued', transactionId: 'txn-1' });
   });
 
-  it('returns permanently-failed for GraphQL errors', async () => {
+  it('returns permanently-failed after the durable exchange rolls back', async () => {
+    flag.mockReturnValue(true);
+    const error = new Error('mutation failed');
+    mockGraphqlClient({
+      error,
+      extensions: {
+        normalizedCacheMutationDisposition: {
+          kind: 'permanently-failed',
+          transactionId: 'txn-1',
+        },
+      },
+    });
+
+    await expect(setEntityProperty(args)).resolves.toEqual({
+      kind: 'permanently-failed',
+      error,
+    });
+  });
+
+  it('returns permanently-failed for non-durable GraphQL errors', async () => {
     flag.mockReturnValue(true);
     const error = new Error('mutation failed');
     mockGraphqlClient({ error });
