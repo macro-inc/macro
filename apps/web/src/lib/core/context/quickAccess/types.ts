@@ -174,8 +174,8 @@ export type QuickAccessContextValue = {
     ): QuickAccessList<ItemForBucket<B[number]>>;
   };
 
-  /** Whether this source uses the cache-backed indexed entity query. */
-  usesIndexedEntityQuery: Accessor<boolean>;
+  /** Whether this source reads normalized records through cache fragments. */
+  usesRecordSelection: Accessor<boolean>;
 
   /**
    * Whether any data sources are still loading.

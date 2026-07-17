@@ -8,9 +8,9 @@ import type {
   CachePush,
   CacheRequest,
   CacheResponse,
-  IndexedEntityPage,
   OptimisticWriteResult,
   ReadResult,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 import { type CacheEngine, loadCacheWasm } from './wasm-module';
@@ -71,14 +71,13 @@ export class CacheWorkerCore {
         );
         return result;
       })
-      .with({ kind: 'query-indexed-items' }, async (request) => {
+      .with({ kind: 'read-records' }, async (request) => {
         const engine = this.requireEngine();
-        const result: IndexedEntityPage = await engine.queryIndexedItems(
-          request.buckets,
-          request.searchTerm,
+        const result: SelectedRecordPageWire = await engine.readRecords(
+          request.document,
+          request.fragmentName,
           request.cursor,
-          request.limit,
-          request.includeTotalCount
+          request.limit
         );
         return result;
       })
@@ -107,7 +106,7 @@ export class CacheWorkerCore {
           request.revalidations,
           request.createdAtMs
         );
-        this.fanOut(result, false);
+        this.fanOut(result, true);
         return result;
       })
       .with({ kind: 'inspect-query' }, async (request) => {
@@ -158,7 +157,7 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration
         );
-        this.fanOut(result, false);
+        this.fanOut(result, true);
         return result;
       })
       .with({ kind: 'invalidate' }, async (request) => {
@@ -181,7 +180,7 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'clear' }, async () => {
         await this.requireEngine().clear();
-        this.push({ kind: 'entity-index-changed' });
+        this.push({ kind: 'cache-changed' });
         return null;
       })
       .exhaustive();
@@ -207,7 +206,7 @@ export class CacheWorkerCore {
   }
 
   /** Notifies every page connected to this shared engine. */
-  private fanOut(result: WriteResult, indexChanged: boolean): void {
+  private fanOut(result: WriteResult, cacheChanged: boolean): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -215,8 +214,8 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
-    if (indexChanged && result.changed.length > 0) {
-      this.push({ kind: 'entity-index-changed' });
+    if (cacheChanged) {
+      this.push({ kind: 'cache-changed' });
     }
   }
 

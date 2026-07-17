@@ -22,7 +22,7 @@ type UseEmailSearchMentionResult = {
 };
 
 /**
- * Provides cache-backed email mentions for the indexed Quick Access source and
+ * Provides cache-backed email mentions for the record-selection source and
  * preserves the remote unified-search path for the legacy source.
  */
 export function useEmailSearchMention(
@@ -31,12 +31,12 @@ export function useEmailSearchMention(
   const { searchTerm, enabled } = options;
   const listEnabled = () => enabled?.() !== false;
   const quickAccess = useQuickAccess();
-  const indexedEmails = quickAccess.useList({
+  const cachedEmails = quickAccess.useList({
     buckets: ['email'],
     searchTerm,
     enabled: listEnabled,
   });
-  const usesIndexedSearch = quickAccess.usesIndexedEntityQuery;
+  const usesRecordSelection = quickAccess.usesRecordSelection;
 
   const args = createLazyMemo((): SearchSoupQueryArgs => {
     return {
@@ -57,7 +57,7 @@ export function useEmailSearchMention(
   });
 
   const emailSearchQuery = useSearchSoupQuery(args, () => ({
-    enabled: !usesIndexedSearch() && listEnabled(),
+    enabled: !usesRecordSelection() && listEnabled(),
   }));
 
   const remoteEmailList = createLazyMemo((): EntityItem[] => {
@@ -87,7 +87,7 @@ export function useEmailSearchMention(
   });
 
   const emails = createLazyMemo((): EntityItem[] => {
-    if (usesIndexedSearch()) return indexedEmails.items();
+    if (usesRecordSelection()) return cachedEmails.items();
 
     const term = searchTerm();
     const remoteEmails = remoteEmailList();
@@ -98,18 +98,18 @@ export function useEmailSearchMention(
   return {
     emails,
     totalCount: () =>
-      usesIndexedSearch() ? indexedEmails.totalCount() : emails().length,
+      usesRecordSelection() ? cachedEmails.totalCount() : emails().length,
     hasMore: () =>
-      usesIndexedSearch()
-        ? indexedEmails.hasMore()
+      usesRecordSelection()
+        ? cachedEmails.hasMore()
         : Boolean(emailSearchQuery.hasNextPage),
     isLoadingMore: () =>
-      usesIndexedSearch()
-        ? indexedEmails.isLoadingMore()
+      usesRecordSelection()
+        ? cachedEmails.isLoadingMore()
         : emailSearchQuery.isFetching,
     loadMore: async () => {
-      if (usesIndexedSearch()) {
-        await indexedEmails.loadMore();
+      if (usesRecordSelection()) {
+        await cachedEmails.loadMore();
       } else if (emailSearchQuery.hasNextPage) {
         await emailSearchQuery.fetchNextPage();
       }

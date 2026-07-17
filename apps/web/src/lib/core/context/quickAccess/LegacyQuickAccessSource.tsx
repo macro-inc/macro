@@ -728,7 +728,7 @@ export function createLegacyQuickAccessValue(): QuickAccessContextValue {
 
   return {
     useList,
-    usesIndexedEntityQuery: () => false,
+    usesRecordSelection: () => false,
     isLoading,
     refresh,
     getById,

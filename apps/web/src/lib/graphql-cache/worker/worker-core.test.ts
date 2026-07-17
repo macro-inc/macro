@@ -4,24 +4,22 @@ const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
 
-import type { IndexedEntityPage } from '../protocol';
+import type { SelectedRecordPageWire } from '../protocol';
 import { CacheWorkerCore } from './worker-core';
 
-describe('CacheWorkerCore indexed queries', () => {
+describe('CacheWorkerCore record selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('dispatches query-indexed-items to the wasm engine', async () => {
-    const page: IndexedEntityPage = {
-      items: [],
+  it('dispatches read-records to the wasm engine', async () => {
+    const page: SelectedRecordPageWire = {
+      records: [{ id: 'item-1' }],
       nextCursor: null,
-      hasMore: false,
-      totalCount: null,
     };
-    const queryIndexedItems = vi.fn().mockResolvedValue(page);
+    const readRecords = vi.fn().mockResolvedValue(page);
     loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({ queryIndexedItems }),
+      openCache: vi.fn().mockResolvedValue({ readRecords }),
     });
     const messages: unknown[] = [];
     const port = { postMessage: (message: unknown) => messages.push(message) };
@@ -34,24 +32,23 @@ describe('CacheWorkerCore indexed queries', () => {
     });
     await core.handleRequest(port, {
       id: 2,
-      kind: 'query-indexed-items',
-      buckets: ['document'],
+      kind: 'read-records',
+      document: 'fragment Item on GraphqlSoupItem { id }',
+      fragmentName: 'Item',
       cursor: 'cursor-1',
       limit: 25,
-      includeTotalCount: true,
     });
 
-    expect(queryIndexedItems).toHaveBeenCalledWith(
-      ['document'],
-      undefined,
+    expect(readRecords).toHaveBeenCalledWith(
+      'fragment Item on GraphqlSoupItem { id }',
+      'Item',
       'cursor-1',
-      25,
-      true
+      25
     );
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
-  it('pushes durable record changes even without affected operations', async () => {
+  it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: [],
@@ -79,6 +76,6 @@ describe('CacheWorkerCore indexed queries', () => {
       data: { user: { id: 'user-1' } },
     });
 
-    expect(messages).toContainEqual({ kind: 'entity-index-changed' });
+    expect(messages).toContainEqual({ kind: 'cache-changed' });
   });
 });

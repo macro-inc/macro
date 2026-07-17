@@ -1,25 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_INDEXED_ENTITY_PAGE_SIZE,
-  normalizeIndexedEntityLimit,
+  MAX_RECORD_SELECTION_PAGE_SIZE,
+  validateRecordSelectionLimit,
 } from './protocol';
 
-describe('normalizeIndexedEntityLimit', () => {
-  it('accepts integers and clamps oversized pages', () => {
-    expect(normalizeIndexedEntityLimit(25)).toBe(25);
-    expect(normalizeIndexedEntityLimit(Number.MAX_SAFE_INTEGER)).toBe(
-      MAX_INDEXED_ENTITY_PAGE_SIZE
-    );
+describe('validateRecordSelectionLimit', () => {
+  it('accepts bounded positive integers', () => {
+    expect(validateRecordSelectionLimit(1)).toBe(1);
+    expect(
+      validateRecordSelectionLimit(MAX_RECORD_SELECTION_PAGE_SIZE)
+    ).toBe(MAX_RECORD_SELECTION_PAGE_SIZE);
   });
 
   it.each([
+    0,
     -1,
     1.5,
+    MAX_RECORD_SELECTION_PAGE_SIZE + 1,
     Number.NaN,
     Number.POSITIVE_INFINITY,
   ])('rejects invalid limit %s', (limit) => {
-    expect(() => normalizeIndexedEntityLimit(limit)).toThrow(
-      'indexed entity limit must be a non-negative integer'
+    expect(() => validateRecordSelectionLimit(limit)).toThrow(
+      'record selection limit must be an integer between 1 and 500'
     );
   });
 });

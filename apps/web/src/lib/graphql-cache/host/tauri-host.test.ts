@@ -69,38 +69,28 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
-  it('queries indexed entities with bucket and cursor arguments', async () => {
-    const page = {
-      items: [],
-      nextCursor: null,
-      hasMore: false,
-      totalCount: 2,
-    };
+  it('reads selected records with fragment and cursor arguments', async () => {
+    const page = { records: [], nextCursor: null };
     invokeMock.mockImplementation((command: string) =>
-      Promise.resolve(
-        command === 'graphql_cache_query_indexed_items' ? page : null
-      )
+      Promise.resolve(command === 'graphql_cache_read_records' ? page : null)
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const cursor = 'cursor-1';
 
     await expect(
-      host.queryIndexedItems({
-        buckets: ['document'],
+      host.readRecords({
+        document: 'fragment Item on GraphqlSoupItem { id }',
+        fragmentName: 'Item',
         cursor,
         limit: 25,
-        includeTotalCount: true,
       })
     ).resolves.toEqual(page);
-    expect(invokeMock).toHaveBeenCalledWith(
-      'graphql_cache_query_indexed_items',
-      {
-        buckets: ['document'],
-        cursor,
-        limit: 25,
-        includeTotalCount: true,
-      }
-    );
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read_records', {
+      document: 'fragment Item on GraphqlSoupItem { id }',
+      fragmentName: 'Item',
+      cursor,
+      limit: 25,
+    });
   });
 
   it('sends writes with origin op id and identity', async () => {
@@ -249,15 +239,13 @@ describe('createTauriCacheHost', () => {
     expect(seen).toEqual([[5, 8]]);
   });
 
-  it('delivers entity-index change keys', async () => {
+  it('delivers cache change notifications', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     let calls = 0;
-    host.onEntityIndexChanged(() => calls++);
+    host.onCacheChanged(() => calls++);
     await Promise.resolve();
 
-    eventCallbacks.get('graphql-cache://entity-index-changed')?.({
-      payload: {},
-    });
+    eventCallbacks.get('graphql-cache://cache-changed')?.({ payload: {} });
     expect(calls).toBe(1);
   });
 

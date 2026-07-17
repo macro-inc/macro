@@ -35,25 +35,25 @@ export function useEntityMention(
     searchTerm: options.searchTerm,
   }) as QuickAccessList<EntityItem>;
   const entities = createLazyMemo(() => {
-    if (quickAccess.usesIndexedEntityQuery()) return entityList.items();
+    if (quickAccess.usesRecordSelection()) return entityList.items();
     return searchQuickAccessEntities(entityList.items(), options.searchTerm());
   });
 
   return {
     entities,
     totalCount: () =>
-      quickAccess.usesIndexedEntityQuery()
+      quickAccess.usesRecordSelection()
         ? entityList.totalCount()
         : entities().length,
-    hasMore: () => quickAccess.usesIndexedEntityQuery() && entityList.hasMore(),
+    hasMore: () => quickAccess.usesRecordSelection() && entityList.hasMore(),
     isLoading: () =>
-      quickAccess.usesIndexedEntityQuery()
+      quickAccess.usesRecordSelection()
         ? entityList.isLoading()
         : quickAccess.isLoading(),
     isLoadingMore: () =>
-      quickAccess.usesIndexedEntityQuery() && entityList.isLoadingMore(),
+      quickAccess.usesRecordSelection() && entityList.isLoadingMore(),
     loadMore: async () => {
-      if (quickAccess.usesIndexedEntityQuery()) await entityList.loadMore();
+      if (quickAccess.usesRecordSelection()) await entityList.loadMore();
     },
   };
 }

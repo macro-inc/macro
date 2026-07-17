@@ -11,13 +11,12 @@
 import type {
   CachedQueryInstanceWire,
   ClaimedMutation,
-  EntityIndexCursor,
-  IndexedEntityBucket,
-  IndexedEntityPage,
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
   QueryRevalidationWire,
   ReadResult,
+  RecordCursor,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -28,13 +27,12 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined
   ): Promise<ReadResult>;
-  queryIndexedItems(
-    buckets: IndexedEntityBucket[],
-    searchTerm: string | undefined,
-    cursor: EntityIndexCursor | undefined,
-    limit: number,
-    includeTotalCount: boolean
-  ): Promise<IndexedEntityPage>;
+  readRecords(
+    document: string,
+    fragmentName: string,
+    cursor: RecordCursor | undefined,
+    limit: number
+  ): Promise<SelectedRecordPageWire>;
   writeQuery(
     originOpId: string | undefined,
     query: string,

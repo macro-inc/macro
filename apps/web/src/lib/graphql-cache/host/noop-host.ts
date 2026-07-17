@@ -1,8 +1,8 @@
 import {
-  normalizeIndexedEntityLimit,
   type OptimisticWriteResult,
-  type QueryIndexedItemsArgs,
+  type ReadRecordsArgs,
   type ReadResult,
+  validateRecordSelectionLimit,
   type WriteResult,
 } from '../protocol';
 import type { CacheHost } from './types';
@@ -27,15 +27,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
-    async queryIndexedItems(args: QueryIndexedItemsArgs) {
-      normalizeIndexedEntityLimit(args.limit);
-      return {
-        items: [],
-        nextCursor: null,
-        hasMore: false,
-        totalCount: args.includeTotalCount ? 0 : null,
-        bucketCounts: args.includeTotalCount ? {} : null,
-      };
+    async readRecords(args: ReadRecordsArgs) {
+      validateRecordSelectionLimit(args.limit);
+      return { records: [], nextCursor: null };
     },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
@@ -64,7 +58,7 @@ export function createNoopCacheHost(reason: string): CacheHost {
     onOpsAffected() {
       return () => undefined;
     },
-    onEntityIndexChanged() {
+    onCacheChanged() {
       return () => undefined;
     },
     dispose() {},

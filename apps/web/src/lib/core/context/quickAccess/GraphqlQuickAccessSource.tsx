@@ -25,6 +25,7 @@ import {
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
+  mapGraphqlSoupItem,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -35,13 +36,14 @@ import {
   graphqlEntityToQuickAccessItem,
   userToQuickAccessItem,
 } from './graphql-items';
+import { createRecordSelectionQuickAccessItems } from './record-selection-list';
 import {
-  createIndexedQuickAccessItems,
-  indexedBucketsForExactCount,
-  QUICK_ACCESS_INDEX_QUERY_KEY,
-} from './indexed-list';
+  createQuickAccessRecordSelectionQuery,
+  QUICK_ACCESS_RECORD_SELECTION_QUERY_KEY,
+} from './record-selection-items';
 import type {
   Bucket,
+  EntityItem,
   QuickAccessContextValue,
   QuickAccessItem,
   QuickAccessList,
@@ -50,7 +52,7 @@ import type {
 
 const QUICK_ACCESS_LIMIT = 500;
 const DEFAULT_SEARCH_PAGE_SIZE = 50;
-const INDEX_REFRESH_DEBOUNCE_MS = 250;
+const CACHE_REFRESH_DEBOUNCE_MS = 250;
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 function makeQuickAccessInput(snippetsEnabled: boolean): SoupInput {
@@ -136,18 +138,20 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
   const cacheHost = getGraphqlSoupCacheHost();
 
   const queryClient = useQueryClient();
-  const invalidateIndexedQueries = () =>
-    queryClient.invalidateQueries({ queryKey: QUICK_ACCESS_INDEX_QUERY_KEY });
-  const scheduleIndexedRefresh = debounce(() => {
-    void invalidateIndexedQueries();
-  }, INDEX_REFRESH_DEBOUNCE_MS);
+  const invalidateRecordSelection = () =>
+    queryClient.invalidateQueries({
+      queryKey: QUICK_ACCESS_RECORD_SELECTION_QUERY_KEY,
+    });
+  const scheduleCacheRefresh = debounce(() => {
+    void invalidateRecordSelection();
+  }, CACHE_REFRESH_DEBOUNCE_MS);
 
-  const unsubscribeIndexChanges = cacheHost?.onEntityIndexChanged(
-    scheduleIndexedRefresh
+  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(
+    scheduleCacheRefresh
   );
   onCleanup(() => {
-    unsubscribeIndexChanges?.();
-    scheduleIndexedRefresh.clear();
+    unsubscribeCacheChanges?.();
+    scheduleCacheRefresh.clear();
   });
 
   const input = createMemo(() => makeQuickAccessInput(snippetsFlag().enabled));
@@ -175,8 +179,29 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     );
   });
 
+  const recordSelectionQuery = createQuickAccessRecordSelectionQuery({
+    cacheHost: () => cacheHost,
+  });
+  const selectedEntities = createMemo(() => {
+    const records = recordSelectionQuery.data;
+    if (!records) return [];
+    return mapGraphqlQuickAccessEntities(
+      {
+        items: records.map(mapGraphqlSoupItem),
+        next_cursor: undefined,
+      },
+      instructionsIdQuery
+    );
+  });
+  const selectedItems = createMemo<EntityItem[]>(() =>
+    selectedEntities().flatMap((entity) => {
+      const item = graphqlEntityToQuickAccessItem(entity);
+      return item ? [item] : [];
+    })
+  );
+
   const itemsById = new Map<string, QuickAccessItem>();
-  const indexedItemsById = new Map<string, QuickAccessItem>();
+  const selectedItemsById = new Map<string, QuickAccessItem>();
 
   const localItems = createMemo<QuickAccessItem[]>(() => {
     const nextItemsById = new Map<string, QuickAccessItem>();
@@ -246,95 +271,52 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
       () => options.searchTerm?.().trim() ?? ''
     );
 
-    // Prevent the reactive reads inside the hook from rerunning this `useList` function
-    const indexed = untrack(() =>
-      createIndexedQuickAccessItems({
-        cacheHost,
+    // Prevent reactive reads inside the hook from rerunning `useList`.
+    const selected = untrack(() =>
+      createRecordSelectionQuickAccessItems({
         buckets,
         searchTerm: activeSearchTerm,
         enabled: listEnabled,
         pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+        selectedItems,
         localItems,
         instructionsId: () => instructionsIdQuery.data ?? undefined,
         snippetsEnabled: () => snippetsFlag().enabled,
         crmEnabled: () => crmFlag().enabled,
         onItems: (items) => {
-          for (const item of items) indexedItemsById.set(item.id, item);
+          for (const item of items) selectedItemsById.set(item.id, item);
         },
       })
     );
 
-    const items = createMemo(() => {
-      if (!listEnabled()) return [];
-      const candidates = indexed.items();
-      if (buckets.length === 0) return candidates;
-      const requested = new Set(buckets);
-      return candidates.filter((item) => requested.has(item.bucket));
-    });
-
-    const countBuckets = createMemo(() => {
-      const entityBuckets = indexed.entityBuckets();
-      return entityBuckets.length === buckets.length
-        ? indexedBucketsForExactCount(entityBuckets)
-        : undefined;
-    });
-
-    const totalCount = createMemo(() => {
-      if (!listEnabled()) return 0;
-      const counts = indexed.query.data?.pages[0]?.bucketCounts;
-      const indexedBuckets = countBuckets();
-      if (!counts || !indexedBuckets) return items().length;
-
-      let count = indexedBuckets.reduce(
-        (total, bucket) => total + (counts[bucket] ?? 0),
-        0
-      );
-      if (
-        !activeSearchTerm() &&
-        indexed.entityBuckets().includes('note') &&
-        instructionsIdQuery.data
-      ) {
-        count = Math.max(0, count - 1);
-      }
-      return count;
-    });
-
     return {
-      items,
-      totalCount,
-      hasMore: () => listEnabled() && indexed.query.hasNextPage,
+      items: selected.items,
+      totalCount: selected.totalCount,
+      hasMore: () => listEnabled() && selected.hasMore(),
       isLoading: () =>
         listEnabled() &&
-        indexed.query.isPending &&
-        indexed.query.data === undefined,
-      isLoadingMore: () => listEnabled() && indexed.query.isFetchingNextPage,
-      loadMore: async () => {
-        if (
-          !listEnabled() ||
-          !indexed.query.hasNextPage ||
-          indexed.query.isFetching
-        )
-          return;
-        await indexed.query.fetchNextPage();
-      },
+        recordSelectionQuery.isPending &&
+        recordSelectionQuery.data === undefined,
+      isLoadingMore: selected.isLoadingMore,
+      loadMore: selected.loadMore,
     };
   }) as QuickAccessContextValue['useList'];
 
   const getById = (id: string): QuickAccessItem | undefined => {
     localItems();
-    return itemsById.get(id) ?? indexedItemsById.get(id);
+    return itemsById.get(id) ?? selectedItemsById.get(id);
   };
 
   const refresh = () => {
     setRefreshVersion((version) => version + 1);
-    void invalidateIndexedQueries();
+    void invalidateRecordSelection();
     void crmCompaniesQuery.refetch();
     void snippetsQuery.refetch();
   };
 
   return {
     useList,
-    usesIndexedEntityQuery: () => true,
+    usesRecordSelection: () => true,
     isLoading: () => retainedQueryData() === undefined && query.fetching(),
     refresh,
     getById,

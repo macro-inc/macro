@@ -11,56 +11,38 @@
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
-/** Soup entity buckets persisted by the normalized-cache secondary index. */
-export type IndexedEntityBucket =
-  | 'document'
-  | 'chat'
-  | 'project'
-  | 'email'
-  | 'channel'
-  | 'crm_company';
+/** Opaque exclusive cursor for deterministic normalized-record scans. */
+export type RecordCursor = string;
 
-/** Opaque cursor for indexed browsing or relevance-ordered search. */
-export type EntityIndexCursor = string;
-
-/** Cache-only indexed entity snapshot. Normalized record links are omitted. */
-export type IndexedEntityItem = {
-  id: string;
-  bucket: IndexedEntityBucket;
-  sortTimestamp: number;
-  entity: Record<string, unknown>;
+/** Untyped wire page returned by cache hosts. */
+export type SelectedRecordPageWire = {
+  records: unknown[];
+  nextCursor: RecordCursor | null;
 };
 
-/** One deterministic page from the normalized-record secondary index. */
-export type IndexedEntityPage = {
-  items: IndexedEntityItem[];
-  nextCursor: EntityIndexCursor | null;
-  hasMore: boolean;
-  /** Present only when requested, normally on the first page. */
-  totalCount: number | null;
-  /** Per-entity-type totals, present alongside `totalCount`. */
-  bucketCounts?: Partial<Record<IndexedEntityBucket, number>> | null;
-};
-
-export const MAX_INDEXED_ENTITY_PAGE_SIZE = 500;
-
-export type QueryIndexedItemsArgs = {
-  /** Empty or omitted means every indexed entity bucket. */
-  buckets?: IndexedEntityBucket[];
-  /** Non-empty values switch the query to relevance-ordered search. */
-  searchTerm?: string;
-  cursor?: EntityIndexCursor;
+export type ReadRecordsArgs = {
+  /** Serialized generated fragment document. */
+  document: string;
+  /** Root fragment to apply to matching normalized records. */
+  fragmentName: string;
+  cursor?: RecordCursor;
   limit: number;
-  /** Request a bucket-wide count without hydrating additional records. */
-  includeTotalCount?: boolean;
 };
 
-/** Validates and clamps an indexed page size before crossing a host boundary. */
-export function normalizeIndexedEntityLimit(limit: number): number {
-  if (!Number.isSafeInteger(limit) || limit < 0) {
-    throw new RangeError('indexed entity limit must be a non-negative integer');
+export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+
+/** Validates a record-selection page size before crossing a host boundary. */
+export function validateRecordSelectionLimit(limit: number): number {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > MAX_RECORD_SELECTION_PAGE_SIZE
+  ) {
+    throw new RangeError(
+      `record selection limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
+    );
   }
-  return Math.min(limit, MAX_INDEXED_ENTITY_PAGE_SIZE);
+  return limit;
 }
 
 export type QueryRevalidationWire = {
@@ -209,12 +191,11 @@ export type CacheRequest = { id: number } & (
       leaseGeneration: string;
     }
   | {
-      kind: 'query-indexed-items';
-      buckets: IndexedEntityBucket[];
-      searchTerm?: string;
-      cursor?: EntityIndexCursor;
+      kind: 'read-records';
+      document: string;
+      fragmentName: string;
+      cursor?: RecordCursor;
       limit: number;
-      includeTotalCount: boolean;
     }
   | {
       kind: 'inspect-query';
@@ -260,7 +241,7 @@ export type CachePush =
       keys: string[];
     }
   | {
-      kind: 'entity-index-changed';
+      kind: 'cache-changed';
     };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -268,6 +249,6 @@ export type WorkerMessage = CacheResponse | CachePush;
 export function isCachePush(msg: WorkerMessage): msg is CachePush {
   return (
     'kind' in msg &&
-    (msg.kind === 'ops-affected' || msg.kind === 'entity-index-changed')
+    (msg.kind === 'ops-affected' || msg.kind === 'cache-changed')
   );
 }

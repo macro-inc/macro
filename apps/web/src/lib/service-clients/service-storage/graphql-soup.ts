@@ -172,7 +172,7 @@ export type GraphqlGroupedSoupPage = {
   }>;
 };
 
-type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
+export type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem['entity'];
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
@@ -316,7 +316,7 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
   }));
 }
 
-function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
+export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
   const frecency = item.frecencyScore;
   // `is_favorited: false` below: the GraphQL soup surface has no favorites
   // data; the REST `SoupApiItem` shape requires the flag, and nothing

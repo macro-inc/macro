@@ -99,13 +99,8 @@ function makeFakeHost(): FakeHost {
       });
       return readResult;
     },
-    async queryIndexedItems() {
-      return {
-        items: [],
-        nextCursor: null,
-        hasMore: false,
-        totalCount: null,
-      };
+    async readRecords() {
+      return { records: [], nextCursor: null };
     },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
@@ -183,7 +178,7 @@ function makeFakeHost(): FakeHost {
       subscribers.add(cb);
       return () => subscribers.delete(cb);
     },
-    onEntityIndexChanged() {
+    onCacheChanged() {
       return () => undefined;
     },
     dispose() {},

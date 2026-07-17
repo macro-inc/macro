@@ -8,13 +8,13 @@
 import type {
   CachedQueryInstanceWire,
   ClaimedMutation,
-  IndexedEntityPage,
   MutationClaim,
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
-  QueryIndexedItemsArgs,
   QueryRevalidationWire,
+  ReadRecordsArgs,
   ReadResult,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -52,8 +52,8 @@ export interface CacheHost {
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
-  /** Browses or searches durable normalized entities through the index. */
-  queryIndexedItems(args: QueryIndexedItemsArgs): Promise<IndexedEntityPage>;
+  /** Projects normalized records through a named GraphQL fragment. */
+  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
   beginOptimisticWrite(
@@ -99,8 +99,8 @@ export interface CacheHost {
    */
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
 
-  /** Subscribes to durable record changes that can alter indexed lists. */
-  onEntityIndexChanged(cb: () => void): () => void;
+  /** Subscribes whenever the effective normalized-cache view changes. */
+  onCacheChanged(cb: () => void): () => void;
 
   dispose(): void;
 }

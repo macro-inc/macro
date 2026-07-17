@@ -8,13 +8,13 @@ import {
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
-  type IndexedEntityPage,
   isCachePush,
   type MutationClaim,
-  normalizeIndexedEntityLimit,
   type OptimisticWriteResult,
-  type QueryIndexedItemsArgs,
+  type ReadRecordsArgs,
   type ReadResult,
+  type SelectedRecordPageWire,
+  validateRecordSelectionLimit,
   type WorkerMessage,
   type WriteResult,
 } from '../protocol';
@@ -61,7 +61,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const pending = new Map<number, Pending>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const indexSubscribers = new Set<() => void>();
+  const cacheChangeSubscribers = new Set<() => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let nextRequestId = 1;
@@ -72,8 +72,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const onMessage = (event: MessageEvent<WorkerMessage>) => {
     const msg = event.data;
     if (isCachePush(msg)) {
-      if (msg.kind === 'entity-index-changed') {
-        for (const cb of indexSubscribers) cb();
+      if (msg.kind === 'cache-changed') {
+        for (const cb of cacheChangeSubscribers) cb();
         return;
       }
       const prefix = `${clientId}:`;
@@ -129,7 +129,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
       const entry: Pending = { resolve, reject };
-      if (msg.kind === 'read' || msg.kind === 'inspect-query') {
+      if (
+        msg.kind === 'read' ||
+        msg.kind === 'read-records' ||
+        msg.kind === 'inspect-query'
+      ) {
         entry.timer = setTimeout(() => {
           if (pending.delete(id)) {
             reject(new Error(`cache worker timeout: ${msg.kind}`));
@@ -172,19 +176,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as ReadResult;
     },
 
-    async queryIndexedItems(
-      args: QueryIndexedItemsArgs
-    ): Promise<IndexedEntityPage> {
-      const limit = normalizeIndexedEntityLimit(args.limit);
+    async readRecords(
+      args: ReadRecordsArgs
+    ): Promise<SelectedRecordPageWire> {
+      const limit = validateRecordSelectionLimit(args.limit);
       await ready;
       return (await request({
-        kind: 'query-indexed-items',
-        buckets: args.buckets ?? [],
-        ...(args.searchTerm ? { searchTerm: args.searchTerm } : {}),
+        kind: 'read-records',
+        document: args.document,
+        fragmentName: args.fragmentName,
         cursor: args.cursor,
         limit,
-        includeTotalCount: args.includeTotalCount ?? false,
-      })) as IndexedEntityPage;
+      })) as SelectedRecordPageWire;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
@@ -311,14 +314,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    onEntityIndexChanged(cb: () => void): () => void {
-      indexSubscribers.add(cb);
-      return () => indexSubscribers.delete(cb);
+    onCacheChanged(cb: () => void): () => void {
+      cacheChangeSubscribers.add(cb);
+      return () => cacheChangeSubscribers.delete(cb);
     },
 
     dispose() {
       affectedSubscribers.clear();
-      indexSubscribers.clear();
+      cacheChangeSubscribers.clear();
       dispose();
     },
   };

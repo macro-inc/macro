@@ -433,7 +433,7 @@ export function useCommandItems(
     queryText: string
   ): CommandMenuItem[] => {
     if (!queryText.trim()) return items.filter(showInRecencyList);
-    if (!quickAccess.usesIndexedEntityQuery()) {
+    if (!quickAccess.usesRecordSelection()) {
       return search()(items, queryText).map((result) => result.item);
     }
 

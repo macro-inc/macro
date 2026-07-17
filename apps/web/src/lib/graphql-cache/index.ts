@@ -10,6 +10,12 @@ export {
   selectAll,
 } from './exchange/inspection';
 export {
+  readRecords,
+  type RecordSelection,
+  type SelectedRecordPage,
+  selectRecords,
+} from './exchange/record-selection';
+export {
   executeOptimisticMutation,
   type LinkDiff,
   type ListSelection,
@@ -35,16 +41,14 @@ export type {
   CachePush,
   CacheRequest,
   CacheResponse,
-  EntityIndexCursor,
-  IndexedEntityBucket,
-  IndexedEntityItem,
-  IndexedEntityPage,
   OptimisticWriteResult,
-  QueryIndexedItemsArgs,
+  ReadRecordsArgs,
   ReadResult,
+  RecordCursor,
+  SelectedRecordPageWire,
   WriteResult,
 } from './protocol';
 export {
-  MAX_INDEXED_ENTITY_PAGE_SIZE,
-  normalizeIndexedEntityLimit,
+  MAX_RECORD_SELECTION_PAGE_SIZE,
+  validateRecordSelectionLimit,
 } from './protocol';

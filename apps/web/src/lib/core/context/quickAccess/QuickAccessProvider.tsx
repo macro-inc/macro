@@ -48,7 +48,7 @@ export const QuickAccessProvider: FlowComponent = (props) => {
 
   const quickAccess: QuickAccessContextValue = {
     useList,
-    usesIndexedEntityQuery: () => source().usesIndexedEntityQuery(),
+    usesRecordSelection: () => source().usesRecordSelection(),
     isLoading: () => source().isLoading(),
     refresh: () => source().refresh(),
     getById: (id) => source().getById(id),
