@@ -520,6 +520,10 @@ impl<S: Storage> Engine<S> {
         optimistic: &BTreeMap<EntityKey, Record>,
     ) -> Result<Vec<(EntityKey, Json)>, EngineError<S::Error>> {
         let candidate_keys: Vec<_> = candidates.keys().cloned().collect();
+        let optimistic_only_candidates: BTreeSet<_> = candidates
+            .iter()
+            .filter_map(|(key, record)| record.is_none().then_some(key.clone()))
+            .collect();
         let mut fetched_base: HashMap<_, _> = candidates
             .into_iter()
             .filter_map(|(key, record)| record.map(|record| (key, record)))
@@ -527,9 +531,13 @@ impl<S: Storage> Engine<S> {
         let mut composed = HashMap::new();
         for (key, update) in optimistic {
             let base = fetched_base.get(key).or_else(|| self.hot.peek(key));
-            let mut effective = base.cloned().unwrap_or_default();
-            effective.merge(update.clone());
-            composed.insert(key.clone(), effective);
+            if let Some(base) = base {
+                let mut effective = base.clone();
+                effective.merge(update.clone());
+                composed.insert(key.clone(), effective);
+            } else if optimistic_only_candidates.contains(key) {
+                composed.insert(key.clone(), update.clone());
+            }
         }
 
         let variables = serde_json::Map::new();
@@ -596,7 +604,11 @@ impl<S: Storage> Engine<S> {
                         fetched_base.insert(key, record);
                     }
                     None => {
-                        known_absent.insert(key);
+                        if let Some(update) = optimistic.get(&key) {
+                            composed.insert(key, update.clone());
+                        } else {
+                            known_absent.insert(key);
+                        }
                     }
                 }
             }

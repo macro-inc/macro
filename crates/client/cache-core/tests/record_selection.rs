@@ -149,6 +149,104 @@ fn reads_object_and_union_fragments_in_entity_key_order() {
 }
 
 #[test]
+fn merges_optimistic_updates_with_cold_linked_bases() {
+    block_on(async {
+        let property_key = key("GraphqlProperty:property-1");
+        let document_key = key("GraphqlSoupDocument:doc-1");
+        let mut storage = InMemoryStorage::new();
+        storage
+            .put_batch(vec![
+                item("item-1", Some(document_key.clone())),
+                (
+                    document_key,
+                    record(
+                        "GraphqlSoupDocument",
+                        [
+                            ("id", CacheValue::String("doc-1".to_string())),
+                            (
+                                "properties",
+                                CacheValue::List(vec![CacheValue::Ref(property_key.clone())]),
+                            ),
+                        ],
+                    ),
+                ),
+                (
+                    property_key,
+                    record(
+                        "GraphqlProperty",
+                        [
+                            ("id", CacheValue::String("property-1".to_string())),
+                            (
+                                "propertyDefinitionId",
+                                CacheValue::String("definition-1".to_string()),
+                            ),
+                            ("displayName", CacheValue::String("Old".to_string())),
+                        ],
+                    ),
+                ),
+            ])
+            .await
+            .unwrap();
+        let mut engine = Engine::with_capacity(storage, 1);
+        let selection = RecordSelection::parse(
+            r#"fragment Item on GraphqlSoupItem {
+                id
+                entity {
+                    ... on GraphqlSoupDocument {
+                        properties { id propertyDefinitionId displayName }
+                    }
+                }
+            }"#,
+            "Item",
+        )
+        .unwrap();
+        let mutation = r#"mutation SetProperty($input: SetEntityPropertyInput!) {
+            setEntityProperty(input: $input) { id displayName }
+        }"#;
+        let Json::Object(variables) = json!({
+            "input": {
+                "entityType": "DOCUMENT",
+                "entityId": "doc-1",
+                "propertyDefinitionId": "definition-1"
+            }
+        }) else {
+            unreachable!()
+        };
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: mutation,
+                    operation_name: Some("SetProperty"),
+                    variables: &variables,
+                    data: &json!({
+                        "setEntityProperty": {
+                            "id": "property-1",
+                            "displayName": "Optimistic"
+                        }
+                    }),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+
+        let page = engine.read_records(&selection, None, 10).await.unwrap();
+        assert_eq!(page.records.len(), 1);
+        assert_eq!(
+            page.records[0]["entity"]["properties"][0],
+            json!({
+                "id": "property-1",
+                "propertyDefinitionId": "definition-1",
+                "displayName": "Optimistic"
+            })
+        );
+    });
+}
+
+#[test]
 fn includes_optimistic_only_records() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

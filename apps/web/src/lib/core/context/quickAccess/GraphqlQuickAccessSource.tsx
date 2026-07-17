@@ -192,15 +192,17 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
       instructionsIdQuery
     );
   });
-  const selectedItems = createMemo<EntityItem[]>(() =>
-    selectedEntities().flatMap((entity) => {
-      const item = graphqlEntityToQuickAccessItem(entity);
-      return item ? [item] : [];
-    })
-  );
-
   const itemsById = new Map<string, QuickAccessItem>();
   const selectedItemsById = new Map<string, QuickAccessItem>();
+  const selectedItems = createMemo<EntityItem[]>(() => {
+    const items = selectedEntities().flatMap((entity) => {
+      const item = graphqlEntityToQuickAccessItem(entity);
+      return item ? [item] : [];
+    });
+    selectedItemsById.clear();
+    for (const item of items) selectedItemsById.set(item.id, item);
+    return items;
+  });
 
   const localItems = createMemo<QuickAccessItem[]>(() => {
     const nextItemsById = new Map<string, QuickAccessItem>();
@@ -282,9 +284,7 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
         instructionsId: () => instructionsIdQuery.data ?? undefined,
         snippetsEnabled: () => snippetsFlag().enabled,
         crmEnabled: () => crmFlag().enabled,
-        onItems: (items) => {
-          for (const item of items) selectedItemsById.set(item.id, item);
-        },
+        onItems: () => undefined,
       })
     );
 
@@ -294,6 +294,7 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
       hasMore: () => listEnabled() && selected.hasMore(),
       isLoading: () =>
         listEnabled() &&
+        cacheHost !== undefined &&
         recordSelectionQuery.isPending &&
         recordSelectionQuery.data === undefined,
       isLoadingMore: selected.isLoadingMore,
@@ -303,6 +304,7 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
 
   const getById = (id: string): QuickAccessItem | undefined => {
     localItems();
+    selectedItems();
     return itemsById.get(id) ?? selectedItemsById.get(id);
   };
 
