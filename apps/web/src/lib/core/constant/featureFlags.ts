@@ -126,8 +126,11 @@ export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 // previews, and the per-message include toggle. PostHog-gated with a dev-mode
 // default; override with VITE_ENABLE_EMAIL_SIGNATURES.
 export const ENABLE_EMAIL_SIGNATURES_FLAG = 'enable-email-signatures';
+// Honor an explicit VITE_ENABLE_EMAIL_SIGNATURES=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
 export const ENABLE_EMAIL_SIGNATURES_OVERRIDE =
-  resolveFeatureFlag('ENABLE_EMAIL_SIGNATURES', DEV_MODE_ENV) || undefined;
+  getFeatureFlagOverride('ENABLE_EMAIL_SIGNATURES') ??
+  (DEV_MODE_ENV ? true : undefined);
 
 /**
  * Non-reactive check for imperative call sites. For reactive UI, prefer
