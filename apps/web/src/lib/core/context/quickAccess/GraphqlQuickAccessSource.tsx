@@ -30,7 +30,7 @@ import {
 import { createLazyMemo } from '@solid-primitives/memo';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQueryClient } from '@tanstack/solid-query';
-import { createMemo, createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import {
   graphqlEntityToQuickAccessItem,
   userToQuickAccessItem,
@@ -237,25 +237,33 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
             searchTerm: undefined,
             enabled: undefined,
           };
+
     const buckets = [...options.buckets];
+
     const listEnabled = () => options.enabled?.() ?? true;
+
     const activeSearchTerm = createMemo(
       () => options.searchTerm?.().trim() ?? ''
     );
-    const indexed = createIndexedQuickAccessItems({
-      cacheHost,
-      buckets,
-      searchTerm: activeSearchTerm,
-      enabled: listEnabled,
-      pageSize: DEFAULT_SEARCH_PAGE_SIZE,
-      localItems,
-      instructionsId: () => instructionsIdQuery.data ?? undefined,
-      snippetsEnabled: () => snippetsFlag().enabled,
-      crmEnabled: () => crmFlag().enabled,
-      onItems: (items) => {
-        for (const item of items) indexedItemsById.set(item.id, item);
-      },
-    });
+
+    // Prevent the reactive reads inside the hook from rerunning this `useList` function
+    const indexed = untrack(() =>
+      createIndexedQuickAccessItems({
+        cacheHost,
+        buckets,
+        searchTerm: activeSearchTerm,
+        enabled: listEnabled,
+        pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+        localItems,
+        instructionsId: () => instructionsIdQuery.data ?? undefined,
+        snippetsEnabled: () => snippetsFlag().enabled,
+        crmEnabled: () => crmFlag().enabled,
+        onItems: (items) => {
+          for (const item of items) indexedItemsById.set(item.id, item);
+        },
+      })
+    );
+
     const items = createMemo(() => {
       if (!listEnabled()) return [];
       const candidates = indexed.items();
@@ -263,12 +271,14 @@ export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
       const requested = new Set(buckets);
       return candidates.filter((item) => requested.has(item.bucket));
     });
+
     const countBuckets = createMemo(() => {
       const entityBuckets = indexed.entityBuckets();
       return entityBuckets.length === buckets.length
         ? indexedBucketsForExactCount(entityBuckets)
         : undefined;
     });
+
     const totalCount = createMemo(() => {
       if (!listEnabled()) return 0;
       const counts = indexed.query.data?.pages[0]?.bucketCounts;

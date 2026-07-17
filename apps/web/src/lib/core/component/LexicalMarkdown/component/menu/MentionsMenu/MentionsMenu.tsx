@@ -21,6 +21,7 @@ import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   onCleanup,
@@ -515,7 +516,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     return mode ? controller.getBucket(mode) : undefined;
   };
 
-  const visibleBuckets = () => {
+  const visibleBuckets = createMemo(() => {
     const currentBins = controller.bins();
     const seenIds = new Set<string>(blockId ? [blockId] : []);
     let cumulativeIndex = 0;
@@ -537,7 +538,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         cumulativeIndex += bucketItems.length;
         return { config, bucketItems, startIndex };
       });
-  };
+  });
 
   const clickOutsideHandler = (e: MouseEvent) => {
     e.stopPropagation();
