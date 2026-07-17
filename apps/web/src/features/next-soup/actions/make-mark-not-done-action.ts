@@ -47,9 +47,13 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
         emailIds.map((id) => refetchSoupEntity(id, 'emailThread'))
       );
       invalidateAllSoup();
-    } catch {
+    } catch (err) {
       optimistic.rollback();
       toast.failure('Failed to mark as not done');
+      // Rethrow (matching makeMarkDoneAction's mutateAsync) so wrappers like
+      // trackExternalThreadArchive can restore their own caches; UI feedback
+      // is already handled above.
+      throw err;
     }
   };
 

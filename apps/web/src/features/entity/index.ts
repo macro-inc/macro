@@ -30,7 +30,7 @@ export {
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export { createUpdateFileTypeMutation } from './queries/file-type';
-export { emailQueryKeyExcludesDone, queryKeys } from './queries/key';
+export { queryKeys } from './queries/key';
 export {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,

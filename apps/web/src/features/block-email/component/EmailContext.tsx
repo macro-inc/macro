@@ -24,7 +24,11 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
-import { createEffectOnEntityTypeNotification } from '@notifications';
+import {
+  compositeEntity,
+  createEffectOnEntityTypeNotification,
+  setDoneOverride,
+} from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
@@ -36,6 +40,7 @@ import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
+import { bulkMarkNotificationsAsUndone } from '@queries/notification/user-notifications';
 import {
   getSoupEntityById,
   invalidateAllSoup,
@@ -444,6 +449,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       // with the thread's): unarchive directly, then refetch the thread's
       // soup item to reinsert its rows and refetch the lists.
       const threadId = thread.db_id;
+      // Snapshot the thread's notification ids now — the entity path restores
+      // them via executeMarkEntitiesUndone, so mirror that here or they stay
+      // done after the unarchive.
+      const notificationIds = (
+        notificationSource.notificationsByEntity()[
+          compositeEntity({ type: 'email_thread', id: threadId })
+        ] ?? []
+      ).map((n) => n.id);
       archiveMutation.mutate(
         {
           threadId,
@@ -451,7 +464,17 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           linkId: toHeaderLinkId(thread.link_id),
         },
         {
-          onSuccess: () => {
+          onSuccess: async () => {
+            if (notificationIds.length > 0) {
+              setDoneOverride(notificationIds, false);
+              try {
+                await bulkMarkNotificationsAsUndone(notificationIds);
+              } catch {
+                // The unarchive itself succeeded, so keep that outcome and
+                // let the override fall back to the server's done state.
+                setDoneOverride(notificationIds, undefined);
+              }
+            }
             void refetchSoupEntity(threadId, 'emailThread');
             invalidateAllSoup();
           },
