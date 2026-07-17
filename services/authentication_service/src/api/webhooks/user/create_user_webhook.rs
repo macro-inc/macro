@@ -5,10 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_middleware::auth::internal_access::ValidInternalKey;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use rand::Rng;
 
-use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
+use crate::{
+    api::context::{ApiContext, AuthorizationService},
+    rate_limit_config::RATE_LIMIT_CONFIG,
+};
 use authentication_service::service::user::create_user::create_user;
 use fusionauth::error::FusionAuthClientError;
 use macro_user_id::{email::Email, user_id::MacroUserIdStr};
@@ -16,10 +19,10 @@ use model::authentication::webhooks::FusionAuthUserWebhook;
 use teams::domain::team_repo::TeamService;
 
 /// FusionAuth create user webhook
-#[tracing::instrument(skip(ctx, req, _internal_access), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
+#[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_access: ValidInternalKey,
+    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Json(req): extract::Json<FusionAuthUserWebhook>,
 ) -> Result<Response, Response> {
     tracing::info!("create_user_webhook");
