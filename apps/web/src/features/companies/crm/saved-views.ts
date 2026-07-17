@@ -227,7 +227,9 @@ export function useTeamCrmViews() {
       createdAt: new Date().toISOString(),
     };
     update.mutate(
-      { teamViews: [...(config().teamViews ?? []), view] },
+      // Updater form: derives from the latest cache when the (serialized)
+      // mutation actually runs, so rapid saves don't drop each other.
+      { teamViews: (current) => [...current, view] },
       {
         onError: (error: Error) => {
           console.error('Failed to save team view', error);
@@ -238,12 +240,11 @@ export function useTeamCrmViews() {
   };
 
   const remove = (id: string) => {
-    const current = config();
     update.mutate(
       {
-        teamViews: (current.teamViews ?? []).filter((view) => view.id !== id),
+        teamViews: (current) => current.filter((view) => view.id !== id),
         // A deleted view can't stay the team default.
-        ...(current.defaultTeamViewId === id
+        ...(config().defaultTeamViewId === id
           ? { defaultTeamViewId: null }
           : {}),
       },

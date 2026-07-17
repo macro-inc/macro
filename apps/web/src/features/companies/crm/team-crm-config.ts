@@ -3,20 +3,21 @@
  * views, display defaults).
  *
  * Stored on `team_crm_settings` and served by GET/PUT `/crm/settings`
- * (document storage service). Any team member can read; writes are
- * admin/owner-gated server-side. Updates are field-wise partial: omitted
- * fields keep their current values, `null` clears the nullable ones, and
- * `teamViews` is replaced whole (last write wins).
+ * (document storage service). Any team member can read and can update
+ * the views fields (`teamViews`, `defaultTeamViewId`); the governance
+ * fields (permission thresholds, `closedStageIds`) are admin/owner-gated
+ * server-side. Updates are field-wise partial: omitted fields keep their
+ * current values, `null` clears the nullable ones, and `teamViews` is
+ * replaced whole (last write wins).
  */
 
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import {
-  storageServiceClient,
-  type UpdateCrmTeamSettingsRequest,
-} from '@service-storage/client';
+import { storageServiceClient } from '@service-storage/client';
+import type { CrmTeamSettingsResponse } from '@service-storage/generated/schemas/crmTeamSettingsResponse';
+import type { UpdateCrmTeamSettingsRequest } from '@service-storage/generated/schemas/updateCrmTeamSettingsRequest';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -63,12 +64,18 @@ export type TeamCrmConfig = {
 /**
  * Field-wise partial update of the shared config. Omitted fields keep
  * their current values; `null` clears `closedStageIds` /
- * `defaultTeamViewId`; `teamViews` replaces the whole list.
+ * `defaultTeamViewId`; `teamViews` replaces the whole list. Pass a
+ * function for `teamViews` to derive the new list from the latest
+ * cached value at execution time — mutations are serialized (shared
+ * scope), so queued updates see the previous write instead of a stale
+ * snapshot.
  */
 export type TeamCrmConfigPatch = {
   permissions?: Partial<CrmPermissions>;
   closedStageIds?: string[] | null;
-  teamViews?: TeamCrmSavedView[];
+  teamViews?:
+    | TeamCrmSavedView[]
+    | ((current: TeamCrmSavedView[]) => TeamCrmSavedView[]);
   defaultTeamViewId?: string | null;
 };
 
@@ -106,7 +113,20 @@ export function useTeamCrmConfig() {
   });
 
   const updateMutation = useMutation(() => ({
+    // Serialize updates: with whole-list team_views writes, concurrent
+    // PUTs would clobber each other. Scoped mutations run one at a time,
+    // and updater-style teamViews patches read the cache only once the
+    // previous mutation's response has been written back.
+    scope: { id: 'crm-team-settings' },
     mutationFn: async (patch: TeamCrmConfigPatch) => {
+      const teamViews =
+        typeof patch.teamViews === 'function'
+          ? patch.teamViews(
+              (queryClient.getQueryData<CrmTeamSettingsResponse>(
+                CRM_TEAM_SETTINGS_QUERY_KEY
+              )?.team_views as TeamCrmSavedView[]) ?? []
+            )
+          : patch.teamViews;
       const body: UpdateCrmTeamSettingsRequest = {
         edit_stages_role: patch.permissions?.editStages,
         move_closed_deals_role: patch.permissions?.moveClosedDeals,
@@ -114,9 +134,7 @@ export function useTeamCrmConfig() {
         ...(patch.closedStageIds !== undefined
           ? { closed_stage_ids: patch.closedStageIds }
           : {}),
-        ...(patch.teamViews !== undefined
-          ? { team_views: patch.teamViews }
-          : {}),
+        ...(teamViews !== undefined ? { team_views: teamViews } : {}),
         ...(patch.defaultTeamViewId !== undefined
           ? { default_team_view_id: patch.defaultTeamViewId }
           : {}),

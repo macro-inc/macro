@@ -4625,6 +4625,112 @@
         }
       }
     },
+    "/crm/settings": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::team_settings"],
+        "summary": "Read the caller's team CRM configuration. Any team member may read;\nteams without a settings row get the defaults.",
+        "operationId": "get_crm_team_settings",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmTeamSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::axum_router::team_settings"],
+        "summary": "Partially update the caller's team CRM configuration. Any team\nmember may update the views fields (`team_views`,\n`default_team_view_id`); the governance fields (permission\nthresholds, `closed_stage_ids`) require an admin/owner team role\n(403 otherwise). Omitted fields keep their current values;\n`team_views` is replaced whole. Returns the resulting settings.",
+        "operationId": "put_crm_team_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCrmTeamSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmTeamSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -13159,6 +13265,50 @@
           }
         }
       },
+      "CrmPermissionRole": {
+        "type": "string",
+        "description": "Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
+        "enum": ["admin", "owner"]
+      },
+      "CrmTeamSettingsResponse": {
+        "type": "object",
+        "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH /team/crm` on the auth service).",
+        "required": [
+          "edit_stages_role",
+          "move_closed_deals_role",
+          "delete_records_role",
+          "team_views"
+        ],
+        "properties": {
+          "closed_stage_ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Stage option ids counting as closed deals; absent = the client\nfalls back to its label heuristic."
+          },
+          "default_team_view_id": {
+            "type": ["string", "null"],
+            "description": "Team view applied by default when a member opens the CRM view."
+          },
+          "delete_records_role": {
+            "$ref": "#/components/schemas/CrmPermissionRole",
+            "description": "Who can delete (hide) CRM records."
+          },
+          "edit_stages_role": {
+            "$ref": "#/components/schemas/CrmPermissionRole",
+            "description": "Who can change the deal stage set in CRM settings."
+          },
+          "move_closed_deals_role": {
+            "$ref": "#/components/schemas/CrmPermissionRole",
+            "description": "Who can move deals out of a closed stage."
+          },
+          "team_views": {
+            "description": "Team saved views — an opaque JSON array owned by the frontend."
+          }
+        }
+      },
       "CrmThread": {
         "type": "object",
         "description": "A CRM comment thread: the parent record one or more comments hang off.",
@@ -19834,6 +19984,60 @@
           "operation": {
             "$ref": "#/components/schemas/UpdateOperation",
             "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
+          }
+        }
+      },
+      "UpdateCrmTeamSettingsRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /crm/settings`. Every field is optional:\nomitted fields keep their current values.",
+        "properties": {
+          "closed_stage_ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "New closed-stage set. Omit to keep the current value; pass\n`null` to clear it (falling back to the client label heuristic)."
+          },
+          "default_team_view_id": {
+            "type": ["string", "null"],
+            "description": "New default team view id. Omit to keep the current value; pass\n`null` to clear it."
+          },
+          "delete_records_role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmPermissionRole",
+                "description": "New `delete_records_role`, if provided."
+              }
+            ]
+          },
+          "edit_stages_role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmPermissionRole",
+                "description": "New `edit_stages_role`, if provided."
+              }
+            ]
+          },
+          "move_closed_deals_role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmPermissionRole",
+                "description": "New `move_closed_deals_role`, if provided."
+              }
+            ]
+          },
+          "team_views": {
+            "description": "Replacement team-views array (whole-blob, last write wins)."
           }
         }
       },

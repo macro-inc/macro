@@ -93,6 +93,7 @@ import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityT
 import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
@@ -140,6 +141,7 @@ import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
+import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
@@ -154,29 +156,6 @@ import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
 } from './util/getDocxFile';
-
-// Hand-written until `just gen-api cloud-storage` regenerates the DSS
-// schemas; swap for the generated crmTeamSettings* types afterward.
-/** Minimum team role required for a CRM capability. */
-export type CrmPermissionRole = 'admin' | 'owner';
-/** Response of GET/PUT /crm/settings. */
-export type CrmTeamSettingsResponse = {
-  edit_stages_role: CrmPermissionRole;
-  move_closed_deals_role: CrmPermissionRole;
-  delete_records_role: CrmPermissionRole;
-  closed_stage_ids?: string[] | null;
-  team_views: unknown;
-  default_team_view_id?: string | null;
-};
-/** Body of PUT /crm/settings — omitted fields keep current values; null clears nullable fields. */
-export type UpdateCrmTeamSettingsRequest = {
-  edit_stages_role?: CrmPermissionRole;
-  move_closed_deals_role?: CrmPermissionRole;
-  delete_records_role?: CrmPermissionRole;
-  closed_stage_ids?: string[] | null;
-  team_views?: unknown;
-  default_team_view_id?: string | null;
-};
 
 function normalizeLocationResponseV3(response: LocationResponseV3) {
   return response;

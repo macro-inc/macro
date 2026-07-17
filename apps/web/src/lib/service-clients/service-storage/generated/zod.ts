@@ -3425,6 +3425,149 @@ export const setContactHiddenBody = zod
   .describe('Request body for `PUT \/contacts\/{contact_id}\/hidden`.');
 
 /**
+ * @summary Read the caller's team CRM configuration. Any team member may read;
+teams without a settings row get the defaults.
+ */
+export const getCrmTeamSettingsResponse = zod
+  .object({
+    closed_stage_ids: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Stage option ids counting as closed deals; absent = the client\nfalls back to its label heuristic.'
+      ),
+    default_team_view_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'Team view applied by default when a member opens the CRM view.'
+      ),
+    delete_records_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    edit_stages_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    move_closed_deals_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    team_views: zod
+      .unknown()
+      .describe(
+        'Team saved views — an opaque JSON array owned by the frontend.'
+      ),
+  })
+  .describe(
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+  );
+
+/**
+ * @summary Partially update the caller's team CRM configuration. Any team
+member may update the views fields (`team_views`,
+`default_team_view_id`); the governance fields (permission
+thresholds, `closed_stage_ids`) require an admin/owner team role
+(403 otherwise). Omitted fields keep their current values;
+`team_views` is replaced whole. Returns the resulting settings.
+ */
+export const putCrmTeamSettingsBody = zod
+  .object({
+    closed_stage_ids: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'New closed-stage set. Omit to keep the current value; pass\n`null` to clear it (falling back to the client label heuristic).'
+      ),
+    default_team_view_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'New default team view id. Omit to keep the current value; pass\n`null` to clear it.'
+      ),
+    delete_records_role: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['admin', 'owner'])
+          .describe(
+            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+          ),
+      ])
+      .optional(),
+    edit_stages_role: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['admin', 'owner'])
+          .describe(
+            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+          ),
+      ])
+      .optional(),
+    move_closed_deals_role: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['admin', 'owner'])
+          .describe(
+            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+          ),
+      ])
+      .optional(),
+    team_views: zod
+      .unknown()
+      .optional()
+      .describe('Replacement team-views array (whole-blob, last write wins).'),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/settings`. Every field is optional:\nomitted fields keep their current values.'
+  );
+
+export const putCrmTeamSettingsResponse = zod
+  .object({
+    closed_stage_ids: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Stage option ids counting as closed deals; absent = the client\nfalls back to its label heuristic.'
+      ),
+    default_team_view_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'Team view applied by default when a member opens the CRM view.'
+      ),
+    delete_records_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    edit_stages_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    move_closed_deals_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    team_views: zod
+      .unknown()
+      .describe(
+        'Team saved views — an opaque JSON array owned by the frontend.'
+      ),
+  })
+  .describe(
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+  );
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({
