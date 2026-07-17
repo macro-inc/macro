@@ -1,6 +1,6 @@
 use axum::{
-    Extension, Router,
-    http::{Method, Request, StatusCode},
+    Router,
+    http::{Method, Request, StatusCode, header},
 };
 use chrono::{Duration, Utc};
 use email::domain::{
@@ -10,12 +10,17 @@ use email::domain::{
 use entity_access::domain::models::{BotId, EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
     CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, PaginateOn, Query,
     SimpleSortMethod, SortOn, TypeEraseCursor,
 };
+use rootcause::Report;
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -38,6 +43,9 @@ use crate::{
 };
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
+const USER_ID: &str = "macro|test@example.com";
+const INTERNAL_USER_ID: &str = "macro|internal@example.com";
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Debug)]
 enum MockCursorKind {
@@ -49,6 +57,7 @@ enum MockCursorKind {
 
 #[derive(Debug)]
 struct MockSoupCall {
+    user_id: String,
     soup_type: SoupType,
     email_preview_view: PreviewView,
     link_ids: Vec<Uuid>,
@@ -60,12 +69,21 @@ struct MockSoupCall {
 #[derive(Clone)]
 struct MockSoup {
     called: Arc<std::sync::Mutex<Vec<MockSoupCall>>>,
+    succeeds: bool,
 }
 
 impl MockSoup {
     fn new() -> Self {
-        MockSoup {
+        Self {
             called: Arc::new(std::sync::Mutex::new(Vec::new())),
+            succeeds: false,
+        }
+    }
+
+    fn succeeding() -> Self {
+        Self {
+            succeeds: true,
+            ..Self::new()
         }
     }
 }
@@ -142,6 +160,7 @@ impl SoupService for MockSoup {
                 MockCursorKind::FrecencyCursor
             }
         };
+        let user_id = req.user.to_string();
         let soup_type = req.soup_type;
         let email_preview_view = req.email_preview_view.clone();
         let link_ids = req.link_ids.clone();
@@ -149,6 +168,7 @@ impl SoupService for MockSoup {
         let expanded_filter = serde_json::to_value(req.into_ast()?.cursor.filter()).unwrap();
         let mut guard = self.called.lock().unwrap();
         guard.push(MockSoupCall {
+            user_id,
             soup_type,
             email_preview_view,
             link_ids,
@@ -156,7 +176,15 @@ impl SoupService for MockSoup {
             filter,
             expanded_filter,
         });
-        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+        drop(guard);
+
+        if self.succeeds {
+            Ok(either::Either::Left(
+                models_pagination::Paginated::from_parts(Vec::new(), None),
+            ))
+        } else {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+        }
     }
 
     async fn get_user_soup_grouped(
@@ -467,39 +495,139 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
     }
 }
 
-fn mock_router() -> Router {
-    soup_router(SoupRouterState::new(
-        MockSoup::new(),
-        MockEmail,
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
+#[derive(Clone)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        match jwt {
+            "valid" => Ok(user_context(USER_ID)),
+            "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        }
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.map(|user_id| user_context(&user_id)))
+    }
+}
+
+fn user_context(user_id: &str) -> UserContext {
+    UserContext {
+        user_id: user_id.to_string(),
+        fusion_user_id: "fusion-user-id".to_string(),
         permissions: None,
         organization_id: None,
-    }))
+    }
+}
+
+type MockRouterState<T, U> = SoupRouterState<T, U, MockEntityAccess, FakeAuthorizationService>;
+
+fn mock_router_state<T, U>(service: T, email: U) -> MockRouterState<T, U>
+where
+    T: SoupService,
+    U: EmailService,
+{
+    SoupRouterState::new(
+        service,
+        email,
+        Arc::new(MockEntityAccess),
+        MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+    )
+}
+
+fn mock_router_with<T, U>(service: T, email: U) -> Router
+where
+    T: SoupService,
+    U: EmailService,
+{
+    soup_router(mock_router_state(service, email))
+}
+
+fn mock_router() -> Router {
+    mock_router_with(MockSoup::new(), MockEmail)
+}
+
+fn authenticated_request() -> axum::http::request::Builder {
+    Request::builder().header(header::AUTHORIZATION, "Bearer valid")
+}
+
+async fn send_json(
+    router: Router,
+    request: Request<axum::body::Body>,
+) -> (StatusCode, serde_json::Value) {
+    let response = router.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body = serde_json::from_slice(&bytes).unwrap();
+    (status, body)
 }
 
 #[tokio::test]
 async fn it_should_deserialize_empty_filter() {
-    let router = mock_router();
-
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri(format!("/soup?cursor={CURSOR}"))
         .body(axum::body::Body::empty())
         .unwrap();
 
-    let res = router.oneshot(request).await.unwrap();
-    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    let bytes = res.into_body().collect().await.unwrap().to_bytes();
-    let json: serde_json::Value = serde_json::from_slice(bytes.as_ref()).unwrap();
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(
-        json,
+        body,
         json!({
             "message": "An internal server error has occurred"
         })
     );
+}
+
+#[tokio::test]
+async fn no_credentials_returns_unauthorized_json() {
+    let request = Request::get(format!("/soup?cursor={CURSOR}"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+}
+
+#[tokio::test]
+async fn garbage_bearer_returns_unauthorized_json() {
+    let request = Request::get(format!("/soup?cursor={CURSOR}"))
+        .header(header::AUTHORIZATION, "Bearer garbage")
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+}
+
+#[tokio::test]
+async fn internal_credentials_use_the_acting_user() {
+    let soup = MockSoup::succeeding();
+    let calls = soup.called.clone();
+    let request = Request::get(format!("/soup?cursor={CURSOR}"))
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, INTERNAL_USER_ID)
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let (status, body) = send_json(mock_router_with(soup, MockEmail), request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "items": [], "next_cursor": null }));
+
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].user_id, INTERNAL_USER_ID);
 }
 
 struct MockEmailLinkResult {
@@ -648,21 +776,14 @@ impl EmailService for MockEmailLinkResult {
 async fn it_calls_soup_with_missing_link() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri(format!("/soup?cursor={CURSOR}"))
         .body(axum::body::Body::empty())
         .unwrap();
@@ -679,23 +800,16 @@ async fn it_calls_soup_with_missing_link() {
 async fn it_does_not_call_soup_with_db_err() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| {
                 Err(EmailErr::RepoErr(anyhow::anyhow!("failed to fetch")))
             }),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri(format!("/soup?cursor={CURSOR}"))
         .body(axum::body::Body::empty())
         .unwrap();
@@ -711,21 +825,14 @@ async fn it_does_not_call_soup_with_db_err() {
 async fn it_loads_email_all_view() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri(format!("/soup?cursor={CURSOR}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -752,21 +859,14 @@ async fn it_loads_email_all_view() {
 async fn it_loads_email_sent_view() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri(format!("/soup?cursor={CURSOR}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -793,21 +893,14 @@ async fn it_loads_email_sent_view() {
 async fn it_parses_file_assoc_filters() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -833,21 +926,14 @@ async fn it_parses_file_assoc_filters() {
 async fn cursor_with_assoc_works() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup.clone(),
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -899,7 +985,7 @@ async fn cursor_with_assoc_works() {
 
     let cursor = res.type_erase().next_cursor.unwrap();
 
-    let request2 = Request::builder()
+    let request2 = authenticated_request()
         .uri(format!("/soup?cursor={cursor}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -908,19 +994,12 @@ async fn cursor_with_assoc_works() {
         ))
         .unwrap();
 
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
     let _res = router.oneshot(request2).await.unwrap();
     let guard2 = inner_counter.lock().unwrap();
@@ -932,21 +1011,14 @@ async fn cursor_with_assoc_works() {
 async fn cursor_with_all_works() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup.clone(),
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -998,7 +1070,7 @@ async fn cursor_with_all_works() {
 
     let cursor = res.type_erase().next_cursor.unwrap();
 
-    let request2 = Request::builder()
+    let request2 = authenticated_request()
         .uri(format!("/soup?cursor={cursor}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1007,19 +1079,12 @@ async fn cursor_with_all_works() {
         ))
         .unwrap();
 
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
     let _res = router.oneshot(request2).await.unwrap();
     let guard2 = inner_counter.lock().unwrap();
@@ -1031,23 +1096,16 @@ async fn cursor_with_all_works() {
 async fn it_parses_channel_filters() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup.clone(),
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
     let uuid1 = Uuid::new_v4();
     let uuid2 = Uuid::new_v4();
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1076,21 +1134,14 @@ async fn it_parses_channel_filters() {
 async fn it_parses_notification_and_task_filters() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1189,21 +1240,14 @@ async fn it_can_filter_chat_owners() {
 
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1228,21 +1272,14 @@ async fn it_can_filter_chat_owners() {
 async fn ast_endpoint_expands_file_assoc_pdf() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1275,22 +1312,15 @@ async fn ast_endpoint_expands_file_assoc_pdf() {
 async fn ast_endpoint_passes_through_plain_document_literal() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
     let doc_id = Uuid::new_v4();
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1323,21 +1353,14 @@ async fn ast_endpoint_passes_through_plain_document_literal() {
 async fn ast_endpoint_passes_through_foreign_entity_filter() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1393,21 +1416,14 @@ fn ast_cursor_without_foreign_entity_filter_deserializes() {
 async fn ast_endpoint_expands_file_assoc_image_to_or_tree() {
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1531,21 +1547,14 @@ async fn it_can_expand_assoc_ast() {
 
     let soup = MockSoup::new();
     let inner_counter = soup.called.clone();
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup.clone(),
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
-    let request = Request::builder()
+    let request = authenticated_request()
         .uri("/soup/ast")
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1594,7 +1603,7 @@ async fn it_can_expand_assoc_ast() {
 
     let cursor = res.type_erase().next_cursor.unwrap();
 
-    let request2 = Request::builder()
+    let request2 = authenticated_request()
         .uri(format!("/soup/ast?cursor={cursor}"))
         .method(Method::POST)
         .header("content-type", "application/json")
@@ -1603,19 +1612,12 @@ async fn it_can_expand_assoc_ast() {
         ))
         .unwrap();
 
-    let router: Router = soup_router(SoupRouterState::new(
+    let router: Router = mock_router_with(
         soup,
         MockEmailLinkResult {
             get_link_result: Arc::new(|| Ok(None)),
         },
-        Arc::new(MockEntityAccess),
-    ))
-    .layer(Extension(UserContext {
-        user_id: "macro|test@example.com".to_string(),
-        fusion_user_id: "1234".to_string(),
-        permissions: None,
-        organization_id: None,
-    }));
+    );
 
     let _res = router.oneshot(request2).await.unwrap();
 

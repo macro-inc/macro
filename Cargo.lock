@@ -13325,6 +13325,7 @@ dependencies = [
  "http-body-util",
  "indexmap 2.14.0",
  "item_filters",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
