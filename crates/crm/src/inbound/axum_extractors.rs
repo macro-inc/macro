@@ -7,6 +7,9 @@
 //! knows nothing about CRM models, so the CRM-typed extractors and the
 //! receipts they produce are the trusted seam that lives here.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
