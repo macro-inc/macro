@@ -542,6 +542,7 @@ impl<Fs: FsRepo> Service<Fs> {
         if !self.current_bundle_is_usable(native_build).await {
             tracing::warn!("Clearing unusable persisted bundle root");
             let _ = self.clear_bundle_root(cache_dir).await;
+            self.cleanup_old_bundles(cache_dir, None).await;
         }
         if let Some(path) = self.bundle_root.path()
             && let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await
@@ -596,10 +597,7 @@ impl<Fs: FsRepo> Service<Fs> {
             matches!(status.as_ref(), Ok(UpdateStatus::ClearRequired(_)))
         };
         if should_clear {
-            self.clear_bundle_root(cache_dir).await?;
-            self.reload_pending = true;
-            self.reload_dispatched_at = None;
-            return Ok(ApplyUpdateResult::ReloadNeeded);
+            return Ok(self.revert_to_embedded(cache_dir).await?);
         }
 
         let completed = {
@@ -622,9 +620,6 @@ impl<Fs: FsRepo> Service<Fs> {
         self.clear_pending_bundle(cache_dir).await?;
         self.reload_pending = true;
         self.reload_dispatched_at = None;
-
-        // Remove old bundle directories now that we've switched to the new one
-        self.cleanup_old_bundles(cache_dir, &bundle_dir).await;
 
         Ok(ApplyUpdateResult::ReloadNeeded)
     }
@@ -667,11 +662,15 @@ impl<Fs: FsRepo> Service<Fs> {
     ///
     /// Returns `Ok(true)` if a pending reload was acknowledged and the updater
     /// worker was nudged to check again, or `Ok(false)` when no reload was pending.
-    pub fn acknowledge_update_reload(&mut self) -> Result<bool, Report> {
+    pub async fn acknowledge_update_reload(&mut self, cache_dir: &Path) -> Result<bool, Report> {
         if !self.reload_pending {
             return Ok(false);
         }
 
+        self.bundle_routes.finish_transition().await;
+        let active_root = self.bundle_root.path().map(Path::to_path_buf);
+        self.cleanup_old_bundles(cache_dir, active_root.as_deref())
+            .await;
         self.restart_run_after_reload_ack()?;
         self.reload_pending = false;
         self.reload_dispatched_at = None;
@@ -692,7 +691,7 @@ impl<Fs: FsRepo> Service<Fs> {
         new_root.persist(cache_dir, &self.fs_repo).await?;
         self.bundle_root = new_root;
         self.bundle_routes
-            .restore(BundleSource::ota(bundle_build, path))
+            .transition_to(BundleSource::ota(bundle_build, path))
             .await;
         Ok(())
     }
@@ -795,18 +794,32 @@ impl<Fs: FsRepo> Service<Fs> {
         true
     }
 
-    /// Clear the bundle root and remove all downloaded bundles.
-    pub async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
-        self.clear_pending_bundle(cache_dir).await?;
-        for name in self.fs_repo.list_dir_names(cache_dir).await {
-            if name.parse::<u64>().is_ok() {
-                let _ = self.fs_repo.remove_dir_all(&cache_dir.join(&name)).await;
-            }
+    /// Revert to the embedded bundle and request a webview reload.
+    pub async fn revert_to_embedded(
+        &mut self,
+        cache_dir: &Path,
+    ) -> Result<ApplyUpdateResult, std::io::Error> {
+        if self.reload_pending {
+            return Ok(if self.reload_dispatched_at.is_some() {
+                ApplyUpdateResult::ReloadAlreadyDispatched
+            } else {
+                ApplyUpdateResult::ReloadNeeded
+            });
         }
+        self.clear_bundle_root(cache_dir).await?;
+        self.reload_pending = true;
+        self.reload_dispatched_at = None;
+        Ok(ApplyUpdateResult::ReloadNeeded)
+    }
+
+    /// Clear the active bundle root while retaining OTA files needed by the
+    /// currently loaded document until reload acknowledgement.
+    async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
+        self.clear_pending_bundle(cache_dir).await?;
         self.bundle_root.clear();
         self.bundle_root.persist(cache_dir, &self.fs_repo).await?;
         self.bundle_routes
-            .restore(BundleSource::embedded(self.embedded_bundle_build))
+            .transition_to(BundleSource::embedded(self.embedded_bundle_build))
             .await;
         Ok(())
     }
@@ -818,13 +831,13 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Remove all numeric bundle subdirectories under `dir` except `keep`.
-    async fn cleanup_old_bundles(&self, dir: &Path, keep: &Path) {
+    async fn cleanup_old_bundles(&self, dir: &Path, keep: Option<&Path>) {
         for name in self.fs_repo.list_dir_names(dir).await {
             if name.parse::<u64>().is_err() {
                 continue;
             }
             let path = dir.join(&name);
-            if path == keep {
+            if keep.is_some_and(|keep| path == keep) {
                 continue;
             }
             if let Err(e) = self.fs_repo.remove_dir_all(&path).await {
@@ -1905,7 +1918,11 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &active_dir);
         let (mut service, _start_rx) =
             service_with_status_and_fs(clear_required_status(), fs.clone());
-        service.bundle_root = BundleRoot::from_path(active_dir);
+        service.bundle_root = BundleRoot::from_path(active_dir.clone());
+        service
+            .bundle_routes
+            .restore(BundleSource::ota(20, active_dir))
+            .await;
 
         let applied = service.apply_update(&cache_dir).await.unwrap();
 
@@ -1913,6 +1930,10 @@ mod tests {
         assert!(service.reload_pending);
         assert!(service.bundle_root_path().is_none());
         assert!(!fs.file_exists(cache_dir.join("bundle_root")));
+        assert!(fs.dir_exists(cache_dir.join("1")));
+        assert!(fs.dir_exists(cache_dir.join("2")));
+
+        assert!(service.acknowledge_update_reload(&cache_dir).await.unwrap());
         assert!(!fs.dir_exists(cache_dir.join("1")));
         assert!(!fs.dir_exists(cache_dir.join("2")));
         assert!(fs.dir_exists(cache_dir.join("logs")));
@@ -1938,7 +1959,12 @@ mod tests {
         ));
         assert!(start_rx.try_recv().is_err());
 
-        assert!(service.acknowledge_update_reload().unwrap());
+        assert!(
+            service
+                .acknowledge_update_reload(Path::new("/tmp"))
+                .await
+                .unwrap()
+        );
         assert!(!service.reload_pending);
         assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(
@@ -2018,15 +2044,20 @@ mod tests {
         );
     }
 
-    #[test]
-    fn acknowledge_update_reload_returns_false_without_pending_reload() {
+    #[tokio::test]
+    async fn acknowledge_update_reload_returns_false_without_pending_reload() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
 
-        assert!(!service.acknowledge_update_reload().unwrap());
+        assert!(
+            !service
+                .acknowledge_update_reload(Path::new("/tmp"))
+                .await
+                .unwrap()
+        );
     }
 
-    #[test]
-    fn acknowledge_update_reload_treats_full_command_queue_as_acknowledged() {
+    #[tokio::test]
+    async fn acknowledge_update_reload_treats_full_command_queue_as_acknowledged() {
         let (mut service, _start_rx) = service_with_status(UpdateStatus::Idle);
         service.reload_pending = true;
         service
@@ -2035,7 +2066,12 @@ mod tests {
             .try_send(WorkerCommand::Continue)
             .unwrap();
 
-        assert!(service.acknowledge_update_reload().unwrap());
+        assert!(
+            service
+                .acknowledge_update_reload(Path::new("/tmp"))
+                .await
+                .unwrap()
+        );
         assert!(!service.reload_pending);
         assert!(service.reload_dispatched_at.is_none());
         assert!(matches!(

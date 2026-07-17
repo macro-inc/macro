@@ -1,10 +1,25 @@
 use rootcause::Report;
 
-use crate::domain::models::{
-    AppInfo, BundleAction, DownloadBundleError, DownloadBundleRequest, NativeAppInfo, UnzipError,
-    UnzipRequest, UpdateError, UpdateStatus,
+use crate::domain::{
+    asset_service::{BundleAssetPath, BundleAssetReadError},
+    models::{
+        AppInfo, BundleAction, DownloadBundleError, DownloadBundleRequest, NativeAppInfo,
+        UnzipError, UnzipRequest, UpdateError, UpdateStatus,
+    },
 };
 use std::path::{Path, PathBuf};
+
+/// Port for reading binary assets from an OTA bundle directory.
+pub trait BundleAssetRepo: Clone + Send + Sync + 'static {
+    /// Read a validated relative asset path from the supplied bundle root.
+    ///
+    /// Returns `Ok(None)` when the asset does not exist.
+    fn read_asset(
+        &self,
+        root: &Path,
+        path: &BundleAssetPath,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, BundleAssetReadError>> + Send;
+}
 
 /// Port for communicating with the update server.
 pub trait UpdateRepo: Send + Sync + 'static {

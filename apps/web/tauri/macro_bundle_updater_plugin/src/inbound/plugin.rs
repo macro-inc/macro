@@ -285,13 +285,19 @@ pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Resu
 
 /// Acknowledge that the webview mounted after an applied bundle update reload.
 #[tauri::command]
-pub async fn ack_bundle_update_reload(
+pub async fn ack_bundle_update_reload<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
+    app_handle: tauri::AppHandle<R>,
 ) -> Result<bool, String> {
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?;
     service
         .lock()
         .await
-        .acknowledge_update_reload()
+        .acknowledge_update_reload(&cache_dir)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -344,15 +350,24 @@ pub async fn clear_bundle<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
-    service
-        .lock()
-        .await
-        .clear_bundle_root(&cache_dir)
-        .await
-        .map_err(|e| e.to_string())?;
+    let apply_result = {
+        let mut service = service.lock().await;
+        let result = service
+            .revert_to_embedded(&cache_dir)
+            .await
+            .map_err(|e| e.to_string())?;
+        if result == ApplyUpdateResult::ReloadNeeded {
+            service.mark_update_reload_dispatched();
+        }
+        result
+    };
 
-    if let Some(webview) = app_handle.webview_windows().values().next() {
-        let _ = webview.eval("window.location.reload();");
+    if apply_result == ApplyUpdateResult::ReloadNeeded
+        && let Some(webview) = app_handle.webview_windows().values().next()
+        && let Err(error) = webview.eval("window.location.reload();")
+    {
+        tracing::warn!(error=?error, "[bundle-update] failed to reload after clearing bundle");
+        service.lock().await.unmark_update_reload_dispatched();
     }
     Ok(())
 }
@@ -436,10 +451,19 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                 return Ok(());
             };
             if acknowledge_setup_apply {
-                if let Err(e) = service.acknowledge_update_reload() {
-                    tracing::warn!(
-                        "[bundle-update] failed to acknowledge plugin-initialized bundle apply: {e}"
-                    );
+                match app.path().app_cache_dir() {
+                    Ok(cache_dir) => {
+                        if let Err(e) = tauri::async_runtime::block_on(
+                            service.acknowledge_update_reload(&cache_dir),
+                        ) {
+                            tracing::warn!(
+                                "[bundle-update] failed to acknowledge plugin-initialized bundle apply: {e}"
+                            );
+                        }
+                    }
+                    Err(e) => tracing::warn!(
+                        "[bundle-update] failed to read cache dir for setup acknowledgement: {e}"
+                    ),
                 }
             } else if let Err(e) = service.start() {
                 tracing::warn!(
