@@ -5,7 +5,7 @@ use crate::domain::{
         NativeUpdateRequiredStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
         UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
     },
-    ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
+    ports::{AutoUpdateService, FsRepo, SystemQuery, TaskSpawner, UpdateRepo},
 };
 use rootcause::{Report, prelude::ResultExt, report};
 use std::{
@@ -69,11 +69,12 @@ const ENTRYPOINT_NAME: &str = "index.html";
 const PENDING_BUNDLE_ROOT_FILE: &str = "pending_bundle_root";
 
 impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
-    fn new_handle(
+    fn new_handle<S: TaskSpawner>(
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
         bundle_routes: BundleRoutes,
+        task_spawner: S,
     ) -> WorkerHandle {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(UpdateStatus::Idle));
         let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
@@ -86,7 +87,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             status_tx: status_tx.clone(),
             start_rx,
         }
-        .run_background();
+        .run_background(task_spawner);
 
         WorkerHandle {
             status_rx,
@@ -95,19 +96,20 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
         }
     }
 
-    fn run_background(mut self) {
-        tokio::spawn(async move {
+    fn run_background(self, task_spawner: impl TaskSpawner) {
+        task_spawner.spawn(async move {
+            let mut worker = self;
             // Run the checker loop once on startup, then again each time we
             // receive a restart signal from the main thread.
-            while let Some(command) = self.start_rx.recv().await {
+            while let Some(command) = worker.start_rx.recv().await {
                 if matches!(command, WorkerCommand::Restart) {
                     // Reset status to Idle for the new run.
-                    if self.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
+                    if worker.status_tx.send(Ok(UpdateStatus::Idle)).is_err() {
                         break;
                     }
                 }
 
-                self.run_check_loop().await;
+                worker.run_check_loop().await;
             }
         });
     }
@@ -507,10 +509,11 @@ async fn glue_channels<F>(
 
 impl<Fs: FsRepo> Service<Fs> {
     /// Create a new service, spawning the background update worker.
-    pub fn new<U: UpdateRepo, Q: SystemQuery>(
+    pub fn new<U: UpdateRepo, Q: SystemQuery, S: TaskSpawner>(
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
+        task_spawner: S,
         embedded_bundle_build: u64,
         native_build: u64,
         bundle_routes: BundleRoutes,
@@ -520,6 +523,7 @@ impl<Fs: FsRepo> Service<Fs> {
             fs_repo.clone(),
             system_query,
             bundle_routes.clone(),
+            task_spawner,
         );
         Service {
             handle,
@@ -1161,6 +1165,15 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy)]
+    struct TestTaskSpawner;
+
+    impl TaskSpawner for TestTaskSpawner {
+        fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) {
+            drop(tokio::spawn(task));
+        }
+    }
+
     #[derive(Clone)]
     struct FakeSystemQuery {
         network_type: Arc<StdMutex<Option<String>>>,
@@ -1294,6 +1307,7 @@ mod tests {
             update_repo,
             FakeFs::default(),
             system_query.clone(),
+            TestTaskSpawner,
             0,
             0,
             BundleRoutes::new(0),

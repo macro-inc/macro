@@ -16,6 +16,7 @@ use crate::{
     outbound::{
         api_client::BundleClient,
         fs::FileSystem,
+        runtime::TauriTaskSpawner,
         system_info::{SystemInfo, native_build},
     },
 };
@@ -392,6 +393,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
             client,
             fs,
             system_info,
+            TauriTaskSpawner,
             self.embedded_bundle_build,
             native_build,
             self.bundle_routes.clone(),
