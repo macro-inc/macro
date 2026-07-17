@@ -306,8 +306,12 @@ pub(crate) type DssBotsState =
     BotsRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the channel bot webhook router state.
-pub(crate) type DssChannelBotWebhookState =
-    ChannelBotWebhookRouterState<DssBotService, Arc<DssChannelService>, EntityAccessService>;
+pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
+    DssBotService,
+    Arc<DssChannelService>,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =

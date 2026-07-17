@@ -14,7 +14,6 @@ inbound = [
   "entity_access/ports",
   "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:serde_json",
   "dep:utoipa",
   "ports",
@@ -34,7 +33,6 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
