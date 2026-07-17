@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -43,9 +44,9 @@ pub struct SetContactHiddenRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(contact_id = %contact_id, hidden = req.hidden))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactHiddenRequest>,
 ) -> Result<StatusCode, CrmError> {
