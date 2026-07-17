@@ -137,7 +137,6 @@ where
 /// invalid, and identity-less internal credentials are rejected. A qualifying
 /// team role produces a receipt; no membership or an insufficient role produces
 /// `None`.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct OptionalMacroUserTeamExtractorV2<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt, if the authorized user has a qualifying team membership.

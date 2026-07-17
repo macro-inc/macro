@@ -15,7 +15,7 @@ use axum::{
 };
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use models_properties::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
@@ -111,9 +111,13 @@ impl IntoResponse for GetEntityPropertiesErr {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type(), include_metadata = query.include_metadata), err)]
-pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>(
+pub async fn get_entity_properties<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Query(query): Query<EntityQueryParams>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     // Anonymous access is allowed for publicly shared entities; the extractor
     // minted a view receipt either way.
     access: ViewReceiptExtractor,
@@ -236,12 +240,16 @@ fn validate_bulk_request_size(
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, request, user), fields(entity_count = request.entities.len()), err)]
-pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+pub async fn get_bulk_entity_properties<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: MacroAuthorizationExtractor<Auth>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
     // The public endpoint requires explicit property IDs. An empty property_ids
@@ -352,9 +360,13 @@ impl IntoResponse for SetEntityPropertyErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, entity_type = ?access.0.entity_type(), has_value = request.value.is_some()), err)]
-pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
+pub async fn set_entity_property<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((_entity_type, _entity_id, property_uuid)): Path<(PropertyTargetEntityType, String, Uuid)>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
     Json(request): Json<SetEntityPropertyRequest>,
 ) -> Result<StatusCode, SetEntityPropertyErr> {
@@ -418,14 +430,18 @@ impl IntoResponse for EntityPropertyOptionErr {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
-pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn add_entity_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
         PropertyTargetEntityType,
         String,
         Uuid,
         Uuid,
     )>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("adding entity property option");
@@ -460,14 +476,18 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
-pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccessService>(
+pub async fn remove_entity_property_option<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
         PropertyTargetEntityType,
         String,
         Uuid,
         Uuid,
     )>,
-    State(state): State<PropertiesRouterState<S, A>>,
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("removing entity property option");
@@ -520,13 +540,17 @@ impl IntoResponse for DeleteEntityPropertyErr {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user), fields(entity_property_id = %entity_property_uuid), err)]
-pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService>(
+pub async fn delete_entity_property<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     Path(entity_property_uuid): Path<Uuid>,
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
+    }: MacroAuthorizationExtractor<Auth>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 

@@ -5,6 +5,8 @@
 //! passes the minted receipt into the domain service, whose entity-scoped
 //! methods only accept receipts.
 
+use std::borrow::Cow;
+
 use axum::{
     RequestPartsExt,
     extract::{FromRequestParts, Path},
@@ -17,8 +19,11 @@ use entity_access::domain::models::{
     EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
+    OptionalMacroAuthorizationExtractor,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::user::axum_extractor::{MacroUserExtractor, OptionalMacroUserExtractor};
 use models_properties::api::PropertyTargetEntityType;
 
 use super::{PropertiesRouterState, properties_err_status};
@@ -36,9 +41,14 @@ struct EntityPathParams {
 /// Rejection for the receipt extractors.
 #[derive(Debug, thiserror::Error)]
 pub enum ReceiptRejection {
-    /// The route requires an authenticated user.
-    #[error("Authentication required")]
-    Unauthorized,
+    /// Request authorization failed.
+    #[error("{message}")]
+    Authorization {
+        /// HTTP status returned by the authorization extractor.
+        status: StatusCode,
+        /// Error message returned by the authorization extractor.
+        message: Cow<'static, str>,
+    },
     /// The path is missing or has invalid entity parameters.
     #[error("{0}")]
     BadRequest(&'static str),
@@ -47,10 +57,19 @@ pub enum ReceiptRejection {
     Properties(#[from] PropertiesErr),
 }
 
+impl From<MacroAuthorizationRejection> for ReceiptRejection {
+    fn from((status, rejection): MacroAuthorizationRejection) -> Self {
+        Self::Authorization {
+            status,
+            message: rejection.0.message,
+        }
+    }
+}
+
 impl IntoResponse for ReceiptRejection {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            ReceiptRejection::Unauthorized => StatusCode::UNAUTHORIZED,
+            ReceiptRejection::Authorization { status, .. } => *status,
             ReceiptRejection::BadRequest(_) => StatusCode::BAD_REQUEST,
             ReceiptRejection::Properties(e) => properties_err_status(e),
         };
@@ -146,27 +165,28 @@ async fn entity_path_params(parts: &mut Parts) -> Result<EntityPathParams, Recei
 /// Allows anonymous callers, for publicly shared entities.
 pub struct ViewReceiptExtractor(pub ViewReceipt);
 
-impl<S, A> FromRequestParts<PropertiesRouterState<S, A>> for ViewReceiptExtractor
+impl<S, A, Auth> FromRequestParts<PropertiesRouterState<S, A, Auth>> for ViewReceiptExtractor
 where
     S: PropertiesService,
     A: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     type Rejection = ReceiptRejection;
 
     #[tracing::instrument(err, skip(parts, state))]
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &PropertiesRouterState<S, A>,
+        state: &PropertiesRouterState<S, A, Auth>,
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let OptionalMacroUserExtractor {
+        let OptionalMacroAuthorizationExtractor {
             macro_user_id: user,
             ..
         } = parts
-            .extract()
+            .extract_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
             .await
-            .map_err(|_| ReceiptRejection::Unauthorized)?;
+            .map_err(ReceiptRejection::from)?;
 
         let receipt = mint_view_receipt(
             state.entity_access_service.as_ref(),
@@ -184,27 +204,28 @@ where
 /// Requires an authenticated user.
 pub struct EditReceiptExtractor(pub EditReceipt);
 
-impl<S, A> FromRequestParts<PropertiesRouterState<S, A>> for EditReceiptExtractor
+impl<S, A, Auth> FromRequestParts<PropertiesRouterState<S, A, Auth>> for EditReceiptExtractor
 where
     S: PropertiesService,
     A: EntityAccessService,
+    Auth: MacroAuthorizationService,
 {
     type Rejection = ReceiptRejection;
 
     #[tracing::instrument(err, skip(parts, state))]
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &PropertiesRouterState<S, A>,
+        state: &PropertiesRouterState<S, A, Auth>,
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let MacroUserExtractor {
+        let MacroAuthorizationExtractor {
             macro_user_id: user,
             ..
         } = parts
-            .extract()
+            .extract_with_state::<MacroAuthorizationExtractor<Auth>, _>(state)
             .await
-            .map_err(|_| ReceiptRejection::Unauthorized)?;
+            .map_err(ReceiptRejection::from)?;
 
         let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
             state.entity_access_service.as_ref(),

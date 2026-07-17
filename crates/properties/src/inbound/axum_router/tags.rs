@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::axum_extractor::MacroUserExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -103,13 +103,17 @@ impl IntoResponse for TagsError {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), err)]
-pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+pub async fn list_tags<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    }: MacroAuthorizationExtractor<Auth>,
+    team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
     let sets = state
         .properties_service
@@ -133,13 +137,17 @@ pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user, team), fields(scope = ?request.scope), err)]
-pub async fn ensure_tag_set<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
+pub async fn ensure_tag_set<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
         macro_user_id: user,
         ..
-    }: MacroUserExtractor,
-    team: PropertyTeamExtractor<A>,
+    }: MacroAuthorizationExtractor<Auth>,
+    team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
     let set = state
