@@ -126,8 +126,11 @@ pub(crate) type DssEmailService = EmailServiceImpl<
 >;
 
 /// CRM router state.
-pub(crate) type DssCrmState =
-    crm::inbound::axum_router::CrmRouterState<DssCrmService, EntityAccessService>;
+pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
+    DssCrmService,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 pub(crate) type DssSoupService = SoupImpl<
     PgSoupRepo,
