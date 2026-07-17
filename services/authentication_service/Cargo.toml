@@ -84,9 +84,7 @@ macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
   "tracking",
-  "user_permissions",
 ] }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
@@ -99,8 +97,6 @@ mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
-models_team = { path = "../../crates/models_team" }
 native_app_service = { path = "../../crates/native_app_service" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification" }
