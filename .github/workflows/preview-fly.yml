@@ -20,6 +20,7 @@ jobs:
       APP_NAME: macro-pr-${{ github.event.pull_request.number }}
       MACRO_STACK_SNAPSHOT_DIR: /home/runner/.cache/macro-preview-snapshots
       CARGO_INCREMENTAL: '0'
+    timeout-minutes: 60
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -419,9 +420,14 @@ jobs:
       if: failure()
       run: |
         flyctl machine list --app "$APP_NAME" || true
-        flyctl logs --app "$APP_NAME" --no-tail || true
+        # `flyctl logs --no-tail` can hang forever on its NATS fetch
+        # (observed: a healthy deploy stuck 1h53m in the timings dump) —
+        # never call it without a timeout.
+        timeout 60 flyctl logs --app "$APP_NAME" --no-tail || true
     - name: Dump boot timings
-      run: flyctl logs --app "$APP_NAME" --no-tail | grep -E '\[preview\]|✓' || true
+      run: |
+        timeout 120 flyctl ssh console --app "$APP_NAME" --quiet \
+          --command 'cat /var/lib/docker/.macro-preview/boot-timings.log' || true
     - name: Comment preview URL
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
       with:

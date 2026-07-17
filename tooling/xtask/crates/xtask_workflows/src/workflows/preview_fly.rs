@@ -67,6 +67,11 @@ fn deploy() -> Job {
         // measured cold on both layers (different --target = disjoint sccache
         // keys, and their volumes never carry a cargo target dir).
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::PREVIEW_CACHE_TAG))
+        // Backstop against hangs: worst honest case is ~15 min cold builds +
+        // ~6 min cold mirror push + the 30 min flyctl wait cap. Anything past
+        // an hour is a stuck step, not a slow deploy (a hung log fetch once
+        // burned 2h26m of runner before someone cancelled it by hand).
+        .timeout_minutes(60u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
@@ -166,18 +171,26 @@ fn dump_fly_diagnostics() -> Step<Run> {
     Step::new("Dump Fly diagnostics")
         .run(indoc::indoc! {r#"
             flyctl machine list --app "$APP_NAME" || true
-            flyctl logs --app "$APP_NAME" --no-tail || true
+            # `flyctl logs --no-tail` can hang forever on its NATS fetch
+            # (observed: a healthy deploy stuck 1h53m in the timings dump) —
+            # never call it without a timeout.
+            timeout 60 flyctl logs --app "$APP_NAME" --no-tail || true
         "#})
         .if_condition(Expression::new("failure()"))
 }
 
-/// The entrypoint logs how long each boot phase took (image pulls, stack up),
-/// but Fly's log retention is short and nobody looks at a healthy machine —
-/// surface the `[preview]` lines in CI so every deploy records its boot
-/// breakdown next to the deploy timings.
+/// The entrypoint tees every boot-phase timing (image pulls, per-stage stack
+/// up, auth startup) into a volume-backed file precisely so CI can read it
+/// deterministically after a healthy deploy. `flyctl logs --no-tail` used to
+/// serve this and both hung (unbounded NATS fetch) and silently lost the
+/// early boot lines to Fly's short log retention. On a hot update the machine
+/// never reboots, so the file describes the last real boot — the hot path's
+/// own output already streams into the deploy step via `ssh console`.
 fn dump_boot_timings() -> Step<Run> {
-    Step::new("Dump boot timings")
-        .run(r#"flyctl logs --app "$APP_NAME" --no-tail | grep -E '\[preview\]|✓' || true"#)
+    Step::new("Dump boot timings").run(indoc::indoc! {r#"
+        timeout 120 flyctl ssh console --app "$APP_NAME" --quiet \
+          --command 'cat /var/lib/docker/.macro-preview/boot-timings.log' || true
+    "#})
 }
 
 /// A cold `stack up --infra-only` on the runner runs the real init (migrate,
