@@ -58,11 +58,8 @@ pub enum ReceiptRejection {
 }
 
 impl From<MacroAuthorizationRejection> for ReceiptRejection {
-    fn from((status, rejection): MacroAuthorizationRejection) -> Self {
-        Self::Authorization {
-            status,
-            message: rejection.0.message,
-        }
+    fn from(MacroAuthorizationRejection { status, message }: MacroAuthorizationRejection) -> Self {
+        Self::Authorization { status, message }
     }
 }
 

@@ -7,6 +7,8 @@
 // Re-exported for use by the `filter_expr_input!` macro expansion.
 pub use filter_ast;
 
+/// GraphQL authorization helpers.
+mod authorization;
 /// Shared GraphQL entity-type mappings.
 mod entity_type;
 /// Axum request-parts extraction helpers for GraphQL resolvers.
@@ -18,6 +20,7 @@ mod property_filter;
 /// Request-scoped context used by GraphQL resolvers.
 mod request_context;
 
+pub use authorization::require_authorized_user;
 pub use entity_type::GraphqlSoupEntityType;
 pub use extract::extract_part;
 pub use filter_input::{IntoFilterExpr, optional_tree, parse_id, parse_macro_user_id, parse_uuid};

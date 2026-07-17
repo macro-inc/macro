@@ -4,6 +4,7 @@ import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
+import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
@@ -237,6 +238,16 @@ export function runCreateAction(
       });
       return;
     case 'chat':
+      // On mobile the chat input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The chat mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(CHAT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
       createBlock({
         blockName: 'chat',
         createFn: async () => {

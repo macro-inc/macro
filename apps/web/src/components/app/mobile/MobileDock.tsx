@@ -28,7 +28,6 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import HomeIcon from '@phosphor/house.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { useLocation } from '@solidjs/router';
@@ -46,7 +45,7 @@ import { pressPulse } from './pressPulse';
 // Keeps the directive import from being tree-shaken / lint-flagged.
 false && pressPulse;
 
-type DockId = ListView | 'home';
+type DockId = ListView;
 
 type MobileDockButtonProps = {
   icon: MobileTouchIconComponent;
@@ -60,7 +59,7 @@ type MobileDockButtonProps = {
   onTouchEnd?: (e: TouchEvent) => void;
   iconClass?: string;
   class?: string;
-  /** Plain svg icons (Home, Caret) don't accept `triggerAnimation`. */
+  /** Plain svg icons (e.g. Caret) don't accept `triggerAnimation`. */
   animateIcon?: boolean;
 };
 
@@ -111,6 +110,7 @@ const MORE_VIEWS: {
   label: string;
   icon: MobileTouchIconComponent;
 }[] = [
+  { id: 'inbox', label: 'Inbox', icon: AnimatedInboxIcon },
   { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
   { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
   { id: 'documents', label: 'Documents', icon: AnimatedFileMdIcon },
@@ -231,19 +231,18 @@ export function MobileDock(props: MobileDockProps) {
       )}
     >
       <MobileDockButton
-        icon={HomeIcon}
-        ariaLabel="Home"
-        animateIcon={false}
-        class="size-10 rounded-full shrink-0"
-        active={isActive('home')}
-        onClick={() => navigate('home')}
-      />
-      <MobileDockButton
         icon={AnimatedInboxIcon}
         ariaLabel="Inbox"
         class="size-10 rounded-full shrink-0"
         active={isActive('inbox')}
         onClick={() => navigate('inbox')}
+      />
+      <MobileDockButton
+        icon={AnimatedEmailIcon}
+        ariaLabel="Email"
+        class="size-10 rounded-full shrink-0"
+        active={isActive('mail')}
+        onClick={() => navigate('mail')}
       />
       <MobileDockButton
         icon={AnimatedSearchIcon}

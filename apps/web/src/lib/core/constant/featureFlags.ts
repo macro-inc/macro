@@ -123,12 +123,27 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. Dev/local only for now; override
-// with VITE_ENABLE_EMAIL_SIGNATURES.
-export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
-  'ENABLE_EMAIL_SIGNATURES',
-  DEV_MODE_ENV
-);
+// previews, and the per-message include toggle. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
+export const ENABLE_EMAIL_SIGNATURES_FLAG = 'enable-email-signatures';
+// Honor an explicit VITE_ENABLE_EMAIL_SIGNATURES=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+export const ENABLE_EMAIL_SIGNATURES_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_EMAIL_SIGNATURES') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, { enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE })`.
+ */
+export function ENABLE_EMAIL_SIGNATURES(): boolean {
+  if (ENABLE_EMAIL_SIGNATURES_OVERRIDE !== undefined) {
+    return ENABLE_EMAIL_SIGNATURES_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_SIGNATURES_FLAG) ?? false
+  );
+}
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in

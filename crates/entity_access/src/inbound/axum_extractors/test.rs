@@ -1,13 +1,11 @@
 use std::borrow::Cow;
 
 use axum::{
-    Json,
     body::to_bytes,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use macro_authorization::MacroAuthorizationRejection;
-use model_error_response::ErrorResponse;
 
 use super::ExtractorError;
 
@@ -24,12 +22,10 @@ async fn response_parts(response: Response) -> (StatusCode, String) {
 
 #[tokio::test]
 async fn authorization_rejection_preserves_status_and_owned_message() {
-    let rejection: MacroAuthorizationRejection = (
-        StatusCode::FORBIDDEN,
-        Json(ErrorResponse {
-            message: Cow::Owned("access forbidden".to_string()),
-        }),
-    );
+    let rejection = MacroAuthorizationRejection {
+        status: StatusCode::FORBIDDEN,
+        message: Cow::Owned("access forbidden".to_string()),
+    };
 
     let response = ExtractorError::from(rejection).into_response();
     let (status, body) = response_parts(response).await;
@@ -40,12 +36,10 @@ async fn authorization_rejection_preserves_status_and_owned_message() {
 
 #[tokio::test]
 async fn authorization_rejection_preserves_jwt_expired_response() {
-    let rejection: MacroAuthorizationRejection = (
-        StatusCode::UNAUTHORIZED,
-        Json(ErrorResponse {
-            message: Cow::Borrowed("jwt expired"),
-        }),
-    );
+    let rejection = MacroAuthorizationRejection {
+        status: StatusCode::UNAUTHORIZED,
+        message: Cow::Borrowed("jwt expired"),
+    };
 
     let response = ExtractorError::from(rejection).into_response();
     let (status, body) = response_parts(response).await;

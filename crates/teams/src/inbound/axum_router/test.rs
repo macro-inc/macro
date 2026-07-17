@@ -4,7 +4,7 @@ use std::{
 };
 
 use axum::{
-    Json, Router,
+    Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
     response::IntoResponse,
@@ -18,14 +18,14 @@ use entity_access::domain::{
 };
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationError, MacroAuthorizationRejection, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
 use macro_user_id::{
     email::Email,
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use model_error_response::ErrorResponse;
 use model_user::UserContext;
 use roles_and_permissions::domain::model::PermissionId;
 use rootcause::Report;
@@ -646,12 +646,10 @@ async fn teams_router_uses_entity_access_team_receipts() {
 
 #[tokio::test]
 async fn premium_user_authorization_rejection_preserves_response() {
-    let rejection = PremiumUserRejection::Authorization((
-        StatusCode::FORBIDDEN,
-        Json(ErrorResponse {
-            message: "authorization denied".into(),
-        }),
-    ));
+    let rejection = PremiumUserRejection::Authorization(MacroAuthorizationRejection {
+        status: StatusCode::FORBIDDEN,
+        message: "authorization denied".into(),
+    });
     let (status, body, _) = response_parts(rejection).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
