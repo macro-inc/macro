@@ -128,4 +128,14 @@ pub struct ApiContext {
     pub mcp_state: DcsMcpRouterState,
 }
 
+impl FromRef<ApiContext>
+    for chat::inbound::http::extractors::UserPermissionsState<DcsUserPermissionsService>
+{
+    fn from_ref(state: &ApiContext) -> Self {
+        chat::inbound::http::extractors::UserPermissionsState(
+            state.user_permissions_service.clone(),
+        )
+    }
+}
+
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

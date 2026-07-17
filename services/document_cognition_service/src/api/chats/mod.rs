@@ -49,6 +49,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         chat_service,
         access_service,
         state.authorization_state.clone(),
+        state.user_permissions_service.clone(),
     );
 
     let ensure_chat_exists = axum::middleware::from_fn_with_state(

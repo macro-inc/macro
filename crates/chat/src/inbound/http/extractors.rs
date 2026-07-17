@@ -17,6 +17,19 @@ use macro_authorization::{
 use roles_and_permissions::domain::model::PermissionId;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 
+/// Axum sub-state carrying the roles-and-permissions service used by
+/// [`ChatModelAccess`].
+///
+/// A newtype (rather than a bare `Arc<P>` bound) so router states can expose
+/// it via `FromRef` without colliding with other `Arc`-typed sub-states.
+pub struct UserPermissionsState<P>(pub Arc<P>);
+
+impl<P> Clone for UserPermissionsState<P> {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
+
 /// Axum extractor resolving the requesting user's model entitlement from their
 /// permissions.
 ///
@@ -83,7 +96,7 @@ impl<S, Auth, P> FromRequestParts<S> for ChatModelAccess<Auth, P>
 where
     MacroAuthorizationState<Auth>: FromRef<S>,
     Auth: MacroAuthorizationService,
-    Arc<P>: FromRef<S>,
+    UserPermissionsState<P>: FromRef<S>,
     P: UserRolesAndPermissionsService,
     S: Send + Sync + 'static,
 {
@@ -94,7 +107,7 @@ where
             .await
             .map_err(ChatModelAccessRejection::Unauthorized)?;
 
-        let permissions_service = <Arc<P>>::from_ref(state);
+        let UserPermissionsState(permissions_service) = UserPermissionsState::<P>::from_ref(state);
         let permissions = permissions_service
             .get_user_permissions(&user.macro_user_id)
             .await
