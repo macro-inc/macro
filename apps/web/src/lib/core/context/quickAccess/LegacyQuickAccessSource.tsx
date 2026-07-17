@@ -18,9 +18,7 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
-import type { Component } from 'solid-js';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
-import type { QuickAccessSourceProps } from './context';
+import { createEffect, createSignal } from 'solid-js';
 import type {
   Bucket,
   BucketCombination,
@@ -224,7 +222,7 @@ function mergeMultipleSortedIndices(arrays: IndexEntry[][]): IndexEntry[] {
   return arrays.reduce((acc, arr) => mergeSortedIndices(acc, arr));
 }
 
-function createLegacyQuickAccessValue(): QuickAccessContextValue {
+export function createLegacyQuickAccessValue(): QuickAccessContextValue {
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -732,12 +730,3 @@ function createLegacyQuickAccessValue(): QuickAccessContextValue {
     getById,
   };
 }
-
-export const LegacyQuickAccessSource: Component<QuickAccessSourceProps> = (
-  props
-) => {
-  const value = createLegacyQuickAccessValue();
-  const unregisterSource = props.registerSource(value);
-  onCleanup(unregisterSource);
-  return null;
-};

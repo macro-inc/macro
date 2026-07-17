@@ -30,14 +30,7 @@ import {
 import { createLazyMemo } from '@solid-primitives/memo';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQueryClient } from '@tanstack/solid-query';
-import {
-  type Accessor,
-  type Component,
-  createMemo,
-  createSignal,
-  onCleanup,
-} from 'solid-js';
-import type { QuickAccessSourceProps } from './context';
+import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   graphqlEntityToQuickAccessItem,
   userToQuickAccessItem,
@@ -124,7 +117,7 @@ function mapGraphqlQuickAccessEntities(
   });
 }
 
-function createGraphqlQuickAccessValue(): QuickAccessContextValue {
+export function createGraphqlQuickAccessValue(): QuickAccessContextValue {
   const contacts = useContacts();
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
@@ -323,12 +316,3 @@ function createGraphqlQuickAccessValue(): QuickAccessContextValue {
     getById,
   };
 }
-
-export const GraphqlQuickAccessSource: Component<QuickAccessSourceProps> = (
-  props
-) => {
-  const value = createGraphqlQuickAccessValue();
-  const unregisterSource = props.registerSource(value);
-  onCleanup(unregisterSource);
-  return null;
-};
