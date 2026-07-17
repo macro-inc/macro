@@ -67,6 +67,7 @@ function PopoverSplitModal(props: {
     canGoBack: () => false,
     canGoForward: () => false,
     goBack: () => {},
+    goBackToHistoryEntry: () => {},
     goForward: () => {},
     reset: () => {},
     activate: () => {},

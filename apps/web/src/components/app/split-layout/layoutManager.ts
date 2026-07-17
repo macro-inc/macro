@@ -423,6 +423,11 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   isLast: () => boolean;
   activate: () => void;
   goBack: () => void;
+  /**
+   * Jump directly back to a prior history entry, as indexed by `history()`.
+   * No-ops unless `0 <= index < history().length - 1` (i.e. a true back jump).
+   */
+  goBackToHistoryEntry: (index: number) => void;
   close: () => void;
   reset: () => void;
   /** Returns the content item one step back in this split's history, without mutating. */
@@ -763,6 +768,65 @@ export function createSplitLayout(
     });
   }
 
+  /**
+   * Whether `reattach` would refuse to land this split on `content` because
+   * the same content is already open in another split. History navigation
+   * preflights this so a refused landing can't strand the history index away
+   * from the mounted content.
+   */
+  function reattachWouldRefuse(split: SplitState, content: SplitContent) {
+    const otherSplits = state.splits.filter((s) => s.id !== split.id);
+    return isDuplicateSplit(otherSplits, content);
+  }
+
+  /**
+   * Nearest history index in `direction` whose entry can actually mount, or
+   * null when every entry on that side is held by another split.
+   */
+  function nearestLandableIndex(
+    split: SplitState,
+    direction: -1 | 1
+  ): number | null {
+    const items = split.history.items;
+    for (
+      let index = split.history.index + direction;
+      index >= 0 && index < items.length;
+      index += direction
+    ) {
+      if (!reattachWouldRefuse(split, items[index])) return index;
+    }
+    return null;
+  }
+
+  /**
+   * Land the split on history entry `targetIndex` as a single navigation:
+   * intermediate entries are stepped through without mounting, so only the
+   * landing entry reattaches. Callers must preflight the target with
+   * `reattachWouldRefuse`.
+   */
+  function landOnHistoryIndex(
+    split: SplitState,
+    targetIndex: number,
+    cause: NavigationCause
+  ) {
+    batch(() => {
+      captureCurrentEntryState(split);
+
+      let landed: SplitContent | null = null;
+      while (split.history.index !== targetIndex) {
+        const stepped =
+          split.history.index > targetIndex
+            ? split.history.back()
+            : split.history.forward();
+        if (!stepped) break;
+        landed = stepped;
+      }
+      if (!landed) return;
+
+      reattach(split, landed, undefined, cause);
+    });
+  }
+
   function back(id: SplitId) {
     const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
@@ -770,14 +834,30 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
 
-    batch(() => {
-      captureCurrentEntryState(split);
+    // Entries open in another split can't mount here — step past them to the
+    // nearest previous entry that can. They stay in history and become
+    // reachable again once the other split lets go of the content.
+    const targetIndex = nearestLandableIndex(split, -1);
+    if (targetIndex === null) return;
 
-      const prev = split.history.back();
-      if (!prev) return;
+    landOnHistoryIndex(split, targetIndex, 'history-back');
+  }
 
-      reattach(split, prev, undefined, 'history-back');
-    });
+  /**
+   * Jump the split's history back to `targetIndex` in one navigation.
+   */
+  function backTo(id: SplitId, targetIndex: number) {
+    const i = splitIndexById(id);
+    if (i < 0) return console.error(`Split with id ${id} not found`);
+
+    const split = state.splits[i];
+    if (targetIndex < 0 || targetIndex >= split.history.index) return;
+
+    // Unlike back(), an explicit jump target is never skipped over: when it
+    // can't mount, the jump is refused outright.
+    if (reattachWouldRefuse(split, split.history.items[targetIndex])) return;
+
+    landOnHistoryIndex(split, targetIndex, 'history-back');
   }
 
   function forward(id: SplitId) {
@@ -787,14 +867,11 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
 
-    batch(() => {
-      captureCurrentEntryState(split);
+    // Mirror back(): skip forward past entries held by another split.
+    const targetIndex = nearestLandableIndex(split, 1);
+    if (targetIndex === null) return;
 
-      const next = split.history.forward();
-      if (!next) return;
-
-      reattach(split, next, undefined, 'history-forward');
-    });
+    landOnHistoryIndex(split, targetIndex, 'history-forward');
   }
 
   function removeFromHistory(
@@ -952,6 +1029,7 @@ export function createSplitLayout(
       canGoForward: () =>
         (findSplitById(currentSplit.id) ?? currentSplit).history.canGoForward(),
       goBack: () => back(currentSplit.id),
+      goBackToHistoryEntry: (index: number) => backTo(currentSplit.id, index),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
       replace: ({ next, mergeHistory = false, referredFrom }) =>

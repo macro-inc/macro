@@ -40,6 +40,13 @@ export type MobileSwipeLayout = {
    * otherwise completes immediately. Called by the split header back button.
    */
   swipeBack: () => void;
+  /**
+   * Jump back to an arbitrary prior entry of the foreground split's history
+   * (as indexed by its `history()`). Re-prepares the background slot with the
+   * target so the standard swipe-back promotion (animation included) lands on
+   * it. Called by the mobile history drawer.
+   */
+  swipeBackToEntry: (index: number) => void;
 };
 
 export function createMobileSwipeLayout(
@@ -209,6 +216,52 @@ export function createMobileSwipeLayout(
     }
   }
 
+  function swipeBackToEntry(index: number) {
+    const currentFgId = fgSplitId();
+    const fgHandle = currentFgId
+      ? splitManager.getSplit(currentFgId)
+      : undefined;
+    if (!fgHandle) return;
+
+    const items = fgHandle.history();
+    const currentIndex = items.length - 1;
+    if (index < 0 || index >= currentIndex) return;
+
+    // The BG slot already holds the immediately-previous entry.
+    if (index === currentIndex - 1) {
+      swipeBack();
+      return;
+    }
+
+    const isFgA = fgIsSlotA();
+    const currentBgId = bgSplitId();
+    const setBgSlotId = isFgA ? setSlotBSplitId : setSlotASplitId;
+
+    // Swap the jump target into the BG slot, then run the normal swipe-back
+    // so the existing promotion path (animation, FG teardown, next BG mount
+    // from the promoted split's history) applies unchanged.
+    // Batch to ensure reactive dependencies never see intermediate state.
+    batch(() => {
+      if (currentBgId) {
+        splitManager.removeSplit(currentBgId);
+      }
+
+      // allowDuplicate: the target entry may share content identity with the
+      // current FG (e.g. A → B → A); dedup would hand back the FG split.
+      const targetHandle = splitManager.createNewSplit({
+        content: items[index],
+        initialHistory: items.slice(0, index),
+        activate: false,
+        allowDuplicate: true,
+        referredFrom: null,
+      });
+
+      setBgSlotId(targetHandle.id);
+    });
+
+    swipeBack();
+  }
+
   return {
     slotASplitId,
     slotBSplitId,
@@ -219,5 +272,6 @@ export function createMobileSwipeLayout(
     setAnimatedTrigger,
     setForwardNavigationTrigger,
     swipeBack,
+    swipeBackToEntry,
   };
 }

@@ -10,6 +10,7 @@ import {
 } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { touchHandler } from '@core/directive/touchHandler';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -41,6 +42,7 @@ import { Portal } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import { useMobileHistoryDrawer } from '../mobile/MobileHistoryDrawer';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 
@@ -74,6 +76,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
+  const historyDrawer = useMobileHistoryDrawer();
   if (!context) return null;
   return (
     <Button
@@ -85,6 +88,16 @@ function SplitBackButton() {
         if (splitBackInterceptor()?.()) return;
         context.handle.goBack();
       }}
+      // Long-press opens the history stack drawer. The touch handler swallows
+      // the synthesized click after a long press, so goBack doesn't also run.
+      ref={(el: HTMLButtonElement) =>
+        touchHandler(el, () => ({
+          onLongPress: () => {
+            if (!isMobile()) return;
+            historyDrawer?.open(context.handle);
+          },
+        }))
+      }
     >
       <CaretLeft class="h-4" />
     </Button>

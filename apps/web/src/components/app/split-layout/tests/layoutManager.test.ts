@@ -459,4 +459,321 @@ describe('layoutManager', () => {
       });
     });
   });
+
+  describe('history jumps', () => {
+    it('jumps directly to a prior entry in one navigation', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+        split.replace({ next: { type: 'md', id: 'doc-3' } });
+
+        const contentChanges: unknown[] = [];
+        split.registerContentChangeListener((payload) => {
+          contentChanges.push(payload);
+        });
+
+        split.goBackToHistoryEntry(0);
+
+        expect(split.content()).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+        expect(split.history()).toHaveLength(1);
+        expect(split.canGoBack()).toBe(false);
+        expect(split.canGoForward()).toBe(true);
+        expect(split.lastNavigationCause()).toBe('history-back');
+        // Intermediate entries are skipped, so only one navigation lands.
+        expect(contentChanges).toHaveLength(1);
+
+        dispose();
+      });
+    });
+
+    it('ignores out-of-range and non-back history indices', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+
+        for (const index of [-1, 1, 5]) {
+          split.goBackToHistoryEntry(index);
+          expect(split.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+        }
+
+        dispose();
+      });
+    });
+
+    it('back() skips entries open in another split and lands on the nearest mountable one', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+
+        manager.createNewSplit({
+          content: { type: 'md', id: 'doc-1' },
+          referredFrom: null,
+        });
+
+        const contentChanges: unknown[] = [];
+        split.registerContentChangeListener((payload) => {
+          contentChanges.push(payload);
+        });
+
+        split.goBack();
+
+        // doc-1 is mounted in the other split, so back() steps past it.
+        expect(split.content()).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+        expect(split.history()).toHaveLength(1);
+        expect(split.canGoForward()).toBe(true);
+        expect(contentChanges).toHaveLength(1);
+
+        dispose();
+      });
+    });
+
+    it('back() no-ops without moving the index when every previous entry is blocked', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'doc-1' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+
+        manager.createNewSplit({
+          content: { type: 'md', id: 'doc-1' },
+          referredFrom: null,
+        });
+
+        split.goBack();
+
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-2' });
+        expect(split.history().map((c) => c.id)).toEqual(['doc-1', 'doc-2']);
+        expect(split.canGoBack()).toBe(true);
+        expect(split.canGoForward()).toBe(false);
+
+        dispose();
+      });
+    });
+
+    it('forward() skips entries open in another split and lands on the nearest mountable one', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+        split.goBack();
+        split.goBack();
+        expect(split.content()).toMatchObject({
+          type: 'component',
+          id: 'inbox',
+        });
+
+        manager.createNewSplit({
+          content: { type: 'md', id: 'doc-1' },
+          referredFrom: null,
+        });
+
+        split.goForward();
+
+        // doc-1 is mounted in the other split, so forward() steps past it.
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-2' });
+        expect(split.history().map((c) => c.id)).toEqual([
+          'inbox',
+          'doc-1',
+          'doc-2',
+        ]);
+        expect(split.canGoForward()).toBe(false);
+
+        dispose();
+      });
+    });
+
+    it('leaves history untouched when the target is open in another split', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.replace({ next: { type: 'md', id: 'doc-1' } });
+        split.replace({ next: { type: 'md', id: 'doc-2' } });
+
+        // Duplicate detection only inspects current contents, so a past
+        // history entry's content can be opened in a second split.
+        manager.createNewSplit({
+          content: { type: 'md', id: 'doc-1' },
+          referredFrom: null,
+        });
+
+        split.goBackToHistoryEntry(1);
+
+        // reattach would refuse the duplicate target, so the jump must not
+        // move the history index away from the mounted content.
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-2' });
+        expect(split.history().map((c) => c.id)).toEqual([
+          'inbox',
+          'doc-1',
+          'doc-2',
+        ]);
+        expect(split.canGoBack()).toBe(true);
+        expect(split.canGoForward()).toBe(false);
+
+        dispose();
+      });
+    });
+
+    describe('mobile swipeBackToEntry', () => {
+      function setupMobileHistory() {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        manager.activateSplit(manager.splits()[0].id);
+        const swipeLayout = createMobileSwipeLayout(manager);
+
+        // With no animation trigger registered, navigation completes
+        // synchronously through the interceptor.
+        for (const id of ['doc-1', 'doc-2', 'doc-3']) {
+          manager.openWithSplit({ type: 'md', id }, { referredFrom: null });
+        }
+
+        const fgId = swipeLayout.fgIsSlotA()
+          ? swipeLayout.slotASplitId()
+          : swipeLayout.slotBSplitId();
+        const fg = manager.getSplit(fgId!)!;
+
+        return { manager, swipeLayout, fg };
+      }
+
+      it('jumps multiple entries back and rebuilds the background slot', () => {
+        createRoot((dispose) => {
+          const { manager, swipeLayout, fg } = setupMobileHistory();
+
+          expect(fg.history().map((c) => c.id)).toEqual([
+            'inbox',
+            'doc-1',
+            'doc-2',
+            'doc-3',
+          ]);
+
+          swipeLayout.swipeBackToEntry(1);
+
+          const newFg = manager.activeSplit()!;
+          expect(newFg.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+          expect(newFg.history().map((c) => c.id)).toEqual(['inbox', 'doc-1']);
+          expect(swipeLayout.canGoBack()).toBe(true);
+          expect(manager.getVisibleSplitCount()).toBe(1);
+
+          // The rebuilt background holds the entry before the target.
+          swipeLayout.swipeBack();
+          expect(manager.activeSplit()!.content()).toMatchObject({
+            type: 'component',
+            id: 'inbox',
+          });
+          expect(swipeLayout.canGoBack()).toBe(false);
+
+          dispose();
+        });
+      });
+
+      it('jumps to the root entry and clears the back stack', () => {
+        createRoot((dispose) => {
+          const { manager, swipeLayout } = setupMobileHistory();
+
+          swipeLayout.swipeBackToEntry(0);
+
+          expect(manager.activeSplit()!.content()).toMatchObject({
+            type: 'component',
+            id: 'inbox',
+          });
+          expect(swipeLayout.canGoBack()).toBe(false);
+
+          dispose();
+        });
+      });
+
+      it('delegates single-step jumps to the standard swipe back', () => {
+        createRoot((dispose) => {
+          const { manager, swipeLayout } = setupMobileHistory();
+
+          swipeLayout.swipeBackToEntry(2);
+
+          const fg = manager.activeSplit()!;
+          expect(fg.content()).toMatchObject({ type: 'md', id: 'doc-2' });
+          expect(fg.history().map((c) => c.id)).toEqual([
+            'inbox',
+            'doc-1',
+            'doc-2',
+          ]);
+          expect(swipeLayout.canGoBack()).toBe(true);
+
+          dispose();
+        });
+      });
+
+      it('ignores out-of-range and non-back indices', () => {
+        createRoot((dispose) => {
+          const { manager, swipeLayout, fg } = setupMobileHistory();
+
+          for (const index of [-1, 3, 9]) {
+            swipeLayout.swipeBackToEntry(index);
+            expect(manager.activeSplitId()).toBe(fg.id);
+            expect(fg.content()).toMatchObject({ type: 'md', id: 'doc-3' });
+          }
+
+          dispose();
+        });
+      });
+
+      it('jumps back to an entry whose content matches the current split', () => {
+        createRoot((dispose) => {
+          const manager = createSplitLayout(createMockOrchestrator(), [
+            { type: 'md', id: 'doc-a' },
+          ]);
+          manager.activateSplit(manager.splits()[0].id);
+          const swipeLayout = createMobileSwipeLayout(manager);
+
+          for (const id of ['doc-b', 'doc-c', 'doc-a']) {
+            manager.openWithSplit({ type: 'md', id }, { referredFrom: null });
+          }
+
+          const fg = manager.activeSplit()!;
+          expect(fg.history().map((c) => c.id)).toEqual([
+            'doc-a',
+            'doc-b',
+            'doc-c',
+            'doc-a',
+          ]);
+
+          swipeLayout.swipeBackToEntry(0);
+
+          const newFg = manager.activeSplit()!;
+          expect(newFg.content()).toMatchObject({ type: 'md', id: 'doc-a' });
+          expect(newFg.history()).toHaveLength(1);
+          expect(swipeLayout.canGoBack()).toBe(false);
+
+          dispose();
+        });
+      });
+    });
+  });
 });

@@ -34,6 +34,8 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
         ...rawHandle,
         goBack: () => mobileSwipeLayout.swipeBack(),
         canGoBack: () => mobileSwipeLayout.canGoBack(),
+        goBackToHistoryEntry: (index) =>
+          mobileSwipeLayout.swipeBackToEntry(index),
       };
       return { split, handle };
     });

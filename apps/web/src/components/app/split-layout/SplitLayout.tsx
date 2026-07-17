@@ -39,6 +39,7 @@ import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,
 } from './mobile/createMobileSwipeLayout';
+import { MobileHistoryDrawerManager } from './mobile/MobileHistoryDrawer';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
 
 type SplitLayoutContainerProps = {
@@ -350,53 +351,55 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div
-        class={cn('size-full p-2 mobile:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
-        })}
-      >
-        <Show
-          when={isNativeMobilePlatform() && mobileSwipeLayout}
-          fallback={
-            // Desktop: side-by-side resizable splits.
-            <Resize.Zone
-              direction="horizontal"
-              gutter={8}
-              captureResizeCtx={splitManager.setResizeContext}
-            >
-              <For each={ids()}>
-                {(id, index) => (
-                  <Show when={splitManager.getSplit(id)}>
-                    {(handle) => (
-                      <Suspense>
-                        <Resize.Panel id={id} minSize={400} index={index()}>
-                          <SplitPanel
-                            split={splits()[index()]!}
-                            handle={handle()}
-                            active={activeSplitSelector(id)}
-                            setPanelRef={(panelRef) =>
-                              panelRefs.set(id, panelRef)
-                            }
-                            index={index()}
-                          />
-                        </Resize.Panel>
-                      </Suspense>
-                    )}
-                  </Show>
-                )}
-              </For>
-            </Resize.Zone>
-          }
+      <MobileHistoryDrawerManager>
+        <div
+          class={cn('size-full p-2 mobile:p-0', {
+            'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
+          })}
         >
-          {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
-          <MobileSplitContainer
-            splitManager={splitManager}
-            mobileSwipeLayout={mobileSwipeLayout!}
-            splits={splits}
-            panelRefs={panelRefs}
-          />
-        </Show>
-      </div>
+          <Show
+            when={isNativeMobilePlatform() && mobileSwipeLayout}
+            fallback={
+              // Desktop: side-by-side resizable splits.
+              <Resize.Zone
+                direction="horizontal"
+                gutter={8}
+                captureResizeCtx={splitManager.setResizeContext}
+              >
+                <For each={ids()}>
+                  {(id, index) => (
+                    <Show when={splitManager.getSplit(id)}>
+                      {(handle) => (
+                        <Suspense>
+                          <Resize.Panel id={id} minSize={400} index={index()}>
+                            <SplitPanel
+                              split={splits()[index()]!}
+                              handle={handle()}
+                              active={activeSplitSelector(id)}
+                              setPanelRef={(panelRef) =>
+                                panelRefs.set(id, panelRef)
+                              }
+                              index={index()}
+                            />
+                          </Resize.Panel>
+                        </Suspense>
+                      )}
+                    </Show>
+                  )}
+                </For>
+              </Resize.Zone>
+            }
+          >
+            {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
+            <MobileSplitContainer
+              splitManager={splitManager}
+              mobileSwipeLayout={mobileSwipeLayout!}
+              splits={splits}
+              panelRefs={panelRefs}
+            />
+          </Show>
+        </div>
+      </MobileHistoryDrawerManager>
       <PopoverSplitRenderer
         popovers={splitManager.popovers}
         onClosePopover={(id) => {
