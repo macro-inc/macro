@@ -1,4 +1,5 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::domain::bundle_routes::BundleRoutes;
 use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
 #[cfg(feature = "auto_apply_update")]
 use macro_bundle_updater_plugin::inbound::plugin::{
@@ -129,6 +130,8 @@ pub fn run() {
 
     registry.init();
 
+    let embedded_bundle_build = embedded_bundle_build();
+    let bundle_routes = BundleRoutes::new(embedded_bundle_build);
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -178,7 +181,8 @@ pub fn run() {
                     .bundle_update_base_url()
                     .parse()
                     .expect("valid url"),
-                embedded_bundle_build(),
+                embedded_bundle_build,
+                bundle_routes.clone(),
             )
             // Builds without this feature (just ios-dev, ios-build-no-update)
             // must never check for or apply OTA bundles on their own; manual

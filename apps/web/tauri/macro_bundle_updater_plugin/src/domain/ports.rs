@@ -1,8 +1,8 @@
 use rootcause::Report;
 
 use crate::domain::models::{
-    AppInfo, BundleAction, DownloadBundleError, DownloadBundleRequest, UnzipError, UnzipRequest,
-    UpdateError, UpdateStatus,
+    AppInfo, BundleAction, DownloadBundleError, DownloadBundleRequest, NativeAppInfo, UnzipError,
+    UnzipRequest, UpdateError, UpdateStatus,
 };
 use std::path::{Path, PathBuf};
 
@@ -66,10 +66,12 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
     fn remove_file(&self, path: &Path) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 }
 
-/// Port for querying system metadata (version, arch, cache dirs).
+/// Port for querying native system metadata and cache directories.
 pub trait SystemQuery: Send + Sync + 'static {
-    /// Return the current app version, architecture, and OS target.
-    fn get_system_info(&self) -> impl Future<Output = Result<AppInfo, rootcause::Report>> + Send;
+    /// Return the native build, architecture, and OS target.
+    fn get_native_app_info(
+        &self,
+    ) -> impl Future<Output = Result<NativeAppInfo, rootcause::Report>> + Send;
     /// Return the current network type, such as `wifi`, `ethernet`, or `cellular`.
     fn get_network_type(
         &self,

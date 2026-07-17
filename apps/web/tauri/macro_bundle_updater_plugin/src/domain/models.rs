@@ -123,6 +123,17 @@ impl BundleManifest {
 /// the bounded size of mpsc channels
 const MPSC_CHAN_SIZE: usize = 10;
 
+/// Native application metadata reported by the host platform.
+#[derive(Debug, Clone)]
+pub struct NativeAppInfo {
+    /// The native app build number.
+    pub native_build: u64,
+    /// CPU architecture.
+    pub arch: Arch,
+    /// Operating system target.
+    pub target: Target,
+}
+
 /// Application metadata sent to the update server.
 #[derive(Debug, Clone)]
 pub struct AppInfo {
@@ -468,6 +479,8 @@ pub struct UnzipStatus {
 /// The update has been fully downloaded and extracted.
 #[derive(Debug, Clone)]
 pub struct CompletedStatus {
+    /// Build number from the validated bundle manifest.
+    pub bundle_build: u64,
     /// Path to the extracted `index.html` entrypoint.
     pub entrypoint: PathBuf,
 }
