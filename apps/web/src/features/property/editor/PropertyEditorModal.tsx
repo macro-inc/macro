@@ -1030,7 +1030,7 @@ function EntityPropertyEditor(props: {
             <ListItem
               id={`entity-option-${index()}`}
               isSelected={selector(index())}
-              class='scroll-m-2'
+              class="scroll-m-2"
               onClick={() => {
                 const entityRef: EntityReference = {
                   entity_id: entity.id,
