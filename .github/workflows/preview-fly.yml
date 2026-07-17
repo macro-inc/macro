@@ -90,7 +90,7 @@ jobs:
         # Best effort by design — anything skipped here (images only the
         # bake produces, like macro-local-runtime:dev) is pushed there.
         flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
-          || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
+              || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
           || flyctl status --app "$APP_NAME" >/dev/null
         flyctl auth docker
         registry="registry.fly.io/$APP_NAME"
@@ -111,6 +111,40 @@ jobs:
             done
           fi
         done
+        # Kick the template-volume fork the moment the app exists: the
+        # ~2 min server-side hydration then overlaps the whole cargo lane
+        # and the deploy preamble instead of gating machine creation.
+        # Best effort — the deploy step retries/falls back if this didn't
+        # land (see its volume-state block, which stays authoritative).
+        if ! flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
+             | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+          tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
+            | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
+                     | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
+          if [ -n "$tpl_src" ]; then
+            curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
+              -H "Authorization: Bearer $FLY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
+              | jq -r '"early template fork: \(.id // "failed") (\(.state // "-"))"' \
+              || echo "early template fork failed; deploy step will fall back" >&2
+          fi
+        fi
+        # Mint the machine's app-scoped read-only registry pull token here
+        # too (macaroon attenuation, see the deploy step for the why) so
+        # the deploy preamble doesn't pay the GraphQL + attenuate
+        # round-trips serially.
+        app_id=$(curl -sf https://api.fly.io/graphql \
+          -H "Authorization: Bearer $FLY_API_TOKEN" \
+          -H "content-type: application/json" \
+          -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
+          | jq -re '.data.app.internalNumericId')
+        now=$(date +%s)
+        printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
+          "$app_id" $((now - 60)) $((now + 604800)) \
+          | flyctl tokens attenuate > "$RUNNER_TEMP/registry-pull-token.next"
+        chmod 600 "$RUNNER_TEMP/registry-pull-token.next"
+        mv "$RUNNER_TEMP/registry-pull-token.next" "$RUNNER_TEMP/registry-pull-token"
         LANE
 
         # A cold `stack up --infra-only` runs the real init (migrate,
@@ -147,7 +181,7 @@ jobs:
           rm -rf "$restored"
           mkdir -p "$restored"
           if nsc artifact download "$artifact" "$archive" \
-              && tar -xf "$archive" -C "$restored" \
+                  && tar -xf "$archive" -C "$restored" \
               && [ -f "$restored/$key/manifest.json" ]; then
             rm -rf "$root/$key"
             cp -a "$restored/$key" "$root/$key"
@@ -319,27 +353,27 @@ jobs:
         # warm /var/lib/docker layer store published by a previous
         # successful deploy (see the "Publish template volume" step).
         # Measured cold, an empty volume costs ~11 min of image pulls at
-        # boot; a fork costs a ~2.5 min server-side hydration that runs
-        # concurrently with the mirror push below (the gate before
-        # machine creation waits for it). Cross-app forks need the
-        # Machines API: flyctl resolves volume ids app-locally. The boot
-        # manifest check makes the volume a pure cache, so every failure
-        # path here just falls back to the old empty-volume behavior.
-        fork_pending=
-        if ! flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
-             | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+        # boot. The images lane normally kicked the fork minutes ago (its
+        # ~2 min server-side hydration overlaps the whole build phase);
+        # this block is the authoritative fallback for a missing or
+        # failed early fork. Cross-app forks need the Machines API:
+        # flyctl resolves volume ids app-locally. The boot manifest check
+        # makes the volume a pure cache, so every failure path here just
+        # falls back to the old empty-volume behavior.
+        vol_state=$(flyctl volumes list --app "$APP_NAME" --json 2>/dev/null \
+          | jq -r '[.[] | select(.name == "docker_data")][0].state // empty') || vol_state=
+        if [ -z "$vol_state" ]; then
           tpl_src=$(flyctl volumes list --app "$TEMPLATE_APP" --json 2>/dev/null \
             | jq -r '[.[] | select((.name | startswith("tpl")) and .state == "created" and .attached_machine_id == null)]
                      | sort_by(.created_at) | last | .id // empty' 2>/dev/null) || tpl_src=
           if [ -n "$tpl_src" ]; then
-            fork_state=$(curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
+            vol_state=$(curl -sf -X POST "https://api.machines.dev/v1/apps/$APP_NAME/volumes" \
               -H "Authorization: Bearer $FLY_API_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"name\":\"docker_data\",\"region\":\"ewr\",\"source_volume_id\":\"$tpl_src\"}" \
-              | jq -r '.state // empty') || fork_state=
-            if [ -n "$fork_state" ]; then
-              echo "seeding docker_data from template volume $tpl_src (state: $fork_state)"
-              fork_pending=1
+              | jq -r '.state // empty') || vol_state=
+            if [ -n "$vol_state" ]; then
+              echo "seeding docker_data from template volume $tpl_src (state: $vol_state)"
             else
               echo "template fork failed; falling back to an empty volume" >&2
             fi
@@ -354,15 +388,21 @@ jobs:
         # secrets, so scope matters). The org deploy token can't mint new
         # tokens (createLimitedAccessToken is not authorized), but macaroon
         # attenuation is pure client-side crypto: append an Apps caveat
-        # (numeric app id, mask "r") and a validity window to our own token.
-        app_id=$(curl -sf https://api.fly.io/graphql \
-          -H "Authorization: Bearer $FLY_API_TOKEN" \
-          -H "content-type: application/json" \
-          -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
-          | jq -re '.data.app.internalNumericId')
-        now=$(date +%s)
-        pull_token=$(printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
-          "$app_id" $((now - 60)) $((now + 604800)) | flyctl tokens attenuate)
+        # (numeric app id, mask "r") and a validity window to our own
+        # token. The images lane normally minted it already; fall back to
+        # minting inline when its file is absent.
+        if [ -s "$RUNNER_TEMP/registry-pull-token" ]; then
+          pull_token=$(cat "$RUNNER_TEMP/registry-pull-token")
+        else
+          app_id=$(curl -sf https://api.fly.io/graphql \
+            -H "Authorization: Bearer $FLY_API_TOKEN" \
+            -H "content-type: application/json" \
+            -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
+            | jq -re '.data.app.internalNumericId')
+          now=$(date +%s)
+          pull_token=$(printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
+            "$app_id" $((now - 60)) $((now + 604800)) | flyctl tokens attenuate)
+        fi
 
         snapshot_key=$(jq -r '.key' "$RUNNER_TEMP/preview-snapshot.json")
         runtime_key=$(jq -r '.runtime_key' preview-ctx/deployment.json)
@@ -425,10 +465,9 @@ jobs:
           --env-file "$envfile" \
           config --images | sort -u)
         echo "mirroring images:" $images
-        docker pull alpine:3
+        docker image inspect alpine:3 >/dev/null 2>&1 || docker pull alpine:3
         mkdir -p preview-ctx/preload
         : > preview-ctx/preload/manifest.txt
-        : > "$RUNNER_TEMP/push-refs.txt"
         for img in $images alpine:3; do
           # Images the bake didn't leave in the daemon (snapshot cache hit,
           # or app-layer-only images like proxy/mailpit) get pulled here.
@@ -440,10 +479,14 @@ jobs:
           ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
           docker tag "$img" "$ref"
           echo "$id $img $ref" >> preview-ctx/preload/manifest.txt
-          if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
-            echo "$ref" >> "$RUNNER_TEMP/push-refs.txt"
-          fi
         done
+        # The existence probes are pure network round-trips (and after the
+        # premirror lane, almost all of them hit) — run them in parallel
+        # instead of ~1s each serially.
+        awk '{print $3}' preview-ctx/preload/manifest.txt \
+          | xargs -P 8 -I {} sh -c \
+              'docker manifest inspect "{}" >/dev/null 2>&1 || echo "{}"' \
+          > "$RUNNER_TEMP/push-refs.txt"
         echo "pushing $(wc -l < "$RUNNER_TEMP/push-refs.txt") of $(wc -l < preview-ctx/preload/manifest.txt) images"
         # The Fly registry occasionally aborts large uploads ("s3aws:
         # append to zero-size path unsupported") — retry; layers that made
@@ -498,12 +541,16 @@ jobs:
         flyctl secrets set --app "$APP_NAME" --stage \
           "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
           "REGISTRY_PULL_TOKEN=$pull_token"
-        if [ -n "$fork_pending" ]; then
-          # The mirror push above bought most of the hydration time; the
-          # volume must reach "created" before a machine can mount it. A
+        if [ -z "$vol_state" ]; then
+          # No volume and no fork landed (no template, or both fork
+          # attempts failed): the old empty-volume path.
+          flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
+        elif [ "$vol_state" != created ]; then
+          # A fork is still hydrating (usually already finished: the
+          # images lane kicked it before the cargo lane even ended). The
+          # volume must reach "created" before a machine can mount it; a
           # fork that never lands is replaced by an empty volume rather
           # than failing the deploy.
-          vol_state=
           for _ in $(seq 1 60); do
             vol_state=$(flyctl volumes list --app "$APP_NAME" --json \
               | jq -r '[.[] | select(.name == "docker_data")][0].state // empty')
@@ -518,9 +565,6 @@ jobs:
             [ -z "$vol_id" ] || flyctl volumes destroy "$vol_id" --app "$APP_NAME" --yes || true
             flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
           fi
-        elif ! flyctl volumes list --app "$APP_NAME" --json \
-             | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
-          flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
         fi
         # Machines created before the volume existed can't take the mounts
         # config update. A destroyed/partial machine is recreated by deploy.
