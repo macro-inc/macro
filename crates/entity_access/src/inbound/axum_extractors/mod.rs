@@ -32,7 +32,8 @@ pub use project::{
     ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2,
 };
 pub use team::{
-    MacroUserTeamExtractor, OptionalMacroUserTeamExtractor, OptionalMacroUserTeamExtractorV2,
+    MacroUserTeamExtractor, MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractor,
+    OptionalMacroUserTeamExtractorV2,
 };
 pub use thread::ThreadAccessLevelExtractor;
 
