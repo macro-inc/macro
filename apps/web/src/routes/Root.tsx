@@ -20,10 +20,7 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
-import {
-  useEmailSoupBackfill,
-  useSoupBackfill,
-} from '@app/lib/queries/soup/backfill';
+import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallProvider } from '@channel/Call/CallContext';
@@ -484,8 +481,7 @@ function UserInfoSideEffects() {
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
 
-  useSoupBackfill(() => userInfo()?.id);
-  useEmailSoupBackfill(() => userInfo()?.id);
+  useSoupBackfills(() => userInfo()?.id);
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
