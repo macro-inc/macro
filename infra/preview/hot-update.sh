@@ -66,6 +66,15 @@ unsafe_images=
 while read -r expected_id tag registry_ref; do
   current_id=$(docker image inspect -f '{{.Id}}' "$tag" 2>/dev/null || true)
   [ "$current_id" = "$expected_id" ] && continue
+  # Mirrored images never match by .Id (the manifest carries the runner's
+  # source-registry digest; this store holds the mirror's) — same mismatch
+  # the entrypoint's pull loop handles. Honor the boot pull receipt before
+  # classifying an image as changed, or every hot update sees all 12 infra
+  # images as "non-hot-updatable drift" and needlessly rehydrates.
+  if [ -n "$current_id" ] \
+      && grep -qxF "$expected_id $tag" "$STATE_DIR/pulled.txt" 2>/dev/null; then
+    continue
+  fi
   case "$tag" in
     *-ai_editing_worker|*-lexical_service|*-sync_service|*-websocket_service)
       log "refreshing auxiliary image $tag"
