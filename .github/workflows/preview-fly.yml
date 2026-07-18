@@ -86,8 +86,19 @@ jobs:
         # its ~2 min server-side hydration then finishes inside the compose
         # build. (It previously sat after the premirror pushes, which put
         # it at the END of the build phase and re-gated the deploy.)
+        # Entirely best-effort: everything in the fly lane (app create,
+        # fork kick, token mint) has an authoritative fallback in the
+        # deploy step, so a transient Fly API failure must not fail the
+        # build. A child `bash -e` (not a `|| `-guarded function: errexit
+        # is suppressed inside those) keeps its internal fail-fast so a
+        # failed app_id fetch can't mint a garbage token.
         cat > "$lanes/fly.sh" <<'LANE'
         set -euo pipefail
+        bash -euo pipefail "$(dirname "$0")/fly-prep.sh" \
+          || echo "fly prep failed (non-fatal): the deploy step falls back" >&2
+        LANE
+
+        cat > "$lanes/fly-prep.sh" <<'LANE'
         flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
           || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
           || flyctl status --app "$APP_NAME" >/dev/null
@@ -127,11 +138,19 @@ jobs:
         set -euo pipefail
         docker compose --project-directory . -p macro -f docker/docker-compose.yml build \
           search sync_service websocket_service lexical_service ai_editing_worker
+        # The image BUILD above is fatal; the premirror below is a pure
+        # optimization with an authoritative fallback (the deploy step's
+        # mirror loop), so its failure only costs a slower push later.
+        bash -euo pipefail "$(dirname "$0")/premirror.sh" \
+          || echo "premirror failed (non-fatal): the deploy step mirrors authoritatively" >&2
+        LANE
+
         # Premirror: content-addressed refs, identical scheme to the deploy
         # step's mirror loop, so its manifest-existence check skips these.
         # Best effort by design — anything skipped here (images only the
         # bake produces, like macro-local-runtime:dev) is pushed there.
         # The fly lane created the app long ago; the guard is a fallback.
+        cat > "$lanes/premirror.sh" <<'LANE'
         flyctl status --app "$APP_NAME" >/dev/null 2>&1 \
           || flyctl apps create "$APP_NAME" --org "$FLY_ORG" \
           || flyctl status --app "$APP_NAME" >/dev/null
@@ -237,7 +256,10 @@ jobs:
 
         declare -a pids=() names=()
         for name in fly cargo web images bake; do
-          bash "$lanes/$name.sh" > "$lanes/$name.log" 2>&1 &
+          # setsid: each lane leads its own process group so fail-fast
+          # can kill the whole tree (cargo/docker/bun children), not just
+          # the wrapper shell.
+          setsid bash "$lanes/$name.sh" > "$lanes/$name.log" 2>&1 &
           pids+=($!)
           names+=("$name")
         done
@@ -251,7 +273,8 @@ jobs:
           fi
         done
         if [ -n "$fail" ]; then
-          kill "${pids[@]}" 2>/dev/null || true
+          # Negative pids: signal each lane's whole process group.
+          kill -- "${pids[@]/#/-}" 2>/dev/null || true
           wait || true
         fi
         for i in "${!names[@]}"; do
