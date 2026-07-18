@@ -16,6 +16,7 @@ import {
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
 import { isUnifiedInputMode } from '../unified-input-mode';
+import { createTargetReplyNavigationController } from './create-target-reply-navigation-controller';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
 import { Thread } from './Thread';
@@ -249,8 +250,7 @@ export function ChannelThread(props: ThreadProps) {
     )
   );
 
-  // this stops re-scrolling to the same target
-  let lastScrolledReplyId: string | undefined;
+  const targetReplyNavigation = createTargetReplyNavigationController();
   createEffect(
     on(
       [
@@ -260,33 +260,26 @@ export function ChannelThread(props: ThreadProps) {
         props.isExpanded,
       ],
       ([targetReplyId, handle, canScroll, isExpanded]) => {
-        if (!targetReplyId) {
-          handle?.cancelScroll();
-          lastScrolledReplyId = undefined;
-          return;
-        }
-        if (lastScrolledReplyId === targetReplyId) return;
-        if (!canScroll || !handle) return;
-
         // Untracked: channel-message reconciles must not re-fire scroll.
-        const replies = isExpanded
-          ? untrack(loadedReplies)
-          : untrack(displayReplies);
-        const index = replies.findIndex((r) => r.id === targetReplyId);
-        if (index === -1) return;
-
-        if (
-          !handle.scrollToIndex(index, () => {
-            if (props.targetReplyId !== targetReplyId) return;
-            lastScrolledReplyId = targetReplyId;
-            props.onTargetReplyScrolled?.(targetReplyId);
-          })
-        ) {
-          return;
-        }
+        const replies =
+          targetReplyId && canScroll && handle
+            ? isExpanded
+              ? untrack(loadedReplies)
+              : untrack(displayReplies)
+            : [];
+        targetReplyNavigation.update({
+          targetReplyId,
+          handle,
+          canScroll,
+          replies,
+          getCurrentTargetReplyId: () => props.targetReplyId,
+          onScrolled: props.onTargetReplyScrolled,
+        });
       }
     )
   );
+
+  onCleanup(targetReplyNavigation.dispose);
 
   return (
     <DebugSuspense name="ChannelThread.root">

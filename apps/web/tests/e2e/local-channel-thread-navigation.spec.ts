@@ -51,6 +51,7 @@ async function expectTargetedMessage(
 async function expectStableLanding(presentation: PresentationObserver) {
   const report = await presentation.waitForQuietAndRead();
   expect(report.firstPositioned, JSON.stringify(report)).toBeDefined();
+  expect(report.unpositionedBeforeLandingCount, JSON.stringify(report)).toBe(0);
   expect(report.last?.positioned, JSON.stringify(report)).toBe(true);
   expect(report.positionLossCount, JSON.stringify(report)).toBe(0);
   expect(
@@ -82,8 +83,18 @@ async function expectBottomLanding(
 }
 
 async function openChannelFromCommandMenu(page: Page, channelName: string) {
-  await page.keyboard.press('Meta+K');
   const dialog = page.getByRole('dialog');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.keyboard.press('Meta+K');
+    if (
+      await dialog
+        .waitFor({ state: 'visible', timeout: 1_000 })
+        .then(() => true)
+        .catch(() => false)
+    ) {
+      break;
+    }
+  }
   await expect(dialog).toBeVisible({ timeout: 10_000 });
   await dialog.getByPlaceholder('Search...').fill(channelName);
   const result = dialog.getByText(channelName, { exact: true }).last();
@@ -418,6 +429,7 @@ test('opens an unread channel notification on its specific cached reply', async 
     name: /general/,
   });
   await expect(unreadChannel).toBeVisible({ timeout: 30_000 });
+  await presentation.reset();
   await unreadChannel.click();
   await expectTargetedMessage(
     page,

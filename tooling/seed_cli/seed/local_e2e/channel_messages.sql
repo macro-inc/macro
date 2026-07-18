@@ -184,7 +184,16 @@ WITH unread_thread_replies AS (
             || lpad((reply_number + 40)::text, 12, '0')
         )::uuid AS id,
         CASE
-            WHEN reply_number = 4 THEN 'Unread cache warmer reply'
+            WHEN reply_number = 4 THEN (
+                SELECT 'Unread cache warmer reply' || E'\n\n' || string_agg(
+                    format(
+                        'Unread cache warmer paragraph %s. This reply keeps the notification target outside the viewport before navigation.',
+                        paragraph_number
+                    ),
+                    E'\n\n' ORDER BY paragraph_number
+                )
+                FROM generate_series(1, 80) AS paragraph(paragraph_number)
+            )
             WHEN reply_number = 5 THEN (
                 SELECT 'Unread oversized target reply' || E'\n\n' || string_agg(
                     format(

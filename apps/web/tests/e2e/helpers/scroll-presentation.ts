@@ -49,6 +49,7 @@ declare global {
     __e2eBottomPresentation?: BottomPresentationReport;
     __e2eResetBottomPresentation?: () => void;
     __e2eTargetPresentation?: TargetPresentationReport;
+    __e2eResetTargetPresentation?: () => void;
     __e2eStopTargetPresentation?: () => void;
   }
 }
@@ -67,11 +68,12 @@ export async function observeTargetPresentation(
 ) {
   await page.addInitScript(
     ({ scrollSelector, targetSelector, tolerancePx }) => {
-      const report: TargetPresentationReport = {
+      const createReport = (): TargetPresentationReport => ({
         unpositionedBeforeLandingCount: 0,
         largestShiftAfterPositioned: 0,
         positionLossCount: 0,
-      };
+      });
+      let report = createReport();
       window.__e2eTargetPresentation = report;
       let stopped = false;
       let previousSample: TargetPresentationSample | undefined;
@@ -99,7 +101,9 @@ export async function observeTargetPresentation(
           const targetStyle = getComputedStyle(target);
           const visible =
             targetStyle.display !== 'none' &&
-            targetStyle.visibility !== 'hidden';
+            targetStyle.visibility !== 'hidden' &&
+            targetRect.bottom > usableTop &&
+            targetRect.top < usableBottom;
           const positioned =
             visible &&
             (targetRect.height <= usableViewportHeight
@@ -128,11 +132,13 @@ export async function observeTargetPresentation(
           report.first ??= sample;
           report.last = sample;
 
-          if (!report.firstPositioned && sample.positioned) {
-            report.firstPositioned = sample;
-            report.lastChangeAt = sample.time;
-          } else if (!report.firstPositioned) {
-            report.unpositionedBeforeLandingCount += 1;
+          if (!report.firstPositioned) {
+            if (sample.positioned) {
+              report.firstPositioned = sample;
+              report.lastChangeAt = sample.time;
+            } else if (sample.visible) {
+              report.unpositionedBeforeLandingCount += 1;
+            }
           } else {
             if (
               !previousSample ||
@@ -163,12 +169,20 @@ export async function observeTargetPresentation(
       window.__e2eStopTargetPresentation = () => {
         stopped = true;
       };
+      window.__e2eResetTargetPresentation = () => {
+        report = createReport();
+        window.__e2eTargetPresentation = report;
+        previousSample = undefined;
+      };
       schedulePostPaintCheck();
     },
     { scrollSelector, targetSelector, tolerancePx }
   );
 
   return {
+    reset: async () => {
+      await page.evaluate(() => window.__e2eResetTargetPresentation?.());
+    },
     waitForFirstPositioned: async () => {
       await page.waitForFunction(
         () => window.__e2eTargetPresentation?.firstPositioned !== undefined,
