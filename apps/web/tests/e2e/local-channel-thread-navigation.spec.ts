@@ -374,6 +374,49 @@ test('loads and lands on a top-level target outside the initial message window',
   await expectStableLanding(presentation);
 });
 
+test('reopens at latest after a load-around channel mount is closed', async ({
+  page,
+}) => {
+  const channel = localE2ESeed.smoke.generalChannel;
+  const channelName = channel.channel_name ?? 'general';
+  const targetMessageId = localE2ESeed.smoke.generalDeepThread.parentMessageId;
+  const aroundRequests = countChannelMessageRequests(
+    page,
+    channel.channel_id,
+    targetMessageId
+  );
+  const latestRequests = countChannelMessageRequests(
+    page,
+    channel.channel_id,
+    null
+  );
+  const presentation = await observeBottomPresentation(
+    page,
+    channelScrollSelector(channel.channel_id),
+    BOTTOM_TOLERANCE_PX
+  );
+
+  await gotoApp(page, targetUrl(channel.channel_id, targetMessageId));
+  await expectTargetedMessage(
+    page,
+    targetMessageId,
+    'Deep thread navigation fixture parent'
+  );
+  expect(aroundRequests()).toBeGreaterThan(0);
+  const loadAroundRequestCount = aroundRequests();
+
+  await replaceActiveSplitWithFiles(page, channel.channel_id);
+  await presentation.reset();
+  await openChannelFromCommandMenu(page, channelName);
+
+  await expectBottomLanding(page, presentation, channel.channel_id);
+  expect(latestRequests()).toBeGreaterThan(0);
+  expect(aroundRequests()).toBe(loadAroundRequestCount);
+  await expect(
+    page.locator(`${CHANNEL_SCROLL_SELECTOR} [data-targeted]`)
+  ).toHaveCount(0);
+});
+
 test('opens an unread channel notification on its specific cached reply', async ({
   page,
 }) => {
