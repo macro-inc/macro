@@ -129,6 +129,32 @@ describe('createTargetMessageController', () => {
     dispose();
   });
 
+  it('keeps a root target pending until its element is positioned within the row', async () => {
+    const scrollToId = vi.fn(() => true);
+    let dispose = () => {};
+    let controller: ReturnType<typeof createTargetMessageController>;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      controller = createController({
+        initialTargetMessageId: 'message-1',
+        messageKeys: ['message-1'],
+        scrollToId,
+        withNavigation: true,
+        didInitialScroll: true,
+      }).controller;
+    });
+
+    await Promise.resolve();
+
+    expect(scrollToId).not.toHaveBeenCalled();
+    expect(controller!.pendingScrollTargetId()).toBe('message-1');
+
+    controller!.completePendingScroll('message-1');
+    expect(controller!.pendingScrollTargetId()).toBeUndefined();
+    dispose();
+  });
+
   it('copies around-target query data into the default query key', () => {
     const aroundData = {
       pageParams: [null],

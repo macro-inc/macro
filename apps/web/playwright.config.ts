@@ -139,6 +139,10 @@ export default defineConfig({
   testIgnore: 'tests/e2e/pdf/inputs/*',
   /* Run tests in files in parallel */
   fullyParallel: true,
+  // Local E2E shares one seeded stack and one authenticated user. Running the
+  // full app in several UI-mode workers can leave background channel layouts
+  // unmeasured, so keep this harness serial and deterministic.
+  workers: isLocalE2E ? 1 : undefined,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

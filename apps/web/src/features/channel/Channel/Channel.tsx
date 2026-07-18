@@ -223,7 +223,10 @@ export function Channel(props: ChannelProps) {
   const messageById = () => messageIndex.byId;
   const keepMountedTargetThreadIndexes = createMemo(() => {
     const threadId = targetMessageController.activeTargetMessageId();
-    if (!threadId || !targetMessageController.pendingTargetReplyId()) return [];
+    const hasPendingElementScroll =
+      targetMessageController.pendingScrollTargetId() !== undefined ||
+      targetMessageController.pendingTargetReplyId() !== undefined;
+    if (!threadId || !hasPendingElementScroll) return [];
 
     const index = messageIndex.keys.indexOf(threadId);
     return index === -1 ? [] : [index];
@@ -638,8 +641,13 @@ export function Channel(props: ChannelProps) {
                       triggerBehavior="spring-back"
                     >
                       <ThreadList
+                        channelId={props.channelId}
                         keys={() => messageIndex.keys}
                         initialScrollTarget={threadListInitialScrollTarget()}
+                        initialScrollHandledByTargetElement={
+                          targetMessageController.pendingScrollTargetId() !==
+                          undefined
+                        }
                         keepMounted={keepMountedTargetThreadIndexes}
                         fullFrameScrollInsets={threadListScrollInsets}
                         shift={shift}
@@ -671,6 +679,26 @@ export function Channel(props: ChannelProps) {
                                   channelId={() => props.channelId}
                                   isNewestThread={isNewestThread()}
                                   getMessageActions={getMessageActions}
+                                  targetMessageId={
+                                    !targetMessageController.pendingTargetReplyId()
+                                      ? targetMessageController.pendingScrollTargetId()
+                                      : undefined
+                                  }
+                                  onTargetMessageScrolled={(messageId) => {
+                                    targetMessageController.completePendingScroll(
+                                      messageId
+                                    );
+                                  }}
+                                  positionTargetMessage={(
+                                    threadRow,
+                                    targetMessage
+                                  ) =>
+                                    threadListNavigation()?.scrollToElementInItem(
+                                      m().id,
+                                      threadRow,
+                                      targetMessage
+                                    ) ?? false
+                                  }
                                   targetThreadId={targetMessageController.activeTargetMessageId()}
                                   targetReplyId={
                                     targetMessageController.pendingScrollTargetId()

@@ -83,9 +83,13 @@ export type FullFrameThreadListScrollInsets = {
 };
 
 type ThreadListProps = {
+  /** Identifies the channel scroll surface when multiple splits are mounted. */
+  channelId?: string;
   keys: Accessor<string[]>;
   children: (item: { id: string }) => JSX.Element;
   initialScrollTarget?: ThreadListScrollTarget;
+  /** A kept-mounted descendant owns the targeted initial viewport movement. */
+  initialScrollHandledByTargetElement?: boolean;
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
@@ -539,6 +543,10 @@ export function ThreadList(props: ThreadListProps) {
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
+    if (props.initialScrollHandledByTargetElement) {
+      completeInitialScroll(handle);
+      return;
+    }
     beginInitialTargetScroll(handle, getInitialScrollTarget());
   }
 
@@ -681,6 +689,9 @@ export function ThreadList(props: ThreadListProps) {
           setScrollEl(el);
         }}
         data-channel-scroll
+        data-channel-id={props.channelId}
+        data-channel-scroll-inset-start={insets().start}
+        data-channel-scroll-inset-end={insets().end}
         class="scrollbar-hidden"
         {...scrollIntent.handlers}
         style={{

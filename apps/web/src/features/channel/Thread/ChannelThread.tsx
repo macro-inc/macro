@@ -5,10 +5,18 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
-import { createEffect, createSignal, on, Show, untrack } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+  untrack,
+} from 'solid-js';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
 import { isUnifiedInputMode } from '../unified-input-mode';
+import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
@@ -195,6 +203,28 @@ export function ChannelThread(props: ThreadProps) {
     !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
+  const [threadRowElement, setThreadRowElement] = createSignal<HTMLElement>();
+  const targetMessageScroller = createTargetReplyScroller({
+    getTarget: () =>
+      threadRowElement()?.querySelector<HTMLElement>(
+        `[data-message-id="${props.data().id}"]`
+      ) ?? undefined,
+    positionTarget: props.positionTargetMessage,
+  });
+
+  createEffect(
+    on([() => props.targetMessageId, threadRowElement], ([targetMessageId]) => {
+      if (!targetMessageId || targetMessageId !== props.data().id) {
+        targetMessageScroller.cancel();
+        return;
+      }
+      targetMessageScroller.scrollToIndex(0, () => {
+        props.onTargetMessageScrolled?.(targetMessageId);
+      });
+    })
+  );
+
+  onCleanup(targetMessageScroller.dispose);
 
   createEffect(
     on(
@@ -261,6 +291,7 @@ export function ChannelThread(props: ThreadProps) {
   return (
     <DebugSuspense name="ChannelThread.root">
       <Thread.Row
+        ref={setThreadRowElement}
         channelId={props.channelId()}
         message={props.data()}
         listMeta={props.listMeta}

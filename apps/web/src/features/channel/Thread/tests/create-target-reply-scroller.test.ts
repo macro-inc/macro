@@ -66,11 +66,13 @@ describe('createTargetReplyScroller', () => {
   const createFixture = () => {
     const scrollElement = document.createElement('div');
     scrollElement.dataset.channelScroll = '';
+    const virtualItem = document.createElement('div');
     const threadRow = document.createElement('div');
     threadRow.dataset.channelThreadRow = '';
     const target = document.createElement('div');
     threadRow.append(target);
-    scrollElement.append(threadRow);
+    virtualItem.append(threadRow);
+    scrollElement.append(virtualItem);
     document.body.append(scrollElement);
 
     let targetRect = rect(1000, 1050);
@@ -87,6 +89,7 @@ describe('createTargetReplyScroller', () => {
 
     return {
       scrollElement,
+      virtualItem,
       threadRow,
       target,
       scrollIntoView,
@@ -96,7 +99,7 @@ describe('createTargetReplyScroller', () => {
     };
   };
 
-  it('waits for the expanded thread row measurement before positioning', () => {
+  it('waits for the expanded thread row measurement before positioning', async () => {
     const fixture = createFixture();
     const onSettled = vi.fn();
     const scroller = createTargetReplyScroller({
@@ -108,24 +111,29 @@ describe('createTargetReplyScroller', () => {
     expect(fixture.scrollIntoView).not.toHaveBeenCalled();
 
     ResizeObserverMock.instances[0].trigger();
-    flushAnimationFrame();
-    flushAnimationFrame();
+    await Promise.resolve();
     expect(fixture.scrollIntoView).toHaveBeenCalledTimes(1);
-
-    fixture.setTargetRect(rect(1000, 1050));
-    ResizeObserverMock.instances[0].trigger();
     flushAnimationFrame();
     flushAnimationFrame();
     expect(fixture.scrollIntoView).toHaveBeenCalledTimes(2);
+
+    fixture.setTargetRect(rect(1000, 1050));
+    ResizeObserverMock.instances[0].trigger();
+    await Promise.resolve();
+    expect(fixture.scrollIntoView).toHaveBeenCalledTimes(3);
+    flushAnimationFrame();
+    flushAnimationFrame();
+    expect(fixture.scrollIntoView).toHaveBeenCalledTimes(4);
 
     vi.advanceTimersByTime(200);
     expect(onSettled).toHaveBeenCalledOnce();
     expect(ResizeObserverMock.instances[0].disconnect).toHaveBeenCalledOnce();
   });
 
-  it('positions through the outer virtualizer when available', () => {
+  it('positions through the outer virtualizer after sibling resize observers', async () => {
     const fixture = createFixture();
-    const positionTarget = vi.fn(() => true);
+    let virtualizerMeasurementApplied = false;
+    const positionTarget = vi.fn(() => virtualizerMeasurementApplied);
     const scroller = createTargetReplyScroller({
       getTarget: () => fixture.target,
       positionTarget,
@@ -133,6 +141,10 @@ describe('createTargetReplyScroller', () => {
 
     expect(scroller.scrollToIndex(0, vi.fn())).toBe(true);
     ResizeObserverMock.instances[0].trigger();
+    expect(positionTarget).not.toHaveBeenCalled();
+    // Simulate Virtua's ResizeObserver running later in the same delivery.
+    virtualizerMeasurementApplied = true;
+    await Promise.resolve();
     flushAnimationFrame();
     flushAnimationFrame();
 
@@ -143,7 +155,25 @@ describe('createTargetReplyScroller', () => {
     expect(fixture.scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it('uses the current reply element after a virtualized remount', () => {
+  it('repositions before paint when an earlier item changes the target offset', async () => {
+    const fixture = createFixture();
+    const scroller = createTargetReplyScroller({
+      getTarget: () => fixture.target,
+    });
+
+    expect(scroller.scrollToIndex(0, vi.fn())).toBe(true);
+    ResizeObserverMock.instances[0].trigger();
+    await Promise.resolve();
+    expect(fixture.scrollIntoView).toHaveBeenCalledTimes(1);
+
+    fixture.setTargetRect(rect(4300, 4350));
+    fixture.virtualItem.style.top = '4240px';
+    await Promise.resolve();
+
+    expect(fixture.scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the current reply element after a virtualized remount', async () => {
     const fixture = createFixture();
     let currentTarget = fixture.target;
     const scroller = createTargetReplyScroller({
@@ -152,6 +182,7 @@ describe('createTargetReplyScroller', () => {
 
     expect(scroller.scrollToIndex(0, vi.fn())).toBe(true);
     ResizeObserverMock.instances[0].trigger();
+    await Promise.resolve();
     flushAnimationFrame();
     flushAnimationFrame();
 
@@ -163,10 +194,11 @@ describe('createTargetReplyScroller', () => {
     currentTarget = remountedTarget;
 
     ResizeObserverMock.instances[0].trigger();
+    await Promise.resolve();
     flushAnimationFrame();
     flushAnimationFrame();
 
-    expect(remountedScrollIntoView).toHaveBeenCalledOnce();
+    expect(remountedScrollIntoView).toHaveBeenCalledTimes(2);
   });
 
   it('disposes pending work without acknowledging the target', () => {

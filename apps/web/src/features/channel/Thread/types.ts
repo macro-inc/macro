@@ -45,6 +45,14 @@ export type ThreadProps = {
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
   targetThreadId?: string;
+  /** One-shot scroll target for the root message within a measured thread row. */
+  targetMessageId?: string;
+  onTargetMessageScrolled?: (messageId: string) => void;
+  /** Positions a root message through the outer virtualizer. */
+  positionTargetMessage?: (
+    threadRow: HTMLElement,
+    targetMessage: HTMLElement
+  ) => boolean;
   /** One-shot scroll target. Caller must clear via `onTargetReplyScrolled`. */
   targetReplyId?: string;
   onTargetReplyScrolled?: (replyId: string) => void;

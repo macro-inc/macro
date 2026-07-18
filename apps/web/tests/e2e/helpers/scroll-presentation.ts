@@ -13,7 +13,17 @@ type BottomPresentationSample = {
 type TargetPresentationSample = {
   time: number;
   center: number;
-  fullyVisible: boolean;
+  positioned: boolean;
+  visible: boolean;
+  scrollTop: number;
+  targetHeight: number;
+  targetTop: number;
+  virtualItemTop?: number;
+  virtualItemStyleTop?: string;
+  virtualItemVisibility?: string;
+  usableViewportHeight: number;
+  insetStart: number;
+  insetEnd: number;
 };
 
 export type BottomPresentationReport = {
@@ -23,10 +33,13 @@ export type BottomPresentationReport = {
 };
 
 export type TargetPresentationReport = {
-  firstVisible?: TargetPresentationSample;
-  largestShiftAfterVisible: number;
-  firstVisibilityLoss?: TargetPresentationSample;
-  visibilityLossCount: number;
+  first?: TargetPresentationSample;
+  firstPositioned?: TargetPresentationSample;
+  last?: TargetPresentationSample;
+  unpositionedBeforeLandingCount: number;
+  largestShiftAfterPositioned: number;
+  firstPositionLoss?: TargetPresentationSample;
+  positionLossCount: number;
   lastChangeAt?: number;
 };
 
@@ -34,14 +47,17 @@ declare global {
   interface Window {
     __e2eResizeObserverDelay?: ResizeObserverDelayState;
     __e2eBottomPresentation?: BottomPresentationReport;
+    __e2eResetBottomPresentation?: () => void;
     __e2eTargetPresentation?: TargetPresentationReport;
     __e2eStopTargetPresentation?: () => void;
   }
 }
 
 /**
- * Sample painted target positions. Once the target is fully visible, any later
- * movement or visibility loss is a user-visible second-pass correction.
+ * Sample painted target positions. A normal target must fit inside the usable
+ * viewport; a target taller than that viewport must cover it. Insets exclude
+ * floating mobile chrome from the usable viewport. Once the target lands, any
+ * later movement or position loss is a user-visible second-pass correction.
  */
 export async function observeTargetPresentation(
   page: Page,
@@ -52,8 +68,9 @@ export async function observeTargetPresentation(
   await page.addInitScript(
     ({ scrollSelector, targetSelector, tolerancePx }) => {
       const report: TargetPresentationReport = {
-        largestShiftAfterVisible: 0,
-        visibilityLossCount: 0,
+        unpositionedBeforeLandingCount: 0,
+        largestShiftAfterPositioned: 0,
+        positionLossCount: 0,
       };
       window.__e2eTargetPresentation = report;
       let stopped = false;
@@ -62,40 +79,75 @@ export async function observeTargetPresentation(
       const verify = () => {
         if (stopped) return;
 
-        const scroller = document.querySelector<HTMLElement>(scrollSelector);
         const target = document.querySelector<HTMLElement>(targetSelector);
+        const scroller =
+          target?.closest<HTMLElement>(scrollSelector) ??
+          document.querySelector<HTMLElement>(scrollSelector);
         if (scroller && target) {
           const scrollRect = scroller.getBoundingClientRect();
           const targetRect = target.getBoundingClientRect();
+          const insetStart = Number(
+            scroller.dataset.channelScrollInsetStart ?? 0
+          );
+          const insetEnd = Number(scroller.dataset.channelScrollInsetEnd ?? 0);
+          const usableTop = scrollRect.top + insetStart;
+          const usableBottom = scrollRect.bottom - insetEnd;
+          const usableViewportHeight = Math.max(0, usableBottom - usableTop);
+          const virtualItem = target.closest<HTMLElement>(
+            '[data-channel-thread-row]'
+          )?.parentElement;
+          const targetStyle = getComputedStyle(target);
+          const visible =
+            targetStyle.display !== 'none' &&
+            targetStyle.visibility !== 'hidden';
+          const positioned =
+            visible &&
+            (targetRect.height <= usableViewportHeight
+              ? targetRect.top >= usableTop - tolerancePx &&
+                targetRect.bottom <= usableBottom + tolerancePx
+              : targetRect.top <= usableTop + tolerancePx &&
+                targetRect.bottom >= usableBottom - tolerancePx);
           const sample: TargetPresentationSample = {
             time: performance.now(),
             center:
               targetRect.top +
               targetRect.height / 2 -
-              (scrollRect.top + scrollRect.height / 2),
-            fullyVisible:
-              targetRect.top >= scrollRect.top - tolerancePx &&
-              targetRect.bottom <= scrollRect.bottom + tolerancePx,
+              (usableTop + usableViewportHeight / 2),
+            positioned,
+            visible,
+            scrollTop: scroller.scrollTop,
+            targetHeight: targetRect.height,
+            targetTop: targetRect.top,
+            virtualItemTop: virtualItem?.getBoundingClientRect().top,
+            virtualItemStyleTop: virtualItem?.style.top,
+            virtualItemVisibility: virtualItem?.style.visibility,
+            usableViewportHeight,
+            insetStart,
+            insetEnd,
           };
+          report.first ??= sample;
+          report.last = sample;
 
-          if (!report.firstVisible && sample.fullyVisible) {
-            report.firstVisible = sample;
+          if (!report.firstPositioned && sample.positioned) {
+            report.firstPositioned = sample;
             report.lastChangeAt = sample.time;
-          } else if (report.firstVisible) {
+          } else if (!report.firstPositioned) {
+            report.unpositionedBeforeLandingCount += 1;
+          } else {
             if (
               !previousSample ||
               Math.abs(sample.center - previousSample.center) > tolerancePx ||
-              sample.fullyVisible !== previousSample.fullyVisible
+              sample.positioned !== previousSample.positioned
             ) {
               report.lastChangeAt = sample.time;
             }
-            report.largestShiftAfterVisible = Math.max(
-              report.largestShiftAfterVisible,
-              Math.abs(sample.center - report.firstVisible.center)
+            report.largestShiftAfterPositioned = Math.max(
+              report.largestShiftAfterPositioned,
+              Math.abs(sample.center - report.firstPositioned.center)
             );
-            if (!sample.fullyVisible) {
-              report.firstVisibilityLoss ??= sample;
-              report.visibilityLossCount += 1;
+            if (!sample.positioned) {
+              report.firstPositionLoss ??= sample;
+              report.positionLossCount += 1;
             }
           }
           previousSample = sample;
@@ -117,18 +169,28 @@ export async function observeTargetPresentation(
   );
 
   return {
+    waitForFirstPositioned: async () => {
+      await page.waitForFunction(
+        () => window.__e2eTargetPresentation?.firstPositioned !== undefined,
+        undefined,
+        { timeout: 10_000 }
+      );
+      return page.evaluate(
+        () => window.__e2eTargetPresentation as TargetPresentationReport
+      );
+    },
     waitForQuietAndRead: async (quietMs = 250) => {
       await page.waitForFunction(
         (quiet) => {
           const report = window.__e2eTargetPresentation;
           return (
-            report?.firstVisible !== undefined &&
+            report?.firstPositioned !== undefined &&
             report.lastChangeAt !== undefined &&
             performance.now() - report.lastChangeAt >= quiet
           );
         },
         quietMs,
-        { timeout: 5000 }
+        { timeout: 10_000 }
       );
       return page.evaluate(() => {
         window.__e2eStopTargetPresentation?.();
@@ -241,8 +303,13 @@ export async function observeBottomPresentation(
 ) {
   await page.addInitScript(
     ({ selector, tolerancePx }) => {
-      const report: BottomPresentationReport = { violationCount: 0 };
-      window.__e2eBottomPresentation = report;
+      let report: BottomPresentationReport;
+      const reset = () => {
+        report = { violationCount: 0 };
+        window.__e2eBottomPresentation = report;
+      };
+      window.__e2eResetBottomPresentation = reset;
+      reset();
 
       const verify = () => {
         const scroller = document.querySelector<HTMLElement>(selector);
@@ -285,6 +352,17 @@ export async function observeBottomPresentation(
   );
 
   return {
+    reset: () => page.evaluate(() => window.__e2eResetBottomPresentation?.()),
+    waitForSampleAndRead: async () => {
+      await page.waitForFunction(
+        () => window.__e2eBottomPresentation?.first !== undefined,
+        undefined,
+        { timeout: 30_000 }
+      );
+      return page.evaluate(
+        () => window.__e2eBottomPresentation as BottomPresentationReport
+      );
+    },
     read: () =>
       page.evaluate(
         () => window.__e2eBottomPresentation as BottomPresentationReport

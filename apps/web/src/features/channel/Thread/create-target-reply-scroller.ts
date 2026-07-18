@@ -53,6 +53,7 @@ export function createTargetReplyScroller(options: {
     let completionRafId = 0;
     let verifyTimerId: number | undefined;
     let measurementTimerId: number | undefined;
+    let measurementMicrotaskQueued = false;
     let hasPositioned = false;
     const startedAt = performance.now();
     const getThreadRow = () =>
@@ -60,9 +61,18 @@ export function createTargetReplyScroller(options: {
         .getTarget(index)
         ?.closest<HTMLElement>(CHANNEL_THREAD_ROW_SELECTOR);
     const threadRow = getThreadRow();
+    const virtualItem = threadRow?.parentElement;
 
     const resizeObserver = threadRow
       ? new ResizeObserver(() => schedulePositionAfterMeasurement())
+      : undefined;
+    // Measuring an earlier virtual item can change this wrapper's absolute
+    // offset without resizing the target row. Observe that position update so
+    // the correction runs in the mutation microtask checkpoint before paint.
+    const positionObserver = virtualItem
+      ? new MutationObserver(() => {
+          if (!completed) positionTarget();
+        })
       : undefined;
 
     const cleanup = () => {
@@ -73,6 +83,7 @@ export function createTargetReplyScroller(options: {
       if (measurementTimerId !== undefined)
         window.clearTimeout(measurementTimerId);
       resizeObserver?.disconnect();
+      positionObserver?.disconnect();
       scrollElement.removeEventListener('wheel', handleUserScroll);
       scrollElement.removeEventListener('pointerdown', handlePointerDown);
       scrollElement.removeEventListener('keydown', handleKeyDown);
@@ -161,6 +172,17 @@ export function createTargetReplyScroller(options: {
 
     function schedulePositionAfterMeasurement() {
       if (completed) return;
+      // ResizeObserver callbacks run before paint, but callback order between
+      // observers is not a safe contract. Defer to a microtask so Virtua's
+      // sibling observer has applied the new item geometry before we position
+      // against it, while still correcting before the browser can paint.
+      if (!measurementMicrotaskQueued) {
+        measurementMicrotaskQueued = true;
+        queueMicrotask(() => {
+          measurementMicrotaskQueued = false;
+          if (!completed) positionTarget();
+        });
+      }
       if (!hasPositioned && positionRafId) {
         cancelAnimationFrame(positionRafId);
         positionRafId = 0;
@@ -201,6 +223,12 @@ export function createTargetReplyScroller(options: {
     });
     scrollElement.addEventListener('keydown', handleKeyDown);
     if (threadRow) resizeObserver?.observe(threadRow);
+    if (virtualItem) {
+      positionObserver?.observe(virtualItem, {
+        attributes: true,
+        attributeFilter: ['style'],
+      });
+    }
     cancelCurrentScroll = abort;
 
     // Wait for the outer row's initial measurement before the first visible
