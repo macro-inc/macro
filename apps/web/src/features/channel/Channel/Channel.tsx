@@ -679,50 +679,39 @@ export function Channel(props: ChannelProps) {
                                   channelId={() => props.channelId}
                                   isNewestThread={isNewestThread()}
                                   getMessageActions={getMessageActions}
-                                  targetMessageId={
-                                    !targetMessageController.pendingTargetReplyId()
-                                      ? targetMessageController.pendingScrollTargetId()
-                                      : undefined
-                                  }
-                                  onTargetMessageScrolled={(messageId) => {
-                                    targetMessageController.completePendingScroll(
-                                      messageId
-                                    );
-                                  }}
-                                  positionTargetMessage={(
-                                    threadRow,
-                                    targetMessage
-                                  ) =>
-                                    threadListNavigation()?.scrollToElementInItem(
-                                      m().id,
+                                  targetNavigation={{
+                                    targetThreadId:
+                                      targetMessageController.activeTargetMessageId,
+                                    targetMessageId: () =>
+                                      !targetMessageController.pendingTargetReplyId()
+                                        ? targetMessageController.pendingScrollTargetId()
+                                        : undefined,
+                                    targetReplyId: () =>
+                                      targetMessageController.pendingScrollTargetId()
+                                        ? undefined
+                                        : targetMessageController.pendingTargetReplyId(),
+                                    activeTargetReplyId:
+                                      targetMessageController.activeTargetMessageReplyId,
+                                    positionTarget: (
                                       threadRow,
-                                      targetMessage
-                                    ) ?? false
-                                  }
-                                  targetThreadId={targetMessageController.activeTargetMessageId()}
-                                  targetReplyId={
-                                    targetMessageController.pendingScrollTargetId()
-                                      ? undefined
-                                      : targetMessageController.pendingTargetReplyId()
-                                  }
-                                  activeTargetReplyId={targetMessageController.activeTargetMessageReplyId()}
+                                      targetElement
+                                    ) =>
+                                      threadListNavigation()?.scrollToElementInItem(
+                                        item.id,
+                                        threadRow,
+                                        targetElement
+                                      ) ?? false,
+                                    onTargetMessageScrolled:
+                                      targetMessageController.completePendingScroll,
+                                    onTargetReplyScrolled: (replyId) => {
+                                      targetMessageController.completePendingReplyScroll(
+                                        item.id,
+                                        replyId
+                                      );
+                                    },
+                                    onClearTarget: releaseSelectionAndTarget,
+                                  }}
                                   unifiedReplyTarget={unifiedInput.replyTarget()}
-                                  onTargetReplyScrolled={(replyId) => {
-                                    targetMessageController.completePendingReplyScroll(
-                                      m().id,
-                                      replyId
-                                    );
-                                  }}
-                                  positionTargetReply={(
-                                    threadRow,
-                                    targetReply
-                                  ) =>
-                                    threadListNavigation()?.scrollToElementInItem(
-                                      m().id,
-                                      threadRow,
-                                      targetReply
-                                    ) ?? false
-                                  }
                                   isExpanded={state.isExpanded}
                                   setIsExpanded={state.setIsExpanded}
                                   isReplying={state.isReplying}
@@ -748,7 +737,6 @@ export function Channel(props: ChannelProps) {
                                   selectedMessageId={selection.selectedId}
                                   onSelectMessage={selectMessage}
                                   onClearSelection={clearSelection}
-                                  onClearTarget={releaseSelectionAndTarget}
                                   messageListScopeId={messageListScopeId}
                                 />
                               )}
