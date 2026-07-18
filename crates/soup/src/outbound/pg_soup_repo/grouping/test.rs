@@ -7,7 +7,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_grouping::date_bucket_sql_key;
 use models_grouping::{GroupingConfig, date_bucket_order};
-use models_pagination::{Query, SimpleSortMethod};
+use models_pagination::{Identify, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 
 #[test]
@@ -53,6 +53,86 @@ fn property_join_includes_definition_id() {
     let join = group_join_clause(&field).unwrap();
     assert!(join.sql.contains("ep_group"));
     assert!(join.sql.contains(&uuid::Uuid::nil().to_string()));
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn property_grouping_uses_canonical_task_entity_type(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TASK_ID: &str = "11111111-0000-0000-0000-000000000000";
+    const STATUS_PROPERTY_ID: uuid::Uuid = uuid::uuid!("00000001-0000-0000-0000-000000000002");
+    const IN_PROGRESS_OPTION_ID: &str = "00000001-0000-0000-0002-000000000002";
+
+    sqlx::query!(
+        r#"
+        INSERT INTO document_sub_type (document_id, sub_type)
+        VALUES ('11111111-0000-0000-0000-000000000000', 'task')
+        "#
+    )
+    .execute(&pool)
+    .await?;
+
+    // A task and its canonical Document share an id. Legacy data can contain
+    // assignments under both storage types; only the TASK value is relevant.
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties
+            (id, entity_id, entity_type, property_definition_id, values)
+        VALUES
+            (
+                'e0000000-0000-0000-0000-000000000001',
+                '11111111-0000-0000-0000-000000000000',
+                'DOCUMENT',
+                '00000001-0000-0000-0000-000000000002',
+                '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000001"]}'::jsonb
+            ),
+            (
+                'e0000000-0000-0000-0000-000000000002',
+                '11111111-0000-0000-0000-000000000000',
+                'TASK',
+                '00000001-0000-0000-0000-000000000002',
+                '{"type":"SelectOption","value":["00000001-0000-0000-0002-000000000002"]}'::jsonb
+            )
+        "#
+    )
+    .execute(&pool)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::Property {
+                    property_definition_id: STATUS_PROPERTY_ID,
+                    entity_type: None,
+                },
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .filter(|item| item.item.id().to_string() == TASK_ID)
+    .collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 1, "task must belong to exactly one status bin");
+    assert_eq!(items[0].key, IN_PROGRESS_OPTION_ID);
+
+    Ok(())
 }
 
 #[sqlx::test(

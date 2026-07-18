@@ -47,7 +47,7 @@ function definitionDomain(
   return {
     id: definition.id,
     displayName: definition.displayName,
-    valueType: 'SELECT_STRING',
+    valueType: 'TAG',
     isMultiSelect: true,
     isMetadata: definition.isMetadata,
     isSystem: definition.isSystem,

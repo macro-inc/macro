@@ -11,6 +11,7 @@ import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxCo
 import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
+import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
@@ -19,10 +20,7 @@ import {
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
-import {
-  useEmailSoupBackfill,
-  useSoupBackfill,
-} from '@app/lib/queries/soup/backfill';
+import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallProvider } from '@channel/Call/CallContext';
@@ -34,7 +32,6 @@ import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -236,26 +233,15 @@ function OfflineFallbackRoute() {
 }
 
 function BasePathComponent() {
-  const analytics = useAnalytics();
-
   const [searchParams] = useSearchParams();
+  const userInfoQuery = useUserInfoQuery();
+  const checkoutRefreshPending = useCheckoutCompletionListener();
 
-  const subscriptionSuccess = searchParams.subscriptionSuccess;
-  const type = searchParams.type;
-  if (subscriptionSuccess === 'true') {
-    toast.success('Your plan has been activated!');
-    analytics.track('subscription_success', { type });
-    // Invalidate user info to refresh trial status and subscription data
-    invalidateUserInfo();
-  }
-
-  if (searchParams.subscriptionCancel === 'true') {
-    analytics.track('subscription_cancel', { tier: searchParams.tier });
-  }
-
-  if (searchParams.upgrade === 'true') {
-    sessionStorage.setItem('showUpgradeModal', 'true');
-  }
+  onMount(() => {
+    if (searchParams.upgrade === 'true') {
+      sessionStorage.setItem('showUpgradeModal', 'true');
+    }
+  });
 
   // check session storage for redirect url
   const redirectUrl = sessionStorage.getItem('redirectUrl');
@@ -266,15 +252,15 @@ function BasePathComponent() {
     return;
   }
 
-  const userInfoQuery = useUserInfoQuery();
-
   // Preserve existing query parameters when redirecting
   const queryString = getCurrentQueryString();
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
   return (
     <Switch>
-      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={userInfoQuery.isLoading || checkoutRefreshPending()}>
+        {null}
+      </Match>
       <Match
         when={
           hasLoginCookie() &&
@@ -495,8 +481,7 @@ function UserInfoSideEffects() {
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
 
-  useSoupBackfill(() => userInfo()?.id);
-  useEmailSoupBackfill(() => userInfo()?.id);
+  useSoupBackfills(() => userInfo()?.id);
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();

@@ -22,7 +22,16 @@ import { openExternalUrl } from '@core/util/url';
 import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
-import { cn, Dialog, Hotkey, Panel } from '@ui';
+import {
+  CommandMenuEmptyState,
+  CommandMenuHotkeyHint,
+  CommandMenuSearchInput,
+  CommandMenuShell,
+  cn,
+  createCommandListController,
+  Dialog,
+  Hotkey,
+} from '@ui';
 import {
   createEffect,
   createMemo,
@@ -140,15 +149,17 @@ export function CommandMenuInner(props: {
     ? undefined
     : useCommandItems(query, CommandState.categoryFilter);
   const filteredItems = props.items ?? defaultFilteredItems!;
-  const [shouldScrollSelectedIntoView, setShouldScrollSelectedIntoView] =
-    createSignal(false);
+  const listController = createCommandListController({
+    items: filteredItems,
+    selectedIndex: CommandState.selectedIndex,
+    setSelectedIndex: CommandState.setSelectedIndex,
+  });
 
   createEffect(() => {
     const items = filteredItems();
     const current = CommandState.selectedIndex();
     if (current >= items.length && items.length > 0) {
-      setShouldScrollSelectedIntoView(false);
-      CommandState.setSelectedIndex(items.length - 1);
+      listController.setSelectedIndex(items.length - 1);
     }
   });
 
@@ -160,8 +171,7 @@ export function CommandMenuInner(props: {
       // no results the rows below are fallbacks (ask AI), and the search row
       // should stay the default.
       const secondIsResult = items[1] && !isAskAiItem(items[1]);
-      setShouldScrollSelectedIntoView(false);
-      CommandState.setSelectedIndex(firstIsSearch && secondIsResult ? 1 : 0);
+      listController.setSelectedIndex(firstIsSearch && secondIsResult ? 1 : 0);
     })
   );
 
@@ -367,9 +377,7 @@ export function CommandMenuInner(props: {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
-      setShouldScrollSelectedIntoView(true);
-      CommandState.setSelectedIndex((prev) => (prev + 1) % items.length);
-      return true;
+      return listController.selectNext();
     },
     runWithInputFocused: true,
     hide: true,
@@ -382,11 +390,7 @@ export function CommandMenuInner(props: {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
-      setShouldScrollSelectedIntoView(true);
-      CommandState.setSelectedIndex(
-        (prev) => (prev - 1 + items.length) % items.length
-      );
-      return true;
+      return listController.selectPrevious();
     },
     runWithInputFocused: true,
     hide: true,
@@ -506,28 +510,6 @@ export function CommandMenuInner(props: {
     }
   });
 
-  const [isKeyboardActive, setIsKeyboardActive] = createSignal(false);
-
-  function handleMouseEnter(index: number) {
-    if (isKeyboardActive()) return;
-    setShouldScrollSelectedIntoView(false);
-    CommandState.setSelectedIndex(index);
-  }
-
-  // Track keyboard activity to prevent mouse hover from interfering
-  createEffect(() => {
-    const handleKeyDown = () => setIsKeyboardActive(true);
-    const handleMouseMove = () => setIsKeyboardActive(false);
-
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  });
-
   const isInCommandScope = createMemo(
     () => CommandState.commandScopeCommands().length > 0
   );
@@ -563,12 +545,12 @@ export function CommandMenuInner(props: {
   }));
 
   return (
-    <Panel
+    <CommandMenuShell
       class={cn('max-h-[75vh] rounded-xl', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
     >
-      <Panel.Header class="gap-2 px-2 bg-surface">
+      <CommandMenuShell.Header>
         <Show
           when={isInCommandScope()}
           fallback={
@@ -585,9 +567,8 @@ export function CommandMenuInner(props: {
             <ArrowLeft class="size-3" />
           </button>
         </Show>
-        <input
+        <CommandMenuSearchInput
           type="text"
-          class="flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
           placeholder={
             CommandState.commandScopePlaceholder() ??
             (isEntityActionMode() ? 'Search actions...' : 'Search...')
@@ -596,12 +577,12 @@ export function CommandMenuInner(props: {
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
         />
-      </Panel.Header>
+      </CommandMenuShell.Header>
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
-        <Panel.Toolbar
+        <CommandMenuShell.Toolbar
           class={cn(
-            'bg-surface pl-2.5 pr-1.5 pt-2 border-0',
+            'pl-2.5 pr-1.5 pt-2 border-0',
             isEntityActionMode() && 'gap-1.5'
           )}
         >
@@ -624,18 +605,18 @@ export function CommandMenuInner(props: {
               entities={CommandState.entityActionEntities()}
             />
           </Show>
-        </Panel.Toolbar>
+        </CommandMenuShell.Toolbar>
       </Show>
 
-      <Panel.Body>
+      <CommandMenuShell.Body>
         <div
-          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out"
+          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
         >
           <Show
             when={filteredItems().length > 0}
             fallback={
-              <div class="p-4 text-center text-ink-muted">No results found</div>
+              <CommandMenuEmptyState>No results found</CommandMenuEmptyState>
             }
           >
             <VirtualizedCommandList
@@ -644,14 +625,14 @@ export function CommandMenuInner(props: {
               onSelect={(item, openInNewSplit) =>
                 handleItemAction(item, openInNewSplit)
               }
-              onMouseEnter={handleMouseEnter}
-              scrollSelectedIntoView={shouldScrollSelectedIntoView()}
+              onItemMouseMove={listController.setSelectedIndexFromPointer}
+              scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
             />
           </Show>
         </div>
-      </Panel.Body>
+      </CommandMenuShell.Body>
 
-      <Panel.Footer class="gap-4 px-4 bg-surface text-xs text-ink-extra-muted/80">
+      <CommandMenuShell.Footer>
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
@@ -704,8 +685,8 @@ export function CommandMenuInner(props: {
         >
           <HotkeyHint command={escapeHotkey} label="Back" />
         </Show>
-      </Panel.Footer>
-    </Panel>
+      </CommandMenuShell.Footer>
+    </CommandMenuShell>
   );
 }
 
@@ -746,7 +727,7 @@ function VirtualizedCommandList(props: {
   items: CommandMenuItem[];
   selectedIndex: number;
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onMouseEnter: (index: number) => void;
+  onItemMouseMove: (index: number) => void;
   scrollSelectedIntoView: boolean;
 }) {
   let virtualizerHandle: VirtualizerHandle | undefined;
@@ -783,7 +764,7 @@ function VirtualizedCommandList(props: {
       }}
       data={props.items}
       style={{ height: '100%' }}
-      class="scrollbar-hidden p-2"
+      class="scrollbar-hidden"
     >
       {(item, index) => (
         <CommandItem
@@ -791,7 +772,7 @@ function VirtualizedCommandList(props: {
           index={index()}
           selected={selector(index())}
           onSelect={props.onSelect}
-          onHover={props.onMouseEnter}
+          onMouseMove={props.onItemMouseMove}
         />
       )}
     </VList>
@@ -800,11 +781,9 @@ function VirtualizedCommandList(props: {
 
 function HotkeyHint(props: { command: RegisterHotkeyReturn; label: string }) {
   return (
-    <span class="flex items-center gap-1">
-      <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
-        <Hotkey shortcut={props.command.hotkey()} class="space-x-1" />
-      </div>
-      {props.label}
-    </span>
+    <CommandMenuHotkeyHint
+      hotkey={<Hotkey shortcut={props.command.hotkey()} class="space-x-1" />}
+      label={props.label}
+    />
   );
 }

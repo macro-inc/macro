@@ -28,6 +28,7 @@ import {
   type WithSearch,
 } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
+import WideStar from '@icon/wide-star.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
@@ -157,6 +158,14 @@ function MobileSearchInner() {
     SearchState.close();
   }
 
+  function handleAskAi(query: string) {
+    // Opens a new chat split and sends the query immediately — same wiring as
+    // the desktop command menu's "Ask AI about" row.
+    openChatWithMessage(query);
+    SearchState.close();
+    SearchState.setQuery('');
+  }
+
   const handleBack = () => {
     if (SearchState.isInCommandScope()) {
       SearchState.clearCommandScopeCommands();
@@ -186,6 +195,7 @@ function MobileSearchInner() {
               SearchState.isFullTextMode() && isFullTextLoading()
             }
             onFullTextSearch={() => SearchState.enableFullTextMode()}
+            onAskAi={handleAskAi}
             query={SearchState.query}
           />
         </div>
@@ -262,6 +272,7 @@ function ResultsContainer(props: {
   onSelectFullText: (entity: WithSearch<EntityData>) => void;
   isLoading?: () => boolean;
   onFullTextSearch: () => void;
+  onAskAi: (query: string) => void;
   query: () => string;
 }) {
   let ref: HTMLDivElement | undefined;
@@ -279,15 +290,30 @@ function ResultsContainer(props: {
 
   const [rowHeight, setRowHeight] = createSignal(0);
   const heightOfNameMatchList = () => props.nameMatchItems.length * rowHeight();
-  const showFullTextSearchButton = () => {
-    if (SearchState.isFullTextMode()) return false;
-    // In a command scope the input filters nested commands, not search.
-    if (SearchState.isInCommandScope()) return false;
-    // Always show when there are no name matches (rowHeight stays 0 since list isn't rendered)
+
+  // In full-text mode or a command scope the input drives search/command
+  // filtering, so neither action row applies.
+  const actionsApply = () =>
+    !SearchState.isFullTextMode() && !SearchState.isInCommandScope();
+  // "Ask AI about" needs something to ask about.
+  const wantAskAiButton = () =>
+    actionsApply() && props.query().trim().length > 0;
+  const actionButtonCount = () =>
+    (actionsApply() ? 1 : 0) + (wantAskAiButton() ? 1 : 0);
+
+  // There's room for the action rows when the name-match list doesn't fill the
+  // frame (with no matches the list isn't rendered, so there's always room).
+  const hasRoomForActions = () => {
     if (props.nameMatchItems.length === 0) return true;
     const rh = rowHeight();
-    return rh > 0 && availableHeight() - heightOfNameMatchList() > rh;
+    return (
+      rh > 0 &&
+      availableHeight() - heightOfNameMatchList() > rh * actionButtonCount()
+    );
   };
+
+  const showFullTextSearchButton = () => actionsApply() && hasRoomForActions();
+  const showAskAiButton = () => wantAskAiButton() && hasRoomForActions();
 
   return (
     <div class="flex-1 min-h-0 bg-surface" ref={ref}>
@@ -349,10 +375,22 @@ function ResultsContainer(props: {
       <Show when={showFullTextSearchButton()}>
         <button
           onClick={props.onFullTextSearch}
-          class="flex items-center px-2 text-sm gap-2 h-10"
+          class="flex w-full min-w-0 items-center px-2 text-sm gap-2 h-10"
         >
-          <SearchIcon class="size-5 p-0.5" />
-          {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
+          <SearchIcon class="size-5 p-0.5 shrink-0" />
+          <span class="truncate">
+            {`Full-text search for${props.query() ? ` "${props.query()}"` : ''}`}
+          </span>
+        </button>
+      </Show>
+
+      <Show when={showAskAiButton()}>
+        <button
+          onClick={() => props.onAskAi(props.query())}
+          class="flex w-full min-w-0 items-center px-2 text-sm gap-2 h-10"
+        >
+          <WideStar class="size-5 p-0.5 shrink-0" />
+          <span class="truncate">{`Ask AI about "${props.query()}"`}</span>
         </button>
       </Show>
     </div>

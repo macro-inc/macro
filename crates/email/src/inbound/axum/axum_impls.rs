@@ -12,6 +12,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
+    MacroAuthorizationState,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
 use std::sync::Arc;
@@ -96,23 +100,24 @@ pub enum EmailLinkErr {
     #[error("No inbox specified; provide the X-Email-Link-Id header")]
     NoInboxSelected,
     #[error(transparent)]
+    Authorization(#[from] MacroAuthorizationRejection),
+    #[error(transparent)]
     UserErr(#[from] UserExtractorErr),
 }
 
 impl IntoResponse for EmailLinkErr {
     fn into_response(self) -> Response {
-        if let EmailLinkErr::UserErr(u) = self {
-            return u.into_response();
-        }
-        let status = match &self {
-            EmailLinkErr::DbErr(_) | EmailLinkErr::UserErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            EmailLinkErr::NotFound => StatusCode::NOT_FOUND,
-            EmailLinkErr::InvalidLinkIdHeader | EmailLinkErr::NoInboxSelected => {
-                StatusCode::BAD_REQUEST
+        let (status, error) = match self {
+            EmailLinkErr::Authorization(error) => return error.into_response(),
+            EmailLinkErr::UserErr(error) => return error.into_response(),
+            error @ EmailLinkErr::DbErr(_) => (StatusCode::INTERNAL_SERVER_ERROR, error),
+            error @ EmailLinkErr::NotFound => (StatusCode::NOT_FOUND, error),
+            error @ (EmailLinkErr::InvalidLinkIdHeader | EmailLinkErr::NoInboxSelected) => {
+                (StatusCode::BAD_REQUEST, error)
             }
         };
 
-        (status, self.to_string()).into_response()
+        (status, error.to_string()).into_response()
     }
 }
 
@@ -199,6 +204,39 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let Cached(MacroUserExtractor { macro_user_id, .. }) =
+            parts.extract_with_state(state).await?;
+        let links = <EmailRouterState<U>>::from_ref(state)
+            .inner
+            .get_inboxes_for_macro_id(macro_user_id)
+            .await?;
+        Ok(Self(links, PhantomData))
+    }
+}
+
+/// Macro-authorized extractor that resolves every inbox the caller can read.
+///
+/// This is the authorization-service equivalent of [`MultiEmailLinkExtractor`].
+/// A caller with no inboxes receives an empty `Vec` rather than a rejection.
+pub struct MultiEmailLinkExtractorV2<U, Auth>(pub Vec<Link>, pub PhantomData<(U, Auth)>);
+
+impl<U, Auth> Clone for MultiEmailLinkExtractorV2<U, Auth> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<S, U, Auth> FromRequestParts<S> for MultiEmailLinkExtractorV2<U, Auth>
+where
+    EmailRouterState<U>: FromRef<S>,
+    U: EmailService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = EmailLinkErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let MacroAuthorizationExtractor { macro_user_id, .. } =
             parts.extract_with_state(state).await?;
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner

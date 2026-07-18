@@ -60,6 +60,8 @@ pub struct GroupJoinClause {
 /// per element, so multi-value properties (e.g. assignees) place each item into
 /// every group it belongs to. Items without a matching row, or with an empty
 /// array / scalar value, produce a single row with NULL `val` (→ "Not Set").
+/// Property rows are also matched to the Soup item's canonical property entity
+/// type, so a task ignores legacy `DOCUMENT` assignments for the same id.
 pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
     match field {
         GroupByField::Property {
@@ -83,6 +85,7 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
                             END
                         ) elem(val) ON TRUE
                         WHERE ep.entity_id = t.id::text
+                          AND ep.entity_type = t.property_entity_type
                           AND ep.property_definition_id = '{}'
                           {}
                     ) ep_group ON TRUE",

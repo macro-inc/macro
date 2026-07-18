@@ -142,7 +142,8 @@ pub(crate) type DssSoupService = SoupImpl<
     ForeignEntityServiceType,
 >;
 
-type DssSoupState = SoupRouterState<DssSoupService, DssEmailService, EntityAccessService>;
+type DssSoupState =
+    SoupRouterState<DssSoupService, DssEmailService, EntityAccessService, AuthorizationService>;
 
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
@@ -152,6 +153,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssEmailService,
     EntityAccessService,
+    AuthorizationService,
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
     Arc<ai_tools::ToolNotificationService>,
@@ -480,8 +482,8 @@ impl FromRef<ApiContext> for SearchHandlerState {
 }
 
 /// `#[derive(FromRef)]` only exposes direct field types, so hand the email
-/// router state out of the nested soup router state for extractors like
-/// `MultiEmailLinkExtractor` that key off `EmailRouterState`.
+/// router state out of the nested soup router state for email-link extractors
+/// that key off `EmailRouterState`.
 impl FromRef<ApiContext>
     for email::inbound::axum::previews_router::EmailRouterState<DssEmailService>
 {

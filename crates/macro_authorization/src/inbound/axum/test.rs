@@ -1,10 +1,14 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 
 use ::axum::{
     Json, Router,
     body::Body,
     extract::FromRef,
     http::{HeaderValue, Request, StatusCode},
+    response::IntoResponse,
     routing::get,
 };
 use http_body_util::BodyExt;
@@ -181,6 +185,50 @@ fn empty_body(request: ::axum::http::request::Builder) -> Request<Body> {
 }
 
 fn assert_clone_without_service_clone<T: Clone>() {}
+
+fn assert_display_and_error<T: std::fmt::Display + std::error::Error>() {}
+
+#[test]
+fn rejection_is_displayable_error_with_client_safe_message() {
+    assert_display_and_error::<MacroAuthorizationRejection>();
+
+    let rejection = MacroAuthorizationRejection {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        message: Cow::Borrowed("client-safe message"),
+    };
+
+    assert_eq!(rejection.to_string(), "client-safe message");
+}
+
+#[tokio::test]
+async fn rejection_response_preserves_status_and_cow_message() {
+    let cases = [
+        MacroAuthorizationRejection {
+            status: StatusCode::IM_A_TEAPOT,
+            message: Cow::Borrowed("borrowed message"),
+        },
+        MacroAuthorizationRejection {
+            status: StatusCode::FORBIDDEN,
+            message: Cow::Owned("owned message".to_string()),
+        },
+    ];
+
+    for rejection in cases {
+        let expected_status = rejection.status;
+        let expected_body = format!(r#"{{"message":"{}"}}"#, rejection.message);
+        let response = rejection.into_response();
+        let status = response.status();
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("rejection response body should be readable")
+            .to_bytes();
+
+        assert_eq!(status, expected_status);
+        assert_eq!(body.as_ref(), expected_body.as_bytes());
+    }
+}
 
 #[test]
 fn state_and_extractors_are_clone_without_requiring_service_clone() {

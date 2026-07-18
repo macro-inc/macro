@@ -853,6 +853,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service.clone(),
             email_service,
             entity_access_service.clone(),
+            authorization_state.clone(),
         )
         .with_favorites_reader(Arc::new(
             service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),

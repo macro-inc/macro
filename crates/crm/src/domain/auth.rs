@@ -166,7 +166,7 @@ pub struct CrmTeamReceipt<T: RequiredPermission> {
 
 impl<T: RequiredPermission> CrmTeamReceipt<T> {
     /// Mint from a verified team-scoped access receipt (e.g. one
-    /// produced by `MacroUserTeamExtractor`). Public because the receipt
+    /// produced by `MacroUserTeamExtractorV2`). Public because the receipt
     /// is itself the capability and `team_id` is derived from its entity
     /// id, so nothing can be forged. Errors if the receipt is not for a
     /// `Team` or the id is malformed.

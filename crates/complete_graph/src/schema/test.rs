@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
     CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
     GetEmailsRequest, Link, LinkLabel, ParsedThread, Thread, UpdateThreadLabelsResult,
@@ -10,6 +11,10 @@ use entity_access::domain::models::{
     EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
 };
 use graphql_common::GraphqlSoupRequestParts;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
@@ -17,9 +22,14 @@ use macro_user_id::{
 use model_user::UserContext;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use models_soup::{document::SoupDocument, item::SoupItem};
+use rootcause::Report;
 use uuid::Uuid;
 
 use super::*;
+
+const VALID_USER_ID: &str = "macro|user@example.com";
+const INTERNAL_USER_ID: &str = "macro|internal@example.com";
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone, Default)]
 struct CountingSoupService {
@@ -32,7 +42,7 @@ fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesFi
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap(),
+        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
         name: format!("Document {id}"),
         file_type: None,
         sha: None,
@@ -385,10 +395,57 @@ impl EntityAccessService for CountingEntityAccessService {
     }
 }
 
+#[derive(Clone, Default)]
+struct FakeAuthorizationService {
+    authorization_calls: Arc<AtomicUsize>,
+}
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.authorization_calls.fetch_add(1, Ordering::SeqCst);
+
+        match jwt {
+            "valid" => Ok(user_context(VALID_USER_ID)),
+            "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        }
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        self.authorization_calls.fetch_add(1, Ordering::SeqCst);
+
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.map(|user_id| user_context(&user_id)))
+    }
+}
+
+fn user_context(user_id: &str) -> UserContext {
+    UserContext {
+        user_id: user_id.to_owned(),
+        fusion_user_id: "fusion-user-id".to_owned(),
+        permissions: None,
+        organization_id: None,
+    }
+}
+
 #[derive(Clone)]
 struct TestState {
+    authorization: MacroAuthorizationState<FakeAuthorizationService>,
     email: EmailRouterState<CountingEmailService>,
     entity_access: Arc<CountingEntityAccessService>,
+}
+
+impl FromRef<TestState> for MacroAuthorizationState<FakeAuthorizationService> {
+    fn from_ref(state: &TestState) -> Self {
+        state.authorization.clone()
+    }
 }
 
 impl FromRef<TestState> for EmailRouterState<CountingEmailService> {
@@ -408,6 +465,7 @@ struct TestHarness {
         CountingSoupService,
         CountingEmailService,
         CountingEntityAccessService,
+        FakeAuthorizationService,
         TestState,
         NoOpEntityPropertyWriter,
         NoOpSoupNotificationEdgeReader,
@@ -415,6 +473,7 @@ struct TestHarness {
         NoOpSoupEmailContentEdgeReader,
     >,
     state: TestState,
+    authorization_calls: Arc<AtomicUsize>,
     inbox_calls: Arc<AtomicUsize>,
     team_calls: Arc<AtomicUsize>,
     raw_soup_calls: Arc<AtomicUsize>,
@@ -425,7 +484,9 @@ struct TestHarness {
 fn harness() -> TestHarness {
     let email = CountingEmailService::default();
     let entity_access = CountingEntityAccessService::default();
+    let authorization = FakeAuthorizationService::default();
     let soup = CountingSoupService::default();
+    let authorization_calls = Arc::clone(&authorization.authorization_calls);
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let team_calls = Arc::clone(&entity_access.team_calls);
     let raw_soup_calls = Arc::clone(&soup.raw_calls);
@@ -434,9 +495,11 @@ fn harness() -> TestHarness {
     TestHarness {
         schema: build_schema_with_service(soup),
         state: TestState {
+            authorization: MacroAuthorizationState::new(Arc::new(authorization)),
             email: EmailRouterState::new(email),
             entity_access: Arc::new(entity_access),
         },
+        authorization_calls,
         inbox_calls,
         team_calls,
         raw_soup_calls,
@@ -446,20 +509,38 @@ fn harness() -> TestHarness {
 }
 
 fn authenticated_parts() -> axum::http::request::Parts {
-    let (mut parts, ()) = axum::http::Request::new(()).into_parts();
-    parts.extensions.insert(UserContext {
-        user_id: "macro|user@example.com".to_owned(),
-        fusion_user_id: String::new(),
-        permissions: None,
-        organization_id: None,
-    });
-    parts
+    bearer_parts("valid")
+}
+
+fn bearer_parts(token: &str) -> axum::http::request::Parts {
+    let request = HttpRequest::builder()
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(())
+        .unwrap();
+    request.into_parts().0
+}
+
+fn internal_parts(user_id: &str) -> axum::http::request::Parts {
+    let request = HttpRequest::builder()
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, user_id)
+        .body(())
+        .unwrap();
+    request.into_parts().0
 }
 
 impl TestHarness {
     async fn execute(&self, query: &str) -> async_graphql::Response {
+        self.execute_with_parts(query, authenticated_parts()).await
+    }
+
+    async fn execute_with_parts(
+        &self,
+        query: &str,
+        parts: axum::http::request::Parts,
+    ) -> async_graphql::Response {
         let request = async_graphql::Request::new(query)
-            .data(GraphqlSoupRequestParts::new(authenticated_parts()))
+            .data(GraphqlSoupRequestParts::new(parts))
             .data(self.state.clone());
         self.schema.execute(request).await
     }
@@ -476,6 +557,28 @@ async fn user_id_resolves_without_touching_services() {
         response.data.to_string(),
         r#"{user: {id: "macro|user@example.com"}}"#
     );
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn internal_authorization_uses_the_acting_user_claim() {
+    let harness = harness();
+
+    let response = harness
+        .execute_with_parts("{ user { id } }", internal_parts(INTERNAL_USER_ID))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.to_string(),
+        r#"{user: {id: "macro|internal@example.com"}}"#
+    );
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
 }
@@ -506,6 +609,9 @@ async fn soup_input_rejects_initial_and_continuation_together() {
 
     assert!(!response.errors.is_empty());
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -518,15 +624,17 @@ async fn soup_requests_frecency_only_when_selected() {
 
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
-async fn group_soup_nests_items_in_bins_and_preserves_database_order() {
+async fn group_soup_nests_items_in_bins_and_reuses_cached_authorization() {
     let harness = harness();
 
     let response = harness
         .execute(
-            "{ user { groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount nextCursor items { id entityType } } } } }",
+            "{ user { id groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount nextCursor items { id entityType } } } } }",
         )
         .await;
 
@@ -535,6 +643,7 @@ async fn group_soup_nests_items_in_bins_and_preserves_database_order() {
     let bin = &data["user"]["groupSoup"]["bins"][0];
     assert_eq!(bin["key"], "document");
     assert_eq!(bin["totalCount"], 3);
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     let cursor = bin["nextCursor"].as_str().unwrap();
     assert_eq!(bin["items"].as_array().unwrap().len(), 2);
 
@@ -544,6 +653,7 @@ async fn group_soup_nests_items_in_bins_and_preserves_database_order() {
     let response = harness.execute(&continuation).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
 
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 2);
     assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 2);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
@@ -562,20 +672,56 @@ async fn crm_scoped_soup_resolves_team_membership_lazily() {
         )
         .await;
 
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
     assert!(!response.errors.is_empty());
 }
 
 #[tokio::test]
 async fn unauthenticated_request_fails_at_the_resolver() {
     let harness = harness();
-    let (parts, ()) = axum::http::Request::new(()).into_parts();
+    let parts = HttpRequest::new(()).into_parts().0;
 
-    let request = async_graphql::Request::new("{ user { id } }")
-        .data(GraphqlSoupRequestParts::new(parts))
-        .data(harness.state.clone());
-    let response = harness.schema.execute(request).await;
+    let response = harness.execute_with_parts("{ user { id } }", parts).await;
 
-    assert!(!response.errors.is_empty());
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "authentication required");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn invalid_credentials_return_the_safe_authorization_error() {
+    let harness = harness();
+
+    let response = harness
+        .execute_with_parts("{ user { id } }", bearer_parts("invalid"))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "unauthorized");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn expired_credentials_return_the_safe_authorization_error() {
+    let harness = harness();
+
+    let response = harness
+        .execute_with_parts("{ user { id } }", bearer_parts("expired"))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "jwt expired");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
 }
