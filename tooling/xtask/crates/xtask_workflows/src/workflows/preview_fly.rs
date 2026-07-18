@@ -621,6 +621,20 @@ fn deploy_to_fly() -> Step<Run> {
             fi
             echo "preview deployment mode: $mode (snapshot $snapshot_key)"
 
+            # Keep the machine in demand for the WHOLE deploy, hot path
+            # included: fly-proxy suspends a machine ~7 min after its last
+            # proxied request, and SSH via hallpass is not proxy traffic — a
+            # hot update with no browser traffic got its VM suspended
+            # mid-session (the frozen `flyctl ssh console` then ate 52 min of
+            # runner until the job timeout). Any response status counts as
+            # traffic, and a request also resumes a suspended machine.
+            (while :; do
+              curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
+              sleep 15
+            done) &
+            keepalive=$!
+            trap 'kill "$keepalive" 2>/dev/null || true' EXIT
+
             flyctl auth docker
             registry="registry.fly.io/$APP_NAME"
             # Mirror every stack image into the app's registry repo instead of
@@ -702,8 +716,11 @@ fn deploy_to_fly() -> Step<Run> {
                 --app "$APP_NAME" --machine "$machine_id" --mode 0600 \
                 || hot_rc=$?
               if [ "$hot_rc" = 0 ]; then
+                # timeout backstop: a suspended-mid-session VM freezes the ssh
+                # client forever (measured: 52 min of hang). 10 min is triple
+                # a normal hot apply; on expiry we fall back to rehydrate.
                 hot_command="/srv/macro/bin/hot-update '$update_image' /tmp/macro-registry-token"
-                flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
+                timeout 600 flyctl ssh console --app "$APP_NAME" --machine "$machine_id" \
                   --command "$hot_command" || hot_rc=$?
               fi
               if [ "$hot_rc" = 0 ]; then
@@ -755,27 +772,15 @@ fn deploy_to_fly() -> Step<Run> {
             image="$registry:${{ github.sha }}"
             docker build -t "$image" preview-ctx
             push_image "$image"
-            # Keep the machine in demand while it boots: with zero inbound
-            # traffic, fly-proxy counts a health-failing machine as excess
-            # capacity and suspends it mid-boot (observed mid-docker-load).
-            # Any response status counts as traffic, and a request also
-            # resumes an already-suspended machine.
-            (while :; do
-              curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
-              sleep 15
-            done) &
-            keepalive=$!
             # First boot does real work before 8090 opens (pulling the stack
             # images, snapshot restore, compose up, FusionAuth's JVM) —
             # give the health check more runway than flyctl's default wait.
-            rc=0
+            # The step-wide keepalive above holds the machine out of suspend.
             flyctl deploy --app "$APP_NAME" \
               --config infra/preview/fly.toml \
               --image "$image" \
               --wait-timeout 1800 \
-              --yes || rc=$?
-            kill "$keepalive" 2>/dev/null || true
-            exit "$rc"
+              --yes
         "#})
         // Accept the org slug from either a repo variable or a repo secret —
         // it's not sensitive, but people reasonably reach for secrets first.
