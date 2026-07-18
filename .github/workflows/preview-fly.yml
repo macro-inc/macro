@@ -53,6 +53,20 @@ jobs:
         set -euo pipefail
         env_file="$RUNNER_TEMP/namespace-sccache.env"
         if nsc cache sccache setup --cache_name fly-preview > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
