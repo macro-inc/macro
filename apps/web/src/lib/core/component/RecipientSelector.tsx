@@ -296,13 +296,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const [portalSearchRef, setPortalSearchRef] = createSignal<
     HTMLDivElement | undefined
   >();
+  const [portalMount, setPortalMount] = createSignal<HTMLElement | undefined>();
 
-  const portalMount = () => {
-    if (props.portalScope !== 'local') return undefined;
-    return (
+  // Resolve the local portal target once the anchor is attached to the DOM.
+  // `.closest()` on a not-yet-connected node returns null, so resolving this as
+  // a derived getter during render would permanently see no `.portal-scope` and
+  // the dropdown would never mount.
+  onMount(() => {
+    if (props.portalScope !== 'local') return;
+    setPortalMount(
       portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
     );
-  };
+  });
+
   const shouldRenderPortal = () =>
     props.portalScope !== 'local' || portalMount() !== undefined;
 
