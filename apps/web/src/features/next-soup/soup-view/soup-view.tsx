@@ -28,6 +28,7 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
+import { SoupRowMetadataProvider } from '@app/features/next-soup/soup-view/soup-row-metadata-provider';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/features/next-soup/soup-view/soup-view-file-dropzone';
@@ -784,7 +785,9 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
-              <SoupViewList />
+              <SoupRowMetadataProvider>
+                <SoupViewList />
+              </SoupRowMetadataProvider>
             </Show>
           </Suspense>
           <Show when={isMobile()}>

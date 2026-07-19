@@ -3,10 +3,9 @@ import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-co
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
-import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import {
   CallDurationBadge,
   CallStatusBadge,
@@ -44,7 +43,6 @@ function RowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
-  tagSets?: Accessor<TagSetResponse[]>;
   onFilterByTag?: (optionId: string) => void;
 }) {
   return (
@@ -52,7 +50,6 @@ function RowTags(props: {
       entityId={props.entityId}
       entityType={props.entityType}
       properties={props.properties}
-      tagSets={props.tagSets}
       onFilterByTag={props.onFilterByTag}
     />
   );
@@ -64,9 +61,8 @@ export function WideLayout(props: LayoutProps) {
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = isEmailEntity(props.entity)
-    ? useOwningInbox(
-        () => (isEmailEntity(props.entity) ? props.entity : undefined),
-        soupView?.emailLinks
+    ? useOwningInbox(() =>
+        isEmailEntity(props.entity) ? props.entity : undefined
       )
     : () => undefined;
 
@@ -120,7 +116,6 @@ export function WideLayout(props: LayoutProps) {
             {(entity) => (
               <EmailWideContent
                 entity={entity()}
-                links={soupView?.emailLinks}
                 chars={props.chars}
                 showHitSnippet={props.showHitSnippet}
                 setContainerRef={props.setSnippetContainerRef}
@@ -176,7 +171,6 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.PROJECT}
               properties={entity().properties}
-              tagSets={soupView?.tagFilter.tagSets}
               onFilterByTag={soupView?.filterByTag}
             />
           )}
@@ -198,7 +192,6 @@ export function WideLayout(props: LayoutProps) {
                   isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
                 }
                 properties={properties()}
-                tagSets={soupView?.tagFilter.tagSets}
                 onFilterByTag={soupView?.filterByTag}
               />
             );
@@ -214,7 +207,6 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.THREAD}
               properties={entity().properties}
-              tagSets={soupView?.tagFilter.tagSets}
             />
           )}
         </Show>
@@ -226,7 +218,6 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CHAT}
               properties={entity().properties}
-              tagSets={soupView?.tagFilter.tagSets}
               onFilterByTag={soupView?.filterByTag}
             />
           )}
@@ -239,7 +230,6 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CALL_RECORD}
               properties={entity().properties}
-              tagSets={soupView?.tagFilter.tagSets}
               onFilterByTag={soupView?.filterByTag}
             />
           )}

@@ -3,17 +3,9 @@ import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn, HoverCard, Layer } from '@ui';
-import {
-  type Accessor,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
@@ -265,22 +257,13 @@ export function EntityRowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
-  tagSets?: Accessor<TagSetResponse[]>;
   maxVisible?: number;
   class?: string;
   onFilterByTag?: (optionId: string) => void;
 }) {
-  const appliedTags = useSoupResolvedTags(
-    () => props.properties,
-    props.tagSets
-  );
+  const appliedTags = useSoupResolvedTags(() => props.properties);
   const createDocTags = () =>
-    useSoupDocTags(
-      props.entityId,
-      props.entityType,
-      () => props.properties,
-      props.tagSets
-    );
+    useSoupDocTags(props.entityId, props.entityType, () => props.properties);
   const maxVisible = () => props.maxVisible ?? DEFAULT_MAX_VISIBLE;
   const visible = () => appliedTags().slice(0, maxVisible());
   const hidden = () => appliedTags().slice(maxVisible());

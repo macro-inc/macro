@@ -66,7 +66,6 @@ import {
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
-import { useEmailLinksQuery } from '@queries/email/link';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -77,7 +76,6 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
 import { useReactiveSoupAstItemsQuery } from '@queries/soup/reactive-items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
-import type { Link } from '@service-email/generated/schemas';
 import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
@@ -148,7 +146,6 @@ interface SoupViewContextValues {
   queryFilters: QueryStore;
   tagFilter: TagFilter;
   filterByTag: (optionId: string) => void;
-  emailLinks: Accessor<Link[]>;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
   ownerFilter: Accessor<string[]>;
@@ -227,8 +224,6 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const queryClient = useQueryClient();
-  const emailLinksQuery = useEmailLinksQuery();
-  const emailLinks = (): Link[] => emailLinksQuery.data?.links ?? [];
   const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
     enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
   });
@@ -1186,7 +1181,6 @@ export const SoupViewContextProvider: FlowComponent<
     queryFilters,
     tagFilter,
     filterByTag,
-    emailLinks,
     assigneeFilter,
     setAssigneeFilter,
     ownerFilter,

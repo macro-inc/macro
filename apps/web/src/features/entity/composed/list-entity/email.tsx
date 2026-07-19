@@ -1,7 +1,5 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { useEmailLinksQuery } from '@queries/email/link';
-import type { Link } from '@service-email/generated/schemas';
 import { cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import { DraftBadge } from '../../components/Badges';
@@ -9,6 +7,7 @@ import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { getSnippetHit } from '../../extractors-search/snippet-entity';
 import type { EmailEntity } from '../../types/entity';
+import { useEmailLinks } from './email-links-context';
 
 /**
  * Resolves the linked inbox a thread belongs to, but only when the user has
@@ -16,17 +15,14 @@ import type { EmailEntity } from '../../types/entity';
  * thread's link is one the user can see. Returns undefined otherwise — e.g. a
  * thread shared with the user that isn't one of their own/delegated inboxes.
  */
-export function useOwningInbox(
-  entity: Accessor<EmailEntity | undefined>,
-  sharedLinks?: Accessor<Link[]>
-) {
-  const linksQuery = sharedLinks ? undefined : useEmailLinksQuery();
+export function useOwningInbox(entity: Accessor<EmailEntity | undefined>) {
+  const links = useEmailLinks();
   return createMemo(() => {
     const linkId = entity()?.linkId;
     if (!linkId) return undefined;
-    const links = sharedLinks?.() ?? linksQuery?.data?.links ?? [];
-    if (links.length <= 1) return undefined;
-    return links.find((l) => l.id === linkId);
+    const availableLinks = links();
+    if (availableLinks.length <= 1) return undefined;
+    return availableLinks.find((link) => link.id === linkId);
   });
 }
 
@@ -35,12 +31,8 @@ export function useOwningInbox(
  * address on hover), resolved by email so an own secondary inbox shows its own
  * identity rather than the parent account's.
  */
-export function EmailInboxChip(props: {
-  entity: EmailEntity;
-  links?: Accessor<Link[]>;
-  class?: string;
-}) {
-  const inbox = useOwningInbox(() => props.entity, props.links);
+export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
+  const inbox = useOwningInbox(() => props.entity);
   return (
     <Show when={inbox()}>
       {(link) => (
@@ -114,7 +106,6 @@ export function EmailNarrowBody(props: {
 
 export function EmailWideContent(props: {
   entity: EmailEntity;
-  links?: Accessor<Link[]>;
   chars: number;
   showHitSnippet: boolean;
   setContainerRef: (el: HTMLElement) => void;
@@ -125,11 +116,7 @@ export function EmailWideContent(props: {
         <span class="truncate max-w-32 flex gap-2 items-center">
           <EmailIdentity entity={props.entity} />
         </span>
-        <EmailInboxChip
-          entity={props.entity}
-          links={props.links}
-          class="ml-auto"
-        />
+        <EmailInboxChip entity={props.entity} class="ml-auto" />
       </span>
       <span class="truncate">
         <Entity.Title entity={props.entity} />

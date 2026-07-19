@@ -194,7 +194,6 @@ export function TaskGridLayout(props: LayoutProps) {
             entityId={props.entity.id}
             entityType={EntityType.TASK}
             properties={entity().properties}
-            tagSets={soupView?.tagFilter.tagSets}
             onFilterByTag={soupView?.filterByTag}
             class="ml-auto"
           />
