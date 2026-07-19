@@ -1828,6 +1828,7 @@ export function BaseInput(props: {
             <div class="shrink-0 text-ink-placeholder">To:</div>
             <RecipientSelector<EmailRecipient['kind']>
               openOnFocus={false}
+              portalScope={composePortalScope()}
               class={mobileRecipientSelectorClass}
               inputRef={setToRef}
               options={ctx.recipientOptions}
@@ -1871,6 +1872,7 @@ export function BaseInput(props: {
               <div class="shrink-0 text-ink-placeholder">Cc:</div>
               <RecipientSelector<EmailRecipient['kind']>
                 openOnFocus={false}
+                portalScope={composePortalScope()}
                 class={mobileRecipientSelectorClass}
                 inputRef={setCcRef}
                 options={ctx.recipientOptions}
@@ -1900,6 +1902,7 @@ export function BaseInput(props: {
               <div class="shrink-0 text-ink-placeholder">Bcc:</div>
               <RecipientSelector<EmailRecipient['kind']>
                 openOnFocus={false}
+                portalScope={composePortalScope()}
                 class={mobileRecipientSelectorClass}
                 inputRef={setBccRef}
                 options={ctx.recipientOptions}
