@@ -5,22 +5,10 @@
 import type { Link } from '@service-email/generated/schemas';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { EmailEntity, EntityData } from '../../types/entity';
 import { EmailInboxChip, useOwningInboxForEntity } from './email';
-import {
-  EmailLinksProvider,
-  EmailLinksQueryProvider,
-  useEmailLinks,
-} from './email-links-context';
-
-const mocks = vi.hoisted(() => ({
-  useEmailLinksQuery: vi.fn(),
-}));
-
-vi.mock('@queries/email/link', () => ({
-  useEmailLinksQuery: mocks.useEmailLinksQuery,
-}));
+import { EmailLinksProvider } from './email-links-context';
 
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: () => <span data-testid="inbox-icon" />,
@@ -34,17 +22,6 @@ vi.mock('../../extractors-search/HitSnippet', () => ({
 vi.mock('../../extractors-search/snippet-entity', () => ({
   getSnippetHit: () => undefined,
 }));
-
-function LinksConsumer() {
-  const links = useEmailLinks();
-  return (
-    <span>
-      {links()
-        .map((link) => link.id)
-        .join(',')}
-    </span>
-  );
-}
 
 function RecycledRowInboxConsumer() {
   const [entity, setEntity] = createSignal<EntityData>({
@@ -82,27 +59,7 @@ function RecycledRowInboxConsumer() {
   );
 }
 
-beforeEach(() => {
-  mocks.useEmailLinksQuery.mockReset();
-  mocks.useEmailLinksQuery.mockReturnValue({
-    data: { links: [{ id: 'inbox-1' }] },
-  });
-});
-
 describe('EmailLinksContext', () => {
-  it('uses provided links without creating a query', () => {
-    const links = (): Link[] => [{ id: 'provided-inbox' } as Link];
-
-    render(() => (
-      <EmailLinksProvider links={links}>
-        <LinksConsumer />
-      </EmailLinksProvider>
-    ));
-
-    expect(screen.getByText('provided-inbox')).toBeTruthy();
-    expect(mocks.useEmailLinksQuery).not.toHaveBeenCalled();
-  });
-
   it('supports the real email-row consumer', () => {
     const links = (): Link[] => [
       { id: 'primary-inbox' } as Link,
@@ -123,7 +80,6 @@ describe('EmailLinksContext', () => {
     ));
 
     expect(screen.getByTitle('secondary@example.com')).toBeTruthy();
-    expect(mocks.useEmailLinksQuery).not.toHaveBeenCalled();
   });
 
   it('updates inbox attribution when a mounted row changes entity type', async () => {
@@ -144,22 +100,5 @@ describe('EmailLinksContext', () => {
     expect(screen.queryByText('secondary@example.com')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Recycle row' }));
     expect(screen.getByText('secondary@example.com')).toBeTruthy();
-  });
-
-  it('makes standalone query ownership explicit', () => {
-    render(() => (
-      <EmailLinksQueryProvider>
-        <LinksConsumer />
-      </EmailLinksQueryProvider>
-    ));
-
-    expect(screen.getByText('inbox-1')).toBeTruthy();
-    expect(mocks.useEmailLinksQuery).toHaveBeenCalledOnce();
-  });
-
-  it('fails fast outside a provider', () => {
-    expect(() => render(() => <LinksConsumer />)).toThrow(
-      'useEmailLinks can only be used under an EmailLinksProvider'
-    );
   });
 });

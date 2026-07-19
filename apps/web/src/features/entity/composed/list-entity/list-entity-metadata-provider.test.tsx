@@ -3,14 +3,12 @@
  */
 
 import { useTagSets } from '@property/tags/tag-sets-context';
-import type { Link } from '@service-email/generated/schemas';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEmailLinks } from './email-links-context';
 import {
-  ListEntityMetadataProvider,
   ListEntityMetadataQueryProvider,
+  ListEntityNoopMetadataProvider,
 } from './list-entity-metadata-provider';
 
 const mocks = vi.hoisted(() => ({
@@ -31,7 +29,7 @@ function MetadataConsumer(props: { label: string }) {
   const tagSets = useTagSets();
   return (
     <span>
-      {props.label}:{emailLinks()[0]?.id}:{tagSets()[0]?.scope}
+      {props.label}:{emailLinks().length}:{tagSets().length}
     </span>
   );
 }
@@ -56,25 +54,20 @@ describe('ListEntityMetadataProvider', () => {
       </ListEntityMetadataQueryProvider>
     ));
 
-    expect(screen.getByText('first:inbox-1:user')).toBeTruthy();
-    expect(screen.getByText('second:inbox-1:user')).toBeTruthy();
+    expect(screen.getByText('first:1:1')).toBeTruthy();
+    expect(screen.getByText('second:1:1')).toBeTruthy();
     expect(mocks.useEmailLinksQuery).toHaveBeenCalledOnce();
     expect(mocks.useTagsQuery).toHaveBeenCalledOnce();
   });
 
-  it('accepts caller-owned metadata without creating queries', () => {
-    const emailLinks = (): Link[] => [{ id: 'provided-inbox' } as Link];
-    const tagSets = (): TagSetResponse[] => [
-      { scope: 'team', options: [] } as TagSetResponse,
-    ];
-
+  it('provides explicit empty metadata without creating queries', () => {
     render(() => (
-      <ListEntityMetadataProvider emailLinks={emailLinks} tagSets={tagSets}>
-        <MetadataConsumer label="provided" />
-      </ListEntityMetadataProvider>
+      <ListEntityNoopMetadataProvider>
+        <MetadataConsumer label="noop" />
+      </ListEntityNoopMetadataProvider>
     ));
 
-    expect(screen.getByText('provided:provided-inbox:team')).toBeTruthy();
+    expect(screen.getByText('noop:0:0')).toBeTruthy();
     expect(mocks.useEmailLinksQuery).not.toHaveBeenCalled();
     expect(mocks.useTagsQuery).not.toHaveBeenCalled();
   });

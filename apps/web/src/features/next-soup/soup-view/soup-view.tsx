@@ -147,7 +147,6 @@ import { useSearchTagsFlag } from './filters-bar/search/search-tags-flag';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { resolveSoupVirtualizerSizing } from './virtualizer-sizing';
 
 export const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
@@ -1712,6 +1711,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 };
 
 const DEFAULT_OVERSCAN = 5;
+const DEFAULT_ITEM_SIZE_ESTIMATE = 40;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
@@ -1735,9 +1735,6 @@ const SoupList = (props: SoupListProps) => {
     createSignal<VirtualizerHandle>();
 
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
-  const virtualizerSizing = createMemo(() =>
-    resolveSoupVirtualizerSizing(props.itemSize, overscan())
-  );
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
 
@@ -1807,8 +1804,12 @@ const SoupList = (props: SoupListProps) => {
           ref={registerVirtualizerHandler}
           startMargin={topInset()}
           data={props.rows}
-          itemSize={virtualizerSizing().itemSize}
-          bufferSize={virtualizerSizing().bufferSize}
+          // Leave itemSize unset for heterogeneous lists so Virtua measures
+          // larger rows; 40px is only the default overscan estimate.
+          itemSize={props.itemSize}
+          bufferSize={
+            overscan() * (props.itemSize ?? DEFAULT_ITEM_SIZE_ESTIMATE)
+          }
           onScroll={handleScroll}
         >
           {(row, i) => props.children(row, i)}

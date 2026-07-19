@@ -5,18 +5,14 @@ import {
   type EmailEntity,
   InlineEntity,
   ListEntity,
-  ListEntityMetadataProvider,
+  ListEntityNoopMetadataProvider,
   ListLayoutProvider,
 } from '@entity';
 import CheckIcon from '@phosphor/check.svg';
-import type { Link } from '@service-email/generated/schemas';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 
 const CURRENT_USER_ID = 'macro|current@example.com';
-const EMPTY_EMAIL_LINKS: Link[] = [];
-const EMPTY_TAG_SETS: TagSetResponse[] = [];
 
 const mockEmail = (
   id: string,
@@ -134,10 +130,7 @@ export function OnboardingInbox() {
         Swipe an email left to mark it done, or press and hold for more actions.
       </p>
 
-      <ListEntityMetadataProvider
-        emailLinks={() => EMPTY_EMAIL_LINKS}
-        tagSets={() => EMPTY_TAG_SETS}
-      >
+      <ListEntityNoopMetadataProvider>
         <ListLayoutProvider ref={listRef}>
           <SwipableRowProvider
             container={listRef}
@@ -181,7 +174,7 @@ export function OnboardingInbox() {
             </div>
           </SwipableRowProvider>
         </ListLayoutProvider>
-      </ListEntityMetadataProvider>
+      </ListEntityNoopMetadataProvider>
 
       {/* Long-press action drawer (markup modeled on SoupEntityActionDrawer). */}
       <MobileDrawer

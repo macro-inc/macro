@@ -1,11 +1,9 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { seedMockDisplayNames } from '@core/user';
-import type { Link } from '@service-email/generated/schemas';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { createSignal, For } from 'solid-js';
 import { ListEntity } from '../composed/ListEntity';
-import { ListEntityMetadataProvider } from '../composed/list-entity/list-entity-metadata-provider';
+import { ListEntityNoopMetadataProvider } from '../composed/list-entity/list-entity-metadata-provider';
 import {
   ALL_MOCK_ENTITIES,
   createEntityWithNotifications,
@@ -17,9 +15,6 @@ import type { WithNotification } from '../types/notification';
 
 // Seed mock display names so user names render correctly
 seedMockDisplayNames([...MOCK_USERS]);
-
-const EMPTY_EMAIL_LINKS: Link[] = [];
-const EMPTY_TAG_SETS: TagSetResponse[] = [];
 
 export default function DebugEntityView() {
   const [selectedIds, setSelectedIds] = createSignal<Set<string>>(new Set());
@@ -72,10 +67,7 @@ export default function DebugEntityView() {
         <StaticSplitLabel label="Enity Component Demo (mock data)" />
         jk
       </SplitHeaderLeft>
-      <ListEntityMetadataProvider
-        emailLinks={() => EMPTY_EMAIL_LINKS}
-        tagSets={() => EMPTY_TAG_SETS}
-      >
+      <ListEntityNoopMetadataProvider>
         <div class="size-full overflow-auto">
           <For each={entitiesWithNotifications}>
             {(entity, index) => (
@@ -91,7 +83,7 @@ export default function DebugEntityView() {
             )}
           </For>
         </div>
-      </ListEntityMetadataProvider>
+      </ListEntityNoopMetadataProvider>
     </>
   );
 }

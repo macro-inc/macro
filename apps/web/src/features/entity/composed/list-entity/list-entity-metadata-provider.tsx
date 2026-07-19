@@ -10,6 +10,9 @@ import {
   EmailLinksQueryProvider,
 } from './email-links-context';
 
+const EMPTY_EMAIL_LINKS: Link[] = [];
+const EMPTY_TAG_SETS: TagSetResponse[] = [];
+
 /** Provides caller-owned metadata to a ListEntity collection without queries. */
 export const ListEntityMetadataProvider: FlowComponent<{
   emailLinks: Accessor<Link[]>;
@@ -18,6 +21,19 @@ export const ListEntityMetadataProvider: FlowComponent<{
   <EmailLinksProvider links={props.emailLinks}>
     <TagSetsProvider tagSets={props.tagSets}>{props.children}</TagSetsProvider>
   </EmailLinksProvider>
+);
+
+/**
+ * Satisfies ListEntity's metadata contract without loading or displaying
+ * optional metadata. Use for intentionally local or static collections.
+ */
+export const ListEntityNoopMetadataProvider: FlowComponent = (props) => (
+  <ListEntityMetadataProvider
+    emailLinks={() => EMPTY_EMAIL_LINKS}
+    tagSets={() => EMPTY_TAG_SETS}
+  >
+    {props.children}
+  </ListEntityMetadataProvider>
 );
 
 /**
