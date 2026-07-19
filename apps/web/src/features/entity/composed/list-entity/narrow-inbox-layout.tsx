@@ -115,7 +115,11 @@ export function NarrowInboxLayout(props: LayoutProps) {
           {(entity) => (
             <>
               <EmailIdentity entity={entity()} />
-              <EmailInboxChip entity={entity()} class="ml-auto" />
+              <EmailInboxChip
+                entity={entity()}
+                links={soupView?.emailLinks}
+                class="ml-auto"
+              />
             </>
           )}
         </Show>

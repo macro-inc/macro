@@ -3,19 +3,29 @@ import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn, HoverCard, Layer } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
-import { TagDot } from './TagDot';
 import {
-  type EditableTag,
-  TagEditorDialog,
-  type TagEditorDialogMode,
-} from './TagEditorDialog';
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { TagDot } from './TagDot';
+import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
-import { type ResolvedTag, useDocTags, useSoupDocTags } from './useDocTags';
+import {
+  type ResolvedTag,
+  useDocTags,
+  useSoupDocTags,
+  useSoupResolvedTags,
+} from './useDocTags';
 
 type DocTags = ReturnType<typeof useSoupDocTags>;
+type CreateDocTags = () => DocTags;
 
 const DEFAULT_MAX_VISIBLE = 3;
 const MAX_OVERFLOW_DOTS = 3;
@@ -131,9 +141,35 @@ function editableTagFromResolved(
   };
 }
 
+function RowTagEditorOwner(props: {
+  tag: ResolvedTag;
+  createDocTags: CreateDocTags;
+  onClose: () => void;
+}) {
+  // Editing is an interaction boundary: initialize query/mutation-backed tag
+  // state only after the user asks to edit this row's tag.
+  const docTags = props.createDocTags();
+  const editable = () => editableTagFromResolved(docTags, props.tag);
+
+  return (
+    <Show when={editable()}>
+      {(tag) => (
+        <TagEditorDialog
+          open
+          mode={{ type: 'edit', tag: tag() }}
+          teamAvailable={Boolean(
+            docTags.tagSets().some((set) => set.scope === 'team')
+          )}
+          onClose={props.onClose}
+        />
+      )}
+    </Show>
+  );
+}
+
 function TagChip(props: {
   tag: ResolvedTag;
-  docTags: DocTags;
+  createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
 }) {
@@ -152,7 +188,7 @@ function TagChip(props: {
         }
       >
         <TagPicker
-          docTags={props.docTags}
+          createDocTags={props.createDocTags}
           triggerClass={chipClass}
           triggerLabel={`Change or select tag ${props.tag.label}`}
           onOpenChange={setPickerOpen}
@@ -167,7 +203,7 @@ function TagChip(props: {
 
 function TagOverflow(props: {
   tags: ResolvedTag[];
-  docTags: DocTags;
+  createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
 }) {
@@ -196,7 +232,7 @@ function TagOverflow(props: {
         }
       >
         <TagPicker
-          docTags={props.docTags}
+          createDocTags={props.createDocTags}
           triggerClass={cn(chipClass, 'gap-1.5')}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
@@ -229,30 +265,29 @@ export function EntityRowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
+  tagSets?: Accessor<TagSetResponse[]>;
   maxVisible?: number;
   class?: string;
   onFilterByTag?: (optionId: string) => void;
 }) {
-  const docTags = useSoupDocTags(
-    props.entityId,
-    props.entityType,
-    () => props.properties
+  const appliedTags = useSoupResolvedTags(
+    () => props.properties,
+    props.tagSets
   );
+  const createDocTags = () =>
+    useSoupDocTags(
+      props.entityId,
+      props.entityType,
+      () => props.properties,
+      props.tagSets
+    );
   const maxVisible = () => props.maxVisible ?? DEFAULT_MAX_VISIBLE;
-  const visible = () => docTags.appliedTags().slice(0, maxVisible());
-  const hidden = () => docTags.appliedTags().slice(maxVisible());
-  const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
-    null
-  );
-
-  const openEdit = (tag: ResolvedTag) => {
-    const editable = editableTagFromResolved(docTags, tag);
-    if (!editable) return;
-    setEditorMode({ type: 'edit', tag: editable });
-  };
+  const visible = () => appliedTags().slice(0, maxVisible());
+  const hidden = () => appliedTags().slice(maxVisible());
+  const [editingTag, setEditingTag] = createSignal<ResolvedTag>();
 
   return (
-    <Show when={docTags.appliedTags().length > 0}>
+    <Show when={appliedTags().length > 0}>
       <div
         class={cn('flex items-center gap-1', props.class)}
         onClick={(event) => event.stopPropagation()}
@@ -261,28 +296,29 @@ export function EntityRowTags(props: {
           {(tag) => (
             <TagChip
               tag={tag}
-              docTags={docTags}
+              createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
-              onEdit={openEdit}
+              onEdit={setEditingTag}
             />
           )}
         </For>
         <Show when={hidden().length > 0}>
           <TagOverflow
             tags={hidden()}
-            docTags={docTags}
+            createDocTags={createDocTags}
             onFilterByTag={props.onFilterByTag}
-            onEdit={openEdit}
+            onEdit={setEditingTag}
           />
         </Show>
-        <TagEditorDialog
-          open={editorMode() !== null}
-          mode={editorMode()}
-          teamAvailable={Boolean(
-            docTags.tagSets().some((set) => set.scope === 'team')
+        <Show when={editingTag()}>
+          {(tag) => (
+            <RowTagEditorOwner
+              tag={tag()}
+              createDocTags={createDocTags}
+              onClose={() => setEditingTag(undefined)}
+            />
           )}
-          onClose={() => setEditorMode(null)}
-        />
+        </Show>
       </div>
     </Show>
   );

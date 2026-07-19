@@ -5,6 +5,7 @@ import { type EntityData, isTaskEntity } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { TagPickerPopover, useSoupDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import {
   type Accessor,
@@ -41,13 +42,15 @@ function RowTagPicker(props: {
   entityId: string;
   entityType: EntityType;
   properties: Accessor<SoupProperty[] | undefined>;
+  tagSets: Accessor<TagSetResponse[]>;
   position: { x: number; y: number } | undefined;
   onClose: () => void;
 }) {
   const docTags = useSoupDocTags(
     props.entityId,
     props.entityType,
-    props.properties
+    props.properties,
+    props.tagSets
   );
 
   return (
@@ -65,7 +68,7 @@ function RowTagPicker(props: {
 export const SoupEntityContextMenu: FlowComponent<
   SoupEntityContextMenuProps
 > = (props) => {
-  const { soup } = useSoupView();
+  const { soup, tagFilter } = useSoupView();
   const drawerManager = useSoupEntityActionDrawer();
   const rowTagsVisible = useRowTagsVisible();
 
@@ -143,6 +146,7 @@ export const SoupEntityContextMenu: FlowComponent<
                 const entity = props.entity;
                 return 'properties' in entity ? entity.properties : undefined;
               }}
+              tagSets={tagFilter.tagSets}
               position={menuPosition()}
               onClose={() => setTagPickerOpen(false)}
             />

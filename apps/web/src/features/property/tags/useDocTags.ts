@@ -93,9 +93,10 @@ function usePersistTagSelection(
 
 function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
-  persistTagSelection: PersistTagSelection
+  persistTagSelection: PersistTagSelection,
+  sharedTagSets?: Accessor<TagSetResponse[]>
 ) {
-  const tagsQuery = useTagsQuery();
+  const tagsQuery = sharedTagSets ? undefined : useTagsQuery();
   const ensureTagSet = useEnsureTagSetMutation();
   const [pendingOptionIdsByDefinition, setPendingOptionIdsByDefinition] =
     createSignal<Map<string, string[]>>(new Map());
@@ -103,7 +104,8 @@ function createDocTags(
     []
   );
 
-  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+  const tagSets = (): TagSetResponse[] =>
+    sharedTagSets?.() ?? tagsQuery?.data ?? [];
 
   const definitionByScope = createMemo(() => {
     const map = new Map<TagScope, PropertyDefinitionDetailResponse>();
@@ -359,7 +361,8 @@ export function useDocTags(entityId: string, entityType: EntityType) {
 export function useSoupDocTags(
   entityId: string,
   entityType: EntityType,
-  properties: Accessor<SoupProperty[] | undefined>
+  properties: Accessor<SoupProperty[] | undefined>,
+  sharedTagSets?: Accessor<TagSetResponse[]>
 ) {
   const appliedOptionIdsForDefinition = (definitionId: string) => {
     const property = properties()?.find(
@@ -370,7 +373,64 @@ export function useSoupDocTags(
   };
   const persistTagSelection = usePersistTagSelection(entityId, entityType);
 
-  return createDocTags(appliedOptionIdsForDefinition, persistTagSelection);
+  return createDocTags(
+    appliedOptionIdsForDefinition,
+    persistTagSelection,
+    sharedTagSets
+  );
+}
+
+/**
+ * Resolves the tags already present in soup properties without initializing
+ * any edit mutations. Virtual rows use this read-only model until a picker is
+ * actually opened.
+ */
+export function useSoupResolvedTags(
+  properties: Accessor<SoupProperty[] | undefined>,
+  sharedTagSets?: Accessor<TagSetResponse[]>
+): Accessor<ResolvedTag[]> {
+  const tagsQuery = sharedTagSets ? undefined : useTagsQuery();
+  const tagSets = (): TagSetResponse[] =>
+    sharedTagSets?.() ?? tagsQuery?.data ?? [];
+
+  const optionById = createMemo(() => {
+    const map = new Map<string, ResolvedTag>();
+    for (const set of tagSets()) {
+      for (const option of set.options) {
+        map.set(option.id, {
+          optionId: option.id,
+          propertyDefinitionId: option.propertyDefinitionId,
+          scope: set.scope,
+          label: optionLabel(option),
+          color: option.color ?? undefined,
+        });
+      }
+    }
+    return map;
+  });
+
+  return createMemo(() => {
+    const resolved: ResolvedTag[] = [];
+    const options = optionById();
+    const soupProperties = properties();
+
+    for (const set of tagSets()) {
+      const definitionId = set.definition?.id;
+      if (!definitionId) continue;
+      const property = soupProperties?.find(
+        (candidate) => candidate.definition.id === definitionId
+      );
+      const value = property?.value;
+      if (value?.type !== 'SelectOption') continue;
+
+      for (const optionId of value.value) {
+        const tag = options.get(optionId);
+        if (tag) resolved.push(tag);
+      }
+    }
+
+    return resolved;
+  });
 }
 
 export function useLocalDocTags(

@@ -1,12 +1,12 @@
 import { useRowTagsVisible } from '@app/features/next-soup/soup-view/filters-bar/search/search-tags-flag';
-import { useRowTagFilter } from '@app/features/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { type Accessor, Match, Show, Switch } from 'solid-js';
 import {
   CallDurationBadge,
   CallStatusBadge,
@@ -44,14 +44,16 @@ function RowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
+  tagSets?: Accessor<TagSetResponse[]>;
+  onFilterByTag?: (optionId: string) => void;
 }) {
-  const filterByTag = useRowTagFilter();
   return (
     <EntityRowTags
       entityId={props.entityId}
       entityType={props.entityType}
       properties={props.properties}
-      onFilterByTag={filterByTag}
+      tagSets={props.tagSets}
+      onFilterByTag={props.onFilterByTag}
     />
   );
 }
@@ -61,9 +63,12 @@ export function WideLayout(props: LayoutProps) {
   const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
-  const owningInbox = useOwningInbox(() =>
-    isEmailEntity(props.entity) ? props.entity : undefined
-  );
+  const owningInbox = isEmailEntity(props.entity)
+    ? useOwningInbox(
+        () => (isEmailEntity(props.entity) ? props.entity : undefined),
+        soupView?.emailLinks
+      )
+    : () => undefined;
 
   return (
     <Entity.Layout
@@ -115,6 +120,7 @@ export function WideLayout(props: LayoutProps) {
             {(entity) => (
               <EmailWideContent
                 entity={entity()}
+                links={soupView?.emailLinks}
                 chars={props.chars}
                 showHitSnippet={props.showHitSnippet}
                 setContainerRef={props.setSnippetContainerRef}
@@ -170,6 +176,8 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.PROJECT}
               properties={entity().properties}
+              tagSets={soupView?.tagFilter.tagSets}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
@@ -190,6 +198,8 @@ export function WideLayout(props: LayoutProps) {
                   isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
                 }
                 properties={properties()}
+                tagSets={soupView?.tagFilter.tagSets}
+                onFilterByTag={soupView?.filterByTag}
               />
             );
           }}
@@ -204,6 +214,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.THREAD}
               properties={entity().properties}
+              tagSets={soupView?.tagFilter.tagSets}
             />
           )}
         </Show>
@@ -215,6 +226,8 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CHAT}
               properties={entity().properties}
+              tagSets={soupView?.tagFilter.tagSets}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
@@ -226,6 +239,8 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CALL_RECORD}
               properties={entity().properties}
+              tagSets={soupView?.tagFilter.tagSets}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>

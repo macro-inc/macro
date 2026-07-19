@@ -62,21 +62,24 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 
 const MAX_LIST_HEIGHT = 192;
 
-export function TagPicker(props: {
-  docTags: DocTags;
+type TagPickerProps = {
   replaceTag?: ResolvedTag;
   triggerClass?: string;
   triggerLabel: string;
   children: JSX.Element;
   onOpenChange?: (open: boolean) => void;
-}) {
+} & (
+  | { docTags: DocTags; createDocTags?: never }
+  | { docTags?: never; createDocTags: () => DocTags }
+);
+
+export function TagPicker(props: TagPickerProps) {
   const [open, setOpen] = createSignal(false);
   const [editorMode, setEditorMode] = createSignal<TagEditorDialogMode | null>(
     null
   );
   const [createSuccessHandler, setCreateSuccessHandler] =
     createSignal<CreateTagSuccessHandler>();
-  const currentTeamQuery = useCurrentTeamQuery();
   let saveAndClose: (() => Promise<void>) | undefined;
 
   const setOpenState = (value: boolean) => {
@@ -98,52 +101,95 @@ export function TagPicker(props: {
   };
 
   return (
-    <>
-      <Popover
-        open={open()}
-        onOpenChange={handleOpenChange}
-        placement="bottom-start"
-        gutter={4}
+    <Popover
+      open={open()}
+      onOpenChange={handleOpenChange}
+      placement="bottom-start"
+      gutter={4}
+    >
+      <Popover.Trigger
+        type="button"
+        class={props.triggerClass}
+        aria-label={props.triggerLabel}
       >
-        <Popover.Trigger
-          type="button"
-          class={props.triggerClass}
-          aria-label={props.triggerLabel}
-        >
-          {props.children}
-        </Popover.Trigger>
-        <Show when={open()}>
-          <TagPickerBody
-            docTags={props.docTags}
-            onClose={() => setOpenState(false)}
-            onOpenCreateEditor={(mode, onCreateSuccess) => {
-              setCreateSuccessHandler(() => onCreateSuccess);
-              setEditorMode(mode);
-              setOpenState(false);
-            }}
-            onOpenEditEditor={(mode) => {
-              setEditorMode(mode);
-              setOpenState(false);
-            }}
-            registerSave={(handler) => {
-              saveAndClose = handler;
-            }}
-            suppressInitialOutsideEvents={false}
-          />
-        </Show>
-      </Popover>
-      <TagEditorDialog
-        open={editorMode() !== null}
-        mode={editorMode()}
-        teamAvailable={Boolean(currentTeamQuery.data?.team)}
-        onCreateSuccess={async (result) => {
-          await createSuccessHandler()?.(result);
-        }}
-        onClose={() => {
-          setEditorMode(null);
-          setCreateSuccessHandler(undefined);
-        }}
-      />
+        {props.children}
+      </Popover.Trigger>
+      <Show when={open() || editorMode() !== null}>
+        <TagPickerBodyOwner
+          docTags={props.docTags}
+          createDocTags={props.createDocTags}
+          open={open}
+          editorMode={editorMode}
+          onClose={() => setOpenState(false)}
+          onOpenCreateEditor={(mode, onCreateSuccess) => {
+            setCreateSuccessHandler(() => onCreateSuccess);
+            setEditorMode(mode);
+            setOpenState(false);
+          }}
+          onOpenEditEditor={(mode) => {
+            setEditorMode(mode);
+            setOpenState(false);
+          }}
+          registerSave={(handler) => {
+            saveAndClose = handler;
+          }}
+          createSuccessHandler={createSuccessHandler}
+          onEditorClose={() => {
+            setEditorMode(null);
+            setCreateSuccessHandler(undefined);
+          }}
+        />
+      </Show>
+    </Popover>
+  );
+}
+
+function TagPickerBodyOwner(props: {
+  docTags?: DocTags;
+  createDocTags?: () => DocTags;
+  open: () => boolean;
+  editorMode: () => TagEditorDialogMode | null;
+  onClose: () => void;
+  onOpenCreateEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'create' }>,
+    onCreateSuccess?: CreateTagSuccessHandler
+  ) => void;
+  onOpenEditEditor: (
+    mode: Extract<TagEditorDialogMode, { type: 'edit' }>
+  ) => void;
+  registerSave: (handler: (() => Promise<void>) | undefined) => void;
+  createSuccessHandler: () => CreateTagSuccessHandler | undefined;
+  onEditorClose: () => void;
+}) {
+  // The factory is invoked under this conditionally-mounted component owner,
+  // so row-level query/mutation hooks do not exist until the picker opens.
+  const docTags = props.docTags ?? props.createDocTags?.();
+  if (!docTags) throw new Error('TagPicker requires a doc-tags source');
+  const currentTeamQuery = useCurrentTeamQuery();
+
+  return (
+    <>
+      <Show when={props.open()}>
+        <TagPickerBody
+          docTags={docTags}
+          onClose={props.onClose}
+          onOpenCreateEditor={props.onOpenCreateEditor}
+          onOpenEditEditor={props.onOpenEditEditor}
+          registerSave={props.registerSave}
+          suppressInitialOutsideEvents={false}
+        />
+      </Show>
+      <Show when={props.editorMode()}>
+        <TagEditorDialog
+          open
+          mode={props.editorMode()}
+          teamAvailable={Boolean(currentTeamQuery.data?.team)}
+          onCreateSuccess={async (result) => {
+            await props.createSuccessHandler()?.(result);
+          }}
+          onClose={props.onEditorClose}
+        />
+      </Show>
     </>
   );
 }

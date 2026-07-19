@@ -1696,7 +1696,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 };
 
-const DEFAULT_ITEM_SIZE = 10;
+// Standard desktop rows are 40px, which is a useful baseline for converting
+// the row-based overscan prop to pixels. Do not force this value into virtua:
+// leaving itemSize unset enables its measured-size estimator, which adapts to
+// larger and heterogeneous rows such as the inbox cards.
+const DEFAULT_ITEM_SIZE_ESTIMATE = 40;
 const DEFAULT_OVERSCAN = 5;
 
 interface SoupListProps {
@@ -1720,8 +1724,10 @@ const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
 
-  const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+  const bufferSize = createMemo(
+    () => overscan() * (props.itemSize ?? DEFAULT_ITEM_SIZE_ESTIMATE)
+  );
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
 
@@ -1791,8 +1797,8 @@ const SoupList = (props: SoupListProps) => {
           ref={registerVirtualizerHandler}
           startMargin={topInset()}
           data={props.rows}
-          itemSize={itemSize()}
-          bufferSize={overscan() * itemSize()}
+          itemSize={props.itemSize}
+          bufferSize={bufferSize()}
           onScroll={handleScroll}
         >
           {(row, i) => props.children(row, i)}

@@ -1,3 +1,4 @@
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
@@ -17,6 +18,7 @@ import { EmailInboxChip } from './email';
 import type { LayoutProps } from './shared';
 
 export function NarrowLayout(props: LayoutProps) {
+  const soupView = useMaybeSoupView();
   return (
     <Entity.Layout
       class="w-full gap-x-2 items-center text-sm px-2 grid"
@@ -87,7 +89,13 @@ export function NarrowLayout(props: LayoutProps) {
           }}
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
-          {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
+          {(entity) => (
+            <EmailInboxChip
+              entity={entity()}
+              links={soupView?.emailLinks}
+              class="ml-auto"
+            />
+          )}
         </Show>
       </Entity.Slot>
 
