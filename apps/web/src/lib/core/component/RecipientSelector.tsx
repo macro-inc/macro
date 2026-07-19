@@ -820,6 +820,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 // drawer treats a touch on the dropdown as a drag (0.3px
                 // threshold) and cancels the tap. Opt this subtree out of drag.
                 data-corvu-no-drag=""
+                // On touch, Kobalte selects a listbox option on `click`, but
+                // tapping a (non-focusable) option first blurs the input, which
+                // tears down the listbox before that click lands — so nothing is
+                // selected. Preventing the pointerdown default keeps input focus
+                // (suppresses the compat mousedown/blur) while the click still
+                // fires, so the option selects.
+                onPointerDown={(e) => {
+                  if (e.pointerType !== 'mouse') e.preventDefault();
+                }}
                 class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge"
               >
                 <Combobox.Listbox
