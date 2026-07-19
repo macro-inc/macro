@@ -47,9 +47,11 @@ jobs:
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
         set -euo pipefail
-        env_file="$RUNNER_TEMP/namespace-sccache.env"
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
         if nsc cache sccache setup --cache_name fly-preview > "$env_file"; then
           # Register credential values as masked BEFORE exporting: GitHub only
           # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
