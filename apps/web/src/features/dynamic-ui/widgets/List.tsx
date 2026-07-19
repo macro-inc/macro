@@ -5,6 +5,7 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import type { FieldFilters } from '@app/features/next-soup/filters/filter-store/types';
+import { ListEntityMetadataQueryProvider } from '@entity';
 import { CollapsibleList } from '@entity/components/CollapsibleList';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
 import type { EntityData } from '@entity/types/entity';
@@ -32,10 +33,9 @@ import { SURFACE, TEXT } from '../tokens';
  * task pills read `entity.properties`. Both come from the soup item query: we
  * compile the widget's source into a soup AST and let `useSoupAstItemsQuery`
  * return ready-to-render `EntityData[]` (properties pre-attached). The only
- * provider `ListEntity` needs for the wide layout is `ListLayoutProvider`
- * (width detection); `Entity.Properties` brings its own `PropertiesProvider`,
- * and the split-panel / soup-view contexts are read optionally so they degrade
- * gracefully when absent. We render inside the gallery's split-panel anyway.
+ * composition root supplies responsive layout and shared row metadata; leaf
+ * rows remain query-free. `Entity.Properties` brings its own
+ * `PropertiesProvider`, and the split-panel / soup-view contexts are optional.
  *
  *  - `items` mode: resolve the supplied refs → EntityData via an id-filtered AST.
  *  - `query` mode: drive the same query straight from `source.query`.
@@ -155,51 +155,53 @@ function Rows(props: {
 
 export function List(props: ListProps) {
   return (
-    <ListLayoutProvider ref={() => undefined}>
-      <div class="flex w-full min-w-0 flex-col gap-2">
-        {/* Group header, soup-style: bold title above the card. */}
-        <Show when={props.title}>
-          {(title) => (
-            <div
-              class={cn(
-                'flex items-center gap-2 px-1 text-sm font-semibold',
-                TEXT.primary
-              )}
-            >
-              {title()}
-            </div>
-          )}
-        </Show>
-
-        {/*
-         * Flush row container (mirrors SoupView's unified list): no
-         * per-row dividers/borders. Each `ListEntity` brings its own
-         * rounded inset highlight pill (`mx-1`), so the card just needs a
-         * hair of vertical padding for the pills to breathe — adding
-         * `divide-y`/per-row borders here would box those highlights in.
-         */}
-        <div
-          class={cn(
-            'overflow-hidden rounded-lg border py-1',
-            SURFACE.borderMuted
-          )}
-        >
-          {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
-          <Suspense
-            fallback={
-              <div class={cn('px-3 py-6 text-center text-sm', TEXT.tertiary)}>
-                Loading…
+    <ListEntityMetadataQueryProvider>
+      <ListLayoutProvider ref={() => undefined}>
+        <div class="flex w-full min-w-0 flex-col gap-2">
+          {/* Group header, soup-style: bold title above the card. */}
+          <Show when={props.title}>
+            {(title) => (
+              <div
+                class={cn(
+                  'flex items-center gap-2 px-1 text-sm font-semibold',
+                  TEXT.primary
+                )}
+              >
+                {title()}
               </div>
-            }
+            )}
+          </Show>
+
+          {/*
+           * Flush row container (mirrors SoupView's unified list): no
+           * per-row dividers/borders. Each `ListEntity` brings its own
+           * rounded inset highlight pill (`mx-1`), so the card just needs a
+           * hair of vertical padding for the pills to breathe — adding
+           * `divide-y`/per-row borders here would box those highlights in.
+           */}
+          <div
+            class={cn(
+              'overflow-hidden rounded-lg border py-1',
+              SURFACE.borderMuted
+            )}
           >
-            <Rows
-              source={props.source}
-              limit={props.limit}
-              groupBy={props.groupBy}
-            />
-          </Suspense>
+            {/* Soup fetches suspend; guard so it can't blank the surrounding view. */}
+            <Suspense
+              fallback={
+                <div class={cn('px-3 py-6 text-center text-sm', TEXT.tertiary)}>
+                  Loading…
+                </div>
+              }
+            >
+              <Rows
+                source={props.source}
+                limit={props.limit}
+                groupBy={props.groupBy}
+              />
+            </Suspense>
+          </div>
         </div>
-      </div>
-    </ListLayoutProvider>
+      </ListLayoutProvider>
+    </ListEntityMetadataQueryProvider>
   );
 }

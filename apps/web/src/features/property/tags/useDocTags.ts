@@ -23,14 +23,9 @@ import {
 import { useEntityProperties } from '../hooks';
 import type { PropertyDefinitionDomain } from '../types';
 import { useTagSets } from './tag-sets-context';
+import type { ResolvedTag } from './useSoupResolvedTags';
 
-export type ResolvedTag = {
-  optionId: string;
-  propertyDefinitionId: string;
-  scope: TagScope;
-  label: string;
-  color?: string;
-};
+export type { ResolvedTag } from './useSoupResolvedTags';
 
 function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
@@ -380,56 +375,6 @@ export function useSoupDocTags(
     persistTagSelection,
     tagSets
   );
-}
-
-/**
- * Resolves the tags already present in soup properties without initializing
- * any edit mutations. Virtual rows use this read-only model until a picker is
- * actually opened.
- */
-export function useSoupResolvedTags(
-  properties: Accessor<SoupProperty[] | undefined>
-): Accessor<ResolvedTag[]> {
-  const tagSets = useTagSets();
-
-  const optionById = createMemo(() => {
-    const map = new Map<string, ResolvedTag>();
-    for (const set of tagSets()) {
-      for (const option of set.options) {
-        map.set(option.id, {
-          optionId: option.id,
-          propertyDefinitionId: option.propertyDefinitionId,
-          scope: set.scope,
-          label: optionLabel(option),
-          color: option.color ?? undefined,
-        });
-      }
-    }
-    return map;
-  });
-
-  return createMemo(() => {
-    const resolved: ResolvedTag[] = [];
-    const options = optionById();
-    const soupProperties = properties();
-
-    for (const set of tagSets()) {
-      const definitionId = set.definition?.id;
-      if (!definitionId) continue;
-      const property = soupProperties?.find(
-        (candidate) => candidate.definition.id === definitionId
-      );
-      const value = property?.value;
-      if (value?.type !== 'SelectOption') continue;
-
-      for (const optionId of value.value) {
-        const tag = options.get(optionId);
-        if (tag) resolved.push(tag);
-      }
-    }
-
-    return resolved;
-  });
 }
 
 export function useLocalDocTags(

@@ -9,12 +9,8 @@ import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
-import {
-  type ResolvedTag,
-  useDocTags,
-  useSoupDocTags,
-  useSoupResolvedTags,
-} from './useDocTags';
+import { useDocTags, useSoupDocTags } from './useDocTags';
+import { type ResolvedTag, useSoupResolvedTags } from './useSoupResolvedTags';
 
 type DocTags = ReturnType<typeof useSoupDocTags>;
 type CreateDocTags = () => DocTags;

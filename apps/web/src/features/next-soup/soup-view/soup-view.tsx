@@ -147,6 +147,7 @@ import { useSearchTagsFlag } from './filters-bar/search/search-tags-flag';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
+import { resolveSoupVirtualizerSizing } from './virtualizer-sizing';
 
 export const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
@@ -785,9 +786,7 @@ export const SoupView = (props: SoupViewProps) => {
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
-              <SoupRowMetadataProvider>
-                <SoupViewList />
-              </SoupRowMetadataProvider>
+              <SoupViewList />
             </Show>
           </Suspense>
           <Show when={isMobile()}>
@@ -820,7 +819,20 @@ interface SoupViewListProps {
   scopeId?: string;
 }
 
-export const SoupViewList = (props: SoupViewListProps) => {
+/**
+ * Complete soup-list composition boundary. Exported consumers receive the
+ * shared metadata contexts required by every row and row-owned overlay.
+ */
+export const SoupViewList = (props: SoupViewListProps) => (
+  <SoupRowMetadataProvider>
+    <SoupViewListContent
+      customScrollbarHidden={props.customScrollbarHidden}
+      scopeId={props.scopeId}
+    />
+  </SoupRowMetadataProvider>
+);
+
+const SoupViewListContent = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
   const {
     soup,
@@ -1699,11 +1711,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 };
 
-// Standard desktop rows are 40px, which is a useful baseline for converting
-// the row-based overscan prop to pixels. Do not force this value into virtua:
-// leaving itemSize unset enables its measured-size estimator, which adapts to
-// larger and heterogeneous rows such as the inbox cards.
-const DEFAULT_ITEM_SIZE_ESTIMATE = 40;
 const DEFAULT_OVERSCAN = 5;
 
 interface SoupListProps {
@@ -1728,8 +1735,8 @@ const SoupList = (props: SoupListProps) => {
     createSignal<VirtualizerHandle>();
 
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
-  const bufferSize = createMemo(
-    () => overscan() * (props.itemSize ?? DEFAULT_ITEM_SIZE_ESTIMATE)
+  const virtualizerSizing = createMemo(() =>
+    resolveSoupVirtualizerSizing(props.itemSize, overscan())
   );
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
@@ -1800,8 +1807,8 @@ const SoupList = (props: SoupListProps) => {
           ref={registerVirtualizerHandler}
           startMargin={topInset()}
           data={props.rows}
-          itemSize={props.itemSize}
-          bufferSize={bufferSize()}
+          itemSize={virtualizerSizing().itemSize}
+          bufferSize={virtualizerSizing().bufferSize}
           onScroll={handleScroll}
         >
           {(row, i) => props.children(row, i)}

@@ -5,13 +5,18 @@ import {
   type EmailEntity,
   InlineEntity,
   ListEntity,
+  ListEntityMetadataProvider,
   ListLayoutProvider,
 } from '@entity';
 import CheckIcon from '@phosphor/check.svg';
+import type { Link } from '@service-email/generated/schemas';
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 
 const CURRENT_USER_ID = 'macro|current@example.com';
+const EMPTY_EMAIL_LINKS: Link[] = [];
+const EMPTY_TAG_SETS: TagSetResponse[] = [];
 
 const mockEmail = (
   id: string,
@@ -129,47 +134,54 @@ export function OnboardingInbox() {
         Swipe an email left to mark it done, or press and hold for more actions.
       </p>
 
-      <ListLayoutProvider ref={listRef}>
-        <SwipableRowProvider
-          container={listRef}
-          canSwipeLeft={() => true}
-          onSwipeLeft={(entityId) => markDone(entityId)}
-        >
-          <div ref={setListRef} class="overflow-hidden border-t border-edge">
-            <For
-              each={emails()}
-              fallback={
-                <div class="flex flex-col items-center justify-center gap-1 py-12 text-center">
-                  <p class="text-sm font-medium text-ink">Inbox zero 🎉</p>
-                  <p class="text-sm text-ink/60">You've cleared every email.</p>
-                </div>
-              }
-            >
-              {(email) => (
-                <div
-                  ref={(el) =>
-                    touchHandler(el, () => ({
-                      onLongPress: () => setDrawerEmail(email),
-                    }))
-                  }
-                >
-                  <ListEntity
-                    entity={email}
-                    timestamp={email.updatedAt}
-                    hideCheckbox
-                    entityRowConfig={{
-                      swipeLeftColor: 'bg-success',
-                      swipeLeftRevealedComponent: (
-                        <CheckIcon class="size-8 text-panel" />
-                      ),
-                    }}
-                  />
-                </div>
-              )}
-            </For>
-          </div>
-        </SwipableRowProvider>
-      </ListLayoutProvider>
+      <ListEntityMetadataProvider
+        emailLinks={() => EMPTY_EMAIL_LINKS}
+        tagSets={() => EMPTY_TAG_SETS}
+      >
+        <ListLayoutProvider ref={listRef}>
+          <SwipableRowProvider
+            container={listRef}
+            canSwipeLeft={() => true}
+            onSwipeLeft={(entityId) => markDone(entityId)}
+          >
+            <div ref={setListRef} class="overflow-hidden border-t border-edge">
+              <For
+                each={emails()}
+                fallback={
+                  <div class="flex flex-col items-center justify-center gap-1 py-12 text-center">
+                    <p class="text-sm font-medium text-ink">Inbox zero 🎉</p>
+                    <p class="text-sm text-ink/60">
+                      You've cleared every email.
+                    </p>
+                  </div>
+                }
+              >
+                {(email) => (
+                  <div
+                    ref={(el) =>
+                      touchHandler(el, () => ({
+                        onLongPress: () => setDrawerEmail(email),
+                      }))
+                    }
+                  >
+                    <ListEntity
+                      entity={email}
+                      timestamp={email.updatedAt}
+                      hideCheckbox
+                      entityRowConfig={{
+                        swipeLeftColor: 'bg-success',
+                        swipeLeftRevealedComponent: (
+                          <CheckIcon class="size-8 text-panel" />
+                        ),
+                      }}
+                    />
+                  </div>
+                )}
+              </For>
+            </div>
+          </SwipableRowProvider>
+        </ListLayoutProvider>
+      </ListEntityMetadataProvider>
 
       {/* Long-press action drawer (markup modeled on SoupEntityActionDrawer). */}
       <MobileDrawer

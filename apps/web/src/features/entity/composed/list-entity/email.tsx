@@ -6,7 +6,11 @@ import { DraftBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { getSnippetHit } from '../../extractors-search/snippet-entity';
-import type { EmailEntity } from '../../types/entity';
+import {
+  type EmailEntity,
+  type EntityData,
+  isEmailEntity,
+} from '../../types/entity';
 import { useEmailLinks } from './email-links-context';
 
 /**
@@ -23,6 +27,14 @@ export function useOwningInbox(entity: Accessor<EmailEntity | undefined>) {
     const availableLinks = links();
     if (availableLinks.length <= 1) return undefined;
     return availableLinks.find((link) => link.id === linkId);
+  });
+}
+
+/** Keeps inbox attribution reactive when a recycled list row changes entity. */
+export function useOwningInboxForEntity(entity: Accessor<EntityData>) {
+  return useOwningInbox(() => {
+    const current = entity();
+    return isEmailEntity(current) ? current : undefined;
   });
 }
 

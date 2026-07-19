@@ -1,7 +1,11 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useInfiniteScrollSentinel } from '@companies/Company/use-infinite-scroll-sentinel';
 import { TabsInset } from '@core/component/TabsInset';
-import { ListEntity, ListLayoutProvider } from '@entity';
+import {
+  ListEntity,
+  ListEntityMetadataQueryProvider,
+  ListLayoutProvider,
+} from '@entity';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { createSignal, For, Show } from 'solid-js';
 import {
@@ -65,21 +69,23 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
           }
         >
           <div class="max-h-96 overflow-y-auto">
-            <ListLayoutProvider ref={listRef}>
-              <div ref={setListRef} class="flex flex-col">
-                <For each={emails()}>
-                  {(entity) => (
-                    <ListEntity
-                      entity={entity}
-                      timestamp={entity.updatedAt}
-                      onClick={() =>
-                        openEntityInSplitFromUnifiedList(entity, {})
-                      }
-                    />
-                  )}
-                </For>
-              </div>
-            </ListLayoutProvider>
+            <ListEntityMetadataQueryProvider>
+              <ListLayoutProvider ref={listRef}>
+                <div ref={setListRef} class="flex flex-col">
+                  <For each={emails()}>
+                    {(entity) => (
+                      <ListEntity
+                        entity={entity}
+                        timestamp={entity.updatedAt}
+                        onClick={() =>
+                          openEntityInSplitFromUnifiedList(entity, {})
+                        }
+                      />
+                    )}
+                  </For>
+                </div>
+              </ListLayoutProvider>
+            </ListEntityMetadataQueryProvider>
             <Show when={emailsQuery.hasNextPage}>
               <div ref={setSentinelRef} class="h-px" />
             </Show>

@@ -32,7 +32,7 @@ import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
-import { EmailWideContent, useOwningInbox } from './email';
+import { EmailWideContent, useOwningInboxForEntity } from './email';
 import {
   GithubPullRequestChecksIndicator,
   GithubPullRequestPills,
@@ -60,11 +60,7 @@ export function WideLayout(props: LayoutProps) {
   const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
-  const owningInbox = isEmailEntity(props.entity)
-    ? useOwningInbox(() =>
-        isEmailEntity(props.entity) ? props.entity : undefined
-      )
-    : () => undefined;
+  const owningInbox = useOwningInboxForEntity(() => props.entity);
 
   return (
     <Entity.Layout
