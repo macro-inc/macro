@@ -815,7 +815,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         <Show when={shouldRenderPortal()}>
           <Combobox.Portal mount={portalMount()}>
             <Layer depth={2}>
-              <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
+              <Combobox.Content
+                // When portaled into a corvu drawer (mobile reply/forward), the
+                // drawer treats a touch on the dropdown as a drag (0.3px
+                // threshold) and cancels the tap. Opt this subtree out of drag.
+                data-corvu-no-drag=""
+                class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge"
+              >
                 <Combobox.Listbox
                   ref={setListboxRef}
                   class="flex flex-col gap-1"
