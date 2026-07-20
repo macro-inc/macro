@@ -5,13 +5,21 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import {
+  type QuickAccessSoupItemFieldsFragment,
+  QuickAccessSoupItemFieldsFragmentDoc,
   type SoupItemFieldsFragment,
-  SoupItemFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
 import { createQuery, keepPreviousData } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
-const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
+const soupItemSelection = selectRecords(QuickAccessSoupItemFieldsFragmentDoc);
+
+type QuickAccessSoupItemRecord = SoupItemFieldsFragment & {
+  entity: Exclude<
+    SoupItemFieldsFragment['entity'],
+    { __typename: 'GraphqlSoupEmailThread' }
+  >;
+};
 
 /** Shared prefix for cache-backed Quick Access record reads. */
 export const QUICK_ACCESS_RECORD_SELECTION_QUERY_KEY = [
@@ -19,12 +27,14 @@ export const QUICK_ACCESS_RECORD_SELECTION_QUERY_KEY = [
   'record-selection',
 ] as const;
 
-/** Loads every complete cached Soup item record. */
+/** Loads complete cached non-email Soup item records. */
 export async function readCachedQuickAccessRecords(
   cacheHost: Pick<CacheHost, 'readRecords'>
-): Promise<SoupItemFieldsFragment[]> {
-  const records: SoupItemFieldsFragment[] = [];
+): Promise<QuickAccessSoupItemRecord[]> {
+  const records: QuickAccessSoupItemRecord[] = [];
+
   let cursor: string | undefined;
+
   const seenCursors = new Set<string>();
   do {
     const page = await readRecords(cacheHost, soupItemSelection, {

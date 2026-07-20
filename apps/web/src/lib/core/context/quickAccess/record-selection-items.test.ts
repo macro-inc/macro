@@ -1,9 +1,16 @@
 import type { CacheHost } from '@graphql-cache/index';
-import type { SoupItemFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import type { QuickAccessSoupItemFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, it, vi } from 'vitest';
 import { readCachedQuickAccessRecords } from './record-selection-items';
 
-const item = (id: string) => ({ id }) as SoupItemFieldsFragment;
+const item = (
+  id: string,
+  typename = 'GraphqlSoupDocument'
+): QuickAccessSoupItemFieldsFragment =>
+  ({
+    id,
+    entity: { __typename: typename },
+  }) as QuickAccessSoupItemFieldsFragment;
 
 describe('readCachedQuickAccessRecords', () => {
   it('loads every record page with exclusive cursors', async () => {
@@ -22,9 +29,34 @@ describe('readCachedQuickAccessRecords', () => {
       >)
     ).resolves.toEqual([item('a'), item('b'), item('c')]);
     expect(readRecords).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        document: expect.stringContaining('fragment QuickAccessSoupItemFields'),
+        fragmentName: 'QuickAccessSoupItemFields',
+      })
+    );
+    expect(readRecords.mock.calls[0]?.[0].document).not.toContain(
+      'GraphqlSoupEmailThread'
+    );
+    expect(readRecords).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ cursor: 'cursor-b', limit: 500 })
     );
+  });
+
+  it('excludes email records from the selected pages', async () => {
+    const document = item('document');
+    const readRecords = vi.fn().mockResolvedValue({
+      records: [document, item('email', 'GraphqlSoupEmailThread')],
+      nextCursor: null,
+    });
+
+    await expect(
+      readCachedQuickAccessRecords({ readRecords } as Pick<
+        CacheHost,
+        'readRecords'
+      >)
+    ).resolves.toEqual([document]);
   });
 
   it('rejects a repeated host cursor', async () => {

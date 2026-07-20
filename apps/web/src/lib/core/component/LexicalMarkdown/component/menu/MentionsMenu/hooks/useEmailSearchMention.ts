@@ -8,6 +8,8 @@ import {
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 
+const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
+
 type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
   enabled?: Accessor<boolean | undefined>;
@@ -22,8 +24,8 @@ type UseEmailSearchMentionResult = {
 };
 
 /**
- * Provides cache-backed email mentions for the record-selection source and
- * preserves the remote unified-search path for the legacy source.
+ * Provides email mentions through unified search by default. The Quick Access
+ * path remains available behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
@@ -31,12 +33,13 @@ export function useEmailSearchMention(
   const { searchTerm, enabled } = options;
   const listEnabled = () => enabled?.() !== false;
   const quickAccess = useQuickAccess();
+  const usesQuickAccess = () =>
+    USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS && quickAccess.usesRecordSelection();
   const cachedEmails = quickAccess.useList({
     buckets: ['email'],
     searchTerm,
-    enabled: listEnabled,
+    enabled: () => usesQuickAccess() && listEnabled(),
   });
-  const usesRecordSelection = quickAccess.usesRecordSelection;
 
   const args = createLazyMemo((): SearchSoupQueryArgs => {
     return {
@@ -57,7 +60,7 @@ export function useEmailSearchMention(
   });
 
   const emailSearchQuery = useSearchSoupQuery(args, () => ({
-    enabled: !usesRecordSelection() && listEnabled(),
+    enabled: !usesQuickAccess() && listEnabled(),
   }));
 
   const remoteEmailList = createLazyMemo((): EntityItem[] => {
@@ -87,7 +90,7 @@ export function useEmailSearchMention(
   });
 
   const emails = createLazyMemo((): EntityItem[] => {
-    if (usesRecordSelection()) return cachedEmails.items();
+    if (usesQuickAccess()) return cachedEmails.items();
 
     const term = searchTerm();
     const remoteEmails = remoteEmailList();
@@ -98,17 +101,17 @@ export function useEmailSearchMention(
   return {
     emails,
     totalCount: () =>
-      usesRecordSelection() ? cachedEmails.totalCount() : emails().length,
+      usesQuickAccess() ? cachedEmails.totalCount() : emails().length,
     hasMore: () =>
-      usesRecordSelection()
+      usesQuickAccess()
         ? cachedEmails.hasMore()
         : Boolean(emailSearchQuery.hasNextPage),
     isLoadingMore: () =>
-      usesRecordSelection()
+      usesQuickAccess()
         ? cachedEmails.isLoadingMore()
         : emailSearchQuery.isFetching,
     loadMore: async () => {
-      if (usesRecordSelection()) {
+      if (usesQuickAccess()) {
         await cachedEmails.loadMore();
       } else if (emailSearchQuery.hasNextPage) {
         await emailSearchQuery.fetchNextPage();

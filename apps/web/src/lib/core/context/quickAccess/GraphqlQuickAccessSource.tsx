@@ -63,6 +63,7 @@ function makeQuickAccessInput(snippetsEnabled: boolean): SoupInput {
       sortMethod: 'VIEWED_UPDATED',
       emailView: 'ALL',
       filters: {
+        emailFilter: { tree: { literal: { threadId: NIL_UUID } } },
         callFilter: { literal: { callId: NIL_UUID } },
         channelThreadFilter: { literal: { threadId: NIL_UUID } },
         foreignEntityFilter: { literal: { id: NIL_UUID } },
