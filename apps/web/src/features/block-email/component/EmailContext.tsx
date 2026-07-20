@@ -420,6 +420,15 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return thread ? !thread.inbox_visible : false;
   };
 
+  // Resolve a thread's soup representation for the mark-done / mark-not-done
+  // paths: the live list row when it's rendered, else the normalized
+  // soup-cache entity. Shared by markThreadNotDone and archiveThread.
+  const resolveThreadSoupLookup = (threadId: string) => {
+    const selectedRow = soup?.items.get(threadId);
+    const cachedItem = selectedRow ? undefined : getSoupEntityById(threadId);
+    return { selectedRow, cachedItem };
+  };
+
   const markThreadNotDone = () => {
     const thread = threadQuery.data;
     if (!thread?.db_id) return false;
@@ -429,10 +438,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     // Mark-not-done issues the /archived request itself (plus notification
     // and soup-cache restore), so the path below skips archiveMutation and
     // only mirrors its thread-cache handling via trackExternalThreadArchive.
-    const selectedRow = soup?.items.get(thread.db_id);
-    const cachedItem = selectedRow
-      ? undefined
-      : getSoupEntityById(thread.db_id);
+    const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
 
     const entity =
       selectedRow?.original ??
@@ -484,6 +490,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
                 // The unarchive itself succeeded, so keep that outcome and
                 // let the override fall back to the server's done state.
                 setDoneOverride(allIds, undefined);
+                toast.failure('Failed to mark as not done');
               }
             }
             void refetchSoupEntity(threadId, 'emailThread');
@@ -512,10 +519,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     // Mark done issues the /archived request itself (with undo support), so
     // the paths below skip archiveMutation and only mirror its thread-cache
     // handling via trackExternalThreadArchive.
-    const selectedRow = soup?.items.get(thread.db_id);
-    const cachedItem = selectedRow
-      ? undefined
-      : getSoupEntityById(thread.db_id);
+    const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
 
     if (soup && selectedRow) {
       void trackExternalThreadArchive(

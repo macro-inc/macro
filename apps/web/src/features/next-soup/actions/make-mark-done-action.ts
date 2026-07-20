@@ -201,13 +201,21 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     restoreFocus?: () => void,
     opts?: MarkDoneExecuteOpts
   ) => {
+    // Skip already-done emails so a mixed selection (e.g. done + not-done rows
+    // in mail "All") doesn't re-archive the done ones or overcount the toast.
+    // done state is email-specific; other entity types are never filtered.
+    const targets = entities.filter(
+      (e) => !(e.type === 'email' && e.done === true)
+    );
+    if (targets.length === 0) return;
+
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
-      entities,
+      entities: targets,
       notificationSource: notificationSource(),
       scopeChannelNotificationsToEntity: scopeChannelNotificationsToEntity(),
     });
     await mutation.mutateAsync({
-      entities,
+      entities: targets,
       emailIds,
       notificationIds,
       restoreFocus,

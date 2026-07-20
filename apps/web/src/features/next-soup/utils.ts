@@ -1054,7 +1054,7 @@ export function applyEntitiesDoneOptimistic(args: {
       optimisticUpdateSoupEntity({
         tag: 'emailThread',
         data: { id, inboxVisible: false },
-        frecency_score: 0,
+        frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
       })
     );
     filterEmailCache();
@@ -1106,7 +1106,7 @@ export function applyEntitiesNotDoneOptimistic(args: {
     optimisticUpdateSoupEntity({
       tag: 'emailThread',
       data: { id, inboxVisible: true },
-      frecency_score: 0,
+      frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
     })
   );
   setDoneOverride(notificationIds, false);
