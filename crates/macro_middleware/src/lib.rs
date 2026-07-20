@@ -8,9 +8,6 @@ use axum::{
 #[cfg(feature = "cloud_storage")]
 pub mod cloud_storage;
 
-#[cfg(feature = "auth")]
-pub mod auth;
-
 #[cfg(feature = "user_permissions")]
 pub mod user_permissions;
 

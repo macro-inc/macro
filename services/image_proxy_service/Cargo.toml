@@ -30,7 +30,6 @@ macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
   "tracking",
 ] }
 model = { path = "../../crates/model" }

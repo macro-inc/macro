@@ -46,11 +46,6 @@ macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_queues = { path = "../../crates/macro_queues" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
-  "cloud_storage",
-  "user_permissions",
-] }
 macro_user_id = { path = "../../crates/macro_user_id" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 prompt = { path = "../../crates/prompt" }

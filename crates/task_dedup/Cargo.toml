@@ -28,7 +28,6 @@ backfill = [
   "dep:macro_aws_config",
   "dep:macro_entrypoint",
   "dep:macro_env",
-  "dep:macro_middleware",
   "dep:secretsmanager_client",
   "dep:tokio",
   "dep:macro_env_var"
@@ -62,9 +61,6 @@ clap = { workspace = true, optional = true }
 macro_aws_config = { path = "../macro_aws_config", optional = true }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_env = { path = "../macro_env", optional = true }
-macro_middleware = { path = "../macro_middleware", default-features = false, features = [
-  "auth",
-], optional = true }
 secretsmanager_client = { path = "../secretsmanager_client", optional = true }
 tokio = { workspace = true, features = [
   "macros",
