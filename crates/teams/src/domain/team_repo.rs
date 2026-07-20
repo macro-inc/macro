@@ -287,6 +287,20 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send;
 
+    /// Whether non-admin members may invite users to the team.
+    fn get_team_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
+    /// Flips whether non-admin members may invite users to the team.
+    ///
+    /// Returns the setting's value after the toggle.
+    fn toggle_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
     /// Gets the id of the team whose auto-join domain matches the email
     /// domain of the provided user id, if any.
     fn get_team_id_by_domain(
@@ -336,7 +350,11 @@ pub trait TeamService: Clone + Send + Sync + 'static {
 
     /// Invites users to a team
     /// This will also handle the teams subscription.
-    /// Any team member may invite; removals stay admin-only.
+    /// Any team member may invite by default; admins can restrict
+    /// inviting to admins/owners via `toggle_allow_non_admin_invites`
+    /// (a non-admin caller then gets
+    /// [`InviteUsersToTeamError::NonAdminInvitesDisabled`]). Removals
+    /// stay admin-only.
     /// Returns the team invites created.
     fn invite_users_to_team(
         &self,
@@ -474,6 +492,17 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send;
+
+    /// Flips whether non-admin members may invite users to the team.
+    /// Defaults to true (any member can invite); when off, only team
+    /// admins and above may invite. Only team admins and above may
+    /// toggle this.
+    ///
+    /// Returns the setting's value after the toggle.
+    fn toggle_allow_non_admin_invites(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
     /// Automatically joins the user to the team whose auto-join domain
     /// matches the user's email domain, if such a team exists. The user is

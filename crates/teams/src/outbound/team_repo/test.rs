@@ -1733,3 +1733,38 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_allow_non_admin_invites_defaults_true_and_toggles(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    // Teams default to allowing non-admin invites.
+    assert!(team_repo.get_team_allow_non_admin_invites(&team_id).await?);
+
+    // Toggling flips it off, and the getter agrees.
+    assert!(!team_repo.toggle_allow_non_admin_invites(&team_id).await?);
+    assert!(!team_repo.get_team_allow_non_admin_invites(&team_id).await?);
+
+    // Toggling again flips it back on.
+    assert!(team_repo.toggle_allow_non_admin_invites(&team_id).await?);
+    assert!(team_repo.get_team_allow_non_admin_invites(&team_id).await?);
+
+    // Missing teams surface TeamDoesNotExist from both methods.
+    let missing = uuid::Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
+    assert!(matches!(
+        team_repo.get_team_allow_non_admin_invites(&missing).await,
+        Err(TeamError::TeamDoesNotExist)
+    ));
+    assert!(matches!(
+        team_repo.toggle_allow_non_admin_invites(&missing).await,
+        Err(TeamError::TeamDoesNotExist)
+    ));
+
+    Ok(())
+}

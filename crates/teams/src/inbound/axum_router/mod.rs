@@ -30,6 +30,8 @@ pub mod reject_invitation;
 pub mod remove_user_from_team;
 /// Toggle automatic domain joining for a team.
 pub mod toggle_auto_join_domain;
+/// Toggle whether non-admin members may invite users to a team.
+pub mod toggle_non_admin_invites;
 
 #[cfg(test)]
 mod test;
@@ -117,6 +119,10 @@ where
         .route(
             "/auto-join-domain/toggle",
             post(toggle_auto_join_domain::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/non-admin-invites/toggle",
+            post(toggle_non_admin_invites::handler::<T, Eas, Auth>),
         )
         .route("/invites", get(get_team_invites::handler::<T, Eas, Auth>))
         .route("/invite", post(invite_to_team::handler::<T, Eas, Auth>))
@@ -246,6 +252,19 @@ impl IntoResponse for InviteUsersToTeamError {
                     message: "too many emails".into(),
                 }),
             ),
+            InviteUsersToTeamError::NonAdminInvitesDisabled => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "only team admins may invite users to this team".into(),
+                }),
+            ),
+            InviteUsersToTeamError::NotEnoughOpenSeats => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "free team member limit reached; upgrade to invite more members"
+                        .into(),
+                }),
+            ),
             InviteUsersToTeamError::CustomerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -275,7 +294,7 @@ impl IntoResponse for JoinTeamError {
             JoinTeamError::FreeTeamLimitReached => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
-                    message: "team is at the free member limit — upgrade to add more members"
+                    message: "team is at the free member limit - upgrade to add more members"
                         .into(),
                 }),
             ),

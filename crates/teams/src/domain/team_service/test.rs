@@ -94,6 +94,9 @@ struct MockTeamRepository {
     add_user_to_team_calls: Arc<Mutex<usize>>,
     remove_user_calls: Arc<Mutex<usize>>,
     auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
+    allow_non_admin_invites: bool,
+    caller_team_role: Option<TeamRole>,
+    non_admin_invites_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
 }
 
 impl MockTeamRepository {
@@ -152,6 +155,9 @@ impl MockTeamRepository {
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
             remove_user_calls: Arc::new(Mutex::new(0)),
             auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
+            allow_non_admin_invites: true,
+            caller_team_role: Some(TeamRole::Member),
+            non_admin_invites_toggle_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -167,6 +173,16 @@ impl MockTeamRepository {
 
     fn with_team_members(mut self, members: Vec<TeamMember<'static>>) -> Self {
         self.team_members = members;
+        self
+    }
+
+    fn with_allow_non_admin_invites(mut self, allow: bool) -> Self {
+        self.allow_non_admin_invites = allow;
+        self
+    }
+
+    fn with_caller_team_role(mut self, role: Option<TeamRole>) -> Self {
+        self.caller_team_role = role;
         self
     }
 }
@@ -514,7 +530,8 @@ impl TeamRepository for MockTeamRepository {
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamRole>, TeamError>> + Send {
-        async { unimplemented!() }
+        let role = self.caller_team_role;
+        async move { Ok(role) }
     }
 
     fn get_team_member(
@@ -569,6 +586,26 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send {
         self.auto_join_toggle_calls.lock().unwrap().push(*team_id);
         async { Ok(Some("example.com".to_string())) }
+    }
+
+    fn get_team_allow_non_admin_invites(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        let allow = self.allow_non_admin_invites;
+        async move { Ok(allow) }
+    }
+
+    fn toggle_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send {
+        self.non_admin_invites_toggle_calls
+            .lock()
+            .unwrap()
+            .push(*team_id);
+        let toggled = !self.allow_non_admin_invites;
+        async move { Ok(toggled) }
     }
 
     fn get_team_id_by_domain(
@@ -1647,6 +1684,129 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
 }
 
 #[tokio::test]
+async fn invite_users_to_team_blocked_for_member_when_non_admin_invites_disabled() {
+    let team_id = uuid::Uuid::from_u128(6100);
+    let invite_id = uuid::Uuid::from_u128(6101);
+    let invited_by = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(
+        vec![make_invite("new@example.com", invite_id, team_id)],
+        "Locked Down Team",
+        mark_sent_calls.clone(),
+    )
+    .with_enterprise(true)
+    .with_allow_non_admin_invites(false)
+    .with_caller_team_role(Some(TeamRole::Member));
+
+    let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invite_emails = vec![
+        Email::parse_from_str("new@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
+    let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
+
+    let error = service
+        .invite_users_to_team(receipt, invites)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        InviteUsersToTeamError::NonAdminInvitesDisabled
+    ));
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
+    assert!(mark_sent_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invite_users_to_team_allowed_for_admin_when_non_admin_invites_disabled() {
+    let team_id = uuid::Uuid::from_u128(6110);
+    let invite_id = uuid::Uuid::from_u128(6111);
+    let invited_by = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(
+        vec![make_invite("new@example.com", invite_id, team_id)],
+        "Locked Down Team",
+        mark_sent_calls.clone(),
+    )
+    .with_enterprise(true)
+    .with_allow_non_admin_invites(false)
+    .with_caller_team_role(Some(TeamRole::Admin));
+
+    let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invite_emails = vec![
+        Email::parse_from_str("new@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap();
+    let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
+
+    let result = service
+        .invite_users_to_team(receipt, invites)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].team_invite_id, invite_id);
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn toggle_allow_non_admin_invites_delegates_to_repository() {
+    let team_id = uuid::Uuid::from_u128(6120);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(vec![], "Team", mark_sent_calls);
+    let toggle_calls = team_repo.non_admin_invites_toggle_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner);
+
+    // Mock defaults to allow=true, so a toggle returns false.
+    let allow = service
+        .toggle_allow_non_admin_invites(receipt)
+        .await
+        .unwrap();
+
+    assert!(!allow);
+    assert_eq!(*toggle_calls.lock().unwrap(), vec![team_id]);
+}
+
+#[tokio::test]
 async fn invite_users_to_team_enterprise_enforces_team_plan_seat_cap() {
     let team_id = uuid::Uuid::from_u128(6010);
     let invite_id = uuid::Uuid::from_u128(6011);
@@ -2715,7 +2875,7 @@ async fn test_join_team_rolls_back_accept_when_backfill_fails() {
 
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     // No `.with_team(...)`: the backfill's team lookup fails hard, which —
-    // unlike the owner simply having no subscription — must still roll the
+    // unlike the owner simply having no subscription - must still roll the
     // accepted invite back.
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Legacy Team", mark_sent_calls);
     team_repo.team_payment_status = false;

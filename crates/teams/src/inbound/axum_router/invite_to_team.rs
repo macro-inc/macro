@@ -61,6 +61,12 @@ impl axum::response::IntoResponse for InviteToTeamError {
                         message: "too many emails".into(),
                     }),
                 ),
+                InviteUsersToTeamError::NonAdminInvitesDisabled => (
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse {
+                        message: "only team admins may invite users to this team".into(),
+                    }),
+                ),
                 InviteUsersToTeamError::NotEnoughOpenSeats => (
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {

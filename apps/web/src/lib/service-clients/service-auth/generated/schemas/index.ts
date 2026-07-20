@@ -107,6 +107,7 @@ export * from './teamRole';
 export * from './teamWithMembers';
 export * from './toggleAutoJoinDomainResponse';
 export * from './toggleAutoJoinDomainResponseAutoJoinDomain';
+export * from './toggleNonAdminInvitesResponse';
 export * from './userLinkResponse';
 export * from './userName';
 export * from './userNameFirstName';

@@ -503,7 +503,7 @@ where
 
         // Auto-join is on by default for corporate domains: colleagues who
         // sign up with the same domain are added to the team automatically.
-        // Owners can turn it off in settings. Best-effort — creation
+        // Owners can turn it off in settings. Best-effort - creation
         // succeeds even if this fails.
         let owner_email = user_id.email_part().lowercase();
         if !is_generic_email_domain(owner_email.domain_part()) {
@@ -584,6 +584,22 @@ where
         let invited_by = entity_access_receipt
             .get_authenticated_user()
             .map_err(|e| InviteUsersToTeamError::TeamError(TeamError::AccessError(e)))?;
+
+        // Inviting is member-level by default; when the team has turned
+        // `allow_non_admin_invites` off, only admins/owners may invite.
+        if !self
+            .team_repository
+            .get_team_allow_non_admin_invites(&team_id)
+            .await?
+        {
+            let role = self
+                .team_repository
+                .get_team_role(&team_id, invited_by)
+                .await?;
+            if !matches!(role, Some(TeamRole::Admin | TeamRole::Owner)) {
+                return Err(InviteUsersToTeamError::NonAdminInvitesDisabled);
+            }
+        }
 
         let team_plan = self.team_repository.get_team_plan(&team_id).await?;
         let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
@@ -711,7 +727,7 @@ where
         let subscription_id = if enterprise {
             None
         } else {
-            // Free teams have no linked subscription — nothing to decrement.
+            // Free teams have no linked subscription - nothing to decrement.
             match self
                 .team_repository
                 .get_team_subscription_id(&team_id)
@@ -828,7 +844,7 @@ where
 
         // Best-effort: ask the email service to tear down CRM rows
         // sourced from this user's email link. Log and swallow failures
-        // — the removal is already committed and the email-service
+        // - the removal is already committed and the email-service
         // handler is idempotent, so a missed enqueue can be retried
         // without leaving the system in an inconsistent state. Team
         // deletion is handled separately via the
@@ -1229,7 +1245,7 @@ where
         }
 
         // Best-effort: ask the email service to seed CRM tables from this
-        // user's historical sent mail. Log and swallow failures — the join
+        // user's historical sent mail. Log and swallow failures - the join
         // is already committed and the email-service consumer is idempotent,
         // so a missed enqueue can be retried (or covered by per-message CRM
         // fan-out) without leaving the system in an inconsistent state.
@@ -1431,7 +1447,7 @@ where
 
         if enabled {
             // Fetch the members *before* flipping the flag so a member-list
-            // failure leaves the flag untouched — a retry will then re-run
+            // failure leaves the flag untouched - a retry will then re-run
             // the full backfill instead of hitting the early-return below.
             let members = if backfill {
                 self.team_repository.get_team_members(&team_id).await?
@@ -1514,6 +1530,19 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn toggle_allow_non_admin_invites(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<bool, TeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        self.team_repository
+            .toggle_allow_non_admin_invites(&team_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn try_join_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1527,7 +1556,7 @@ where
             .get_team_enterprise_status(&team_id)
             .await?;
 
-        // Mirror the seat-cap check from invite_users_to_team — an
+        // Mirror the seat-cap check from invite_users_to_team - an
         // auto-join must not push the team past its plan's seat cap.
         if let Some(team_plan) = self.team_repository.get_team_plan(&team_id).await? {
             let seat_count = self.team_repository.get_team_seat_count(&team_id).await?;
@@ -1621,7 +1650,7 @@ where
             match team_subscription_id {
                 // Free team: no seat billing. The member count (already
                 // bumped by add_user_to_team) must stay within the free
-                // limit — over the cap, skip the auto-join silently like
+                // limit - over the cap, skip the auto-join silently like
                 // the plan seat-cap check above.
                 None => {
                     let seat_count = match self.team_repository.get_team_seat_count(&team_id).await
@@ -1755,7 +1784,7 @@ where
 
         self.enqueue_joining_user_contacts(&team_id, user_id).await;
 
-        // NOTE: no TeamJoined analytics event here — that event is tied to
+        // NOTE: no TeamJoined analytics event here - that event is tied to
         // the team invite that was accepted, and a domain auto-join has none.
 
         Ok(Some(team_member))

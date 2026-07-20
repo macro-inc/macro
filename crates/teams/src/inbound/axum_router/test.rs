@@ -389,6 +389,13 @@ impl TeamService for FakeTeamService {
         panic!("unexpected toggle_auto_join_domain call")
     }
 
+    async fn toggle_allow_non_admin_invites(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<bool, TeamError> {
+        panic!("unexpected toggle_allow_non_admin_invites call")
+    }
+
     async fn try_join_team_by_domain(
         &self,
         _user_id: &MacroUserIdStr<'_>,

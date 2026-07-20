@@ -37,6 +37,7 @@ import {
   usePatchTeamMutation,
   useTeamQuery,
   useToggleAutoJoinDomainMutation,
+  useToggleNonAdminInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
@@ -819,6 +820,7 @@ function TeamManagement(props: {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const deleteTeamMutation = useDeleteTeamMutation();
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
+  const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
   const [showDeleteTeamModal, setShowDeleteTeamModal] = createSignal(false);
   const [deleteConfirmation, setDeleteConfirmation] = createSignal('');
@@ -965,6 +967,16 @@ function TeamManagement(props: {
   const handleToggleAutoJoin = () => {
     if (!props.teamId || toggleAutoJoinMutation.isPending) return;
     toggleAutoJoinMutation.mutate({ teamId: props.teamId });
+  };
+
+  // Whether non-admin members may invite. Teams default to true; only the
+  // backend response flips it, so missing data reads as the default.
+  const allowNonAdminInvites = () =>
+    teamQuery.data?.team.allow_non_admin_invites ?? true;
+
+  const handleToggleNonAdminInvites = () => {
+    if (!props.teamId || toggleNonAdminInvitesMutation.isPending) return;
+    toggleNonAdminInvitesMutation.mutate({ teamId: props.teamId });
   };
 
   const handleSaveTeamName = () => {
@@ -1235,6 +1247,22 @@ function TeamManagement(props: {
                   onChange={handleToggleAutoJoin}
                 />
               </SettingsRow>
+
+              <SettingsRow
+                label="Members can invite"
+                description="Let every team member invite people. When off, only admins and the owner can send invites."
+                hideDescriptionOnMobile
+              >
+                <ToggleSwitch
+                  size="md"
+                  checked={allowNonAdminInvites()}
+                  disabled={
+                    toggleNonAdminInvitesMutation.isPending ||
+                    teamQuery.isLoading
+                  }
+                  onChange={handleToggleNonAdminInvites}
+                />
+              </SettingsRow>
             </Show>
           </SettingsCard>
         </SettingsSection>
@@ -1262,16 +1290,19 @@ function TeamManagement(props: {
         <SettingsSection
           title="Members"
           actions={
-            // Any team member can invite; removals stay admin-only.
-            <Button
-              variant="base"
-              size="sm"
-              class="rounded-xs"
-              onClick={() => setShowInviteModal(true)}
-            >
-              <PlusIcon class="size-4" />
-              Invite
-            </Button>
+            // Members can invite unless the team has restricted inviting
+            // to admins; removals stay admin-only.
+            <Show when={isAdminOrOwner() || allowNonAdminInvites()}>
+              <Button
+                variant="base"
+                size="sm"
+                class="rounded-xs"
+                onClick={() => setShowInviteModal(true)}
+              >
+                <PlusIcon class="size-4" />
+                Invite
+              </Button>
+            </Show>
           }
         >
           <Show when={showMemberSearch()}>

@@ -339,6 +339,9 @@ pub struct Team {
     /// billed out-of-band; membership changes skip all Stripe subscription
     /// bookkeeping (no seat counts, no subscription backfill, no paying check).
     pub(crate) enterprise: bool,
+    /// Whether non-admin members may invite users to the team. Defaults to
+    /// true; admins can turn it off so only admins/owners may invite.
+    pub(crate) allow_non_admin_invites: bool,
 }
 
 impl Team {
@@ -360,6 +363,7 @@ impl Team {
             crm_enabled,
             auto_join_domain: None,
             enterprise,
+            allow_non_admin_invites: true,
         }
     }
 }
@@ -398,6 +402,11 @@ impl Team {
     /// Whether this team is on an enterprise license
     pub fn enterprise(&self) -> bool {
         self.enterprise
+    }
+
+    /// Whether non-admin members may invite users to the team
+    pub fn allow_non_admin_invites(&self) -> bool {
+        self.allow_non_admin_invites
     }
 }
 
@@ -520,6 +529,9 @@ pub enum InviteUsersToTeamError {
     /// Not enough open seats
     #[error("Not enough open seats")]
     NotEnoughOpenSeats,
+    /// The team only allows admins to invite and the caller is not an admin
+    #[error("only team admins may invite users to this team")]
+    NonAdminInvitesDisabled,
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),
