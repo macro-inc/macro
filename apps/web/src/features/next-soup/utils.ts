@@ -453,6 +453,19 @@ export async function navigateChannelEntityToTarget(
 }
 
 /**
+ * Location a plain row click falls back to when no explicit location is given.
+ * Email rows open like plain soup rows — at the latest message, expanded —
+ * so only non-email snippet entities (calls) fall back to their row hit.
+ * Clicking a specific content hit still passes an explicit location.
+ */
+export const getRowClickFallbackLocation = (
+  entity: EntityData
+): SearchLocation | undefined =>
+  isHitSnippetEntity(entity) && !isEmailEntity(entity)
+    ? getSnippetHit(entity)?.location
+    : undefined;
+
+/**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
  *
@@ -466,11 +479,8 @@ export const openEntityInSplitFromUnifiedList = async (
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  // Email rows open like plain soup rows — at the latest message, expanded —
-  // so only non-email snippet entities (calls) fall back to their row hit.
-  // Clicking a specific content hit still passes an explicit location.
-  if (!location && isHitSnippetEntity(entity) && !isEmailEntity(entity)) {
-    location = getSnippetHit(entity)?.location;
+  if (!location) {
+    location = getRowClickFallbackLocation(entity);
   }
 
   // Get dependencies internally
