@@ -28,7 +28,10 @@ use crate::domain::{
     contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
-    events::TeamMacroEvent,
+    events::{
+        TeamCreatedMetadata, TeamInviteCreatedMetadata, TeamInviteRejectedMetadata,
+        TeamInviteRevokedMetadata, TeamMacroEvent,
+    },
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
         InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
@@ -573,13 +576,16 @@ where
         // Owners can turn it off in settings. Best-effort - creation
         // succeeds even if this fails.
         let owner_email = user_id.email_part().lowercase();
-        if !is_generic_email_domain(owner_email.domain_part()) {
+        let auto_join_domain = if is_generic_email_domain(owner_email.domain_part()) {
+            None
+        } else {
             self.team_repository
                 .toggle_auto_join_domain(team.id())
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "unable to default auto-join domain on"))
-                .ok();
-        }
+                .ok()
+                .flatten()
+        };
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamCreated {
             team_id: *team.id(),
@@ -587,6 +593,15 @@ where
             team_name: team.name().to_owned(),
         })
         .await;
+        self.publish_team_event(&TeamMacroEvent::created(TeamCreatedMetadata {
+            team_id: *team.id(),
+            name: team.name().to_owned(),
+            slug: team.slug().to_owned(),
+            owner: user_id.clone().into_owned(),
+            enterprise: team.enterprise(),
+            paid: subscription_id.is_some(),
+            auto_join_domain,
+        }));
 
         Ok(team)
     }
@@ -762,6 +777,13 @@ where
                 team_name: team_name.clone(),
             })
             .await;
+            self.publish_team_event(&TeamMacroEvent::invite_created(TeamInviteCreatedMetadata {
+                team_id,
+                invite_id: invite.team_invite_id,
+                email: invite.email.as_ref().to_owned(),
+                invited_by: invited_by.clone().into_owned(),
+                team_name: team_name.clone(),
+            }));
         }
 
         Ok(invited)
@@ -960,6 +982,15 @@ where
             .delete_team_invite(&team_invite.team_id, team_invite_id)
             .await?;
 
+        self.publish_team_event(&TeamMacroEvent::invite_rejected(
+            TeamInviteRejectedMetadata {
+                team_id: team_invite.team_id,
+                invite_id: team_invite.team_invite_id,
+                email: team_invite.email.as_ref().to_owned(),
+                actor_user_id: user_id.clone().into_owned(),
+            },
+        ));
+
         Ok(())
     }
 
@@ -971,10 +1002,26 @@ where
     ) -> Result<(), RemoveTeamInviteError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        let actor_user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|error| RemoveTeamInviteError::TeamError(TeamError::AccessError(error)))?
+            .clone()
+            .into_owned();
+        let team_invite = self
+            .team_repository
+            .get_team_invite_by_id(team_invite_id)
+            .await?;
 
         self.team_repository
             .delete_team_invite(&team_id, team_invite_id)
             .await?;
+
+        self.publish_team_event(&TeamMacroEvent::invite_revoked(TeamInviteRevokedMetadata {
+            team_id,
+            invite_id: team_invite.team_invite_id,
+            email: team_invite.email.as_ref().to_owned(),
+            actor_user_id,
+        }));
 
         Ok(())
     }

@@ -88,6 +88,10 @@ struct MockTeamRepository {
     fail_github_installation_move: bool,
     fail_invite_users_to_team: bool,
     invite_users_to_team_calls: Arc<Mutex<usize>>,
+    new_invite_emails: Option<Vec<String>>,
+    invite_by_id: Option<TeamInvite<'static>>,
+    delete_invite_calls: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid)>>>,
+    fail_delete_invite: bool,
     get_team_by_id_calls: Arc<Mutex<usize>>,
     team_id_for_domain: Option<uuid::Uuid>,
     team_plan: Option<TeamPlan>,
@@ -149,6 +153,10 @@ impl MockTeamRepository {
             fail_github_installation_move: false,
             fail_invite_users_to_team: false,
             invite_users_to_team_calls: Arc::new(Mutex::new(0)),
+            new_invite_emails: None,
+            invite_by_id: None,
+            delete_invite_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_delete_invite: false,
             get_team_by_id_calls: Arc::new(Mutex::new(0)),
             team_id_for_domain: None,
             team_plan: None,
@@ -322,16 +330,23 @@ impl TeamRepository for MockTeamRepository {
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<Email<Lowercase<'static>>>, InviteUsersToTeamError>> + Send
     {
-        let invites = invites
-            .iter()
-            .map(|email| {
-                Email::parse_from_str(email.as_ref())
-                    .expect("test emails should be valid")
-                    .into_owned()
-                    .lowercase()
-            })
-            .collect();
-        async move { Ok(invites) }
+        let invites = self.new_invite_emails.clone().unwrap_or_else(|| {
+            invites
+                .iter()
+                .map(|email| email.as_ref().to_owned())
+                .collect()
+        });
+        async move {
+            Ok(invites
+                .iter()
+                .map(|email| {
+                    Email::parse_from_str(email)
+                        .expect("test emails should be valid")
+                        .into_owned()
+                        .lowercase()
+                })
+                .collect())
+        }
     }
 
     fn mark_invites_sent(
@@ -359,15 +374,29 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<TeamInvite<'_>, TeamError>> + Send {
-        async { unimplemented!() }
+        let invite = self.invite_by_id.clone();
+        async move { invite.ok_or(TeamError::TeamInviteDoesNotExist) }
     }
 
     fn delete_team_invite(
         &self,
-        _: &uuid::Uuid,
-        _: &uuid::Uuid,
+        team_id: &uuid::Uuid,
+        invite_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RemoveTeamInviteError>> + Send {
-        async { unimplemented!() }
+        self.delete_invite_calls
+            .lock()
+            .unwrap()
+            .push((*team_id, *invite_id));
+        let fail = self.fail_delete_invite;
+        async move {
+            if fail {
+                Err(RemoveTeamInviteError::StorageLayerError(anyhow::anyhow!(
+                    "invite deletion failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn update_team_subscription(
@@ -1257,6 +1286,22 @@ fn build_service(
     (service, notification_ingress)
 }
 
+fn build_service_with_event_broker(
+    team_repo: MockTeamRepository,
+    event_broker: RecordingEventBroker,
+) -> impl TeamService {
+    TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_event_broker(event_broker)
+}
+
 fn build_service_with_analytics(
     team_repo: MockTeamRepository,
     customer_repo: MockCustomerRepository,
@@ -1336,6 +1381,264 @@ async fn event_broker_can_be_replaced_and_is_preserved_by_service_reconstruction
         MockTeamAnalytics::new(Arc::new(Mutex::new(Vec::new()))),
     );
     analytics_service.publish_team_event(&event);
+}
+
+#[tokio::test]
+async fn team_event_create_publishes_actual_domain_and_billing_flags() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@corporate.test").unwrap();
+    let team_id = uuid::Uuid::from_u128(6100);
+    let mut team_repository = MockTeamRepository::new(
+        Vec::new(),
+        "Enterprise Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    team_repository.created_team = Team::new(
+        team_id,
+        "Enterprise Team".to_string(),
+        "ENTERPRISE_TEAM".to_string(),
+        owner.clone().into_owned(),
+        false,
+        true,
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+
+    service
+        .create_team(&owner, "Enterprise Team", Some(&subscription_id))
+        .await
+        .unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.created");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["team_id"], team_id.to_string());
+    assert_eq!(metadata["enterprise"], true);
+    assert_eq!(metadata["paid"], true);
+    assert_eq!(metadata["auto_join_domain"], "example.com");
+}
+
+#[tokio::test]
+async fn team_event_create_generic_domain_is_unpaid_without_auto_join() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@gmail.com").unwrap();
+    let team_repository = MockTeamRepository::new(
+        Vec::new(),
+        "Personal Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+
+    service
+        .create_team(&owner, "Personal Team", None)
+        .await
+        .unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["enterprise"], false);
+    assert_eq!(metadata["paid"], false);
+    assert!(metadata["auto_join_domain"].is_null());
+}
+
+#[tokio::test]
+async fn team_event_create_failure_emits_nothing_and_broker_failure_is_swallowed() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Failed Team", Arc::new(Mutex::new(Vec::new())));
+    team_repository.fail_github_installation_move = true;
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+
+    assert!(
+        service
+            .create_team(&owner, "Failed Team", None)
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
+
+    let team_repository = MockTeamRepository::new(
+        Vec::new(),
+        "Successful Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let service = build_service_with_event_broker(team_repository, RecordingEventBroker::failing());
+    assert!(
+        service
+            .create_team(&owner, "Successful Team", None)
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn invite_team_event_is_published_only_for_new_lowercase_email() {
+    let team_id = uuid::Uuid::from_u128(6110);
+    let new_invite_id = uuid::Uuid::from_u128(6111);
+    let existing_invite_id = uuid::Uuid::from_u128(6112);
+    let inviter = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mut team_repository = MockTeamRepository::new(
+        vec![
+            make_invite("new@example.com", new_invite_id, team_id),
+            make_invite("existing@example.com", existing_invite_id, team_id),
+        ],
+        "Invite Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    team_repository.new_invite_emails = Some(vec!["new@example.com".to_string()]);
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+    let emails = vec![
+        Email::parse_from_str("NEW@EXAMPLE.COM")
+            .unwrap()
+            .lowercase(),
+        Email::parse_from_str("existing@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+
+    service
+        .invite_users_to_team(
+            test_team_receipt::<MemberTeamRole>(team_id, &inviter),
+            non_empty::NonEmpty::new(emails.as_slice()).unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.invite_created");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["invite_id"], new_invite_id.to_string());
+    assert_eq!(metadata["email"], "new@example.com");
+    assert_eq!(metadata["invited_by"], inviter.as_ref());
+    assert_eq!(metadata["team_name"], "Invite Team");
+}
+
+#[tokio::test]
+async fn invite_team_event_repository_failure_emits_nothing_and_broker_failure_is_swallowed() {
+    let team_id = uuid::Uuid::from_u128(6115);
+    let invite_id = uuid::Uuid::from_u128(6116);
+    let inviter = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let email = Email::parse_from_str("member@example.com")
+        .unwrap()
+        .lowercase();
+    let emails = [email];
+    let mut team_repository = MockTeamRepository::new(
+        vec![make_invite("member@example.com", invite_id, team_id)],
+        "Invite Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    team_repository.fail_invite_users_to_team = true;
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+
+    assert!(
+        service
+            .invite_users_to_team(
+                test_team_receipt::<MemberTeamRole>(team_id, &inviter),
+                non_empty::NonEmpty::new(emails.as_slice()).unwrap(),
+            )
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
+
+    let team_repository = MockTeamRepository::new(
+        vec![make_invite("member@example.com", invite_id, team_id)],
+        "Invite Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let service = build_service_with_event_broker(team_repository, RecordingEventBroker::failing());
+    assert!(
+        service
+            .invite_users_to_team(
+                test_team_receipt::<MemberTeamRole>(team_id, &inviter),
+                non_empty::NonEmpty::new(emails.as_slice()).unwrap(),
+            )
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn invite_team_event_rejected_and_revoked_payloads_follow_successful_deletion() {
+    let team_id = uuid::Uuid::from_u128(6120);
+    let invite_id = uuid::Uuid::from_u128(6121);
+    let invite = make_invite("member@example.com", invite_id, team_id);
+    let recipient = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Invite Team", Arc::new(Mutex::new(Vec::new())));
+    team_repository.invite_by_id = Some(invite.clone());
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+
+    service
+        .reject_invitation(&recipient, &invite_id)
+        .await
+        .unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.invite_rejected");
+    assert_eq!(
+        events[0].envelope["metadata"]["email"],
+        "member@example.com"
+    );
+    assert_eq!(
+        events[0].envelope["metadata"]["actor_user_id"],
+        recipient.as_ref()
+    );
+
+    let admin = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Invite Team", Arc::new(Mutex::new(Vec::new())));
+    team_repository.invite_by_id = Some(invite);
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+
+    service
+        .delete_team_invite(
+            test_team_receipt::<AdminTeamRole>(team_id, &admin),
+            &invite_id,
+        )
+        .await
+        .unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.invite_revoked");
+    assert_eq!(
+        events[0].envelope["metadata"]["actor_user_id"],
+        admin.as_ref()
+    );
+}
+
+#[tokio::test]
+async fn invite_team_event_deletion_failure_emits_nothing() {
+    let team_id = uuid::Uuid::from_u128(6130);
+    let invite_id = uuid::Uuid::from_u128(6131);
+    let admin = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Invite Team", Arc::new(Mutex::new(Vec::new())));
+    team_repository.invite_by_id = Some(make_invite("member@example.com", invite_id, team_id));
+    team_repository.fail_delete_invite = true;
+    let event_broker = RecordingEventBroker::default();
+    let service = build_service_with_event_broker(team_repository, event_broker.clone());
+
+    assert!(
+        service
+            .delete_team_invite(
+                test_team_receipt::<AdminTeamRole>(team_id, &admin),
+                &invite_id,
+            )
+            .await
+            .is_err()
+    );
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
