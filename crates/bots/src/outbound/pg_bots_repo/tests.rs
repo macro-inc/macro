@@ -7,6 +7,7 @@ use crate::domain::{
     service::BotServiceImpl,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_event_broker::NoopMacroEventBroker;
 use sqlx::PgPool;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";
@@ -40,8 +41,8 @@ fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
     }
 }
 
-fn service(pool: &PgPool) -> BotServiceImpl<PgBotsRepo> {
-    BotServiceImpl::new(PgBotsRepo::new(pool.clone()))
+fn service(pool: &PgPool) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker> {
+    BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
 }
 
 async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
