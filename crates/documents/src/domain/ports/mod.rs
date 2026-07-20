@@ -174,6 +174,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
 
+    /// Get the document ID assigned to a task number within a team.
+    fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
     /// Get user/team data needed to build a branch name for this user and task.
     fn get_branch_name_context(
         &self,

@@ -296,7 +296,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: None,
-        file_type: Some(FileTypeUpdate::Set(model_file_type::FileType::Rs)),
+        file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
     })
     .await
     .unwrap();
@@ -832,6 +832,38 @@ async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
 
     assert_eq!(task_metadata.team_id, TEST_TEAM_ID);
     assert_eq!(task_metadata.task_num, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_document_id_by_team_task_number(pool: Pool<Postgres>) {
+    insert_second_team(&pool).await;
+    let repo = PgDocumentRepo::new(pool);
+
+    let first_team_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let second_team_task =
+        create_task_for_team(&repo, "macro|other@user.com", SECOND_TEAM_ID).await;
+
+    assert_eq!(
+        repo.get_document_id_by_team_task_number(&TEST_TEAM_ID, 1)
+            .await
+            .unwrap(),
+        Some(first_team_task.document_id)
+    );
+    assert_eq!(
+        repo.get_document_id_by_team_task_number(&SECOND_TEAM_ID, 1)
+            .await
+            .unwrap(),
+        Some(second_team_task.document_id)
+    );
+    assert_eq!(
+        repo.get_document_id_by_team_task_number(&TEST_TEAM_ID, 2)
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[sqlx::test(
