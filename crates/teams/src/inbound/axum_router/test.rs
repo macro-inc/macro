@@ -123,6 +123,19 @@ async fn invite_to_team_validation_error_response_is_preserved() {
 }
 
 #[tokio::test]
+async fn invite_to_free_team_at_capacity_returns_bad_request() {
+    let error =
+        InviteToTeamError::InviteUsersToTeamError(InviteUsersToTeamError::NotEnoughOpenSeats);
+    let (status, body_text, _) = response_parts(error).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body_text,
+        r#"{"message":"free team member limit reached; upgrade to invite more members"}"#
+    );
+}
+
+#[tokio::test]
 async fn remove_team_invite_not_found_response_is_preserved() {
     let (status, body_text, _) =
         response_parts(RemoveTeamInviteError::TeamInviteDoesNotExist).await;

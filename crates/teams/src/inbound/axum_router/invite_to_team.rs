@@ -61,6 +61,13 @@ impl axum::response::IntoResponse for InviteToTeamError {
                         message: "too many emails".into(),
                     }),
                 ),
+                InviteUsersToTeamError::NotEnoughOpenSeats => (
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse {
+                        message: "free team member limit reached; upgrade to invite more members"
+                            .into(),
+                    }),
+                ),
                 InviteUsersToTeamError::CustomerError(_) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
