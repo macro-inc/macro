@@ -19,6 +19,7 @@ use macro_authorization::{
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
 use notification::outbound::queue::SqsQueue;
 use notification::{
@@ -49,6 +50,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<
         SqsContactsIngress<SqsContactsQueue>,
     >,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
 pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
