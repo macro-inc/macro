@@ -10,7 +10,7 @@ serve:
     GITHUB_TOKEN=$(gh auth token) nix develop --command bun run index.ts
 
 client *args:
-    bun scripts/client.ts {{args}}
+    bun scripts/client.tsx {{args}}
 
 # Kick off a session (webhook flow: returns the id immediately; watch `just upstream`).
 session repo prompt:
