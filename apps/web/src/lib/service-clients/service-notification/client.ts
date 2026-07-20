@@ -104,12 +104,12 @@ export const notificationServiceClient = {
     ).map((result) => result);
   },
   async bulkGetUserNotificationsByEventItemId(
-    args: NotificationParams & BulkGetByEventItemIdsRequest
+    args: UserNotificationParams & BulkGetByEventItemIdsRequest
   ) {
-    const { limit, cursor } = args;
+    const { limit, cursor, done } = args;
     return (
       await notificationFetch<GetAllUserNotificationsResponse>(
-        `/user_notifications/item/bulk?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+        `/user_notifications/item/bulk?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}${done !== undefined ? `&done=${done}` : ''}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

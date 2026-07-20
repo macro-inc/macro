@@ -40,7 +40,10 @@ import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
-import { bulkMarkNotificationsAsUndone } from '@queries/notification/user-notifications';
+import {
+  bulkMarkNotificationsAsUndone,
+  fetchDoneNotificationIdsByEventItemIds,
+} from '@queries/notification/user-notifications';
 import {
   getSoupEntityById,
   invalidateAllSoup,
@@ -465,14 +468,22 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         },
         {
           onSuccess: async () => {
-            if (notificationIds.length > 0) {
-              setDoneOverride(notificationIds, false);
+            // The live notification stream only carries not-done
+            // notifications, so the thread's done ids may have aged out of
+            // the local cache — merge the server's view (best effort: the
+            // unarchive itself already succeeded).
+            const serverIds = await fetchDoneNotificationIdsByEventItemIds([
+              threadId,
+            ]).catch(() => []);
+            const allIds = [...new Set([...notificationIds, ...serverIds])];
+            if (allIds.length > 0) {
+              setDoneOverride(allIds, false);
               try {
-                await bulkMarkNotificationsAsUndone(notificationIds);
+                await bulkMarkNotificationsAsUndone(allIds);
               } catch {
                 // The unarchive itself succeeded, so keep that outcome and
                 // let the override fall back to the server's done state.
-                setDoneOverride(notificationIds, undefined);
+                setDoneOverride(allIds, undefined);
               }
             }
             void refetchSoupEntity(threadId, 'emailThread');

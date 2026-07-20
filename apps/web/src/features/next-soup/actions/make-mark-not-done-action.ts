@@ -6,6 +6,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
+import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import type { SoupState } from '../create-soup-state';
 
@@ -38,7 +39,17 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     });
 
     try {
-      await executeMarkEntitiesUndone({ emailIds, notificationIds });
+      // The live notification stream only carries not-done notifications, so
+      // a done thread's ids may have aged out of the local cache — resolve
+      // them from the server and merge before restoring.
+      const serverNotificationIds =
+        await fetchDoneNotificationIdsByEventItemIds(emailIds);
+      await executeMarkEntitiesUndone({
+        emailIds,
+        notificationIds: [
+          ...new Set([...notificationIds, ...serverNotificationIds]),
+        ],
+      });
       // Restore the rows deterministically: refetch each thread's soup item
       // and upsert it into the caches (flat, grouped parents, and expanded
       // group queries), then refetch the lists so done-filtered views
