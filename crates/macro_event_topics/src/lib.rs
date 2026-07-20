@@ -49,6 +49,8 @@ macro_rules! topics {
 topics! {
     /// Example kafka topic.
     MacroExampleTopic => "macro.example",
+    /// Bot lifecycle events (created / updated / deleted).
+    MacroBotsTopic => "macro.bots",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
