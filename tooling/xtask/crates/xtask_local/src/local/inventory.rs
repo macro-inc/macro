@@ -244,6 +244,24 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: true,
     },
+    RustService {
+        compose_name: "agent_proxy_service",
+        cargo_bin: "agent_proxy_service",
+        package: "agent_proxy_service",
+        host_port: Some(Port::AgentProxy),
+        // No frontend proxy route yet; clients hit the host port directly.
+        // Each external agent's runtime dials its own ephemeral WebSocket
+        // listener, provisioned on demand within a fixed port range
+        // (RUNTIME_PORT_RANGE_START/_END, published in the base compose file
+        // rather than derived here). Named instances only remap `host_port`
+        // (see `gen_compose::generate`), so they currently don't get a
+        // remapped range and would collide with the default instance's.
+        path_prefix: None,
+        is_websocket: true,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

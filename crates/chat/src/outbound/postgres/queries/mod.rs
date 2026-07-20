@@ -6,6 +6,7 @@ pub(crate) mod create_message;
 pub(crate) mod delete_message;
 pub(crate) mod edit_share_permission;
 pub(crate) mod get_access_level;
+pub(crate) mod get_agent_kind;
 pub(crate) mod get_chat;
 pub(crate) mod get_message_content;
 pub(crate) mod get_messages;

@@ -1,5 +1,6 @@
 //! Insert a new chat row.
 
+use crate::domain::models::ChatAgentKind;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Postgres, Transaction};
 
@@ -10,16 +11,18 @@ pub(crate) async fn insert_chat(
     user_id: &MacroUserIdStr<'_>,
     name: &str,
     project_id: Option<&str>,
+    kind: ChatAgentKind,
 ) -> anyhow::Result<String> {
     let row = sqlx::query_scalar!(
         r#"
-        INSERT INTO "Chat" ("userId", name, "projectId")
-        VALUES ($1, $2, $3)
+        INSERT INTO "Chat" ("userId", name, "projectId", "agentKind")
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         "#,
         user_id.as_ref(),
         name,
         project_id,
+        kind.as_str(),
     )
     .fetch_one(tx.as_mut())
     .await?;

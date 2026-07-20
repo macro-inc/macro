@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "crates/agent",
+  "crates/agent_proxy",
   "crates/agent_runtime_protocol",
   "crates/ai_projections",
   "crates/ai_usage",
@@ -51,6 +52,7 @@ members = [
   "crates/unfurl",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
+  "services/agent_proxy_service",
   "services/ai_projections_refresh_handler",
   "services/authentication_service",
   "services/call_recording_preview_handler",

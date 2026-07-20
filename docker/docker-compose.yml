@@ -296,6 +296,42 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent_proxy_service (Port 8091 HTTP; 9700-9799 ephemeral agent-runtime
+  # WebSocket listeners, one per session, provisioned on demand)
+  # Proxy for external coding agents - MacroDB + connection gateway
+  # ============================================================================
+  agent_proxy_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_proxy_service"]
+    ports:
+      - "8091:8080"
+      # Each external agent's runtime gets its own ephemeral listener bound
+      # within this range (RUNTIME_PORT_RANGE_START/_END) rather than an
+      # OS-assigned port, since an OS-assigned port has no fixed mapping out
+      # of the container. Chosen clear of the local stack's other published
+      # ports (Kafka 9092, OpenSearch 9200/9600); must match those env vars
+      # if changed.
+      - "9700-9799:9700-9799"
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - connection_gateway
+    networks:
+      databases:
+      services:
+        aliases:
+          - agent-proxy-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # static_file_service (Port 8094)
   # Static file serving - DynamoDB
   # ============================================================================

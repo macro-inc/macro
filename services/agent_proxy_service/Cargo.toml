@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "agent_proxy_service"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent_proxy = { path = "../../crates/agent_proxy" }
+anyhow = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+axum = { workspace = true }
+chat = { path = "../../crates/chat", default-features = false, features = [
+  "outbound",
+] }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+database_env_vars = { path = "../../crates/database_env_vars" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = [
+  "axum",
+  "outbound",
+] }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+redis = { workspace = true, features = [
+  "streams",
+  "aio",
+  "tokio-comp",
+  "tokio-rustls-comp",
+] }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+sqlx = { workspace = true }
+stream = { path = "../../crates/stream" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -129,6 +129,73 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_proxy"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "agent-client-protocol",
+ "agent_runtime_protocol",
+ "anyhow",
+ "async-trait",
+ "attachment",
+ "axum",
+ "chat",
+ "chrono",
+ "clap",
+ "connection_gateway_client",
+ "dotenvy",
+ "futures",
+ "macro_authorization",
+ "macro_user_id",
+ "macro_uuid",
+ "model",
+ "model-entity",
+ "models_permissions",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "stream",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-segmentation",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_proxy_service"
+version = "0.1.0"
+dependencies = [
+ "agent_proxy",
+ "anyhow",
+ "aws-sdk-secretsmanager",
+ "axum",
+ "chat",
+ "connection_gateway_client",
+ "database_env_vars",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "redis",
+ "secretsmanager_client",
+ "sqlx",
+ "stream",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_runtime_protocol"
 version = "0.1.0"
 dependencies = [
@@ -16748,6 +16815,8 @@ dependencies = [
  "crypto-bigint",
  "crypto-common 0.1.6",
  "data-encoding",
+ "derive_more 2.1.1",
+ "derive_more-impl",
  "digest 0.10.7",
  "doppleganger",
  "doppleganger-core",
@@ -16763,6 +16832,7 @@ dependencies = [
  "futures-core",
  "futures-executor",
  "futures-io",
+ "futures-lite 2.6.1",
  "futures-sink",
  "futures-task",
  "futures-util",
@@ -16827,6 +16897,7 @@ dependencies = [
  "serde_core",
  "serde_json",
  "serde_with",
+ "serde_with_macros",
  "sha1 0.10.6",
  "sha2 0.10.9",
  "simd-adler32",
