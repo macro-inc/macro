@@ -157,6 +157,7 @@ use utoipa::OpenApi;
         // documents
         documents::get_user_documents::get_user_documents_handler,
         documents_hex::inbound::axum_router::get_document::get_document_handler,
+        documents_hex::inbound::axum_router::get_document_by_team_slug::get_document_by_team_slug_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document::create_document_handler,
         documents_hex::inbound::axum_router::create_markdown::create_markdown_handler,

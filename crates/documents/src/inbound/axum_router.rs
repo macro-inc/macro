@@ -67,7 +67,7 @@ use self::{
     get_branch_name::get_branch_name_handler,
     get_cached_snapshot_url::get_cached_snapshot_url_handler,
     get_document::get_document_handler,
-    get_document_by_team_slug::get_documnet_by_team_slug_handler,
+    get_document_by_team_slug::get_document_by_team_slug_handler,
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
@@ -220,10 +220,6 @@ where
                 .delete(delete_document_handler::<T, Svc, Auth>),
         )
         .route(
-            "/slug/{slug}",
-            axum::routing::get(get_document_by_team_slug_handler::<T, Svc, Auth>),
-        )
-        .route(
             "/{document_id}/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc, Auth>),
         )
@@ -276,6 +272,10 @@ where
 
     let router = Router::new()
         .merge(document_id_routes)
+        .route(
+            "/slug/{slug}",
+            axum::routing::get(get_document_by_team_slug_handler::<T, Svc, Auth>),
+        )
         .route(
             "/",
             axum::routing::post(create_document_handler::<T, Svc, Auth>),
