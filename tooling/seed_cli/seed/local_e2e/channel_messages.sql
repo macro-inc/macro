@@ -25,6 +25,58 @@ SELECT
 FROM local_e2e_channels AS channel
 CROSS JOIN generate_series(1, 5000) AS message_number;
 
+-- Consecutive reply-heavy roots reproduce the production trace where a fixed
+-- 64px virtual-row estimate mounted far more threads than fit in the viewport.
+WITH reply_heavy_threads AS (
+    SELECT
+        message_number,
+        reply_number,
+        md5(
+            'local-e2e-scroll-'
+            || '00000000-0000-0000-0000-000000000001'
+            || '-'
+            || message_number
+        )::uuid AS thread_id
+    FROM generate_series(2450, 2499) AS message(message_number)
+    CROSS JOIN generate_series(1, 3) AS reply(reply_number)
+)
+INSERT INTO comms_messages (
+    id,
+    channel_id,
+    sender_id,
+    content,
+    thread_id,
+    created_at,
+    updated_at
+)
+SELECT
+    md5(
+        'local-e2e-reply-heavy-'
+        || message_number
+        || '-'
+        || reply_number
+    )::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    CASE reply_number
+        WHEN 1 THEN 'macro|bob@example.com'
+        WHEN 2 THEN 'macro|charlie@example.com'
+        ELSE 'macro|dana@example.com'
+    END,
+    repeat(
+        format(
+            'Reply-heavy virtualization fixture %s-%s. This diagnostic context gives each collapsed thread a production-shaped measured height. ',
+            message_number,
+            reply_number
+        ),
+        12
+    ),
+    thread_id,
+    now() + (message_number || ' milliseconds')::interval
+        + (reply_number || ' microseconds')::interval,
+    now() + (message_number || ' milliseconds')::interval
+        + (reply_number || ' microseconds')::interval
+FROM reply_heavy_threads;
+
 INSERT INTO comms_messages (
     id,
     channel_id,

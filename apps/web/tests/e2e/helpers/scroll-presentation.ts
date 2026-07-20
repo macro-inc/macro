@@ -10,6 +10,14 @@ type BottomPresentationSample = {
   distanceFromBottom: number;
 };
 
+type MountedThreadReport = {
+  currentMessages: number;
+  currentThreads: number;
+  lastChangeAt?: number;
+  peakMessages: number;
+  peakThreads: number;
+};
+
 type TargetPresentationSample = {
   time: number;
   center: number;
@@ -51,7 +59,81 @@ declare global {
     __e2eTargetPresentation?: TargetPresentationReport;
     __e2eResetTargetPresentation?: () => void;
     __e2eStopTargetPresentation?: () => void;
+    __e2eMountedThreads?: MountedThreadReport;
   }
+}
+
+/** Capture transient thread mounts, including rows removed before first paint. */
+export async function observeMountedThreads(
+  page: Page,
+  scrollSelector: string
+) {
+  await page.addInitScript((selector) => {
+    const report: MountedThreadReport = {
+      currentMessages: 0,
+      currentThreads: 0,
+      peakMessages: 0,
+      peakThreads: 0,
+    };
+    window.__e2eMountedThreads = report;
+
+    const sample = () => {
+      const scroller = document.querySelector<HTMLElement>(selector);
+      if (!scroller?.isConnected) return;
+
+      const currentThreads = scroller.querySelectorAll(
+        '[data-channel-thread-row]'
+      ).length;
+      const currentMessages =
+        scroller.querySelectorAll('[data-message-id]').length;
+      if (
+        currentThreads !== report.currentThreads ||
+        currentMessages !== report.currentMessages
+      ) {
+        report.lastChangeAt = performance.now();
+      }
+      report.currentThreads = currentThreads;
+      report.currentMessages = currentMessages;
+      report.peakThreads = Math.max(report.peakThreads, report.currentThreads);
+      report.peakMessages = Math.max(
+        report.peakMessages,
+        report.currentMessages
+      );
+    };
+
+    new MutationObserver(sample).observe(document, {
+      childList: true,
+      subtree: true,
+    });
+
+    const samplePaintedFrames = () => {
+      sample();
+      requestAnimationFrame(samplePaintedFrames);
+    };
+    requestAnimationFrame(samplePaintedFrames);
+  }, scrollSelector);
+
+  return {
+    read: () =>
+      page.evaluate(() => window.__e2eMountedThreads as MountedThreadReport),
+    waitForQuietAndRead: async (quietMs = 250) => {
+      await page.waitForFunction(
+        (quiet) => {
+          const report = window.__e2eMountedThreads;
+          return (
+            report?.currentThreads > 0 &&
+            report.lastChangeAt !== undefined &&
+            performance.now() - report.lastChangeAt >= quiet
+          );
+        },
+        quietMs,
+        { timeout: 30_000 }
+      );
+      return page.evaluate(
+        () => window.__e2eMountedThreads as MountedThreadReport
+      );
+    },
+  };
 }
 
 /**

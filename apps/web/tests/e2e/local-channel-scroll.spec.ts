@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { expect, test } from '@playwright/test';
 import { entityIdSelector } from '../../src/lib/core/dom-selectors';
 
@@ -10,12 +12,52 @@ import {
 import {
   delayResizeObserverFor,
   observeBottomPresentation,
+  observeMountedThreads,
 } from './helpers/scroll-presentation';
 
 const CHANNEL_SCROLL_SELECTOR = '[data-channel-scroll]';
 const BOTTOM_TOLERANCE_PX = 1;
+const MAX_TRANSIENT_MESSAGES = 32;
+const MAX_TRANSIENT_THREADS = 8;
 
 test.skip(!LOCAL_E2E, 'requires the seeded local E2E stack');
+test.use({ viewport: { width: 1920, height: 1080 } });
+
+function scrollFixtureMessageId(channelId: string, messageNumber: number) {
+  const hex = createHash('md5')
+    .update(`local-e2e-scroll-${channelId}-${messageNumber}`)
+    .digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+test('does not transiently mount rows outside a reply-heavy viewport', async ({
+  page,
+}) => {
+  const channelId = localE2ESeed.smoke.generalChannel.channel_id;
+  const targetMessageId = scrollFixtureMessageId(channelId, 2475);
+  const scrollSelector = `${CHANNEL_SCROLL_SELECTOR}[data-channel-id="${channelId}"]`;
+  const mountedThreads = await observeMountedThreads(page, scrollSelector);
+
+  await gotoApp(
+    page,
+    `/channel/${channelId}?channel_message_id=${targetMessageId}`
+  );
+
+  const scroller = page.locator(scrollSelector);
+  await expect(scroller).toBeVisible({ timeout: 30_000 });
+  await expect(
+    scroller.locator(`[data-message-id="${targetMessageId}"]`)
+  ).toBeVisible({ timeout: 30_000 });
+
+  const report = await mountedThreads.waitForQuietAndRead();
+  expect(report.currentThreads).toBeGreaterThan(0);
+  expect(report.peakThreads, JSON.stringify(report)).toBeLessThanOrEqual(
+    MAX_TRANSIENT_THREADS
+  );
+  expect(report.peakMessages, JSON.stringify(report)).toBeLessThanOrEqual(
+    MAX_TRANSIENT_MESSAGES
+  );
+});
 
 test('presents an overflowing channel at the bottom before measurement settles', async ({
   page,
