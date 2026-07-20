@@ -42,7 +42,6 @@ async fn main() -> anyhow::Result<()> {
             Ok(AuthenticatedToolService::new(
                 tools.toolset,
                 context.tool_context.clone(),
-                context.user_roles_and_permissions_service.clone(),
                 item_base_url.clone(),
             ))
         },

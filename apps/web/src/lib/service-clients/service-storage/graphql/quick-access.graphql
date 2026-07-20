@@ -1,0 +1,166 @@
+fragment QuickAccessSoupItemFields on GraphqlSoupItem {
+	id
+	entityType
+	frecencyScore
+	entity {
+		__typename
+		... on GraphqlSoupDocument {
+			id
+			documentName: name
+			ownerId
+			fileType
+			projectId
+			createdAt
+			updatedAt
+			viewedAt
+			deletedAt
+			subType {
+				kind
+				isCompleted
+			}
+			properties {
+				...SoupPropertyFields
+			}
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlSoupChat {
+			id
+			chatName: name
+			ownerId
+			projectId
+			isPersistent
+			createdAt
+			updatedAt
+			viewedAt
+			deletedAt
+			properties {
+				...SoupPropertyFields
+			}
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlSoupProject {
+			id
+			projectName: name
+			ownerId
+			parentId
+			createdAt
+			updatedAt
+			viewedAt
+			deletedAt
+			properties {
+				...SoupPropertyFields
+			}
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		# These fields are intentionally absent from cached Soup email records.
+		# Their absence makes email projections incomplete, so record selection
+		# omits email wrappers instead of returning typename-only shells.
+		... on GraphqlSoupEmailThread {
+			attachmentCount
+			participantCount
+		}
+		... on GraphqlSoupChannel {
+			id
+			channelName: name
+			channelType
+			ownerId
+			organizationId
+			channelTeamId: teamId
+			createdAt
+			updatedAt
+			viewedAt
+			interactedAt
+			participants {
+				channelId
+				userId
+				role
+				joinedAt
+				leftAt
+			}
+			latestMessage {
+				...SoupChannelMessageFields
+			}
+			latestNonThreadMessage {
+				...SoupChannelMessageFields
+			}
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlSoupChannelThread {
+			id
+			channelId
+			senderId
+			content
+			createdAt
+			updatedAt
+			effectiveUpdatedAt
+			replyCount
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlSoupCall {
+			id
+			channelId
+			channelName
+			createdBy
+			customName
+			summary
+			startedAt
+			endedAt
+			durationMs
+			isActive
+			status
+			attended
+			participants {
+				userId
+				joinedAt
+				leftAt
+			}
+			properties {
+				...SoupPropertyFields
+			}
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlSoupCrmCompany {
+			id
+			crmTeamId: teamId
+			crmCompanyName: name
+			description
+			emailSync
+			hidden
+			createdAt
+			updatedAt
+			viewedAt
+			domains
+			properties {
+				...SoupPropertyFields
+			}
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlSoupForeignEntity {
+			id
+			foreignEntityId
+			foreignEntitySource
+			storedForId
+			storedForAuthEntity
+			metadata
+			createdAt
+			updatedAt
+			notifications {
+				...SoupNotificationFields
+			}
+		}
+	}
+}

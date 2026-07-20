@@ -1,5 +1,4 @@
 import { useRowTagsVisible } from '@app/features/next-soup/soup-view/filters-bar/search/search-tags-flag';
-import { useRowTagFilter } from '@app/features/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
@@ -33,7 +32,7 @@ import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
-import { EmailWideContent, useOwningInbox } from './email';
+import { EmailWideContent, useOwningInboxForEntity } from './email';
 import {
   GithubPullRequestChecksIndicator,
   GithubPullRequestPills,
@@ -44,14 +43,14 @@ function RowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
+  onFilterByTag?: (optionId: string) => void;
 }) {
-  const filterByTag = useRowTagFilter();
   return (
     <EntityRowTags
       entityId={props.entityId}
       entityType={props.entityType}
       properties={props.properties}
-      onFilterByTag={filterByTag}
+      onFilterByTag={props.onFilterByTag}
     />
   );
 }
@@ -61,9 +60,7 @@ export function WideLayout(props: LayoutProps) {
   const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
-  const owningInbox = useOwningInbox(() =>
-    isEmailEntity(props.entity) ? props.entity : undefined
-  );
+  const owningInbox = useOwningInboxForEntity(() => props.entity);
 
   return (
     <Entity.Layout
@@ -170,6 +167,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.PROJECT}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
@@ -190,6 +188,7 @@ export function WideLayout(props: LayoutProps) {
                   isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
                 }
                 properties={properties()}
+                onFilterByTag={soupView?.filterByTag}
               />
             );
           }}
@@ -215,6 +214,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CHAT}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>
@@ -226,6 +226,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.CALL_RECORD}
               properties={entity().properties}
+              onFilterByTag={soupView?.filterByTag}
             />
           )}
         </Show>

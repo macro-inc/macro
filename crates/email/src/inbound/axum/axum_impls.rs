@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         models::{EmailErr, Link, PreviewView},
-        ports::{EmailService, GmailTokenProvider},
+        ports::EmailService,
     },
     inbound::axum::{api_types::ApiSortMethod, previews_router::EmailRouterState},
 };
@@ -17,7 +17,6 @@ use macro_authorization::{
     MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
 use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
@@ -81,9 +80,9 @@ pub struct GetPreviewsCursorParams {
     pub sort_method: Option<ApiSortMethod>,
 }
 
-pub struct EmailLinkExtractor<U>(pub Link, pub PhantomData<U>);
+pub struct EmailLinkExtractor<U, Auth>(pub Link, pub PhantomData<(U, Auth)>);
 
-impl<U> Clone for EmailLinkExtractor<U> {
+impl<U, Auth> Clone for EmailLinkExtractor<U, Auth> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
@@ -101,15 +100,12 @@ pub enum EmailLinkErr {
     NoInboxSelected,
     #[error(transparent)]
     Authorization(#[from] MacroAuthorizationRejection),
-    #[error(transparent)]
-    UserErr(#[from] UserExtractorErr),
 }
 
 impl IntoResponse for EmailLinkErr {
     fn into_response(self) -> Response {
         let (status, error) = match self {
             EmailLinkErr::Authorization(error) => return error.into_response(),
-            EmailLinkErr::UserErr(error) => return error.into_response(),
             error @ EmailLinkErr::DbErr(_) => (StatusCode::INTERNAL_SERVER_ERROR, error),
             error @ EmailLinkErr::NotFound => (StatusCode::NOT_FOUND, error),
             error @ (EmailLinkErr::InvalidLinkIdHeader | EmailLinkErr::NoInboxSelected) => {
@@ -159,18 +155,22 @@ fn parse_link_id_header(parts: &Parts) -> Result<Option<Uuid>, EmailLinkErr> {
         .map_err(|_| EmailLinkErr::InvalidLinkIdHeader)
 }
 
-impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
+impl<S, U, Auth> FromRequestParts<S> for EmailLinkExtractor<U, Auth>
 where
     EmailRouterState<U>: FromRef<S>,
+    MacroAuthorizationState<Auth>: FromRef<S>,
     U: EmailService,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let header_link_id = parse_link_id_header(parts)?;
-        let Cached(MacroUserExtractor { macro_user_id, .. }) =
-            parts.extract_with_state(state).await?;
+        let Cached(MacroAuthorizationExtractor { macro_user_id, .. }) = parts
+            .extract_with_state(state)
+            .await
+            .map_err(EmailLinkErr::Authorization)?;
         let caller = macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
@@ -186,95 +186,34 @@ where
 /// endpoints fan out over all returned links. A caller with no inboxes yields an
 /// empty `Vec` (and hence empty results) rather than a 404 — the union over zero
 /// inboxes is empty, not missing.
-pub struct MultiEmailLinkExtractor<U>(pub Vec<Link>, pub PhantomData<U>);
+pub struct MultiEmailLinkExtractor<U, Auth>(pub Vec<Link>, pub PhantomData<(U, Auth)>);
 
-impl<U> Clone for MultiEmailLinkExtractor<U> {
+impl<U, Auth> Clone for MultiEmailLinkExtractor<U, Auth> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<S, U> FromRequestParts<S> for MultiEmailLinkExtractor<U>
+impl<S, U, Auth> FromRequestParts<S> for MultiEmailLinkExtractor<U, Auth>
 where
     EmailRouterState<U>: FromRef<S>,
-    U: EmailService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = EmailLinkErr;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroUserExtractor { macro_user_id, .. }) =
-            parts.extract_with_state(state).await?;
-        let links = <EmailRouterState<U>>::from_ref(state)
-            .inner
-            .get_inboxes_for_macro_id(macro_user_id)
-            .await?;
-        Ok(Self(links, PhantomData))
-    }
-}
-
-/// Macro-authorized extractor that resolves every inbox the caller can read.
-///
-/// This is the authorization-service equivalent of [`MultiEmailLinkExtractor`].
-/// A caller with no inboxes receives an empty `Vec` rather than a rejection.
-pub struct MultiEmailLinkExtractorV2<U, Auth>(pub Vec<Link>, pub PhantomData<(U, Auth)>);
-
-impl<U, Auth> Clone for MultiEmailLinkExtractorV2<U, Auth> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<S, U, Auth> FromRequestParts<S> for MultiEmailLinkExtractorV2<U, Auth>
-where
-    EmailRouterState<U>: FromRef<S>,
-    U: EmailService,
     MacroAuthorizationState<Auth>: FromRef<S>,
+    U: EmailService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let MacroAuthorizationExtractor { macro_user_id, .. } =
-            parts.extract_with_state(state).await?;
+        let Cached(MacroAuthorizationExtractor { macro_user_id, .. }) = parts
+            .extract_with_state(state)
+            .await
+            .map_err(EmailLinkErr::Authorization)?;
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_inboxes_for_macro_id(macro_user_id)
             .await?;
         Ok(Self(links, PhantomData))
-    }
-}
-
-/// Extractor that returns `Option<Link>` - returns `None` if no link is found
-/// instead of failing with a 404 error.
-pub struct OptionalEmailLinkExtractor<U>(pub Option<Link>, pub PhantomData<U>);
-
-impl<U> Clone for OptionalEmailLinkExtractor<U> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<S, U> FromRequestParts<S> for OptionalEmailLinkExtractor<U>
-where
-    EmailRouterState<U>: FromRef<S>,
-    U: EmailService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = EmailLinkErr;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        }) = parts.extract_with_state(state).await?;
-        let res = <EmailRouterState<U>>::from_ref(state)
-            .inner
-            .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
-            .await?;
-        Ok(Self(res, PhantomData))
     }
 }
 
@@ -297,69 +236,5 @@ impl<T> GmailTokenState<T> {
         Self {
             inner: Arc::new(provider),
         }
-    }
-}
-
-/// Extractor that resolves the user's email link and fetches a Gmail access token.
-pub struct GmailAccessTokenExtractor<U, V> {
-    /// The fetched Gmail OAuth access token.
-    pub access_token: String,
-    /// The email link used to fetch the token.
-    pub link: Link,
-    _phantom: PhantomData<(U, V)>,
-}
-
-/// Errors from [`GmailAccessTokenExtractor`].
-#[derive(Debug, Error)]
-pub enum GmailAccessTokenErr {
-    /// Failed to resolve the email link.
-    #[error(transparent)]
-    Link(#[from] EmailLinkErr),
-    /// Failed to fetch the Gmail access token.
-    #[error("Failed to fetch Gmail access token")]
-    TokenFetch(#[source] EmailErr),
-}
-
-impl IntoResponse for GmailAccessTokenErr {
-    fn into_response(self) -> Response {
-        match self {
-            GmailAccessTokenErr::Link(e) => e.into_response(),
-            GmailAccessTokenErr::TokenFetch(e) => {
-                tracing::error!(error=?e, "gmail token fetch error");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to fetch Gmail access token",
-                )
-                    .into_response()
-            }
-        }
-    }
-}
-
-impl<S, U, V> FromRequestParts<S> for GmailAccessTokenExtractor<U, V>
-where
-    EmailRouterState<U>: FromRef<S>,
-    GmailTokenState<V>: FromRef<S>,
-    U: EmailService,
-    V: GmailTokenProvider,
-    S: Send + Sync + 'static,
-{
-    type Rejection = GmailAccessTokenErr;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(EmailLinkExtractor(link, _)) = parts
-            .extract_with_state::<Cached<EmailLinkExtractor<U>>, S>(state)
-            .await?;
-        let token_state = <GmailTokenState<V>>::from_ref(state);
-        let token = token_state
-            .inner
-            .fetch_gmail_access_token(&link)
-            .await
-            .map_err(GmailAccessTokenErr::TokenFetch)?;
-        Ok(Self {
-            access_token: token,
-            link,
-            _phantom: PhantomData,
-        })
     }
 }

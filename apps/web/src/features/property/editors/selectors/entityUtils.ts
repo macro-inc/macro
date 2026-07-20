@@ -70,12 +70,12 @@ export function useQuickAccessEntities<T extends EntityType>(
   const items = (): EntityTypeItemMap[T][] => {
     const b = buckets();
     if (b === null) {
-      return quickAccess.useList()() as EntityTypeItemMap[T][];
+      return quickAccess.useList().items() as EntityTypeItemMap[T][];
     }
     if (b.length === 0) {
       return [];
     }
-    return quickAccess.useList(...b)() as EntityTypeItemMap[T][];
+    return quickAccess.useList(...b).items() as EntityTypeItemMap[T][];
   };
   return { items, isLoading: quickAccess.isLoading };
 }

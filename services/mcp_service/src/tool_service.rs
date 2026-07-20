@@ -6,7 +6,6 @@ use rmcp::{
         Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
     },
 };
-use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use std::sync::Arc;
 
 /// MCP server handler that extracts authenticated user identity from HTTP
@@ -15,31 +14,25 @@ use std::sync::Arc;
     dead_code,
     reason = "fields used via ServerHandler trait impl dispatched by rmcp"
 )]
-pub struct AuthenticatedToolService<Context, RolesService> {
+pub struct AuthenticatedToolService<Context> {
     toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
-    user_roles_and_permissions_service: RolesService,
     /// Base URL of the Macro web app used to build links to Macro items in MCP
     /// responses (e.g. `https://macro.com`). Comes from the `APP_BASE_URL`
     /// environment variable.
     item_base_url: String,
 }
 
-impl<Context, RolesService> AuthenticatedToolService<Context, RolesService>
-where
-    RolesService: UserRolesAndPermissionsService,
-{
+impl<Context> AuthenticatedToolService<Context> {
     /// Creates a new authenticated tool service.
     pub fn new(
         toolset: Arc<AsyncToolCollection<Context>>,
         context: Context,
-        user_roles_and_permissions_service: RolesService,
         item_base_url: String,
     ) -> Self {
         Self {
             toolset,
             context,
-            user_roles_and_permissions_service,
             item_base_url,
         }
     }
@@ -68,41 +61,14 @@ where
                 rmcp::ErrorData::internal_error("missing user identity — is auth configured?", None)
             })
     }
-
-    async fn require_paid_subscription(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> Result<(), rmcp::ErrorData> {
-        let roles = self
-            .user_roles_and_permissions_service
-            .get_user_roles(user_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "failed to check user subscription roles for MCP access");
-                rmcp::ErrorData::internal_error("failed to check subscription", None)
-            })?;
-
-        let is_paid = roles.iter().any(|role| role.is_paid_subscription());
-
-        if !is_paid {
-            return Err(rmcp::ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
-                "MCP access requires a paid subscription",
-                None,
-            ));
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod test;
 
-impl<Context, RolesService> ServerHandler for AuthenticatedToolService<Context, RolesService>
+impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
     Context: Clone + Send + Sync + 'static,
-    RolesService: UserRolesAndPermissionsService,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
@@ -132,8 +98,7 @@ where
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        let user_id = Self::authenticated_user_id(&context.extensions)?;
-        self.require_paid_subscription(&user_id).await?;
+        Self::authenticated_user_id(&context.extensions)?;
 
         Ok(ListToolsResult {
             tools: self.tool_definitions(),
@@ -147,7 +112,6 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
-        self.require_paid_subscription(&user_id).await?;
 
         let request_context = RequestContext::new(user_id);
 

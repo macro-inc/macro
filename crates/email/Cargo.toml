@@ -30,9 +30,7 @@ axum = [
   "dep:axum-extra",
   "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
-  "model_user/axum",
   "models_pagination/axum",
 ]
 gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
@@ -73,7 +71,6 @@ macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }

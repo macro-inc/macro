@@ -1,7 +1,7 @@
 import type { IUser } from '@core/user/types';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
-import { type Accessor, createMemo, For, onMount } from 'solid-js';
+import { type Accessor, createMemo, For, onCleanup, onMount } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import type { NewMessageCheckable } from '../Channel/util';
 import {
@@ -9,20 +9,14 @@ import {
   type MessageActions,
   type MessageData,
 } from '../Message';
+import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 
 export type ThreadReplyListHandle = {
-  scrollToIndex: (index: number) => boolean;
+  scrollToIndex: (index: number, onSettled: () => void) => boolean;
+  cancelScroll: () => void;
 };
-
-function getReplyElementAtIndex(
-  elements: Array<HTMLElement | undefined>,
-  index: number
-): HTMLElement | undefined {
-  if (index < 0) return undefined;
-  return elements[index];
-}
 
 export function ThreadReplyList(props: {
   channelId: string;
@@ -33,6 +27,10 @@ export function ThreadReplyList(props: {
   participants?: Accessor<IUser[]>;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
   onReady?: (handle: ThreadReplyListHandle) => void;
+  positionTarget?: (
+    threadRow: HTMLElement,
+    targetReply: HTMLElement
+  ) => boolean;
   selectedReplyId?: Accessor<string | undefined>;
   /**
    * Reply targeted by channel navigation or bound to the unified input's reply (quote-reply).
@@ -45,20 +43,19 @@ export function ThreadReplyList(props: {
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
   );
   const replyElements: Array<HTMLElement | undefined> = [];
-
-  const scrollToIndex = (index: number): boolean => {
-    const element = getReplyElementAtIndex(replyElements, index);
-    if (!element) return false;
-    // NOTE: this rAF helps prevent situations where the deeply nested thread element is unmounted
-    requestAnimationFrame(() => element.scrollIntoView({ block: 'center' }));
-    return true;
-  };
+  const targetReplyScroller = createTargetReplyScroller({
+    getTarget: (index) => replyElements[index],
+    positionTarget: props.positionTarget,
+  });
 
   onMount(() => {
     props.onReady?.({
-      scrollToIndex,
+      scrollToIndex: targetReplyScroller.scrollToIndex,
+      cancelScroll: targetReplyScroller.cancel,
     });
   });
+
+  onCleanup(targetReplyScroller.dispose);
 
   return (
     <For each={props.replies}>

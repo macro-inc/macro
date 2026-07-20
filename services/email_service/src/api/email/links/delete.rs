@@ -1,12 +1,11 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::email::links::access::{InboxAccess, InboxActionError, authorize_inbox_access};
 use anyhow::Context;
-use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::{EmptyResponse, ErrorResponse};
-use model::user::UserContext;
 use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use uuid::Uuid;
 
@@ -31,12 +30,13 @@ use uuid::Uuid;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.user_context.user_id, fusionauth_user_id=authorization.user_context.fusion_user_id), err)]
 pub async fn delete_link_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService>,
     Path(link_id): Path<Uuid>,
 ) -> Result<Response, InboxActionError> {
+    let user_context = &authorization.user_context;
     let (link, access) = authorize_inbox_access(&ctx, &user_context.user_id, link_id).await?;
 
     match access {

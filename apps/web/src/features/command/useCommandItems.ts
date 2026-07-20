@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
+  type Bucket,
   type EntityItem,
   exclude,
   type QuickAccessItem,
@@ -62,6 +63,12 @@ type AskAiItem = {
 
 /** Combined item type for command menu (quickAccess items + commands) */
 type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem | AskAiItem;
+
+export type PaginationControls = {
+  hasMore: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
+};
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
@@ -318,35 +325,67 @@ function useCommandsList(
   });
 }
 
-/**
- * Hook to get items from QuickAccess organized by category.
- * Items are already sorted by recency from QuickAccess.
- */
-function useQuickAccessBuckets(
-  commandScopeCommands: Accessor<CommandWithInfo[]>
-): Record<CategoryFilter, () => CommandMenuItem[]> {
-  const quickAccess = useQuickAccess();
-  const commandsList = useCommandsList(commandScopeCommands);
-  const entitiesList = quickAccess.useList(...exclude('person'));
+const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
+  Record<CategoryFilter, Bucket[]>
+> = {
+  all: exclude('person'),
+  channels: ['channel'],
+  dms: ['dm'],
+  documents: ['note', 'document', 'snippet', 'project'],
+  tasks: ['task'],
+  chats: ['chat'],
+  projects: ['project'],
+  people: ['person'],
+};
 
-  const allWithCommands = createMemo((): CommandMenuItem[] =>
-    mergeSortedArrays(
-      entitiesList(),
-      commandsList(),
+/** Creates only the Quick Access list needed by the active category. */
+function useQuickAccessCategory(
+  categoryFilter: Accessor<CategoryFilter>,
+  commandScopeCommands: Accessor<CommandWithInfo[]>,
+  searchTerm: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  const quickAccess = useQuickAccess();
+  const commands = useCommandsList(commandScopeCommands);
+  const activeList = createMemo(() => {
+    if (
+      commandScopeCommands().length > 0 ||
+      CommandState.isEntityActionMode()
+    ) {
+      return undefined;
+    }
+    const buckets = QUICK_ACCESS_BUCKETS_BY_CATEGORY[categoryFilter()];
+    return buckets
+      ? quickAccess.useList({ buckets, searchTerm, enabled })
+      : undefined;
+  });
+  const items = createMemo((): CommandMenuItem[] => {
+    if (
+      commandScopeCommands().length > 0 ||
+      CommandState.isEntityActionMode() ||
+      categoryFilter() === 'commands'
+    ) {
+      return commands();
+    }
+
+    const entities: CommandMenuItem[] = activeList()?.items() ?? [];
+    if (categoryFilter() !== 'all') return entities;
+    return mergeSortedArrays(
+      entities,
+      commands(),
       (a, b) => b.sortTimestamp - a.sortTimestamp
-    )
-  );
+    );
+  });
 
   return {
-    all: allWithCommands,
-    channels: quickAccess.useList('channel'),
-    dms: quickAccess.useList('dm'),
-    documents: quickAccess.useList('note', 'document', 'snippet', 'project'),
-    tasks: quickAccess.useList('task'),
-    chats: quickAccess.useList('chat'),
-    projects: quickAccess.useList('project'),
-    people: quickAccess.useList('person'),
-    commands: commandsList,
+    items,
+    pagination: {
+      hasMore: () => activeList()?.hasMore() ?? false,
+      isLoadingMore: () => activeList()?.isLoadingMore() ?? false,
+      loadMore: async () => {
+        await activeList()?.loadMore();
+      },
+    } satisfies PaginationControls,
   };
 }
 
@@ -360,24 +399,23 @@ export function useCommandItems(
      * command menu state; mobile search passes its own scope state.
      */
     commandScopeCommands?: Accessor<CommandWithInfo[]>;
+    /** Whether this menu should drive cache-backed Quick Access search. */
+    searchActive?: Accessor<boolean>;
   }
 ) {
   const showSearchRow = options?.showSearchRow ?? true;
   const commandScopeCommands =
     options?.commandScopeCommands ?? CommandState.commandScopeCommands;
-
-  const buckets = useQuickAccessBuckets(commandScopeCommands);
-
-  // When in command scope or entity action mode, always show commands regardless of category filter
-  const categoryItems = () => {
-    if (commandScopeCommands().length > 0) {
-      return buckets.commands();
-    }
-    if (CommandState.isEntityActionMode()) {
-      return buckets.commands();
-    }
-    return buckets[categoryFilter()]();
-  };
+  const quickAccess = useQuickAccess();
+  const searchActive = () => options?.searchActive?.() === true;
+  const scopedSearchTerm = () => (searchActive() ? query() : '');
+  const category = useQuickAccessCategory(
+    categoryFilter,
+    commandScopeCommands,
+    scopedSearchTerm,
+    searchActive
+  );
+  const categoryItems = category.items;
 
   const search = createMemo(() => {
     const q = query();
@@ -389,6 +427,31 @@ export function useCommandItems(
       getTimestamp: (item) => item.timestamps,
     });
   });
+
+  const rankItems = (
+    items: CommandMenuItem[],
+    queryText: string
+  ): CommandMenuItem[] => {
+    if (!queryText.trim()) return items.filter(showInRecencyList);
+    if (!quickAccess.usesRecordSelection()) {
+      return search()(items, queryText).map((result) => result.item);
+    }
+
+    const entities = items.filter(isEntityItem);
+    const localItems = items.filter((item) => !isEntityItem(item));
+    const rankedLocalItems = search()(localItems, queryText).map(
+      (result) => result.item
+    );
+    if (entities.length === 0) return rankedLocalItems;
+
+    const topCommands = rankedLocalItems.filter(isCommandItem).slice(0, 3);
+    const topCommandIds = new Set(topCommands.map((item) => item.id));
+    return [
+      ...topCommands,
+      ...entities,
+      ...rankedLocalItems.filter((item) => !topCommandIds.has(item.id)),
+    ];
+  };
 
   const shouldShowSearchRow = (q: string) => {
     if (!showSearchRow) return false;
@@ -409,9 +472,7 @@ export function useCommandItems(
       !CommandState.isEntityActionMode()
     ) {
       const trimmedQuery = q.trim();
-      const ranked = trimmedQuery
-        ? search()(items, q).map((result) => result.item)
-        : items.filter(showInRecencyList);
+      const ranked = rankItems(items, q);
       const topCommands = ranked.filter(isCommandItem).slice(0, 3);
 
       if (!trimmedQuery || topCommands.length > 0) {
@@ -428,9 +489,7 @@ export function useCommandItems(
       }
     }
 
-    const ranked = q
-      ? search()(items, q).map((result) => result.item)
-      : items.filter(showInRecencyList);
+    const ranked = rankItems(items, q);
 
     if (shouldShowSearchRow(q)) {
       // With no direct results the menu would only offer search, so also
@@ -444,7 +503,10 @@ export function useCommandItems(
     return ranked;
   });
 
-  return filteredItems;
+  return {
+    items: filteredItems,
+    pagination: category.pagination,
+  };
 }
 
 export type { AskAiItem, CommandMenuItem, SearchItem, UserItem };

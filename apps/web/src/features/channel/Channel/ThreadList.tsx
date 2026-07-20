@@ -8,8 +8,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
-const BASE_ITEM_SIZE: number = 64;
-const BASE_BUFFER_SIZE: number = BASE_ITEM_SIZE;
+const BASE_BUFFER_SIZE = 64;
 
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
@@ -45,6 +44,12 @@ export type ThreadListNavigation = {
   navigatePrevious: () => boolean;
   navigateNext: () => boolean;
   isNearBottom: () => boolean;
+  /** Position a descendant using Virtua's measured coordinate space. */
+  scrollToElementInItem: (
+    id: string,
+    itemElement: HTMLElement,
+    targetElement: HTMLElement
+  ) => boolean;
   /**
    * Signal that a user-initiated navigation is about to cause a
    * programmatic scroll. Call this before `scrollToId` etc. from
@@ -77,9 +82,13 @@ export type FullFrameThreadListScrollInsets = {
 };
 
 type ThreadListProps = {
+  /** Identifies the channel scroll surface when multiple splits are mounted. */
+  channelId?: string;
   keys: Accessor<string[]>;
   children: (item: { id: string }) => JSX.Element;
   initialScrollTarget?: ThreadListScrollTarget;
+  /** A kept-mounted descendant owns the targeted initial viewport movement. */
+  initialScrollHandledByTargetElement?: boolean;
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
@@ -88,6 +97,8 @@ type ThreadListProps = {
   onScrollSnapshotChange?: (snapshot: ThreadListScrollSnapshot) => void;
   shift?: Accessor<boolean>;
   prepend?: Accessor<boolean>;
+  /** Item indexes that must remain mounted during nested-message navigation. */
+  keepMounted?: Accessor<readonly number[]>;
   /**
    * For full-frame insets where the scroll surface spans the whole screen and content
    * scrolls behind the floating chrome. Rendered as scroll-content padding and fed to
@@ -412,6 +423,35 @@ export function ThreadList(props: ThreadListProps) {
 
     isNearBottom,
 
+    scrollToElementInItem: (id, itemElement, targetElement) => {
+      const index = props.keys().indexOf(id);
+      if (index === -1) return false;
+
+      cancelPinToBottom?.();
+      const itemRect = itemElement.getBoundingClientRect();
+      const targetRect = targetElement.getBoundingClientRect();
+      const targetCenter =
+        handle.getItemOffset(index) +
+        (targetRect.top - itemRect.top) +
+        targetRect.height / 2;
+      const { start, end } = insets();
+      const usableViewportCenter =
+        start + (handle.viewportSize - start - end) / 2;
+      // The DOM scroll range includes the full-frame inset spacers; Virtua's
+      // scrollSize only covers its own items.
+      const maxScrollOffset = scrollRef
+        ? scrollRef.scrollHeight - scrollRef.clientHeight
+        : handle.scrollSize - handle.viewportSize;
+      handle.scrollTo(
+        clamp(
+          targetCenter - usableViewportCenter,
+          0,
+          Math.max(0, maxScrollOffset)
+        )
+      );
+      return true;
+    },
+
     markUserIntent: scrollIntent.markUserIntent,
   });
 
@@ -502,6 +542,10 @@ export function ThreadList(props: ThreadListProps) {
   function scrollOnMount(handle: VirtualizerHandle) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
+    if (props.initialScrollHandledByTargetElement) {
+      completeInitialScroll(handle);
+      return;
+    }
     beginInitialTargetScroll(handle, getInitialScrollTarget());
   }
 
@@ -644,6 +688,9 @@ export function ThreadList(props: ThreadListProps) {
           setScrollEl(el);
         }}
         data-channel-scroll
+        data-channel-id={props.channelId}
+        data-channel-scroll-inset-start={insets().start}
+        data-channel-scroll-inset-end={insets().end}
         class="scrollbar-hidden"
         {...scrollIntent.handlers}
         style={{
@@ -675,8 +722,11 @@ export function ThreadList(props: ThreadListProps) {
           }}
           scrollRef={scrollRef}
           startMargin={insets().start}
-          itemSize={BASE_ITEM_SIZE}
+          // Keep Virtua's adaptive size estimation enabled. A fixed 64px hint
+          // makes it eagerly mount a viewport's worth of reply-heavy threads
+          // before their much larger real heights are measured.
           bufferSize={BASE_BUFFER_SIZE}
+          keepMounted={props.keepMounted?.()}
           data={props.keys()}
           onScroll={handleScroll}
           onScrollEnd={handleScrollEnd}

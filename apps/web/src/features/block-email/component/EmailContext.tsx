@@ -29,6 +29,7 @@ import {
   createEffectOnEntityTypeNotification,
   setDoneOverride,
 } from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
@@ -37,8 +38,8 @@ import {
   markSenderNoiseWithToast,
   markSenderSignalWithToast,
   trackExternalThreadArchive,
-  useArchiveThreadMutation,
   useThreadQuery,
+  useUndoableArchiveThreadMutation,
 } from '@queries/email/thread';
 import {
   bulkMarkNotificationsAsUndone,
@@ -387,12 +388,44 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     notificationSource: () => notificationSource,
   });
 
-  const archiveMutation = useArchiveThreadMutation({
-    onError: (_err, params) => {
+  // Only the direct archive/unarchive fallbacks go through this mutation
+  // (the mark-done / mark-not-done action paths toast on their own).
+  const archiveMutation = useUndoableArchiveThreadMutation({
+    onPushed: (handle, params) => {
+      const message = params.archive ? 'Marked as done' : 'Marked as not done';
+      let toastId: number | undefined;
+
+      const showToast = () => {
+        toastId = toast.success(message, {
+          actions: [
+            {
+              label: 'Undo',
+              icon: ArrowCounterClockwise,
+              onClick: () => {
+                handle.undo({
+                  onError: () => toast.failure('Failed to undo'),
+                });
+              },
+            },
+          ],
+          duration: 3_000,
+          stack: true,
+          hideOnMobile: true,
+        });
+      };
+
+      showToast();
+
+      return {
+        onUndone: () => {
+          if (toastId !== undefined) toast.dismiss(toastId);
+        },
+        onRedone: showToast,
+      };
+    },
+    onError: (params) => {
       toast.failure(
-        params.archive
-          ? 'Failed to archive thread'
-          : 'Failed to mark as not done'
+        params.archive ? 'Failed to mark as done' : 'Failed to mark as not done'
       );
     },
   });

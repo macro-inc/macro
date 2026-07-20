@@ -1,5 +1,5 @@
 //! Shared workflow environment: secrets, the repo-wide env block, concurrency,
-//! and the sccache-on-volume settings. This is the "environment" file.
+//! and Namespace cache names. This is the "environment" file.
 
 use gh_workflow::{Concurrency, Expression, Workflow};
 
@@ -37,10 +37,16 @@ pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
 /// smaller.
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
-/// Explicit Namespace cache tag for the heavy compile jobs (check + test). A
-/// fixed tag (instead of the default per-branch scoping) makes the cache volume
-/// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
+/// Explicit Namespace cache-volume tag for the heavy compile jobs (check +
+/// test). A fixed tag (instead of the default per-branch scoping) makes the
+/// Cargo/Nix volume global across all branches — see
+/// [`crate::workflows::runners::Runner::with_cache_tag`]. The legacy tag name is
+/// retained so the existing warm volume is not invalidated.
 pub const CI_CACHE_TAG: &str = "sccache-ci";
+
+/// Namespace remote sccache shared by the cloud-storage compile/test jobs and
+/// the workspace dependency checks.
+pub const CI_SCCACHE_NAME: &str = "sccache-ci";
 
 /// Namespace cache tag for the Fly preview deploy job. Its own pool, NOT
 /// [`CI_CACHE_TAG`]: sharing looked economical but was measured cold both ways
@@ -66,19 +72,16 @@ pub const PREVIEW_SCCACHE_NAME: &str = "fly-preview";
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
-/// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
-/// volume so it persists across runs — this is what replaces the S3 bucket.
-pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
+/// Namespace remote sccache used when the web checks compile Rust API schema
+/// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
+/// a different workload and runner profile.
+pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
 /// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
 /// on the preview cache volume for the zero-copy fast path; the workflow also
 /// backs each content-addressed snapshot up to Namespace artifact storage so a
 /// cache-volume miss does not force another infra bake.
 pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
-
-/// Max on-disk size for the sccache cache. Larger than the setup default since
-/// the persisted volume can hold a full-workspace cache.
-pub const SCCACHE_CACHE_SIZE: &str = "20G";
 
 /// The repo-wide env block (mirrors the original top-level `env:`). Defaults the
 /// linker to `lld`; the heavy jobs override `RUSTFLAGS` to use `mold`.

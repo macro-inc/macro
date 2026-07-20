@@ -34,6 +34,7 @@ import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { TeamContextProvider } from '@core/context/team';
 import {
@@ -77,7 +78,6 @@ import {
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
-import { prefetchHistory } from '@queries/history/history';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
@@ -129,7 +129,6 @@ function useSyncLoginCookie() {
 
 const rootPreload: RoutePreloadFunc = async (args) => {
   await prefetchUserInfo();
-  prefetchHistory();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -617,46 +616,48 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <BrowserNotificationModal />
-                <IosPushNotificationModal />
-                <GlobalShareInboxConflictDialog />
-                <QuerySyncProviderWithUserId />
-                <UserInfoSideEffects />
-                <TeamContextProvider>
-                  <ConfiguredGlobalAppStateProvider>
-                    <MutationUndoProvider>
-                      <ChannelsContextProvider>
-                        <CallProvider>
-                          <CallKitSync />
-                          <CallStartedNotifier />
-                          <QuickAccessProvider>
-                            <SearchProvider>
-                              <ChatAttachmentsInit />
-                              <ReactiveFavicon />
-                              <Title>{tabTitle()}</Title>
-                              <Suspense>
-                                <IsomorphicRouter
-                                  transformUrl={transformShortIdInUrlPathname}
-                                  root={Layout}
-                                  rootPreload={rootPreload}
-                                  base={ROUTER_BASE}
-                                >
-                                  {{
-                                    path: '/',
-                                    component: TauriRouteListener,
-                                    children: ROUTES,
-                                  }}
-                                </IsomorphicRouter>
-                              </Suspense>
-                              <InitialInteractiveOnboardingModal />
-                              <ToastRegion />
-                            </SearchProvider>
-                          </QuickAccessProvider>
-                        </CallProvider>
-                      </ChannelsContextProvider>
-                    </MutationUndoProvider>
-                  </ConfiguredGlobalAppStateProvider>
-                </TeamContextProvider>
+                <EmailLinksContextProvider>
+                  <BrowserNotificationModal />
+                  <IosPushNotificationModal />
+                  <GlobalShareInboxConflictDialog />
+                  <QuerySyncProviderWithUserId />
+                  <UserInfoSideEffects />
+                  <TeamContextProvider>
+                    <ConfiguredGlobalAppStateProvider>
+                      <MutationUndoProvider>
+                        <ChannelsContextProvider>
+                          <CallProvider>
+                            <CallKitSync />
+                            <CallStartedNotifier />
+                            <QuickAccessProvider>
+                              <SearchProvider>
+                                <ChatAttachmentsInit />
+                                <ReactiveFavicon />
+                                <Title>{tabTitle()}</Title>
+                                <Suspense>
+                                  <IsomorphicRouter
+                                    transformUrl={transformShortIdInUrlPathname}
+                                    root={Layout}
+                                    rootPreload={rootPreload}
+                                    base={ROUTER_BASE}
+                                  >
+                                    {{
+                                      path: '/',
+                                      component: TauriRouteListener,
+                                      children: ROUTES,
+                                    }}
+                                  </IsomorphicRouter>
+                                </Suspense>
+                                <InitialInteractiveOnboardingModal />
+                                <ToastRegion />
+                              </SearchProvider>
+                            </QuickAccessProvider>
+                          </CallProvider>
+                        </ChannelsContextProvider>
+                      </MutationUndoProvider>
+                    </ConfiguredGlobalAppStateProvider>
+                  </TeamContextProvider>
+                </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

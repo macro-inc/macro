@@ -12,7 +12,9 @@ import type {
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
   QueryRevalidationWire,
+  ReadRecordsArgs,
   ReadResult,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -50,6 +52,8 @@ export interface CacheHost {
   readonly disabled?: boolean;
 
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
+  /** Projects normalized records through a named GraphQL fragment. */
+  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues a mutation and its optimistic response. */
   beginOptimisticWrite(
@@ -94,6 +98,9 @@ export interface CacheHost {
    * Only keys belonging to this client are delivered. Returns unsubscribe.
    */
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
+
+  /** Subscribes whenever the effective normalized-cache view changes. */
+  onCacheChanged(cb: () => void): () => void;
 
   dispose(): void;
 }

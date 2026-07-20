@@ -193,7 +193,8 @@ export function useUndoableMutation<
   options: () => MutationOptions<TData, TError, TVariables, TContext> & {
     undoFn?: UndoHandler<TVariables, TContext>;
     redoFn?: UndoHandler<TVariables, TContext>;
-    undoLabel?: string;
+    /** Static label, or derived per entry from the mutation variables. */
+    undoLabel?: string | ((variables: TVariables) => string);
     /** Fires after the entry is pushed onto the undo stack. Returned
      *  lifecycle hooks (onUndone/onRedone) will run on this specific
      *  entry — regardless of whether it is undone via the returned
@@ -228,7 +229,10 @@ export function useUndoableMutation<
           const handle = pushUndo({
             undo: () => undoFn(variables, context),
             redo: redoFn ? () => redoFn(variables, context) : undefined,
-            label: undoLabel,
+            label:
+              typeof undoLabel === 'function'
+                ? undoLabel(variables)
+                : undoLabel,
             onUndone: () => lifecycleRef.current?.onUndone?.(),
             onRedone: () => lifecycleRef.current?.onRedone?.(),
           });

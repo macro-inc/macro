@@ -27,23 +27,23 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
-decode_jwt = { path = "../../crates/decode_jwt" }
 email_formatting = { path = "../../crates/email_formatting" }
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
-macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_queues = { path = "../../crates/macro_queues" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
@@ -53,8 +53,10 @@ model-entity = { path = "../../crates/model-entity" }
 model-error-response = { path = "../../crates/model-error-response" }
 model_file_type = { path = "../../crates/model_file_type" }
 model_notifications = { path = "../../crates/model_notifications" }
-model_user = { path = "../../crates/model_user", features = ["axum"] }
-models_pagination = { path = "../../crates/models_pagination", features = ["axum"] }
+model_user = { path = "../../crates/model_user" }
+models_pagination = { path = "../../crates/models_pagination", features = [
+  "axum",
+] }
 notification = { path = "../../crates/notification", features = ["axum"] }
 notification_db_client = { path = "../../crates/notification_db_client" }
 paste = { workspace = true }

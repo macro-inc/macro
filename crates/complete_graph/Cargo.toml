@@ -33,7 +33,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 apollo-compiler = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-model_user = { path = "../model_user", features = ["axum"] }
+model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }

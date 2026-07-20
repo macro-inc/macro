@@ -27,6 +27,13 @@ describe('createWorkerCacheHost', () => {
     await expect(
       host.writeQuery({ query: '{ x }', data: { x: 1 } })
     ).resolves.toEqual({ changed: [], affectedOps: [], reset: false });
+    await expect(
+      host.readRecords({
+        document: 'fragment Item on GraphqlSoupItem { id }',
+        fragmentName: 'Item',
+        limit: 20,
+      })
+    ).resolves.toEqual({ records: [], nextCursor: null });
   });
 
   it('round-trips generated query inspection through the worker protocol', async () => {

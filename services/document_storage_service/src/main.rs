@@ -489,6 +489,7 @@ async fn main() -> anyhow::Result<()> {
     let foreign_entity_state = ForeignEntityRouterState::new(
         foreign_entity_service.clone(),
         entity_access_service.clone(),
+        authorization_state.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
@@ -672,6 +673,7 @@ async fn main() -> anyhow::Result<()> {
             webhook_repository.clone(),
             webhook_http_client.clone(),
             webhook_endpoint_scheme_policy,
+            macro_event_broker.clone(),
         );
     let webhook_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -778,7 +780,8 @@ async fn main() -> anyhow::Result<()> {
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
     let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
-    let bots_service = bots::domain::service::BotServiceImpl::new(bots_repo.clone());
+    let bots_service =
+        bots::domain::service::BotServiceImpl::new(bots_repo.clone(), macro_event_broker.clone());
     let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(

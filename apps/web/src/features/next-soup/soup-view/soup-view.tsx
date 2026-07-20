@@ -28,6 +28,7 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
+import { SoupRowMetadataProvider } from '@app/features/next-soup/soup-view/soup-row-metadata-provider';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/features/next-soup/soup-view/soup-view-file-dropzone';
@@ -817,7 +818,20 @@ interface SoupViewListProps {
   scopeId?: string;
 }
 
-export const SoupViewList = (props: SoupViewListProps) => {
+/**
+ * Complete soup-list composition boundary. Exported consumers receive the
+ * shared metadata contexts required by every row and row-owned overlay.
+ */
+export const SoupViewList = (props: SoupViewListProps) => (
+  <SoupRowMetadataProvider>
+    <SoupViewListContent
+      customScrollbarHidden={props.customScrollbarHidden}
+      scopeId={props.scopeId}
+    />
+  </SoupRowMetadataProvider>
+);
+
+const SoupViewListContent = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
   const {
     soup,
@@ -1696,8 +1710,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 };
 
-const DEFAULT_ITEM_SIZE = 10;
 const DEFAULT_OVERSCAN = 5;
+const DEFAULT_ITEM_SIZE_ESTIMATE = 40;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
@@ -1720,7 +1734,6 @@ const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
 
-  const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
@@ -1791,8 +1804,12 @@ const SoupList = (props: SoupListProps) => {
           ref={registerVirtualizerHandler}
           startMargin={topInset()}
           data={props.rows}
-          itemSize={itemSize()}
-          bufferSize={overscan() * itemSize()}
+          // Leave itemSize unset for heterogeneous lists so Virtua measures
+          // larger rows; 40px is only the default overscan estimate.
+          itemSize={props.itemSize}
+          bufferSize={
+            overscan() * (props.itemSize ?? DEFAULT_ITEM_SIZE_ESTIMATE)
+          }
           onScroll={handleScroll}
         >
           {(row, i) => props.children(row, i)}

@@ -305,7 +305,8 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;
+pub(crate) type DssBotService =
+    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -367,7 +368,7 @@ pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEnt
 
 /// Type alias for the foreign entity router state.
 pub(crate) type DssForeignEntityState =
-    ForeignEntityRouterState<ForeignEntityServiceType, EntityAccessService>;
+    ForeignEntityRouterState<ForeignEntityServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
@@ -385,8 +386,11 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
 /// Type alias for the product webhook service.
-pub(crate) type DssWebhookService =
-    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient>;
+pub(crate) type DssWebhookService = WebhookServiceImpl<
+    PgWebhookRepo,
+    ReqwestWebhookValidationClient,
+    MacroEventBrokerService<KafkaEventPublisher>,
+>;
 
 /// Type alias for the product webhook rate limiter.
 pub(crate) type DssWebhookRateLimiter =

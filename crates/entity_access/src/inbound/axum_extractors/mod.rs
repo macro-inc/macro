@@ -30,15 +30,13 @@ pub use entity_permission::EntityPermissionExtractor;
 pub use foreign_entity::ForeignEntityAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
-pub use project::{
-    ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2,
-};
+pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
 pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
 pub use thread::ThreadAccessLevelExtractor;
 
 use std::borrow::Cow;
 
-use crate::domain::models::{AccessError, AccessLevel};
+use crate::domain::models::AccessError;
 use axum::{
     Json,
     http::StatusCode,
@@ -48,15 +46,6 @@ use macro_authorization::MacroAuthorizationRejection;
 use model_error_response::ErrorResponse;
 
 pub use crate::domain::models::RequiredPermission;
-
-/// Marker struct for internal service-to-service requests.
-///
-/// Middleware inserts this into request extensions for authenticated internal callers.
-#[derive(Debug, Clone)]
-pub struct InternalUser {
-    /// The access level granted to the internal user.
-    pub access_level: AccessLevel,
-}
 
 /// Error type for access extractors that can be returned as HTTP responses.
 #[derive(Debug, thiserror::Error)]

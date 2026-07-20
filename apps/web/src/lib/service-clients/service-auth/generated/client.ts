@@ -57,6 +57,7 @@ import type {
   TeamInvitesResponse,
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
+  ToggleNonAdminInvitesResponse,
   UserLinkResponse,
   UserName,
   UserNames,
@@ -2731,6 +2732,78 @@ export const rejectInvitation = async (
     status: res.status,
     headers: res.headers,
   } as rejectInvitationResponse;
+};
+
+/**
+ * @summary Toggles whether non-admin members may invite users to the team. Teams
+start with this on (any member can invite); turning it off restricts
+inviting to team admins and owners. Requires the caller to be an Admin
+or Owner of the team.
+ */
+export type toggleTeamNonAdminInvitesResponse200 = {
+  data: ToggleNonAdminInvitesResponse;
+  status: 200;
+};
+
+export type toggleTeamNonAdminInvitesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type toggleTeamNonAdminInvitesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type toggleTeamNonAdminInvitesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type toggleTeamNonAdminInvitesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type toggleTeamNonAdminInvitesResponseSuccess =
+  toggleTeamNonAdminInvitesResponse200 & {
+    headers: Headers;
+  };
+export type toggleTeamNonAdminInvitesResponseError = (
+  | toggleTeamNonAdminInvitesResponse401
+  | toggleTeamNonAdminInvitesResponse403
+  | toggleTeamNonAdminInvitesResponse404
+  | toggleTeamNonAdminInvitesResponse500
+) & {
+  headers: Headers;
+};
+
+export type toggleTeamNonAdminInvitesResponse =
+  | toggleTeamNonAdminInvitesResponseSuccess
+  | toggleTeamNonAdminInvitesResponseError;
+
+export const getToggleTeamNonAdminInvitesUrl = () => {
+  return `/team/non-admin-invites/toggle`;
+};
+
+export const toggleTeamNonAdminInvites = async (
+  options?: RequestInit
+): Promise<toggleTeamNonAdminInvitesResponse> => {
+  const res = await fetch(getToggleTeamNonAdminInvitesUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: toggleTeamNonAdminInvitesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as toggleTeamNonAdminInvitesResponse;
 };
 
 /**

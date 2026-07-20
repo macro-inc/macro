@@ -36,6 +36,21 @@ export type MessageEditState = {
   snapshot: InputSnapshot;
 };
 
+/** Reactive contract for positioning and releasing a channel navigation target. */
+export type ThreadTargetNavigation = {
+  targetThreadId: Accessor<string | undefined>;
+  targetMessageId: Accessor<string | undefined>;
+  targetReplyId: Accessor<string | undefined>;
+  activeTargetReplyId: Accessor<string | undefined>;
+  positionTarget: (
+    threadRow: HTMLElement,
+    targetElement: HTMLElement
+  ) => boolean;
+  onTargetMessageScrolled: (messageId: string) => void;
+  onTargetReplyScrolled: (replyId: string) => void;
+  onClearTarget: (threadId: string) => void;
+};
+
 export type ThreadProps = {
   data: Accessor<ApiChannelMessage>;
   channelId: Accessor<string>;
@@ -44,20 +59,13 @@ export type ThreadProps = {
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
-  targetThreadId?: string;
-  /** One-shot scroll target. Caller must clear via `onTargetReplyScrolled`. */
-  targetReplyId?: string;
-  onTargetReplyScrolled?: (replyId: string) => void;
-  /** Navigation target reply */
-  activeTargetReplyId?: string;
+  targetNavigation?: ThreadTargetNavigation;
   /** The unified input's reply binding */
   unifiedReplyTarget?: { threadId: string; replyId?: string };
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   selectedMessageId?: Accessor<string | undefined>;
   onSelectMessage?: (messageId: string) => void;
   onClearSelection?: () => void;
-  /** Release the navigation target (clicking the targeted message). */
-  onClearTarget?: (threadId: string) => void;
   messageListScopeId?: string;
   isNewestThread?: boolean;
 } & ThreadState;

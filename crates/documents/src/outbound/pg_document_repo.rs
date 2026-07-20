@@ -729,6 +729,25 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT document_id
+            FROM team_task
+            WHERE team_id = $1 AND task_num = $2
+            "#,
+            team_id,
+            task_num,
+        )
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_branch_name_context(
         &self,
         document_id: &str,

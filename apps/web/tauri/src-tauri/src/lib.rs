@@ -228,6 +228,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_read,
+            graphql_cache_plugin::commands::graphql_cache_read_records,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_begin_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_inspect_query,

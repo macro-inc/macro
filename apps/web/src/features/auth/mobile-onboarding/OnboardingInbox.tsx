@@ -5,6 +5,7 @@ import {
   type EmailEntity,
   InlineEntity,
   ListEntity,
+  ListEntityNoopMetadataProvider,
   ListLayoutProvider,
 } from '@entity';
 import CheckIcon from '@phosphor/check.svg';
@@ -129,47 +130,51 @@ export function OnboardingInbox() {
         Swipe an email left to mark it done, or press and hold for more actions.
       </p>
 
-      <ListLayoutProvider ref={listRef}>
-        <SwipableRowProvider
-          container={listRef}
-          canSwipeLeft={() => true}
-          onSwipeLeft={(entityId) => markDone(entityId)}
-        >
-          <div ref={setListRef} class="overflow-hidden border-t border-edge">
-            <For
-              each={emails()}
-              fallback={
-                <div class="flex flex-col items-center justify-center gap-1 py-12 text-center">
-                  <p class="text-sm font-medium text-ink">Inbox zero 🎉</p>
-                  <p class="text-sm text-ink/60">You've cleared every email.</p>
-                </div>
-              }
-            >
-              {(email) => (
-                <div
-                  ref={(el) =>
-                    touchHandler(el, () => ({
-                      onLongPress: () => setDrawerEmail(email),
-                    }))
-                  }
-                >
-                  <ListEntity
-                    entity={email}
-                    timestamp={email.updatedAt}
-                    hideCheckbox
-                    entityRowConfig={{
-                      swipeLeftColor: 'bg-success',
-                      swipeLeftRevealedComponent: (
-                        <CheckIcon class="size-8 text-panel" />
-                      ),
-                    }}
-                  />
-                </div>
-              )}
-            </For>
-          </div>
-        </SwipableRowProvider>
-      </ListLayoutProvider>
+      <ListEntityNoopMetadataProvider>
+        <ListLayoutProvider ref={listRef}>
+          <SwipableRowProvider
+            container={listRef}
+            canSwipeLeft={() => true}
+            onSwipeLeft={(entityId) => markDone(entityId)}
+          >
+            <div ref={setListRef} class="overflow-hidden border-t border-edge">
+              <For
+                each={emails()}
+                fallback={
+                  <div class="flex flex-col items-center justify-center gap-1 py-12 text-center">
+                    <p class="text-sm font-medium text-ink">Inbox zero 🎉</p>
+                    <p class="text-sm text-ink/60">
+                      You've cleared every email.
+                    </p>
+                  </div>
+                }
+              >
+                {(email) => (
+                  <div
+                    ref={(el) =>
+                      touchHandler(el, () => ({
+                        onLongPress: () => setDrawerEmail(email),
+                      }))
+                    }
+                  >
+                    <ListEntity
+                      entity={email}
+                      timestamp={email.updatedAt}
+                      hideCheckbox
+                      entityRowConfig={{
+                        swipeLeftColor: 'bg-success',
+                        swipeLeftRevealedComponent: (
+                          <CheckIcon class="size-8 text-panel" />
+                        ),
+                      }}
+                    />
+                  </div>
+                )}
+              </For>
+            </div>
+          </SwipableRowProvider>
+        </ListLayoutProvider>
+      </ListEntityNoopMetadataProvider>
 
       {/* Long-press action drawer (markup modeled on SoupEntityActionDrawer). */}
       <MobileDrawer

@@ -1,9 +1,10 @@
-use crate::api::ApiContext;
+use crate::api::{ApiContext, context::AuthorizationService};
 use axum::{
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
 
@@ -51,6 +52,7 @@ pub struct PathParams {
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    _: InternalMacroAuthorizationExtractor<AuthorizationService>,
     extract::Path(PathParams { id }): extract::Path<PathParams>,
     extract::Query(query_params): extract::Query<ListThreadsParams>,
 ) -> Result<Response, Response> {

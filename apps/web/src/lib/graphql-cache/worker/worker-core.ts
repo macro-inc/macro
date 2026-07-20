@@ -10,6 +10,7 @@ import type {
   CacheResponse,
   OptimisticWriteResult,
   ReadResult,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 import { type CacheEngine, loadCacheWasm } from './wasm-module';
@@ -70,6 +71,16 @@ export class CacheWorkerCore {
         );
         return result;
       })
+      .with({ kind: 'read-records' }, async (request) => {
+        const engine = this.requireEngine();
+        const result: SelectedRecordPageWire = await engine.readRecords(
+          request.document,
+          request.fragmentName,
+          request.cursor,
+          request.limit
+        );
+        return result;
+      })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
@@ -80,7 +91,7 @@ export class CacheWorkerCore {
           request.data,
           request.identity
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
       })
       .with({ kind: 'begin-optimistic-write' }, async (request) => {
@@ -95,7 +106,7 @@ export class CacheWorkerCore {
           request.revalidations,
           request.createdAtMs
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
       })
       .with({ kind: 'inspect-query' }, async (request) => {
@@ -136,7 +147,7 @@ export class CacheWorkerCore {
           request.variables,
           request.data
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
       })
       .with({ kind: 'rollback-optimistic-write' }, async (request) => {
@@ -146,18 +157,21 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration
         );
-        this.fanOut(result);
+        this.fanOut(result, true);
         return result;
       })
       .with({ kind: 'invalidate' }, async (request) => {
         const engine = this.requireEngine();
         const affectedOps = await engine.invalidateKeys(request.keys);
-        this.fanOut({
-          changed: request.keys,
-          affectedOps,
-          reset: false,
-          revalidations: [],
-        });
+        this.fanOut(
+          {
+            changed: request.keys,
+            affectedOps,
+            reset: false,
+            revalidations: [],
+          },
+          true
+        );
         return affectedOps;
       })
       .with({ kind: 'teardown' }, async (request) => {
@@ -166,6 +180,7 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'clear' }, async () => {
         await this.requireEngine().clear();
+        this.push({ kind: 'cache-changed' });
         return null;
       })
       .exhaustive();
@@ -191,7 +206,7 @@ export class CacheWorkerCore {
   }
 
   /** Notifies every page connected to this shared engine. */
-  private fanOut(result: WriteResult): void {
+  private fanOut(result: WriteResult, cacheChanged: boolean): void {
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -199,10 +214,12 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
+    if (cacheChanged) {
+      this.push({ kind: 'cache-changed' });
+    }
   }
 
   private push(msg: CachePush): void {
-    if (msg.opIds.length === 0) return;
     for (const port of this.ports) {
       port.postMessage(msg);
     }

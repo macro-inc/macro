@@ -84,11 +84,11 @@ export function graphqlCacheEnabled(): boolean {
 }
 
 let cachedClient: Client | undefined;
-let cacheHost: CacheHost | undefined;
+let cachedCacheHost: CacheHost | undefined;
 
 /** Returns the persistent normalized-cache host after client initialization. */
 export function getGraphqlCacheHost(): CacheHost | undefined {
-  return cacheHost?.disabled ? undefined : cacheHost;
+  return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
 /**
@@ -102,14 +102,25 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
 export function getGraphqlSoupClient(): Client {
   if (!graphqlCacheEnabled()) return graphqlSoupClient;
   cachedClient ??= (() => {
+    let host: CacheHost | undefined;
+    let unregisterHost: () => void = () => undefined;
+    const onInitializationError = (error: Error) => {
+      if (!host || cachedCacheHost !== host) return;
+      unregisterHost();
+      host.dispose();
+      cachedCacheHost = undefined;
+      cachedClient = graphqlSoupClient;
+      console.warn(
+        'graphql cache async init failed; using uncached client',
+        error
+      );
+    };
     try {
       const scope = getOrCreateCacheScope();
-      const host = isTauri()
-        ? createTauriCacheHost({ scope })
-        : createWorkerCacheHost({ scope });
-      cacheHost = host;
-      registerCacheHost(host);
-      return createClient({
+      host = isTauri()
+        ? createTauriCacheHost({ scope, onInitializationError })
+        : createWorkerCacheHost({ scope, onInitializationError });
+      const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
           normalizedCacheExchange(host, {
@@ -127,12 +138,24 @@ export function getGraphqlSoupClient(): Client {
         ],
         fetch: dssGraphqlFetch,
       });
+      cachedCacheHost = host;
+      unregisterHost = registerCacheHost(host);
+      return client;
     } catch (error) {
+      host?.dispose();
+      cachedCacheHost = undefined;
       console.warn('graphql cache init failed; using uncached client', error);
       return graphqlSoupClient;
     }
   })();
   return cachedClient;
+}
+
+/** Returns the cache host backing the flagged GraphQL Soup client. */
+export function getGraphqlSoupCacheHost(): CacheHost | undefined {
+  if (!graphqlCacheEnabled()) return undefined;
+  getGraphqlSoupClient();
+  return cachedCacheHost;
 }
 
 export type GraphqlSoupInput = SoupInput;
@@ -149,7 +172,7 @@ export type GraphqlGroupedSoupPage = {
   }>;
 };
 
-type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
+export type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem['entity'];
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
@@ -293,7 +316,7 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
   }));
 }
 
-function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
+export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
   const frecency = item.frecencyScore;
   // `is_favorited: false` below: the GraphQL soup surface has no favorites
   // data; the REST `SoupApiItem` shape requires the flag, and nothing

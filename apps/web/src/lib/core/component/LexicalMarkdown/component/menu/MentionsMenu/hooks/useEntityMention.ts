@@ -1,20 +1,25 @@
 import {
   type EntityBucket,
   type EntityItem,
+  type QuickAccessList,
   useQuickAccess,
 } from '@core/context/quickAccess';
-import { createFreshSearch } from '@core/util/freshSort';
+import { searchQuickAccessEntities } from '@core/context/quickAccess/entity-search';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 
 type UseEntityMentionOptions = {
-  searchTerm: Accessor<string>;
   buckets: EntityBucket[];
+  searchTerm: Accessor<string>;
 };
 
 type UseEntityMentionResult = {
-  searchedEntities: Accessor<EntityItem[]>;
-  allEntities: Accessor<EntityItem[]>;
+  entities: Accessor<EntityItem[]>;
+  totalCount: Accessor<number>;
+  hasMore: Accessor<boolean>;
+  isLoading: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
 };
 
 /**
@@ -24,29 +29,32 @@ type UseEntityMentionResult = {
 export function useEntityMention(
   options: UseEntityMentionOptions
 ): UseEntityMentionResult {
-  const { searchTerm, buckets } = options;
   const quickAccess = useQuickAccess();
-
-  const entitiesList = quickAccess.useList(
-    ...(buckets as [EntityBucket, ...EntityBucket[]])
-  );
-
-  const entitySearch = createFreshSearch<EntityItem>({
-    config: { useViewedAt: true },
-    getName: (item) => item.searchText,
-    isChannelItem: (item) => item.bucket === 'channel',
-    getTimestamp: (item) => item.timestamps,
-  });
-
+  const entityList = quickAccess.useList({
+    buckets: options.buckets,
+    searchTerm: options.searchTerm,
+  }) as QuickAccessList<EntityItem>;
   const entities = createLazyMemo(() => {
-    const term = searchTerm();
-    if (!term) return entitiesList();
-    return entitySearch(entitiesList(), term).map(({ item }) => item);
+    if (quickAccess.usesRecordSelection()) return entityList.items();
+    return searchQuickAccessEntities(entityList.items(), options.searchTerm());
   });
 
   return {
-    searchedEntities: entities,
-    allEntities: entitiesList,
+    entities,
+    totalCount: () =>
+      quickAccess.usesRecordSelection()
+        ? entityList.totalCount()
+        : entities().length,
+    hasMore: () => quickAccess.usesRecordSelection() && entityList.hasMore(),
+    isLoading: () =>
+      quickAccess.usesRecordSelection()
+        ? entityList.isLoading()
+        : quickAccess.isLoading(),
+    isLoadingMore: () =>
+      quickAccess.usesRecordSelection() && entityList.isLoadingMore(),
+    loadMore: async () => {
+      if (quickAccess.usesRecordSelection()) await entityList.loadMore();
+    },
   };
 }
 
@@ -70,21 +78,16 @@ export function useEntityMentionFromList(
     items().filter((item) => bucketSet.has(item.bucket))
   );
 
-  const entitySearch = createFreshSearch<EntityItem>({
-    config: { useViewedAt: true },
-    getName: (item) => item.searchText,
-    isChannelItem: (item) => item.bucket === 'channel',
-    getTimestamp: (item) => item.timestamps,
-  });
-
-  const entities = createLazyMemo(() => {
-    const term = searchTerm();
-    if (!term) return entitiesList();
-    return entitySearch(entitiesList(), term).map(({ item }) => item);
-  });
+  const entities = createLazyMemo(() =>
+    searchQuickAccessEntities(entitiesList(), searchTerm())
+  );
 
   return {
-    searchedEntities: entities,
-    allEntities: entitiesList,
+    entities,
+    totalCount: () => entities().length,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => undefined,
   };
 }

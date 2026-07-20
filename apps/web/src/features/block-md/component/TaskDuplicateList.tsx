@@ -8,6 +8,7 @@ import {
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
+import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { useTaskSimilaritySearchQuery } from '@queries/storage/task-duplicates';
 import type { TaskSimilarityResult } from '@service-storage/client';
@@ -93,25 +94,27 @@ function SimilarTasksInner(props: {
           <span>Similar Tasks</span>
         </button>
         <Show when={expanded()}>
-          <ListLayoutProvider ref={listRef}>
-            {/* Named `u-list` container so the task rows pick up the narrow
-                (<=840px) container queries and collapse status/priority/
-                assignee pills to icons, leaving the width for task names. */}
-            <div
-              ref={setListRef}
-              class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
-            >
-              <For each={entities()}>
-                {(entity) => (
-                  <TaskListEntity
-                    entity={entity}
-                    hideCheckbox
-                    onClick={() => props.onOpenTask(entity.id)}
-                  />
-                )}
-              </For>
-            </div>
-          </ListLayoutProvider>
+          <TagSetsQueryProvider>
+            <ListLayoutProvider ref={listRef}>
+              {/* Named `u-list` container so the task rows pick up the narrow
+                  (<=840px) container queries and collapse status/priority/
+                  assignee pills to icons, leaving the width for task names. */}
+              <div
+                ref={setListRef}
+                class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
+              >
+                <For each={entities()}>
+                  {(entity) => (
+                    <TaskListEntity
+                      entity={entity}
+                      hideCheckbox
+                      onClick={() => props.onOpenTask(entity.id)}
+                    />
+                  )}
+                </For>
+              </div>
+            </ListLayoutProvider>
+          </TagSetsQueryProvider>
         </Show>
       </div>
     </Show>

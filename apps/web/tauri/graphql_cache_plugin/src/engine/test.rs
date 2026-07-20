@@ -79,6 +79,72 @@ fn write_then_read_round_trips() {
 }
 
 #[test]
+fn record_selection_returns_native_cache_entities() {
+    let handle = spawn_handle();
+    let query = r#"query Soup($input: SoupInput!) {
+        user {
+            id
+            soup(input: $input) {
+                items {
+                    id
+                    entity {
+                        __typename
+                        ... on GraphqlSoupDocument {
+                            id name fileType createdAt updatedAt viewedAt deletedAt
+                            subType { kind isCompleted }
+                        }
+                    }
+                }
+                nextCursor
+                hasMore
+            }
+        }
+    }"#;
+    let data = serde_json::json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "items": [{
+                    "id": "item-1",
+                    "entity": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "doc-1",
+                        "name": "A note",
+                        "fileType": "md",
+                        "createdAt": "1970-01-01T00:00:01Z",
+                        "updatedAt": "1970-01-01T00:00:02Z",
+                        "viewedAt": "1970-01-01T00:00:03Z",
+                        "deletedAt": null,
+                        "subType": null
+                    }
+                }],
+                "nextCursor": null,
+                "hasMore": false
+            }
+        }
+    });
+    block_on(handle.write(
+        None,
+        query.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        data,
+        None,
+    ))
+    .unwrap();
+
+    let page = block_on(handle.read_records(
+        "fragment Document on GraphqlSoupDocument { id name }".to_string(),
+        "Document".to_string(),
+        None,
+        10,
+    ))
+    .unwrap();
+    assert_eq!(page.records, vec![serde_json::json!({"id": "doc-1", "name": "A note"})]);
+    assert!(page.next_cursor.is_none());
+}
+
+#[test]
 fn query_inspection_serializes_generated_variables_and_value() {
     let handle = spawn_handle();
     write(&handle, None, soup_data(false), None);

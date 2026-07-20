@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import {
@@ -9,6 +10,8 @@ import {
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity } from '@entity';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
 import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
@@ -18,6 +21,10 @@ import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { TagDot } from '@property/tags/TagDot';
+import {
+  TagEditorDialog,
+  type TagEditorDialogMode,
+} from '@property/tags/TagEditorDialog';
 import type {
   Property,
   PropertyApiValues,
@@ -81,6 +88,7 @@ import {
 function ListItem(props: {
   id: string;
   isSelected: boolean;
+  as?: 'button' | 'div';
   disabled?: boolean;
   onClick: (event: MouseEvent) => void;
   onMouseEnter: () => void;
@@ -89,6 +97,7 @@ function ListItem(props: {
 }) {
   return (
     <CommandMenuListItem
+      as={props.as}
       id={props.id}
       selected={props.isSelected}
       disabled={props.disabled}
@@ -508,6 +517,11 @@ function TagAssignmentEditor(props: {
   const currentTeamQuery = useCurrentTeamQuery();
   const addOption = useAddEntityPropertyOptionMutation();
   const removeOption = useRemoveEntityPropertyOptionMutation();
+  const [tagEditorMode, setTagEditorMode] =
+    createSignal<TagEditorDialogMode | null>(null);
+  const [tagEditorOpen, setTagEditorOpen] = createControlledOpenSignal(false, {
+    id: 'property-tag-edit',
+  });
   const singleEntity = () =>
     props.entities.length === 1 ? props.entities[0] : undefined;
   const entityPropertiesQuery = useEntityPropertiesQuery(
@@ -576,6 +590,13 @@ function TagAssignmentEditor(props: {
     }
     return items;
   });
+  const tagDefinitionsById = createMemo(() => {
+    const definitions = new Map<string, PropertyDefinitionDetailResponse>();
+    for (const item of tagItems()) {
+      definitions.set(item.definition.id, item.definition);
+    }
+    return definitions;
+  });
 
   const isFullyApplied = (item: TagOptionItem) => {
     if (props.entities.length === 0) return false;
@@ -608,6 +629,41 @@ function TagAssignmentEditor(props: {
 
     return [...applied, ...remaining];
   });
+  const createLabel = () => props.searchValue().trim();
+  const exactTagMatchExists = () => {
+    const label = createLabel().toLowerCase();
+    return (
+      !!label &&
+      tagItems().some(
+        (item) => tagOptionLabel(item.option).toLowerCase() === label
+      )
+    );
+  };
+  const showCreateRow = () =>
+    createLabel().length > 0 && !exactTagMatchExists();
+  const hasSearch = () => createLabel().length > 0;
+  const hasAnyAppliedTags = () => {
+    for (const byDefinition of localTagIds().values()) {
+      for (const optionIds of byDefinition.values()) {
+        if (optionIds.length > 0) return true;
+      }
+    }
+    return false;
+  };
+  const showClearAllRow = () => hasAnyAppliedTags();
+  const showClearAllAtTop = () => showClearAllRow() && !hasSearch();
+  const showClearAllAtBottom = () => showClearAllRow() && hasSearch();
+  const itemRowIndex = (index: number) => index + (showClearAllAtTop() ? 1 : 0);
+  const createRowIndex = () =>
+    filteredItems().length + (showClearAllAtTop() ? 1 : 0);
+  const clearAllRowIndex = () =>
+    showClearAllAtTop()
+      ? 0
+      : filteredItems().length + (showCreateRow() ? 1 : 0);
+  const rowCount = () =>
+    filteredItems().length +
+    (showClearAllRow() ? 1 : 0) +
+    (showCreateRow() ? 1 : 0);
   const selectedGroupSize = createMemo(
     () => filteredItems().filter(wasFullyAppliedWhenOpened).length
   );
@@ -692,24 +748,160 @@ function TagAssignmentEditor(props: {
     }
   };
 
+  const openCreateTag = () => {
+    const label = createLabel();
+    if (!showCreateRow() || !label) return;
+
+    setTagEditorMode({
+      type: 'create',
+      initialScope: currentTeamQuery.data?.team ? 'team' : 'user',
+      initialLabel: label,
+    });
+    setTagEditorOpen(true, false);
+  };
+
+  const openEditTag = (item: TagOptionItem) => {
+    setTagEditorMode({
+      type: 'edit',
+      tag: {
+        scope: item.scope,
+        propertyDefinitionId: item.definition.id,
+        option: item.option,
+      },
+    });
+    setTagEditorOpen(true, false);
+  };
+
+  const clearAllTags = async (event?: KeyboardEvent | MouseEvent) => {
+    if (!showClearAllRow()) return;
+
+    const shouldClose = !event?.shiftKey;
+    const previousTagIds = localTagIds();
+    setHasEditedTags(true);
+    setLocalTagIds(
+      new Map(
+        props.entities.map((entity) => [entity.id, new Map<string, string[]>()])
+      )
+    );
+
+    try {
+      const updates: Promise<void>[] = [];
+      for (const entity of props.entities) {
+        const entityType = macroEntityToPropertyEntityType(entity);
+        const byDefinition = previousTagIds.get(entity.id) ?? new Map();
+
+        for (const [definitionId, optionIds] of byDefinition) {
+          const definition = tagDefinitionsById().get(definitionId);
+          if (!definition) continue;
+
+          for (const optionId of optionIds) {
+            updates.push(
+              removeOption.mutateAsync({
+                entityId: entity.id,
+                entityType,
+                property: tagDefinitionDomain(definition),
+                optionId,
+                optimisticOptionIds: [],
+              })
+            );
+          }
+        }
+      }
+
+      if (shouldClose) closePropertyEditor();
+      await Promise.all(updates);
+    } catch (error) {
+      if (!shouldClose) {
+        setLocalTagIds(previousTagIds);
+      }
+      console.error('Failed to clear tags', error);
+    }
+  };
+
+  const applyCreatedTag = async (
+    definition: PropertyDefinitionDetailResponse,
+    optionId: string
+  ) => {
+    const previousTagIds = localTagIds();
+    setHasEditedTags(true);
+    setLocalTagIds((prev) => {
+      const next = new Map(prev);
+      for (const entity of props.entities) {
+        const byDefinition = new Map(next.get(entity.id) ?? []);
+        const current = byDefinition.get(definition.id) ?? [];
+        byDefinition.set(
+          definition.id,
+          current.includes(optionId) ? current : [...current, optionId]
+        );
+        next.set(entity.id, byDefinition);
+      }
+      return next;
+    });
+
+    try {
+      await Promise.all(
+        props.entities.map(async (entity) => {
+          const entityType = macroEntityToPropertyEntityType(entity);
+          const current = getTagIds(previousTagIds, entity.id, definition.id);
+          if (current.includes(optionId)) return;
+
+          await addOption.mutateAsync({
+            entityId: entity.id,
+            entityType,
+            property: tagDefinitionDomain(definition),
+            optionId,
+            optimisticOptionIds: [...current, optionId],
+          });
+        })
+      );
+      closePropertyEditor();
+    } catch (error) {
+      setLocalTagIds(previousTagIds);
+      console.error('Failed to apply created tag', error);
+    }
+  };
+
   props.setKeybindings({
     next: () => {
-      const len = filteredItems().length;
+      const len = rowCount();
       if (len === 0) return;
       props.setSelectedIndex((prev) => (prev + 1) % len);
     },
     previous: () => {
-      const len = filteredItems().length;
+      const len = rowCount();
       if (len === 0) return;
       props.setSelectedIndex((prev) => (prev - 1 + len) % len);
     },
     select: (event) => {
-      const item = filteredItems()[props.selectedIndex()];
+      if (showClearAllRow() && props.selectedIndex() === clearAllRowIndex()) {
+        void clearAllTags(event);
+        return;
+      }
+
+      if (showCreateRow() && props.selectedIndex() === createRowIndex()) {
+        openCreateTag();
+        return;
+      }
+
+      const item =
+        filteredItems()[props.selectedIndex() - (showClearAllAtTop() ? 1 : 0)];
       if (item) void toggleTag(item, event);
     },
   });
 
   const selector = createSelector(props.selectedIndex);
+  const renderClearAllRow = () => (
+    <ListItem
+      id={`tag-assignment-option-${clearAllRowIndex()}`}
+      isSelected={selector(clearAllRowIndex())}
+      onClick={(event) => void clearAllTags(event)}
+      onMouseEnter={() => props.setSelectedIndexFromMouse(clearAllRowIndex())}
+      class="scroll-m-2"
+    >
+      <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
+      <span class="min-w-0 flex-1 truncate text-ink-muted">Clear all tags</span>
+    </ListItem>
+  );
 
   return (
     <Show
@@ -717,7 +909,7 @@ function TagAssignmentEditor(props: {
       fallback={<CommandMenuEmptyState>Loading tags...</CommandMenuEmptyState>}
     >
       <Show
-        when={filteredItems().length > 0}
+        when={rowCount() > 0}
         fallback={
           <CommandMenuEmptyState>
             {(tagsQuery.data ?? []).length === 0
@@ -727,6 +919,7 @@ function TagAssignmentEditor(props: {
         }
       >
         <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
+          <Show when={showClearAllAtTop()}>{renderClearAllRow()}</Show>
           <For each={filteredItems()}>
             {(item, index) => (
               <>
@@ -738,10 +931,13 @@ function TagAssignmentEditor(props: {
                   <div class="mx-2 my-1 h-px bg-edge-muted/50" />
                 </Show>
                 <ListItem
-                  id={`tag-assignment-option-${index()}`}
-                  isSelected={selector(index())}
+                  as="div"
+                  id={`tag-assignment-option-${itemRowIndex(index())}`}
+                  isSelected={selector(itemRowIndex(index()))}
                   onClick={(event) => void toggleTag(item, event)}
-                  onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+                  onMouseEnter={() =>
+                    props.setSelectedIndexFromMouse(itemRowIndex(index()))
+                  }
                   class="scroll-m-2"
                 >
                   <OptionCheckBox checked={isFullyApplied(item)} multiselect />
@@ -754,12 +950,78 @@ function TagAssignmentEditor(props: {
                       {teamName()}
                     </span>
                   </Show>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${tagOptionLabel(item.option)}`}
+                    class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted opacity-0 outline-none hover:bg-hover hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openEditTag(item);
+                    }}
+                  >
+                    <PencilIcon class="size-3.5" />
+                  </button>
                 </ListItem>
               </>
             )}
           </For>
+          <Show when={showCreateRow()}>
+            <Show when={filteredItems().length > 0}>
+              <div class="mx-2 my-1 h-px bg-edge-muted/50" />
+            </Show>
+            <ListItem
+              id={`tag-assignment-option-${createRowIndex()}`}
+              isSelected={selector(createRowIndex())}
+              onClick={openCreateTag}
+              onMouseEnter={() =>
+                props.setSelectedIndexFromMouse(createRowIndex())
+              }
+              class="scroll-m-2"
+            >
+              <TagIcon class="size-4 text-ink-muted opacity-50" />
+              <span class="min-w-0 flex-1 truncate">
+                Create new tag "{createLabel()}"
+              </span>
+            </ListItem>
+          </Show>
+          <Show when={showClearAllAtBottom()}>
+            <Show when={filteredItems().length > 0 || showCreateRow()}>
+              <div class="mx-2 my-1 h-px bg-edge-muted/50" />
+            </Show>
+            {renderClearAllRow()}
+          </Show>
         </div>
       </Show>
+      <TagEditorDialog
+        open={tagEditorOpen()}
+        mode={tagEditorMode()}
+        teamAvailable={Boolean(currentTeamQuery.data?.team)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          queueMicrotask(() => {
+            const selectedRow = document.getElementById(
+              `tag-assignment-option-${props.selectedIndex()}`
+            );
+            if (selectedRow instanceof HTMLElement) {
+              selectedRow.focus();
+            }
+          });
+        }}
+        onCreateSuccess={async (result) => {
+          const definition = result.tagSet.definition;
+          if (!definition) return;
+          await applyCreatedTag(definition, result.option.id);
+        }}
+        onClose={() => {
+          setTagEditorOpen(false, false);
+          setTagEditorMode(null);
+        }}
+      />
     </Show>
   );
 }

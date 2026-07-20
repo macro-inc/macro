@@ -1,5 +1,4 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { isReservedPropertyDefinitionName } from '@companies/crm/team-crm-config';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
@@ -135,14 +134,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   );
 
   // Fetched properties merged with any default placeholders whose
-  // definition the entity doesn't carry yet. Hidden definitions and
-  // reserved internal definitions (`__macro:*`) are dropped first.
+  // definition the entity doesn't carry yet. Hidden definitions are
+  // dropped first.
   const mergedProperties = createMemo(() => {
     const hiddenDefinitionIds = new Set(props.hidePropertyDefinitionIds ?? []);
     const fetched = properties().filter(
-      (property) =>
-        !hiddenDefinitionIds.has(property.propertyDefinitionId) &&
-        !isReservedPropertyDefinitionName(property.displayName)
+      (property) => !hiddenDefinitionIds.has(property.propertyDefinitionId)
     );
     const defaults = props.defaultProperties?.() ?? [];
     if (defaults.length === 0) return fetched;

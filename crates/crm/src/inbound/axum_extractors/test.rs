@@ -394,6 +394,21 @@ impl CrmService for FakeCrmService {
             .push(*comment_id);
         Ok(self.comment_entity)
     }
+
+    async fn get_team_settings(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<crate::domain::model::CrmTeamSettings, CrmError> {
+        panic!("unexpected get_team_settings call")
+    }
+
+    async fn update_team_settings(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _patch: crate::domain::model::CrmTeamSettingsPatch,
+    ) -> Result<crate::domain::model::CrmTeamSettings, CrmError> {
+        panic!("unexpected update_team_settings call")
+    }
 }
 
 async fn company_handler(

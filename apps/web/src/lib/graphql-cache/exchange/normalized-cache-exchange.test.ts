@@ -99,6 +99,9 @@ function makeFakeHost(): FakeHost {
       });
       return readResult;
     },
+    async readRecords() {
+      return { records: [], nextCursor: null };
+    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,
@@ -174,6 +177,9 @@ function makeFakeHost(): FakeHost {
     onOpsAffected(cb) {
       subscribers.add(cb);
       return () => subscribers.delete(cb);
+    },
+    onCacheChanged() {
+      return () => undefined;
     },
     dispose() {},
   };

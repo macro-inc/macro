@@ -53,6 +53,7 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
+import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { queryClient } from '@queries/client';
 import { useBeforeLeave } from '@solidjs/router';
@@ -220,6 +221,16 @@ export function Channel(props: ChannelProps) {
 
   const messages = createMemo(() => [...messageIndex.items]);
   const messageById = () => messageIndex.byId;
+  const keepMountedTargetThreadIndexes = createMemo(() => {
+    const threadId = targetMessageController.activeTargetMessageId();
+    const hasPendingElementScroll =
+      targetMessageController.pendingScrollTargetId() !== undefined ||
+      targetMessageController.pendingTargetReplyId() !== undefined;
+    if (!threadId || !hasPendingElementScroll) return [];
+
+    const index = messageIndex.keys.indexOf(threadId);
+    return index === -1 ? [] : [index];
+  });
 
   const participants = useChannelParticipants(() => props.channelId);
 
@@ -259,6 +270,22 @@ export function Channel(props: ChannelProps) {
   const threadManager = createThreadManager(
     props.initialMessagesStateSnapshot?.threads
   );
+
+  const prepareTargetReply = (threadId: string) => {
+    // Expand before the virtualized row mounts so navigation never presents a
+    // collapsed parent and then grows it in the viewport.
+    threadManager.getOrCreateThreadState(threadId).setIsExpanded(true);
+    // Reply data and the load-around message window can load in parallel. The
+    // mounted query reuses this request and remains the owner of render state.
+    void queryClient.prefetchQuery(
+      threadRepliesQueryOptions(props.channelId, threadId)
+    );
+  };
+
+  if (props.targetMessageId && props.targetMessageReplyId) {
+    prepareTargetReply(props.targetMessageId);
+  }
+
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
@@ -422,6 +449,7 @@ export function Channel(props: ChannelProps) {
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
     if (replyId) {
       clearSelection();
+      prepareTargetReply(messageId);
     } else {
       selectMessage(messageId);
     }
@@ -613,8 +641,14 @@ export function Channel(props: ChannelProps) {
                       triggerBehavior="spring-back"
                     >
                       <ThreadList
+                        channelId={props.channelId}
                         keys={() => messageIndex.keys}
                         initialScrollTarget={threadListInitialScrollTarget()}
+                        initialScrollHandledByTargetElement={
+                          targetMessageController.pendingScrollTargetId() !==
+                          undefined
+                        }
+                        keepMounted={keepMountedTargetThreadIndexes}
                         fullFrameScrollInsets={threadListScrollInsets}
                         shift={shift}
                         prepend={threadPaginator.isPrepending}
@@ -645,16 +679,39 @@ export function Channel(props: ChannelProps) {
                                   channelId={() => props.channelId}
                                   isNewestThread={isNewestThread()}
                                   getMessageActions={getMessageActions}
-                                  targetThreadId={targetMessageController.activeTargetMessageId()}
-                                  targetReplyId={targetMessageController.pendingTargetReplyId()}
-                                  activeTargetReplyId={targetMessageController.activeTargetMessageReplyId()}
-                                  unifiedReplyTarget={unifiedInput.replyTarget()}
-                                  onTargetReplyScrolled={(replyId) => {
-                                    targetMessageController.completePendingReplyScroll(
-                                      m().id,
-                                      replyId
-                                    );
+                                  targetNavigation={{
+                                    targetThreadId:
+                                      targetMessageController.activeTargetMessageId,
+                                    targetMessageId: () =>
+                                      !targetMessageController.pendingTargetReplyId()
+                                        ? targetMessageController.pendingScrollTargetId()
+                                        : undefined,
+                                    targetReplyId: () =>
+                                      targetMessageController.pendingScrollTargetId()
+                                        ? undefined
+                                        : targetMessageController.pendingTargetReplyId(),
+                                    activeTargetReplyId:
+                                      targetMessageController.activeTargetMessageReplyId,
+                                    positionTarget: (
+                                      threadRow,
+                                      targetElement
+                                    ) =>
+                                      threadListNavigation()?.scrollToElementInItem(
+                                        item.id,
+                                        threadRow,
+                                        targetElement
+                                      ) ?? false,
+                                    onTargetMessageScrolled:
+                                      targetMessageController.completePendingScroll,
+                                    onTargetReplyScrolled: (replyId) => {
+                                      targetMessageController.completePendingReplyScroll(
+                                        item.id,
+                                        replyId
+                                      );
+                                    },
+                                    onClearTarget: releaseSelectionAndTarget,
                                   }}
+                                  unifiedReplyTarget={unifiedInput.replyTarget()}
                                   isExpanded={state.isExpanded}
                                   setIsExpanded={state.setIsExpanded}
                                   isReplying={state.isReplying}
@@ -680,7 +737,6 @@ export function Channel(props: ChannelProps) {
                                   selectedMessageId={selection.selectedId}
                                   onSelectMessage={selectMessage}
                                   onClearSelection={clearSelection}
-                                  onClearTarget={releaseSelectionAndTarget}
                                   messageListScopeId={messageListScopeId}
                                 />
                               )}

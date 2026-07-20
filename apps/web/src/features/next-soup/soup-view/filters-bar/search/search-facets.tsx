@@ -178,7 +178,7 @@ export type SearchFacetVM = FacetBase &
  */
 function useChannelPicker(): Accessor<SearchableOption[]> {
   const { useList } = useQuickAccess();
-  const channels = useList('channel', 'dm');
+  const channels = useList('channel', 'dm').items;
 
   return createMemo(() =>
     channels()
@@ -206,7 +206,7 @@ function useChannelPicker(): Accessor<SearchableOption[]> {
 function usePersonPicker(): Accessor<SearchableOption[]> {
   const { useList } = useQuickAccess();
   const currentUserId = useUserId();
-  const people = useList('person');
+  const people = useList('person').items;
 
   return createMemo(() => {
     const uid = currentUserId();

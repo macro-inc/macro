@@ -243,18 +243,6 @@ fn api_router(state: ApiContext) -> Router {
             "/crm",
             crm::inbound::axum_router::crm_router(state.crm_state.clone()),
         )
-        .layer(
-            // NOTE: this will still be needed until we add in `MacroAuthorizationExtractor` support for all crates
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::auth::initialize_user_context::handler,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.jwt_validation_args.clone(),
-                    macro_middleware::auth::attach_user::handler,
-                )),
-        )
-        // Merge after the user-auth layer so webhook calls authenticate only with the bot token.
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(
                 state.channel_bot_webhook_state.clone(),

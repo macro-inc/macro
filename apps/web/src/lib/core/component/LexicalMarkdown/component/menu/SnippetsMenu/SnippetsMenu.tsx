@@ -59,10 +59,11 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   const analytics = useAnalytics();
 
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
-  const { searchedEntities: snippets } = useEntityMention({
+  const { entities: snippets } = useEntityMention({
     buckets: ['snippet'],
-    searchTerm,
+    searchTerm: activeSearchTerm,
   });
   const filteredSnippets = () =>
     snippets().filter((snippet) => snippet.id !== props.sourceDocumentId);

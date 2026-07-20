@@ -6,5 +6,6 @@ pub fn router() -> Router<ApiContext> {
     email::inbound::axum::email_filter_router::email_filter_router::<
         ApiContext,
         crate::api::context::EmailSvc,
+        crate::api::context::AuthorizationService,
     >()
 }

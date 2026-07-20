@@ -22,7 +22,7 @@ use cache_core::queue::{
 };
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
@@ -266,6 +266,47 @@ impl Storage for SqliteStorage {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    async fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+        if type_names.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut sql = String::from("SELECT key, value FROM records WHERE ");
+        let mut values = Vec::<rusqlite::types::Value>::new();
+        if let Some(after) = after {
+            sql.push_str("key > ? AND ");
+            values.push(after.0.clone().into());
+        }
+        sql.push('(');
+        for (index, type_name) in type_names.iter().enumerate() {
+            if index > 0 {
+                sql.push_str(" OR ");
+            }
+            sql.push_str("(key >= ? AND key < ?)");
+            values.push(format!("{type_name}:").into());
+            values.push(format!("{type_name};").into());
+        }
+        sql.push_str(") ORDER BY key ASC LIMIT ?");
+        values.push(i64::try_from(limit).unwrap_or(i64::MAX).into());
+
+        let conn = self.conn();
+        let mut statement = conn.prepare(&sql)?;
+        let rows = statement.query_map(params_from_iter(values.iter()), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })?;
+        let mut records = Vec::new();
+        for row in rows {
+            let (key, value) = row?;
+            records.push((EntityKey(key), decode_record(&value)?));
+        }
+        Ok(records)
     }
 
     async fn enqueue_mutation(
@@ -550,6 +591,45 @@ mod tests {
 
             s.clear().await.unwrap();
             assert_eq!(s.record_count().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn scans_selected_record_types_in_key_order() {
+        block_on(async {
+            let mut storage = SqliteStorage::open_in_memory("user-1").unwrap();
+            storage
+                .put_batch(vec![
+                    (key("TypeB:2"), record("b2")),
+                    (key("Other:1"), record("other")),
+                    (key("TypeA:2"), record("a2")),
+                    (key("TypeA:1"), record("a1")),
+                ])
+                .await
+                .unwrap();
+
+            let first = storage
+                .scan_records(&["TypeB".into(), "TypeA".into()], None, 2)
+                .await
+                .unwrap();
+            assert_eq!(
+                first
+                    .iter()
+                    .map(|(key, _)| key.0.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["TypeA:1", "TypeA:2"]
+            );
+            let second = storage
+                .scan_records(&["TypeA".into(), "TypeB".into()], Some(&first[1].0), 2)
+                .await
+                .unwrap();
+            assert_eq!(
+                second
+                    .iter()
+                    .map(|(key, _)| key.0.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["TypeB:2"]
+            );
         });
     }
 

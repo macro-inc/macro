@@ -4,11 +4,11 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use decode_jwt::DecodedJwt;
+use macro_authorization::MacroAuthorizationExtractor;
 use model::response::ErrorResponse;
 use model_notifications::UserUnsubscribe;
 
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 
 /// Gets the users unsubscribe items.
 #[utoipa::path(
@@ -21,14 +21,14 @@ use crate::api::context::ApiContext;
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, decoded_jwt))]
+#[tracing::instrument(skip(ctx, user))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    decoded_jwt: DecodedJwt,
+    user: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, Response> {
     let unsubscribe_items = notification_db_client::unsubscribe::get::get_user_unsubscribes(
         &ctx.db,
-        &decoded_jwt.user_context.user_id,
+        &user.user_context.user_id,
     )
     .await
     .map_err(|e| {

@@ -15,6 +15,8 @@ import type {
   OptimisticWriteResult,
   QueryRevalidationWire,
   ReadResult,
+  RecordCursor,
+  SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
 
@@ -25,6 +27,12 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined
   ): Promise<ReadResult>;
+  readRecords(
+    document: string,
+    fragmentName: string,
+    cursor: RecordCursor | undefined,
+    limit: number
+  ): Promise<SelectedRecordPageWire>;
   writeQuery(
     originOpId: string | undefined,
     query: string,

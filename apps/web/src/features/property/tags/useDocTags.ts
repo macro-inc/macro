@@ -22,14 +22,10 @@ import {
 } from 'solid-js';
 import { useEntityProperties } from '../hooks';
 import type { PropertyDefinitionDomain } from '../types';
+import { useTagSets } from './tag-sets-context';
+import type { ResolvedTag } from './useSoupResolvedTags';
 
-export type ResolvedTag = {
-  optionId: string;
-  propertyDefinitionId: string;
-  scope: TagScope;
-  label: string;
-  color?: string;
-};
+export type { ResolvedTag } from './useSoupResolvedTags';
 
 function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
@@ -93,17 +89,15 @@ function usePersistTagSelection(
 
 function createDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
-  persistTagSelection: PersistTagSelection
+  persistTagSelection: PersistTagSelection,
+  tagSets: Accessor<TagSetResponse[]>
 ) {
-  const tagsQuery = useTagsQuery();
   const ensureTagSet = useEnsureTagSetMutation();
   const [pendingOptionIdsByDefinition, setPendingOptionIdsByDefinition] =
     createSignal<Map<string, string[]>>(new Map());
   const [displayOptionOrder, setDisplayOptionOrder] = createSignal<string[]>(
     []
   );
-
-  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
 
   const definitionByScope = createMemo(() => {
     const map = new Map<TagScope, PropertyDefinitionDetailResponse>();
@@ -322,7 +316,6 @@ function createDocTags(
   };
 
   return {
-    tagsQuery,
     tagSets,
     appliedTags,
     optionById,
@@ -347,8 +340,14 @@ export function useDocTags(entityId: string, entityType: EntityType) {
       : [];
   };
   const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const tagsQuery = useTagsQuery();
+  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
 
-  return createDocTags(appliedOptionIdsForDefinition, persistTagSelection);
+  return createDocTags(
+    appliedOptionIdsForDefinition,
+    persistTagSelection,
+    tagSets
+  );
 }
 
 /**
@@ -369,19 +368,31 @@ export function useSoupDocTags(
     return value?.type === 'SelectOption' ? value.value : [];
   };
   const persistTagSelection = usePersistTagSelection(entityId, entityType);
+  const tagSets = useTagSets();
 
-  return createDocTags(appliedOptionIdsForDefinition, persistTagSelection);
+  return createDocTags(
+    appliedOptionIdsForDefinition,
+    persistTagSelection,
+    tagSets
+  );
 }
 
 export function useLocalDocTags(
   appliedOptionIdsForDefinition: (definitionId: string) => string[],
   setTagOptionIdsForDefinition: SetTagOptionIdsForDefinition
 ) {
-  return createDocTags(appliedOptionIdsForDefinition, async (updates) => {
-    await Promise.all(
-      updates.map((update) =>
-        setTagOptionIdsForDefinition(update.definition, update.nextOptionIds)
-      )
-    );
-  });
+  const tagsQuery = useTagsQuery();
+  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+
+  return createDocTags(
+    appliedOptionIdsForDefinition,
+    async (updates) => {
+      await Promise.all(
+        updates.map((update) =>
+          setTagOptionIdsForDefinition(update.definition, update.nextOptionIds)
+        )
+      );
+    },
+    tagSets
+  );
 }

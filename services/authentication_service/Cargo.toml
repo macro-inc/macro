@@ -42,6 +42,9 @@ axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
+contacts = { path = "../../crates/contacts", default-features = false, features = [
+  "outbound",
+] }
 cookie = { workspace = true }
 decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
@@ -81,6 +84,7 @@ macro_db_client = { path = "../../crates/macro_db_client", default-features = fa
 ] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
