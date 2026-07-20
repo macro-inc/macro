@@ -1,6 +1,7 @@
 //! Webhook service implementation.
 
 use super::{
+    events::{WebhookCreatedMetadata, WebhookMacroEvent},
     models::{
         CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
         WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
@@ -9,6 +10,7 @@ use super::{
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
 use chrono::Utc;
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::net::IpAddr;
 use url::Url;
@@ -22,19 +24,21 @@ const VALIDATION_EVENT_NAME: &str = "webhook.validation.test";
 
 /// Webhook service implementation.
 #[derive(Debug, Clone)]
-pub struct WebhookServiceImpl<R, V> {
+pub struct WebhookServiceImpl<R, V, B> {
     repo: R,
     validation_client: V,
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+    event_broker: B,
 }
 
-impl<R, V> WebhookServiceImpl<R, V> {
+impl<R, V, B> WebhookServiceImpl<R, V, B> {
     /// Create a webhook service that requires public HTTPS endpoints.
-    pub fn new(repo: R, validation_client: V) -> Self {
+    pub fn new(repo: R, validation_client: V, event_broker: B) -> Self {
         Self::new_with_endpoint_scheme_policy(
             repo,
             validation_client,
             WebhookEndpointSchemePolicy::HttpsOnly,
+            event_broker,
         )
     }
 
@@ -43,11 +47,13 @@ impl<R, V> WebhookServiceImpl<R, V> {
         repo: R,
         validation_client: V,
         endpoint_scheme_policy: WebhookEndpointSchemePolicy,
+        event_broker: B,
     ) -> Self {
         Self {
             repo,
             validation_client,
             endpoint_scheme_policy,
+            event_broker,
         }
     }
 }
@@ -239,11 +245,18 @@ fn validation_response(
     }
 }
 
-impl<R, V> WebhookServiceImpl<R, V>
+impl<R, V, B> WebhookServiceImpl<R, V, B>
 where
     R: WebhookRepo,
     V: WebhookValidationClient,
+    B: MacroEventBroker,
 {
+    fn publish_webhook_event(&self, event: &WebhookMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error=?error, "failed to schedule webhook lifecycle event");
+        }));
+    }
+
     async fn workspace_id_for_scope(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -306,10 +319,11 @@ where
     }
 }
 
-impl<R, V> WebhookService for WebhookServiceImpl<R, V>
+impl<R, V, B> WebhookService for WebhookServiceImpl<R, V, B>
 where
     R: WebhookRepo,
     V: WebhookValidationClient,
+    B: MacroEventBroker + Clone,
 {
     async fn create_webhook(
         &self,
@@ -321,6 +335,11 @@ where
         let workspace_id = self
             .workspace_id_for_scope(caller.clone(), request.scope)
             .await?;
+        let created_by_user_id = caller.clone();
+        let mut header_names = request.headers.as_ref().map_or_else(Vec::new, |headers| {
+            headers.keys().cloned().collect::<Vec<_>>()
+        });
+        header_names.sort();
 
         let signing_secret = generate_signing_secret(&caller);
         let headers = serde_json::to_value(request.headers.clone().unwrap_or_default())
@@ -331,6 +350,23 @@ where
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
         webhook.is_valid = false;
+
+        self.publish_webhook_event(&WebhookMacroEvent::created(
+            webhook.id.clone(),
+            WebhookCreatedMetadata {
+                webhook_id: webhook.id.clone(),
+                workspace_id: webhook.workspace_id.clone(),
+                created_by_user_id,
+                name: webhook.name.clone(),
+                endpoint_url: webhook.endpoint_url.clone(),
+                status: webhook.status,
+                is_valid: webhook.is_valid,
+                filters: webhook.filters.clone(),
+                header_names,
+                created_at: webhook.created_at,
+            },
+        ));
+
         Ok(webhook)
     }
 

@@ -8,8 +8,15 @@ use super::{
     service::WebhookServiceImpl,
 };
 use chrono::Utc;
+use macro_event_broker::{
+    EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker, Topic as _,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use std::{collections::BTreeMap, sync::Arc};
+use serde_json::json;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex as StdMutex},
+};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]
@@ -17,6 +24,8 @@ struct RepoState {
     team_workspace_id: Option<String>,
     webhook: Option<Webhook>,
     validation_updates: Vec<bool>,
+    create_fails: bool,
+    team_lookup_fails: bool,
 }
 
 #[derive(Clone, Default)]
@@ -31,6 +40,18 @@ impl FakeRepo {
         state.webhook = Some(webhook);
         state.team_workspace_id = team_workspace_id;
         drop(state);
+        repo
+    }
+
+    async fn failing_create() -> Self {
+        let repo = Self::default();
+        repo.state.lock().await.create_fails = true;
+        repo
+    }
+
+    async fn failing_team_lookup() -> Self {
+        let repo = Self::default();
+        repo.state.lock().await.team_lookup_fails = true;
         repo
     }
 }
@@ -57,6 +78,10 @@ impl WebhookRepo for FakeRepo {
         _signing_secret: String,
         _headers: serde_json::Value,
     ) -> Result<Webhook, Self::Err> {
+        if self.state.lock().await.create_fails {
+            anyhow::bail!("create failed");
+        }
+
         let webhook = webhook_from_create(created_by_user_id, workspace_id, request);
         self.state.lock().await.webhook = Some(webhook.clone());
         Ok(webhook)
@@ -167,7 +192,55 @@ impl WebhookRepo for FakeRepo {
         &self,
         _user_id: MacroUserIdStr<'static>,
     ) -> Result<Option<String>, Self::Err> {
-        Ok(self.state.lock().await.team_workspace_id.clone())
+        let state = self.state.lock().await;
+        if state.team_lookup_fails {
+            anyhow::bail!("team lookup failed");
+        }
+        Ok(state.team_workspace_id.clone())
+    }
+}
+
+#[derive(Clone, Debug)]
+struct PublishedEvent {
+    topic: &'static str,
+    key: String,
+    payload: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct TestEventBroker {
+    published: Arc<StdMutex<Vec<PublishedEvent>>>,
+    fail: bool,
+}
+
+impl TestEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail: true,
+            ..Self::default()
+        }
+    }
+
+    fn published(&self) -> Arc<StdMutex<Vec<PublishedEvent>>> {
+        Arc::clone(&self.published)
+    }
+}
+
+impl MacroEventBroker for TestEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail {
+            return Err(EventBrokerError::Publish("test failure".to_string()));
+        }
+
+        self.published.lock().unwrap().push(PublishedEvent {
+            topic: event.topic().as_str(),
+            key: event.key().to_string(),
+            payload: serde_json::to_value(event.event())?,
+        });
+        Ok(tokio::spawn(async { Ok(()) }))
     }
 }
 
@@ -290,22 +363,83 @@ fn assert_bad_request<T>(result: Result<T, WebhookError>) {
 }
 
 #[tokio::test]
-async fn create_succeeds_for_user_scope() {
-    let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+async fn create_publishes_full_sanitized_snapshot() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        event_broker,
+    );
+    let mut request = create_request();
+    request.headers = Some(BTreeMap::from([
+        ("Z-Private".to_string(), "z-header-value".to_string()),
+        ("A-Private".to_string(), "a-header-value".to_string()),
+    ]));
 
     let webhook = service
-        .create_webhook(caller(), create_request())
+        .create_webhook(caller(), request)
         .await
-        .unwrap();
+        .expect("webhook should be created");
 
     assert_eq!(webhook.id, "wh_test");
     assert!(!webhook.is_valid);
+
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.webhooks");
+    assert_eq!(event.key, webhook.id);
+    assert_eq!(event.payload["schema_version"], 1);
+    assert_eq!(event.payload["event_type"], "webhook.created");
+    assert!(event.payload["event_id"].is_string());
+    assert_eq!(
+        event.payload["metadata"],
+        json!({
+            "webhook_id": webhook.id,
+            "workspace_id": webhook.workspace_id,
+            "created_by_user_id": caller().as_ref(),
+            "name": webhook.name,
+            "endpoint_url": webhook.endpoint_url,
+            "status": webhook.status,
+            "is_valid": false,
+            "filters": webhook.filters,
+            "header_names": ["A-Private", "Z-Private"],
+            "created_at": webhook.created_at,
+        })
+    );
+
+    let serialized = event.payload.to_string();
+    assert!(!serialized.contains("signing_secret"));
+    assert!(!serialized.contains("a-header-value"));
+    assert!(!serialized.contains("z-header-value"));
+}
+
+#[tokio::test]
+async fn create_request_validation_failure_publishes_nothing() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        event_broker,
+    );
+    let mut request = create_request();
+    request.name = " ".to_string();
+
+    assert_bad_request(service.create_webhook(caller(), request).await);
+    assert!(published.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn create_fails_bad_request_when_team_scope_user_has_no_team() {
-    let service = WebhookServiceImpl::new(FakeRepo::default(), FakeValidationClient::default());
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        event_broker,
+    );
     let mut request = create_request();
     request.scope = WebhookScope::Team;
 
@@ -315,12 +449,65 @@ async fn create_fails_bad_request_when_team_scope_user_has_no_team() {
         result,
         Err(WebhookError::BadRequest(message)) if message == "team scope requires the user to belong to a team"
     ));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_team_scope_repository_failure_publishes_nothing() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::failing_team_lookup().await,
+        FakeValidationClient::default(),
+        event_broker,
+    );
+    let mut request = create_request();
+    request.scope = WebhookScope::Team;
+
+    let result = service.create_webhook(caller(), request).await;
+
+    assert!(matches!(result, Err(WebhookError::Repo(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_repository_failure_publishes_nothing() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::failing_create().await,
+        FakeValidationClient::default(),
+        event_broker,
+    );
+
+    let result = service.create_webhook(caller(), create_request()).await;
+
+    assert!(matches!(result, Err(WebhookError::Repo(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_succeeds_when_event_scheduling_fails() {
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        TestEventBroker::failing(),
+    );
+
+    let webhook = service
+        .create_webhook(caller(), create_request())
+        .await
+        .expect("event scheduling must not fail webhook creation");
+
+    assert_eq!(webhook.id, "wh_test");
+    assert!(!webhook.is_valid);
 }
 
 #[tokio::test]
 async fn patch_fails_not_found_for_missing_id() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
 
     let result = service
         .patch_webhook(caller(), "wh_missing".to_string(), patch_request())
@@ -334,7 +521,8 @@ async fn patch_fails_unauthorized_when_caller_does_not_own_workspace() {
     let mut webhook = existing_webhook();
     webhook.workspace_id = "other_workspace".to_string();
     let repo = FakeRepo::with_webhook(webhook, None).await;
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
 
     let result = service
         .patch_webhook(caller(), "wh_test".to_string(), patch_request())
@@ -346,7 +534,8 @@ async fn patch_fails_unauthorized_when_caller_does_not_own_workspace() {
 #[tokio::test]
 async fn invalid_http_endpoint_is_rejected() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
     let mut request = create_request();
     request.endpoint_url = "http://example.com/webhook".to_string();
 
@@ -359,6 +548,7 @@ async fn local_addresses_are_allowed_when_policy_permits_them() {
         FakeRepo::default(),
         FakeValidationClient::default(),
         WebhookEndpointSchemePolicy::HttpAndHttps,
+        NoopMacroEventBroker,
     );
 
     for endpoint_url in [
@@ -383,7 +573,8 @@ async fn local_addresses_are_allowed_when_policy_permits_them() {
 #[tokio::test]
 async fn private_and_link_local_endpoints_are_rejected() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
 
     for endpoint_url in [
         "https://localhost/webhook",
@@ -403,7 +594,8 @@ async fn private_and_link_local_endpoints_are_rejected() {
 #[tokio::test]
 async fn empty_filters_list_is_rejected() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
     let mut request = create_request();
     request.filters = Vec::new();
 
@@ -413,7 +605,8 @@ async fn empty_filters_list_is_rejected() {
 #[tokio::test]
 async fn filter_with_empty_events_is_rejected() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
     let mut request = create_request();
     request.filters = vec![WebhookFilter {
         events: Vec::new(),
@@ -426,7 +619,8 @@ async fn filter_with_empty_events_is_rejected() {
 #[tokio::test]
 async fn filter_with_empty_ids_is_rejected() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
     let mut request = create_request();
     request.filters = vec![WebhookFilter {
         events: vec!["file.created".to_string()],
@@ -439,7 +633,8 @@ async fn filter_with_empty_ids_is_rejected() {
 #[tokio::test]
 async fn filter_without_ids_is_accepted() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
 
     let webhook = service
         .create_webhook(caller(), create_request())
@@ -452,7 +647,8 @@ async fn filter_without_ids_is_accepted() {
 #[tokio::test]
 async fn filter_with_valid_ids_is_accepted() {
     let repo = FakeRepo::default();
-    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let service =
+        WebhookServiceImpl::new(repo, FakeValidationClient::default(), NoopMacroEventBroker);
     let mut request = create_request();
     request.filters = vec![WebhookFilter {
         events: vec!["file.created".to_string()],
@@ -468,7 +664,11 @@ async fn filter_with_valid_ids_is_accepted() {
 #[tokio::test]
 async fn validate_succeeds_and_sets_webhook_validity() {
     let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
-    let service = WebhookServiceImpl::new(repo.clone(), FakeValidationClient::succeeds());
+    let service = WebhookServiceImpl::new(
+        repo.clone(),
+        FakeValidationClient::succeeds(),
+        NoopMacroEventBroker,
+    );
 
     let response = service
         .validate_webhook(caller(), "wh_test".to_string())
@@ -486,7 +686,7 @@ async fn validate_fails_unauthorized_before_calling_validation_client() {
     webhook.workspace_id = "other_workspace".to_string();
     let repo = FakeRepo::with_webhook(webhook, None).await;
     let validation_client = FakeValidationClient::succeeds();
-    let service = WebhookServiceImpl::new(repo, validation_client.clone());
+    let service = WebhookServiceImpl::new(repo, validation_client.clone(), NoopMacroEventBroker);
 
     let result = service
         .validate_webhook(caller(), "wh_test".to_string())
@@ -499,7 +699,11 @@ async fn validate_fails_unauthorized_before_calling_validation_client() {
 #[tokio::test]
 async fn validate_records_invalid_and_returns_sanitized_failure() {
     let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
-    let service = WebhookServiceImpl::new(repo.clone(), FakeValidationClient::fails());
+    let service = WebhookServiceImpl::new(
+        repo.clone(),
+        FakeValidationClient::fails(),
+        NoopMacroEventBroker,
+    );
 
     let ValidateWebhookResponse {
         is_valid,
