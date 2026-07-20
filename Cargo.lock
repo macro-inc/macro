@@ -13928,6 +13928,7 @@ name = "sync_service_hex"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "macro_authorization",
  "serde",
  "utoipa",
  "workspace-hack",

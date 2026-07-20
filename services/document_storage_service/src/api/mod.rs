@@ -201,6 +201,7 @@ fn api_router(state: ApiContext) -> Router {
             sync_service_hex::inbound::axum_router::sync_service_router(
                 sync_service_hex::inbound::axum_router::SyncServiceRouterState {
                     service: state.sync_service_client.clone(),
+                    authorization_state: state.authorization_state.clone(),
                 },
             ),
         )
@@ -262,6 +263,7 @@ fn api_router(state: ApiContext) -> Router {
                     sync_service_hex::inbound::axum_router::sync_service_router(
                         sync_service_hex::inbound::axum_router::SyncServiceRouterState {
                             service: state.sync_service_client.clone(),
+                            authorization_state: state.authorization_state.clone(),
                         },
                     ),
                 )
