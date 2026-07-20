@@ -7,7 +7,6 @@ version = "0.1.0"
 [features]
 consumer = [
   "dep:macro_env",
-  "dep:macro_event_topics",
   "dep:rdkafka",
   "dep:tokio",
   "ingestion",
@@ -31,7 +30,6 @@ ingestion = [
   "dep:documents",
   "dep:entity_access",
   "dep:futures",
-  "dep:macro_event_broker",
   "dep:uuid",
   "ports",
 ]
@@ -47,7 +45,7 @@ outbound = [
   "dep:url",
   "ports",
 ]
-ports = ["dep:serde_json", "dep:url"]
+ports = ["dep:serde_json", "dep:url", "macro_event_broker/ports"]
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
@@ -67,8 +65,8 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
   "axum",
 ] }
 macro_env = { path = "../macro_env", optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
-macro_event_topics = { path = "../macro_event_topics", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
