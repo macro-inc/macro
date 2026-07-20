@@ -1837,6 +1837,7 @@ export function BaseInput(props: {
                 form().setRecipients('to', v)
               )}
               triggerMode="input"
+              portalScope={composePortalScope()}
               hideBorder
               noPadding
               onChipDragStart={(option, e) =>
@@ -1880,6 +1881,7 @@ export function BaseInput(props: {
                   form().setRecipients('cc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>
@@ -1909,6 +1911,7 @@ export function BaseInput(props: {
                   form().setRecipients('bcc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>
