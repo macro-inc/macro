@@ -323,17 +323,24 @@ export async function fetchDoneNotificationIdsByEventItemIds(
   eventItemIds: string[]
 ): Promise<string[]> {
   if (eventItemIds.length === 0) return [];
-  const response = await throwOnErr(
-    async () =>
-      await notificationServiceClient.bulkGetUserNotificationsByEventItemId({
-        eventItemIds,
-        // Server max page size; a single thread never has anywhere near this
-        // many done notifications, so one page suffices.
-        limit: 500,
-        done: true,
-      })
-  );
-  return response.items.map((n) => n.id);
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await throwOnErr(
+      async () =>
+        await notificationServiceClient.bulkGetUserNotificationsByEventItemId({
+          eventItemIds,
+          // Server max page size; bulk selections can span many threads, so
+          // follow the cursor through every page rather than capping.
+          limit: 500,
+          done: true,
+          cursor,
+        })
+    );
+    ids.push(...response.items.map((n) => n.id));
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+  return ids;
 }
 
 export function invalidateEntityNotifications(eventItemId: string) {
