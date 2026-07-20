@@ -12,12 +12,12 @@ import {
 } from './list-entity-metadata-provider';
 
 const mocks = vi.hoisted(() => ({
-  useEmailLinksQuery: vi.fn(),
+  useEmailLinksContext: vi.fn(),
   useTagsQuery: vi.fn(),
 }));
 
-vi.mock('@queries/email/link', () => ({
-  useEmailLinksQuery: mocks.useEmailLinksQuery,
+vi.mock('@core/context/emailLinks', () => ({
+  useEmailLinksContext: mocks.useEmailLinksContext,
 }));
 
 vi.mock('@queries/properties/tags', () => ({
@@ -35,10 +35,10 @@ function MetadataConsumer(props: { label: string }) {
 }
 
 beforeEach(() => {
-  mocks.useEmailLinksQuery.mockReset();
+  mocks.useEmailLinksContext.mockReset();
   mocks.useTagsQuery.mockReset();
-  mocks.useEmailLinksQuery.mockReturnValue({
-    data: { links: [{ id: 'inbox-1' }] },
+  mocks.useEmailLinksContext.mockReturnValue({
+    links: () => [{ id: 'inbox-1' }],
   });
   mocks.useTagsQuery.mockReturnValue({
     data: [{ scope: 'user', options: [] }],
@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 describe('ListEntityMetadataProvider', () => {
-  it('shares one query observer of each kind across a collection', () => {
+  it('adapts global links and shares one tag query across a collection', () => {
     render(() => (
       <ListEntityMetadataQueryProvider>
         <MetadataConsumer label="first" />
@@ -56,7 +56,7 @@ describe('ListEntityMetadataProvider', () => {
 
     expect(screen.getByText('first:1:1')).toBeTruthy();
     expect(screen.getByText('second:1:1')).toBeTruthy();
-    expect(mocks.useEmailLinksQuery).toHaveBeenCalledOnce();
+    expect(mocks.useEmailLinksContext).toHaveBeenCalledOnce();
     expect(mocks.useTagsQuery).toHaveBeenCalledOnce();
   });
 
@@ -68,7 +68,7 @@ describe('ListEntityMetadataProvider', () => {
     ));
 
     expect(screen.getByText('noop:0:0')).toBeTruthy();
-    expect(mocks.useEmailLinksQuery).not.toHaveBeenCalled();
+    expect(mocks.useEmailLinksContext).not.toHaveBeenCalled();
     expect(mocks.useTagsQuery).not.toHaveBeenCalled();
   });
 });

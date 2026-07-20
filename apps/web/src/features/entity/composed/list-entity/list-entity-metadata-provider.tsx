@@ -1,3 +1,4 @@
+import { useEmailLinksContext } from '@core/context/emailLinks';
 import {
   TagSetsProvider,
   TagSetsQueryProvider,
@@ -5,10 +6,7 @@ import {
 import type { Link } from '@service-email/generated/schemas';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { Accessor, FlowComponent } from 'solid-js';
-import {
-  EmailLinksProvider,
-  EmailLinksQueryProvider,
-} from './email-links-context';
+import { EmailLinksProvider } from './email-links-context';
 
 const EMPTY_EMAIL_LINKS: Link[] = [];
 const EMPTY_TAG_SETS: TagSetResponse[] = [];
@@ -37,11 +35,16 @@ export const ListEntityNoopMetadataProvider: FlowComponent = (props) => (
 );
 
 /**
- * Owns the shared metadata queries required by a standalone ListEntity
- * collection. Soup lists use their soup-specific metadata provider instead.
+ * Adapts app-owned email links and owns the remaining metadata queries needed
+ * by a standalone ListEntity collection. Soup lists use their soup-specific
+ * metadata provider instead.
  */
-export const ListEntityMetadataQueryProvider: FlowComponent = (props) => (
-  <EmailLinksQueryProvider>
-    <TagSetsQueryProvider>{props.children}</TagSetsQueryProvider>
-  </EmailLinksQueryProvider>
-);
+export const ListEntityMetadataQueryProvider: FlowComponent = (props) => {
+  const { links } = useEmailLinksContext();
+
+  return (
+    <EmailLinksProvider links={links}>
+      <TagSetsQueryProvider>{props.children}</TagSetsQueryProvider>
+    </EmailLinksProvider>
+  );
+};
