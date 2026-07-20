@@ -29,6 +29,7 @@ import {
   type ChannelClickTarget,
   type EntityData,
   getSnippetHit,
+  isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
   isSearchEntity,
@@ -465,7 +466,10 @@ export const openEntityInSplitFromUnifiedList = async (
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  if (!location && isHitSnippetEntity(entity)) {
+  // Email rows open like plain soup rows — at the latest message, expanded —
+  // so only non-email snippet entities (calls) fall back to their row hit.
+  // Clicking a specific content hit still passes an explicit location.
+  if (!location && isHitSnippetEntity(entity) && !isEmailEntity(entity)) {
     location = getSnippetHit(entity)?.location;
   }
 

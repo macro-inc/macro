@@ -332,6 +332,8 @@ function EmailContent(props: EmailViewProps) {
   async function handleTargetMessage(messageId: string) {
     const messages = untrack(context.messages.list);
     if (!messages) return;
+    // Expand the target so the navigated-to hit isn't a collapsed row
+    context.messages.setExpandedBodyId(messageId, true);
     const targetIndex = messages.findIndex((m) => m.db_id === messageId);
 
     // Case 1: Message not in current loaded batch - need to load more
