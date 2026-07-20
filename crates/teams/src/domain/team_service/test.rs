@@ -2590,10 +2590,20 @@ async fn test_get_team_reports_crm_enabled() {
 struct RecordingCrmEnqueuer {
     populated: Arc<Mutex<Vec<String>>>,
     depopulated: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
+    fail: bool,
+}
+
+impl RecordingCrmEnqueuer {
+    fn failing() -> Self {
+        Self {
+            fail: true,
+            ..Self::default()
+        }
+    }
 }
 
 impl CrmEnqueuer for RecordingCrmEnqueuer {
-    type Err = std::convert::Infallible;
+    type Err = &'static str;
 
     async fn enqueue_populate_crm_for_user(
         &self,
@@ -2603,7 +2613,11 @@ impl CrmEnqueuer for RecordingCrmEnqueuer {
             .lock()
             .unwrap()
             .push(macro_id.as_ref().to_string());
-        Ok(())
+        if self.fail {
+            Err("CRM enqueue failed")
+        } else {
+            Ok(())
+        }
     }
 
     async fn enqueue_depopulate_crm_for_user(
@@ -2615,7 +2629,11 @@ impl CrmEnqueuer for RecordingCrmEnqueuer {
             .lock()
             .unwrap()
             .push((*team_id, macro_id.as_ref().to_string()));
-        Ok(())
+        if self.fail {
+            Err("CRM enqueue failed")
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -3462,6 +3480,44 @@ async fn team_analytics_join_team_emits_joined_event_with_team_id() {
 }
 
 #[tokio::test]
+async fn team_event_invite_join_uses_accepted_invite_snapshot() {
+    let team_id = uuid::Uuid::from_u128(333);
+    let invite_id = uuid::Uuid::from_u128(334);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let team_repository = make_enterprise_join_team_repository(team_id, invite_id, &user_id);
+    let event_broker = RecordingEventBroker::default();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        RecordingCrmEnqueuer::failing(),
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_contacts_enqueuer(RecordingContactsEnqueuer::failing())
+    .with_event_broker(event_broker.clone());
+
+    service.join_team(&invite_id, &user_id).await.unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].topic, "macro.teams");
+    assert_eq!(events[0].key, team_id.to_string());
+    assert_eq!(events[0].envelope["event_type"], "team.member_joined");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["team_id"], team_id.to_string());
+    assert_eq!(metadata["member_id"], user_id.as_ref());
+    assert_eq!(metadata["role"], "member");
+    assert_eq!(metadata["join_method"]["type"], "invite_accepted");
+    assert_eq!(metadata["join_method"]["invite_id"], invite_id.to_string());
+    assert_eq!(
+        metadata["join_method"]["invited_by"],
+        "macro|owner@example.com"
+    );
+}
+
+#[tokio::test]
 async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
     let team_id = uuid::Uuid::from_u128(1);
     let invite_id = uuid::Uuid::from_u128(2);
@@ -3485,6 +3541,7 @@ async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
     let roles_service = MockUserRolesAndPermissionsService::default();
     let upsert_role_calls = roles_service.upsert_calls.clone();
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
@@ -3493,11 +3550,13 @@ async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let err = service.join_team(&invite_id, &user_id).await.err().unwrap();
 
     assert!(matches!(err, JoinTeamError::CustomerError(_)));
+    assert!(event_broker.events().is_empty());
     assert_eq!(
         *increment_calls.lock().unwrap(),
         vec![(subscription_id.to_string(), 1)]
@@ -3619,6 +3678,42 @@ async fn team_analytics_remove_user_from_team_emits_left_event_with_team_id() {
         }
         event => panic!("unexpected event: {event:?}"),
     }
+}
+
+#[tokio::test]
+async fn team_event_self_service_removal_uses_member_as_actor_and_previous_role() {
+    let team_id = uuid::Uuid::from_u128(335);
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let team_repository =
+        make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Admin);
+    let event_broker = RecordingEventBroker::default();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        RecordingCrmEnqueuer::failing(),
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_event_broker(event_broker.clone());
+
+    service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &member_id),
+            &member_id,
+        )
+        .await
+        .unwrap();
+
+    let events = event_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.member_removed");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["team_id"], team_id.to_string());
+    assert_eq!(metadata["member_id"], member_id.as_ref());
+    assert_eq!(metadata["removed_by"], member_id.as_ref());
+    assert_eq!(metadata["role"], "admin");
 }
 
 #[tokio::test]
@@ -3973,6 +4068,7 @@ async fn test_try_join_team_by_domain_returns_none_when_already_member() {
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
@@ -3981,12 +4077,14 @@ async fn test_try_join_team_by_domain_returns_none_when_already_member() {
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let member = service.try_join_team_by_domain(&user_id).await.unwrap();
 
     assert!(member.is_none());
     assert!(increment_calls.lock().unwrap().is_empty());
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
@@ -4010,6 +4108,7 @@ async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
@@ -4018,12 +4117,14 @@ async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let member = service.try_join_team_by_domain(&user_id).await.unwrap();
 
     assert!(member.is_none());
     assert!(increment_calls.lock().unwrap().is_empty());
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
@@ -4054,6 +4155,7 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
         ..Default::default()
     };
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
@@ -4062,7 +4164,8 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
         NoOpTeamCrmSettingsRepository,
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let err = service
         .try_join_team_by_domain(&user_id)
@@ -4085,6 +4188,7 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*remove_user_calls.lock().unwrap(), 1);
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
@@ -4146,6 +4250,7 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new_with_analytics(
         team_repository.clone(),
         customer_repository.clone(),
@@ -4155,7 +4260,8 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
         crm_enqueuer.clone(),
         NoOpTeamCrmSettingsRepository,
         MockTeamAnalytics::new(events.clone()),
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let member = service
         .try_join_team_by_domain(&user_id)
@@ -4194,6 +4300,17 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
         vec![user_id.as_ref().to_string()]
     );
     assert!(events.lock().unwrap().is_empty());
+    let published_events = event_broker.events();
+    assert_eq!(published_events.len(), 1);
+    assert_eq!(
+        published_events[0].envelope["event_type"],
+        "team.member_joined"
+    );
+    let metadata = &published_events[0].envelope["metadata"];
+    assert_eq!(metadata["team_id"], team_id.to_string());
+    assert_eq!(metadata["member_id"], user_id.as_ref());
+    assert_eq!(metadata["role"], "member");
+    assert_eq!(metadata["join_method"]["type"], "domain_auto_join");
 }
 
 #[tokio::test]
@@ -4337,6 +4454,7 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new_with_analytics(
         team_repository.clone(),
         customer_repository.clone(),
@@ -4346,7 +4464,8 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
         crm_enqueuer.clone(),
         NoOpTeamCrmSettingsRepository,
         MockTeamAnalytics::new(events.clone()),
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     service
         .remove_user_from_team(
@@ -4387,10 +4506,20 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
         vec![TeamAnalyticsEvent::TeamLeft {
             team_id,
             member_id: member_id.clone().into_owned(),
-            removed_by_id: owner_id.into_owned(),
+            removed_by_id: owner_id.clone().into_owned(),
             role: TeamRole::Admin,
         }]
     );
+    let published_events = event_broker.events();
+    assert_eq!(published_events.len(), 1);
+    assert_eq!(
+        published_events[0].envelope["event_type"],
+        "team.member_removed"
+    );
+    let metadata = &published_events[0].envelope["metadata"];
+    assert_eq!(metadata["member_id"], member_id.as_ref());
+    assert_eq!(metadata["removed_by"], owner_id.as_ref());
+    assert_eq!(metadata["role"], "admin");
 }
 
 #[tokio::test]
@@ -4409,6 +4538,7 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
 
+    let event_broker = RecordingEventBroker::default();
     let service = TeamServiceImpl::new_with_analytics(
         team_repository.clone(),
         customer_repository.clone(),
@@ -4418,7 +4548,8 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
         crm_enqueuer.clone(),
         NoOpTeamCrmSettingsRepository,
         MockTeamAnalytics::new(events.clone()),
-    );
+    )
+    .with_event_broker(event_broker.clone());
 
     let error = service
         .remove_user_from_team(
@@ -4429,6 +4560,7 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
         .unwrap_err();
 
     assert!(matches!(error, RemoveUserFromTeamError::TeamError(_)));
+    assert!(event_broker.events().is_empty());
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
     assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);

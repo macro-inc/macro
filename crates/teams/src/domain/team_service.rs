@@ -30,7 +30,8 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     events::{
         TeamCreatedMetadata, TeamInviteCreatedMetadata, TeamInviteRejectedMetadata,
-        TeamInviteRevokedMetadata, TeamMacroEvent,
+        TeamInviteRevokedMetadata, TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata,
+        TeamMemberRemovedMetadata,
     },
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
@@ -955,10 +956,16 @@ where
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
             member_id: removed_member.user_id.clone().into_owned(),
-            removed_by_id,
+            removed_by_id: removed_by_id.clone(),
             role: removed_member.role,
         })
         .await;
+        self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
+            team_id,
+            member_id: removed_member.user_id.into_owned(),
+            removed_by: removed_by_id,
+            role: removed_member.role,
+        }));
 
         Ok(())
     }
@@ -1386,6 +1393,15 @@ where
             role: team_member.role,
         })
         .await;
+        self.publish_team_event(&TeamMacroEvent::member_joined(TeamMemberJoinedMetadata {
+            team_id: team_member.team_id,
+            member_id: team_member.user_id.clone().into_owned(),
+            role: team_member.role,
+            join_method: TeamJoinMethod::InviteAccepted {
+                invite_id: accepted_invite.invite.id,
+                invited_by: accepted_invite.invite.invited_by,
+            },
+        }));
 
         Ok(team_member)
     }
@@ -1900,6 +1916,12 @@ where
 
         // NOTE: no TeamJoined analytics event here - that event is tied to
         // the team invite that was accepted, and a domain auto-join has none.
+        self.publish_team_event(&TeamMacroEvent::member_joined(TeamMemberJoinedMetadata {
+            team_id,
+            member_id: team_member.user_id.clone().into_owned(),
+            role: team_member.role,
+            join_method: TeamJoinMethod::DomainAutoJoin,
+        }));
 
         Ok(Some(team_member))
     }
