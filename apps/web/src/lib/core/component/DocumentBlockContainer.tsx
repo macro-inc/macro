@@ -18,6 +18,14 @@ export function DocumentBlockContainer(
 
   const isLoading = () => !hasBlockData() && !blockError();
 
+  // TEMP PREVIEW: always render the no-access screen. Revert before merging.
+  return (
+    <ContainerWithTopBar {...local}>
+      <Unauthorized />
+    </ContainerWithTopBar>
+  );
+
+  // eslint-disable-next-line no-unreachable
   return (
     <Show
       when={hasBlockData() && !blockError()}

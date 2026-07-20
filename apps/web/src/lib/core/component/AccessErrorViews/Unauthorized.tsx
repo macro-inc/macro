@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
 import { useEmail } from '@core/context/user';
-import Lock from '@phosphor-icons/core/regular/lock.svg?component-solid';
+import NoAccessGraphic from '@design/empty-state-no-access.svg';
 import { EmptyStatePanel } from '@ui';
 import { onMount } from 'solid-js';
 import { openLoginModal } from '../TopBar/LoginButton';
@@ -21,12 +21,11 @@ export default function Unauthorized() {
   return (
     <EmptyStatePanel
       centered
-      graphic={Lock}
+      graphic={NoAccessGraphic}
+      graphicClass="mb-6"
       title="You don't have access to this file"
       description={
-        currentUserEmail()
-          ? `Signed in as ${currentUserEmail()}. Ask the owner to share it with you.`
-          : 'Ask the owner to share it with you.'
+        currentUserEmail() ? `Signed in as ${currentUserEmail()}` : undefined
       }
     />
   );
