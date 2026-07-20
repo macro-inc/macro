@@ -8,7 +8,8 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
-const BASE_BUFFER_SIZE = 64;
+const BASE_ITEM_SIZE = 96;
+const BASE_BUFFER_SIZE = 500;
 
 type ScrollAlignment = ScrollToIndexOpts['align'];
 
@@ -722,9 +723,7 @@ export function ThreadList(props: ThreadListProps) {
           }}
           scrollRef={scrollRef}
           startMargin={insets().start}
-          // Keep Virtua's adaptive size estimation enabled. A fixed 64px hint
-          // makes it eagerly mount a viewport's worth of reply-heavy threads
-          // before their much larger real heights are measured.
+          itemSize={BASE_ITEM_SIZE}
           bufferSize={BASE_BUFFER_SIZE}
           keepMounted={props.keepMounted?.()}
           data={props.keys()}
