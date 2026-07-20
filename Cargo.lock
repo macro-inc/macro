@@ -2138,6 +2138,8 @@ dependencies = [
  "hex",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
