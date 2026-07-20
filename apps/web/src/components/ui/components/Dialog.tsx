@@ -16,11 +16,12 @@ export type DialogProps = {
   contentRef?: Ref<HTMLDivElement> /* content element ref  */;
   position?: 'top' | 'center' /* Vertical position    */;
   /** Edge-to-edge takeover: fills the viewport with no gutter or centering. */
-  fullscreen?: boolean /* Fill the viewport    */;
-  children: JSX.Element /* Content children     */;
-  class?: string /* classes for content  */;
-  open: boolean /* if dialog is open    */;
+  fullscreen?: boolean /* Fill the viewport */;
+  children: JSX.Element /* Content children */;
+  class?: string /* classes for content */;
+  open: boolean /* if dialog is open */;
   visibleScrim?: boolean /* if the scrim is visible */;
+  animate?: boolean /* is the menu/dialog animated on open */;
 };
 
 export function Dialog(props: DialogProps) {
@@ -34,7 +35,7 @@ export function Dialog(props: DialogProps) {
           openDialogCount > 0 ||
           performance.now() - lastAllDialogsClosedAt < DIALOG_HANDOFF_WINDOW_MS;
 
-        setAnimateOnOpen(!isDialogHandoff);
+        setAnimateOnOpen(!isDialogHandoff && Boolean(props.animate));
         openDialogCount += 1;
         countedOpen = true;
       }

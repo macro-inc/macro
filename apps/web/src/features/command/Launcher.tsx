@@ -760,7 +760,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <CommandMenuShell
       depth={2}
-      class="h-auto w-fit max-w-[calc(100vw-2rem)] shadow-menu menu-open-animation"
+      class="h-auto w-fit max-w-[calc(100vw-2rem)] shadow-menu"
     >
       <CommandMenuShell.Header class="my-0 justify-between p-2 px-4 sm:px-6 bg-surface">
         <h1 class="font-bold text-ink-muted">Create New</h1>
