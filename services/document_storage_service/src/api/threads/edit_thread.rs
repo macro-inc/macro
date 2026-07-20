@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
 use entity_access::domain::models::EntityPermission;
-use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use macro_authorization::MacroAuthorizationExtractor;
 use macro_db_client::share_permission::edit::edit_thread_permission;
@@ -59,10 +59,11 @@ pub async fn edit_thread_handler(
     user: MacroAuthorizationExtractor<AuthorizationService>,
     thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
-    project: ProjectBodyAccessLevelExtractor<
+    project: ProjectBodyAccessLevelExtractorV2<
         EditAccessLevel,
         PatchThreadRequestV2,
         EntityAccessService,
+        AuthorizationService,
     >,
 ) -> Result<Response, Response> {
     let req = project.into_inner();

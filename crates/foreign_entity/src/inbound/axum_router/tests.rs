@@ -7,21 +7,24 @@ use axum::{
     response::Response,
 };
 use chrono::{DateTime, Utc};
-use entity_access::{
-    domain::{
-        models::{
-            AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt,
-            EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
-        },
-        ports::EntityAccessService,
+use entity_access::domain::{
+    models::{
+        AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
+        EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
     },
-    inbound::axum_extractors::InternalUser,
+    ports::EntityAccessService,
 };
 use http_body_util::BodyExt;
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState,
+};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
+use model_user::UserContext;
+use rootcause::Report;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -150,7 +153,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        unreachable!("InternalUser extension should bypass real access receipt generation")
+        unreachable!("identity-less internal access should bypass real access receipt generation")
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
@@ -159,7 +162,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        unreachable!("InternalUser extension should bypass bot access receipt generation")
+        unreachable!("identity-less internal access should bypass bot access receipt generation")
     }
 
     async fn get_access_level(
@@ -168,7 +171,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        unreachable!("InternalUser extension should bypass real access checks")
+        unreachable!("identity-less internal access should bypass real access checks")
     }
 
     async fn check_access(
@@ -178,7 +181,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        unreachable!("InternalUser extension should bypass real access checks")
+        unreachable!("identity-less internal access should bypass real access checks")
     }
 
     async fn check_public_access(
@@ -187,7 +190,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        unreachable!("InternalUser extension should bypass real access checks")
+        unreachable!("identity-less internal access should bypass real access checks")
     }
 
     async fn get_entity_permission(
@@ -197,7 +200,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        unreachable!("InternalUser extension should bypass real access checks")
+        unreachable!("identity-less internal access should bypass real access checks")
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -206,7 +209,7 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
-        unreachable!("InternalUser extension should bypass real access checks")
+        unreachable!("identity-less internal access should bypass real access checks")
     }
 
     async fn get_users_by_entity(
@@ -239,25 +242,49 @@ impl EntityAccessService for NoopEntityAccessService {
     }
 }
 
+const VALID_INTERNAL_KEY: &str = "valid-internal-key";
+
+#[derive(Clone, Debug, Default)]
+struct FakeAuthorizationService;
+
+impl MacroAuthorizationService for FakeAuthorizationService {
+    async fn authorize(&self, _jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        unreachable!("internal requests should not authorize user credentials")
+    }
+
+    async fn authorize_internal(
+        &self,
+        provided_key: &str,
+        claims: InternalIdentityClaims,
+    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
+        if provided_key != VALID_INTERNAL_KEY {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(claims.user_id.map(|user_id| UserContext {
+            user_id,
+            fusion_user_id: "fusion-user-id".to_string(),
+            organization_id: None,
+            permissions: None,
+        }))
+    }
+}
+
 fn test_router(service: Arc<StubForeignEntityService>) -> Router {
     foreign_entity_router(ForeignEntityRouterState::new(
         service,
         Arc::new(NoopEntityAccessService),
+        MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
     ))
 }
 
 fn internal_get(uri: impl Into<String>) -> Request<Body> {
-    let mut request = Request::builder()
+    Request::builder()
         .method(Method::GET)
         .uri(uri.into())
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
         .body(Body::empty())
-        .expect("test request should be built");
-
-    request.extensions_mut().insert(InternalUser {
-        access_level: AccessLevel::Owner,
-    });
-
-    request
+        .expect("test request should be built")
 }
 
 async fn response_json(response: Response) -> Value {

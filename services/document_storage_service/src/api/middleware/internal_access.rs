@@ -8,9 +8,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-pub(crate) use entity_access::inbound::axum_extractors::InternalUser;
 use model::user::UserContext;
-use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::header::ToStrError;
 use thiserror::Error;
 use tracing::Level;
@@ -83,14 +81,10 @@ pub(in crate::api) async fn handler(
 
     // Attach user_id to the UserContext
     req.extensions_mut().insert(UserContext {
-        user_id: user_id.clone(),
+        user_id,
         fusion_user_id: "".to_string(), // not needed in this use case
         permissions: None,
         organization_id: None,
-    });
-
-    req.extensions_mut().insert(InternalUser {
-        access_level: AccessLevel::Owner,
     });
 
     Ok(next.run(req).await)

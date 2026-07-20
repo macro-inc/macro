@@ -489,6 +489,7 @@ async fn main() -> anyhow::Result<()> {
     let foreign_entity_state = ForeignEntityRouterState::new(
         foreign_entity_service.clone(),
         entity_access_service.clone(),
+        authorization_state.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
