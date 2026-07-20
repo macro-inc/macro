@@ -54,39 +54,9 @@ impl axum::response::IntoResponse for InviteToTeamError {
                     message: "no emails provided".into(),
                 }),
             ),
-            InviteToTeamError::InviteUsersToTeamError(e) => match e {
-                InviteUsersToTeamError::TooManyEmails => (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        message: "too many emails".into(),
-                    }),
-                ),
-                InviteUsersToTeamError::NonAdminInvitesDisabled => (
-                    StatusCode::FORBIDDEN,
-                    Json(ErrorResponse {
-                        message: "only team admins may invite users to this team".into(),
-                    }),
-                ),
-                InviteUsersToTeamError::NotEnoughOpenSeats => (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        message: "free team member limit reached; upgrade to invite more members"
-                            .into(),
-                    }),
-                ),
-                InviteUsersToTeamError::CustomerError(_) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "internal server error".into(),
-                    }),
-                ),
-                _ => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "unable to invite users to team".into(),
-                    }),
-                ),
-            },
+            // Domain errors share one mapping - see the IntoResponse impl
+            // for InviteUsersToTeamError in this crate's axum_router module.
+            InviteToTeamError::InviteUsersToTeamError(e) => return e.into_response(),
         }
         .into_response()
     }

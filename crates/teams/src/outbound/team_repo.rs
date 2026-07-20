@@ -1491,7 +1491,7 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
     ) -> Result<bool, TeamError> {
-        let row = sqlx::query!(
+        sqlx::query_scalar!(
             r#"
             SELECT allow_non_admin_invites
             FROM team
@@ -1500,10 +1500,8 @@ impl TeamRepository for TeamRepositoryImpl {
             team_id,
         )
         .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(|row| row.allow_non_admin_invites)
-            .ok_or(TeamError::TeamDoesNotExist)
+        .await?
+        .ok_or(TeamError::TeamDoesNotExist)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1511,7 +1509,7 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
     ) -> Result<bool, TeamError> {
-        let row = sqlx::query!(
+        sqlx::query_scalar!(
             r#"
             UPDATE team
             SET allow_non_admin_invites = NOT allow_non_admin_invites
@@ -1521,10 +1519,8 @@ impl TeamRepository for TeamRepositoryImpl {
             team_id,
         )
         .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(|row| row.allow_non_admin_invites)
-            .ok_or(TeamError::TeamDoesNotExist)
+        .await?
+        .ok_or(TeamError::TeamDoesNotExist)
     }
 
     #[tracing::instrument(skip(self), err)]
