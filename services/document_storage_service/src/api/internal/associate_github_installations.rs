@@ -1,10 +1,11 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use github::domain::ports::GithubSyncService;
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use model::response::{EmptyResponse, GenericErrorResponse};
 
 #[derive(serde::Deserialize)]
@@ -29,9 +30,10 @@ pub struct Params {
         (status = 500, body = GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), err(Debug))]
+#[tracing::instrument(skip(ctx, _auth), err(Debug))]
 pub async fn associate_github_installations_handler(
     State(ctx): State<ApiContext>,
+    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
     Path(Params { github_user_id }): Path<Params>,
 ) -> Result<Response, Response> {
     ctx.github_sync_service
