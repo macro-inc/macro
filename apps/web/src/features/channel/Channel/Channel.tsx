@@ -679,6 +679,7 @@ export function Channel(props: ChannelProps) {
                                   channelId={() => props.channelId}
                                   isNewestThread={isNewestThread()}
                                   getMessageActions={getMessageActions}
+                                  isFindBarOpen={findBar.isOpen}
                                   targetNavigation={{
                                     targetThreadId:
                                       targetMessageController.activeTargetMessageId,

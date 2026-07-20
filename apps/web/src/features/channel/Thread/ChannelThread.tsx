@@ -19,6 +19,7 @@ import { isUnifiedInputMode } from '../unified-input-mode';
 import { createTargetReplyNavigationController } from './create-target-reply-navigation-controller';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
+import { createThreadRepliesFetchGate } from './create-thread-replies-fetch-gate';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
@@ -37,11 +38,14 @@ export function ChannelThread(props: ThreadProps) {
   const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const fetchRepliesEnabled = () =>
-    (!!props.targetNavigation?.targetReplyId() &&
-      props.targetNavigation.targetThreadId() === props.data().id) ||
-    props.isExpanded() ||
-    (hasReplies() && thread().reply_count > DEFAULT_VISIBLE_REPLY_COUNT);
+  const fetchRepliesEnabled = createThreadRepliesFetchGate({
+    threadId: () => props.data().id,
+    replyCount: () => thread().reply_count,
+    isExpanded: props.isExpanded,
+    isFindBarOpen: props.isFindBarOpen,
+    targetThreadId: () => props.targetNavigation?.targetThreadId(),
+    targetReplyId: () => props.targetNavigation?.targetReplyId(),
+  });
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
