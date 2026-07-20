@@ -267,16 +267,9 @@ fn api_router(state: ApiContext) -> Router {
                         },
                     ),
                 )
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(axum::middleware::from_fn_with_state(
-                            state.clone(),
-                            middleware::internal_access::handler,
-                        ))
-                        .layer(axum::middleware::from_fn(
-                            macro_middleware::connection_drop_prevention_handler,
-                        )),
-                ),
+                .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+                    macro_middleware::connection_drop_prevention_handler,
+                ))),
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
