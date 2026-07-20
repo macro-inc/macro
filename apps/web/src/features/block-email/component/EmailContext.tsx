@@ -401,8 +401,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         onRedone: showToast,
       };
     },
-    onError: () => {
-      toast.failure('Failed to archive thread');
+    onError: (params) => {
+      toast.failure(
+        params.archive ? 'Failed to mark as done' : 'Failed to mark as not done'
+      );
     },
   });
 

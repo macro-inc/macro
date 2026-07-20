@@ -358,7 +358,7 @@ export function useUndoableArchiveThreadMutation(options: {
     handle: UndoHandle,
     params: ArchiveThreadParams
   ) => { onUndone?: () => void; onRedone?: () => void } | void;
-  onError?: () => void;
+  onError?: (params: ArchiveThreadParams) => void;
 }) {
   return useUndoableMutation<
     void,
@@ -386,7 +386,7 @@ export function useUndoableArchiveThreadMutation(options: {
           context.previousData
         );
       }
-      options.onError?.();
+      options.onError?.(params);
     },
     onSettled: (_data, _error, params) => {
       queryClient.invalidateQueries({
@@ -397,7 +397,7 @@ export function useUndoableArchiveThreadMutation(options: {
     undoFn: async (params) =>
       replayThreadArchive({ ...params, archive: !params.archive }),
     redoFn: async (params) => replayThreadArchive(params),
-    undoLabel: 'Mark Done',
+    undoLabel: (params) => (params.archive ? 'Mark Done' : 'Mark Not Done'),
     onPushed: (handle, params) => options.onPushed?.(handle, params),
   }));
 }
