@@ -55,6 +55,8 @@ topics! {
     MacroDocumentsTopic => "macro.documents",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
     MacroProjectsTopic => "macro.projects",
+    /// Team lifecycle, invite, and membership events.
+    MacroTeamsTopic => "macro.teams",
     /// Channel lifecycle, message, participant, and attachment events.
     MacroChannelsTopic => "macro.channels",
     /// Email lifecycle events (links, messages, threads, labels).
