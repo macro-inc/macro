@@ -50,6 +50,14 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
           ...new Set([...notificationIds, ...serverNotificationIds]),
         ],
       });
+      // Match the mark-done action's success feedback (and the direct
+      // unarchive fallback's toast in EmailContext).
+      toast.success(
+        targets.length > 1
+          ? `Marked ${targets.length} items as not done`
+          : 'Marked as not done',
+        { duration: 3_000, stack: true, hideOnMobile: true }
+      );
       // Restore the rows deterministically: refetch each thread's soup item
       // and upsert it into the caches (flat, grouped parents, and expanded
       // group queries), then refetch the lists so done-filtered views

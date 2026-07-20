@@ -42,6 +42,7 @@ import {
   useUndoableArchiveThreadMutation,
 } from '@queries/email/thread';
 import {
+  bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
   fetchDoneNotificationIdsByEventItemIds,
 } from '@queries/notification/user-notifications';
@@ -388,6 +389,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     notificationSource: () => notificationSource,
   });
 
+  // Notification ids the mark-not-done fallback restored, per thread, so the
+  // undo/redo hooks below can re-mark them when the archive flip is replayed.
+  const restoredNotificationIds = new Map<string, string[]>();
+
   // Only the direct archive/unarchive fallbacks go through this mutation
   // (the mark-done / mark-not-done action paths toast on their own).
   const archiveMutation = useUndoableArchiveThreadMutation({
@@ -416,11 +421,33 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
       showToast();
 
+      // Undo/redo replay only the /archived flip; mirror the fallback's
+      // notification and soup-list side effects for the resulting state.
+      const syncSideEffects = (nowArchived: boolean) => {
+        const ids = restoredNotificationIds.get(params.threadId) ?? [];
+        if (ids.length > 0) {
+          setDoneOverride(ids, nowArchived);
+          void (
+            nowArchived
+              ? bulkMarkNotificationsAsDone(ids)
+              : bulkMarkNotificationsAsUndone(ids)
+          ).catch(() => setDoneOverride(ids, undefined));
+        }
+        if (!nowArchived) {
+          void refetchSoupEntity(params.threadId, 'emailThread');
+        }
+        invalidateAllSoup();
+      };
+
       return {
         onUndone: () => {
           if (toastId !== undefined) toast.dismiss(toastId);
+          syncSideEffects(!params.archive);
         },
-        onRedone: showToast,
+        onRedone: () => {
+          showToast();
+          syncSideEffects(params.archive);
+        },
       };
     },
     onError: (params) => {
@@ -515,6 +542,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
               threadId,
             ]).catch(() => []);
             const allIds = [...new Set([...notificationIds, ...serverIds])];
+            // Record for the undo/redo hooks, which re-mark these when the
+            // archive flip is replayed.
+            restoredNotificationIds.set(threadId, allIds);
             if (allIds.length > 0) {
               setDoneOverride(allIds, false);
               try {

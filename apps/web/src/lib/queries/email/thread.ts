@@ -240,7 +240,8 @@ async function threadArchiveOnMutate(params: ArchiveThreadParams) {
  * (e.g. the mark-done and mark-not-done actions, which issue their own
  * /archived requests): optimistically flips `inbox_visible`, rolls back if
  * the request fails, and invalidates the thread + preview queries once it
- * settles. Mirrors useArchiveThreadMutation without firing a second request.
+ * settles. Mirrors useUndoableArchiveThreadMutation's cache handling without
+ * firing a second request or pushing an undo entry.
  */
 export async function trackExternalThreadArchive(
   threadId: string,
@@ -266,58 +267,6 @@ export async function trackExternalThreadArchive(
     });
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
   }
-}
-
-/**
- * Mutation to archive or unarchive a thread.
- * Uses optimistic updates to immediately reflect the change in UI.
- */
-export function useArchiveThreadMutation(
-  callbacks?: MutationCallbacks<
-    void,
-    Error,
-    ArchiveThreadParams,
-    ArchiveThreadContext
-  >
-) {
-  return useMutation(() => ({
-    // Must await the PATCH: `void`-ing the promise resolved the mutation
-    // immediately, so onSettled's invalidation refetched before the server
-    // committed (stomping the optimistic update) and errors were swallowed
-    // without ever reaching onError.
-    mutationFn: async (params: ArchiveThreadParams) => {
-      await throwOnErr(
-        async () =>
-          await emailClient.flagArchived(
-            {
-              id: params.threadId,
-              value: params.archive,
-            },
-            params.linkId
-          )
-      );
-    },
-    ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
-      {
-        onMutate: async (params) => await threadArchiveOnMutate(params),
-        onError: (_err, params, context) => {
-          if (context?.previousData) {
-            queryClient.setQueryData(
-              emailKeys.threadMessages(params.threadId).queryKey,
-              context.previousData
-            );
-          }
-        },
-        onSettled: (_data, _error, params) => {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.threadMessages(params.threadId).queryKey,
-          });
-          queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
-        },
-      },
-      callbacks
-    ),
-  }));
 }
 
 /**
@@ -352,10 +301,10 @@ async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
 }
 
 /**
- * Undoable variant of `useArchiveThreadMutation`: each successful archive or
- * unarchive is pushed onto the mutation undo stack, and undo/redo replays the
- * opposite call with the same optimistic cache handling.
- * Must be used inside a MutationUndoProvider.
+ * Mutation to archive or unarchive a thread, with optimistic `inbox_visible`
+ * handling. Each successful archive or unarchive is pushed onto the mutation
+ * undo stack, and undo/redo replays the opposite call with the same
+ * optimistic cache handling. Must be used inside a MutationUndoProvider.
  */
 export function useUndoableArchiveThreadMutation(options: {
   /** Bind side effects (e.g. an undo toast) to the pushed undo entry. */
