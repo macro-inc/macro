@@ -3,5 +3,6 @@
   "macro.documents",
   "macro.email",
   "macro.example",
-  "macro.projects"
+  "macro.projects",
+  "macro.webhooks"
 ]

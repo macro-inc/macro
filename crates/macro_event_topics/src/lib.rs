@@ -57,4 +57,6 @@ topics! {
     MacroChannelsTopic => "macro.channels",
     /// Email lifecycle events (links, messages, threads, labels).
     MacroEmailTopic => "macro.email",
+    /// Webhook configuration lifecycle events (created / updated / deleted / validated).
+    MacroWebhooksTopic => "macro.webhooks",
 }

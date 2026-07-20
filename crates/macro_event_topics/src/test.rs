@@ -21,4 +21,5 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroDocumentsTopic.as_str()));
     assert!(all_topic_names().contains(&MacroProjectsTopic.as_str()));
     assert!(all_topic_names().contains(&MacroChannelsTopic.as_str()));
+    assert!(all_topic_names().contains(&MacroWebhooksTopic.as_str()));
 }
