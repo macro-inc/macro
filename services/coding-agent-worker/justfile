@@ -1,0 +1,21 @@
+image := "agent-container"
+
+typecheck:
+    nix develop --command bunx tsc --noEmit
+
+build-image:
+    cd container && docker build -t {{image}} .
+
+serve:
+    GITHUB_TOKEN=$(gh auth token) nix develop --command bun run index.ts
+
+client *args:
+    bun scripts/client.ts {{args}}
+
+# Kick off a session (webhook flow: returns the id immediately; watch `just upstream`).
+session repo prompt:
+    curl -s -X POST localhost:3000/session -H 'content-type: application/json' \
+      -d '{"repoUrl":"{{repo}}","prompt":"{{prompt}}"}'
+
+destroy id:
+    curl -s -X DELETE localhost:3000/session/{{id}}

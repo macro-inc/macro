@@ -1,0 +1,24 @@
+{
+  "name": "daytona-bun-hello",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "@daytona/sdk": "latest",
+    "@hono/zod-validator": "^0.9.0",
+    "@zed-industries/agent-client-protocol": "^0.4.5",
+    "chalk": "^5.6.2",
+    "envsafe": "^2.0.3",
+    "hono": "^4.12.30",
+    "json-rpc-2.0": "^1.7.1",
+    "ts-pattern": "^5.9.0",
+    "websocketstream-polyfill": "^1.0.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/yargs": "^17.0.35"
+  }
+}
