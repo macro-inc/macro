@@ -10,6 +10,7 @@ use std::{
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, RequiredPermission,
 };
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use notification::domain::{
     models::{Notification, NotificationResult, request::SendNotificationRequest},
@@ -23,6 +24,7 @@ use roles_and_permissions::domain::{
 use crate::domain::{
     contacts_enqueuer::ContactsEnqueuer,
     crm_enqueuer::{CrmEnqueuer, NoOpCrmEnqueuer},
+    events::TeamCreatedMetadata,
     team_analytics::{TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
 };
@@ -955,6 +957,53 @@ impl TeamAnalytics for MockTeamAnalytics {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct PublishedTeamEvent {
+    topic: &'static str,
+    key: String,
+    envelope: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct RecordingEventBroker {
+    events: Arc<Mutex<Vec<PublishedTeamEvent>>>,
+    fail_scheduling: bool,
+}
+
+impl RecordingEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail_scheduling: true,
+            ..Self::default()
+        }
+    }
+
+    fn events(&self) -> Vec<PublishedTeamEvent> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+impl MacroEventBroker for RecordingEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail_scheduling {
+            return Err(EventBrokerError::Publish(
+                "intentional scheduling failure".to_string(),
+            ));
+        }
+
+        self.events.lock().unwrap().push(PublishedTeamEvent {
+            topic: event.topic().as_str(),
+            key: event.key().to_string(),
+            envelope: serde_json::to_value(event.event())?,
+        });
+
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
 type ContactPair = (MacroUserIdStr<'static>, MacroUserIdStr<'static>);
 type ContactBatches = Arc<Mutex<Vec<Vec<ContactPair>>>>;
 
@@ -1228,6 +1277,66 @@ fn build_service_with_analytics(
 }
 
 // -- Tests --
+
+#[tokio::test]
+async fn event_broker_can_be_replaced_and_is_preserved_by_service_reconstruction() {
+    let team_id = uuid::Uuid::from_u128(6000);
+    let event = TeamMacroEvent::created(TeamCreatedMetadata {
+        team_id,
+        name: "Event Team".to_string(),
+        slug: "EVENT_TEAM".to_string(),
+        owner: MacroUserIdStr::parse_from_str("macro|owner@example.com")
+            .unwrap()
+            .into_owned(),
+        enterprise: false,
+        paid: false,
+        auto_join_domain: None,
+    });
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let default_service = TeamServiceImpl::new(
+        MockTeamRepository::new(Vec::new(), "Event Team", mark_sent_calls),
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    default_service.publish_team_event(&event);
+
+    let recording_broker = RecordingEventBroker::default();
+    let service = default_service
+        .with_event_broker(recording_broker.clone())
+        .with_contacts_enqueuer(RecordingContactsEnqueuer::default());
+    service.clone().publish_team_event(&event);
+
+    let events = recording_broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].topic, "macro.teams");
+    assert_eq!(events[0].key, team_id.to_string());
+    assert_eq!(events[0].envelope["event_type"], "team.created");
+    assert_eq!(
+        events[0].envelope["metadata"]["team_id"],
+        team_id.to_string()
+    );
+
+    service
+        .with_event_broker(RecordingEventBroker::failing())
+        .publish_team_event(&event);
+
+    let analytics_service = TeamServiceImpl::new_with_analytics(
+        MockTeamRepository::new(Vec::new(), "Event Team", Arc::new(Mutex::new(Vec::new()))),
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(Arc::new(Mutex::new(Vec::new()))),
+    );
+    analytics_service.publish_team_event(&event);
+}
 
 #[tokio::test]
 async fn team_payment_revoke_removes_exact_premium_roles_from_members() {

@@ -8,6 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
 };
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{
     cowlike::CowLike,
     email::{Email, ReadEmailParts},
@@ -27,6 +28,7 @@ use crate::domain::{
     contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
+    events::TeamMacroEvent,
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
         InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
@@ -52,6 +54,7 @@ pub struct TeamServiceImpl<
     TCRMS,
     TA = NoOpTeamAnalytics,
     CNE = NoOpContactsEnqueuer,
+    EB = NoopMacroEventBroker,
 > where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -62,6 +65,7 @@ pub struct TeamServiceImpl<
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
+    EB: MacroEventBroker,
 {
     /// The underlying team repository
     team_repository: TR,
@@ -84,10 +88,12 @@ pub struct TeamServiceImpl<
     team_analytics: TA,
     /// Outbound port for contact connections created through team membership.
     contacts_enqueuer: CNE,
+    /// Outbound port for best-effort team events.
+    event_broker: EB,
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE> Clone
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB> Clone
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -98,6 +104,7 @@ where
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
+    EB: MacroEventBroker + Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -110,12 +117,24 @@ where
             team_crm_settings_repository: self.team_crm_settings_repository.clone(),
             team_analytics: self.team_analytics.clone(),
             contacts_enqueuer: self.contacts_enqueuer.clone(),
+            event_broker: self.event_broker.clone(),
         }
     }
 }
 
 impl<TR, CR, TCR, URPS, NI, CE, TCRMS>
-    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, NoOpTeamAnalytics, NoOpContactsEnqueuer>
+    TeamServiceImpl<
+        TR,
+        CR,
+        TCR,
+        URPS,
+        NI,
+        CE,
+        TCRMS,
+        NoOpTeamAnalytics,
+        NoOpContactsEnqueuer,
+        NoopMacroEventBroker,
+    >
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -149,7 +168,18 @@ where
 }
 
 impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA>
-    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, NoOpContactsEnqueuer>
+    TeamServiceImpl<
+        TR,
+        CR,
+        TCR,
+        URPS,
+        NI,
+        CE,
+        TCRMS,
+        TA,
+        NoOpContactsEnqueuer,
+        NoopMacroEventBroker,
+    >
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -185,12 +215,13 @@ where
             team_crm_settings_repository,
             team_analytics,
             contacts_enqueuer: NoOpContactsEnqueuer,
+            event_broker: NoopMacroEventBroker,
         }
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
-    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
+    TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -201,12 +232,13 @@ where
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
+    EB: MacroEventBroker,
 {
     /// Replaces the contacts enqueuer while preserving every other service dependency.
     pub fn with_contacts_enqueuer<CNE2>(
         self,
         contacts_enqueuer: CNE2,
-    ) -> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE2>
+    ) -> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE2, EB>
     where
         CNE2: ContactsEnqueuer,
     {
@@ -220,7 +252,40 @@ where
             team_crm_settings_repository: self.team_crm_settings_repository,
             team_analytics: self.team_analytics,
             contacts_enqueuer,
+            event_broker: self.event_broker,
         }
+    }
+
+    /// Replaces the event broker while preserving every other service dependency.
+    pub fn with_event_broker<EB2>(
+        self,
+        event_broker: EB2,
+    ) -> TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB2>
+    where
+        EB2: MacroEventBroker,
+    {
+        TeamServiceImpl {
+            team_repository: self.team_repository,
+            customer_repository: self.customer_repository,
+            team_channels_repository: self.team_channels_repository,
+            user_roles_and_permissions_service: self.user_roles_and_permissions_service,
+            notification_ingress: self.notification_ingress,
+            crm_enqueuer: self.crm_enqueuer,
+            team_crm_settings_repository: self.team_crm_settings_repository,
+            team_analytics: self.team_analytics,
+            contacts_enqueuer: self.contacts_enqueuer,
+            event_broker,
+        }
+    }
+
+    #[allow(
+        dead_code,
+        reason = "team mutations publish events in follow-up changes"
+    )]
+    fn publish_team_event(&self, event: &TeamMacroEvent) {
+        drop(self.event_broker.send_event(event).inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to schedule team event");
+        }));
     }
 
     async fn track_team_analytics_event(&self, event: TeamAnalyticsEvent) {
@@ -434,8 +499,8 @@ impl GetTeamSubscriptionError {
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE> TeamMembersService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamMembersService
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -446,6 +511,7 @@ where
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
+    EB: MacroEventBroker + Clone,
 {
     #[tracing::instrument(skip(self), err)]
     async fn list_team_members(
@@ -462,8 +528,8 @@ where
     }
 }
 
-impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE> TeamService
-    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE>
+impl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB> TeamService
+    for TeamServiceImpl<TR, CR, TCR, URPS, NI, CE, TCRMS, TA, CNE, EB>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -474,6 +540,7 @@ where
     TCRMS: TeamCrmSettingsRepository,
     TA: TeamAnalytics,
     CNE: ContactsEnqueuer,
+    EB: MacroEventBroker + Clone,
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_team(
