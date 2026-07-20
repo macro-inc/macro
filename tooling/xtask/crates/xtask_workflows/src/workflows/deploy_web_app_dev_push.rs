@@ -45,7 +45,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
             DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
             SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
             POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-            CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         "#})?,
     );
     Ok(())

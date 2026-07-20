@@ -30,11 +30,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
+        cache: nix
         path: |-
-          /nix
           ${{ github.workspace }}/target
           /home/runner/.cache/macro-preview-snapshots
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
       continue-on-error: true
     - name: Prune stale incremental caches
       run: rm -rf target/*/debug/incremental target/debug/incremental
@@ -44,8 +45,6 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup dev shell + web deps
       uses: './.github/actions/setup-reqs-web'
-      with:
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-

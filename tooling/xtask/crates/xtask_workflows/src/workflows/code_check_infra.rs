@@ -114,7 +114,7 @@ fn paths_filter() -> Step<Use> {
                   - 'infra/**'
                   - 'flake.nix'
                   - 'flake.lock'
-                  - '.github/actions/setup-cachix/**'
+                  - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/workflows/code_check_infra.yml'
             "#},
         ))
