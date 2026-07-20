@@ -66,6 +66,10 @@ pub const PREVIEW_SCCACHE_NAME: &str = "fly-preview";
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
+/// Bun's global package cache. Mounted explicitly because Bun is supplied by
+/// the Nix dev shell and is not available to Namespace's cache planner yet.
+pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
+
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.
 pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
