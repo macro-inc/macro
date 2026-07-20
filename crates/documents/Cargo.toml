@@ -121,7 +121,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true, features = ["axum"] }
+model_user = { path = "../model_user", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies

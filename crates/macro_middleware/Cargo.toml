@@ -35,7 +35,7 @@ macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
-model_user = { path = "../model_user", features = ["axum"], optional = true }
+model_user = { path = "../model_user", optional = true }
 models_permissions = { path = "../models_permissions" }
 remote_env_var = { path = "../remote_env_var" }
 serde = { workspace = true }

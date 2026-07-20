@@ -9063,10 +9063,8 @@ dependencies = [
 name = "model_user"
 version = "0.1.0"
 dependencies = [
- "axum",
  "macro_user_id",
  "serde",
- "thiserror 2.0.18",
  "utoipa",
  "uuid",
  "workspace-hack",
