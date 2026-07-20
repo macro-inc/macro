@@ -1,4 +1,5 @@
 import shortuuid from 'short-uuid';
+import { maybeOpenInApp } from './macroAppUrl';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -13,7 +14,16 @@ function unwrapShortId(id: string): string {
   return id;
 }
 
+/**
+ * The single entry point for opening a URL from user content or UI actions —
+ * use this instead of `window.open`.
+ * If Macro urls end up being called here (e.g. a bare markdown url) we open the link in-app when
+ * running inside the native Tauri shell (where `window.open` would kick the
+ * user out to the system browser); everything else opens a new tab on web or
+ * the system browser.
+ */
 export function openExternalUrl(url: string) {
+  if (maybeOpenInApp(url)) return;
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 

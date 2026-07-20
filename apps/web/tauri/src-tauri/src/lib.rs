@@ -4,12 +4,11 @@ use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
 use macro_bundle_updater_plugin::inbound::plugin::{
     allow_update_reload_retry, apply_completed_update_from, start_update_check,
 };
-use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
+use navigation_plugin::{MacroNavigationPlugin, NavigatePayload};
 use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
-use serde::Serialize;
 use share_target::{
     PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
     maybe_handle_share_deep_link, pop_shared_files, read_shared_file_text,
@@ -21,7 +20,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 mod tauri_protocol;
 
 pub(crate) const APP_SCHEME: &str = "macro";
-use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
@@ -82,8 +81,6 @@ mod debug;
 static ALLOWED_DOMAINS: &[&str] = &[
     "http://tauri.localhost",
     "tauri://localhost",
-    "https://macro.com",
-    "https://dev.macro.com",
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
@@ -95,6 +92,12 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "http://localhost:3008",
     "http://localhost:3009",
 ];
+
+/// hosts whose `/app` urls are Macro app links. Main-frame navigations to
+/// these are routed through the SPA router instead of loading the remote
+/// site in the webview. Keep in parity with the deep-link hosts in
+/// tauri.conf.json.
+static APP_LINK_HOSTS: &[&str] = &["macro.com", "dev.macro.com", "staging.macro.com"];
 
 type Type = std::sync::OnceLock<
     Box<dyn Fn(&str, http::Request<Vec<u8>>, tauri::UriSchemeResponder) + Send + Sync + 'static>,
@@ -171,7 +174,11 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
-        .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
+        .plugin(
+            MacroNavigationPlugin::new(ALLOWED_DOMAINS)
+                .expect("Domains must be valid urls")
+                .with_app_link_hosts(APP_LINK_HOSTS),
+        )
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
                 AppEnvironment::current()
@@ -224,6 +231,7 @@ pub fn run() {
             }
         })
         .manage(PendingShareFilesState::default())
+        .manage(LaunchDeepLinkFlushed::default())
         .manage(graphql_cache_plugin::CacheState::default())
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
@@ -249,6 +257,7 @@ pub fn run() {
             pop_shared_files,
             clear_shared_files,
             read_shared_file_text,
+            flush_launch_deep_link,
             staged_upload::upload_staged_file_to_presigned_url,
         ])
         .setup(|app| {
@@ -370,49 +379,80 @@ impl AppChain for tauri::App {
     }
 }
 
+/// Set once the launch deep link has been flushed to the frontend, so it is
+/// only ever delivered once.
+#[derive(Default)]
+struct LaunchDeepLinkFlushed(std::sync::atomic::AtomicBool);
+
+/// Convert a deep link url into a `navigate` event for the frontend router.
+#[tracing::instrument(err, skip(handle))]
+fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Report> {
+    // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
+    let macro_scheme = match url.scheme() {
+        s if s == APP_SCHEME => MacroScheme::new(url)?,
+        "http" | "https" => MacroScheme::from_url(&url)?,
+        scheme => {
+            return Err(report!("unexpected deep link scheme: {}", scheme));
+        }
+    };
+
+    let payload = NavigatePayload {
+        path: macro_scheme.0.path(),
+        query: macro_scheme.0.query().unwrap_or_default(),
+    };
+    // we send a navigate event instead of calling navigate directly
+    // because navigate performs a full browser navigation
+
+    tracing::trace!("{payload:?}");
+    Ok(handle.emit("navigate", payload)?)
+}
+
+fn is_share_deep_link(url: &Url) -> bool {
+    url.scheme() == APP_SCHEME && url.host_str() == Some("share")
+}
+
 fn attach_deep_link_handler(app: &mut tauri::App) {
-    fn inner_handler(ev: OpenUrlEvent, handle: &AppHandle) -> Result<(), Report> {
-        let urls = ev.urls();
-        tracing::trace!("received open url event {urls:?}");
-        let url = urls
-            .into_iter()
-            .next()
-            .ok_or_else(|| report!("expected at least 1 url"))?;
-
-        if maybe_handle_share_deep_link(handle, &url) {
-            return Ok(());
-        }
-
-        // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
-        let macro_scheme = match url.scheme() {
-            s if s == APP_SCHEME => MacroScheme::new(url)?,
-            "http" | "https" => MacroScheme::from_url(&url)?,
-            scheme => {
-                return Err(report!("unexpected deep link scheme: {}", scheme));
-            }
-        };
-
-        #[derive(Clone, Serialize, Debug)]
-        struct NavigatePayload<'a> {
-            path: &'a str,
-            query: &'a str,
-        }
-
-        let payload = NavigatePayload {
-            path: macro_scheme.0.path(),
-            query: macro_scheme.0.query().unwrap_or_default(),
-        };
-        // we send a navigate event instead of calling navigate directly
-        // because navigate performs a full browser navigation
-
-        tracing::trace!("{payload:?}");
-        Ok(handle.emit("navigate", payload)?)
-    }
-
     app.deep_link().on_open_url({
         let handle = app.handle().clone();
         move |ev| {
-            inner_handler(ev, &handle).log_and_consume();
+            let urls = ev.urls();
+            tracing::trace!("received open url event {urls:?}");
+            let Some(url) = urls.into_iter().next() else {
+                tracing::warn!("open url event contained no urls");
+                return;
+            };
+            if maybe_handle_share_deep_link(&handle, &url) {
+                return;
+            }
+            emit_navigate_for_deep_link(url, &handle).log_and_consume();
         }
     });
+}
+
+/// Re-delivers the deep link that launched the app, if any. `on_open_url`
+/// fires during startup before the webview has registered its `navigate`
+/// listener, so on a cold open the emitted event is lost; the frontend calls
+/// this once its listener exists. Share deep links are skipped — their
+/// native handling already ran at launch and the frontend pulls the files
+/// through the share commands.
+#[tauri::command]
+fn flush_launch_deep_link(app: AppHandle, flushed: tauri::State<'_, LaunchDeepLinkFlushed>) {
+    use std::sync::atomic::Ordering;
+
+    if flushed.0.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let urls = match app.deep_link().get_current() {
+        Ok(Some(urls)) => urls,
+        Ok(None) => return,
+        Err(e) => {
+            tracing::warn!(error=?e, "failed to read launch deep link");
+            return;
+        }
+    };
+    tracing::debug!("flushing launch deep link {urls:?}");
+    let Some(url) = urls.into_iter().find(|url| !is_share_deep_link(url)) else {
+        return;
+    };
+    emit_navigate_for_deep_link(url, &app).log_and_consume();
 }

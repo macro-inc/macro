@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { openExternalUrl } from '@core/util/url';
 import {
   $createAutoLinkNode,
   $createLinkNode,
@@ -402,7 +403,7 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     const link = getLinkFromDom(el);
     if (link === null) return;
     if (e.metaKey || e.ctrlKey) {
-      window.open(link.url);
+      openExternalUrl(link.url);
     }
 
     if (editor.isEditable()) {
@@ -417,7 +418,7 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
 
     e.preventDefault();
     e.stopPropagation();
-    window.open(link.url, '_blank');
+    openExternalUrl(link.url);
   };
 
   const handlePointerMove = (e: MouseEvent) => {

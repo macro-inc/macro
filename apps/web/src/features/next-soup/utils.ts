@@ -268,7 +268,7 @@ export const openEntityInNewTab = ({
     }
   }
 
-  window.open(entityUrl.toString(), '_blank', 'noopener');
+  openExternalUrl(entityUrl.toString());
 };
 
 /**

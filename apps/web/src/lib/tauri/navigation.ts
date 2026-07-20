@@ -1,4 +1,5 @@
 import { useNavigate } from '@solidjs/router';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createEffect, onCleanup } from 'solid-js';
 
@@ -21,6 +22,12 @@ export function useTauriNavigationEffect() {
           ? `${ev.payload.path}?${ev.payload.query}`
           : ev.payload.path;
         navigate(path);
+      });
+      // On a cold open, the deep-link handler emits `navigate` during
+      // startup, before this listener exists, and the event is lost — pull
+      // the launch deep link now that we can receive it.
+      invoke('flush_launch_deep_link').catch((e) => {
+        console.error('[nav-debug] failed to flush launch deep link', e);
       });
     }
     inner();
