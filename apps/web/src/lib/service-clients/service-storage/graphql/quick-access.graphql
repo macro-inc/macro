@@ -58,6 +58,13 @@ fragment QuickAccessSoupItemFields on GraphqlSoupItem {
 				...SoupNotificationFields
 			}
 		}
+		# These fields are intentionally absent from cached Soup email records.
+		# Their absence makes email projections incomplete, so record selection
+		# omits email wrappers instead of returning typename-only shells.
+		... on GraphqlSoupEmailThread {
+			attachmentCount
+			participantCount
+		}
 		... on GraphqlSoupChannel {
 			id
 			channelName: name
