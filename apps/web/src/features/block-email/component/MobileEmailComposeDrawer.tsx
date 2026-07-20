@@ -47,6 +47,13 @@ export function MobileEmailComposeDrawer(props: {
           preventScroll={false}
           preventScrollbarShift={false}
           breakPoints={[0.85]}
+          // corvu's focus trap runs a MutationObserver that re-grabs focus to
+          // the drawer's first focusable element whenever the subtree mutates
+          // and activeElement is <body>. Tapping a recipient suggestion blurs
+          // the input (→ body) and mutates the DOM (dropdown closes / chip
+          // inserts), so focus is stolen and the selection is torn down before
+          // it lands. Disable the trap so recipient selection works on mobile.
+          trapFocus={false}
         >
           <MobileDrawer.Portal>
             <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
