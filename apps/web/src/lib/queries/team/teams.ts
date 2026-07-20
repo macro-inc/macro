@@ -383,6 +383,7 @@ export function useCreateTeamWithInvitesMutation(
               crm_enabled: false,
               auto_join_domain: null,
               enterprise: false,
+              allow_non_admin_invites: true,
             };
 
             queryClient.setQueryData<Team[]>(
