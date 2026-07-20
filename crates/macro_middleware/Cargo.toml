@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
-all = ["cloud_storage", "tracking", "user_permissions"]
+all = ["cloud_storage", "tracking"]
 cloud_storage = [
   "dep:entity_access_db_utils",
   "dep:macro_user_id",
@@ -15,7 +15,6 @@ cloud_storage = [
 default = ["all"]
 macro_db_client = ["dep:macro_db_client", "dep:sqlx"]
 tracking = ["dep:ip_extractor"]
-user_permissions = ["dep:macro_user_id", "macro_db_client"]
 
 [dependencies]
 anyhow = { workspace = true }
