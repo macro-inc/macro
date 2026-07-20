@@ -26,7 +26,8 @@ export function mountMailtoInterceptor() {
           (el): el is HTMLAnchorElement =>
             el instanceof HTMLAnchorElement && el.href.startsWith('mailto:')
         );
-      if (!anchor) return;
+      // Links inside editors: let the click place the cursor instead.
+      if (!anchor || anchor.isContentEditable) return;
       const parsed = parseMailto(anchor.href);
       if (!parsed) return;
       // Not ready yet — let the OS mail client handle it.
