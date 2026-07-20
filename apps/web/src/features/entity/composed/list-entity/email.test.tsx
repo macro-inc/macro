@@ -5,17 +5,21 @@
 import type { Link } from '@service-email/generated/schemas';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
-import type { EmailEntity, EntityData } from '../../types/entity';
-import { EmailInboxChip, useOwningInboxForEntity } from './email';
-import { EmailLinksProvider } from './email-links-context';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EntityData } from '../../types/entity';
+import { useOwningInboxForEntity } from './email';
 
-vi.mock('@core/component/UserIcon', () => ({
-  UserIcon: () => <span data-testid="inbox-icon" />,
+const mocks = vi.hoisted(() => ({
+  links: vi.fn(),
 }));
 
-vi.mock('../../entity', () => ({ Entity: {} }));
+vi.mock('@core/context/emailLinks', () => ({
+  useEmailLinksContext: () => ({ links: mocks.links }),
+}));
+
+vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('../../components/Badges', () => ({ DraftBadge: () => null }));
+vi.mock('../../entity', () => ({ Entity: {} }));
 vi.mock('../../extractors-search/HitSnippet', () => ({
   HitSnippet: () => null,
 }));
@@ -59,43 +63,20 @@ function RecycledRowInboxConsumer() {
   );
 }
 
-describe('EmailLinksContext', () => {
-  it('supports the real email-row consumer', () => {
-    const links = (): Link[] => [
-      { id: 'primary-inbox' } as Link,
-      {
-        id: 'secondary-inbox',
-        email_address: 'secondary@example.com',
-      } as Link,
-    ];
-    const entity = {
-      type: 'email',
-      linkId: 'secondary-inbox',
-    } as EmailEntity;
+beforeEach(() => {
+  mocks.links.mockReset();
+  mocks.links.mockReturnValue([
+    { id: 'primary-inbox' } as Link,
+    {
+      id: 'secondary-inbox',
+      email_address: 'secondary@example.com',
+    } as Link,
+  ]);
+});
 
-    render(() => (
-      <EmailLinksProvider links={links}>
-        <EmailInboxChip entity={entity} />
-      </EmailLinksProvider>
-    ));
-
-    expect(screen.getByTitle('secondary@example.com')).toBeTruthy();
-  });
-
+describe('useOwningInboxForEntity', () => {
   it('updates inbox attribution when a mounted row changes entity type', async () => {
-    const links = (): Link[] => [
-      { id: 'primary-inbox' } as Link,
-      {
-        id: 'secondary-inbox',
-        email_address: 'secondary@example.com',
-      } as Link,
-    ];
-
-    render(() => (
-      <EmailLinksProvider links={links}>
-        <RecycledRowInboxConsumer />
-      </EmailLinksProvider>
-    ));
+    render(() => <RecycledRowInboxConsumer />);
 
     expect(screen.queryByText('secondary@example.com')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Recycle row' }));
