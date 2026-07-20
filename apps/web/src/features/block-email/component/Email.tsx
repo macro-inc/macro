@@ -536,11 +536,8 @@ function EmailContent(props: EmailViewProps) {
         });
       }
 
-      if (markdownDomRef) {
-        markdownDomRef.focus();
-        return true;
-      }
-      return false;
+      // No message focused: reply to the latest message, same as 'r'
+      return openHotkeyTarget('reply-all');
     },
     hotkeyToken: TOKENS.block.focus,
     hide: true,
