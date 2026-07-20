@@ -9228,11 +9228,8 @@
               }
             }
           },
-          "400": {
-            "description": "Malformed request or missing internal auth header"
-          },
           "401": {
-            "description": "Invalid internal auth header"
+            "description": "Authentication required (JSON error response)"
           }
         }
       }
