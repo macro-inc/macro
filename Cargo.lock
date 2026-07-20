@@ -8716,7 +8716,6 @@ dependencies = [
  "readonly_pool",
  "redis",
  "rmcp",
- "roles_and_permissions",
  "search_service_client",
  "secretsmanager_client",
  "serde_json",
