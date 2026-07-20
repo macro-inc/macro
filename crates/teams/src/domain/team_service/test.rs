@@ -8,7 +8,8 @@ use std::{
 };
 
 use entity_access::domain::models::{
-    AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, RequiredPermission,
+    AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerTeamRole,
+    RequiredPermission,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
@@ -80,7 +81,9 @@ struct MockTeamRepository {
     fail_rollback_accept: bool,
     fail_rollback_remove: bool,
     patch_team_user_role_calls: Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
+    fail_patch_team_user_role_at: Option<usize>,
     patch_team_name_calls: Arc<Mutex<Vec<(uuid::Uuid, Option<String>, Option<String>)>>>,
+    fail_patch_team: bool,
     created_team: Team,
     github_installation_move_calls: Arc<Mutex<Vec<(String, uuid::Uuid)>>>,
     subscription_update_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
@@ -100,9 +103,14 @@ struct MockTeamRepository {
     add_user_to_team_calls: Arc<Mutex<usize>>,
     remove_user_calls: Arc<Mutex<usize>>,
     auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
+    auto_join_toggle_result: Option<String>,
+    fail_auto_join_toggle: bool,
     allow_non_admin_invites: bool,
     caller_team_role: Option<TeamRole>,
     non_admin_invites_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
+    delete_team_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
+    fail_delete_team: bool,
+    fail_get_all_team_members: bool,
 }
 
 impl MockTeamRepository {
@@ -136,7 +144,9 @@ impl MockTeamRepository {
             fail_rollback_accept: false,
             fail_rollback_remove: false,
             patch_team_user_role_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_patch_team_user_role_at: None,
             patch_team_name_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_patch_team: false,
             created_team: Team::new(
                 uuid::Uuid::from_u128(1000),
                 "Created Team".to_string(),
@@ -165,9 +175,14 @@ impl MockTeamRepository {
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
             remove_user_calls: Arc::new(Mutex::new(0)),
             auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
+            auto_join_toggle_result: Some("example.com".to_string()),
+            fail_auto_join_toggle: false,
             allow_non_admin_invites: true,
             caller_team_role: Some(TeamRole::Member),
             non_admin_invites_toggle_calls: Arc::new(Mutex::new(Vec::new())),
+            delete_team_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_delete_team: false,
+            fail_get_all_team_members: false,
         }
     }
 
@@ -424,15 +439,38 @@ impl TeamRepository for MockTeamRepository {
         async { Ok(()) }
     }
 
-    fn delete_team(&self, _: &uuid::Uuid) -> impl Future<Output = Result<(), TeamError>> + Send {
-        async { unimplemented!() }
+    fn delete_team(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        self.delete_team_calls.lock().unwrap().push(*team_id);
+        let fail = self.fail_delete_team;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "team deletion failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn get_all_team_members(
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<TeamMember<'_>>, TeamError>> + Send {
-        async { unimplemented!() }
+        let members = self.team_members.clone();
+        let fail = self.fail_get_all_team_members;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "member lookup failed"
+                )))
+            } else {
+                Ok(members)
+            }
+        }
     }
 
     fn accept_team_invite(
@@ -482,7 +520,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send {
-        async { unimplemented!() }
+        async { Ok(true) }
     }
 
     fn get_team_members(
@@ -553,7 +591,16 @@ impl TeamRepository for MockTeamRepository {
             req.name.clone(),
             req.slug.clone(),
         ));
-        async { Ok(()) }
+        let fail = self.fail_patch_team;
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "team patch failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn get_team_role(
@@ -579,12 +626,20 @@ impl TeamRepository for MockTeamRepository {
         user_id: &MacroUserIdStr<'_>,
         role: TeamRole,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        self.patch_team_user_role_calls.lock().unwrap().push((
-            *team_id,
-            user_id.as_ref().to_string(),
-            role,
-        ));
-        async { Ok(()) }
+        let mut calls = self.patch_team_user_role_calls.lock().unwrap();
+        calls.push((*team_id, user_id.as_ref().to_string(), role));
+        let call_number = calls.len();
+        let fail = self.fail_patch_team_user_role_at == Some(call_number);
+        drop(calls);
+        async move {
+            if fail {
+                Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                    "role patch failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn get_team_seat_count(
@@ -616,7 +671,17 @@ impl TeamRepository for MockTeamRepository {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<String>, ToggleAutoJoinDomainError>> + Send {
         self.auto_join_toggle_calls.lock().unwrap().push(*team_id);
-        async { Ok(Some("example.com".to_string())) }
+        let result = self.auto_join_toggle_result.clone();
+        let fail = self.fail_auto_join_toggle;
+        async move {
+            if fail {
+                Err(ToggleAutoJoinDomainError::TeamError(
+                    TeamError::StorageLayerError(anyhow::anyhow!("toggle failed")),
+                ))
+            } else {
+                Ok(result)
+            }
+        }
     }
 
     fn get_team_allow_non_admin_invites(
@@ -2720,6 +2785,22 @@ async fn test_enable_crm_without_backfill_skips_enqueue() {
     assert!(populated.lock().unwrap().is_empty());
 }
 
+fn build_service_with_repo_and_broker(
+    team_repo: MockTeamRepository,
+    event_broker: RecordingEventBroker,
+) -> impl TeamService {
+    TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_event_broker(event_broker)
+}
+
 fn build_service_with_team(
     team: Team,
 ) -> (
@@ -2914,6 +2995,266 @@ async fn test_patch_team_empty_role_updates() {
     let name_calls = name_calls.lock().unwrap();
     assert_eq!(name_calls.len(), 1);
     assert_eq!(name_calls[0], (team_id, Some("New Name".to_string()), None));
+}
+
+#[tokio::test]
+async fn test_patch_team_metadata_publishes_updated_with_omitted_fields() {
+    let team_id = uuid::Uuid::from_u128(801);
+    let actor = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(
+        MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new()))),
+        broker.clone(),
+    );
+    let request = PatchTeamRequest {
+        name: Some("Renamed".to_string()),
+        slug: None,
+        user_role_updates: None,
+    };
+
+    service
+        .patch_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &actor),
+            &request,
+        )
+        .await
+        .unwrap();
+
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.updated");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["actor_user_id"], actor.as_ref());
+    assert_eq!(metadata["name"], "Renamed");
+    assert!(metadata["slug"].is_null());
+}
+
+#[tokio::test]
+async fn test_patch_team_role_only_publishes_previous_role_without_updated_event() {
+    let team_id = uuid::Uuid::from_u128(802);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())))
+        .with_team(Team::new(
+            team_id,
+            "Team".to_string(),
+            "team".to_string(),
+            owner.clone().into_owned(),
+            false,
+            false,
+        ));
+    repo.team_members = vec![make_team_member(team_id, member.as_ref(), TeamRole::Member)];
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+    let request = PatchTeamRequest {
+        name: None,
+        slug: None,
+        user_role_updates: Some(vec![PatchTeamUserRole {
+            team_user_id: member.clone().into_owned(),
+            role: TeamRole::Admin,
+        }]),
+    };
+
+    service
+        .patch_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &owner),
+            &request,
+        )
+        .await
+        .unwrap();
+
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.member_role_changed");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["previous_role"], "member");
+    assert_eq!(metadata["role"], "admin");
+    assert_eq!(metadata["actor_user_id"], owner.as_ref());
+}
+
+#[tokio::test]
+async fn test_patch_team_partial_role_failure_keeps_ordered_success_events() {
+    let team_id = uuid::Uuid::from_u128(803);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let first = MacroUserIdStr::parse_from_str("macro|first@example.com").unwrap();
+    let second = MacroUserIdStr::parse_from_str("macro|second@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())))
+        .with_team(Team::new(
+            team_id,
+            "Team".to_string(),
+            "team".to_string(),
+            owner.clone().into_owned(),
+            false,
+            false,
+        ));
+    repo.team_members = vec![
+        make_team_member(team_id, first.as_ref(), TeamRole::Member),
+        make_team_member(team_id, second.as_ref(), TeamRole::Admin),
+    ];
+    repo.fail_patch_team_user_role_at = Some(2);
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+    let request = PatchTeamRequest {
+        name: None,
+        slug: None,
+        user_role_updates: Some(vec![
+            PatchTeamUserRole {
+                team_user_id: first.clone().into_owned(),
+                role: TeamRole::Admin,
+            },
+            PatchTeamUserRole {
+                team_user_id: second.clone().into_owned(),
+                role: TeamRole::Member,
+            },
+        ]),
+    };
+
+    assert!(
+        service
+            .patch_team(
+                test_team_receipt::<AdminTeamRole>(team_id, &owner),
+                &request
+            )
+            .await
+            .is_err()
+    );
+
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["metadata"]["member_id"], first.as_ref());
+}
+
+#[tokio::test]
+async fn test_patch_team_repository_failure_does_not_publish_updated() {
+    let team_id = uuid::Uuid::from_u128(804);
+    let actor = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.fail_patch_team = true;
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+    let request = PatchTeamRequest {
+        name: Some("Renamed".to_string()),
+        slug: None,
+        user_role_updates: None,
+    };
+
+    assert!(
+        service
+            .patch_team(
+                test_team_receipt::<AdminTeamRole>(team_id, &actor),
+                &request
+            )
+            .await
+            .is_err()
+    );
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn test_toggle_auto_join_domain_publishes_enabled_and_disabled_states() {
+    let team_id = uuid::Uuid::from_u128(805);
+    let actor = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+
+    for expected_domain in [Some("example.com".to_string()), None] {
+        let mut repo =
+            MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+        repo.auto_join_toggle_result = expected_domain.clone();
+        let broker = RecordingEventBroker::default();
+        let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+        let result = service
+            .toggle_auto_join_domain(test_team_receipt::<AdminTeamRole>(team_id, &actor))
+            .await
+            .unwrap();
+
+        assert_eq!(result, expected_domain);
+        let events = broker.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].envelope["event_type"],
+            "team.auto_join_domain_toggled"
+        );
+        assert_eq!(
+            events[0].envelope["metadata"]["auto_join_domain"],
+            serde_json::to_value(expected_domain).unwrap()
+        );
+        assert_eq!(
+            events[0].envelope["metadata"]["actor_user_id"],
+            actor.as_ref()
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_toggle_auto_join_domain_failure_does_not_publish_event() {
+    let team_id = uuid::Uuid::from_u128(806);
+    let actor = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.fail_auto_join_toggle = true;
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    assert!(
+        service
+            .toggle_auto_join_domain(test_team_receipt::<AdminTeamRole>(team_id, &actor))
+            .await
+            .is_err()
+    );
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn test_delete_team_publishes_single_event_with_member_snapshot() {
+    let team_id = uuid::Uuid::from_u128(807);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.team_members = vec![
+        make_team_member(team_id, owner.as_ref(), TeamRole::Owner),
+        make_team_member(team_id, member.as_ref(), TeamRole::Member),
+    ];
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    service
+        .delete_team(test_team_receipt::<OwnerTeamRole>(team_id, &owner))
+        .await
+        .unwrap();
+
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.deleted");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["actor_user_id"], owner.as_ref());
+    assert_eq!(
+        metadata["member_user_ids"],
+        serde_json::json!([owner.as_ref(), member.as_ref()])
+    );
+}
+
+#[tokio::test]
+async fn test_delete_team_repository_failures_do_not_publish_event() {
+    let team_id = uuid::Uuid::from_u128(808);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+
+    for failure_step in 0..3 {
+        let mut repo =
+            MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+        repo.team_members = vec![make_team_member(team_id, owner.as_ref(), TeamRole::Owner)];
+        repo.fail_get_all_team_members = failure_step == 0;
+        repo.fail_team_subscription_id_lookup = failure_step == 1;
+        repo.fail_delete_team = failure_step == 2;
+        let broker = RecordingEventBroker::default();
+        let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+        assert!(
+            service
+                .delete_team(test_team_receipt::<OwnerTeamRole>(team_id, &owner))
+                .await
+                .is_err()
+        );
+        assert!(broker.events().is_empty());
+    }
 }
 
 #[tokio::test]

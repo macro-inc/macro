@@ -29,9 +29,10 @@ use crate::domain::{
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
     events::{
-        TeamCreatedMetadata, TeamInviteCreatedMetadata, TeamInviteRejectedMetadata,
-        TeamInviteRevokedMetadata, TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata,
-        TeamMemberRemovedMetadata,
+        TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata, TeamDeletedMetadata,
+        TeamInviteCreatedMetadata, TeamInviteRejectedMetadata, TeamInviteRevokedMetadata,
+        TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata, TeamMemberRemovedMetadata,
+        TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, FREE_TEAM_MAX_MEMBERS,
@@ -1040,8 +1041,17 @@ where
     ) -> Result<(), DeleteTeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        let actor_user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|error| DeleteTeamError::TeamError(TeamError::AccessError(error)))?
+            .clone()
+            .into_owned();
 
         let members = self.team_repository.get_all_team_members(&team_id).await?;
+        let member_user_ids = members
+            .iter()
+            .map(|member| member.user_id.clone().into_owned())
+            .collect();
 
         let subscription_id = self
             .team_repository
@@ -1059,6 +1069,11 @@ where
             .delete_team(&team_id)
             .await
             .map_err(DeleteTeamError::TeamError)?;
+        self.publish_team_event(&TeamMacroEvent::deleted(TeamDeletedMetadata {
+            team_id,
+            actor_user_id,
+            member_user_ids,
+        }));
 
         // Remove roles for team members
         let roles = vec![RoleId::TeamSubscriber];
@@ -1521,6 +1536,11 @@ where
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
+        let actor_user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(TeamError::AccessError)?
+            .clone()
+            .into_owned();
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 
@@ -1544,14 +1564,38 @@ where
                 }
 
                 for update in user_role_updates {
+                    let previous_role = team
+                        .members
+                        .iter()
+                        .find(|member| member.user_id == update.team_user_id)
+                        .map(|member| member.role);
                     self.team_repository
                         .patch_team_user_role(&team_id, &update.team_user_id, update.role)
                         .await?;
+                    self.publish_team_event(&TeamMacroEvent::member_role_changed(
+                        TeamMemberRoleChangedMetadata {
+                            team_id,
+                            actor_user_id: actor_user_id.clone(),
+                            member_id: update.team_user_id.clone(),
+                            role: update.role,
+                            previous_role,
+                        },
+                    ));
                 }
             }
         }
 
-        self.team_repository.patch_team(&team_id, req).await
+        self.team_repository.patch_team(&team_id, req).await?;
+        if req.name.is_some() || req.slug.is_some() {
+            self.publish_team_event(&TeamMacroEvent::updated(TeamUpdatedMetadata {
+                team_id,
+                actor_user_id,
+                name: req.name.clone(),
+                slug: req.slug.clone(),
+            }));
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1653,10 +1697,27 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
+        let actor_user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(TeamError::AccessError)?
+            .clone()
+            .into_owned();
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 
-        self.team_repository.toggle_auto_join_domain(&team_id).await
+        let auto_join_domain = self
+            .team_repository
+            .toggle_auto_join_domain(&team_id)
+            .await?;
+        self.publish_team_event(&TeamMacroEvent::auto_join_domain_toggled(
+            TeamAutoJoinDomainToggledMetadata {
+                team_id,
+                actor_user_id,
+                auto_join_domain: auto_join_domain.clone(),
+            },
+        ));
+
+        Ok(auto_join_domain)
     }
 
     #[tracing::instrument(skip(self), err)]
