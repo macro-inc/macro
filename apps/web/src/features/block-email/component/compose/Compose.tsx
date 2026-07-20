@@ -38,6 +38,8 @@ import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
+  emailToId,
+  recipientEntityMapper,
   tryMacroId,
   useDisplayName,
   type WithCustomUserInput,
@@ -75,6 +77,7 @@ import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 
+import * as EmailValidator from 'email-validator';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -109,6 +112,8 @@ let undoComposeSnapshot: UndoComposeSnapshot | null = null;
 
 type EmailComposeProps = {
   draftID?: string;
+  /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
+  initialTo?: string[];
 };
 
 export function EmailCompose(props: EmailComposeProps) {
@@ -209,6 +214,19 @@ export function EmailCompose(props: EmailComposeProps) {
     }
     setIncludeSignature(restoredSnapshot.includeSignature);
     undoComposeSnapshot = null;
+  }
+
+  if (!props.draftID && props.initialTo?.length) {
+    form.setRecipients(
+      'to',
+      props.initialTo.map((email) =>
+        recipientEntityMapper('custom')({
+          id: emailToId(email),
+          email,
+          invalid: !EmailValidator.validate(email),
+        })
+      )
+    );
   }
 
   // --- Draft persistence ---

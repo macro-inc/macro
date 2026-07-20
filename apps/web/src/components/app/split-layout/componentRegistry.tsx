@@ -386,7 +386,15 @@ registerComponent('channel-compose', () => {
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  return <EmailCompose draftID={params?.draftID} />;
+  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  const toParam = new URLSearchParams(window.location.search).get('to');
+  const initialTo =
+    params?.initialTo ??
+    toParam
+      ?.split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+  return <EmailCompose draftID={params?.draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
