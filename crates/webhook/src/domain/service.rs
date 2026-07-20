@@ -1,7 +1,10 @@
 //! Webhook service implementation.
 
 use super::{
-    events::{WebhookCreatedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata},
+    events::{
+        WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata,
+        WebhookValidatedMetadata,
+    },
     models::{
         CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
         WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
@@ -432,20 +435,32 @@ where
         webhook_id: WebhookId,
     ) -> Result<ValidateWebhookResponse, WebhookError> {
         let webhook = self
-            .load_authorized_webhook(caller, webhook_id.clone())
+            .load_authorized_webhook(caller.clone(), webhook_id.clone())
             .await?;
+        let workspace_id = webhook.workspace_id.clone();
         let result = self
             .validation_client
             .validate_webhook(webhook)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
-        let is_valid = result.is_valid;
 
         self.repo
-            .set_webhook_validity(webhook_id.clone(), is_valid)
+            .set_webhook_validity(webhook_id.clone(), result.is_valid)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
+
+        self.publish_webhook_event(&WebhookMacroEvent::validated(
+            webhook_id.clone(),
+            WebhookValidatedMetadata {
+                webhook_id: webhook_id.clone(),
+                workspace_id,
+                actor_user_id: caller,
+                is_valid: result.is_valid,
+                response_status: result.response_status,
+                message: result.message.clone(),
+            },
+        ));
 
         Ok(validation_response(webhook_id, result))
     }
@@ -456,14 +471,23 @@ where
         webhook_id: WebhookId,
     ) -> Result<(), WebhookError> {
         let webhook = self
-            .load_authorized_webhook(caller, webhook_id.clone())
+            .load_authorized_webhook(caller.clone(), webhook_id)
             .await?;
 
         self.repo
-            .delete_webhook(webhook.id)
+            .delete_webhook(webhook.id.clone())
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
+
+        self.publish_webhook_event(&WebhookMacroEvent::deleted(
+            webhook.id.clone(),
+            WebhookDeletedMetadata {
+                webhook_id: webhook.id,
+                workspace_id: webhook.workspace_id,
+                actor_user_id: caller,
+            },
+        ));
 
         Ok(())
     }

@@ -27,6 +27,8 @@ struct RepoState {
     create_fails: bool,
     patch_fails: bool,
     patch_returns_missing: bool,
+    delete_fails: bool,
+    delete_returns_missing: bool,
     validity_update_fails: bool,
     validity_update_returns_missing: bool,
     team_lookup_fails: bool,
@@ -171,6 +173,13 @@ impl WebhookRepo for FakeRepo {
 
     async fn delete_webhook(&self, webhook_id: String) -> Result<Option<Webhook>, Self::Err> {
         let mut state = self.state.lock().await;
+        if state.delete_fails {
+            anyhow::bail!("delete failed");
+        }
+        if state.delete_returns_missing {
+            return Ok(None);
+        }
+
         let webhook = state
             .webhook
             .as_mut()
@@ -269,6 +278,7 @@ impl MacroEventBroker for TestEventBroker {
 struct FakeValidationClient {
     result: WebhookValidationResult,
     calls: Arc<Mutex<usize>>,
+    transport_fails: bool,
 }
 
 impl FakeValidationClient {
@@ -288,10 +298,17 @@ impl FakeValidationClient {
         })
     }
 
+    fn transport_failure() -> Self {
+        let mut client = Self::succeeds();
+        client.transport_fails = true;
+        client
+    }
+
     fn new(result: WebhookValidationResult) -> Self {
         Self {
             result,
             calls: Arc::new(Mutex::new(0)),
+            transport_fails: false,
         }
     }
 
@@ -314,6 +331,9 @@ impl WebhookValidationClient for FakeValidationClient {
         _webhook: Webhook,
     ) -> Result<WebhookValidationResult, Self::Err> {
         *self.calls.lock().await += 1;
+        if self.transport_fails {
+            anyhow::bail!("validation transport failed");
+        }
         Ok(self.result.clone())
     }
 }
@@ -908,48 +928,56 @@ async fn filter_with_valid_ids_is_accepted() {
 }
 
 #[tokio::test]
-async fn validate_succeeds_and_sets_webhook_validity() {
-    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
-    let service = WebhookServiceImpl::new(
-        repo.clone(),
-        FakeValidationClient::succeeds(),
-        NoopMacroEventBroker,
-    );
+async fn validate_publishes_success_when_persisted_validity_is_unchanged() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "team_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, Some("team_workspace".to_string())).await;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service =
+        WebhookServiceImpl::new(repo.clone(), FakeValidationClient::succeeds(), event_broker);
 
     let response = service
         .validate_webhook(caller(), "wh_test".to_string())
         .await
-        .unwrap();
+        .expect("webhook validation should succeed");
 
     assert!(response.is_valid);
     assert_eq!(response.response_status, Some(204));
     assert_eq!(repo.state.lock().await.validation_updates, vec![true]);
-}
 
-#[tokio::test]
-async fn validate_fails_unauthorized_before_calling_validation_client() {
-    let mut webhook = existing_webhook();
-    webhook.workspace_id = "other_workspace".to_string();
-    let repo = FakeRepo::with_webhook(webhook, None).await;
-    let validation_client = FakeValidationClient::succeeds();
-    let service = WebhookServiceImpl::new(repo, validation_client.clone(), NoopMacroEventBroker);
-
-    let result = service
-        .validate_webhook(caller(), "wh_test".to_string())
-        .await;
-
-    assert!(matches!(result, Err(WebhookError::Unauthorized)));
-    assert_eq!(validation_client.call_count().await, 0);
-}
-
-#[tokio::test]
-async fn validate_records_invalid_and_returns_sanitized_failure() {
-    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
-    let service = WebhookServiceImpl::new(
-        repo.clone(),
-        FakeValidationClient::fails(),
-        NoopMacroEventBroker,
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.webhooks");
+    assert_eq!(event.key, "wh_test");
+    assert_eq!(event.payload["schema_version"], 1);
+    assert_eq!(event.payload["event_type"], "webhook.validated");
+    assert!(event.payload["event_id"].is_string());
+    assert_eq!(
+        event.payload["metadata"],
+        json!({
+            "webhook_id": "wh_test",
+            "workspace_id": "team_workspace",
+            "actor_user_id": caller().as_ref(),
+            "is_valid": true,
+            "response_status": 204,
+            "message": null,
+        })
     );
+}
+
+#[tokio::test]
+async fn validate_http_failure_publishes_sanitized_invalid_result() {
+    let mut webhook = existing_webhook();
+    webhook.signing_secret = "stored-signing-secret".to_string();
+    webhook.headers =
+        BTreeMap::from([("X-Private".to_string(), "stored-header-value".to_string())]);
+    let repo = FakeRepo::with_webhook(webhook, None).await;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service =
+        WebhookServiceImpl::new(repo.clone(), FakeValidationClient::fails(), event_broker);
 
     let ValidateWebhookResponse {
         is_valid,
@@ -959,10 +987,261 @@ async fn validate_records_invalid_and_returns_sanitized_failure() {
     } = service
         .validate_webhook(caller(), "wh_test".to_string())
         .await
-        .unwrap();
+        .expect("an HTTP failure is a completed validation");
 
     assert!(!is_valid);
     assert_eq!(response_status, Some(500));
     assert_eq!(message.as_deref(), Some("webhook returned HTTP 500"));
     assert_eq!(repo.state.lock().await.validation_updates, vec![false]);
+
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.webhooks");
+    assert_eq!(event.key, "wh_test");
+    assert_eq!(event.payload["event_type"], "webhook.validated");
+    assert_eq!(
+        event.payload["metadata"],
+        json!({
+            "webhook_id": "wh_test",
+            "workspace_id": caller().as_ref(),
+            "actor_user_id": caller().as_ref(),
+            "is_valid": false,
+            "response_status": 500,
+            "message": "webhook returned HTTP 500",
+        })
+    );
+    let serialized = event.payload.to_string();
+    assert!(!serialized.contains("signing_secret"));
+    assert!(!serialized.contains("stored-signing-secret"));
+    assert!(!serialized.contains("stored-header-value"));
+}
+
+#[tokio::test]
+async fn validate_missing_webhook_publishes_nothing() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let validation_client = FakeValidationClient::succeeds();
+    let service =
+        WebhookServiceImpl::new(FakeRepo::default(), validation_client.clone(), event_broker);
+
+    let result = service
+        .validate_webhook(caller(), "wh_missing".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::NotFound(_))));
+    assert_eq!(validation_client.call_count().await, 0);
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn validate_fails_unauthorized_before_calling_validation_client() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "other_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, None).await;
+    let validation_client = FakeValidationClient::succeeds();
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(repo, validation_client.clone(), event_broker);
+
+    let result = service
+        .validate_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::Unauthorized)));
+    assert_eq!(validation_client.call_count().await, 0);
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn validate_transport_failure_publishes_nothing() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        repo.clone(),
+        FakeValidationClient::transport_failure(),
+        event_broker,
+    );
+
+    let result = service
+        .validate_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::Repo(_))));
+    assert!(repo.state.lock().await.validation_updates.is_empty());
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn validate_validity_persistence_failure_publishes_nothing() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    repo.state.lock().await.validity_update_fails = true;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::succeeds(), event_broker);
+
+    let result = service
+        .validate_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::Repo(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn validate_missing_validity_row_publishes_nothing() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    repo.state.lock().await.validity_update_returns_missing = true;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::succeeds(), event_broker);
+
+    let result = service
+        .validate_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::NotFound(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn validate_succeeds_when_event_scheduling_fails() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    let service = WebhookServiceImpl::new(
+        repo,
+        FakeValidationClient::fails(),
+        TestEventBroker::failing(),
+    );
+
+    let response = service
+        .validate_webhook(caller(), "wh_test".to_string())
+        .await
+        .expect("event scheduling must not fail webhook validation");
+
+    assert!(!response.is_valid);
+    assert_eq!(response.response_status, Some(500));
+}
+
+#[tokio::test]
+async fn delete_publishes_event_after_soft_deletion() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "team_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, Some("team_workspace".to_string())).await;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service =
+        WebhookServiceImpl::new(repo.clone(), FakeValidationClient::default(), event_broker);
+
+    service
+        .delete_webhook(caller(), "wh_test".to_string())
+        .await
+        .expect("webhook should be deleted");
+
+    assert!(
+        repo.state
+            .lock()
+            .await
+            .webhook
+            .as_ref()
+            .is_some_and(|webhook| webhook.deleted_at.is_some())
+    );
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.webhooks");
+    assert_eq!(event.key, "wh_test");
+    assert_eq!(event.payload["schema_version"], 1);
+    assert_eq!(event.payload["event_type"], "webhook.deleted");
+    assert!(event.payload["event_id"].is_string());
+    assert_eq!(
+        event.payload["metadata"],
+        json!({
+            "webhook_id": "wh_test",
+            "workspace_id": "team_workspace",
+            "actor_user_id": caller().as_ref(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn delete_missing_webhook_publishes_nothing() {
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(
+        FakeRepo::default(),
+        FakeValidationClient::default(),
+        event_broker,
+    );
+
+    let result = service
+        .delete_webhook(caller(), "wh_missing".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::NotFound(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_unauthorized_webhook_publishes_nothing() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "other_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, None).await;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default(), event_broker);
+
+    let result = service
+        .delete_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::Unauthorized)));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_repository_failure_publishes_nothing() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    repo.state.lock().await.delete_fails = true;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default(), event_broker);
+
+    let result = service
+        .delete_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::Repo(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_missing_row_after_authorization_publishes_nothing() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    repo.state.lock().await.delete_returns_missing = true;
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default(), event_broker);
+
+    let result = service
+        .delete_webhook(caller(), "wh_test".to_string())
+        .await;
+
+    assert!(matches!(result, Err(WebhookError::NotFound(_))));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_succeeds_when_event_scheduling_fails() {
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
+    let service = WebhookServiceImpl::new(
+        repo,
+        FakeValidationClient::default(),
+        TestEventBroker::failing(),
+    );
+
+    service
+        .delete_webhook(caller(), "wh_test".to_string())
+        .await
+        .expect("event scheduling must not fail webhook deletion");
 }
