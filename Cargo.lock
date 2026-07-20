@@ -9623,7 +9623,6 @@ dependencies = [
  "axum",
  "chrono",
  "database_env_vars",
- "decode_jwt",
  "email_formatting",
  "hmac 0.12.1",
  "http-body-util",

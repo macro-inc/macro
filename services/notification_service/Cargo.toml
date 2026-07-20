@@ -27,7 +27,6 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
-decode_jwt = { path = "../../crates/decode_jwt" }
 email_formatting = { path = "../../crates/email_formatting" }
 hmac = { workspace = true }
 http-body-util = { workspace = true }

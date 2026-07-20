@@ -1,6 +1,6 @@
 use crate::config::Config;
 use axum::extract::FromRef;
-use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
+use macro_auth::InternalApiKey;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
@@ -15,6 +15,5 @@ pub struct ApiContext {
     pub sns_client: Arc<sns_client::SNS>,
     pub config: Arc<Config>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
-    pub jwt_args: JwtValidationArgs,
     pub internal_api_key: InternalApiKey,
 }
