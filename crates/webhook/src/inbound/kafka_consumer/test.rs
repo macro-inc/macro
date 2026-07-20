@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::ingestion::WebhookEventIngestionError;
+use crate::domain::{events::WebhookTopicEvent, ingestion::WebhookEventIngestionError};
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelDeletedMetadata;
 use documents::domain::events::DocumentDeletedMetadata;
@@ -95,6 +95,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_channel_event(
         &self,
         _event: Event<ChannelTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
+
+    async fn ingest_webhook_event(
+        &self,
+        _event: Event<WebhookTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         Ok(())
     }
