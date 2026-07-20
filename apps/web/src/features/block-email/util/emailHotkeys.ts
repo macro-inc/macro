@@ -7,6 +7,7 @@ interface EmailHotkeyHandlers {
   forwardFocusedMessage: () => boolean;
   blockSender: () => boolean;
   markDone: () => boolean;
+  markNotDone: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
   navigateToPreviousMessage: () => boolean;
@@ -51,6 +52,14 @@ export function registerEmailHotkeys(
     description: 'Mark done',
     keyDownHandler: handlers.markDone,
     hotkeyToken: TOKENS.entity.action.markDone,
+    displayPriority: 10,
+  });
+  registerHotkey({
+    hotkey: 'shift+e',
+    scopeId,
+    description: 'Mark not done',
+    keyDownHandler: handlers.markNotDone,
+    hotkeyToken: TOKENS.entity.action.markNotDone,
     displayPriority: 10,
   });
   registerHotkey({

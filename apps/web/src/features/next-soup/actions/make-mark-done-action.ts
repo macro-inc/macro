@@ -55,9 +55,15 @@ type MarkDoneVariables = {
   /** Receives the undo handle once the mark-done is pushed onto the undo
    *  stack, so callers (e.g. undo-send) can reverse it programmatically. */
   onUndoHandle?: (handle: UndoHandle) => void;
+  /** Navigates the view back to the marked entity on undo, when marking done
+   *  navigated away to the next item. */
+  navigateBack?: () => void;
 };
 
-type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
+type MarkDoneExecuteOpts = Pick<
+  MarkDoneVariables,
+  'silent' | 'onUndoHandle' | 'navigateBack'
+>;
 
 type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
   nextEntityId?: string;
@@ -169,6 +175,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           if (toastId !== undefined) toast.dismiss(toastId);
           variables.restoreFocus?.();
           restoreSoupFocus(firstEntityId, inPreview);
+          variables.navigateBack?.();
         },
         onRedone: showToast,
       };
@@ -213,6 +220,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       restoreFocus,
       silent: opts?.silent,
       onUndoHandle: opts?.onUndoHandle,
+      navigateBack: opts?.navigateBack,
     });
   };
 
@@ -272,7 +280,16 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       onNavigate?.(nextRow.original);
     }
 
-    await execute(entities, restoreFocus, opts);
+    // When marking done navigated the view to the next item, undo navigates
+    // back to the marked entity through the same callback.
+    const firstEntity = entities[0];
+    const navigateBack =
+      opts?.navigateBack ??
+      (nextRow && onNavigate && firstEntity
+        ? () => onNavigate(firstEntity)
+        : undefined);
+
+    await execute(entities, restoreFocus, { ...opts, navigateBack });
   };
 
   return { canExecute, execute, executeWithSoup };

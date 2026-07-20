@@ -22,6 +22,7 @@ import {
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
 import { createEffectOnEntityTypeNotification } from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
@@ -30,8 +31,8 @@ import {
   markSenderNoiseWithToast,
   markSenderSignalWithToast,
   trackExternalThreadArchive,
-  useArchiveThreadMutation,
   useThreadQuery,
+  useUndoableArchiveThreadMutation,
 } from '@queries/email/thread';
 import { getSoupEntityById } from '@queries/soup/cache';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
@@ -135,6 +136,7 @@ type EmailContextValues = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  markNotDone: () => boolean;
   getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
@@ -364,7 +366,41 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     userId,
   });
 
-  const archiveMutation = useArchiveThreadMutation({
+  // Only the direct-archive fallback goes through this mutation with
+  // archive=true (the mark-done action paths toast on their own).
+  const archiveMutation = useUndoableArchiveThreadMutation({
+    onPushed: (handle, params) => {
+      const message = params.archive ? 'Marked as done' : 'Marked as not done';
+      let toastId: number | undefined;
+
+      const showToast = () => {
+        toastId = toast.success(message, {
+          actions: [
+            {
+              label: 'Undo',
+              icon: ArrowCounterClockwise,
+              onClick: () => {
+                handle.undo({
+                  onError: () => toast.failure('Failed to undo'),
+                });
+              },
+            },
+          ],
+          duration: 3_000,
+          stack: true,
+          hideOnMobile: true,
+        });
+      };
+
+      showToast();
+
+      return {
+        onUndone: () => {
+          if (toastId !== undefined) toast.dismiss(toastId);
+        },
+        onRedone: showToast,
+      };
+    },
     onError: () => {
       toast.failure('Failed to archive thread');
     },
@@ -457,6 +493,18 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       });
     }
 
+    return true;
+  };
+
+  const markNotDone = () => {
+    const thread = threadQuery.data;
+    if (!thread?.db_id || thread.inbox_visible) return false;
+
+    archiveMutation.mutate({
+      threadId: thread.db_id,
+      archive: false,
+      linkId: toHeaderLinkId(thread.link_id),
+    });
     return true;
   };
 
@@ -629,6 +677,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
           archiveThread,
+          markNotDone,
           getMarkDoneNavigationTargetId,
           blockSender,
           markSenderSignal,
