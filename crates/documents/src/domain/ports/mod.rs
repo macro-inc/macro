@@ -10,7 +10,7 @@ pub mod markdown;
 use std::future::Future;
 
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata};
@@ -351,6 +351,13 @@ pub trait DocumentService: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<DocumentBasic, DocumentError>> + Send;
+
+    /// Resolve a team task slug to its document ID.
+    fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 
     /// Get a document with metadata, access level, and view location.
     fn get_document(

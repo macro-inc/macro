@@ -10,7 +10,7 @@ use embedding::embedding_provider::openai::TextEmbedding3Small;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, UserTeamInfo,
+        EntityType, MemberTeamRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -125,6 +125,14 @@ impl DocumentService for FakeDocumentService {
             project_id: None,
             deleted_at: None,
         })
+    }
+
+    async fn get_document_by_team_slug(
+        &self,
+        _team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        _slug: &str,
+    ) -> Result<String, DocumentError> {
+        panic!("unexpected get_document_by_team_slug call")
     }
 
     async fn get_document(

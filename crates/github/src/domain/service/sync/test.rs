@@ -22,7 +22,8 @@ use documents::domain::{
     },
 };
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerAccessLevel,
+    ViewAccessLevel,
 };
 use foreign_entity::domain::{
     models::{
@@ -124,6 +125,13 @@ impl DocumentService for StubDocumentService {
         &self,
         _document_id: &str,
     ) -> Result<DocumentBasic, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_document_by_team_slug(
+        &self,
+        _team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        _slug: &str,
+    ) -> Result<String, DocumentError> {
         unimplemented!()
     }
     async fn get_short_id(
