@@ -10,7 +10,6 @@ use std::borrow::Cow;
 
 use crate::{api::context::ApiContext, generate_password::generate_random_password};
 use fusionauth::error::FusionAuthClientError;
-use macro_env::Environment;
 use macro_user_id::user_id::MacroUserId;
 use model::{
     authentication::login::{
@@ -190,10 +189,10 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    // Locally, hand the code back so dev tooling (persona tabs, tests) can
-    // complete the login without reading the email. Never outside Local.
+    // Hand the code back only when explicitly compiled for local/dev tooling
+    // that needs to complete passwordless login without reading the email.
     let body = PasswordlessStartedResponse {
-        code: matches!(Environment::new_or_prod(), Environment::Local).then_some(code),
+        code: cfg!(feature = "return_passwordless_code").then_some(code),
     };
 
     Ok((StatusCode::OK, Json(body)).into_response())

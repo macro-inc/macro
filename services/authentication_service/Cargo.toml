@@ -25,6 +25,7 @@ path = "src/doppler_config.rs"
 default = ["rate_limit"]
 local = []
 rate_limit = []
+return_passwordless_code = []
 
 [dependencies]
 analytics_client = { path = "../../crates/analytics_client" }
