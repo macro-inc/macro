@@ -1,7 +1,7 @@
 //! Webhook service implementation.
 
 use super::{
-    events::{WebhookCreatedMetadata, WebhookMacroEvent},
+    events::{WebhookCreatedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata},
     models::{
         CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
         WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
@@ -377,10 +377,17 @@ where
         request: PatchWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
         let webhook = self
-            .load_authorized_webhook(caller, webhook_id.clone())
+            .load_authorized_webhook(caller.clone(), webhook_id.clone())
             .await?;
         validate_patch_request(&request, self.endpoint_scheme_policy)?;
-        let reset_validity = request.endpoint_url.is_some() || request.headers.is_some();
+
+        let requested_name = request.name.clone();
+        let requested_endpoint_url = request.endpoint_url.clone();
+        let requested_filters = request.filters.clone();
+        let headers_updated = request.headers.is_some();
+        let requested_status = request.status;
+        let previous_status = requested_status.map(|_| webhook.status);
+        let reset_validity = requested_endpoint_url.is_some() || headers_updated;
 
         let patched = self
             .repo
@@ -389,15 +396,34 @@ where
             .map_err(|err| WebhookError::Repo(err.into()))?
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
 
-        if !reset_validity {
-            return Ok(patched);
-        }
+        let final_webhook = if reset_validity {
+            self.repo
+                .set_webhook_validity(patched.id, false)
+                .await
+                .map_err(|err| WebhookError::Repo(err.into()))?
+                .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?
+        } else {
+            patched
+        };
 
-        self.repo
-            .set_webhook_validity(patched.id, false)
-            .await
-            .map_err(|err| WebhookError::Repo(err.into()))?
-            .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))
+        self.publish_webhook_event(&WebhookMacroEvent::updated(
+            final_webhook.id.clone(),
+            WebhookUpdatedMetadata {
+                webhook_id: final_webhook.id.clone(),
+                workspace_id: final_webhook.workspace_id.clone(),
+                actor_user_id: caller,
+                name: requested_name,
+                endpoint_url: requested_endpoint_url,
+                filters: requested_filters,
+                headers_updated,
+                status: requested_status,
+                previous_status,
+                is_valid: final_webhook.is_valid,
+                updated_at: final_webhook.updated_at,
+            },
+        ));
+
+        Ok(final_webhook)
     }
 
     async fn validate_webhook(
