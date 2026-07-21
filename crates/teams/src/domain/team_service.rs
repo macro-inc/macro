@@ -5,7 +5,10 @@ mod test;
 
 use std::{collections::HashSet, sync::Arc};
 
-use channels::domain::ports::{ChannelMutationErr, ChannelService};
+use channels::domain::{
+    models::{ChannelType, CreateChannelRequest, Sender},
+    ports::{ChannelMutationErr, ChannelService},
+};
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
 };
@@ -557,6 +560,22 @@ where
             .team_repository
             .create_team(user_id, team_name, subscription_id)
             .await?;
+        let owner_id = user_id.clone().into_owned();
+        self.channel_service
+            .create_channel(
+                Sender::new_from_user(owner_id.clone()),
+                None,
+                CreateChannelRequest {
+                    name: Some(team.name().to_owned()),
+                    channel_type: ChannelType::Team,
+                    team_id: Some(*team.id()),
+                    auto_join_team: true,
+                    participants: HashSet::from([owner_id]),
+                },
+            )
+            .await
+            .map_err(|error| CreateTeamError::StorageLayerError(error.into()))?;
+
         if let Some(subscription_id) = subscription_id {
             self.customer_repository
                 .convert_subscription_to_team(subscription_id, team.id(), user_id)
