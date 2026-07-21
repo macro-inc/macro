@@ -18,7 +18,10 @@ use model_user::UserContext;
 use rootcause::Report;
 use serde::Deserialize;
 
-use crate::{InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService};
+use crate::{
+    InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
+    MacroUserAuthentication,
+};
 
 /// Header carrying the shared key for standard internal service authorization.
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -92,16 +95,6 @@ struct AuthorizationQuery {
     macro_api_token: Option<String>,
 }
 
-struct AuthorizedUser {
-    macro_user_id: MacroUserIdStr<'static>,
-    user_context: UserContext,
-}
-
-struct AuthorizationOutcome {
-    identity: Option<AuthorizedUser>,
-    is_internal_access: bool,
-}
-
 struct InternalHeaderConvention {
     key_header: &'static str,
     user_id_header: &'static str,
@@ -137,6 +130,8 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
 /// authorization service is resolved from Axum state.
 #[non_exhaustive]
 pub struct MacroAuthorizationExtractor<Svc> {
+    /// The typed authorization principal established for the request.
+    pub authorization: MacroAuthorization,
     /// The validated Macro user identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The complete context returned by the authorization service.
@@ -149,6 +144,7 @@ pub struct MacroAuthorizationExtractor<Svc> {
 impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
     fn clone(&self) -> Self {
         Self {
+            authorization: self.authorization.clone(),
             macro_user_id: self.macro_user_id.clone(),
             user_context: self.user_context.clone(),
             is_internal_access: self.is_internal_access,
@@ -166,15 +162,21 @@ where
     type Rejection = MacroAuthorizationRejection;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let outcome = authorize_request::<S, Svc>(parts, state).await?;
-        let Some(authorized_user) = outcome.identity else {
-            return Err(rejection("unauthorized"));
-        };
+        let authorization = authorize_request::<S, Svc>(parts, state)
+            .await?
+            .ok_or_else(|| rejection("unauthorized"))?;
+        let authorized_user = authorization
+            .acting_user()
+            .ok_or_else(|| rejection("unauthorized"))?;
+        let macro_user_id = authorized_user.macro_user_id.clone();
+        let user_context = authorized_user.user_context.clone();
+        let is_internal_access = authorization.is_internal();
 
         Ok(Self {
-            macro_user_id: authorized_user.macro_user_id,
-            user_context: authorized_user.user_context,
-            is_internal_access: outcome.is_internal_access,
+            authorization,
+            macro_user_id,
+            user_context,
+            is_internal_access,
             _service: PhantomData,
         })
     }
@@ -238,9 +240,11 @@ where
 /// be exclusively internal.
 #[non_exhaustive]
 pub struct OptionalMacroAuthorizationExtractor<Svc> {
-    /// The validated Macro user identifier, or `None` for an anonymous request.
+    /// The typed authorization principal, or `None` for an anonymous request.
+    pub authorization: Option<MacroAuthorization>,
+    /// The validated Macro user identifier, or `None` when there is no acting user.
     pub macro_user_id: Option<MacroUserIdStr<'static>>,
-    /// The authorized context, or the default context for an anonymous request.
+    /// The authorized context, or the default context when there is no acting user.
     pub user_context: UserContext,
     /// True when the request authenticated with an internal service key rather than user credentials.
     pub is_internal_access: bool,
@@ -250,6 +254,7 @@ pub struct OptionalMacroAuthorizationExtractor<Svc> {
 impl<Svc> Clone for OptionalMacroAuthorizationExtractor<Svc> {
     fn clone(&self) -> Self {
         Self {
+            authorization: self.authorization.clone(),
             macro_user_id: self.macro_user_id.clone(),
             user_context: self.user_context.clone(),
             is_internal_access: self.is_internal_access,
@@ -267,20 +272,26 @@ where
     type Rejection = MacroAuthorizationRejection;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let outcome = authorize_request::<S, Svc>(parts, state).await?;
-        let Some(authorized_user) = outcome.identity else {
-            return Ok(Self {
-                macro_user_id: None,
-                user_context: UserContext::default(),
-                is_internal_access: outcome.is_internal_access,
-                _service: PhantomData,
-            });
+        let authorization = authorize_request::<S, Svc>(parts, state).await?;
+        let (macro_user_id, user_context) = match authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+        {
+            Some(authorized_user) => (
+                Some(authorized_user.macro_user_id.clone()),
+                authorized_user.user_context.clone(),
+            ),
+            None => (None, UserContext::default()),
         };
+        let is_internal_access = authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
 
         Ok(Self {
-            macro_user_id: Some(authorized_user.macro_user_id),
-            user_context: authorized_user.user_context,
-            is_internal_access: outcome.is_internal_access,
+            authorization,
+            macro_user_id,
+            user_context,
+            is_internal_access,
             _service: PhantomData,
         })
     }
@@ -289,7 +300,7 @@ where
 async fn authorize_request<S, Svc>(
     parts: &mut Parts,
     state: &S,
-) -> Result<AuthorizationOutcome, MacroAuthorizationRejection>
+) -> Result<Option<MacroAuthorization>, MacroAuthorizationRejection>
 where
     MacroAuthorizationState<Svc>: FromRef<S>,
     Svc: MacroAuthorizationService,
@@ -301,14 +312,13 @@ where
 
     #[cfg(feature = "local_auth")]
     if let Some(user_context) = local_user_context() {
-        return authorization_outcome(Some(user_context), false);
+        return authenticated_user(user_context)
+            .map(MacroAuthorization::User)
+            .map(Some);
     }
 
     let Some(token) = extract_token(parts, state).await? else {
-        return Ok(AuthorizationOutcome {
-            identity: None,
-            is_internal_access: false,
-        });
+        return Ok(None);
     };
 
     let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
@@ -318,14 +328,16 @@ where
         .await
         .map_err(authorization_rejection)?;
 
-    authorization_outcome(Some(user_context), false)
+    authenticated_user(user_context)
+        .map(MacroAuthorization::User)
+        .map(Some)
 }
 
 async fn authorize_internal_request<S, Svc>(
     parts: &Parts,
     state: &S,
     convention: &InternalHeaderConvention,
-) -> Result<AuthorizationOutcome, MacroAuthorizationRejection>
+) -> Result<Option<MacroAuthorization>, MacroAuthorizationRejection>
 where
     MacroAuthorizationState<Svc>: FromRef<S>,
     Svc: MacroAuthorizationService,
@@ -343,25 +355,14 @@ where
         .authorize_internal(provided_key, claims)
         .await
         .map_err(internal_authorization_rejection)?;
+    let acting_user = user_context.map(authenticated_user).transpose()?;
 
-    authorization_outcome(user_context, true)
+    Ok(Some(MacroAuthorization::Internal(acting_user)))
 }
 
-fn authorization_outcome(
-    user_context: Option<UserContext>,
-    is_internal_access: bool,
-) -> Result<AuthorizationOutcome, MacroAuthorizationRejection> {
-    let identity = user_context.map(authorized_user).transpose()?;
-
-    Ok(AuthorizationOutcome {
-        identity,
-        is_internal_access,
-    })
-}
-
-fn authorized_user(
+fn authenticated_user(
     user_context: UserContext,
-) -> Result<AuthorizedUser, MacroAuthorizationRejection> {
+) -> Result<MacroUserAuthentication, MacroAuthorizationRejection> {
     let macro_user_id = MacroUserIdStr::parse_from_str(&user_context.user_id)
         .map(CowLike::into_owned)
         .map_err(|error| {
@@ -369,7 +370,7 @@ fn authorized_user(
             rejection("invalid user id")
         })?;
 
-    Ok(AuthorizedUser {
+    Ok(MacroUserAuthentication {
         macro_user_id,
         user_context,
     })

@@ -9,12 +9,15 @@
 //! The `axum` feature provides three request extractors:
 //!
 //! - [`MacroAuthorizationExtractor`] requires an acting user. It accepts either
-//!   user credentials or internal service credentials automatically. An
-//!   internal request must resolve to a user through its acting-user header or
-//!   [`InternalAuthConfig::default_user_id`].
+//!   user credentials or internal service credentials automatically and exposes
+//!   the typed [`MacroAuthorization`] principal alongside user convenience
+//!   fields. An internal request must resolve to a user through its acting-user
+//!   header or [`InternalAuthConfig::default_user_id`].
 //! - [`OptionalMacroAuthorizationExtractor`] supports anonymous, authenticated
-//!   user, and internal service callers. Missing credentials succeed without a
-//!   user identity, but supplied invalid or expired credentials are rejected.
+//!   user, and internal service callers. Its optional [`MacroAuthorization`]
+//!   distinguishes anonymous requests from identityless internal callers.
+//!   Missing credentials succeed without a user identity, but supplied invalid
+//!   or expired credentials are rejected.
 //! - [`InternalMacroAuthorizationExtractor`] is for endpoints that will only
 //!   ever be called by trusted internal services. It requires an internal API
 //!   key, does not accept user credentials as a substitute, and exposes no user
