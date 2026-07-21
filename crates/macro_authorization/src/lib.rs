@@ -45,7 +45,7 @@ pub use domain::{
         BotActingUserClaims, BotAuthentication, InternalAuthConfig, InternalIdentityClaims,
         MacroAuthorization, MacroAuthorizationError, MacroUserAuthentication, ValidatedIdentity,
     },
-    ports::{JwtValidator, MacroAuthorizationService},
+    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer},
     service::MacroAuthorizationServiceImpl,
 };
 /// Service-backed Axum authorization extractors, state, headers, and rejection type.
