@@ -297,7 +297,7 @@ pub async fn get_or_create_call_handler<
 
     let response = state
         .service
-        .get_or_create_call(&channel_id, user.macro_user_id)
+        .get_or_create_call(&channel_id, user.macro_user_id.clone())
         .await?;
 
     Ok(Json(response))
@@ -551,7 +551,7 @@ pub async fn get_batch_call_record_preview_handler<
 
     let response = state
         .service
-        .get_batch_call_record_previews(request, user.macro_user_id)
+        .get_batch_call_record_previews(request, user.macro_user_id.clone())
         .await?;
     Ok(Json(response))
 }
@@ -585,7 +585,7 @@ pub async fn leave_or_end_call_handler<
 
     let response = state
         .service
-        .leave_or_end_call(&channel_id, user.macro_user_id)
+        .leave_or_end_call(&channel_id, user.macro_user_id.clone())
         .await?;
 
     Ok(Json(response))

@@ -55,11 +55,14 @@ where
 
     #[tracing::instrument(err, skip(req, state))]
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let OptionalMacroAuthorizationExtractor { macro_user_id, .. } = req
+        let authorization = req
             .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
             .await
             .map_err(ExtractorError::from)?;
-        let user = macro_user_id.ok_or(ExtractorError::Unauthorized)?;
+        let user = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone())
+            .ok_or(ExtractorError::Unauthorized)?;
 
         let Json(json): Json<serde_json::Value> = req
             .extract()

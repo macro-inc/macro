@@ -32,7 +32,10 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let projects = state.service.list_projects(user.macro_user_id).await?;
+    let projects = state
+        .service
+        .list_projects(user.macro_user_id.clone())
+        .await?;
     Ok(Json(GetProjectsResponse {
         error: false,
         data: projects,
@@ -62,7 +65,7 @@ where
 {
     let projects = state
         .service
-        .list_pending_projects(user.macro_user_id)
+        .list_pending_projects(user.macro_user_id.clone())
         .await?;
     Ok(Json(PendingProjectsResponse {
         error: false,

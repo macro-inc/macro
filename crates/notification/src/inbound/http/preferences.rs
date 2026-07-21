@@ -53,7 +53,7 @@ pub async fn get_notification_type_preferences<
 {
     let disabled = state
         .inner
-        .get_disabled_notification_types(user.macro_user_id)
+        .get_disabled_notification_types(user.macro_user_id.clone())
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get notification type preferences");
@@ -228,7 +228,7 @@ pub async fn enable_notification_type<S: NotificationReader, Auth: MacroAuthoriz
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .enable_notification_type(user.macro_user_id, &notification_event_type)
+        .enable_notification_type(user.macro_user_id.clone(), &notification_event_type)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to enable notification type");

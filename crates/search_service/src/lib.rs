@@ -3,8 +3,6 @@
 pub mod api;
 
 // Re-exports for consumers
-pub use api::context::{SearchHandlerState, SearchRouterState};
+pub use api::context::SearchHandlerState;
+pub use api::router as search_router;
 pub use api::swagger::ApiDoc as SearchApiDoc;
-pub use api::{
-    router as search_router, router_with_authorization as search_router_with_authorization,
-};

@@ -186,7 +186,7 @@ async fn create_bot_handler<
 ) -> Result<(StatusCode, Json<Bot>), BotsHandlerErr> {
     let bot = state
         .service
-        .create_bot(authorization.macro_user_id, req)
+        .create_bot(authorization.macro_user_id.clone(), req)
         .await?;
     Ok((StatusCode::CREATED, Json(bot)))
 }
@@ -200,7 +200,10 @@ async fn list_bots_handler<
     authorization: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<Vec<Bot>>, BotsHandlerErr> {
     Ok(Json(
-        state.service.list_bots(authorization.macro_user_id).await?,
+        state
+            .service
+            .list_bots(authorization.macro_user_id.clone())
+            .await?,
     ))
 }
 
@@ -216,7 +219,7 @@ async fn get_bot_handler<
     Ok(Json(
         state
             .service
-            .get_bot(authorization.macro_user_id, path.bot_id)
+            .get_bot(authorization.macro_user_id.clone(), path.bot_id)
             .await?,
     ))
 }
@@ -234,7 +237,7 @@ async fn patch_bot_handler<
     Ok(Json(
         state
             .service
-            .patch_bot(authorization.macro_user_id, path.bot_id, req)
+            .patch_bot(authorization.macro_user_id.clone(), path.bot_id, req)
             .await?,
     ))
 }
@@ -250,7 +253,7 @@ async fn delete_bot_handler<
 ) -> Result<StatusCode, BotsHandlerErr> {
     state
         .service
-        .delete_bot(authorization.macro_user_id, path.bot_id)
+        .delete_bot(authorization.macro_user_id.clone(), path.bot_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -267,7 +270,7 @@ async fn create_token_handler<
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
     let token = state
         .service
-        .create_token(authorization.macro_user_id, path.bot_id, req)
+        .create_token(authorization.macro_user_id.clone(), path.bot_id, req)
         .await?;
     Ok((StatusCode::CREATED, Json(token)))
 }
@@ -284,7 +287,7 @@ async fn list_tokens_handler<
     Ok(Json(
         state
             .service
-            .list_tokens(authorization.macro_user_id, path.bot_id)
+            .list_tokens(authorization.macro_user_id.clone(), path.bot_id)
             .await?,
     ))
 }
@@ -300,7 +303,11 @@ async fn revoke_token_handler<
 ) -> Result<StatusCode, BotsHandlerErr> {
     state
         .service
-        .revoke_token(authorization.macro_user_id, path.bot_id, path.token_id)
+        .revoke_token(
+            authorization.macro_user_id.clone(),
+            path.bot_id,
+            path.token_id,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -333,7 +340,7 @@ pub async fn list_bot_channels_handler<
     Ok(Json(
         state
             .service
-            .list_bot_channels(authorization.macro_user_id, path.bot_id)
+            .list_bot_channels(authorization.macro_user_id.clone(), path.bot_id)
             .await?,
     ))
 }
@@ -366,7 +373,11 @@ pub async fn remove_bot_channel_handler<
 ) -> Result<StatusCode, BotsHandlerErr> {
     state
         .service
-        .remove_bot_from_channel(authorization.macro_user_id, path.channel_id, path.bot_id)
+        .remove_bot_from_channel(
+            authorization.macro_user_id.clone(),
+            path.channel_id,
+            path.bot_id,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

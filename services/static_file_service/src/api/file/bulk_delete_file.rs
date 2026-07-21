@@ -88,7 +88,9 @@ pub async fn handle_bulk_delete_file(
         match metadata_results.get(file_id) {
             Some(metadata) => {
                 // Skip owner check for internal requests
-                if !user.is_internal_access && metadata.owner_id != user.macro_user_id.as_ref() {
+                if !user.authorization.is_internal()
+                    && metadata.owner_id != user.macro_user_id.as_ref()
+                {
                     tracing::warn!(file_id = file_id, "delete requested by non-owner");
                     results.push(DeleteResult {
                         file_id: file_id.clone(),

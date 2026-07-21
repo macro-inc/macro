@@ -30,7 +30,7 @@ pub async fn create_instructions_handler(
     State(ctx): State<ApiContext>,
     user_context: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Json<CreateInstructionsDocumentResponse>, DocumentError> {
-    let user_id = user_context.macro_user_id;
+    let user_id = user_context.macro_user_id.clone();
 
     if get_instructions_document(&ctx.db, user_id.clone())
         .await

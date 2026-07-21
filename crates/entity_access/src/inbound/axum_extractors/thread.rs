@@ -13,7 +13,8 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 
 use super::{ExtractorError, RequiredPermission};
@@ -52,13 +53,17 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id,
-            is_internal_access,
-            ..
-        } = OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ExtractorError::from)?;
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone());
 
         let Path(path_params): Path<HashMap<String, String>> = parts
             .extract()

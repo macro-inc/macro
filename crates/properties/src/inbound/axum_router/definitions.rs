@@ -105,12 +105,10 @@ pub async fn list_properties<
 >(
     Query(query): Query<ListPropertiesQuery>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
+    let user = user.macro_user_id.clone();
     let callers_team = team.entity_access_receipt.as_ref();
 
     // Determine query parameters based on scope. The team receipt and user id are
@@ -207,13 +205,11 @@ pub async fn create_property_definition<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
+    let user = user.macro_user_id.clone();
     tracing::info!(scope = ?request.scope, "creating property definition");
 
     // The owner is derived in the service from the authenticated caller and
@@ -274,12 +270,10 @@ pub async fn delete_property_definition<
 >(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
+    let user = user.macro_user_id.clone();
     tracing::info!("deleting property definition");
 
     state

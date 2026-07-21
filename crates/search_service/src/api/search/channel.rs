@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use crate::api::context::{SearchHandlerState, SearchRouterState};
+use crate::api::context::{SearchAuthorizationService, SearchHandlerState};
 use crate::api::search::SearchPaginationParams;
 use axum::{
     Router,
@@ -13,7 +13,7 @@ use axum::{
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
@@ -379,15 +379,12 @@ where
         (status = 500, body=model::response::ErrorResponse),
     )
 )]
-pub async fn handler<Auth>(
+pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
-) -> Result<Json<ChannelSearchResponse>, SearchError>
-where
-    Auth: MacroAuthorizationService,
-{
+) -> Result<Json<ChannelSearchResponse>, SearchError> {
     let user_id = authorization.user_context.user_id.clone();
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);

@@ -92,7 +92,7 @@ where
         };
 
         Ok(Self {
-            macro_user_id: user.macro_user_id,
+            macro_user_id: user.macro_user_id.clone(),
             subscription_id,
             _authorization: PhantomData,
         })

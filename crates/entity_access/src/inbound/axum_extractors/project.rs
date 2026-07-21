@@ -12,7 +12,8 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
@@ -57,13 +58,17 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id,
-            is_internal_access,
-            ..
-        } = OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ExtractorError::from)?;
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone());
 
         let project_context: Extension<BasicProject> = parts
             .extract()
@@ -267,14 +272,17 @@ where
 
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id,
-            is_internal_access,
-            ..
-        } = req
+        let authorization: OptionalMacroAuthorizationExtractor<Auth> = req
             .extract_parts_with_state(state)
             .await
             .map_err(ExtractorError::from)?;
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone());
         let has_internal_owner_access = macro_user_id.is_none() && is_internal_access;
 
         extract_project_body_access(req, service, macro_user_id, has_internal_owner_access)

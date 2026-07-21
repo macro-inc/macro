@@ -147,7 +147,7 @@ where
         )
         .await?;
 
-        Ok(SavedViewOwner(user.user_context))
+        Ok(SavedViewOwner(user.user_context.clone()))
     }
 }
 

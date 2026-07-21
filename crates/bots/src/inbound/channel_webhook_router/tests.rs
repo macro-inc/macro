@@ -569,7 +569,7 @@ impl JwtValidator for FakeJwtValidator {
     }
 }
 
-type TestAuthorizationService = MacroAuthorizationServiceImpl<FakeJwtValidator, TestBotAuthorizer>;
+type TestAuthorizationService = MacroAuthorizationServiceImpl<FakeJwtValidator>;
 
 fn authorization_state(
     bot_authorizer: TestBotAuthorizer,

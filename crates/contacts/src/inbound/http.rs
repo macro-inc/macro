@@ -53,7 +53,10 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth>,
 ) -> impl IntoResponse {
-    match contacts.query_contacts(authorization.macro_user_id).await {
+    match contacts
+        .query_contacts(authorization.macro_user_id.clone())
+        .await
+    {
         Ok(contacts) if !contacts.is_empty() => {
             (StatusCode::OK, Json(Some(GetContactsResponse { contacts })))
         }
@@ -81,7 +84,7 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
 ) -> Result<StatusCode, StatusCode> {
     service
         .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([authorization.macro_user_id, body.user_id]),
+            users: HashSet::from([authorization.macro_user_id.clone(), body.user_id]),
         })
         .await
         .map_err(|e| {

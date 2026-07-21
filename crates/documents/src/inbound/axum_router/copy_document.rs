@@ -61,7 +61,7 @@ pub async fn copy_document_handler<
         .copy_document(
             access.entity_access_receipt,
             document_context.0,
-            user.macro_user_id,
+            user.macro_user_id.clone(),
             req.document_name,
             params.version_id,
             req.version_id,

@@ -10,7 +10,8 @@ use axum::{
     http::request::Parts,
 };
 use macro_authorization::{
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
 };
 use uuid::Uuid;
 
@@ -58,13 +59,17 @@ where
             })?;
         let foreign_entity_id = extract_foreign_entity_id(&path_params)?.to_string();
 
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id,
-            is_internal_access,
-            ..
-        } = OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
-            .await
-            .map_err(ExtractorError::from)?;
+        let authorization =
+            OptionalMacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state)
+                .await
+                .map_err(ExtractorError::from)?;
+        let is_internal_access = authorization
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal);
+        let macro_user_id = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone());
 
         if macro_user_id.is_none() && is_internal_access {
             return Self::from_permission(

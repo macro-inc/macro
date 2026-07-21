@@ -187,12 +187,13 @@ async fn required_handler(
 ) -> Json<Value> {
     let extractor = extractor.clone();
     let authorization = authorization_json(&extractor.authorization);
+    let acting_user = extractor.acting_user();
 
     Json(json!({
         "authorization": authorization,
-        "macro_user_id": extractor.macro_user_id.to_string(),
-        "user_context": extractor.user_context,
-        "is_internal_access": extractor.is_internal_access,
+        "macro_user_id": acting_user.macro_user_id.to_string(),
+        "user_context": acting_user.user_context,
+        "is_internal_access": extractor.authorization.is_internal(),
     }))
 }
 
@@ -201,12 +202,16 @@ async fn optional_handler(
 ) -> Json<Value> {
     let extractor = extractor.clone();
     let authorization = extractor.authorization.as_ref().map(authorization_json);
+    let acting_user = extractor.acting_user();
 
     Json(json!({
         "authorization": authorization,
-        "macro_user_id": extractor.macro_user_id.map(|id| id.to_string()),
-        "user_context": extractor.user_context,
-        "is_internal_access": extractor.is_internal_access,
+        "macro_user_id": acting_user.map(|user| user.macro_user_id.to_string()),
+        "user_context": acting_user.map(|user| user.user_context.clone()).unwrap_or_default(),
+        "is_internal_access": extractor
+            .authorization
+            .as_ref()
+            .is_some_and(MacroAuthorization::is_internal),
     }))
 }
 

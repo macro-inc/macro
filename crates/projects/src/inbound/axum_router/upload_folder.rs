@@ -49,7 +49,11 @@ where
     ensure_parent_edit_access(&state, &user, request.parent_id.as_deref()).await?;
     let data = state
         .service
-        .upload_folder(user.macro_user_id, user.is_internal_access, request)
+        .upload_folder(
+            user.macro_user_id.clone(),
+            user.authorization.is_internal(),
+            request,
+        )
         .await?;
 
     Ok(Json(UploadFolderResponse { error: false, data }))
@@ -81,7 +85,7 @@ where
     ensure_parent_edit_access(&state, &user, request.parent_id.as_deref()).await?;
     let data = state
         .service
-        .create_upload_extract_request(user.macro_user_id, request)
+        .create_upload_extract_request(user.macro_user_id.clone(), request)
         .await?;
 
     Ok(Json(UploadExtractFolderResponse { error: false, data }))
@@ -95,7 +99,7 @@ async fn ensure_parent_edit_access<T, Svc, Auth>(
 where
     Svc: EntityAccessService,
 {
-    let Some(parent_id) = parent_id.filter(|_| !user.is_internal_access) else {
+    let Some(parent_id) = parent_id.filter(|_| !user.authorization.is_internal()) else {
         return Ok(());
     };
 

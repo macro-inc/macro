@@ -199,7 +199,7 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
         S,
         AuthorizationService,
         serde_json::Value,
-    >(&state, user.macro_user_id, query, cursor)
+    >(&state, user.macro_user_id.clone(), query, cursor)
     .await?;
 
     let (notifs, failed): (Vec<_>, Vec<_>) = response

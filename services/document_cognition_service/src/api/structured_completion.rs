@@ -72,7 +72,7 @@ pub async fn structured_completion(
     let ctx = Arc::new(state);
     let model = model_access.best_model();
 
-    let user_id = user.macro_user_id;
+    let user_id = user.macro_user_id.clone();
 
     let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
         ToolSet::All => &ctx.all_tools_prompt,

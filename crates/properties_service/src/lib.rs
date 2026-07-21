@@ -11,7 +11,5 @@ pub use api::context::AuthorizationServiceType;
 pub use api::context::EntityAccessServiceType;
 pub use api::context::PropertiesHandlerState;
 pub use api::context::PropertiesService;
+pub use api::router as properties_router;
 pub use api::swagger::ApiDoc as PropertiesApiDoc;
-pub use api::{
-    router as properties_router, router_with_authorization as properties_router_with_authorization,
-};

@@ -13,9 +13,9 @@
 //! The `axum` feature provides four request extractors:
 //!
 //! - [`MacroAuthorizationExtractor`] requires an acting user. It accepts user,
-//!   bot, or internal service credentials and exposes the typed
-//!   [`MacroAuthorization`] principal alongside user convenience fields. Bot
-//!   and internal requests must resolve to a user.
+//!   bot, or internal service credentials and exposes only the typed
+//!   [`MacroAuthorization`] principal. Bot and internal requests must resolve
+//!   to a user.
 //! - [`OptionalMacroAuthorizationExtractor`] additionally supports anonymous,
 //!   identityless bot, and identityless internal callers. Its optional
 //!   [`MacroAuthorization`] distinguishes those security states.

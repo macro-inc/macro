@@ -250,12 +250,10 @@ pub async fn get_bulk_entity_properties<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
+    let user = user.macro_user_id.clone();
     // The public endpoint requires explicit property IDs. An empty property_ids
     // means "no properties requested", so return early with empty result.
     if request.entities.is_empty() || request.property_ids.is_empty() {
@@ -937,11 +935,9 @@ pub async fn delete_entity_property<
 >(
     Path(entity_property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
+    let user = user.macro_user_id.clone();
     tracing::info!("removing entity property");
 
     // The entity this property is attached to is only known after a lookup, so

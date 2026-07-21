@@ -36,7 +36,7 @@ where
 {
     let data = state
         .service
-        .create_project(user.macro_user_id, project.into_inner())
+        .create_project(user.macro_user_id.clone(), project.into_inner())
         .await?;
 
     Ok(Json(CreateProjectResponse { error: false, data }))

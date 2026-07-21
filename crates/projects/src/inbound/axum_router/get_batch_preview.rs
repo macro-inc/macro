@@ -22,7 +22,11 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
         (status = 500, body = model::response::GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, request), fields(user_id=?user.macro_user_id), err)]
+#[tracing::instrument(
+    skip(state, user, request),
+    fields(user_id = tracing::field::Empty),
+    err
+)]
 pub async fn get_batch_preview_handler<T, Svc, Auth>(
     State(state): State<ProjectRouterState<T, Svc, Auth>>,
     user: OptionalMacroAuthorizationExtractor<Auth>,
@@ -33,9 +37,13 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let user_id = user.acting_user().map(|user| user.macro_user_id.clone());
+    if let Some(user_id) = &user_id {
+        tracing::Span::current().record("user_id", tracing::field::display(user_id));
+    }
     let previews = state
         .service
-        .get_batch_preview(user.macro_user_id, request.project_ids)
+        .get_batch_preview(user_id, request.project_ids)
         .await?;
     Ok(Json(GetBatchProjectPreviewResponse { previews }))
 }

@@ -66,11 +66,14 @@ where
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroAuthorizationExtractor { macro_user_id, .. } = req
+        let authorization = req
             .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
             .await
             .map_err(ExtractorError::from)?;
-        let macro_user_id = macro_user_id.ok_or(ExtractorError::Unauthorized)?;
+        let macro_user_id = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone())
+            .ok_or(ExtractorError::Unauthorized)?;
 
         let Path(PinParams { pinned_item_id }) = req
             .extract_parts_with_state(state)

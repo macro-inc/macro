@@ -47,7 +47,7 @@ pub async fn create_document_handler<
     let req = project.into_inner();
 
     // Email linking is internal only
-    if req.email_attachment_id.is_some() && !user.is_internal_access {
+    if req.email_attachment_id.is_some() && !user.authorization.is_internal() {
         return Err(DocumentError::Unauthorized);
     }
 
@@ -102,7 +102,7 @@ pub async fn create_document_handler<
 
     let response_data = state
         .service
-        .create_document(user.macro_user_id, args, req.job_id)
+        .create_document(user.macro_user_id.clone(), args, req.job_id)
         .await?;
 
     Ok(Json(CreateDocumentResponse {

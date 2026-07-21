@@ -1,6 +1,5 @@
 use axum::Router;
-use context::SearchRouterState;
-use macro_authorization::MacroAuthorizationService;
+use context::SearchHandlerState;
 
 // Routes
 pub mod search;
@@ -13,14 +12,6 @@ pub mod swagger;
 /// Exposes:
 /// - POST / - unified search
 /// - POST /simple - simple unified search
-pub fn router() -> Router<SearchRouterState> {
+pub fn router() -> Router<SearchHandlerState> {
     search::router()
-}
-
-/// Creates the search router with the supplied authorization service.
-pub fn router_with_authorization<Auth>() -> Router<SearchRouterState<Auth>>
-where
-    Auth: MacroAuthorizationService,
-{
-    search::router_with_authorization()
 }

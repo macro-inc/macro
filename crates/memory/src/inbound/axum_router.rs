@@ -88,7 +88,10 @@ pub async fn get_memory_handler<T: MemoryService, Auth: MacroAuthorizationServic
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth>,
 ) -> Response {
-    match service.get_or_generate_memory(user.macro_user_id).await {
+    match service
+        .get_or_generate_memory(user.macro_user_id.clone())
+        .await
+    {
         Ok(Some(memory)) => Json(MemoryResponse { memory }).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => {

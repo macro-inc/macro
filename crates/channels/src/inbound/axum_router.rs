@@ -412,7 +412,7 @@ pub async fn create_channel_handler<
     let res = state
         .service
         .create_channel(
-            Sender::new_from_user(user.macro_user_id),
+            Sender::new_from_user(user.macro_user_id.clone()),
             user.user_context.organization_id.map(i64::from),
             req,
         )
@@ -447,7 +447,7 @@ pub async fn get_or_create_dm_handler<
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
         .service
-        .get_or_create_dm(Sender::new_from_user(user.macro_user_id), req)
+        .get_or_create_dm(Sender::new_from_user(user.macro_user_id.clone()), req)
         .await?;
     Ok((StatusCode::OK, Json(res)))
 }
@@ -479,7 +479,7 @@ pub async fn get_or_create_private_handler<
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
         .service
-        .get_or_create_private(Sender::new_from_user(user.macro_user_id), req)
+        .get_or_create_private(Sender::new_from_user(user.macro_user_id.clone()), req)
         .await?;
     Ok((StatusCode::OK, Json(res)))
 }
@@ -875,7 +875,7 @@ pub async fn join_channel_by_code_handler<
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     state
         .service
-        .join_channel_by_code(Sender::new_from_user(user.macro_user_id), join_code)
+        .join_channel_by_code(Sender::new_from_user(user.macro_user_id.clone()), join_code)
         .await?;
     Ok(StatusCode::OK)
 }
@@ -909,6 +909,7 @@ pub async fn join_channel_handler<
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state.service.join_channel(actor, channel_id).await?;
+
     Ok(StatusCode::OK)
 }
 
@@ -1620,17 +1621,13 @@ pub async fn get_batch_channel_preview_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id,
-        user_context,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     Json(req): Json<GetBatchChannelPreviewRequest>,
 ) -> Result<Json<GetBatchChannelPreviewResponse>, ChannelsHandlerErr> {
-    let org_id = user_context.organization_id.map(i64::from);
+    let org_id = user.user_context.organization_id.map(i64::from);
     let previews = state
         .service
-        .batch_get_channel_previews(macro_user_id, org_id, req.channel_ids)
+        .batch_get_channel_previews(user.macro_user_id.clone(), org_id, req.channel_ids)
         .await?;
     Ok(Json(GetBatchChannelPreviewResponse { previews }))
 }
@@ -1750,7 +1747,7 @@ pub async fn post_activity_handler<
     let activity = state
         .service
         .post_activity(
-            Sender::new_from_user(user.macro_user_id),
+            Sender::new_from_user(user.macro_user_id.clone()),
             channel_id,
             req.activity_type,
         )

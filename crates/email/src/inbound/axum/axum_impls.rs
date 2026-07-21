@@ -167,10 +167,11 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let header_link_id = parse_link_id_header(parts)?;
-        let Cached(MacroAuthorizationExtractor { macro_user_id, .. }) = parts
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> = parts
             .extract_with_state(state)
             .await
             .map_err(EmailLinkErr::Authorization)?;
+        let macro_user_id = authorization.macro_user_id.clone();
         let caller = macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
@@ -205,10 +206,11 @@ where
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroAuthorizationExtractor { macro_user_id, .. }) = parts
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth>> = parts
             .extract_with_state(state)
             .await
             .map_err(EmailLinkErr::Authorization)?;
+        let macro_user_id = authorization.macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_inboxes_for_macro_id(macro_user_id)

@@ -54,7 +54,7 @@ pub async fn post_referral_invite_handler<
 ) -> Result<StatusCode, ReferralError> {
     let () = state
         .service
-        .send_referral_invite(authorization.macro_user_id, recipient)
+        .send_referral_invite(authorization.macro_user_id.clone(), recipient)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)

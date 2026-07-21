@@ -244,7 +244,7 @@ impl IntoResponse for McpHandlerErr {
 #[tracing::instrument(skip_all, err)]
 pub async fn list_servers<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth>,
 ) -> Result<Json<Vec<ServerResponse>>, McpHandlerErr>
 where
     S: McpServerStore,
@@ -254,7 +254,7 @@ where
 {
     let records = state
         .store
-        .list(&macro_user_id)
+        .list(&authorization.macro_user_id)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -279,7 +279,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     Json(body): Json<AddServerRequest>,
 ) -> Result<(StatusCode, Json<ServerResponse>), McpHandlerErr>
 where
@@ -289,7 +289,7 @@ where
     anyhow::Error: From<S::Err>,
 {
     let record = McpServerRecord {
-        user_id: macro_user_id,
+        user_id: authorization.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
         credentials: None,
@@ -325,7 +325,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn update_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     Json(body): Json<UpdateServerRequest>,
 ) -> Result<Json<ServerResponse>, McpHandlerErr>
 where
@@ -336,7 +336,7 @@ where
 {
     let mut record = state
         .store
-        .load(&macro_user_id, &body.url)
+        .load(&authorization.macro_user_id, &body.url)
         .await
         .map_err(anyhow::Error::from)?
         .ok_or(McpHandlerErr::NotFound)?;
@@ -373,7 +373,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn delete_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     Query(params): Query<DeleteServerParams>,
 ) -> Result<StatusCode, McpHandlerErr>
 where
@@ -384,7 +384,7 @@ where
 {
     state
         .store
-        .delete(&macro_user_id, &params.url)
+        .delete(&authorization.macro_user_id, &params.url)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -407,7 +407,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    MacroAuthorizationExtractor { macro_user_id, .. }: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     Json(body): Json<StartAuthRequest>,
 ) -> Result<Json<StartAuthResponse>, McpHandlerErr>
 where
@@ -417,7 +417,11 @@ where
 {
     let authorization_url = state
         .oauth
-        .start_authorization(&macro_user_id, &body.server_url, &body.server_name)
+        .start_authorization(
+            &authorization.macro_user_id,
+            &body.server_url,
+            &body.server_name,
+        )
         .await?;
 
     Ok(Json(StartAuthResponse { authorization_url }))

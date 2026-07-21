@@ -146,7 +146,7 @@ pub async fn send_chat_message(
     Box::pin(send_chat_message_inner(
         state,
         model_access,
-        user.macro_user_id,
+        user.macro_user_id.clone(),
         bearer,
         request,
     ))

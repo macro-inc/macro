@@ -34,7 +34,10 @@ pub struct DocumentPermissionsTokenRequest {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(config_context, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(
+    skip(config_context, user),
+    fields(user_id = tracing::field::Empty)
+)]
 pub async fn handler(
     State(config_context): State<Arc<Config>>,
     user: OptionalMacroAuthorizationExtractor<AuthorizationService>,
@@ -47,7 +50,12 @@ pub async fn handler(
 
     validation.set_issuer(&[ISSUER]);
 
-    let user_id = user.macro_user_id.map(|user_id| user_id.to_string());
+    let user_id = user
+        .acting_user()
+        .map(|user| user.macro_user_id.to_string());
+    if let Some(user_id) = &user_id {
+        tracing::Span::current().record("user_id", tracing::field::display(user_id));
+    }
 
     // Attempt to decode the token.
     let decoded_jwt: DocumentPermissionsToken = match jsonwebtoken::decode::<DocumentPermissionsToken>(

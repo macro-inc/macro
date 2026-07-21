@@ -45,7 +45,7 @@ pub async fn handle_delete_file(
         .ok_or_else(|| (StatusCode::NOT_FOUND, "not found").into_response())?;
 
     // Skip owner check for internal requests
-    if !user.is_internal_access && metadata.owner_id != user.macro_user_id.as_ref() {
+    if !user.authorization.is_internal() && metadata.owner_id != user.macro_user_id.as_ref() {
         tracing::warn!("delete requested by non-owner");
         return Err((StatusCode::FORBIDDEN, "access denied").into_response());
     }

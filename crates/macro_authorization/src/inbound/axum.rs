@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{borrow::Cow, fmt, marker::PhantomData, sync::Arc};
+use std::{borrow::Cow, fmt, marker::PhantomData, ops::Deref, sync::Arc};
 
 use ::axum::{
     Json,
@@ -139,22 +139,30 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
 pub struct MacroAuthorizationExtractor<Svc> {
     /// The typed authorization principal established for the request.
     pub authorization: MacroAuthorization,
-    /// The validated Macro user identifier.
-    pub macro_user_id: MacroUserIdStr<'static>,
-    /// The complete context returned by the authorization service.
-    pub user_context: UserContext,
-    /// True when the request authenticated with an internal service key rather than user credentials.
-    pub is_internal_access: bool,
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> MacroAuthorizationExtractor<Svc> {
+    /// Return the acting user guaranteed by required authorization extraction.
+    pub fn acting_user(&self) -> &MacroUserAuthentication {
+        self.authorization
+            .acting_user()
+            .expect("required authorization always has an acting user")
+    }
+}
+
+impl<Svc> Deref for MacroAuthorizationExtractor<Svc> {
+    type Target = MacroUserAuthentication;
+
+    fn deref(&self) -> &Self::Target {
+        self.acting_user()
+    }
 }
 
 impl<Svc> Clone for MacroAuthorizationExtractor<Svc> {
     fn clone(&self) -> Self {
         Self {
             authorization: self.authorization.clone(),
-            macro_user_id: self.macro_user_id.clone(),
-            user_context: self.user_context.clone(),
-            is_internal_access: self.is_internal_access,
             _service: PhantomData,
         }
     }
@@ -172,18 +180,12 @@ where
         let authorization = authorize_request::<S, Svc>(parts, state)
             .await?
             .ok_or_else(|| rejection("unauthorized"))?;
-        let authorized_user = authorization
+        authorization
             .acting_user()
             .ok_or_else(|| rejection("unauthorized"))?;
-        let macro_user_id = authorized_user.macro_user_id.clone();
-        let user_context = authorized_user.user_context.clone();
-        let is_internal_access = authorization.is_internal();
 
         Ok(Self {
             authorization,
-            macro_user_id,
-            user_context,
-            is_internal_access,
             _service: PhantomData,
         })
     }
@@ -303,32 +305,32 @@ where
 /// Extracts and authorizes an optional acting user.
 ///
 /// This extractor supports anonymous, direct user, bot, and internal service
-/// callers. Requests without credentials succeed with an empty [`UserContext`].
-/// Supplying more than one explicit credential type is rejected; an ambient
-/// access-token cookie is considered only when no explicit credential exists.
-/// Any supplied credential must pass authorization and is never treated as
-/// anonymous. Identityless internal and bot principals remain visible through
-/// `authorization` even though their user convenience fields are empty.
+/// callers. Requests without credentials succeed with `authorization` set to
+/// `None`. Supplying more than one explicit credential type is rejected; an
+/// ambient access-token cookie is considered only when no explicit credential
+/// exists. Any supplied credential must pass authorization and is never treated
+/// as anonymous. Identityless internal and bot principals remain visible
+/// through `authorization`.
 #[non_exhaustive]
 pub struct OptionalMacroAuthorizationExtractor<Svc> {
     /// The typed authorization principal, or `None` for an anonymous request.
     pub authorization: Option<MacroAuthorization>,
-    /// The validated Macro user identifier, or `None` when there is no acting user.
-    pub macro_user_id: Option<MacroUserIdStr<'static>>,
-    /// The authorized context, or the default context when there is no acting user.
-    pub user_context: UserContext,
-    /// True when the request authenticated with an internal service key rather than user credentials.
-    pub is_internal_access: bool,
     _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> OptionalMacroAuthorizationExtractor<Svc> {
+    /// Return the acting user when the request established one.
+    pub fn acting_user(&self) -> Option<&MacroUserAuthentication> {
+        self.authorization
+            .as_ref()
+            .and_then(MacroAuthorization::acting_user)
+    }
 }
 
 impl<Svc> Clone for OptionalMacroAuthorizationExtractor<Svc> {
     fn clone(&self) -> Self {
         Self {
             authorization: self.authorization.clone(),
-            macro_user_id: self.macro_user_id.clone(),
-            user_context: self.user_context.clone(),
-            is_internal_access: self.is_internal_access,
             _service: PhantomData,
         }
     }
@@ -344,25 +346,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let authorization = authorize_request::<S, Svc>(parts, state).await?;
-        let (macro_user_id, user_context) = match authorization
-            .as_ref()
-            .and_then(MacroAuthorization::acting_user)
-        {
-            Some(authorized_user) => (
-                Some(authorized_user.macro_user_id.clone()),
-                authorized_user.user_context.clone(),
-            ),
-            None => (None, UserContext::default()),
-        };
-        let is_internal_access = authorization
-            .as_ref()
-            .is_some_and(MacroAuthorization::is_internal);
 
         Ok(Self {
             authorization,
-            macro_user_id,
-            user_context,
-            is_internal_access,
             _service: PhantomData,
         })
     }

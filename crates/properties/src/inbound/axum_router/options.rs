@@ -63,12 +63,10 @@ pub async fn get_property_options<
 >(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
+    let user = user.macro_user_id.clone();
     tracing::info!("retrieving property options");
 
     let options = state
@@ -133,13 +131,11 @@ pub async fn add_property_option<
 >(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<AddPropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
+    let user = user.macro_user_id.clone();
     tracing::info!("adding property option");
 
     let option = state
@@ -208,13 +204,11 @@ pub async fn update_property_option<
 >(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<UpdatePropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), UpdatePropertyOptionErr> {
+    let user = user.macro_user_id.clone();
     let updated = state
         .properties_service
         .update_property_option(
@@ -278,12 +272,10 @@ pub async fn delete_property_option<
 >(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
+    let user = user.macro_user_id.clone();
     tracing::info!("deleting property option");
 
     state

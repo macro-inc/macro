@@ -223,8 +223,8 @@ async fn init_user(
     }): Query<InitParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService>,
 ) -> Result<Response, InitError> {
-    let macro_user_id = authorization.macro_user_id;
-    let user_context = authorization.user_context;
+    let macro_user_id = authorization.macro_user_id.clone();
+    let user_context = authorization.user_context.clone();
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());

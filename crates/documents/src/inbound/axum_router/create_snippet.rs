@@ -47,7 +47,7 @@ pub async fn create_snippet_handler<
     let created = state
         .creator
         .create_markdown_text(
-            user.macro_user_id,
+            user.macro_user_id.clone(),
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown: req.markdown.unwrap_or_default(),

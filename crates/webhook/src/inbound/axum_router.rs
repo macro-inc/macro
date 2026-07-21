@@ -225,7 +225,7 @@ pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
     let webhook = service
-        .create_webhook(authorization.macro_user_id, request)
+        .create_webhook(authorization.macro_user_id.clone(), request)
         .await?;
     Ok((StatusCode::CREATED, Json(webhook.into())))
 }
@@ -253,7 +253,11 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
     Ok(Json(
         service
-            .patch_webhook(authorization.macro_user_id, path.webhook_id, request)
+            .patch_webhook(
+                authorization.macro_user_id.clone(),
+                path.webhook_id,
+                request,
+            )
             .await?,
     ))
 }
@@ -277,7 +281,7 @@ pub async fn delete_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Path(path): Path<WebhookPath>,
 ) -> Result<StatusCode, WebhookHandlerError> {
     service
-        .delete_webhook(authorization.macro_user_id, path.webhook_id)
+        .delete_webhook(authorization.macro_user_id.clone(), path.webhook_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -303,7 +307,7 @@ pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
     Ok(Json(
         service
-            .validate_webhook(authorization.macro_user_id, path.webhook_id)
+            .validate_webhook(authorization.macro_user_id.clone(), path.webhook_id)
             .await?,
     ))
 }

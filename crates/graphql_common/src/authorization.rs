@@ -29,6 +29,7 @@ where
         extract_part::<Cached<OptionalMacroAuthorizationExtractor<Auth>>, St>(ctx).await?;
 
     authorization
-        .macro_user_id
+        .acting_user()
+        .map(|user| user.macro_user_id.clone())
         .ok_or_else(|| async_graphql::Error::new("authentication required"))
 }

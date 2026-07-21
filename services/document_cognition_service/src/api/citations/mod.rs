@@ -32,12 +32,16 @@ pub struct Params {
       (status = 500, body = String),
   )
 )]
-#[tracing::instrument(skip(db, user), fields(user_id=?user.macro_user_id))]
+#[tracing::instrument(skip(db, user), fields(user_id = tracing::field::Empty))]
 pub async fn get_citation_handler(
     State(db): State<PgPool>,
     user: OptionalMacroAuthorizationExtractor<DcsAuthorizationService>,
     Path(Params { id }): Path<Params>,
 ) -> Result<Json<DocumentTextPart>, (StatusCode, String)> {
+    let user_id = user.acting_user().map(|user| user.macro_user_id.as_ref());
+    if let Some(user_id) = user_id {
+        tracing::Span::current().record("user_id", tracing::field::display(user_id));
+    }
     match get_part_by_id(db, id.as_str()).await {
         Ok(Some(part)) => Ok(Json(part)),
         Ok(None) => Err((
@@ -45,7 +49,7 @@ pub async fn get_citation_handler(
             "not found - possible hallucination".to_string(),
         )),
         Err(err) => {
-            tracing::error!(user_id=?user.macro_user_id, citation_id=%id, error=%err, "failed to get citation");
+            tracing::error!(user_id, citation_id=%id, error=%err, "failed to get citation");
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "unable to get citation".to_string(),

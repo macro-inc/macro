@@ -97,7 +97,7 @@ async fn cursor_handler<T: EmailService, Auth: MacroAuthorizationService>(
             .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
                 link_ids: links.iter().map(|link| link.id).collect(),
-                macro_id: macro_user.macro_user_id,
+                macro_id: macro_user.macro_user_id.clone(),
                 limit: params.limit,
                 query: cursor
                     .into_query(

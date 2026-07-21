@@ -70,7 +70,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
-    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState, PgBotAuthorizer,
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
@@ -90,7 +90,7 @@ use properties::{
 };
 use properties_service::PropertiesHandlerState;
 use readonly_pool::ReadOnlyPool;
-use search_service::{SearchHandlerState, SearchRouterState};
+use search_service::SearchHandlerState;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -262,19 +262,8 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
-/// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
-
 /// Type alias for the authorization service.
-pub(crate) type AuthorizationService =
-    MacroAuthorizationServiceImpl<MacroAuthJwtValidator, PgBotAuthorizer>;
-
-/// Type alias for the properties router state.
-pub(crate) type DssPropertiesHandlerState = PropertiesHandlerState<AuthorizationService>;
-
-/// Type alias for the search router state.
-pub(crate) type DssSearchRouterState = SearchRouterState<AuthorizationService>;
+pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
 /// Type alias for the documents router state.
 pub(crate) type DocumentsState =
@@ -323,6 +312,10 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
+
+/// Type alias for the bots service wired into DSS.
+pub(crate) type DssBotService =
+    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -469,9 +462,9 @@ env_var! {
     pub struct DocumentStorageServiceAuthKey;
 }
 
-impl From<&ApiContext> for DssPropertiesHandlerState {
+impl From<&ApiContext> for PropertiesHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        DssPropertiesHandlerState::new(
+        PropertiesHandlerState::new(
             ctx.properties_service.clone(),
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
@@ -479,28 +472,26 @@ impl From<&ApiContext> for DssPropertiesHandlerState {
     }
 }
 
-impl FromRef<ApiContext> for DssPropertiesHandlerState {
+impl FromRef<ApiContext> for PropertiesHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
-        DssPropertiesHandlerState::from(ctx)
+        PropertiesHandlerState::from(ctx)
     }
 }
 
-impl From<&ApiContext> for DssSearchRouterState {
+impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        Self {
-            handler_state: SearchHandlerState {
-                db: ctx.readonly_db.clone(),
-                opensearch_client: ctx.opensearch_client.clone(),
-                entity_access_service: ctx.entity_access_service.clone(),
-            },
+        SearchHandlerState {
+            db: ctx.readonly_db.clone(),
+            opensearch_client: ctx.opensearch_client.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
         }
     }
 }
 
-impl FromRef<ApiContext> for DssSearchRouterState {
+impl FromRef<ApiContext> for SearchHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
-        DssSearchRouterState::from(ctx)
+        SearchHandlerState::from(ctx)
     }
 }
 

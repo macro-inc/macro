@@ -200,7 +200,7 @@ pub async fn create_chat_handler<
     let id = state
         .inner
         .create(
-            user.macro_user_id,
+            user.macro_user_id.clone(),
             CreateChatArgs {
                 name: req.name.unwrap_or_else(|| "New Chat".to_string()),
                 project_id: req.project_id,

@@ -106,7 +106,7 @@ pub async fn create_action<
         .ok_or_else(|| anyhow::anyhow!("schedule has no future firings"))?;
     let action = ScheduledAction {
         id: None,
-        owner: user.macro_user_id,
+        owner: user.macro_user_id.clone(),
         name: req.name,
         schedule: req.schedule,
         kind: req.kind,
@@ -140,7 +140,10 @@ pub async fn list_actions<
     State(state): State<ScheduledActionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    let actions = state.service.get_actions(user.macro_user_id).await?;
+    let actions = state
+        .service
+        .get_actions(user.macro_user_id.clone())
+        .await?;
     Ok(Json(actions))
 }
 
@@ -188,7 +191,7 @@ pub async fn update_action<
     };
     let updated = state
         .service
-        .update_action(action, user.macro_user_id)
+        .update_action(action, user.macro_user_id.clone())
         .await?;
     Ok(Json(updated))
 }
@@ -214,7 +217,10 @@ pub async fn delete_action<
     user: MacroAuthorizationExtractor<Auth>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    state.service.delete_action(&id, user.macro_user_id).await?;
+    state
+        .service
+        .delete_action(&id, user.macro_user_id.clone())
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -242,7 +248,7 @@ pub async fn execute_action<
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let execution = state
         .service
-        .execute_action_now(&id, user.macro_user_id)
+        .execute_action_now(&id, user.macro_user_id.clone())
         .await?;
     Ok(Json(execution))
 }
@@ -270,7 +276,7 @@ pub async fn list_history<
 ) -> Result<impl IntoResponse, ScheduledActionApiError> {
     let records = state
         .service
-        .get_execution_records(&id, user.macro_user_id)
+        .get_execution_records(&id, user.macro_user_id.clone())
         .await?;
     Ok(Json(records))
 }

@@ -109,12 +109,10 @@ pub async fn list_tags<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
+    let user = user.macro_user_id.clone();
     let sets = state
         .properties_service
         .list_tag_sets(&user, team.entity_access_receipt.as_ref())
@@ -143,13 +141,11 @@ pub async fn ensure_tag_set<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<PropertiesRouterState<S, A, Auth>>,
-    MacroAuthorizationExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth>,
     team: PropertyTeamExtractor<A, Auth>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
+    let user = user.macro_user_id.clone();
     let set = state
         .properties_service
         .ensure_tag_set(

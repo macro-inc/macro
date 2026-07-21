@@ -177,13 +177,13 @@ where
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let OptionalMacroAuthorizationExtractor {
-            macro_user_id: user,
-            ..
-        } = parts
+        let authorization = parts
             .extract_with_state::<OptionalMacroAuthorizationExtractor<Auth>, _>(state)
             .await
             .map_err(ReceiptRejection::from)?;
+        let user = authorization
+            .acting_user()
+            .map(|user| user.macro_user_id.clone());
 
         let receipt = mint_view_receipt(
             state.entity_access_service.as_ref(),
@@ -216,17 +216,14 @@ where
     ) -> Result<Self, Self::Rejection> {
         let params = entity_path_params(parts).await?;
 
-        let MacroAuthorizationExtractor {
-            macro_user_id: user,
-            ..
-        } = parts
+        let authorization = parts
             .extract_with_state::<MacroAuthorizationExtractor<Auth>, _>(state)
             .await
             .map_err(ReceiptRejection::from)?;
 
         let receipt = mint_authenticated_receipt::<EditAccessLevel, A>(
             state.entity_access_service.as_ref(),
-            &user,
+            &authorization.macro_user_id,
             &params.entity_id,
             target_entity_type(params.entity_type),
         )

@@ -1,6 +1,4 @@
-use crate::api::context::{
-    ApiContext, AuthorizationService, DssPropertiesHandlerState, DssSearchRouterState,
-};
+use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
@@ -11,6 +9,8 @@ use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use properties_service::PropertiesHandlerState;
+use search_service::SearchHandlerState;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
@@ -185,13 +185,12 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/properties",
-            properties_service::properties_router_with_authorization::<AuthorizationService>()
-                .with_state(DssPropertiesHandlerState::from_ref(&state)),
+            properties_service::properties_router()
+                .with_state(PropertiesHandlerState::from_ref(&state)),
         )
         .nest(
             "/search",
-            search_service::search_router_with_authorization::<AuthorizationService>()
-                .with_state(DssSearchRouterState::from_ref(&state)),
+            search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
         )
         .nest(
             "/sync_service",
@@ -252,8 +251,8 @@ fn api_router(state: ApiContext) -> Router {
                 .nest("/notifications", notification::router())
                 .nest(
                     "/search",
-                    search_service::search_router_with_authorization::<AuthorizationService>()
-                        .with_state(DssSearchRouterState::from_ref(&state)),
+                    search_service::search_router()
+                        .with_state(SearchHandlerState::from_ref(&state)),
                 )
                 .nest(
                     "/sync_service",

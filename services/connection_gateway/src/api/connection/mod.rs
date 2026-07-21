@@ -47,8 +47,8 @@ pub async fn ws_handler(
             socket,
             ctx,
             config,
-            authorization.macro_user_id,
-            authorization.user_context,
+            authorization.macro_user_id.clone(),
+            authorization.user_context.clone(),
         )
     })
 }

@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod test;
 
+use std::{future::Future, pin::Pin, sync::Arc};
+
 use constant_time_eq::constant_time_eq;
 use model_user::UserContext;
 use rootcause::Report;
@@ -10,32 +12,62 @@ use super::{
         BotActingUserClaims, BotAuthentication, InternalAuthConfig, InternalIdentityClaims,
         MacroAuthorizationError,
     },
-    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer},
+    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService},
 };
+
+type BotAuthorizationFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<BotAuthentication, Report<MacroAuthorizationError>>> + Send + 'a,
+    >,
+>;
+
+trait DynBotAuthorizer: Send + Sync {
+    fn authorize_bot<'a>(
+        &'a self,
+        bot_token: &'a str,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> BotAuthorizationFuture<'a>;
+}
+
+impl<B> DynBotAuthorizer for B
+where
+    B: BotAuthorizer,
+{
+    fn authorize_bot<'a>(
+        &'a self,
+        bot_token: &'a str,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> BotAuthorizationFuture<'a> {
+        Box::pin(BotAuthorizer::authorize_bot(self, bot_token, acting_user))
+    }
+}
 
 /// Default authorization service backed by a credential validator.
 #[derive(Clone)]
-pub struct MacroAuthorizationServiceImpl<V, B = NoBotAuthorizer> {
+pub struct MacroAuthorizationServiceImpl<V> {
     validator: V,
     internal_auth: InternalAuthConfig,
-    bot_authorizer: B,
+    bot_authorizer: Arc<dyn DynBotAuthorizer>,
 }
 
-impl<V, B> MacroAuthorizationServiceImpl<V, B> {
+impl<V> MacroAuthorizationServiceImpl<V> {
     /// Create an authorization service with required user, internal, and bot authorization dependencies.
-    pub fn new(validator: V, internal_auth: InternalAuthConfig, bot_authorizer: B) -> Self {
+    pub fn new(
+        validator: V,
+        internal_auth: InternalAuthConfig,
+        bot_authorizer: impl BotAuthorizer,
+    ) -> Self {
         Self {
             validator,
             internal_auth,
-            bot_authorizer,
+            bot_authorizer: Arc::new(bot_authorizer),
         }
     }
 }
 
-impl<V, B> MacroAuthorizationService for MacroAuthorizationServiceImpl<V, B>
+impl<V> MacroAuthorizationService for MacroAuthorizationServiceImpl<V>
 where
     V: JwtValidator,
-    B: BotAuthorizer,
 {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         let identity = self.validator.validate(jwt)?;

@@ -1,11 +1,10 @@
-use crate::api::context::{SearchAuthorizationService, SearchRouterState};
+use crate::api::context::SearchHandlerState;
 use axum::{
     Json, Router,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };
-use macro_authorization::MacroAuthorizationService;
 use model::response::ErrorResponse;
 use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
@@ -18,15 +17,8 @@ pub(in crate::api) mod simple_document;
 pub(in crate::api) mod simple_project;
 pub mod simple_unified;
 
-pub fn router() -> Router<SearchRouterState> {
-    router_with_authorization::<SearchAuthorizationService>()
-}
-
-pub(super) fn router_with_authorization<Auth>() -> Router<SearchRouterState<Auth>>
-where
-    Auth: MacroAuthorizationService,
-{
-    Router::new().route("/", post(simple_unified::handler::<Auth>))
+pub fn router() -> Router<SearchHandlerState> {
+    Router::new().route("/", post(simple_unified::handler))
 }
 
 #[derive(thiserror::Error, Debug)]
