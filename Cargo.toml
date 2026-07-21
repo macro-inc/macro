@@ -6,7 +6,7 @@ members = [
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/bot_id",
-  "crates/bots",
+  "crates/bots", "crates/broadcast",
   "crates/channel_bots",
   "crates/client/cache-core",
   "crates/client/cache-idb",
