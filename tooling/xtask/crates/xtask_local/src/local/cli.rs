@@ -42,6 +42,8 @@ enum Cmd {
     ResetLocal(InstanceArgs),
     /// Remove an instance's containers, networks, and volumes.
     DestroyLocal(InstanceArgs),
+    /// Start, seed, and test an isolated local E2E stack.
+    LocalE2e(super::e2e::LocalE2eArgs),
     /// Headless stack orchestration (previews, agents, CI) — no TTY, no
     /// attached dev server; the proxy serves a static frontend bundle.
     #[command(subcommand)]
@@ -177,8 +179,9 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::StopLocal(a) => super::stop(&a),
         Cmd::ResetLocal(a) => super::reset(&a),
         Cmd::DestroyLocal(a) => super::destroy(&a),
+        Cmd::LocalE2e(a) => super::e2e::run(&a),
         Cmd::Stack(cmd) => match cmd {
-            StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
+            StackCmd::Up(a) => super::stack::up(Mode::Local, &a).map(|_| ()),
             StackCmd::Update(a) => super::stack::update(&a),
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Down(a) => super::stack::down(&a),
@@ -186,3 +189,6 @@ fn run(cli: Cli) -> Result<()> {
         },
     }
 }
+
+#[cfg(test)]
+mod test;

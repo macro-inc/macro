@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            permission.id,\n            permission.\"isPublic\" AS \"is_public\",\n            permission.\"publicAccessLevel\" AS \"public_access_level?\",\n            project.\"userId\" AS owner,\n            COALESCE(\n                json_agg(json_build_object(\n                    'channel_id', channel.\"channel_id\",\n                    'access_level', channel.\"access_level\"\n                )) FILTER (WHERE channel.\"channel_id\" IS NOT NULL),\n                '[]'\n            ) AS \"channel_share_permissions?\"\n        FROM \"ProjectPermission\" project_permission\n        JOIN \"SharePermission\" permission\n            ON project_permission.\"sharePermissionId\" = permission.id\n        JOIN \"Project\" project ON project_permission.\"projectId\" = project.id\n        LEFT JOIN \"ChannelSharePermission\" channel\n            ON channel.\"share_permission_id\" = permission.id\n        WHERE project_permission.\"projectId\" = $1\n        GROUP BY permission.id, project.\"userId\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "public_access_level?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "channel_share_permissions?",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "bf98ad9ab317aeb662ab9859a9a076ba4cb25186e0743845a7bb0fc5db1f4c99"
+}

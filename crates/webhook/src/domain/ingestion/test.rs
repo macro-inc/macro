@@ -1,5 +1,9 @@
 use super::*;
 use crate::domain::{
+    events::{
+        WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookTopicEvent, WebhookUpdatedMetadata,
+        WebhookValidatedMetadata,
+    },
     models::{
         CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookEventQueueMessage, WebhookStatus,
     },
@@ -654,6 +658,92 @@ fn channel_event_cases() -> Vec<EventCase> {
     ]
 }
 
+struct WebhookEventCase {
+    event: Event<WebhookTopicEvent>,
+    event_name: &'static str,
+    webhook_id: &'static str,
+    workspace_id: &'static str,
+}
+
+fn webhook_event_cases() -> Vec<WebhookEventCase> {
+    vec![
+        WebhookEventCase {
+            event: Event::with_event_id_and_schema_version(
+                Uuid::parse_str("01998a30-1a2b-7c3d-9e4f-5a6b7c8d9e0f").unwrap(),
+                2,
+                WebhookTopicEvent::Created(WebhookCreatedMetadata {
+                    webhook_id: "wh_created".to_string(),
+                    workspace_id: PERSONAL_WORKSPACE_ID.to_string(),
+                    created_by_user_id: user_id("macro|creator@example.com"),
+                    name: "Created webhook".to_string(),
+                    endpoint_url: "https://example.com/created".to_string(),
+                    status: WebhookStatus::Active,
+                    is_valid: false,
+                    filters: vec![],
+                    header_names: vec!["X-Customer".to_string()],
+                    created_at: timestamp(),
+                }),
+            ),
+            event_name: "webhook.created",
+            webhook_id: "wh_created",
+            workspace_id: PERSONAL_WORKSPACE_ID,
+        },
+        WebhookEventCase {
+            event: Event::with_event_id_and_schema_version(
+                Uuid::parse_str("01998a30-2b3c-7d4e-8f50-6b7c8d9e0f1a").unwrap(),
+                3,
+                WebhookTopicEvent::Updated(WebhookUpdatedMetadata {
+                    webhook_id: "wh_updated".to_string(),
+                    workspace_id: TEAM_WORKSPACE_ID.to_string(),
+                    actor_user_id: user_id("macro|editor@example.com"),
+                    name: Some("Updated webhook".to_string()),
+                    endpoint_url: None,
+                    filters: None,
+                    headers_updated: true,
+                    status: Some(WebhookStatus::Paused),
+                    previous_status: Some(WebhookStatus::Active),
+                    is_valid: false,
+                    updated_at: timestamp(),
+                }),
+            ),
+            event_name: "webhook.updated",
+            webhook_id: "wh_updated",
+            workspace_id: TEAM_WORKSPACE_ID,
+        },
+        WebhookEventCase {
+            event: Event::with_event_id_and_schema_version(
+                Uuid::parse_str("01998a30-3c4d-7e5f-8051-7c8d9e0f1a2b").unwrap(),
+                4,
+                WebhookTopicEvent::Deleted(WebhookDeletedMetadata {
+                    webhook_id: "wh_deleted".to_string(),
+                    workspace_id: PERSONAL_WORKSPACE_ID.to_string(),
+                    actor_user_id: user_id("macro|deleter@example.com"),
+                }),
+            ),
+            event_name: "webhook.deleted",
+            webhook_id: "wh_deleted",
+            workspace_id: PERSONAL_WORKSPACE_ID,
+        },
+        WebhookEventCase {
+            event: Event::with_event_id_and_schema_version(
+                Uuid::parse_str("01998a30-4d5e-7f60-8152-8d9e0f1a2b3c").unwrap(),
+                5,
+                WebhookTopicEvent::Validated(WebhookValidatedMetadata {
+                    webhook_id: "wh_validated".to_string(),
+                    workspace_id: TEAM_WORKSPACE_ID.to_string(),
+                    actor_user_id: user_id("macro|validator@example.com"),
+                    is_valid: true,
+                    response_status: Some(204),
+                    message: None,
+                }),
+            ),
+            event_name: "webhook.validated",
+            webhook_id: "wh_validated",
+            workspace_id: TEAM_WORKSPACE_ID,
+        },
+    ]
+}
+
 #[tokio::test]
 async fn normalizes_and_matches_all_fourteen_event_variants() {
     let event_cases = document_event_cases()
@@ -725,6 +815,167 @@ async fn normalizes_and_matches_all_fourteen_event_variants() {
         assert!(message.event.occurred_at >= before_ingestion);
         assert!(message.event.occurred_at <= after_ingestion);
     }
+}
+
+#[tokio::test]
+async fn normalizes_all_webhook_variants_with_direct_workspace_ownership() {
+    for event_case in webhook_event_cases() {
+        let access = MockAccessService {
+            users: vec![user_id("macro|unrelated@example.com")],
+            failure: Some(AccessFailure::Internal),
+            calls: Arc::default(),
+        };
+        let repository = MockRepository::new(
+            vec!["workspace-that-must-not-be-used".to_string()],
+            vec![webhook("wh_match", event_case.workspace_id)],
+        );
+        lock(&repository.state).fail_workspace_resolution = true;
+        let enqueuer = MockEnqueuer::default();
+        let service = service(access.clone(), repository.clone(), enqueuer.clone());
+        let expected_envelope = serde_json::to_value(&event_case.event).unwrap();
+        let before_ingestion = Utc::now();
+
+        service
+            .ingest_webhook_event(event_case.event.clone())
+            .await
+            .unwrap_or_else(|error| {
+                panic!("{} should be ingested: {error}", event_case.event_name)
+            });
+        let after_ingestion = Utc::now();
+
+        assert!(
+            lock(&access.calls).is_empty(),
+            "entity access must not be called for {}",
+            event_case.event_name
+        );
+        let repository_state = lock(&repository.state);
+        assert!(
+            repository_state.workspace_calls.is_empty(),
+            "workspace resolution must not be called for {}",
+            event_case.event_name
+        );
+        assert_eq!(
+            repository_state.match_calls,
+            vec![MatchCall {
+                workspace_ids: vec![event_case.workspace_id.to_string()],
+                event_name: event_case.event_name.to_string(),
+                entity_id: event_case.webhook_id.to_string(),
+            }],
+            "strict workspace matching for {}",
+            event_case.event_name
+        );
+        drop(repository_state);
+
+        let enqueuer_state = lock(&enqueuer.state);
+        assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+        let message = &enqueuer_state.attempted_messages[0];
+        assert_eq!(message.webhook_id, "wh_match");
+        assert_eq!(
+            message.event.event_id,
+            event_case.event.event_id.to_string()
+        );
+        assert_eq!(
+            message.event.schema_version,
+            event_case.event.schema_version
+        );
+        assert_eq!(message.event.event_name, event_case.event_name);
+        assert_eq!(message.event.entity_type, WEBHOOK_ENTITY_TYPE);
+        assert_eq!(message.event.entity_id, event_case.webhook_id);
+        assert_eq!(message.event.ordering_key, event_case.webhook_id);
+        assert_eq!(message.event.broker_envelope, expected_envelope);
+        assert_eq!(
+            message.event.broker_envelope["event_type"],
+            event_case.event_name
+        );
+        assert!(message.event.occurred_at >= before_ingestion);
+        assert!(message.event.occurred_at <= after_ingestion);
+    }
+}
+
+#[tokio::test]
+async fn webhook_event_fans_out_complete_envelope_to_every_match() {
+    let event_case = webhook_event_cases().remove(1);
+    let expected_envelope = serde_json::to_value(&event_case.event).unwrap();
+    let access = MockAccessService::with_users(Vec::new());
+    let repository = MockRepository::new(
+        Vec::new(),
+        vec![
+            webhook("wh_first_match", event_case.workspace_id),
+            webhook("wh_second_match", event_case.workspace_id),
+        ],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_webhook_event(event_case.event)
+        .await
+        .expect("webhook fan-out succeeds");
+
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert!(repository_state.workspace_calls.is_empty());
+    assert_eq!(
+        repository_state.match_calls,
+        vec![MatchCall {
+            workspace_ids: vec![TEAM_WORKSPACE_ID.to_string()],
+            event_name: "webhook.updated".to_string(),
+            entity_id: "wh_updated".to_string(),
+        }]
+    );
+    drop(repository_state);
+
+    let enqueuer_state = lock(&enqueuer.state);
+    let mut webhook_ids = enqueuer_state
+        .attempted_messages
+        .iter()
+        .map(|message| message.webhook_id.as_str())
+        .collect::<Vec<_>>();
+    webhook_ids.sort_unstable();
+    assert_eq!(webhook_ids, vec!["wh_first_match", "wh_second_match"]);
+    assert_eq!(enqueuer_state.completed_webhook_ids.len(), 2);
+    for message in &enqueuer_state.attempted_messages {
+        assert_eq!(message.event.broker_envelope, expected_envelope);
+    }
+}
+
+#[tokio::test]
+async fn malformed_webhook_ids_are_permanent_and_skip_all_resolution() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    for invalid_id in ["", "webhook_without_prefix"] {
+        let event = Event::new(WebhookTopicEvent::Deleted(WebhookDeletedMetadata {
+            webhook_id: invalid_id.to_string(),
+            workspace_id: PERSONAL_WORKSPACE_ID.to_string(),
+            actor_user_id: user_id("macro|deleter@example.com"),
+        }));
+
+        let error = service
+            .ingest_webhook_event(event)
+            .await
+            .expect_err("malformed webhook ids are rejected");
+
+        assert!(matches!(
+            &error,
+            WebhookEventIngestionError::InvalidEntityId {
+                entity_type: WEBHOOK_ENTITY_TYPE,
+                entity_id,
+            } if entity_id == invalid_id
+        ));
+        assert!(!error.is_transient());
+    }
+
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert!(repository_state.workspace_calls.is_empty());
+    assert!(repository_state.match_calls.is_empty());
+    assert!(lock(&enqueuer.state).attempted_messages.is_empty());
 }
 
 #[tokio::test]

@@ -101,6 +101,17 @@ const fusionAuthStack = new pulumi.StackReference('fusion-auth-stack', {
   name: `macro-inc/fusion-auth/${stack}`,
 });
 
+const contactsServiceStack = new pulumi.StackReference(
+  'contacts-service-stack',
+  {
+    name: `macro-inc/contacts-service/${stack}`,
+  }
+);
+
+const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueArn')
+  .apply((arn) => arn as string);
+
 const fusionAuthClusterArn: pulumi.Output<string> = fusionAuthStack
   .getOutput('fusionAuthClusterArn')
   .apply((fusionAuthClusterArn) => fusionAuthClusterArn as string);
@@ -135,6 +146,7 @@ const service = new AuthenticationService('authentication-service', {
     searchEventQueueArn,
     linkManagerQueueArn,
     backfillQueueArn,
+    contactsQueueArn,
   ],
   containerEnvVars: [
     { name: 'ENVIRONMENT', value: stack },

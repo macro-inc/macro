@@ -4,12 +4,18 @@ import {
   type GraphqlSoupInitialInput,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
-import { useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { useQueries, useQueryClient } from '@tanstack/solid-query';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 2;
+const BACKFILL_VERSION = 3;
 const PAGE_LIMIT = 250;
 // The email-content DataLoader rejects operations with more than 20 threads.
 const EMAIL_CONTENT_PAGE_LIMIT = 20;
@@ -27,28 +33,30 @@ export type SoupBackfillParams = {
   pageDelayMs?: number;
 };
 
-export const ALL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
-  checkpointId: 'all',
+/** Backfills the entities used most often by Quick Access and primary views. */
+export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'core-entities',
   input: {
     limit: PAGE_LIMIT,
     expand: true,
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
-      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
     },
   },
 };
 
 /**
- * Fetches email threads and their newest content message while excluding every
- * other entity variant with an impossible id filter.
+ * Backfills email threads and their newest content message while excluding
+ * every other entity variant with an impossible id filter.
  */
-export const EMAIL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
-  // This namespace must not reuse checkpoints from the old metadata-only pass.
-  checkpointId: 'email-content-all',
+export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'email-content',
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
@@ -66,6 +74,33 @@ export const EMAIL_SOUP_BACKFILL_PARAMS: SoupBackfillParams = {
     },
   },
 };
+
+/** Backfills CRM companies and foreign entities. */
+export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'auxiliary-entities',
+  input: {
+    limit: PAGE_LIMIT,
+    expand: true,
+    sortMethod: 'VIEWED_UPDATED',
+    emailView: 'ALL',
+    filters: {
+      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
+      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
+      emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
+      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+    },
+  },
+};
+
+/** Independently checkpointed backfills started together by the coordinator. */
+export const DEFAULT_SOUP_BACKFILL_LANES = [
+  CORE_SOUP_BACKFILL_LANE,
+  EMAIL_SOUP_BACKFILL_LANE,
+  AUXILIARY_SOUP_BACKFILL_LANE,
+] as const satisfies readonly SoupBackfillParams[];
 
 export type SoupBackfillCheckpoint = {
   userId: string;
@@ -93,11 +128,7 @@ type StoredSoupBackfillCheckpoint = Omit<
   >;
 
 function checkpointKey(userId: string, checkpointId: string): string {
-  const baseKey = `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}`;
-  // Preserve the original all-Soup checkpoint key.
-  return checkpointId === ALL_SOUP_BACKFILL_PARAMS.checkpointId
-    ? baseKey
-    : `${baseKey}:${checkpointId}`;
+  return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${checkpointId}`;
 }
 
 function initialCheckpoint(userId: string): SoupBackfillCheckpoint {
@@ -139,7 +170,7 @@ function isCheckpoint(
 
 export function loadSoupBackfillCheckpoint(
   userId: string,
-  checkpointId = ALL_SOUP_BACKFILL_PARAMS.checkpointId
+  checkpointId = CORE_SOUP_BACKFILL_LANE.checkpointId
 ): SoupBackfillCheckpoint {
   try {
     const saved = localStorage.getItem(checkpointKey(userId, checkpointId));
@@ -178,7 +209,7 @@ function saveSoupBackfillCheckpoint(
 
 export function resetSoupBackfillCheckpoint(
   userId: string,
-  checkpointId = ALL_SOUP_BACKFILL_PARAMS.checkpointId
+  checkpointId = CORE_SOUP_BACKFILL_LANE.checkpointId
 ): void {
   try {
     localStorage.removeItem(checkpointKey(userId, checkpointId));
@@ -329,48 +360,75 @@ export async function runSoupBackfill(
 }
 
 /**
- * Slowly fills the browser GraphQL cache with every expanded Soup page.
- * The next cursor is persisted after each successful page so retries and
- * future sessions resume from the first unfinished page.
+ * Slowly fills the browser GraphQL cache through independently checkpointed
+ * lanes. Every lane starts together on the elected tab.
  */
-export function useSoupBackfill(
-  userId: Accessor<string | undefined>,
-  params?: Accessor<SoupBackfillParams>
-) {
-  const checkpointId =
-    params?.().checkpointId ?? ALL_SOUP_BACKFILL_PARAMS.checkpointId;
+export function useSoupBackfills(userId: Accessor<string | undefined>) {
+  const queryClient = useQueryClient();
   const isLeader = createTabLeaderSignal(
-    `graphql-soup-backfill:v${BACKFILL_VERSION}:${checkpointId}`
+    `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
+  );
+  const initialLeadershipController = new AbortController();
+  const initiallyLeader = isLeader();
+  if (!initiallyLeader) initialLeadershipController.abort();
+  const [leadership, setLeadership] = createSignal({
+    isLeader: initiallyLeader,
+    controller: initialLeadershipController,
+  });
+
+  createEffect(
+    on(
+      isLeader,
+      (leader) => {
+        setLeadership((current) => {
+          current.controller.abort();
+          const controller = new AbortController();
+          if (!leader) {
+            controller.abort();
+            void queryClient.cancelQueries({
+              queryKey: ['graphql-soup-backfill', BACKFILL_VERSION],
+            });
+          }
+          return { isLeader: leader, controller };
+        });
+      },
+      { defer: true }
+    )
   );
 
-  return useQuery(() => {
+  onCleanup(() => leadership().controller.abort());
+
+  return useQueries(() => {
     const currentUserId = userId();
-    const currentParams = params?.() ?? ALL_SOUP_BACKFILL_PARAMS;
+    const currentLeadership = leadership();
+    const backfillEnabled =
+      currentUserId !== undefined &&
+      graphqlCacheEnabled() &&
+      currentLeadership.isLeader;
 
     return {
-      queryKey: [
-        'graphql-soup-backfill',
-        BACKFILL_VERSION,
-        currentUserId,
-        currentParams.checkpointId,
-      ] as const,
-      enabled:
-        currentUserId !== undefined && graphqlCacheEnabled() && isLeader(),
-      queryFn: ({ signal }: { signal: AbortSignal }) => {
-        return runSoupBackfill(currentUserId!, currentParams, signal);
-      },
-      networkMode: 'online' as const,
-      retry: 5,
-      retryDelay: backfillRetryDelay,
-      // Keep the successful result fresh in the elected tab. Other tabs keep
-      // the query disabled until tab-election transfers leadership to them.
-      staleTime: Infinity,
-      refetchOnWindowFocus: false,
+      queries: DEFAULT_SOUP_BACKFILL_LANES.map((lane) => ({
+        queryKey: [
+          'graphql-soup-backfill',
+          BACKFILL_VERSION,
+          currentUserId,
+          lane.checkpointId,
+        ] as const,
+        enabled: backfillEnabled,
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          runSoupBackfill(
+            currentUserId!,
+            lane,
+            AbortSignal.any([signal, currentLeadership.controller.signal])
+          ),
+        networkMode: 'online' as const,
+        retry: 5,
+        retryDelay: backfillRetryDelay,
+        // A completed lane stays fresh for this QueryClient lifetime. A new
+        // session starts another watermark-based pass from its checkpoint.
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+      })),
     };
   });
-}
-
-/** Backfills email thread metadata and content with an independent checkpoint. */
-export function useEmailSoupBackfill(userId: Accessor<string | undefined>) {
-  return useSoupBackfill(userId, () => EMAIL_SOUP_BACKFILL_PARAMS);
 }

@@ -24,6 +24,7 @@ import {
   makeFavoriteAction,
   makeHideCompanyAction,
   makeMarkDoneAction,
+  makeMarkNotDoneAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
   makeMoveToProjectAction,
@@ -92,6 +93,10 @@ export function createSoupEntityActions(): {
     notificationSource: () => notificationSource,
   });
 
+  const markNotDone = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
+  });
+
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
   });
@@ -136,15 +141,25 @@ export function createSoupEntityActions(): {
     if (
       activeTab &&
       isListViewID(activeListView) &&
-      canExecuteMarkDoneOnView(activeListView, activeTab) &&
-      canExecuteAll(markDone.canExecute)
+      canExecuteMarkDoneOnView(activeListView, activeTab)
     ) {
-      topItems.push({
-        id: 'mark-done',
-        label: 'Mark Done',
-        hotkeyToken: TOKENS.entity.action.markDone,
-        onClick: handle(markDone.executeWithSoup),
-      });
+      // A fully-done selection (e.g. archived threads in mail "All") gets the
+      // reverse action; anything else gets Mark Done.
+      if (canExecuteAll(markNotDone.canExecute)) {
+        topItems.push({
+          id: 'mark-not-done',
+          label: 'Mark Not Done',
+          hotkeyToken: TOKENS.entity.action.markNotDone,
+          onClick: handle(markNotDone.executeWithSoup),
+        });
+      } else if (canExecuteAll(markDone.canExecute)) {
+        topItems.push({
+          id: 'mark-done',
+          label: 'Mark Done',
+          hotkeyToken: TOKENS.entity.action.markDone,
+          onClick: handle(markDone.executeWithSoup),
+        });
+      }
     }
 
     const canOpenInSplit = () => {

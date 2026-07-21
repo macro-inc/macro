@@ -122,13 +122,36 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
-// Email signatures: the settings editor, the compose / reply / AI-chat signature
-// previews, and the per-message include toggle. Dev/local only for now; override
-// with VITE_ENABLE_EMAIL_SIGNATURES.
-export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
-  'ENABLE_EMAIL_SIGNATURES',
+// Activity timeline: the Activity sidebar entry and the combined Firehose /
+// My Activity view. Keep it dev-only by default while the feature is under
+// development; override with VITE_ENABLE_ACTIVITY for controlled testing.
+export const ENABLE_ACTIVITY = resolveFeatureFlag(
+  'ENABLE_ACTIVITY',
   DEV_MODE_ENV
 );
+
+// Email signatures: the settings editor, the compose / reply / AI-chat signature
+// previews, and the per-message include toggle. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_EMAIL_SIGNATURES.
+export const ENABLE_EMAIL_SIGNATURES_FLAG = 'enable-email-signatures';
+// Honor an explicit VITE_ENABLE_EMAIL_SIGNATURES=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+export const ENABLE_EMAIL_SIGNATURES_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_EMAIL_SIGNATURES') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, { enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE })`.
+ */
+export function ENABLE_EMAIL_SIGNATURES(): boolean {
+  if (ENABLE_EMAIL_SIGNATURES_OVERRIDE !== undefined) {
+    return ENABLE_EMAIL_SIGNATURES_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_SIGNATURES_FLAG) ?? false
+  );
+}
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
@@ -379,11 +402,6 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
   'USE_MACRO_PR_SUMMARY_BLOCK',
   true
 );
-
-// skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
-// can also be overridden via VITE_ENABLE_TEAMS env var
-export const ENABLE_TEAMS_OVERRIDE =
-  resolveFeatureFlag('ENABLE_TEAMS', DEV_MODE_ENV) || undefined;
 
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;

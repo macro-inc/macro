@@ -332,6 +332,8 @@ function EmailContent(props: EmailViewProps) {
   async function handleTargetMessage(messageId: string) {
     const messages = untrack(context.messages.list);
     if (!messages) return;
+    // Expand the target so the navigated-to hit isn't a collapsed row
+    context.messages.setExpandedBodyId(messageId, true);
     const targetIndex = messages.findIndex((m) => m.db_id === messageId);
 
     // Case 1: Message not in current loaded batch - need to load more
@@ -508,6 +510,8 @@ function EmailContent(props: EmailViewProps) {
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       blockSender: context.blockSender,
       markDone: context.archiveThread,
+      markNotDone: context.markThreadNotDone,
+      isThreadDone: context.isThreadDone,
       markSenderSignal: context.markSenderSignal,
       markSenderNoise: context.markSenderNoise,
       navigateToPreviousMessage,
@@ -536,11 +540,8 @@ function EmailContent(props: EmailViewProps) {
         });
       }
 
-      if (markdownDomRef) {
-        markdownDomRef.focus();
-        return true;
-      }
-      return false;
+      // No message focused: reply to the latest message, same as 'r'
+      return openHotkeyTarget('reply-all');
     },
     hotkeyToken: TOKENS.block.focus,
     hide: true,

@@ -736,17 +736,28 @@ where
             .map(|sets| sets.applied_tag_by_option_id())
             .unwrap_or_default();
 
-        let items: Vec<EntityItem> = paginated
+        let mut items: Vec<EntityItem> = paginated
             .items
             .into_iter()
             .map(|EnrichedSoupItem { item, .. }| EntityItem::from_soup_item(item, &tag_map))
             .collect();
+
+        retain_excluding_self_chat(&mut items, service_context.self_chat_id);
 
         // Build summary
         let summary = build_summary(&items, has_more, &self.effective_include_types());
 
         Ok(ListEntitiesResponse { items, summary })
     }
+}
+
+/// Drop the chat the agent is currently running inside from `items` so it
+/// never surfaces itself in its own results.
+pub(super) fn retain_excluding_self_chat(items: &mut Vec<EntityItem>, self_chat_id: Option<Uuid>) {
+    let Some(self_chat_id) = self_chat_id else {
+        return;
+    };
+    items.retain(|item| !matches!(item, EntityItem::AiChat { id, .. } if *id == self_chat_id));
 }
 
 async fn fetch_caller_tag_sets<T, E>(

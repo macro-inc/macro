@@ -25,7 +25,6 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::axum_extractor::MacroUserExtractor;
 
 enum TeamAccessOutcome<T: RequiredPermission> {
     Qualifying(EntityAccessReceipt<T>),
@@ -38,6 +37,16 @@ impl<T: RequiredPermission> TeamAccessOutcome<T> {
         match self {
             Self::Qualifying(receipt) => Some(receipt),
             Self::NotInTeam | Self::InsufficientRole => None,
+        }
+    }
+
+    fn into_required_receipt(self) -> Result<EntityAccessReceipt<T>, ExtractorError> {
+        match self {
+            Self::Qualifying(receipt) => Ok(receipt),
+            Self::NotInTeam => Err(ExtractorError::UnauthorizedWithMessage("not in a team")),
+            Self::InsufficientRole => Err(ExtractorError::UnauthorizedWithMessage(
+                "you do not have a high enough role",
+            )),
         }
     }
 }
@@ -76,68 +85,12 @@ where
     }))
 }
 
-/// Resolves the authenticated user's **OPTIONAL** team membership and exposes the receipt
-/// when the user satisfies the required permission `T`.
-///
-/// `entity_access_receipt` is:
-/// - `Some(receipt)` if the user belongs to a team and their role satisfies `T`
-/// - `None` if the user belongs to a team but their role does not satisfy `T`
-/// - `None` if the user belongs to no team
-///
-/// Returns `ExtractorError::Unauthorized` if there is no authenticated user.
-#[derive(Debug)]
-pub struct OptionalMacroUserTeamExtractor<T: RequiredPermission, Svc> {
-    /// The entity access receipt, if the user has a qualifying team membership.
-    pub entity_access_receipt: Option<EntityAccessReceipt<T>>,
-    _marker: PhantomData<(T, Svc)>,
-}
-
-impl<T: RequiredPermission, Svc> Clone for OptionalMacroUserTeamExtractor<T, Svc>
-where
-    EntityAccessReceipt<T>: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            entity_access_receipt: self.entity_access_receipt.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<T, S, Svc> FromRequestParts<S> for OptionalMacroUserTeamExtractor<T, Svc>
-where
-    T: RequiredPermission,
-    Arc<Svc>: FromRef<S>,
-    Svc: EntityAccessService,
-    S: Send + Sync + 'static,
-{
-    type Rejection = ExtractorError;
-
-    #[tracing::instrument(err, skip(state, parts))]
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let service = <Arc<Svc>>::from_ref(state);
-
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
-            .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
-
-        let outcome = team_access_outcome::<T, Svc>(service.as_ref(), macro_user_id).await?;
-
-        Ok(Self {
-            entity_access_receipt: outcome.into_optional_receipt(),
-            _marker: PhantomData,
-        })
-    }
-}
-
 /// Authorizes a user and resolves their optional team membership.
 ///
 /// The extractor uses the required [`MacroAuthorizationExtractor`], so missing,
 /// invalid, and identity-less internal credentials are rejected. A qualifying
 /// team role produces a receipt; no membership or an insufficient role produces
 /// `None`.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct OptionalMacroUserTeamExtractorV2<T: RequiredPermission, Svc, Auth> {
     /// The entity access receipt, if the authorized user has a qualifying team membership.
@@ -184,21 +137,26 @@ where
     }
 }
 
-/// Resolves the authenticated user's team membership and exposes the receipt
-/// when the user satisfies the required permission `T`.
-/// Returns `ExtractorError::Unauthorized` if there is no authenticated user or no team.
+/// Authorizes a user and resolves their required team membership.
+///
+/// The extractor uses [`MacroAuthorizationExtractor`] to authenticate the request.
+/// It returns an [`EntityAccessReceipt`] when the user belongs to a team and their
+/// role satisfies `T`. A user without a team receives `"not in a team"`; a user
+/// whose role does not satisfy `T` receives `"you do not have a high enough role"`.
 #[derive(Debug)]
-pub struct MacroUserTeamExtractor<T: RequiredPermission, Svc> {
-    /// The entity access receipt.
+pub struct MacroUserTeamExtractorV2<T: RequiredPermission, Svc, Auth> {
+    /// The entity access receipt for the authorized team member.
     pub entity_access_receipt: EntityAccessReceipt<T>,
-    _marker: PhantomData<(T, Svc)>,
+    _marker: PhantomData<(T, Svc, Auth)>,
 }
 
-impl<T, S, Svc> FromRequestParts<S> for MacroUserTeamExtractor<T, Svc>
+impl<T, S, Svc, Auth> FromRequestParts<S> for MacroUserTeamExtractorV2<T, Svc, Auth>
 where
     T: RequiredPermission,
     Arc<Svc>: FromRef<S>,
     Svc: EntityAccessService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+    Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     type Rejection = ExtractorError;
@@ -206,24 +164,13 @@ where
     #[tracing::instrument(err, skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
-
-        let MacroUserExtractor { macro_user_id, .. } = parts
-            .extract()
+        let MacroAuthorizationExtractor { macro_user_id, .. } = parts
+            .extract_with_state(state)
             .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
-
-        let entity_access_receipt =
-            match team_access_outcome::<T, Svc>(service.as_ref(), macro_user_id).await? {
-                TeamAccessOutcome::Qualifying(receipt) => receipt,
-                TeamAccessOutcome::NotInTeam => {
-                    return Err(ExtractorError::UnauthorizedWithMessage("not in a team"));
-                }
-                TeamAccessOutcome::InsufficientRole => {
-                    return Err(ExtractorError::UnauthorizedWithMessage(
-                        "you do not have a high enough role",
-                    ));
-                }
-            };
+            .map_err(ExtractorError::from)?;
+        let entity_access_receipt = team_access_outcome::<T, Svc>(service.as_ref(), macro_user_id)
+            .await?
+            .into_required_receipt()?;
 
         Ok(Self {
             entity_access_receipt,

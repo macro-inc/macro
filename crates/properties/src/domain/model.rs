@@ -1,8 +1,8 @@
 //! Domain models for properties.
 
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    EntityType as AccessEntityType, RequiredPermission, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
+    RequiredPermission, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -11,150 +11,81 @@ use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
 
-/// Map a properties entity type onto the entity type used by the access
-/// control system. Tasks are stored as documents, so the mapping collapses
-/// Task into Document; [`PropertiesAccessReceipt`] preserves the original type.
-pub fn access_entity_type(entity_type: EntityType) -> AccessEntityType {
+/// Map an internal properties storage type to its canonical entity type.
+pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {
-        EntityType::Document => AccessEntityType::Document,
-        // Call access is resolved through the call's owning channel.
+        EntityType::Document | EntityType::Task => AccessEntityType::Document,
         EntityType::CallRecord => AccessEntityType::Call,
         EntityType::Chat => AccessEntityType::Chat,
         EntityType::Project => AccessEntityType::Project,
         EntityType::Thread => AccessEntityType::EmailThread,
         EntityType::Channel => AccessEntityType::Channel,
-        // Tasks are stored as documents, so they share document permissions.
-        EntityType::Task => AccessEntityType::Document,
-        // CRM company access is resolved from the owning team's membership.
         EntityType::Company => AccessEntityType::CrmCompany,
         EntityType::User => AccessEntityType::User,
     }
 }
 
-/// Proof that a caller holds (at least) permission `T` on one entity.
-///
-/// Wraps the [`EntityAccessReceipt`] minted by the permission adapter together
-/// with the original properties entity type, which the access-control mapping
-/// loses (Task maps to Document). Every entity-scoped
-/// [`PropertiesService`](super::service::PropertiesService) method takes one of
-/// these, so an unchecked call cannot compile.
-#[derive(Debug, Clone)]
-pub struct PropertiesAccessReceipt<T: RequiredPermission> {
-    receipt: EntityAccessReceipt<T>,
-    entity_id: String,
-    entity_type: EntityType,
+/// Proof of view (or better) access to one canonical entity.
+pub type ViewReceipt = EntityAccessReceipt<ViewAccessLevel>;
+/// Proof of edit (or better) access to one canonical entity.
+pub type EditReceipt = EntityAccessReceipt<EditAccessLevel>;
+
+/// Convenience accessors for canonical property access receipts.
+pub trait PropertyAccessReceiptExt {
+    /// Canonical entity identifier.
+    fn entity_id(&self) -> &str;
+    /// Canonical entity type.
+    fn entity_type(&self) -> AccessEntityType;
+    /// Authenticated user, if the receipt represents one.
+    fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>>;
 }
 
-/// Proof of view (or better) access to one entity.
-pub type ViewReceipt = PropertiesAccessReceipt<ViewAccessLevel>;
-/// Proof of edit (or better) access to one entity.
-pub type EditReceipt = PropertiesAccessReceipt<EditAccessLevel>;
-
-impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
-    /// Wrap a receipt minted by the entity access service while preserving the
-    /// original properties entity type (notably, tasks map to documents in the
-    /// access service).
-    pub fn try_from_entity_access_receipt(
-        receipt: EntityAccessReceipt<T>,
-        entity_type: EntityType,
-    ) -> Result<Self, entity_access::domain::models::AccessError> {
-        if receipt.entity().entity_type != access_entity_type(entity_type) {
-            return Err(entity_access::domain::models::AccessError::BadRequest(
-                "entity access receipt type does not match properties entity type",
-            ));
-        }
-
-        let entity_id = receipt.entity().entity_id.clone();
-        Ok(Self {
-            receipt,
-            entity_id,
-            entity_type,
-        })
+impl<T: RequiredPermission> PropertyAccessReceiptExt for EntityAccessReceipt<T> {
+    fn entity_id(&self) -> &str {
+        &self.entity().entity_id
     }
 
-    /// The entity this receipt grants access to.
-    pub fn entity_id(&self) -> &str {
-        &self.entity_id
+    fn entity_type(&self) -> AccessEntityType {
+        self.entity().entity_type
     }
 
-    /// The properties entity type this receipt grants access to.
-    pub fn entity_type(&self) -> EntityType {
-        self.entity_type
-    }
-
-    /// How the caller was authenticated.
-    pub fn auth(&self) -> &EntityAccessAuth {
-        self.receipt.auth()
-    }
-
-    /// The authenticated user this receipt was minted for, if any
-    /// (`None` for bot, internal, and anonymous-public access).
-    pub fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>> {
-        match self.receipt.auth() {
+    fn authenticated_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self.auth() {
             EntityAccessAuth::Authenticated(user) => Some(user),
             EntityAccessAuth::Bot(_)
             | EntityAccessAuth::Unauthenticated
             | EntityAccessAuth::Internal => None,
         }
     }
+}
 
-    /// Dangerously mint a receipt for an internal (service-to-service or
-    /// worker) caller without an access check.
-    /// **NOTE** Use only for machine flows that operate outside a user
-    /// session; never to bypass a user's permission check.
-    pub fn dangerously_assert_internal(entity_id: &str, entity_type: EntityType) -> Self {
-        Self {
-            receipt: EntityAccessReceipt::dangerously_assert_internal_user(
-                entity_id,
-                access_entity_type(entity_type),
-            ),
-            entity_id: entity_id.to_string(),
-            entity_type,
+/// Canonical key identifying an entity receiving properties.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyTargetKey {
+    /// Canonical entity identifier.
+    pub entity_id: String,
+    /// Canonical entity type. Tasks use `Document`.
+    pub entity_type: AccessEntityType,
+}
+
+/// A canonical property target resolved to its internal storage namespace.
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedPropertySubject {
+    pub(crate) canonical_key: PropertyTargetKey,
+    pub(crate) storage_entity_type: EntityType,
+}
+
+impl ResolvedPropertySubject {
+    /// Return the repository key for this subject.
+    pub(crate) fn storage_key(&self) -> EntityPropertiesKey {
+        EntityPropertiesKey {
+            entity_id: self.canonical_key.entity_id.clone(),
+            entity_type: self.storage_entity_type,
         }
-    }
-
-    /// Dangerously mint a receipt for an authenticated user without the
-    /// underlying access check. **NOTE** Intended for tests, and for callers
-    /// that have already verified the user's access to the entity through
-    /// another authoritative seam (e.g. a CRM team-scoped listing) — never as
-    /// a way to skip a check that hasn't happened.
-    pub fn dangerously_assert_authenticated_user(
-        user_id: MacroUserIdStr<'static>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> Self {
-        Self {
-            receipt: EntityAccessReceipt::dangerously_assert_authenticated_user(
-                user_id,
-                entity_id,
-                access_entity_type(entity_type),
-            ),
-            entity_id: entity_id.to_string(),
-            entity_type,
-        }
-    }
-
-    /// Mint a receipt from a resolved permission, validating it satisfies `T`.
-    /// Only the permission adapter constructs these.
-    pub(crate) fn try_from_permission(
-        auth: EntityAccessAuth,
-        entity_id: &str,
-        entity_type: EntityType,
-        access_level: AccessLevel,
-    ) -> Result<Self, entity_access::domain::models::AccessError> {
-        let receipt = EntityAccessReceipt::try_new(
-            auth,
-            Entity {
-                entity_id: entity_id.to_string(),
-                entity_type: access_entity_type(entity_type),
-            },
-            EntityPermission::AccessLevel { access_level },
-        )?;
-        Self::try_from_entity_access_receipt(receipt, entity_type)
     }
 }
 
-/// Key identifying the properties attached to one entity.
+/// Internal repository key identifying properties attached to one entity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EntityPropertiesKey {
     pub entity_id: String,

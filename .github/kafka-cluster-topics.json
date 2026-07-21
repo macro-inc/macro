@@ -1,6 +1,10 @@
 [
+  "macro.bots",
   "macro.channels",
   "macro.documents",
   "macro.email",
-  "macro.example"
+  "macro.example",
+  "macro.projects",
+  "macro.teams",
+  "macro.webhooks"
 ]

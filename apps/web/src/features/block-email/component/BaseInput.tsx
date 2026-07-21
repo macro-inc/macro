@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
@@ -23,7 +24,8 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SCHEDULED_SEND,
-  ENABLE_EMAIL_SIGNATURES,
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -328,6 +330,9 @@ export function BaseInput(props: {
     emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
   );
   const signature = useEmailSignature(activeLinkId);
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   // Whether this reply includes the signature. Defaults on, reset per reply,
   // and dismissable via the preview ✕.
   const [includeSignature, setIncludeSignature] = createSignal(true);
@@ -336,7 +341,7 @@ export function BaseInput(props: {
   // and the user hasn't dismissed it. The backend does the actual injection on
   // send — this just mirrors when that will happen.
   const replySignatureHtml = (): string | undefined =>
-    ENABLE_EMAIL_SIGNATURES &&
+    emailSignaturesFlag().enabled &&
     props.replyingTo() &&
     includeSignature() &&
     sendingLink()?.settings.signature_on_replies_forwards
@@ -556,7 +561,7 @@ export function BaseInput(props: {
               },
             ]
           : undefined,
-        duration: 10_000,
+        duration: 5_000,
       });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
@@ -1832,6 +1837,7 @@ export function BaseInput(props: {
                 form().setRecipients('to', v)
               )}
               triggerMode="input"
+              portalScope={composePortalScope()}
               hideBorder
               noPadding
               onChipDragStart={(option, e) =>
@@ -1875,6 +1881,7 @@ export function BaseInput(props: {
                   form().setRecipients('cc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>
@@ -1904,6 +1911,7 @@ export function BaseInput(props: {
                   form().setRecipients('bcc', v)
                 )}
                 triggerMode="input"
+                portalScope={composePortalScope()}
                 hideBorder
                 noPadding
                 onChipDragStart={(option, e) =>

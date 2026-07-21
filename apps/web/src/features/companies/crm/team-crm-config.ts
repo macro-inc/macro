@@ -2,34 +2,26 @@
  * Team-shared CRM configuration (permissions, closed-stage set, team saved
  * views, display defaults).
  *
- * There is no generic team key-value store yet, so the config rides on the
- * existing team-scoped property-definition infrastructure: a reserved
- * definition (`__macro:crm-config`) holds a single select option whose
- * string value is the JSON config. Every team member can read it (team
- * definitions are team-visible) and writes go through the existing option
- * endpoints. Reserved `__macro:`-prefixed definitions are filtered out of
- * property pickers (see `isReservedPropertyDefinitionName`).
+ * Stored on `team_crm_settings` and served by GET/PUT `/crm/settings`
+ * (document storage service). Any team member can read and can update
+ * the views fields (`teamViews`, `defaultTeamViewId`); the governance
+ * fields (permission thresholds, `closedStageIds`) are admin/owner-gated
+ * server-side. Updates are field-wise partial: omitted fields keep their
+ * current values, `null` clears the nullable ones, and `teamViews` is
+ * replaced whole (last write wins).
  */
 
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
-import { RESERVED_PROPERTY_DEFINITION_PREFIX } from '@property/constants';
-import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { propertiesServiceClient } from '@service-properties/client';
-import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
-import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
-import { useMutation, useQueryClient } from '@tanstack/solid-query';
+import { storageServiceClient } from '@service-storage/client';
+import type { CrmTeamSettingsResponse } from '@service-storage/generated/schemas/crmTeamSettingsResponse';
+import type { UpdateCrmTeamSettingsRequest } from '@service-storage/generated/schemas/updateCrmTeamSettingsRequest';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
-// Canonical home is `@property/constants`; re-exported for existing callers.
-export {
-  isReservedPropertyDefinitionName,
-  RESERVED_PROPERTY_DEFINITION_PREFIX,
-} from '@property/constants';
-
-const CRM_CONFIG_DEFINITION_NAME = `${RESERVED_PROPERTY_DEFINITION_PREFIX}crm-config`;
+const CRM_TEAM_SETTINGS_QUERY_KEY = ['crm', 'team-settings'] as const;
 
 /**
  * Minimum team role required for a CRM capability. Team members are
@@ -57,8 +49,7 @@ export type TeamCrmSavedView = {
 };
 
 export type TeamCrmConfig = {
-  version: 1;
-  permissions?: Partial<CrmPermissions>;
+  permissions?: CrmPermissions;
   /**
    * Stage option ids that count as "closed" deals (used by the
    * move-closed-deals permission). When unset, stages labeled like
@@ -70,6 +61,24 @@ export type TeamCrmConfig = {
   defaultTeamViewId?: string;
 };
 
+/**
+ * Field-wise partial update of the shared config. Omitted fields keep
+ * their current values; `null` clears `closedStageIds` /
+ * `defaultTeamViewId`; `teamViews` replaces the whole list. Pass a
+ * function for `teamViews` to derive the new list from the latest
+ * cached value at execution time — mutations are serialized (shared
+ * scope), so queued updates see the previous write instead of a stale
+ * snapshot.
+ */
+export type TeamCrmConfigPatch = {
+  permissions?: Partial<CrmPermissions>;
+  closedStageIds?: string[] | null;
+  teamViews?:
+    | TeamCrmSavedView[]
+    | ((current: TeamCrmSavedView[]) => TeamCrmSavedView[]);
+  defaultTeamViewId?: string | null;
+};
+
 export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {
   editStages: 'admin',
   moveClosedDeals: 'admin',
@@ -79,128 +88,72 @@ export const DEFAULT_CRM_PERMISSIONS: CrmPermissions = {
 /** Labels treated as closed when no explicit closed set is configured. */
 const DEFAULT_CLOSED_STAGE_LABEL = /customer|churned|closed|won|lost/i;
 
-function findConfigDefinition(
-  definitions: PropertyDefinitionResponse[] | undefined
-): PropertyDefinitionWithOptions | undefined {
-  return definitions?.find(
-    (entry): entry is PropertyDefinitionWithOptions =>
-      'definition' in entry &&
-      entry.definition.display_name === CRM_CONFIG_DEFINITION_NAME &&
-      !entry.definition.is_system &&
-      entry.definition.owner.scope === 'team'
-  );
-}
-
-function parseConfig(definition: PropertyDefinitionWithOptions | undefined): {
-  config: TeamCrmConfig;
-  optionId?: string;
-} {
-  const empty: TeamCrmConfig = { version: 1 };
-  if (!definition) return { config: empty };
-  const option = [...definition.property_options].sort(
-    (a, b) => a.display_order - b.display_order
-  )[0];
-  const raw = option?.value;
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    !('value' in raw) ||
-    typeof raw.value !== 'string'
-  ) {
-    return { config: empty, optionId: option?.id };
-  }
-  try {
-    const parsed = JSON.parse(raw.value) as TeamCrmConfig;
-    return { config: { ...empty, ...parsed }, optionId: option?.id };
-  } catch {
-    return { config: empty, optionId: option?.id };
-  }
-}
-
 export function useTeamCrmConfig() {
   const queryClient = useQueryClient();
-  const teamDefinitionsQuery = useListPropertiesQuery(() => ({
-    scope: 'team',
-    includeOptions: true,
+
+  const settingsQuery = useQuery(() => ({
+    queryKey: CRM_TEAM_SETTINGS_QUERY_KEY,
+    queryFn: async () =>
+      await throwOnErr(() => storageServiceClient.getCrmTeamSettings()),
   }));
 
-  const parsed = createMemo(() =>
-    parseConfig(findConfigDefinition(teamDefinitionsQuery.data))
-  );
+  const config = createMemo((): TeamCrmConfig => {
+    const data = settingsQuery.data;
+    if (!data) return {};
+    return {
+      permissions: {
+        editStages: data.edit_stages_role,
+        moveClosedDeals: data.move_closed_deals_role,
+        deleteRecords: data.delete_records_role,
+      },
+      closedStageIds: data.closed_stage_ids ?? undefined,
+      teamViews: (data.team_views as TeamCrmSavedView[]) ?? [],
+      defaultTeamViewId: data.default_team_view_id ?? undefined,
+    };
+  });
 
-  const config = createMemo(() => parsed().config);
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({
-      predicate: ({ queryKey }) =>
-        queryKey.includes('properties') && queryKey.includes('definitions'),
-    });
-
-  /**
-   * Read-modify-write of the shared config. Creates the reserved
-   * definition/option on first write; concurrent writers are last-wins.
-   */
   const updateMutation = useMutation(() => ({
-    mutationFn: async (updater: (current: TeamCrmConfig) => TeamCrmConfig) => {
-      // Re-list right before writing to reduce lost updates.
-      const definitions = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.listProperties({
-            scope: 'team',
-            include_options: true,
-          })
-      );
-      const existing = findConfigDefinition(definitions);
-      const definitionId = existing
-        ? existing.definition.id
-        : (
-            await throwOnErr(
-              async () =>
-                await propertiesServiceClient.createPropertyDefinition({
-                  body: {
-                    display_name: CRM_CONFIG_DEFINITION_NAME,
-                    data_type: {
-                      type: 'select_string',
-                      multi: false,
-                      options: [],
-                    },
-                    scope: 'team',
-                  },
-                })
+    // Serialize updates: with whole-list team_views writes, concurrent
+    // PUTs would clobber each other. Scoped mutations run one at a time,
+    // and updater-style teamViews patches read the cache only once the
+    // previous mutation's response has been written back.
+    scope: { id: 'crm-team-settings' },
+    mutationFn: async (patch: TeamCrmConfigPatch) => {
+      const teamViews =
+        typeof patch.teamViews === 'function'
+          ? patch.teamViews(
+              (queryClient.getQueryData<CrmTeamSettingsResponse>(
+                CRM_TEAM_SETTINGS_QUERY_KEY
+              )?.team_views as TeamCrmSavedView[]) ?? []
             )
-          ).id;
-      const { config: current, optionId } = parseConfig(existing);
-      const next = updater(current);
-      const serialized = JSON.stringify(next);
-      if (optionId) {
-        await throwOnErr(
-          async () =>
-            await propertiesServiceClient.updatePropertyOption({
-              definition_id: definitionId,
-              option_id: optionId,
-              body: { value: serialized },
-            })
-        );
-      } else {
-        await throwOnErr(
-          async () =>
-            await propertiesServiceClient.addPropertyOption({
-              definition_id: definitionId,
-              body: {
-                type: 'select_string',
-                option: { value: serialized, display_order: 0 },
-              },
-            })
-        );
-      }
-      return next;
+          : patch.teamViews;
+      const body: UpdateCrmTeamSettingsRequest = {
+        edit_stages_role: patch.permissions?.editStages,
+        move_closed_deals_role: patch.permissions?.moveClosedDeals,
+        delete_records_role: patch.permissions?.deleteRecords,
+        ...(patch.closedStageIds !== undefined
+          ? { closed_stage_ids: patch.closedStageIds }
+          : {}),
+        ...(teamViews !== undefined ? { team_views: teamViews } : {}),
+        ...(patch.defaultTeamViewId !== undefined
+          ? { default_team_view_id: patch.defaultTeamViewId }
+          : {}),
+      };
+      return await throwOnErr(() =>
+        storageServiceClient.updateCrmTeamSettings(body)
+      );
     },
-    onSettled: () => invalidate(),
+    onSuccess: (settings) => {
+      // The PUT returns the resulting row — seed the cache with it.
+      queryClient.setQueryData(CRM_TEAM_SETTINGS_QUERY_KEY, settings);
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: CRM_TEAM_SETTINGS_QUERY_KEY }),
   }));
 
   return {
     config,
-    isLoading: () => teamDefinitionsQuery.isLoading,
+    isLoading: () => settingsQuery.isLoading,
     update: updateMutation,
   };
 }

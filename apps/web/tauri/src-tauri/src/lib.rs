@@ -1,9 +1,13 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::domain::{
+    asset_service::BundleAssetResolver, bundle_routes::BundleRoutes,
+};
 use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
 #[cfg(feature = "auto_apply_update")]
 use macro_bundle_updater_plugin::inbound::plugin::{
     allow_update_reload_retry, apply_completed_update_from, start_update_check,
 };
+use macro_bundle_updater_plugin::outbound::fs::FileSystem;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -129,6 +133,9 @@ pub fn run() {
 
     registry.init();
 
+    let embedded_bundle_build = embedded_bundle_build();
+    let bundle_routes = BundleRoutes::new(embedded_bundle_build);
+    let bundle_asset_resolver = BundleAssetResolver::new(bundle_routes.clone(), FileSystem);
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -178,7 +185,8 @@ pub fn run() {
                     .bundle_update_base_url()
                     .parse()
                     .expect("valid url"),
-                embedded_bundle_build(),
+                embedded_bundle_build,
+                bundle_routes.clone(),
             )
             // Builds without this feature (just ios-dev, ios-build-no-update)
             // must never check for or apply OTA bundles on their own; manual
@@ -218,7 +226,7 @@ pub fn run() {
             move |ctx, request, responder| {
                 let h = handler.get_or_init(|| {
                     let app = ctx.app_handle();
-                    tauri_protocol::get(app.clone(), &window_origin)
+                    tauri_protocol::get(app.clone(), &window_origin, bundle_asset_resolver.clone())
                 });
                 h(ctx.webview_label(), request, responder);
             }
@@ -228,6 +236,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_read,
+            graphql_cache_plugin::commands::graphql_cache_read_records,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_begin_optimistic_write,
             graphql_cache_plugin::commands::graphql_cache_inspect_query,

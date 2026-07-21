@@ -20,10 +20,63 @@ existing `rate_limit` crate with the key
 `per-user-validate-webhook:{macro_user_id}:{webhook_id}` and a limit of 10
 attempts per 3600-second window.
 
+### Management lifecycle events
+
+Successful authenticated management mutations publish schema-version-1 events
+to `macro.webhooks`. The Kafka key is the subject webhook ID for every event:
+
+| Event name | Emitted after | Sanitized metadata |
+| --- | --- | --- |
+| `webhook.created` | Creation | `webhook_id`, `workspace_id`, `created_by_user_id`, configuration snapshot, sorted `header_names`, and `created_at` |
+| `webhook.updated` | The final PATCH mutation, including any validity reset | `webhook_id`, `workspace_id`, `actor_user_id`, requested PATCH fields, `headers_updated`, status transition, final `is_valid`, and `updated_at` |
+| `webhook.deleted` | Soft deletion | `webhook_id`, `workspace_id`, and `actor_user_id` |
+| `webhook.validated` | Validation-result persistence, whether valid or invalid | `webhook_id`, `workspace_id`, `actor_user_id`, `is_valid`, optional response status, and a sanitized message |
+
+Created metadata exposes custom-header names but not their values. Updated
+metadata exposes only whether headers were replaced. No lifecycle event includes
+the webhook signing secret or custom-header values. A created event has this
+wire-envelope shape (the Kafka key is not part of the JSON):
+
+```json
+{
+  "event_id": "01998a30-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+  "schema_version": 1,
+  "event_type": "webhook.created",
+  "metadata": {
+    "webhook_id": "wh_01998a2f-aaaa-7bbb-8ccc-dddddddddddd",
+    "workspace_id": "team_0123",
+    "created_by_user_id": "macro|creator@example.com",
+    "name": "Document updates",
+    "endpoint_url": "https://example.com/hooks/macro",
+    "status": "active",
+    "is_valid": false,
+    "filters": [
+      {
+        "events": ["document.updated"],
+        "ids": ["0197f776-6e7b-7c69-a251-780ae754d3e4"]
+      }
+    ],
+    "header_names": ["Authorization", "X-Customer"],
+    "created_at": "2026-07-20T17:01:02Z"
+  }
+}
+```
+
+Publication is post-mutation and fire-and-forget. The API result does not wait
+for Kafka delivery, and a scheduling or publication failure does not roll back
+or fail an otherwise successful mutation. There is no transaction, outbox, or
+retry coupling persistence to publication, so a persisted mutation can have no
+corresponding event; this accepted gap gives lifecycle production at-most-once
+semantics relative to management mutations.
+
+Only the authenticated create, patch, delete, and validate flows produce these
+lifecycle events. Event ingestion, queue workers, HTTP delivery, and delivery
+bookkeeping (including success/failure timestamp updates) do not produce them.
+
 ## Event ingestion and matching
 
-The `webhook-event-ingestion` Kafka consumer reads `macro.documents` and
-`macro.channels`. It supports these event names:
+The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
+`macro.channels`, and `macro.webhooks`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
@@ -32,17 +85,27 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents` and
   `channel.message_deleted`, `channel.message_attachment_created`,
   `channel.message_attachment_removed`, `channel.participant_added`, and
   `channel.participant_removed`.
+- Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
+  `webhook.validated`.
 
-For each event, ingestion asks `EntityAccessService` for the people who
-currently have access to its entity. The matching workspace set contains each
-person's Macro user ID, for personal webhooks, plus every team ID to which any
-of those people belongs. The set is deduplicated before matching, so one person
-or team is considered only once.
+For document and channel events, ingestion asks `EntityAccessService` for the
+people who currently have access to the entity. The matching workspace set
+contains each person's Macro user ID, for personal webhooks, plus every team ID
+to which any of those people belongs. The set is deduplicated before matching,
+so one person or team is considered only once.
 
-A webhook matches only when it is active, valid, not soft-deleted, owned by one
-of those personal or team workspaces, and has one filter element that matches
-both the exact event name and entity ID. An event match in one filter element
-cannot be combined with an ID match in another element.
+Webhook events use `entity_type = "webhook"` and take the event metadata's
+`workspace_id` as the sole matching workspace. This is a strict owner-workspace
+rule: ingestion does not perform an entity-access lookup or personal/team
+workspace expansion, and actor membership does not make another workspace
+eligible.
+
+A webhook matches only when it is active, valid, not soft-deleted, owned by an
+eligible workspace, and has one filter element that matches both the exact
+event name and entity ID. An event match in one filter element cannot be
+combined with an ID match in another element. Because deletion is published
+after soft deletion, a webhook cannot receive its own `webhook.deleted` event;
+other eligible webhooks in the same owner workspace can receive it.
 
 ### Filter-ID semantics
 
@@ -61,7 +124,9 @@ matches every entity ID for that filter's events:
 For document events, IDs always mean the event's `document_id`. For every
 channel event, IDs mean `channel_id`. This includes message, attachment, and
 participant events: their message, attachment, and participant IDs are not used
-for webhook filtering.
+for webhook filtering. For webhook events, IDs mean the subject `webhook_id`;
+an absent or `null` `ids` field matches every webhook ID in the strict owner
+workspace.
 
 The matching query stores filters in the `webhook.filters` `JSONB NOT NULL`
 column, protected by the `webhook_filters_is_array` constraint. It uses the
@@ -99,8 +164,8 @@ reuse the same delivery record.
 
 FIFO preserves the order in which the current consumer enqueues events for one
 webhook. It does not create a global order across Kafka partitions or across the
-`macro.documents` and `macro.channels` topics. Consumers must therefore treat
-the order as observed order, not total event order.
+`macro.documents`, `macro.channels`, and `macro.webhooks` topics. Consumers must
+therefore treat the order as observed order, not total event order.
 
 ## HTTP delivery contract
 
@@ -211,9 +276,9 @@ just run_local --no-frontend
 ```
 
 Services inside the local compose network receive
-`http://localstack:4566/000000000000/webhook-event-queue.fifo`. The
-`docker/docker-compose.local-e2e.yml` environment supplies the same override. Worker
-polling defaults to 10 messages and a 20-second long poll and can be adjusted
+`http://localstack:4566/000000000000/webhook-event-queue.fifo`. The local E2E
+harness now receives the same override from its xtask-generated instance env.
+Worker polling defaults to 10 messages and a 20-second long poll and can be adjusted
 with `WEBHOOK_QUEUE_MAX_MESSAGES` and `WEBHOOK_QUEUE_WAIT_TIME_SECONDS`.
 
 ### Tracing

@@ -3,8 +3,12 @@
 mod helpers;
 mod task_properties;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use document_sub_type::DocumentSubType;
+use entity_access::domain::models::{
+    EntityAccessReceipt, EntityType as AccessEntityType, RequiredPermission,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::DataType;
 use models_properties::api::requests::SetPropertyValue;
@@ -18,7 +22,7 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityPropertyReference, EntityReference, EntityType};
+use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
@@ -27,8 +31,9 @@ use std::sync::Arc;
 use super::error::PropertiesErr;
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TagScope,
-    TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
+    EditReceipt, EntityPropertyInfo, PropertyAccessReceiptExt, PropertyDefinitionOwner,
+    PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
+    ViewReceipt,
 };
 use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
@@ -98,6 +103,80 @@ where
         self.permission_service
             .as_ref()
             .ok_or(PropertiesErr::PermissionServiceNotConfigured)
+    }
+
+    /// Resolve canonical access receipts to internal properties storage keys.
+    async fn resolve_subjects<T: RequiredPermission>(
+        &self,
+        access: &[EntityAccessReceipt<T>],
+    ) -> Result<Vec<ResolvedPropertySubject>, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let document_ids = access
+            .iter()
+            .filter(|receipt| receipt.entity_type() == AccessEntityType::Document)
+            .filter_map(|receipt| Uuid::parse_str(receipt.entity_id()).ok())
+            .collect::<HashSet<_>>();
+
+        let document_sub_types = if document_ids.is_empty() {
+            HashMap::new()
+        } else {
+            self.repository
+                .get_document_sub_types(&document_ids.into_iter().collect::<Vec<_>>())
+                .await
+                .map_err(anyhow::Error::from)?
+        };
+
+        access
+            .iter()
+            .map(|receipt| {
+                let canonical_entity_type = receipt.entity_type();
+                let storage_entity_type = match canonical_entity_type {
+                    AccessEntityType::Document => Uuid::parse_str(receipt.entity_id())
+                        .ok()
+                        .and_then(|document_id| document_sub_types.get(&document_id))
+                        .map_or(EntityType::Document, |sub_type| match sub_type {
+                            DocumentSubType::Task => EntityType::Task,
+                            DocumentSubType::Snippet => EntityType::Document,
+                        }),
+                    AccessEntityType::EmailThread => EntityType::Thread,
+                    AccessEntityType::Call => EntityType::CallRecord,
+                    AccessEntityType::CrmCompany => EntityType::Company,
+                    AccessEntityType::Chat => EntityType::Chat,
+                    AccessEntityType::Channel => EntityType::Channel,
+                    AccessEntityType::Project => EntityType::Project,
+                    AccessEntityType::User => EntityType::User,
+                    unsupported => {
+                        return Err(PropertiesErr::Validation(format!(
+                            "Unsupported property target type: {unsupported}"
+                        )));
+                    }
+                };
+
+                Ok(ResolvedPropertySubject {
+                    canonical_key: PropertyTargetKey {
+                        entity_id: receipt.entity_id().to_string(),
+                        entity_type: canonical_entity_type,
+                    },
+                    storage_entity_type,
+                })
+            })
+            .collect()
+    }
+
+    /// Resolve one canonical access receipt to its internal storage key.
+    async fn resolve_subject<T: RequiredPermission>(
+        &self,
+        access: &EntityAccessReceipt<T>,
+    ) -> Result<ResolvedPropertySubject, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        self.resolve_subjects(std::slice::from_ref(access))
+            .await?
+            .pop()
+            .ok_or_else(|| PropertiesErr::Validation("Missing property target".to_string()))
     }
 
     /// Best-effort publish of a property reindex for entity types whose
@@ -232,13 +311,18 @@ where
         // Tag properties are filtered in the query to definitions the viewer
         // can see: their own and their teams'. Receipts without an
         // authenticated user (anonymous public / internal) see no tags.
+        let subject = self.resolve_subject(access).await?;
         let tag_viewer_user_id = access
             .authenticated_user()
             .map(|user| user.as_ref())
             .unwrap_or_default();
         Ok(self
             .repository
-            .get_entity_properties(access.entity_id(), access.entity_type(), tag_viewer_user_id)
+            .get_entity_properties(
+                access.entity_id(),
+                subject.storage_entity_type,
+                tag_viewer_user_id,
+            )
             .await
             .map_err(anyhow::Error::from)?)
     }
@@ -261,11 +345,12 @@ where
         access: &ViewReceipt,
         property_definition_id: Uuid,
     ) -> Result<Option<PropertyValue>, PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
         Ok(self
             .repository
             .get_entity_property_value(
                 access.entity_id(),
-                access.entity_type(),
+                subject.storage_entity_type,
                 property_definition_id,
             )
             .await
@@ -296,8 +381,9 @@ where
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
-        let entity_type = access.entity_type();
+        let entity_type = subject.storage_entity_type;
 
         // Get property definition to validate it exists and for validation
         let property_definition = self
@@ -430,7 +516,8 @@ where
             ));
         }
 
-        if !is_property_applicable_to(property_definition_id, access.entity_type()) {
+        let subject = self.resolve_subject(access).await?;
+        if !is_property_applicable_to(property_definition_id, subject.storage_entity_type) {
             return Err(PropertiesErr::Validation(
                 "This property cannot be attached to this entity type".to_string(),
             ));
@@ -442,14 +529,14 @@ where
         self.repository
             .add_entity_property_option(
                 access.entity_id(),
-                access.entity_type(),
+                subject.storage_entity_type,
                 property_definition_id,
                 option_id,
             )
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), access.entity_type())
+        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
             .await;
 
         Ok(())
@@ -470,17 +557,18 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
         self.repository
             .remove_entity_property_option(
                 access.entity_id(),
-                access.entity_type(),
+                subject.storage_entity_type,
                 property_definition_id,
                 option_id,
             )
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), access.entity_type())
+        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
             .await;
 
         Ok(())
@@ -887,9 +975,10 @@ where
         &self,
         access: &ViewReceipt,
     ) -> Result<Vec<EntityPropertyWithDefinition>, PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
         let mut properties = self
             .repository
-            .get_entity_properties_with_definitions(access.entity_id(), access.entity_type())
+            .get_entity_properties_with_definitions(access.entity_id(), subject.storage_entity_type)
             .await
             .map_err(anyhow::Error::from)?;
         retain_caller_visible_tags(&mut properties, access.auth());
@@ -901,8 +990,9 @@ where
         &self,
         access: &ViewReceipt,
     ) -> Result<Option<Vec<EntityPropertyWithDefinition>>, PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
-        let properties = match access.entity_type() {
+        let properties = match subject.storage_entity_type {
             entity_type @ (EntityType::Document | EntityType::Task) => self
                 .repository
                 .get_document_metadata(entity_id)
@@ -943,18 +1033,21 @@ where
         &self,
         access: &[ViewReceipt],
         property_ids: Vec<Uuid>,
-    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr>
-    {
-        let entity_refs = access
+    ) -> Result<HashMap<PropertyTargetKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr> {
+        let subjects = self.resolve_subjects(access).await?;
+        let entity_refs = subjects
             .iter()
-            .map(|receipt| {
-                EntityReference::new(receipt.entity_id().to_string(), receipt.entity_type())
+            .map(|subject| {
+                EntityReference::new(
+                    subject.canonical_key.entity_id.clone(),
+                    subject.storage_entity_type,
+                )
             })
             .collect::<Vec<_>>();
 
         // An empty property_ids means "fetch all properties"; otherwise only
         // the requested definitions are returned.
-        let mut result = if property_ids.is_empty() {
+        let mut internal_result = if property_ids.is_empty() {
             self.repository
                 .get_entity_properties_batch(entity_refs)
                 .await
@@ -966,24 +1059,19 @@ where
                 .map_err(anyhow::Error::from)?
         };
 
-        // Filter each entity's properties by the auth of the receipt that
-        // granted access to that entity, so personal tags stay private.
-        let auth_by_key: HashMap<EntityPropertiesKey, &ViewReceipt> = access
-            .iter()
-            .map(|receipt| {
-                (
-                    EntityPropertiesKey {
-                        entity_id: receipt.entity_id().to_string(),
-                        entity_type: receipt.entity_type(),
-                    },
-                    receipt,
-                )
-            })
-            .collect();
-        for (key, properties) in result.iter_mut() {
-            if let Some(receipt) = auth_by_key.get(key) {
-                retain_caller_visible_tags(properties, receipt.auth());
+        // Return canonical keys while preserving the internal key only at the
+        // repository boundary. Filter personal tags using the receipt that
+        // granted access to each canonical entity.
+        let mut result = HashMap::with_capacity(subjects.len());
+        for (subject, receipt) in subjects.into_iter().zip(access) {
+            if result.contains_key(&subject.canonical_key) {
+                continue;
             }
+            let mut properties = internal_result
+                .remove(&subject.storage_key())
+                .unwrap_or_default();
+            retain_caller_visible_tags(&mut properties, receipt.auth());
+            result.insert(subject.canonical_key, properties);
         }
 
         Ok(result)
@@ -991,8 +1079,9 @@ where
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn delete_entity_properties(&self, access: &EditReceipt) -> Result<(), PropertiesErr> {
+        let subject = self.resolve_subject(access).await?;
         let entity_reference =
-            EntityReference::new(access.entity_id().to_string(), access.entity_type());
+            EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
         Ok(self
             .repository
             .delete_entity_properties(&entity_reference)
@@ -1004,12 +1093,16 @@ where
     async fn lookup_entity_property(
         &self,
         entity_property_id: Uuid,
-    ) -> Result<Option<EntityPropertyReference>, PropertiesErr> {
+    ) -> Result<Option<PropertyTargetKey>, PropertiesErr> {
         Ok(self
             .repository
             .lookup_entity_property(entity_property_id)
             .await
-            .map_err(anyhow::Error::from)?)
+            .map_err(anyhow::Error::from)?
+            .map(|property| PropertyTargetKey {
+                entity_id: property.entity_id,
+                entity_type: super::model::canonical_entity_type(property.entity_type),
+            }))
     }
 
     #[tracing::instrument(skip(self, access), fields(entity_property_id = %entity_property_id, entity_id = %access.entity_id()), err)]
@@ -1025,10 +1118,13 @@ where
             .map_err(anyhow::Error::from)?
             .ok_or(PropertiesErr::EntityPropertyNotFound)?;
 
-        // The receipt must prove access to the entity this property is
-        // actually attached to - a receipt for another entity is no proof.
+        let subject = self.resolve_subject(access).await?;
+
+        // The receipt must prove access to the canonical entity this property
+        // is attached to. A stored Task assignment belongs to a Document
+        // receipt after subtype resolution.
         if property_info.entity_id != access.entity_id()
-            || property_info.entity_type != access.entity_type()
+            || property_info.entity_type != subject.storage_entity_type
         {
             tracing::warn!(
                 receipt_entity_id = %access.entity_id(),

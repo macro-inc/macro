@@ -1,8 +1,7 @@
 use super::{
-    context::{ApiContext, AuthorizationService, EntityAccessService},
+    context::ApiContext,
     documents::{export_document, get_document_version},
     history::upsert_history,
-    projects::upload_folder,
 };
 use super::{documents::get_document_access_level, user::delete_user_items};
 use super::{documents::save_document, history::delete_history};
@@ -14,7 +13,9 @@ use super::{
     },
     user::populate_items,
 };
-use crate::api::context::DocumentService;
+use crate::api::context::{
+    AuthorizationService, DocumentService, EntityAccessService, ProjectService,
+};
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
 use crate::api::{documents::get_documents_metadata, items::validate_item_ids};
@@ -22,14 +23,15 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
+use macro_authorization::InternalMacroAuthorizationExtractor;
 use macro_middleware::cloud_storage::{
     document::ensure_document_exists, thread::ensure_thread_exists,
 };
 
 mod associate_github_installations;
 
-/// Internal routes. All routes are authenticated via the internal_access middleware
-/// These routes are not part of the public Swagger documentation and should never be
+/// Internal routes authenticate through extractors on each handler.
+/// These routes are not part of the public Swagger documentation.
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     let ensure_document_exists_middleware =
         axum::middleware::from_fn_with_state(state.clone(), ensure_document_exists::handler);
@@ -158,11 +160,23 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // Project routes
         .route(
             "/projects/upload",
-            post(upload_folder::upload_folder_handler),
+            post(
+                projects_hex::inbound::axum_router::upload_folder::upload_folder_handler::<
+                    ProjectService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
         )
         .route(
             "/projects/mark_uploaded",
-            post(upload_folder::mark_uploaded_handler),
+            post(
+                projects_hex::inbound::axum_router::upload_folder::mark_uploaded_handler::<
+                    ProjectService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))
         .route("/validate_item_ids", post(validate_item_ids::handler))
@@ -171,5 +185,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/github/installations/{github_user_id}/associate",
             post(associate_github_installations::associate_github_installations_handler),
         )
-        .route("/health", get(async move || "healthy"))
+        .route("/health", get(health_handler))
+}
+
+async fn health_handler(
+    _auth: InternalMacroAuthorizationExtractor<AuthorizationService>,
+) -> &'static str {
+    "healthy"
 }

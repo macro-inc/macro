@@ -17,6 +17,7 @@ use entity_access::{
     domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::EntityPermissionExtractor,
 };
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde_json::Value;
@@ -80,9 +81,13 @@ pub struct EditCrmCommentRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(entity_id = %entity_id))]
-pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
-    access: EntityPermissionExtractor<Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn list_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: EntityPermissionExtractor<Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
     let team_id = owning_team_for_entity(&state, &access).await?;
@@ -114,9 +119,13 @@ pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(entity_id = %entity_id))]
-pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
-    access: EntityPermissionExtractor<Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn create_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: EntityPermissionExtractor<Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
     Json(req): Json<CreateCrmCommentRequest>,
 ) -> Result<Json<CrmCommentThread>, CrmError> {
@@ -168,9 +177,13 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(comment_id = %comment_id))]
-pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn edit_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
     Json(req): Json<EditCrmCommentRequest>,
 ) -> Result<Json<CrmComment>, CrmError> {
@@ -207,9 +220,13 @@ pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(comment_id = %comment_id))]
-pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn delete_handler<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<Json<DeleteCrmCommentResult>, CrmError> {
     let result = state
@@ -225,9 +242,13 @@ pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
 /// team — so the bundled team can't drift from the authorized entity.
 /// `EntityPermissionExtractor` already validated access on that entity, so a
 /// failure here means corrupted state rather than a real authorization miss.
-async fn owning_team_for_entity<C: CrmService, Eas: EntityAccessService>(
-    state: &CrmRouterState<C, Eas>,
-    access: &EntityPermissionExtractor<Eas>,
+async fn owning_team_for_entity<
+    C: CrmService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    state: &CrmRouterState<C, Eas, Auth>,
+    access: &EntityPermissionExtractor<Eas, Auth>,
 ) -> Result<Uuid, CrmError> {
     let user_id = access
         .entity_access_receipt

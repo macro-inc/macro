@@ -90,6 +90,14 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
+use projects_hex::{
+    domain::service::ProjectServiceImpl,
+    inbound::axum_router::ProjectRouterState,
+    outbound::{
+        DynamoBulkUploadAdapter, PgProjectRepo, S3ProjectUploadAdapter, ShaCountAdapter,
+        SqsProjectSearchIndexer,
+    },
+};
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
@@ -356,11 +364,14 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage.clone(),
     );
     // Create the legacy channel list router state for routes mounted under /comms.
-    let channel_list_state = ChannelListRouterState::new(ChannelListServiceImpl::new(
-        PgChannelsRepo::new(db.clone()),
-        PgChannelsRepo::new(db.clone()),
-        frecency_storage.clone(),
-    ));
+    let channel_list_state = ChannelListRouterState::new(
+        ChannelListServiceImpl::new(
+            PgChannelsRepo::new(db.clone()),
+            PgChannelsRepo::new(db.clone()),
+            frecency_storage.clone(),
+        ),
+        authorization_state.clone(),
+    );
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -414,6 +425,26 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create kafka event publisher")?,
     );
 
+    let project_service = Arc::new(ProjectServiceImpl::new(
+        PgProjectRepo::new(db.clone()),
+        S3ProjectUploadAdapter::new(
+            macro_aws_config::s3_client().await,
+            config.document_storage_bucket.as_ref(),
+            config.docx_document_upload_bucket.as_ref(),
+            config.upload_staging_bucket.as_ref(),
+        ),
+        DynamoBulkUploadAdapter::new(dynamodb_client.clone()),
+        ShaCountAdapter::new(Redis::new(redis_client.clone())),
+        entity_access_management_service.clone(),
+        SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone())),
+        if cfg!(feature = "local") {
+            Some(uuid::uuid!("d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc"))
+        } else {
+            None
+        },
+        macro_event_broker.clone(),
+    ));
+
     let document_service = Arc::new(
         DocumentServiceImpl::new(
             document_repo,
@@ -458,6 +489,7 @@ async fn main() -> anyhow::Result<()> {
     let foreign_entity_state = ForeignEntityRouterState::new(
         foreign_entity_service.clone(),
         entity_access_service.clone(),
+        authorization_state.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
@@ -641,6 +673,7 @@ async fn main() -> anyhow::Result<()> {
             webhook_repository.clone(),
             webhook_http_client.clone(),
             webhook_endpoint_scheme_policy,
+            macro_event_broker.clone(),
         );
     let webhook_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -650,6 +683,7 @@ async fn main() -> anyhow::Result<()> {
     let webhook_state = webhook::inbound::axum_router::WebhookRouterState::new(
         webhook_service,
         webhook_rate_limiter,
+        authorization_state.clone(),
     );
 
     let webhook_ingestion_service =
@@ -746,7 +780,8 @@ async fn main() -> anyhow::Result<()> {
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
     let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
-    let bots_service = bots::domain::service::BotServiceImpl::new(bots_repo.clone());
+    let bots_service =
+        bots::domain::service::BotServiceImpl::new(bots_repo.clone(), macro_event_broker.clone());
     let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(
@@ -800,6 +835,7 @@ async fn main() -> anyhow::Result<()> {
             bots_service.clone(),
             channels_service.clone(),
             (*entity_access_service).clone(),
+            authorization_state.clone(),
         );
 
     let soup_service = Arc::new(SoupImpl::new(
@@ -820,6 +856,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service.clone(),
             email_service,
             entity_access_service.clone(),
+            authorization_state.clone(),
         )
         .with_favorites_reader(Arc::new(
             service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
@@ -827,6 +864,7 @@ async fn main() -> anyhow::Result<()> {
         favorites_state: FavoritesRouterState::new(
             favorites_service.clone(),
             entity_access_service.clone(),
+            authorization_state.clone(),
         ),
         favorites_service,
         #[cfg(feature = "graphql")]
@@ -855,6 +893,11 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         channel_list_state,
         entity_access_service: entity_access_service.clone(),
+        projects_state: ProjectRouterState {
+            service: project_service,
+            access_service: entity_access_service.clone(),
+            authorization_state: authorization_state.clone(),
+        },
         documents_state: DocumentRouterState {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
@@ -873,10 +916,12 @@ async fn main() -> anyhow::Result<()> {
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
+            authorization_state.clone(),
         ),
         bots_state: bots::inbound::axum_router::BotsRouterState::new(
             bots_service.clone(),
             (*entity_access_service).clone(),
+            authorization_state.clone(),
         ),
         channel_bot_webhook_state,
         call_state,
@@ -888,6 +933,7 @@ async fn main() -> anyhow::Result<()> {
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             entity_access_service: entity_access_service.clone(),
+            authorization_state: authorization_state.clone(),
         },
     };
 

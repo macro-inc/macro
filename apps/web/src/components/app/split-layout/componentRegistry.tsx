@@ -1,4 +1,3 @@
-import { ActivityView } from '@app/features/activity-timeline/activity-view';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
@@ -20,6 +19,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
+  ENABLE_ACTIVITY,
   ENABLE_CRM,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
@@ -158,9 +158,20 @@ registerComponent(
   })
 );
 
+const ActivityView = lazy(() =>
+  import('@app/features/activity-timeline/activity-view').then((module) => ({
+    default: module.ActivityView,
+  }))
+);
+
 registerComponent(
   'activity',
   withAuth(() => {
+    // Keep the registration so direct navigation and restored splits can
+    // recover safely without loading the data-owning Activity view.
+    if (!ENABLE_ACTIVITY) {
+      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    }
     usePageViewTracking('activity');
     return <ActivityView />;
   })
@@ -375,7 +386,15 @@ registerComponent('channel-compose', () => {
 });
 registerComponent('email-compose', (params) => {
   usePageViewTracking('email-compose');
-  return <EmailCompose draftID={params?.draftID} />;
+  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+  const toParam = new URLSearchParams(window.location.search).get('to');
+  const initialTo =
+    params?.initialTo ??
+    toParam
+      ?.split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+  return <EmailCompose draftID={params?.draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');

@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
 use ::notification::domain::models::email_notification_digest::ports::DigestBatch;
 use ::notification::domain::service::NotificationEgressService;
@@ -16,6 +16,7 @@ use config::Config;
 use email_formatting::EmailDigestNotification;
 use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_service_urls::ConnectionGatewayUrl;
@@ -129,6 +130,13 @@ pub async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.as_ref().to_string(),
+            default_user_id: None,
+        },
+    )));
 
     let notification_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
@@ -176,7 +184,7 @@ pub async fn main() -> anyhow::Result<()> {
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,
         hmac_key.clone(),
-        jwt_args.clone(),
+        authorization_state.clone(),
     );
 
     // Set up egress worker for delivering notifications from the queue
@@ -316,7 +324,7 @@ pub async fn main() -> anyhow::Result<()> {
             db,
             sns_client: Arc::new(sns_client),
             config: Arc::new(config),
-            jwt_args,
+            authorization_state,
         },
         ingress_state,
     )

@@ -28,7 +28,9 @@ import { openExternalUrl } from '@core/util/url';
 import {
   type ChannelClickTarget,
   type EntityData,
+  emailQueryKeyExcludesDone,
   getSnippetHit,
+  isEmailEntity,
   isGithubPrEntity,
   isHitSnippetEntity,
   isSearchEntity,
@@ -62,6 +64,7 @@ import {
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
   removeSoupEntities,
+  removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
@@ -452,6 +455,19 @@ export async function navigateChannelEntityToTarget(
 }
 
 /**
+ * Location a plain row click falls back to when no explicit location is given.
+ * Email rows open like plain soup rows — at the latest message, expanded —
+ * so only non-email snippet entities (calls) fall back to their row hit.
+ * Clicking a specific content hit still passes an explicit location.
+ */
+export const getRowClickFallbackLocation = (
+  entity: EntityData
+): SearchLocation | undefined =>
+  isHitSnippetEntity(entity) && !isEmailEntity(entity)
+    ? getSnippetHit(entity)?.location
+    : undefined;
+
+/**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
  *
@@ -465,8 +481,8 @@ export const openEntityInSplitFromUnifiedList = async (
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  if (!location && isHitSnippetEntity(entity)) {
-    location = getSnippetHit(entity)?.location;
+  if (!location) {
+    location = getRowClickFallbackLocation(entity);
   }
 
   // Get dependencies internally
@@ -956,9 +972,10 @@ export function resolveMarkEntitiesDoneVariables(args: {
 }
 
 /**
- * Applies the optimistic UI state for marking entities as done — removes
- * emails from the soup + email caches and flips the notification `done`
- * override. Returns a context the mutation uses for rollback / reapply.
+ * Applies the optimistic UI state for marking entities as done — removes the
+ * entities from done-filtered soup/email caches, flips surviving email rows
+ * to the done state, and sets the notification `done` override. Returns a
+ * context the mutation uses for rollback / reapply.
  */
 export function applyEntitiesDoneOptimistic(args: {
   entityIds: string[];
@@ -985,6 +1002,8 @@ export function applyEntitiesDoneOptimistic(args: {
       queryKey: queryKeys.all.email,
     })) {
       if (!data) continue;
+      // Views that show done threads keep their rows.
+      if (!emailQueryKeyExcludesDone(key)) continue;
       const bucket = removedEmails.get(key) ?? new Map<string, EntityData>();
       let mutated = false;
       const pages = data.pages.map((page) => {
@@ -1034,26 +1053,45 @@ export function applyEntitiesDoneOptimistic(args: {
   };
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
+  let emailRowTxns: { rollback: () => void }[] = [];
 
   const reapply = () => {
-    // Remove every marked entity from the soup feed cache so the hide is
-    // authoritative for all types; undo restores them via this transaction's
-    // rollback.
-    soupTxn = entityIds.length > 0 ? removeSoupEntities(entityIdSet) : null;
+    // Remove the marked entities from done-filtered soup queries (inbox,
+    // mail Important/Noise); views that show done content (e.g. mail All)
+    // keep their rows. Undo restores them via this transaction's rollback.
+    soupTxn =
+      entityIds.length > 0
+        ? removeSoupEntitiesFromDoneFilteredQueries(entityIdSet)
+        : null;
+    // Rows that remain visible flip to the done state.
+    emailRowTxns = emailIds.map((id) =>
+      optimisticUpdateSoupEntity({
+        tag: 'emailThread',
+        data: { id, inboxVisible: false },
+        frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
+      })
+    );
     filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
 
-  const rollback = () => {
+  const rollbackSoup = () => {
+    for (const txn of [...emailRowTxns].reverse()) {
+      txn.rollback();
+    }
+    emailRowTxns = [];
     soupTxn?.rollback();
     soupTxn = null;
+  };
+
+  const rollback = () => {
+    rollbackSoup();
     restoreEmailCache();
     setDoneOverride(notificationIds, undefined);
   };
 
   const applyUndone = () => {
-    soupTxn?.rollback();
-    soupTxn = null;
+    rollbackSoup();
     restoreEmailCache();
     restoreUserNotifications(notificationSnapshots);
     // Force `done=false` — cache may have reconciled to `done=true` from the
@@ -1064,6 +1102,37 @@ export function applyEntitiesDoneOptimistic(args: {
   reapply();
 
   return { rollback, reapply, applyUndone };
+}
+
+/**
+ * Optimistic UI for marking entities as not done — flips email rows back to
+ * inbox-visible and forces the notification `done` override off. Rows are
+ * patched in place; done-filtered views regain the entities when the caller
+ * invalidates after the server confirms.
+ */
+export function applyEntitiesNotDoneOptimistic(args: {
+  emailIds: string[];
+  notificationIds: string[];
+}): { rollback: () => void } {
+  const { emailIds, notificationIds } = args;
+
+  const emailRowTxns = emailIds.map((id) =>
+    optimisticUpdateSoupEntity({
+      tag: 'emailThread',
+      data: { id, inboxVisible: true },
+      frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
+    })
+  );
+  setDoneOverride(notificationIds, false);
+
+  return {
+    rollback: () => {
+      for (const txn of [...emailRowTxns].reverse()) {
+        txn.rollback();
+      }
+      setDoneOverride(notificationIds, undefined);
+    },
+  };
 }
 
 /**

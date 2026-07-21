@@ -9,6 +9,7 @@ use entity_access::domain::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::ChatToolContext;
 
@@ -63,6 +64,18 @@ where
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read chat");
+
+        if let Some(self_chat_id) = service_context.self_chat_id
+            && Uuid::parse_str(&self.chat_id) == Ok(self_chat_id)
+        {
+            return Err(ToolCallError {
+                description: "This is the chat you are currently running in — you already \
+                    have its full message history in context, so it cannot be read via this \
+                    tool. Use ReadChat only to read a different chat."
+                    .to_string(),
+                internal_error: anyhow::anyhow!("attempted to read the currently running chat"),
+            });
+        }
 
         let receipt = service_context
             .entity_access_service

@@ -29,6 +29,12 @@ import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
+/**
+ * Id of the chat input's text-area wrapper. Exposed so callers (e.g. the
+ * mobile Create menu) can arm focus on the contenteditable before it mounts.
+ */
+export const CHAT_INPUT_TEXT_AREA_ID = 'chat-input-text-area';
+
 type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
@@ -337,7 +343,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               </div>
             </Show>
             <div
-              id="chat-input-text-area"
+              id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn('text-sm sm:text-sm text-ink')}
               classList={{
                 'pl-8': !isMultiline() && !isTallVariant(),

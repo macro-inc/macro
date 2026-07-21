@@ -46,6 +46,7 @@ export const TOKENS = {
     open: 'entity.open',
     action: {
       markDone: 'entity.action.markDone',
+      markNotDone: 'entity.action.markNotDone',
       delete: 'entity.action.delete',
       rename: 'entity.action.rename',
       moveToFolder: 'entity.action.moveToFolder',
@@ -56,6 +57,7 @@ export const TOKENS = {
       copyEntityId: 'entity.action.copyEntityId',
       favorite: 'entity.action.favorite',
       properties: 'entity.action.properties',
+      tags: 'entity.action.tags',
       priority: 'entity.action.priority',
       status: 'entity.action.status',
       assignee: 'entity.action.assignee',

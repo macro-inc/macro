@@ -10,6 +10,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import {
   type AnyVariables,
   type Client,
+  CombinedError,
   type Operation,
   type OperationResult,
   type OperationResultSource,
@@ -28,6 +29,9 @@ import {
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+/** Private result-extension field carrying the queue disposition. */
+const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
+  'normalizedCacheMutationDisposition';
 declare const selectionType: unique symbol;
 declare const optimisticUpdateType: unique symbol;
 
@@ -91,6 +95,65 @@ export type OptimisticMutationContext<TData = unknown> = {
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
 };
+
+/** Caller-facing disposition of one durable optimistic mutation submission. */
+export type OptimisticMutationDisposition<TData> =
+  | { kind: 'committed'; data: TData }
+  | { kind: 'queued'; transactionId: string }
+  | { kind: 'permanently-failed'; error: CombinedError };
+
+/** Exchange-private metadata attached after queue routing or settlement. */
+export type OptimisticMutationDispositionMetadata =
+  | { kind: 'committed'; transactionId?: string }
+  | { kind: 'queued'; transactionId: string }
+  | { kind: 'permanently-failed'; transactionId?: string };
+
+/** Returns a copy of an operation result carrying its queue disposition. */
+export function withOptimisticMutationDisposition(
+  result: OperationResult,
+  disposition: OptimisticMutationDispositionMetadata
+): OperationResult {
+  return {
+    ...result,
+    extensions: {
+      ...result.extensions,
+      [OPTIMISTIC_MUTATION_DISPOSITION_KEY]: disposition,
+    },
+  };
+}
+
+/** Reads the typed caller-facing disposition attached by the cache exchange. */
+export function optimisticMutationDispositionOf<
+  TData,
+  TVariables extends AnyVariables,
+>(
+  result: OperationResult<TData, TVariables>
+): OptimisticMutationDisposition<TData> | undefined {
+  const value: unknown =
+    result.extensions?.[OPTIMISTIC_MUTATION_DISPOSITION_KEY];
+  if (value === null || typeof value !== 'object' || !('kind' in value)) {
+    return undefined;
+  }
+
+  const metadata = value as OptimisticMutationDispositionMetadata;
+  if (metadata.kind === 'queued' && metadata.transactionId) {
+    return { kind: 'queued', transactionId: metadata.transactionId };
+  }
+  if (metadata.kind === 'committed' && result.data != null) {
+    return { kind: 'committed', data: result.data };
+  }
+  if (metadata.kind === 'permanently-failed') {
+    return {
+      kind: 'permanently-failed',
+      error:
+        result.error ??
+        new CombinedError({
+          graphQLErrors: [new Error('mutation returned no data')],
+        }),
+    };
+  }
+  return undefined;
+}
 
 function serializeRevalidation(
   revalidation: QueryRevalidation
@@ -163,7 +226,8 @@ export function update<TItem extends object>(
 
 /**
  * Executes `document` with one durable optimistic entity/link transaction.
- * The source resolves only with the real network result.
+ * The source resolves with the head's network result or a synthetic queued
+ * disposition when an older mutation currently blocks the operation.
  */
 export function executeOptimisticMutation<
   TData,

@@ -71,6 +71,7 @@ reviews:
         - Avoid deprecated SolidJS APIs: `blockSignals`, `blockMemos`, `blockResources`, etc.
         - Primitive UI components should be pure and prefer composition over complex global state/context.
         - If a Lexical Node is created or modified with breaking changes, the lexical version counter must be incremented (`apps/web/src/lib/core/component/LexicalMarkdown/version.ts`).
+        - New or moved query call sites must have a deliberate Suspense boundary — walk up the tree from the call site and check which boundary would catch it (see FE-29 in docs/STYLE_GUIDE.md).
 
     - path: "infra/**/*.ts"
       instructions: |

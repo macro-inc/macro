@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
   createEmailFormState,
@@ -28,12 +29,17 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_EMAIL_SIGNATURES } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
+  emailToId,
+  recipientEntityMapper,
   tryMacroId,
   useDisplayName,
   type WithCustomUserInput,
@@ -71,6 +77,7 @@ import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 
+import * as EmailValidator from 'email-validator';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -105,6 +112,8 @@ let undoComposeSnapshot: UndoComposeSnapshot | null = null;
 
 type EmailComposeProps = {
   draftID?: string;
+  /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
+  initialTo?: string[];
 };
 
 export function EmailCompose(props: EmailComposeProps) {
@@ -157,6 +166,9 @@ export function EmailCompose(props: EmailComposeProps) {
   // message. The backend injects it on send (see include_signature below); the
   // FE only renders the preview and signals an explicit dismiss.
   const signature = useEmailSignature(() => link()?.id);
+  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
   const [includeSignature, setIncludeSignature] = createSignal(true);
 
   const hasLinkError = createMemo(() => {
@@ -202,6 +214,19 @@ export function EmailCompose(props: EmailComposeProps) {
     }
     setIncludeSignature(restoredSnapshot.includeSignature);
     undoComposeSnapshot = null;
+  }
+
+  if (!props.draftID && props.initialTo?.length) {
+    form.setRecipients(
+      'to',
+      props.initialTo.map((email) =>
+        recipientEntityMapper('custom')({
+          id: emailToId(email),
+          email,
+          invalid: !EmailValidator.validate(email),
+        })
+      )
+    );
   }
 
   // --- Draft persistence ---
@@ -424,7 +449,7 @@ export function EmailCompose(props: EmailComposeProps) {
               },
             ]
           : undefined,
-        duration: 8_000,
+        duration: 5_000,
       });
       if (data.message.thread_db_id) {
         replaceSplit({
@@ -768,7 +793,11 @@ export function EmailCompose(props: EmailComposeProps) {
     // dismiss. Shown only when the sending inbox has a signature and it hasn't
     // been dismissed.
     signaturePreview: () => (
-      <Show when={ENABLE_EMAIL_SIGNATURES && includeSignature() && signature()}>
+      <Show
+        when={
+          emailSignaturesFlag().enabled && includeSignature() && signature()
+        }
+      >
         {(html) => (
           <SignaturePreview
             html={html()}

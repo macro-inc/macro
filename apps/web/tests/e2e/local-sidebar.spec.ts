@@ -19,7 +19,7 @@ const SIDEBAR_LIST_VIEWS = [
   {
     id: 'mail',
     label: 'Email',
-    tabs: ['Signal', 'Noise', 'Calendar', 'Sent', 'Drafts', 'Shared', 'All'],
+    tabs: ['Signal', 'Noise', 'Sent', 'Calendar', 'Drafts', 'Shared', 'All'],
   },
   {
     id: 'documents',

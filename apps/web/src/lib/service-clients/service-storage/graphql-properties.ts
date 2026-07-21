@@ -15,15 +15,18 @@ import { throwOnErr } from '@core/util/result';
 import {
   executeOptimisticMutation,
   type OptimisticMutationOptions,
+  optimisticMutationDispositionOf,
 } from '@graphql-cache/index';
 import { match } from 'ts-pattern';
 import { propertiesServiceClient } from '../service-properties/client';
 import type { EntityReference } from '../service-properties/generated/schemas/entityReference';
 import type { EntityType } from '../service-properties/generated/schemas/entityType';
+import type { PropertyTargetEntityType } from '../service-properties/generated/schemas/propertyTargetEntityType';
 import type { SetPropertyValue } from '../service-properties/generated/schemas/setPropertyValue';
 import {
   type GraphqlEntityReferenceInput,
   type GraphqlPropertyEntityType,
+  type GraphqlPropertyTargetEntityType,
   type GraphqlSetPropertyValue,
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
@@ -53,6 +56,26 @@ export function toGraphqlPropertyEntityType(
   entityType: EntityType
 ): GraphqlPropertyEntityType {
   return ENTITY_TYPE_TO_GRAPHQL[entityType];
+}
+
+const TARGET_ENTITY_TYPE_TO_GRAPHQL: Record<
+  PropertyTargetEntityType,
+  GraphqlPropertyTargetEntityType
+> = {
+  CALL_RECORD: 'CALL_RECORD',
+  CHANNEL: 'CHANNEL',
+  CHAT: 'CHAT',
+  COMPANY: 'COMPANY',
+  DOCUMENT: 'DOCUMENT',
+  PROJECT: 'PROJECT',
+  THREAD: 'THREAD',
+  USER: 'USER',
+};
+
+export function toGraphqlPropertyTargetEntityType(
+  entityType: PropertyTargetEntityType
+): GraphqlPropertyTargetEntityType {
+  return TARGET_ENTITY_TYPE_TO_GRAPHQL[entityType];
 }
 
 function toGraphqlEntityReference(
@@ -125,7 +148,7 @@ export function toGraphqlSetPropertyValue(
 }
 
 export type SetEntityPropertyArgs = {
-  entityType: EntityType;
+  entityType: PropertyTargetEntityType;
   entityId: string;
   propertyDefinitionId: string;
   /** REST-shaped value; `null` attaches the property without a value. */
@@ -141,31 +164,41 @@ export type SetEntityPropertyArgs = {
   optimisticCache?: OptimisticMutationOptions;
 };
 
-/**
- * Sets or attaches one property on an entity. Rejects on transport or
- * GraphQL errors, matching the REST path's throw-on-error behavior
- * expected by the TanStack mutation hooks.
- */
+/** Outcome of submitting one property mutation to its configured transport. */
+export type SetEntityPropertyDisposition =
+  | { kind: 'committed'; property?: SoupPropertyFieldsFragment }
+  | { kind: 'queued'; transactionId: string }
+  | { kind: 'permanently-failed'; error: Error };
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+/** Sets or durably queues one property assignment. */
 export async function setEntityProperty(
   args: SetEntityPropertyArgs
-): Promise<SoupPropertyFieldsFragment | void> {
+): Promise<SetEntityPropertyDisposition> {
   if (!ENABLE_GRAPHQL_SOUP()) {
-    await throwOnErr(
-      async () =>
-        await propertiesServiceClient.setEntityProperty({
-          entity_type: args.entityType,
-          entity_id: args.entityId,
-          property_id: args.propertyDefinitionId,
-          body: { value: args.value },
-        })
-    );
-    return;
+    try {
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.setEntityProperty({
+            entity_type: args.entityType,
+            entity_id: args.entityId,
+            property_id: args.propertyDefinitionId,
+            body: { value: args.value },
+          })
+      );
+      return { kind: 'committed' };
+    } catch (error) {
+      return { kind: 'permanently-failed', error: asError(error) };
+    }
   }
 
   const client = getGraphqlSoupClient();
   const variables: SetEntityPropertyMutationVariables = {
     input: {
-      entityType: toGraphqlPropertyEntityType(args.entityType),
+      entityType: toGraphqlPropertyTargetEntityType(args.entityType),
       entityId: args.entityId,
       propertyDefinitionId: args.propertyDefinitionId,
       value: toGraphqlSetPropertyValue(args.value),
@@ -182,8 +215,24 @@ export async function setEntityProperty(
         args.optimisticCache
       ).toPromise()
     : await client.mutation(SetEntityPropertyDocument, variables).toPromise();
-  if (result.error) {
-    throw result.error;
+  const disposition = optimisticMutationDispositionOf(result);
+  if (disposition?.kind === 'queued') return disposition;
+  if (disposition?.kind === 'permanently-failed') return disposition;
+  if (disposition?.kind === 'committed') {
+    return {
+      kind: 'committed',
+      property: disposition.data.setEntityProperty,
+    };
   }
-  return result.data?.setEntityProperty;
+
+  if (result.error) {
+    return { kind: 'permanently-failed', error: result.error };
+  }
+  if (!result.data) {
+    return {
+      kind: 'permanently-failed',
+      error: new Error('setEntityProperty mutation returned no data'),
+    };
+  }
+  return { kind: 'committed', property: result.data.setEntityProperty };
 }

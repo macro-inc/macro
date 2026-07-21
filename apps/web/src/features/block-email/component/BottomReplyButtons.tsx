@@ -5,6 +5,8 @@ import { useEmail } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
+import CheckIcon from '@phosphor/check.svg';
+import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
@@ -16,7 +18,8 @@ import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
-  label: string;
+  label?: string;
+  ariaLabel?: string;
   onClick: () => void;
 }) {
   return (
@@ -27,6 +30,7 @@ function ReplyActionButton(props: {
       // Button's own Layer would reset it.)
       depth={isMobile() ? 3 : undefined}
       variant="base"
+      aria-label={props.ariaLabel}
       class={cn(
         // Island pills when floating in the mobile accessory region.
         'mobile:island mobile:h-8 mobile:rounded-full mobile:border-0'
@@ -34,7 +38,9 @@ function ReplyActionButton(props: {
       onClick={props.onClick}
     >
       <props.icon class="size-4 shrink-0" />
-      <span>{props.label}</span>
+      <Show when={props.label}>
+        <span>{props.label}</span>
+      </Show>
     </Button>
   );
 }
@@ -62,6 +68,16 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     return email ? inboxIconProps(email) : { email: '' };
   };
 
+  const isDone = () => ctx.isThreadDone();
+
+  const toggleMarkDone = () => {
+    if (isDone()) {
+      ctx.markThreadNotDone();
+    } else {
+      ctx.archiveThread();
+    }
+  };
+
   return (
     <Show
       when={isMobile()}
@@ -85,16 +101,31 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     >
       <FloatRegionOrInline region="accessory">
         <div class="w-full p-2 pb-2 pt-4 mobile:px-(--mobile-chrome-gutter) mobile:py-0">
-          <div class="flex flex-row items-center gap-2 mobile:pointer-events-auto">
+          <div class="flex flex-row items-center gap-2 justify-between mobile:pointer-events-auto">
+            <div class="flex flex-row items-center gap-2">
+              <ReplyActionButton
+                icon={ArrowBendUpLeft}
+                label="Reply"
+                onClick={open('reply-all')}
+              />
+              <ReplyActionButton
+                icon={ArrowBendUpRight}
+                label="Forward"
+                onClick={open('forward')}
+              />
+            </div>
+
             <ReplyActionButton
-              icon={ArrowBendUpLeft}
-              label="Reply"
-              onClick={open('reply-all')}
-            />
-            <ReplyActionButton
-              icon={ArrowBendUpRight}
-              label="Forward"
-              onClick={open('forward')}
+              icon={(iconProps) => (
+                <Show
+                  when={isDone()}
+                  fallback={<CheckIcon class={iconProps.class} />}
+                >
+                  <CheckBoldIcon class={cn(iconProps.class, 'text-accent')} />
+                </Show>
+              )}
+              ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
+              onClick={toggleMarkDone}
             />
           </div>
         </div>

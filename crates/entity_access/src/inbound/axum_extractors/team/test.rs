@@ -37,7 +37,8 @@ type V2Extractor = OptionalMacroUserTeamExtractorV2<
     FakeEntityAccessService,
     FakeAuthorizationService,
 >;
-type V1RequiredExtractor = MacroUserTeamExtractor<AdminTeamRole, FakeEntityAccessService>;
+type RequiredV2Extractor =
+    MacroUserTeamExtractorV2<AdminTeamRole, FakeEntityAccessService, FakeAuthorizationService>;
 
 #[derive(Clone, Debug, Default)]
 struct FakeEntityAccessService {
@@ -247,13 +248,12 @@ async fn extract_v2(
     V2Extractor::from_request_parts(&mut parts, state).await
 }
 
-async fn extract_v1_required(
-    mut request: Request<Body>,
+async fn extract_required_v2(
+    request: Request<Body>,
     state: &TestState,
-) -> Result<V1RequiredExtractor, ExtractorError> {
-    request.extensions_mut().insert(user_context(USER_ID));
+) -> Result<RequiredV2Extractor, ExtractorError> {
     let (mut parts, _) = request.into_parts();
-    V1RequiredExtractor::from_request_parts(&mut parts, state).await
+    RequiredV2Extractor::from_request_parts(&mut parts, state).await
 }
 
 async fn response_parts(response: Response) -> (StatusCode, String) {
@@ -276,6 +276,129 @@ fn assert_receipt(receipt: &EntityAccessReceipt<AdminTeamRole>, user_id: &str, r
         receipt.entity_permission(),
         EntityPermission::TeamRole { role: actual_role } if *actual_role == role
     ));
+}
+
+#[tokio::test]
+async fn required_v2_accepts_bearer_credentials_for_a_qualifying_member() {
+    let state = state(
+        FakeEntityAccessService::default().with_membership(USER_ID, TeamRole::Admin),
+        FakeAuthorizationService::default(),
+    );
+
+    let extracted = extract_required_v2(bearer_request("valid"), &state)
+        .await
+        .expect("qualifying bearer-authenticated membership should extract");
+
+    assert_receipt(&extracted.entity_access_receipt, USER_ID, TeamRole::Admin);
+}
+
+#[tokio::test]
+async fn required_v2_accepts_internal_acting_user_credentials() {
+    let state = state(
+        FakeEntityAccessService::default().with_membership(ACT_AS_USER_ID, TeamRole::Owner),
+        FakeAuthorizationService::default(),
+    );
+    let request = Request::builder()
+        .header(INTERNAL_API_KEY_HEADER, INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, ACT_AS_USER_ID)
+        .body(Body::empty())
+        .expect("request should be valid");
+
+    let extracted = extract_required_v2(request, &state)
+        .await
+        .expect("qualifying internal acting-user membership should extract");
+
+    assert_receipt(
+        &extracted.entity_access_receipt,
+        ACT_AS_USER_ID,
+        TeamRole::Owner,
+    );
+}
+
+#[tokio::test]
+async fn required_v2_rejects_missing_credentials() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_v2(request(), &state)
+        .await
+        .expect_err("required authorization should reject missing credentials");
+    let (status, body) = response_parts(error.into_response()).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, r#"{"message":"unauthorized"}"#);
+}
+
+#[tokio::test]
+async fn required_v2_rejects_expired_credentials() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_v2(bearer_request("expired"), &state)
+        .await
+        .expect_err("expired credentials should be rejected");
+    let (status, body) = response_parts(error.into_response()).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, r#"{"message":"jwt expired"}"#);
+}
+
+#[tokio::test]
+async fn required_v2_preserves_no_membership_error() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_v2(bearer_request("valid"), &state)
+        .await
+        .expect_err("required extraction should reject absent membership");
+
+    assert!(matches!(
+        error,
+        ExtractorError::UnauthorizedWithMessage("not in a team")
+    ));
+}
+
+#[tokio::test]
+async fn required_v2_preserves_insufficient_role_error() {
+    let state = state(
+        FakeEntityAccessService::default().with_membership(USER_ID, TeamRole::Member),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_v2(bearer_request("valid"), &state)
+        .await
+        .expect_err("required extraction should reject an insufficient role");
+
+    assert!(matches!(
+        error,
+        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
+    ));
+}
+
+#[tokio::test]
+async fn required_v2_rejects_identity_less_internal_credentials() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+    let request = Request::builder()
+        .header(INTERNAL_API_KEY_HEADER, INTERNAL_KEY)
+        .body(Body::empty())
+        .expect("request should be valid");
+
+    let error = extract_required_v2(request, &state)
+        .await
+        .expect_err("required authorization should reject identity-less internal credentials");
+    let (status, body) = response_parts(error.into_response()).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, r#"{"message":"unauthorized"}"#);
 }
 
 #[tokio::test]
@@ -416,33 +539,6 @@ async fn identity_less_internal_request_is_unauthorized() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, r#"{"message":"unauthorized"}"#);
-}
-
-#[tokio::test]
-async fn v1_required_extractor_preserves_team_failure_messages() {
-    let no_team_state = state(
-        FakeEntityAccessService::default(),
-        FakeAuthorizationService::default(),
-    );
-    let no_team_error = extract_v1_required(request(), &no_team_state)
-        .await
-        .expect_err("required V1 extraction should reject absent membership");
-    assert!(matches!(
-        no_team_error,
-        ExtractorError::UnauthorizedWithMessage("not in a team")
-    ));
-
-    let insufficient_role_state = state(
-        FakeEntityAccessService::default().with_membership(USER_ID, TeamRole::Member),
-        FakeAuthorizationService::default(),
-    );
-    let insufficient_role_error = extract_v1_required(request(), &insufficient_role_state)
-        .await
-        .expect_err("required V1 extraction should reject an insufficient role");
-    assert!(matches!(
-        insufficient_role_error,
-        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
-    ));
 }
 
 #[test]

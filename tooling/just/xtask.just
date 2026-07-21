@@ -39,3 +39,19 @@ stop_local *ARGS:
 #   just stack down                    # reclaim everything
 stack *ARGS:
   {{ xtask }} stack "$@"
+
+# Start an isolated stack, seed it, and run the local Playwright suite.
+local-e2e *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite web -- "$@"
+
+# Start and seed the same isolated stack, then run ignored Rust integration tests.
+local-e2e-rust *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite rust -- "$@"
+
+# Start and seed once, then run the Rust and Playwright suites.
+local-e2e-all *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite all -- "$@"
+
+# Start and seed the stack, then open Playwright UI mode.
+local-e2e-ui *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite web --ui -- "$@"

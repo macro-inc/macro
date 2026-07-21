@@ -61,6 +61,25 @@ pub fn denormalize(
     source: &impl RecordSource,
     deps: &mut BTreeSet<EntityKey>,
 ) -> Result<ReadOutcome, DenormalizeError> {
+    denormalize_record(
+        &EntityKey::root(),
+        meta::QUERY_ROOT_TYPE,
+        &op.selection_set,
+        variables,
+        source,
+        deps,
+    )
+}
+
+/// Projects one normalized record through a fragment selection.
+pub fn denormalize_record(
+    key: &EntityKey,
+    type_name: &str,
+    selections: &[Selection],
+    variables: &serde_json::Map<String, Json>,
+    source: &impl RecordSource,
+    deps: &mut BTreeSet<EntityKey>,
+) -> Result<ReadOutcome, DenormalizeError> {
     let mut walk = Walk {
         variables,
         source,
@@ -68,8 +87,7 @@ pub fn denormalize(
         missing_records: BTreeSet::new(),
         miss: None,
     };
-    let root_key = EntityKey::root();
-    let data = walk.read_record(&root_key, meta::QUERY_ROOT_TYPE, &op.selection_set)?;
+    let data = walk.read_record(key, type_name, selections)?;
 
     if !walk.missing_records.is_empty() {
         return Ok(ReadOutcome::NeedRecords(walk.missing_records));
@@ -79,10 +97,9 @@ pub fn denormalize(
     }
     match data {
         Some(json) => Ok(ReadOutcome::Complete(json)),
-        // Root record itself absent → nothing cached for this operation yet.
         None => Ok(ReadOutcome::Miss {
-            entity: root_key,
-            field: "(root)".to_string(),
+            entity: key.clone(),
+            field: "(record)".to_string(),
         }),
     }
 }

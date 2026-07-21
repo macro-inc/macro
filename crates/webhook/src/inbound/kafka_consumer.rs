@@ -1,7 +1,8 @@
 //! Kafka consumer that feeds broker events into webhook ingestion.
 //!
-//! Subscribes to [`MacroDocumentsTopic`] and [`MacroChannelsTopic`] and hands
-//! every decoded event envelope to a [`WebhookEventIngestionService`].
+//! Subscribes to [`MacroDocumentsTopic`], [`MacroChannelsTopic`], and
+//! [`MacroWebhooksTopic`] and hands every decoded event envelope to a
+//! [`WebhookEventIngestionService`].
 //!
 //! Delivery is at-least-once: an event's offset is committed only after the
 //! ingestion service accepted it or permanently rejected it. Transient
@@ -20,14 +21,14 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::ingestion::WebhookEventIngestionService;
+use crate::domain::{events::WebhookTopicEvent, ingestion::WebhookEventIngestionService};
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
 use macro_env::Environment;
 use macro_event_broker::outbound::msk_iam::configure_sasl_iam;
 use macro_event_broker::{Event, EventBrokerError, MskIamClientContext, Topic as _};
-use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic};
+use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroWebhooksTopic};
 use rdkafka::ClientConfig;
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::error::KafkaResult;
@@ -49,6 +50,14 @@ const MAX_INGEST_ATTEMPTS: u32 = 5;
 /// consumer from its group.
 const INGEST_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
+fn subscribed_topics() -> [&'static str; 3] {
+    [
+        MacroDocumentsTopic.as_str(),
+        MacroChannelsTopic.as_str(),
+        MacroWebhooksTopic.as_str(),
+    ]
+}
+
 /// One decoded event envelope from a topic this consumer subscribes to.
 ///
 /// The Kafka message key is not carried: every event's metadata already
@@ -59,6 +68,8 @@ pub enum WebhookConsumerEvent {
     Documents(Event<DocumentTopicEvent>),
     /// Event received on [`MacroChannelsTopic`].
     Channels(Event<ChannelTopicEvent>),
+    /// Event received on [`MacroWebhooksTopic`].
+    Webhooks(Event<WebhookTopicEvent>),
 }
 
 impl WebhookConsumerEvent {
@@ -70,6 +81,9 @@ impl WebhookConsumerEvent {
             }
             topic if topic == MacroChannelsTopic.as_str() => {
                 Ok(Self::Channels(Event::decode(payload)?))
+            }
+            topic if topic == MacroWebhooksTopic.as_str() => {
+                Ok(Self::Webhooks(Event::decode(payload)?))
             }
             unknown => Err(EventBrokerError::UnknownTopic(unknown.to_string())),
         }
@@ -117,7 +131,7 @@ impl WebhookKafkaConsumer {
     }
 
     fn subscribe(&self) -> KafkaResult<()> {
-        let topics = [MacroDocumentsTopic.as_str(), MacroChannelsTopic.as_str()];
+        let topics = subscribed_topics();
         match self {
             Self::Plaintext(consumer) => consumer.subscribe(&topics),
             Self::MskIam(consumer) => consumer.subscribe(&topics),
@@ -181,6 +195,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
             WebhookConsumerEvent::Channels(event) => {
                 service.ingest_channel_event(event.clone()).await
             }
+            WebhookConsumerEvent::Webhooks(event) => {
+                service.ingest_webhook_event(event.clone()).await
+            }
         };
         match result {
             Ok(()) => {
@@ -224,9 +241,10 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
 
 /// Run the webhook event consumer until `shutdown` resolves.
 ///
-/// Connects to `brokers`, subscribes to [`MacroDocumentsTopic`] and
-/// [`MacroChannelsTopic`] under the `webhook-event-ingestion` consumer group,
-/// and feeds every decoded event to `service`, committing each offset only
+/// Connects to `brokers` and subscribes to [`MacroDocumentsTopic`],
+/// [`MacroChannelsTopic`], and [`MacroWebhooksTopic`] under the
+/// `webhook-event-ingestion` consumer group. Every decoded event is fed to
+/// `service`, committing each offset only
 /// after ingestion succeeds (see `ingest_with_retry` for the retry policy).
 /// Returns an error when the consumer cannot be created or subscribed, or when
 /// a transient ingestion failure exhausts its in-process retries; callers
@@ -246,7 +264,7 @@ where
         .subscribe()
         .context("failed to subscribe to webhook event topics")?;
     tracing::info!(
-        topics = ?[MacroDocumentsTopic.as_str(), MacroChannelsTopic.as_str()],
+        topics = ?subscribed_topics(),
         group = GROUP_ID,
         "webhook event consumer listening"
     );

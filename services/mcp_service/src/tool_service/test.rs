@@ -1,22 +1,11 @@
 use super::*;
 use ai_toolset::AsyncToolCollection;
 use rmcp::{handler::server::ServerHandler, model::ErrorCode};
-use roles_and_permissions::{
-    domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
-};
-use sqlx::postgres::PgPoolOptions;
 
-type TestRolesService = UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>;
-
-fn empty_service() -> AuthenticatedToolService<(), TestRolesService> {
-    let db = PgPoolOptions::new()
-        .connect_lazy("postgres://localhost/unused")
-        .expect("lazy pool creation should not fail");
-    let roles_repository = MacroDB::new(db);
+fn empty_service() -> AuthenticatedToolService<()> {
     AuthenticatedToolService::new(
         Arc::new(AsyncToolCollection::new()),
         (),
-        UserRolesAndPermissionsServiceImpl::new(roles_repository.clone(), roles_repository),
         "https://macro.com".to_owned(),
     )
 }
@@ -105,19 +94,16 @@ fn authenticated_user_id_is_read_from_http_request_parts() {
     let mut extensions = rmcp::model::Extensions::new();
     extensions.insert(parts);
 
-    let user_id =
-        AuthenticatedToolService::<(), TestRolesService>::authenticated_user_id(&extensions)
-            .unwrap();
+    let user_id = AuthenticatedToolService::<()>::authenticated_user_id(&extensions).unwrap();
 
     assert_eq!(user_id, expected_user_id);
 }
 
 #[test]
 fn authenticated_user_id_requires_request_parts() {
-    let error = AuthenticatedToolService::<(), TestRolesService>::authenticated_user_id(
-        &rmcp::model::Extensions::new(),
-    )
-    .expect_err("missing request parts should fail auth extraction");
+    let error =
+        AuthenticatedToolService::<()>::authenticated_user_id(&rmcp::model::Extensions::new())
+            .expect_err("missing request parts should fail auth extraction");
 
     assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
     assert_eq!(error.message, "missing user identity — is auth configured?");
@@ -129,9 +115,8 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
     let mut extensions = rmcp::model::Extensions::new();
     extensions.insert(parts);
 
-    let error =
-        AuthenticatedToolService::<(), TestRolesService>::authenticated_user_id(&extensions)
-            .expect_err("missing user id should fail auth extraction");
+    let error = AuthenticatedToolService::<()>::authenticated_user_id(&extensions)
+        .expect_err("missing user id should fail auth extraction");
 
     assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
     assert_eq!(error.message, "missing user identity — is auth configured?");

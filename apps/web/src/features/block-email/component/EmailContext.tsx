@@ -1,4 +1,7 @@
-import { makeMarkDoneAction } from '@app/features/next-soup/actions';
+import {
+  makeMarkDoneAction,
+  makeMarkNotDoneAction,
+} from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { URL_PARAMS } from '@block-email/constants';
@@ -21,7 +24,12 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
-import { createEffectOnEntityTypeNotification } from '@notifications';
+import {
+  compositeEntity,
+  createEffectOnEntityTypeNotification,
+  setDoneOverride,
+} from '@notifications';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
@@ -30,10 +38,19 @@ import {
   markSenderNoiseWithToast,
   markSenderSignalWithToast,
   trackExternalThreadArchive,
-  useArchiveThreadMutation,
   useThreadQuery,
+  useUndoableArchiveThreadMutation,
 } from '@queries/email/thread';
-import { getSoupEntityById } from '@queries/soup/cache';
+import {
+  bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsUndone,
+  fetchDoneNotificationIdsByEventItemIds,
+} from '@queries/notification/user-notifications';
+import {
+  getSoupEntityById,
+  invalidateAllSoup,
+  refetchSoupEntity,
+} from '@queries/soup/cache';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { UndoHandle } from '@queries/undo';
 import type {
@@ -135,6 +152,10 @@ type EmailContextValues = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** True when the thread is archived, i.e. currently marked done. */
+  isThreadDone: Accessor<boolean>;
+  /** Unarchives a done thread and restores its notifications. */
+  markThreadNotDone: () => boolean;
   getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
@@ -364,9 +385,75 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     userId,
   });
 
-  const archiveMutation = useArchiveThreadMutation({
-    onError: () => {
-      toast.failure('Failed to archive thread');
+  const markNotDoneAction = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
+  });
+
+  // Notification ids the mark-not-done fallback restored, per thread, so the
+  // undo/redo hooks below can re-mark them when the archive flip is replayed.
+  const restoredNotificationIds = new Map<string, string[]>();
+
+  // Only the direct archive/unarchive fallbacks go through this mutation
+  // (the mark-done / mark-not-done action paths toast on their own).
+  const archiveMutation = useUndoableArchiveThreadMutation({
+    onPushed: (handle, params) => {
+      const message = params.archive ? 'Marked as done' : 'Marked as not done';
+      let toastId: number | undefined;
+
+      const showToast = () => {
+        toastId = toast.success(message, {
+          actions: [
+            {
+              label: 'Undo',
+              icon: ArrowCounterClockwise,
+              onClick: () => {
+                handle.undo({
+                  onError: () => toast.failure('Failed to undo'),
+                });
+              },
+            },
+          ],
+          duration: 3_000,
+          stack: true,
+          hideOnMobile: true,
+        });
+      };
+
+      showToast();
+
+      // Undo/redo replay only the /archived flip; mirror the fallback's
+      // notification and soup-list side effects for the resulting state.
+      const syncSideEffects = (nowArchived: boolean) => {
+        const ids = restoredNotificationIds.get(params.threadId) ?? [];
+        if (ids.length > 0) {
+          setDoneOverride(ids, nowArchived);
+          void (
+            nowArchived
+              ? bulkMarkNotificationsAsDone(ids)
+              : bulkMarkNotificationsAsUndone(ids)
+          ).catch(() => setDoneOverride(ids, undefined));
+        }
+        if (!nowArchived) {
+          void refetchSoupEntity(params.threadId, 'emailThread');
+        }
+        invalidateAllSoup();
+      };
+
+      return {
+        onUndone: () => {
+          if (toastId !== undefined) toast.dismiss(toastId);
+          syncSideEffects(!params.archive);
+        },
+        onRedone: () => {
+          showToast();
+          syncSideEffects(params.archive);
+        },
+      };
+    },
+    onError: (params) => {
+      toast.failure(
+        params.archive ? 'Failed to mark as done' : 'Failed to mark as not done'
+      );
     },
   });
 
@@ -388,6 +475,97 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return candidates.find((row) => row && row.id !== focusedId)?.id;
   };
 
+  const isThreadDone = () => {
+    const thread = threadQuery.data;
+    return thread ? !thread.inbox_visible : false;
+  };
+
+  // Resolve a thread's soup representation for the mark-done / mark-not-done
+  // paths: the live list row when it's rendered, else the normalized
+  // soup-cache entity. Shared by markThreadNotDone and archiveThread.
+  const resolveThreadSoupLookup = (threadId: string) => {
+    const selectedRow = soup?.items.get(threadId);
+    const cachedItem = selectedRow ? undefined : getSoupEntityById(threadId);
+    return { selectedRow, cachedItem };
+  };
+
+  const markThreadNotDone = () => {
+    const thread = threadQuery.data;
+    if (!thread?.db_id) return false;
+
+    if (thread.inbox_visible) return false;
+
+    // Mark-not-done issues the /archived request itself (plus notification
+    // and soup-cache restore), so the path below skips archiveMutation and
+    // only mirrors its thread-cache handling via trackExternalThreadArchive.
+    const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
+
+    const entity =
+      selectedRow?.original ??
+      (cachedItem && cachedItem.tag !== 'channelThread'
+        ? mapApiSoupItemToEntity(cachedItem)
+        : undefined);
+
+    if (entity && markNotDoneAction.canExecute(entity)) {
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markNotDoneAction.execute([entity]),
+        false
+      );
+    } else {
+      // No soup entity to drive the action from — the mark-done removal
+      // evicted it from the soup caches (or its done state hasn't caught up
+      // with the thread's): unarchive directly, then refetch the thread's
+      // soup item to reinsert its rows and refetch the lists.
+      const threadId = thread.db_id;
+      // Snapshot the thread's notification ids now — the entity path restores
+      // them via executeMarkEntitiesUndone, so mirror that here or they stay
+      // done after the unarchive.
+      const notificationIds = (
+        notificationSource.notificationsByEntity()[
+          compositeEntity({ type: 'email_thread', id: threadId })
+        ] ?? []
+      ).map((n) => n.id);
+      archiveMutation.mutate(
+        {
+          threadId,
+          archive: false,
+          linkId: toHeaderLinkId(thread.link_id),
+        },
+        {
+          onSuccess: async () => {
+            // The live notification stream only carries not-done
+            // notifications, so the thread's done ids may have aged out of
+            // the local cache — merge the server's view (best effort: the
+            // unarchive itself already succeeded).
+            const serverIds = await fetchDoneNotificationIdsByEventItemIds([
+              threadId,
+            ]).catch(() => []);
+            const allIds = [...new Set([...notificationIds, ...serverIds])];
+            // Record for the undo/redo hooks, which re-mark these when the
+            // archive flip is replayed.
+            restoredNotificationIds.set(threadId, allIds);
+            if (allIds.length > 0) {
+              setDoneOverride(allIds, false);
+              try {
+                await bulkMarkNotificationsAsUndone(allIds);
+              } catch {
+                // The unarchive itself succeeded, so keep that outcome and
+                // let the override fall back to the server's done state.
+                setDoneOverride(allIds, undefined);
+                toast.failure('Failed to mark as not done');
+              }
+            }
+            void refetchSoupEntity(threadId, 'emailThread');
+            invalidateAllSoup();
+          },
+        }
+      );
+    }
+
+    return true;
+  };
+
   const archiveThread = (opts?: ArchiveThreadOptions) => {
     const thread = threadQuery.data;
     // `=== true` because callers may pass this straight to an event handler.
@@ -399,24 +577,12 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!thread?.db_id) return false;
 
-    // Unarchiving ('e' on an already-done thread) is a plain toggle back to
-    // the inbox; the mark-done action doesn't apply.
-    if (!thread.inbox_visible) {
-      archiveMutation.mutate({
-        threadId: thread.db_id,
-        archive: false,
-        linkId: toHeaderLinkId(thread.link_id),
-      });
-      return true;
-    }
+    if (!thread.inbox_visible) return false;
 
     // Mark done issues the /archived request itself (with undo support), so
     // the paths below skip archiveMutation and only mirror its thread-cache
     // handling via trackExternalThreadArchive.
-    const selectedRow = soup?.items.get(thread.db_id);
-    const cachedItem = selectedRow
-      ? undefined
-      : getSoupEntityById(thread.db_id);
+    const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
 
     if (soup && selectedRow) {
       void trackExternalThreadArchive(
@@ -629,6 +795,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           recipientOptions: createMemo(getRecipientOptions),
           onRecipientsChange,
           archiveThread,
+          isThreadDone,
+          markThreadNotDone,
           getMarkDoneNavigationTargetId,
           blockSender,
           markSenderSignal,

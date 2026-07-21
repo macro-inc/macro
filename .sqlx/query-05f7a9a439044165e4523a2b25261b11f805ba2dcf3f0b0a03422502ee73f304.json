@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)\n            VALUES ($1, $2, $3, 1, $4, TRUE)\n            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "enterprise",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "allow_non_admin_invites",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "05f7a9a439044165e4523a2b25261b11f805ba2dcf3f0b0a03422502ee73f304"
+}

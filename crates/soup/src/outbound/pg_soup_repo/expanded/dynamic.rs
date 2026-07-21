@@ -78,7 +78,11 @@ static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN d."createdAt"
                         ELSE d."updatedAt"
                     END::timestamptz as sort_ts,
-                    d."projectId"::text as project_id
+                    d."projectId"::text as project_id,
+                    CASE
+                        WHEN dt.sub_type = 'task' THEN 'TASK'::property_entity_type
+                        ELSE 'DOCUMENT'::property_entity_type
+                    END as property_entity_type
                 FROM AccessibleItems ai
                 INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -94,7 +98,8 @@ static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN c."createdAt"
                         ELSE c."updatedAt"
                     END::timestamptz as sort_ts,
-                    c."projectId"::text as project_id
+                    c."projectId"::text as project_id,
+                    'CHAT'::property_entity_type as property_entity_type
                 FROM AccessibleItems ai
                 INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -111,7 +116,8 @@ static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
                         WHEN 'created_at' THEN p."createdAt"
                         ELSE p."updatedAt"
                     END::timestamptz as sort_ts,
-                    p."parentId"::text as project_id
+                    p."parentId"::text as project_id,
+                    'PROJECT'::property_entity_type as property_entity_type
                 FROM AccessibleItems ai
                 INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
                 LEFT JOIN "UserHistory" uh
@@ -1724,7 +1730,7 @@ fn build_grouped_query<'a>(
     // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push(
-        "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id FROM (",
+        "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id, all_items.property_entity_type FROM (",
     );
 
     let mut needs_separator = false;
@@ -1766,7 +1772,7 @@ fn build_grouped_query<'a>(
     // Fallback when all entity types are filtered out
     if !needs_separator {
         builder.push(
-            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id WHERE false",
+            "SELECT 'document'::text as item_type, NULL::text as id, NULL::timestamptz as sort_ts, NULL::text as project_id, NULL::property_entity_type as property_entity_type WHERE false",
         );
     }
 

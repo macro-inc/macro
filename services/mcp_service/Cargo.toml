@@ -14,49 +14,48 @@ name = "mcp_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
-ai_usage = { path = "../../crates/ai_usage" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
+ai_usage = { path = "../../crates/ai_usage" }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log"] }
-call = { path = "../../crates/call", default-features = false, features = ["ports"] }
-chat = { path = "../../crates/chat", features = ["ai_tools", "outbound"] }
+call = { path = "../../crates/call", default-features = false, features = [
+  "ports",
+] }
 channels = { path = "../../crates/channels", features = ["outbound"] }
+chat = { path = "../../crates/chat", features = ["ai_tools", "outbound"] }
 crm = { path = "../../crates/crm" }
+database_env_vars = { path = "../../crates/database_env_vars" }
 documents = { path = "../../crates/documents", features = ["ai_tools"] }
+doppler-config = { workspace = true }
 email = { path = "../../crates/email", features = ["outbound"] }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access" }
 entity_access_management = { path = "../../crates/entity_access_management" }
 foreign_entity = { path = "../../crates/foreign_entity" }
-frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
+frecency = { path = "../../crates/frecency", features = [
+  "outbound",
+  "postgres",
+] }
 fusionauth = { path = "../../crates/fusionauth" }
 http = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
-mcp_auth_proxy = { path = "../mcp_auth_proxy" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_queues = { path = "../../crates/macro_queues" }
-database_env_vars = { path = "../../crates/database_env_vars" }
-doppler-config = { workspace = true }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
-  "cloud_storage",
-  "user_permissions",
-] }
 macro_user_id = { path = "../../crates/macro_user_id" }
+mcp_auth_proxy = { path = "../mcp_auth_proxy" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 prompt = { path = "../../crates/prompt" }
 readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
-roles_and_permissions = { path = "../../crates/roles_and_permissions" }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

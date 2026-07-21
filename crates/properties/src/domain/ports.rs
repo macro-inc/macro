@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use document_sub_type::DocumentSubType;
+use entity_access::domain::models::EntityType as AccessEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::document_metadata::DocumentMetadata;
 use models_properties::service::entity_property::EntityProperty;
@@ -296,6 +298,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_reference: &EntityReference,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Resolve document subtype facts in one batch.
+    ///
+    /// Missing IDs and documents without a subtype are omitted. Callers treat
+    /// either case as a regular document.
+    fn get_document_sub_types(
+        &self,
+        document_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, DocumentSubType>, Self::Err>> + Send;
+
     /// Get a document's metadata (name, owner, timestamps, project).
     /// Returns `None` if the document doesn't exist.
     /// Tasks are stored as documents, so this works for both.
@@ -340,7 +351,7 @@ pub trait PermissionService: Send + Sync + 'static {
         &self,
         user_id: Option<&'a MacroUserIdStr<'a>>,
         entity_id: &str,
-        entity_type: EntityType,
+        entity_type: AccessEntityType,
     ) -> impl Future<Output = Result<ViewReceipt, Self::Err>> + Send;
 
     /// Mint a proof that the user has edit (or owner) access to the entity.
@@ -351,7 +362,7 @@ pub trait PermissionService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'a>,
         entity_id: &str,
-        entity_type: EntityType,
+        entity_type: AccessEntityType,
     ) -> impl Future<Output = Result<EditReceipt, Self::Err>> + Send;
 
     /// Grant edit permissions to users for a task.

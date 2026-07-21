@@ -3425,6 +3425,149 @@ export const setContactHiddenBody = zod
   .describe('Request body for `PUT \/contacts\/{contact_id}\/hidden`.');
 
 /**
+ * @summary Read the caller's team CRM configuration. Any team member may read;
+teams without a settings row get the defaults.
+ */
+export const getCrmTeamSettingsResponse = zod
+  .object({
+    closed_stage_ids: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Stage option ids counting as closed deals; absent = the client\nfalls back to its label heuristic.'
+      ),
+    default_team_view_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'Team view applied by default when a member opens the CRM view.'
+      ),
+    delete_records_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    edit_stages_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    move_closed_deals_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    team_views: zod
+      .unknown()
+      .describe(
+        'Team saved views — an opaque JSON array owned by the frontend.'
+      ),
+  })
+  .describe(
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+  );
+
+/**
+ * @summary Partially update the caller's team CRM configuration. Any team
+member may update the views fields (`team_views`,
+`default_team_view_id`); the governance fields (permission
+thresholds, `closed_stage_ids`) require an admin/owner team role
+(403 otherwise). Omitted fields keep their current values;
+`team_views` is replaced whole. Returns the resulting settings.
+ */
+export const putCrmTeamSettingsBody = zod
+  .object({
+    closed_stage_ids: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'New closed-stage set. Omit to keep the current value; pass\n`null` to clear it (falling back to the client label heuristic).'
+      ),
+    default_team_view_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'New default team view id. Omit to keep the current value; pass\n`null` to clear it.'
+      ),
+    delete_records_role: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['admin', 'owner'])
+          .describe(
+            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+          ),
+      ])
+      .optional(),
+    edit_stages_role: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['admin', 'owner'])
+          .describe(
+            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+          ),
+      ])
+      .optional(),
+    move_closed_deals_role: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['admin', 'owner'])
+          .describe(
+            'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+          ),
+      ])
+      .optional(),
+    team_views: zod
+      .unknown()
+      .optional()
+      .describe('Replacement team-views array (whole-blob, last write wins).'),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/settings`. Every field is optional:\nomitted fields keep their current values.'
+  );
+
+export const putCrmTeamSettingsResponse = zod
+  .object({
+    closed_stage_ids: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Stage option ids counting as closed deals; absent = the client\nfalls back to its label heuristic.'
+      ),
+    default_team_view_id: zod
+      .string()
+      .nullish()
+      .describe(
+        'Team view applied by default when a member opens the CRM view.'
+      ),
+    delete_records_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    edit_stages_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    move_closed_deals_role: zod
+      .enum(['admin', 'owner'])
+      .describe(
+        'Minimum team role required for a CRM capability. Members are\nview-only at the platform level, so the configurable range is\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    team_views: zod
+      .unknown()
+      .describe(
+        'Team saved views — an opaque JSON array owned by the frontend.'
+      ),
+  })
+  .describe(
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+  );
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({
@@ -4375,6 +4518,162 @@ export const getBatchPreviewHandlerResponse = zod.object({
         ),
     ])
   ),
+});
+
+/**
+ * Returns document metadata, user access level, and view location.
+ * @summary Handler for `GET /documents/slug/{slug}`.
+ */
+export const getDocumentByTeamSlugParams = zod.object({
+  slug: zod.string().describe('Team-task reference, such as ENG-42'),
+});
+
+export const getDocumentByTeamSlugResponse = zod.object({
+  data: zod
+    .object({
+      items: zod
+        .array(
+          zod.union([
+            zod.object({
+              branchedFromId: zod
+                .string()
+                .nullish()
+                .describe('The id of the document this document branched from'),
+              branchedFromVersionId: zod
+                .number()
+                .nullish()
+                .describe(
+                  'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+                ),
+              createdAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the document was created'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the document was deleted'),
+              documentFamilyId: zod
+                .number()
+                .nullish()
+                .describe(
+                  'The id of the document family this document belongs to'
+                ),
+              documentVersionId: zod
+                .number()
+                .describe(
+                  'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+                ),
+              fileType: zod
+                .string()
+                .nullish()
+                .describe('The file type of the document (e.g. pdf, docx)'),
+              id: zod.string().describe('The document id'),
+              name: zod.string().describe('The name of the document'),
+              owner: zod.string().describe('The owner of the document'),
+              projectId: zod
+                .string()
+                .nullish()
+                .describe(
+                  'The id of the project that this document belongs to'
+                ),
+              sha: zod
+                .string()
+                .nullish()
+                .describe(
+                  'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+                ),
+              subType: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          is_completed: zod
+                            .boolean()
+                            .describe(
+                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                            ),
+                          type: zod.enum(['task']),
+                        })
+                        .describe(
+                          'A task document with its associated properties'
+                        ),
+                      zod
+                        .object({
+                          type: zod.enum(['snippet']),
+                        })
+                        .describe('A snippet document — reusable markdown'),
+                    ])
+                    .describe(
+                      'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
+                    ),
+                ])
+                .optional(),
+              updatedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'The time the document instance \/ document BOM was updated'
+                ),
+              type: zod.enum(['document']),
+            }),
+            zod.object({
+              createdAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was created'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was deleted'),
+              id: zod.string().describe('The chat uuid'),
+              isPersistent: zod.boolean(),
+              model: zod
+                .string()
+                .nullish()
+                .describe('The model used to generate the chat'),
+              name: zod.string().describe('The name of the chat'),
+              projectId: zod
+                .string()
+                .nullish()
+                .describe('The project id of the chat'),
+              tokenCount: zod.number().nullish(),
+              updatedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was last updated'),
+              userId: zod.string().describe('Who the chat belongs to'),
+              type: zod.enum(['chat']),
+            }),
+            zod.object({
+              createdAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the project was created'),
+              deletedAt: zod.iso.datetime({}).nullish(),
+              id: zod.string().describe('The id of the project'),
+              name: zod.string().describe('The name of the project'),
+              parentId: zod
+                .string()
+                .nullish()
+                .describe('The parent project id'),
+              updatedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the project was updated'),
+              userId: zod
+                .string()
+                .describe('The user id of who created the project'),
+              type: zod.enum(['project']),
+            }),
+          ])
+        )
+        .describe('The items returned from the call'),
+    })
+    .describe('Data to be returned'),
+  error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
 /**
@@ -19740,7 +20039,7 @@ export const removePinHandlerResponse = zod.object({
 });
 
 /**
- * @summary Gets all the users projects. This includes projects shared with the user.
+ * @summary List projects visible to the authenticated user.
  */
 export const getProjectsHandlerResponse = zod.object({
   data: zod
@@ -19767,8 +20066,7 @@ export const getProjectsHandlerResponse = zod.object({
 });
 
 /**
- * @summary Creates a new project.
-The project can be created as a sub-project of another project or as a top-level project.
+ * @summary Create a project, optionally beneath an existing project.
  */
 export const createProjectHandlerBody = zod.object({
   name: zod.string().describe('The name of the project.'),
@@ -19799,7 +20097,7 @@ export const createProjectHandlerResponse = zod.object({
 });
 
 /**
- * @summary Gets all the users projects that are pending upload. This includes projects shared with the user.
+ * @summary List pending root projects owned by the authenticated user.
  */
 export const getPendingProjectsHandlerResponse = zod.object({
   data: zod
@@ -19840,6 +20138,9 @@ export const getPendingProjectsHandlerResponse = zod.object({
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
+/**
+ * @summary Get previews for a batch of project IDs.
+ */
 export const getBatchProjectPreviewBody = zod.object({
   projectIds: zod.array(zod.string()),
 });
@@ -19883,8 +20184,7 @@ export const getBatchProjectPreviewResponse = zod.object({
 });
 
 /**
- * @summary Uploads a folder to the user's cloud storage. Mimicing the folder structure
-with projects and placing all documents in the correct location.
+ * @summary Upload a folder tree and create its upload destinations.
  */
 export const uploadFolderHandlerBody = zod.object({
   content: zod
@@ -20844,9 +21144,7 @@ export const uploadFolderHandlerResponse = zod.object({
 });
 
 /**
- * @summary Creates a request id in the dynamodb table for tracking the upload
-Returns a presigned url for uploading a zip file to the staging bucket
-Returns a request id for tracking the upload
+ * @summary Create a request for extracting an uploaded folder archive.
  */
 export const uploadExtractFolderHandlerBody = zod.object({
   name: zod.string().nullish(),
@@ -20864,6 +21162,9 @@ export const uploadExtractFolderHandlerResponse = zod.object({
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
+/**
+ * @summary Get project metadata.
+ */
 export const getProjectHandlerParams = zod.object({
   id: zod.string().describe('ID of the project'),
 });
@@ -20894,8 +21195,7 @@ export const getProjectHandlerResponse = zod.object({
 });
 
 /**
- * @summary Deletes a project.
-Soft deletes the project and all of its children.
+ * @summary Soft-delete a project and all of its children.
  */
 export const deleteProjectHandlerParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -20904,22 +21204,19 @@ export const deleteProjectHandlerParams = zod.object({
 export const deleteProjectHandlerResponse = zod.object({
   data: zod
     .object({
-      chat_ids: zod
-        .array(zod.string())
-        .describe('The ids of the chats that were marked as deleted'),
-      document_ids: zod
-        .array(zod.string())
-        .describe('The ids of the documents that were marked as deleted'),
+      chat_ids: zod.array(zod.string()).describe('Deleted chats.'),
+      document_ids: zod.array(zod.string()).describe('Deleted documents.'),
       project_ids: zod
         .array(zod.string())
-        .describe('The ids of the project that were marked as deleted'),
+        .describe('Deleted projects, including the requested root.'),
     })
+    .describe('Identifiers affected by a recursive project soft deletion.')
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
 /**
- * @summary Gets the user's access level to the project
+ * @summary Get the caller's project access level.
  */
 export const getProjectUserAccessLevelParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -20930,8 +21227,7 @@ export const getProjectUserAccessLevelResponse = zod
   .describe('Ordered from least to most access top -> bottom');
 
 /**
- * @summary Gets the content of a project.
-This includes the projects sub-projects as well as the items in the project.
+ * @summary Get a project's immediate children.
  */
 export const getProjectContentHandlerParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21084,7 +21380,7 @@ export const getProjectContentHandlerResponse = zod.object({
 });
 
 /**
- * @summary Permanently deletes a project and all of it's children.
+ * @summary Permanently delete a soft-deleted project and all of its children.
  */
 export const permanentlyDeleteProjectParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21098,8 +21394,7 @@ export const permanentlyDeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary Gets the current documents share permissions
-Gets the projects share permissions
+ * @summary Get a project's share permissions.
  */
 export const getProjectPermissionsV2Params = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21133,7 +21428,7 @@ export const getProjectPermissionsV2Response = zod.object({
 });
 
 /**
- * @summary Deletes a specific document
+ * @summary Restore a soft-deleted project and its children.
  */
 export const revertDeleteProjectParams = zod.object({
   id: zod.string().describe('ID of the project'),
@@ -21500,7 +21795,7 @@ export const getDocumentPermissionsV2Response = zod.object({
 });
 
 /**
- * @summary Edits a project.
+ * @summary Edit project metadata and sharing settings.
  */
 export const editProjectV2Params = zod.object({
   id: zod.string().describe('ID of the project'),

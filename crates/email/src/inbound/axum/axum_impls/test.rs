@@ -1,7 +1,10 @@
-use super::{EmailLinkErr, resolve_target_link};
+use super::{EmailLinkErr, MultiEmailLinkExtractor, resolve_target_link};
 use crate::domain::models::{Link, UserProvider};
+use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
 use chrono::Utc;
+use macro_authorization::MacroAuthorizationRejection;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
+use std::{borrow::Cow, marker::PhantomData};
 use uuid::Uuid;
 
 fn test_link(id: Uuid, owner: &str, email: &str, is_primary: bool) -> Link {
@@ -20,6 +23,30 @@ fn test_link(id: Uuid, owner: &str, email: &str, is_primary: bool) -> Link {
 
 fn caller() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("user@test.com").unwrap()
+}
+
+#[tokio::test]
+async fn authorization_error_delegates_response() {
+    let rejection = MacroAuthorizationRejection {
+        status: StatusCode::IM_A_TEAPOT,
+        message: Cow::Borrowed("safe authorization error"),
+    };
+    let expected = rejection.clone().into_response();
+    let actual = EmailLinkErr::Authorization(rejection).into_response();
+
+    assert_eq!(actual.status(), expected.status());
+    let actual_body = to_bytes(actual.into_body(), usize::MAX).await.unwrap();
+    let expected_body = to_bytes(expected.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(actual_body, expected_body);
+    assert_eq!(actual_body, r#"{"message":"safe authorization error"}"#);
+}
+
+#[test]
+fn multi_email_link_extractor_is_cloneable_without_generic_clone_bounds() {
+    struct NotClone;
+
+    let extractor = MultiEmailLinkExtractor::<NotClone, NotClone>(Vec::new(), PhantomData);
+    let _clone = extractor.clone();
 }
 
 #[test]

@@ -3,6 +3,7 @@ use axum::{
     extract::{Path, State},
 };
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use uuid::Uuid;
 
@@ -33,9 +34,9 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(contact_id = %contact_id))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: CrmContactAccessLevelExtractor<ViewAccessLevel, Eas>,
-    State(state): State<CrmRouterState<C, Eas>>,
+pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: CrmContactAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
+    State(state): State<CrmRouterState<C, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state

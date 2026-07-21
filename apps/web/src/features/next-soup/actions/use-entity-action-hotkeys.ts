@@ -13,6 +13,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { macroEntityToPropertyEntityType } from '@property/utils';
 import { onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import {
@@ -23,6 +24,7 @@ import {
   makeDeleteAction,
   makeFavoriteAction,
   makeMarkDoneAction,
+  makeMarkNotDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
   makeSetCompanyPropertyAction,
@@ -53,6 +55,10 @@ export const useEntityActionHotkeys = (
     userId: () => userId(),
     notificationSource: () => notificationSource,
     hotkeyGroup: group,
+  });
+
+  const markNotDone = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
   });
 
   const deleteAction = makeDeleteAction({
@@ -128,6 +134,14 @@ export const useEntityActionHotkeys = (
       openPropertyEditor(entities, mode, property);
     }
   };
+  const canAssignTags = (entity: EntityData) => {
+    try {
+      macroEntityToPropertyEntityType(entity);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   // Mark Done - 'e', not included in Hotkey Group so that we can use it from inside of blocks
   registerHotkey({
@@ -158,6 +172,40 @@ export const useEntityActionHotkeys = (
 
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mark as not done - 'shift+e', reverses mark done on archived emails
+  registerHotkey({
+    hotkey: ['shift+e'],
+    hotkeyToken: TOKENS.entity.action.markNotDone,
+    scopeId,
+    description: 'Mark as not done',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(markNotDone.canExecute)) return false;
+
+      markNotDone.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+
+      const contentId = splitHandle?.content().id;
+
+      const soupViewTab = options.activeSoupViewTab?.();
+
+      if (
+        !isListViewID(contentId) ||
+        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
+      )
+        return false;
+
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(markNotDone.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
@@ -403,6 +451,30 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(isTaskEntity);
+    },
+    scopeId,
+  }).withGroup(group);
+
+  // Assign tags - t
+  registerHotkey({
+    hotkey: ['t'],
+    hotkeyToken: TOKENS.entity.action.tags,
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: () => {
+      const count = getEntitiesForAction().length;
+      return count > 1 ? 'Tag items' : 'Tag item';
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      openPropertyEditor(entities, 'tag');
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(canAssignTags);
     },
     scopeId,
   }).withGroup(group);

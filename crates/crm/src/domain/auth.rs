@@ -166,7 +166,7 @@ pub struct CrmTeamReceipt<T: RequiredPermission> {
 
 impl<T: RequiredPermission> CrmTeamReceipt<T> {
     /// Mint from a verified team-scoped access receipt (e.g. one
-    /// produced by `MacroUserTeamExtractor`). Public because the receipt
+    /// produced by `MacroUserTeamExtractorV2`). Public because the receipt
     /// is itself the capability and `team_id` is derived from its entity
     /// id, so nothing can be forged. Errors if the receipt is not for a
     /// `Team` or the id is malformed.
@@ -193,6 +193,13 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
     /// Derived from the receipt's actual team role, so the service — not
     /// the caller — enforces the hidden gate.
     pub(crate) fn include_hidden(&self) -> bool {
+        self.has_admin_role()
+    }
+
+    /// Whether the caller's actual team role is admin/owner. Used by the
+    /// service to gate admin-only mutations that share an endpoint with
+    /// member-level ones (e.g. the governance fields of team settings).
+    pub(crate) fn has_admin_role(&self) -> bool {
         self.receipt
             .entity_permission()
             .allows_team_role(entity_access::domain::models::TeamRole::Admin)

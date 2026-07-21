@@ -15,7 +15,7 @@ vi.mock('@service-connection/websocket', () => ({
 
 import type { ChannelEntityTarget, EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
-import { getChannelEntityTarget } from './utils';
+import { getChannelEntityTarget, getRowClickFallbackLocation } from './utils';
 
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>
   ({
@@ -208,5 +208,73 @@ describe('getChannelEntityTarget', () => {
   it('returns undefined for non-channel entities', () => {
     const entity = { type: 'email', id: 'e1' } as unknown as EntityData;
     expect(getChannelEntityTarget(entity)).toBeUndefined();
+  });
+});
+
+const emailHit = (messageId: string, content: string) => ({
+  type: 'email' as const,
+  content,
+  sender: 'Sender',
+  senderId: 'sender-1',
+  sentAt: '2026-07-14T00:00:00.000Z',
+  location: { type: 'email' as const, messageId },
+});
+
+const callHit = (transcriptId: string) => ({
+  type: 'call_record' as const,
+  id: transcriptId,
+  content: 'hit content',
+  senderId: 'speaker-1',
+  sentAt: '2026-07-14T00:00:00.000Z',
+  videoSeconds: 0,
+  location: { type: 'call_record' as const, callId: 'call-1', transcriptId },
+});
+
+const searchEntity = (
+  type: 'email' | 'call',
+  contentHitData: unknown[] | null
+): EntityData =>
+  ({
+    type,
+    id: `${type}-1`,
+    search: {
+      nameHighlight: null,
+      senderHighlightTerms: null,
+      contentHitData,
+      source: 'service',
+    },
+  }) as unknown as EntityData;
+
+describe('getRowClickFallbackLocation', () => {
+  it('returns no location for an email row, even with content hits', () => {
+    const entity = searchEntity('email', [
+      emailHit('old-msg', 'a long matched snippet of text'),
+      emailHit('newer-msg', 'short'),
+    ]);
+    expect(getRowClickFallbackLocation(entity)).toBeUndefined();
+  });
+
+  it('returns no location for an email row without search data', () => {
+    const entity = { type: 'email', id: 'e1' } as unknown as EntityData;
+    expect(getRowClickFallbackLocation(entity)).toBeUndefined();
+  });
+
+  it('keeps the snippet-hit fallback for call rows', () => {
+    const entity = searchEntity('call', [callHit('seg-1'), callHit('seg-2')]);
+    expect(getRowClickFallbackLocation(entity)).toEqual({
+      type: 'call_record',
+      callId: 'call-1',
+      transcriptId: 'seg-1',
+    });
+  });
+
+  it('returns no location for a call row without content hits', () => {
+    const entity = searchEntity('call', null);
+    expect(getRowClickFallbackLocation(entity)).toBeUndefined();
+  });
+
+  it('returns no location for non-snippet entities', () => {
+    const entity = { type: 'document', id: 'd1' } as unknown as EntityData;
+    expect(getRowClickFallbackLocation(entity)).toBeUndefined();
   });
 });

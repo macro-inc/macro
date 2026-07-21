@@ -17,3 +17,21 @@ export const TAG_COLORS = [
 ] as const;
 
 export const DEFAULT_TAG_COLOR: string = TAG_COLORS[11];
+
+export const TAG_COLOR_OPTIONS = [
+  { color: TAG_COLORS[0], name: 'Red' },
+  { color: TAG_COLORS[1], name: 'Tomato' },
+  { color: TAG_COLORS[2], name: 'Orange' },
+  { color: TAG_COLORS[3], name: 'Amber' },
+  { color: TAG_COLORS[4], name: 'Yellow' },
+  { color: TAG_COLORS[5], name: 'Green' },
+  { color: TAG_COLORS[6], name: 'Teal' },
+  { color: TAG_COLORS[7], name: 'Blue' },
+  { color: TAG_COLORS[8], name: 'Indigo' },
+  { color: TAG_COLORS[9], name: 'Purple' },
+  { color: TAG_COLORS[10], name: 'Pink' },
+  { color: TAG_COLORS[11], name: 'Gray' },
+] as const satisfies readonly {
+  color: (typeof TAG_COLORS)[number];
+  name: string;
+}[];

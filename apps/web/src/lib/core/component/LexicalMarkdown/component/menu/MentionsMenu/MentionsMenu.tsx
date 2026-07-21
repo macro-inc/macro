@@ -21,6 +21,7 @@ import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   onCleanup,
@@ -91,12 +92,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
 
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
 
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
-
-  const allItems = props.entities ?? quickAccess!.useList();
+  const allItems = props.entities ?? quickAccess!.useList().items;
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -120,7 +121,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const customChannels = props.entities
     ? useEntityMentionFromList({
         items: props.entities,
-        buckets: ['channel'],
+        buckets: ['channel', 'dm'],
         searchTerm,
       })
     : undefined;
@@ -134,19 +135,21 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         })
       : undefined;
 
-  const { searchedEntities: docs } =
+  const docsMention =
     customDocs ??
     useEntityMention({
       buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
-      searchTerm,
+      searchTerm: activeSearchTerm,
     });
+  const docs = docsMention.entities;
 
-  const { searchedEntities: channels } =
+  const channelsMention =
     customChannels ??
     useEntityMention({
-      buckets: ['channel'],
-      searchTerm,
+      buckets: ['channel', 'dm'],
+      searchTerm: activeSearchTerm,
     });
+  const channels = channelsMention.entities;
 
   // CRM companies only surface in mentions when the feature is enabled —
   // the mention hook isn't even wired up otherwise.
@@ -154,25 +157,29 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     ? (customCompanies ??
       useEntityMention({
         buckets: ['crm_company'],
-        searchTerm,
+        searchTerm: activeSearchTerm,
       }))
     : undefined;
-  const companies = () => companyMention?.searchedEntities() ?? [];
+  const companies = () => companyMention?.entities() ?? [];
 
-  const { emails, emailSearchQuery: emailUnifiedSearchInfiniteQuery } =
-    hasCustomEntities()
-      ? {
-          emails: () => [],
-          emailSearchQuery: {
-            hasNextPage: false,
-            isFetching: false,
-            fetchNextPage: () => {},
-          } as any,
-        }
-      : useEmailSearchMention({
-          searchTerm,
-          enabled: () => !props.sources || props.sources.includes('emails'),
-        });
+  const {
+    emails,
+    totalCount: totalEmailCount,
+    hasMore: hasMoreEmails,
+    isLoadingMore: isLoadingMoreEmails,
+    loadMore: loadMoreEmails,
+  } = hasCustomEntities()
+    ? {
+        emails: () => [],
+        totalCount: () => 0,
+        hasMore: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+      }
+    : useEmailSearchMention({
+        searchTerm: activeSearchTerm,
+        enabled: () => !props.sources || props.sources.includes('emails'),
+      });
 
   const dateOptions = useDateSearch({ query: searchTerm });
   const dates = createLazyMemo((): DateMentionItem[] => {
@@ -250,7 +257,31 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           id: 'all',
           label: 'All',
           getData: mobileAllItems,
-          getFullCount: () => mobileAllItems().length,
+          getFullCount: () =>
+            (usersAndGroups()?.length ?? 0) +
+            docsMention.totalCount() +
+            channelsMention.totalCount() +
+            (companyMention?.totalCount() ?? 0) +
+            totalEmailCount() +
+            (dates()?.length ?? 0),
+          hasMore: () =>
+            docsMention.hasMore() ||
+            channelsMention.hasMore() ||
+            (companyMention?.hasMore() ?? false) ||
+            hasMoreEmails(),
+          isLoadingMore: () =>
+            docsMention.isLoadingMore() ||
+            channelsMention.isLoadingMore() ||
+            (companyMention?.isLoadingMore() ?? false) ||
+            isLoadingMoreEmails(),
+          loadMore: async () => {
+            await Promise.all([
+              docsMention.loadMore(),
+              channelsMention.loadMore(),
+              companyMention?.loadMore(),
+              loadMoreEmails(),
+            ]);
+          },
         },
       ];
     }
@@ -266,25 +297,37 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         id: 'documents',
         label: 'Documents, Agents, & Tasks',
         getData: () => docs() ?? [],
-        getFullCount: () => docs()?.length ?? 0,
+        getFullCount: docsMention.totalCount,
+        hasMore: docsMention.hasMore,
+        isLoadingMore: docsMention.isLoadingMore,
+        loadMore: docsMention.loadMore,
       },
       {
         id: 'channels',
         label: 'Channels',
         getData: () => channels() ?? [],
-        getFullCount: () => channels()?.length ?? 0,
+        getFullCount: channelsMention.totalCount,
+        hasMore: channelsMention.hasMore,
+        isLoadingMore: channelsMention.isLoadingMore,
+        loadMore: channelsMention.loadMore,
       },
       {
         id: 'companies',
         label: 'Companies',
         getData: () => companies() ?? [],
-        getFullCount: () => companies()?.length ?? 0,
+        getFullCount: () => companyMention?.totalCount() ?? 0,
+        hasMore: () => companyMention?.hasMore() ?? false,
+        isLoadingMore: () => companyMention?.isLoadingMore() ?? false,
+        loadMore: async () => companyMention?.loadMore(),
       },
       {
         id: 'emails',
         label: 'Emails',
         getData: () => emails() ?? [],
-        getFullCount: () => emails()?.length ?? 0,
+        getFullCount: totalEmailCount,
+        hasMore: hasMoreEmails,
+        isLoadingMore: isLoadingMoreEmails,
+        loadMore: loadMoreEmails,
       },
       {
         id: 'dates',
@@ -377,10 +420,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       if (!controller.isViewAllMode()) {
         const currentCategory = controller.selectedCategory();
         if (currentCategory) {
+          const category = controller.getBucket(currentCategory);
           if (
             controller.canViewAllForCategory(currentCategory) ||
-            (emailUnifiedSearchInfiniteQuery.hasNextPage &&
-              currentCategory === 'emails')
+            category?.hasMore?.()
           ) {
             controller.viewAll(currentCategory);
           }
@@ -436,13 +479,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const items = controller.combinedItems();
     if (!items) return;
 
+    const viewAllMode = controller.viewAllMode();
+    const activeBucket = viewAllMode
+      ? controller.getBucket(viewAllMode)
+      : undefined;
     if (
       controller.selectedIndex() >= items.length - 5 &&
-      controller.viewAllMode() === 'emails' &&
-      emailUnifiedSearchInfiniteQuery.hasNextPage &&
-      !emailUnifiedSearchInfiniteQuery.isFetching
+      activeBucket?.hasMore?.() &&
+      !activeBucket.isLoadingMore?.()
     ) {
-      emailUnifiedSearchInfiniteQuery.fetchNextPage();
+      void activeBucket.loadMore?.();
     }
     if (controller.selectedIndex() >= items.length) {
       controller.selectItem(items.length - 1);
@@ -461,10 +507,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const mode = controller.viewAllMode();
     if (!mode) return 'Items';
     const bucket = bucketConfigs().find((b) => b.id === mode);
-    return bucket?.label || 'Items';
+    if (!bucket) return 'Items';
+    return `${bucket.label} (${bucket.getFullCount()})`;
   };
 
-  const visibleBuckets = () => {
+  const activeViewAllBucket = () => {
+    const mode = controller.viewAllMode();
+    return mode ? controller.getBucket(mode) : undefined;
+  };
+
+  const visibleBuckets = createMemo(() => {
     const currentBins = controller.bins();
     const seenIds = new Set<string>(blockId ? [blockId] : []);
     let cumulativeIndex = 0;
@@ -486,7 +538,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         cumulativeIndex += bucketItems.length;
         return { config, bucketItems, startIndex };
       });
-  };
+  });
 
   const clickOutsideHandler = (e: MouseEvent) => {
     e.stopPropagation();
@@ -626,6 +678,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
+                hasMore={activeViewAllBucket()?.hasMore?.() ?? false}
+                isLoadingMore={
+                  activeViewAllBucket()?.isLoadingMore?.() ?? false
+                }
+                onEndReached={() => {
+                  void activeViewAllBucket()?.loadMore?.();
+                }}
               />
             </Show>
           </Surface>
@@ -642,6 +701,9 @@ function VirtualizedItemList(props: {
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onEndReached: () => void;
 }) {
   let scrollContainerRef: HTMLDivElement | undefined;
 
@@ -657,7 +719,8 @@ function VirtualizedItemList(props: {
   // Scroll selected item into view
   createEffect(() => {
     const index = props.selectedIndex;
-    if (index >= 0 && index < props.items.length) {
+    const itemCount = untrack(() => props.items.length);
+    if (index >= 0 && index < itemCount) {
       virtualizer.scrollToIndex(index, { align: 'auto' });
     }
   });
@@ -665,6 +728,13 @@ function VirtualizedItemList(props: {
   return (
     <div
       ref={scrollContainerRef}
+      onScroll={(event) => {
+        if (!props.hasMore || props.isLoadingMore) return;
+        const target = event.currentTarget;
+        const remaining =
+          target.scrollHeight - target.scrollTop - target.clientHeight;
+        if (remaining <= VIRTUAL_ITEM_HEIGHT * 5) props.onEndReached();
+      }}
       class="overflow-y-auto scrollbar-hidden"
       style={{
         'max-height':

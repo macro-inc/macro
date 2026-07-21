@@ -17,7 +17,44 @@ type SeedManifest = {
       id: string;
       name: string;
       message: string;
+      navigationLauncherMessageId: string;
+      deepThread: {
+        parentMessageId: string;
+        firstReplyId: string;
+        targetReplyId: string;
+        targetReplyText: string;
+        oversizedReplyId: string;
+        oversizedReplyText: string;
+      };
+      alternateDeepThread: {
+        parentMessageId: string;
+        targetReplyId: string;
+        targetReplyText: string;
+      };
     };
+  };
+  navigation: {
+    genericChannelMention: {
+      sourceChannelId: string;
+      sourceChannelName: string;
+      sourceMessageId: string;
+    };
+    targetedMessageMention: {
+      sourceChannelId: string;
+      sourceChannelName: string;
+      sourceMessageId: string;
+    };
+    unreadMessageNavigation: {
+      sourceChannelId: string;
+      sourceChannelName: string;
+      sourceMessageId: string;
+      parentMessageId: string;
+      cacheWarmerReplyId: string;
+      cacheWarmerReplyText: string;
+      targetReplyId: string;
+      targetReplyText: string;
+    };
+    unreadNotificationId: string;
   };
 };
 
@@ -167,5 +204,33 @@ export const localE2ESeed = {
       ),
       `message ${manifest.channels.general.message}`
     ),
+    generalNavigationLauncherMessageId:
+      manifest.channels.general.navigationLauncherMessageId,
+    generalDeepThread: manifest.channels.general.deepThread,
+    generalAlternateDeepThread: manifest.channels.general.alternateDeepThread,
+    genericMentionSourceChannel: required(
+      channelsById.get(
+        manifest.navigation.genericChannelMention.sourceChannelId
+      ),
+      `channel ${manifest.navigation.genericChannelMention.sourceChannelId}`
+    ),
+    genericMentionSourceMessageId:
+      manifest.navigation.genericChannelMention.sourceMessageId,
+    targetedMentionSourceChannel: required(
+      channelsById.get(
+        manifest.navigation.targetedMessageMention.sourceChannelId
+      ),
+      `channel ${manifest.navigation.targetedMessageMention.sourceChannelId}`
+    ),
+    targetedMentionSourceMessageId:
+      manifest.navigation.targetedMessageMention.sourceMessageId,
+    unreadMessageNavigation: manifest.navigation.unreadMessageNavigation,
+    unreadMentionSourceChannel: required(
+      channelsById.get(
+        manifest.navigation.unreadMessageNavigation.sourceChannelId
+      ),
+      `channel ${manifest.navigation.unreadMessageNavigation.sourceChannelId}`
+    ),
+    unreadChannelNotificationId: manifest.navigation.unreadNotificationId,
   },
 } as const;

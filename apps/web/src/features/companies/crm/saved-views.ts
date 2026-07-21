@@ -207,12 +207,15 @@ export function useTeamCrmViews() {
   const defaultView = () => views().find((view) => view.id === defaultViewId());
 
   const setDefault = (id: string | undefined) => {
-    update.mutate((current) => ({ ...current, defaultTeamViewId: id }), {
-      onError: (error: Error) => {
-        console.error('Failed to set default team view', error);
-        toast.failure('Failed to set default team view');
-      },
-    });
+    update.mutate(
+      { defaultTeamViewId: id ?? null },
+      {
+        onError: (error: Error) => {
+          console.error('Failed to set default team view', error);
+          toast.failure('Failed to set default team view');
+        },
+      }
+    );
   };
 
   const add = (name: string, viewConfig: CrmViewConfig) => {
@@ -224,10 +227,9 @@ export function useTeamCrmViews() {
       createdAt: new Date().toISOString(),
     };
     update.mutate(
-      (current) => ({
-        ...current,
-        teamViews: [...(current.teamViews ?? []), view],
-      }),
+      // Updater form: derives from the latest cache when the (serialized)
+      // mutation actually runs, so rapid saves don't drop each other.
+      { teamViews: (current) => [...current, view] },
       {
         onError: (error: Error) => {
           console.error('Failed to save team view', error);
@@ -239,15 +241,13 @@ export function useTeamCrmViews() {
 
   const remove = (id: string) => {
     update.mutate(
-      (current) => ({
-        ...current,
-        teamViews: (current.teamViews ?? []).filter((view) => view.id !== id),
+      {
+        teamViews: (current) => current.filter((view) => view.id !== id),
         // A deleted view can't stay the team default.
-        defaultTeamViewId:
-          current.defaultTeamViewId === id
-            ? undefined
-            : current.defaultTeamViewId,
-      }),
+        ...(config().defaultTeamViewId === id
+          ? { defaultTeamViewId: null }
+          : {}),
+      },
       {
         onError: (error: Error) => {
           console.error('Failed to delete team view', error);

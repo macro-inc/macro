@@ -95,7 +95,8 @@ execSync(`cp ${buildOutputPath}/index.html ./appRouteLambda/index.html`, {
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',
   {
-    create: pulumi.interpolate`aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "app/app-archive.zip"${stack === 'prod' ? ' --exclude "*.js.map"' : ''}`,
+    // Source maps are intentionally public in production; the web client is open source.
+    create: pulumi.interpolate`aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "app/app-archive.zip"`,
     triggers: [Date.now()],
   },
   {

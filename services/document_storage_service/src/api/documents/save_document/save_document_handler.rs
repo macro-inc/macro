@@ -15,7 +15,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractor;
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use macro_authorization::MacroAuthorizationExtractor;
 use model::document::response::DocumentResponseMetadata;
 use model::{
@@ -55,10 +55,11 @@ pub async fn save_document_handler(
     user: MacroAuthorizationExtractor<AuthorizationService>,
     document_context: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
-    project: ProjectBodyAccessLevelExtractor<
+    project: ProjectBodyAccessLevelExtractorV2<
         EditAccessLevel,
         SaveDocumentRequest,
         EntityAccessService,
+        AuthorizationService,
     >,
 ) -> impl IntoResponse {
     let req = project.into_inner();

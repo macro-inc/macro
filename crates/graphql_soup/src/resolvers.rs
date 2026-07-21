@@ -9,10 +9,10 @@ use email::{
 };
 use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::OptionalMacroUserTeamExtractor,
+    inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
 };
-use graphql_common::extract_part;
-use model_user::axum_extractor::MacroUserExtractor;
+use graphql_common::{extract_part, require_authorized_user};
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
 
@@ -22,18 +22,19 @@ use crate::{
 };
 
 /// Resolve Soup items nested into grouping bins for the authenticated user.
-pub async fn resolve_grouped_soup<S, St, Edges>(
+pub async fn resolve_grouped_soup<S, Auth, St, Edges>(
     service: &S,
     ctx: &Context<'_>,
     input: GroupedSoupInput,
 ) -> async_graphql::Result<GroupedSoup<Edges>>
 where
     S: SoupService,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<St>,
     St: Clone + Send + Sync + 'static,
     Edges: SoupEntityEdges,
 {
-    let Cached(MacroUserExtractor { macro_user_id, .. }) =
-        extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
+    let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let request = input.into_request(macro_user_id)?;
     let sort_method = *request.cursor.sort_method();
     let filters = request.cursor.filter().clone();
@@ -47,7 +48,7 @@ where
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
 /// into a Soup request, and executes it against the Soup service.
-pub async fn resolve_soup<S, E, EAS, St, Edges>(
+pub async fn resolve_soup<S, E, EAS, Auth, St, Edges>(
     service: &S,
     ctx: &Context<'_>,
     input: SoupInput,
@@ -56,15 +57,16 @@ where
     S: SoupService,
     E: EmailService,
     EAS: EntityAccessService,
+    Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     EmailRouterState<E>: FromRef<St>,
     Arc<EAS>: FromRef<St>,
+    MacroAuthorizationState<Auth>: FromRef<St>,
     Edges: SoupEntityEdges,
 {
-    let Cached(MacroUserExtractor { macro_user_id, .. }) =
-        extract_part::<Cached<MacroUserExtractor>, St>(ctx).await?;
+    let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let Cached(MultiEmailLinkExtractor(links, _)) =
-        extract_part::<Cached<MultiEmailLinkExtractor<E>>, St>(ctx).await?;
+        extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids = links.into_iter().map(|link| link.id).collect();
     let request = input.into_request(macro_user_id, link_ids)?;
 
@@ -74,16 +76,17 @@ where
     // companies) is enforced by the soup domain and CRM service from
     // the receipt.
     let effective_filter = request.cursor.filter();
-    let team_receipt = if effective_filter.requests_crm_scope()
-        || effective_filter.requests_crm_admin()
-    {
-        let Cached(team) =
-            extract_part::<Cached<OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>>, St>(ctx)
-                .await?;
-        team.entity_access_receipt
-    } else {
-        None
-    };
+    let team_receipt =
+        if effective_filter.requests_crm_scope() || effective_filter.requests_crm_admin() {
+            let Cached(team) = extract_part::<
+                Cached<OptionalMacroUserTeamExtractorV2<MemberTeamRole, EAS, Auth>>,
+                St,
+            >(ctx)
+            .await?;
+            team.entity_access_receipt
+        } else {
+            None
+        };
 
     let include_frecency = ctx
         .look_ahead()

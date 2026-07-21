@@ -5,11 +5,21 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
-import { createEffect, createSignal, on, Show, untrack } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+  untrack,
+} from 'solid-js';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
 import { isUnifiedInputMode } from '../unified-input-mode';
+import { createTargetReplyNavigationController } from './create-target-reply-navigation-controller';
+import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
+import { createThreadRepliesFetchGate } from './create-thread-replies-fetch-gate';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
@@ -28,10 +38,14 @@ export function ChannelThread(props: ThreadProps) {
   const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const fetchRepliesEnabled = () =>
-    (!!props.targetReplyId && props.targetThreadId === props.data().id) ||
-    props.isExpanded() ||
-    (hasReplies() && thread().reply_count > DEFAULT_VISIBLE_REPLY_COUNT);
+  const fetchRepliesEnabled = createThreadRepliesFetchGate({
+    threadId: () => props.data().id,
+    replyCount: () => thread().reply_count,
+    isExpanded: props.isExpanded,
+    isFindBarOpen: props.isFindBarOpen,
+    targetThreadId: () => props.targetNavigation?.targetThreadId(),
+    targetReplyId: () => props.targetNavigation?.targetReplyId(),
+  });
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
@@ -101,15 +115,15 @@ export function ChannelThread(props: ThreadProps) {
   // Channel navigation landed on this root message (and not on one of its
   // replies).
   const isRootNavTargeted = () =>
-    !!props.targetThreadId &&
-    props.targetThreadId === props.data().id &&
-    !props.activeTargetReplyId;
+    !!props.targetNavigation?.targetThreadId() &&
+    props.targetNavigation.targetThreadId() === props.data().id &&
+    !props.targetNavigation.activeTargetReplyId();
 
   const selectThreadMessage = () => {
     // Clicking the navigation-targeted message releases the target instead
     // of toggling selection.
     if (isRootNavTargeted()) {
-      props.onClearTarget?.(props.data().id);
+      props.targetNavigation?.onClearTarget(props.data().id);
       return;
     }
     // On touch devices, we want to block "click to select"
@@ -126,8 +140,8 @@ export function ChannelThread(props: ThreadProps) {
   const selectReply = (replyId: string) => {
     // Clicking the navigation-targeted reply releases the target instead of
     // toggling selection.
-    if (props.activeTargetReplyId === replyId) {
-      props.onClearTarget?.(props.data().id);
+    if (props.targetNavigation?.activeTargetReplyId() === replyId) {
+      props.targetNavigation.onClearTarget(props.data().id);
       return;
     }
     // On touch devices, we want to block "click to select"
@@ -195,12 +209,37 @@ export function ChannelThread(props: ThreadProps) {
     !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
+  const [threadRowElement, setThreadRowElement] = createSignal<HTMLElement>();
+  const targetMessageScroller = createTargetReplyScroller({
+    getTarget: () =>
+      threadRowElement()?.querySelector<HTMLElement>(
+        `[data-message-id="${props.data().id}"]`
+      ) ?? undefined,
+    positionTarget: props.targetNavigation?.positionTarget,
+  });
+
+  createEffect(
+    on(
+      [() => props.targetNavigation?.targetMessageId(), threadRowElement],
+      ([targetMessageId]) => {
+        if (!targetMessageId || targetMessageId !== props.data().id) {
+          targetMessageScroller.cancel();
+          return;
+        }
+        targetMessageScroller.scrollToIndex(0, () => {
+          props.targetNavigation?.onTargetMessageScrolled(targetMessageId);
+        });
+      }
+    )
+  );
+
+  onCleanup(targetMessageScroller.dispose);
 
   createEffect(
     on(
       [
-        () => props.activeTargetReplyId,
-        () => props.targetReplyId,
+        () => props.targetNavigation?.activeTargetReplyId(),
+        () => props.targetNavigation?.targetReplyId(),
         loadedReplies,
       ],
       ([activeTargetReplyId, _targetReplyId, replies]) => {
@@ -219,52 +258,42 @@ export function ChannelThread(props: ThreadProps) {
     )
   );
 
-  createEffect(
-    on(
-      [() => props.targetReplyId, displayReplies, props.isExpanded],
-      ([targetReplyId, rendered, isExpanded]) => {
-        if (!targetReplyId || isExpanded) return;
-        if (rendered.some((r) => r.id === targetReplyId)) return;
-        props.setIsExpanded(true);
-      }
-    )
-  );
-
-  // this stops re-scrolling to the same target
-  let lastScrolledReplyId: string | undefined;
+  const targetReplyNavigation = createTargetReplyNavigationController();
   createEffect(
     on(
       [
-        () => props.targetReplyId,
+        () => props.targetNavigation?.targetReplyId(),
         replyListHandle,
         canScrollToTargetReply,
         props.isExpanded,
       ],
       ([targetReplyId, handle, canScroll, isExpanded]) => {
-        if (!targetReplyId) {
-          lastScrolledReplyId = undefined;
-          return;
-        }
-        if (lastScrolledReplyId === targetReplyId) return;
-        if (!canScroll || !handle) return;
-
         // Untracked: channel-message reconciles must not re-fire scroll.
-        const replies = isExpanded
-          ? untrack(loadedReplies)
-          : untrack(displayReplies);
-        const index = replies.findIndex((r) => r.id === targetReplyId);
-        if (index === -1) return;
-
-        if (!handle.scrollToIndex(index)) return;
-        lastScrolledReplyId = targetReplyId;
-        props.onTargetReplyScrolled?.(targetReplyId);
+        const replies =
+          targetReplyId && canScroll && handle
+            ? isExpanded
+              ? untrack(loadedReplies)
+              : untrack(displayReplies)
+            : [];
+        targetReplyNavigation.update({
+          targetReplyId,
+          handle,
+          canScroll,
+          replies,
+          getCurrentTargetReplyId: () =>
+            props.targetNavigation?.targetReplyId(),
+          onScrolled: props.targetNavigation?.onTargetReplyScrolled,
+        });
       }
     )
   );
 
+  onCleanup(targetReplyNavigation.dispose);
+
   return (
     <DebugSuspense name="ChannelThread.root">
       <Thread.Row
+        ref={setThreadRowElement}
         channelId={props.channelId()}
         message={props.data()}
         listMeta={props.listMeta}
@@ -315,9 +344,10 @@ export function ChannelThread(props: ThreadProps) {
                       participants={props.participants}
                       isNewMessage={props.isNewMessage}
                       onReady={setReplyListHandle}
+                      positionTarget={props.targetNavigation?.positionTarget}
                       selectedReplyId={replySelection.selectedId}
                       targetedReplyId={() =>
-                        props.activeTargetReplyId ??
+                        props.targetNavigation?.activeTargetReplyId() ??
                         unifiedReplyBinding()?.boundReplyId
                       }
                       isThreadFocused={isThreadFocused}

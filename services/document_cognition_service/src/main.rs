@@ -28,6 +28,10 @@ use foreign_entity::{
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
     ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
@@ -140,6 +144,15 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await
             .context("failed to create jwt validation args")?;
+
+    let authorization_state =
+        MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+            MacroAuthJwtValidator::new(jwt_args),
+            InternalAuthConfig {
+                api_key: internal_api_key.clone(),
+                default_user_id: None,
+            },
+        )));
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         internal_api_key.clone(),
@@ -515,7 +528,18 @@ async fn main() -> anyhow::Result<()> {
         mcp_redirect_uri,
         mcp_pre_registered,
     );
-    let mcp_state = mcp_client::inbound::McpRouterState::new(mcp_server_repo, mcp_oauth);
+    let mcp_state = mcp_client::inbound::McpRouterState::new(
+        mcp_server_repo,
+        mcp_oauth,
+        authorization_state.clone(),
+    );
+
+    let user_permissions_service = Arc::new(
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
+            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
+        ),
+    );
 
     api::setup_and_serve(ApiContext {
         db: db.clone(),
@@ -523,7 +547,8 @@ async fn main() -> anyhow::Result<()> {
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
         search_service_client,
-        jwt_args,
+        authorization_state,
+        user_permissions_service,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
         notification_ingress_service,

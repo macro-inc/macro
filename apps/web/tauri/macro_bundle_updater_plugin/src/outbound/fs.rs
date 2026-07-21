@@ -1,6 +1,7 @@
 use crate::domain::{
+    asset_service::{BundleAssetPath, BundleAssetReadError},
     models::{UnzipError, UnzipRequest},
-    ports::FsRepo,
+    ports::{BundleAssetRepo, FsRepo},
 };
 use digest::Digest;
 use sha2::Sha256;
@@ -10,6 +11,25 @@ use zip::{read::root_dir_common_filter, result::ZipError};
 /// Real filesystem implementation of [`FsRepo`](crate::domain::ports::FsRepo).
 #[derive(Clone)]
 pub struct FileSystem;
+
+impl BundleAssetRepo for FileSystem {
+    async fn read_asset(
+        &self,
+        root: &std::path::Path,
+        path: &BundleAssetPath,
+    ) -> Result<Option<Vec<u8>>, BundleAssetReadError> {
+        let canonical_root = tokio::fs::canonicalize(root).await?;
+        let canonical_file = match tokio::fs::canonicalize(root.join(path.as_path())).await {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        if !canonical_file.starts_with(&canonical_root) {
+            return Err(BundleAssetReadError::OutsideBundleRoot);
+        }
+        Ok(Some(tokio::fs::read(canonical_file).await?))
+    }
+}
 
 fn map_zip_err(err: ZipError) -> UnzipError {
     match err {

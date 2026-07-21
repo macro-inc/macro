@@ -4,6 +4,7 @@ import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
+import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
@@ -52,7 +53,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
-import { cn, Hotkey, Layer } from '@ui';
+import { CommandMenuShell, cn, Hotkey, Layer } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
   createEffect,
@@ -237,6 +238,16 @@ export function runCreateAction(
       });
       return;
     case 'chat':
+      // On mobile the chat input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The chat mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(CHAT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
       createBlock({
         blockName: 'chat',
         createFn: async () => {
@@ -747,8 +758,11 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <div class="bg-surface ring ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
-      <div class="flex items-center justify-between p-2 px-4 sm:px-6 border-b border-edge-muted">
+    <CommandMenuShell
+      depth={2}
+      class="h-auto w-fit max-w-[calc(100vw-2rem)] shadow-menu"
+    >
+      <CommandMenuShell.Header class="my-0 justify-between p-2 px-4 sm:px-6 bg-surface">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           <style>{`
@@ -779,23 +793,25 @@ export const LauncherInner = (props: LauncherInnerProps) => {
           </span>
           to launch in new split
         </p>
-      </div>
-      <div
-        class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
-        ref={ref}
-      >
-        <For each={blocks()}>
-          {(item, index) => (
-            <LauncherMenuItem
-              creatableBlock={item}
-              onMouseEnter={() => setFocusedIndex(index())}
-              onFocus={() => setFocusedIndex(index())}
-              focused={focusedIndex() === index()}
-            />
-          )}
-        </For>
-      </div>
-    </div>
+      </CommandMenuShell.Header>
+      <CommandMenuShell.Body>
+        <div
+          class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
+          ref={ref}
+        >
+          <For each={blocks()}>
+            {(item, index) => (
+              <LauncherMenuItem
+                creatableBlock={item}
+                onMouseEnter={() => setFocusedIndex(index())}
+                onFocus={() => setFocusedIndex(index())}
+                focused={focusedIndex() === index()}
+              />
+            )}
+          </For>
+        </div>
+      </CommandMenuShell.Body>
+    </CommandMenuShell>
   );
 };
 
@@ -808,24 +824,25 @@ export const Launcher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"></Dialog.Overlay>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay"></Dialog.Overlay>
         <Dialog.Content>
-          <Layer depth={3}>
-            <div
-              class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  props.onOpenChange(false);
-                }
-              }}
-            >
-              <LauncherInner
-                onClose={(shouldReturnFocus) =>
-                  props.onOpenChange(false, shouldReturnFocus)
-                }
-              />
-            </div>
-          </Layer>
+          <div
+            class={cn(
+              'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
+              isMobile() ? 'items-center' : 'items-start pt-[10vh]'
+            )}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                props.onOpenChange(false);
+              }
+            }}
+          >
+            <LauncherInner
+              onClose={(shouldReturnFocus) =>
+                props.onOpenChange(false, shouldReturnFocus)
+              }
+            />
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

@@ -8,6 +8,7 @@ import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
+import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
@@ -21,7 +22,6 @@ import {
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
-  ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -60,6 +60,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
+      { tab: 'Tags', label: 'Tags', icon: TagIcon },
       { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
@@ -99,6 +100,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Agent: 'mcp-server',
   Bots: 'bots',
   Team: 'team',
+  Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
   Email: 'email',
@@ -139,9 +141,6 @@ export const getSettingsTabItem = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const teamsFlag = useFeatureFlag('enable-teams-settings', {
-    enabledOverride: ENABLE_TEAMS_OVERRIDE,
-  });
   const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
     enabledOverride: BOT_MANAGEMENT_OVERRIDE,
   });
@@ -157,12 +156,13 @@ export const useSettingsTabAvailable = () => {
       case 'Billing':
         return true;
       case 'Team':
-        return teamsFlag().enabled;
+      case 'Tags':
+        return true;
       // CRM is still rolling out (Macro-internal only); keep the settings tab
       // behind the same enable-crm gate as every other CRM surface so it never
       // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return teamsFlag().enabled && crmFlag().enabled;
+        return crmFlag().enabled;
       case 'Connected':
         return true;
       case 'Shortcuts':
