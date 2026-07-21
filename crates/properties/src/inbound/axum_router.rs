@@ -159,8 +159,7 @@ where
         // Transactional multi-property option deltas (one tag-picker selection)
         .route(
             "/entities/{entity_type}/{entity_id}/options/bulk",
-            post(entities::bulk_update_entity_property_options::<S, A>)
-                .layer(ensure_user_exists.clone()),
+            post(entities::bulk_update_entity_property_options::<S, A, Auth>),
         )
         .route(
             "/entity_properties/{entity_property_id}",

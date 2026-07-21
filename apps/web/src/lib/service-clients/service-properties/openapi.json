@@ -456,10 +456,10 @@
           {
             "name": "entity_type",
             "in": "path",
-            "description": "Entity type (user, document, channel, project, thread)",
+            "description": "Canonical entity type; tasks use DOCUMENT",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/EntityType"
+              "$ref": "#/components/schemas/PropertyTargetEntityType"
             }
           },
           {

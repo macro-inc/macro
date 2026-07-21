@@ -1150,11 +1150,10 @@ export const bulkUpdateEntityPropertyOptionsParams = zod.object({
       'COMPANY',
       'DOCUMENT',
       'PROJECT',
-      'TASK',
       'THREAD',
       'USER',
     ])
-    .describe('Entity type (user, document, channel, project, thread)'),
+    .describe('Canonical entity type; tasks use DOCUMENT'),
   entity_id: zod.string().describe('Entity ID'),
 });
 

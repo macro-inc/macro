@@ -31,10 +31,9 @@ use std::sync::Arc;
 use super::error::PropertiesErr;
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
-    ViewReceipt,
+    EditReceipt, EntityPropertyInfo, EntityPropertyOptionSelection, EntityPropertyOptionUpdate,
+    PropertyAccessReceiptExt, PropertyDefinitionOwner, PropertyTargetKey, ResolvedPropertySubject,
+    TagScope, TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
@@ -589,7 +588,8 @@ where
         access: &EditReceipt,
         updates: Vec<EntityPropertyOptionUpdate>,
     ) -> Result<Vec<EntityPropertyOptionSelection>, PropertiesErr> {
-        let entity_type = access.entity_type();
+        let subject = self.resolve_subject(access).await?;
+        let entity_type = subject.storage_entity_type;
 
         // Validate every property up front so an invalid option never triggers a
         // partial write: the persistence below is a single transaction and only

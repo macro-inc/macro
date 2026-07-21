@@ -13,7 +13,7 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { useMutation, useMutationState, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
@@ -98,7 +98,7 @@ function invalidatePropertiesForEntity(
   entityType: EntityType | PropertyTargetEntityType,
   entityId: string
 ) {
-  queryClient.invalidateQueries({
+  return queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
   });
 }
@@ -447,12 +447,12 @@ export function useRemoveEntityPropertyOptionMutation(
   }));
 }
 
-export type EntityPropertyOptionDelta = {
+type EntityPropertyOptionDelta = {
   type: 'add' | 'remove';
   optionId: string;
 };
 
-export function getEntityPropertyOptionDeltas(
+function getEntityPropertyOptionDeltas(
   currentOptionIds: string[],
   nextOptionIds: string[]
 ): EntityPropertyOptionDelta[] {
@@ -466,19 +466,6 @@ export function getEntityPropertyOptionDeltas(
       .filter((optionId) => !current.has(optionId))
       .map((optionId) => ({ type: 'add' as const, optionId })),
   ];
-}
-
-/** Reverses a single delta on an option-id list (undo an optimistic change). */
-export function rollbackEntityPropertyOptionDelta(
-  optionIds: string[],
-  delta: EntityPropertyOptionDelta
-): string[] {
-  if (delta.type === 'add') {
-    return optionIds.filter((id) => id !== delta.optionId);
-  }
-  return optionIds.includes(delta.optionId)
-    ? optionIds
-    : [...optionIds, delta.optionId];
 }
 
 type BulkUpdateEntityPropertyOptionsParams = {
@@ -502,13 +489,60 @@ type BulkUpdateEntityPropertyOptionsContext = {
 };
 
 /**
+ * Mutation-cache key for an entity's bulk option updates. Used both as the
+ * mutation's serialization scope and to read its in-flight variables for
+ * optimistic display.
+ */
+function bulkEntityPropertyOptionsKey(entityId: string) {
+  return ['bulkEntityPropertyOptions', entityId] as const;
+}
+
+/**
+ * Optimistic overlay for a query-backed tag source: the option ids an in-flight
+ * bulk update is applying to a property, so a query-backed view reflects the
+ * change before its refetch lands. Returns `undefined` when nothing is in
+ * flight for the property, so callers fall back to the persisted value. On
+ * settle the mutation leaves `pending` and the overlay disappears — no manual
+ * rollback. Soup-backed sources don't need this: their optimism rides the
+ * soup-cache update in the mutation lifecycle below.
+ */
+export function useInFlightEntityPropertyOptions(entityId: string) {
+  const inFlight = useMutationState(() => ({
+    filters: {
+      mutationKey: bulkEntityPropertyOptionsKey(entityId),
+      status: 'pending' as const,
+    },
+    select: (mutation) =>
+      mutation.state.variables as
+        | BulkUpdateEntityPropertyOptionsParams
+        | undefined,
+  }));
+
+  return (propertyDefinitionId: string): string[] | undefined => {
+    const pending = inFlight();
+    // Latest in-flight update targeting this property wins.
+    for (let index = pending.length - 1; index >= 0; index--) {
+      const match = pending[index]?.properties.find(
+        (update) =>
+          getPropertyDefinitionId(update.property) === propertyDefinitionId
+      );
+      if (match) return match.nextOptionIds;
+    }
+    return undefined;
+  };
+}
+
+/**
  * Persists a complete multi-select selection across one or more properties in a
  * single transactional request, then reconciles the soup cache from the final
  * option ids the server returns (which may differ from the optimistic value if a
  * concurrent edit merged in). The optimistic soup update is atomic and rolls
- * back as a whole on failure.
+ * back as a whole on failure. Commits for the same entity are serialized via a
+ * mutation scope, so concurrent edits can't interleave and corrupt optimistic
+ * state.
  */
 export function useBulkUpdateEntityPropertyOptionsMutation(
+  entityId: string,
   callbacks?: MutationCallbacks<
     EntityPropertyOptionSelection[],
     Error,
@@ -517,6 +551,8 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
   >
 ) {
   return useMutation(() => ({
+    mutationKey: bulkEntityPropertyOptionsKey(entityId),
+    scope: { id: `entity-property-options:${entityId}` },
     mutationFn: async (
       variables: BulkUpdateEntityPropertyOptionsParams
     ): Promise<EntityPropertyOptionSelection[]> => {
@@ -603,11 +639,14 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           toast.failure('Failed to update tags');
         },
         onSettled: (_data, _error, variables) => {
-          invalidatePropertiesForEntity(
+          invalidateSoupEntity(variables.entityId);
+          // Returned so the mutation stays `pending` until the refetch lands,
+          // keeping the in-flight optimistic overlay visible through the
+          // reconcile with no flash back to the stale value.
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
           );
-          invalidateSoupEntity(variables.entityId);
         },
       },
       callbacks

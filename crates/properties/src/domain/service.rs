@@ -27,8 +27,8 @@ use uuid::Uuid;
 
 use super::error::PropertiesErr;
 use super::model::{
-    EditReceipt, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
+    EditReceipt, EntityPropertyInfo, EntityPropertyOptionSelection, EntityPropertyOptionUpdate,
+    PropertyTargetKey, TagScope, TagSet, ViewReceipt,
 };
 
 /// The caller's team-membership proof, used to scope definition/option/tag

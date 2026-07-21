@@ -552,7 +552,7 @@ pub struct BulkUpdateEntityPropertyOptionsResponse {
     post,
     path = "/properties/entities/{entity_type}/{entity_id}/options/bulk",
     params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
+        ("entity_type" = PropertyTargetEntityType, Path, description = "Canonical entity type; tasks use DOCUMENT"),
         ("entity_id" = String, Path, description = "Entity ID")
     ),
     request_body = BulkUpdateEntityPropertyOptionsRequest,
@@ -565,8 +565,12 @@ pub struct BulkUpdateEntityPropertyOptionsResponse {
     tags = ["Properties"]
 )]
 #[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type(), property_count = request.properties.len()), err)]
-pub async fn bulk_update_entity_property_options<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
+pub async fn bulk_update_entity_property_options<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
     Json(request): Json<BulkUpdateEntityPropertyOptionsRequest>,
 ) -> Result<Json<BulkUpdateEntityPropertyOptionsResponse>, EntityPropertyOptionErr> {

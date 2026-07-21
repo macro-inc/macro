@@ -55,7 +55,7 @@ type EntityPropertyOptionArgs = {
   option_id: string;
 };
 type BulkUpdateEntityPropertyOptionsArgs = {
-  entity_type: EntityType;
+  entity_type: PropertyTargetEntityType;
   entity_id: string;
   body: BulkUpdateEntityPropertyOptionsRequest;
 };
