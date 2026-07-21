@@ -1,7 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
@@ -636,7 +636,11 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
         onError: (error, _variables, context) => {
           context?.soupTxn?.rollback();
           console.error('Failed to update tags', error);
-          toast.failure('Failed to update tags');
+          toast.failure(
+            thrownResultErrorHasCode(error, 'FORBIDDEN')
+              ? 'Edit permissions are required to update tags'
+              : 'Failed to update tags'
+          );
         },
         onSettled: (_data, _error, variables) => {
           invalidateSoupEntity(variables.entityId);
