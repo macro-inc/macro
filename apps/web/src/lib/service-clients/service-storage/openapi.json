@@ -12393,6 +12393,11 @@
         "description": "Request to create a channel.",
         "required": ["channel_type", "participants"],
         "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether team members automatically join this channel. Defaults to false.",
+            "default": false
+          },
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."

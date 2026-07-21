@@ -1332,8 +1332,16 @@ export const ingestTranscriptBody = zod
 /**
  * @summary Handler for `POST /channels`.
  */
+export const createChannelBodyAutoJoinTeamDefault = false;
+
 export const createChannelBody = zod
   .object({
+    auto_join_team: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether team members automatically join this channel. Defaults to false.'
+      ),
     channel_type: zod
       .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
