@@ -173,11 +173,11 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           toast.failure(
             'Gmail access was not granted. Please allow all requested permissions and try again.'
           );
-          navigateToSuccess();
+          navigateToEmailSettings();
           return;
         }
         toast.failure('Failed to add inbox');
-        navigateToSuccess();
+        navigateToEmailSettings();
       }
     );
   };
