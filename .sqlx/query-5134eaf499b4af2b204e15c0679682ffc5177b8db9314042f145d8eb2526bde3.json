@@ -1,11 +1,10 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n            VALUES (\n                $1, $2, $3, $4,\n                jsonb_build_object('type', 'SelectOption', 'value', '[]'::jsonb)\n            )\n            ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING\n            ",
+  "query": "\n                UPDATE entity_properties\n                SET values = $4, updated_at = NOW()\n                WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3\n                ",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
-        "Uuid",
         "Text",
         {
           "Custom": {
@@ -25,10 +24,11 @@
             }
           }
         },
-        "Uuid"
+        "Uuid",
+        "Jsonb"
       ]
     },
     "nullable": []
   },
-  "hash": "af690a309e080586c06ee1b128df840a2216ef8d4a932e3007248f391987c0cd"
+  "hash": "5134eaf499b4af2b204e15c0679682ffc5177b8db9314042f145d8eb2526bde3"
 }

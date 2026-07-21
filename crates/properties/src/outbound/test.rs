@@ -993,3 +993,43 @@ async fn bulk_update_options_partial_failure_rolls_back(
 
     Ok(())
 }
+
+/// A removal-only update on a property the entity has no row for is a no-op: it
+/// returns an empty selection and must not create an empty `entity_properties`
+/// row.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties_seed"))
+)]
+async fn bulk_update_options_removal_only_on_unattached_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let def_id = seed_multi_select_definition(&pool, "Bulk Tags Noop").await;
+    let entity_id = "entity-bulk-noop";
+    let absent = macro_uuid::generate_uuid_v7();
+
+    let result = repo
+        .bulk_update_entity_property_options(
+            entity_id,
+            EntityType::Document,
+            &[option_update(def_id, vec![], vec![absent])],
+        )
+        .await?;
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].option_ids, Vec::<Uuid>::new());
+
+    let row_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*) FROM entity_properties
+        WHERE entity_id = $1 AND property_definition_id = $2
+        "#,
+    )
+    .bind(entity_id)
+    .bind(def_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row_count, 0, "removal-only update must not create a row");
+
+    Ok(())
+}

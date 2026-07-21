@@ -157,12 +157,13 @@ pub async fn remove_entity_property_option(
 /// Apply option deltas to several of an entity's multi-select property values in
 /// one transaction, returning each property's final option ids.
 ///
-/// Per property the row is created if missing, then locked with
-/// `SELECT ... FOR UPDATE` before its current value is read, diffed, and
-/// rewritten. Because each delta is applied to the freshly locked value, two
-/// bulk updates racing on the same row compose instead of overwriting each other
-/// (no lost update). The whole batch shares one transaction, so a failure on any
-/// property rolls back every property in the batch.
+/// A property is only attached (row created) when there are options to add;
+/// otherwise the row is locked with `SELECT ... FOR UPDATE` before its current
+/// value is read, diffed, and rewritten. A removal-only update on an unattached
+/// property is a no-op — it does not create an empty row. Because each delta is
+/// applied to the freshly locked value, two bulk updates racing on the same row
+/// compose instead of overwriting each other (no lost update). The whole batch
+/// shares one transaction, so a failure on any property rolls back the batch.
 pub async fn bulk_update_entity_property_options(
     pool: &Pool<Postgres>,
     entity_id: &str,
@@ -178,30 +179,33 @@ pub async fn bulk_update_entity_property_options(
     ordered.sort_by_key(|update| update.property_definition_id);
 
     for update in ordered {
-        // Ensure the row exists so the FOR UPDATE below has something to lock. A
-        // concurrent creator blocks on the unique index here until it commits,
-        // after which this insert is a no-op and the FOR UPDATE sequences the
-        // two writers.
-        let id = macro_uuid::generate_uuid_v7();
-        sqlx::query!(
-            r#"
-            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
-            VALUES (
-                $1, $2, $3, $4,
-                jsonb_build_object('type', 'SelectOption', 'value', '[]'::jsonb)
-            )
-            ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING
-            "#,
-            id,
-            entity_id,
-            entity_type as EntityType,
-            update.property_definition_id,
-        )
-        .execute(&mut *tx)
-        .await?;
+        let has_additions = !update.add_option_ids.is_empty();
 
-        // Lock the row and read the current stored value before diffing.
-        let current = sqlx::query_scalar!(
+        // Attach the property only when adding options. A concurrent creator
+        // blocks on the unique index here until it commits, after which this
+        // insert is a no-op and the FOR UPDATE below sequences the two writers.
+        if has_additions {
+            let id = macro_uuid::generate_uuid_v7();
+            sqlx::query!(
+                r#"
+                INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+                VALUES (
+                    $1, $2, $3, $4,
+                    jsonb_build_object('type', 'SelectOption', 'value', '[]'::jsonb)
+                )
+                ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING
+                "#,
+                id,
+                entity_id,
+                entity_type as EntityType,
+                update.property_definition_id,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // Lock the row (if any) and read the current stored value before diffing.
+        let existing = sqlx::query_scalar!(
             r#"
             SELECT values as "values: serde_json::Value"
             FROM entity_properties
@@ -212,10 +216,11 @@ pub async fn bulk_update_entity_property_options(
             entity_type as EntityType,
             update.property_definition_id,
         )
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
 
-        let current_ids = match current {
+        let row_exists = existing.is_some();
+        let current_ids = match existing.flatten() {
             Some(value) => match serde_json::from_value::<PropertyValue>(value) {
                 Ok(PropertyValue::SelectOption(ids)) => ids,
                 _ => Vec::new(),
@@ -229,23 +234,26 @@ pub async fn bulk_update_entity_property_options(
             &update.remove_option_ids,
         );
 
-        let value_json = serde_json::json!({
-            "type": "SelectOption",
-            "value": final_ids,
-        });
-        sqlx::query!(
-            r#"
-            UPDATE entity_properties
-            SET values = $4, updated_at = NOW()
-            WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
-            "#,
-            entity_id,
-            entity_type as EntityType,
-            update.property_definition_id,
-            value_json,
-        )
-        .execute(&mut *tx)
-        .await?;
+        // Nothing to add and no row to remove from: a no-op, leave the DB alone.
+        if row_exists {
+            let value_json = serde_json::json!({
+                "type": "SelectOption",
+                "value": final_ids,
+            });
+            sqlx::query!(
+                r#"
+                UPDATE entity_properties
+                SET values = $4, updated_at = NOW()
+                WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+                "#,
+                entity_id,
+                entity_type as EntityType,
+                update.property_definition_id,
+                value_json,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
 
         selections.push(EntityPropertyOptionSelection {
             property_definition_id: update.property_definition_id,
