@@ -3,6 +3,7 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use channels::{domain::service::ChannelServiceImpl, outbound::pg_channels_repo::PgChannelsRepo};
 use config::{Config, Environment};
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -44,8 +45,7 @@ use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
         contacts_enqueuer::ContactsIngressEnqueuer, customer_repo::CustomerRepositoryImpl,
-        team_analytics::AnalyticsClientTeamAnalytics,
-        team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
+        team_analytics::AnalyticsClientTeamAnalytics, team_repo::TeamRepositoryImpl,
     },
 };
 
@@ -283,7 +283,7 @@ async fn main() -> anyhow::Result<()> {
         stripe_client.clone(),
         config.stripe_price_id.to_string().clone(),
     );
-    let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
+    let channel_service = ChannelServiceImpl::new(PgChannelsRepo::new(db.clone()));
     let team_crm_settings_repo_impl =
         teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl::new(db.clone());
 
@@ -306,7 +306,7 @@ async fn main() -> anyhow::Result<()> {
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,
         customer_repo_impl,
-        team_channels_repo_impl,
+        channel_service,
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,

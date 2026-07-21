@@ -7,12 +7,23 @@ use std::{
     },
 };
 
+use channels::domain::{
+    models::{
+        AttachmentEntityReference, ChannelAttachmentType, ChannelMessageFilters,
+        ChannelParticipant, MessagePageDirection, ThreadReply,
+    },
+    ports::{
+        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+        ChannelService,
+    },
+};
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerTeamRole,
     RequiredPermission,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use models_pagination::{CreatedAt, Query};
 use notification::domain::{
     models::{Notification, NotificationResult, request::SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
@@ -50,7 +61,7 @@ use crate::domain::{
         TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
         ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
     },
-    team_repo::{TeamChannelsRepository, TeamRepository},
+    team_repo::TeamRepository,
 };
 
 // -- Mock TeamRepository --
@@ -833,31 +844,90 @@ impl CustomerRepository for MockCustomerRepository {
     }
 }
 
-// -- Mock TeamChannelsRepository --
+// -- Recording ChannelService --
 
 #[derive(Clone, Default)]
-struct MockTeamChannelsRepository {
-    add_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
-    remove_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
-    fail_add: bool,
-    fail_remove: bool,
+struct RecordingChannelService {
+    auto_join_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
+    leave_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
+    restore_calls: Arc<Mutex<Vec<(String, Vec<uuid::Uuid>)>>>,
+    leave_channel_ids: Vec<uuid::Uuid>,
+    fail_auto_join: bool,
+    fail_leave: bool,
+    fail_restore: bool,
 }
 
-impl TeamChannelsRepository for MockTeamChannelsRepository {
-    fn add_team_member_to_channels(
+impl ChannelService for RecordingChannelService {
+    fn get_channel_messages(
+        &self,
+        _channel_id: uuid::Uuid,
+        _query: Query<uuid::Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn get_channel_attachments(
+        &self,
+        _channel_id: uuid::Uuid,
+        _query: Query<uuid::Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn get_channel_participants(
+        &self,
+        _channel_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
+    {
+        async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn get_channel_messages_around(
+        &self,
+        _channel_id: uuid::Uuid,
+        _message_id: uuid::Uuid,
+        _limit: u16,
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn get_thread_replies(
+        &self,
+        _channel_id: uuid::Uuid,
+        _message_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn auto_join_by_team_id(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        self.add_calls
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        self.auto_join_calls
             .lock()
             .unwrap()
             .push((*team_id, user_id.as_ref().to_string()));
-        let fail = self.fail_add;
+        let fail = self.fail_auto_join;
         async move {
             if fail {
-                Err(TeamError::StorageLayerError(anyhow::anyhow!(
-                    "add channels failed"
+                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
+                    "auto-join channels failed"
                 )))
             } else {
                 Ok(())
@@ -865,20 +935,42 @@ impl TeamChannelsRepository for MockTeamChannelsRepository {
         }
     }
 
-    fn remove_team_member_from_channels(
+    fn leave_by_team_id(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        self.remove_calls
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, ChannelMutationErr>> + Send {
+        self.leave_calls
             .lock()
             .unwrap()
             .push((*team_id, user_id.as_ref().to_string()));
-        let fail = self.fail_remove;
+        let channel_ids = self.leave_channel_ids.clone();
+        let fail = self.fail_leave;
         async move {
             if fail {
-                Err(TeamError::StorageLayerError(anyhow::anyhow!(
-                    "remove channels failed"
+                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
+                    "leave channels failed"
+                )))
+            } else {
+                Ok(channel_ids)
+            }
+        }
+    }
+
+    fn restore_by_channel_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        channel_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        self.restore_calls
+            .lock()
+            .unwrap()
+            .push((user_id.as_ref().to_string(), channel_ids.to_vec()));
+        let fail = self.fail_restore;
+        async move {
+            if fail {
+                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
+                    "restore channels failed"
                 )))
             } else {
                 Ok(())
@@ -1342,7 +1434,7 @@ fn build_service(
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress.clone(),
         NoOpCrmEnqueuer,
@@ -1358,7 +1450,7 @@ fn build_service_with_event_broker(
     TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1370,7 +1462,7 @@ fn build_service_with_event_broker(
 fn build_service_with_analytics(
     team_repo: MockTeamRepository,
     customer_repo: MockCustomerRepository,
-    channels_repo: MockTeamChannelsRepository,
+    channels_repo: RecordingChannelService,
     roles_service: MockUserRolesAndPermissionsService,
     team_analytics: MockTeamAnalytics,
 ) -> impl TeamService {
@@ -1406,7 +1498,7 @@ async fn event_broker_can_be_replaced_and_is_preserved_by_service_reconstruction
     let default_service = TeamServiceImpl::new(
         MockTeamRepository::new(Vec::new(), "Event Team", mark_sent_calls),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1438,7 +1530,7 @@ async fn event_broker_can_be_replaced_and_is_preserved_by_service_reconstruction
     let analytics_service = TeamServiceImpl::new_with_analytics(
         MockTeamRepository::new(Vec::new(), "Event Team", Arc::new(Mutex::new(Vec::new()))),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1722,7 +1814,7 @@ async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1762,7 +1854,7 @@ async fn team_payment_restore_adds_exact_premium_roles_to_members() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1795,7 +1887,7 @@ async fn team_payment_patch_payment_status_delegates_to_repository() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1836,7 +1928,7 @@ async fn test_create_team_moves_github_installation_to_created_team() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1875,7 +1967,7 @@ async fn test_create_team_propagates_github_installation_move_failure() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -1915,7 +2007,7 @@ async fn team_analytics_create_team_emits_created_event_with_team_id() {
     let service = build_service_with_analytics(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::new(events.clone()),
     );
@@ -1965,7 +2057,7 @@ async fn team_analytics_failure_is_swallowed_by_create_team() {
     let service = build_service_with_analytics(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::failing(events.clone()),
     );
@@ -2002,7 +2094,7 @@ async fn team_analytics_create_team_does_not_emit_when_side_effect_fails() {
     let service = build_service_with_analytics(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::new(events.clone()),
     );
@@ -2034,7 +2126,7 @@ fn build_service_for_premium_check(
             no_active_subscription,
             ..Default::default()
         },
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -2103,7 +2195,7 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
     let service = TeamServiceImpl::new_with_analytics(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress.clone(),
         NoOpCrmEnqueuer,
@@ -2180,7 +2272,7 @@ async fn invite_users_to_team_blocked_for_member_when_non_admin_invites_disabled
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -2228,7 +2320,7 @@ async fn invite_users_to_team_allowed_for_admin_when_non_admin_invites_disabled(
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -2264,7 +2356,7 @@ async fn toggle_allow_non_admin_invites_delegates_to_repository() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -2308,7 +2400,7 @@ async fn invite_users_to_team_enterprise_enforces_team_plan_seat_cap() {
     let service = TeamServiceImpl::new_with_analytics(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress.clone(),
         NoOpCrmEnqueuer,
@@ -2357,7 +2449,7 @@ async fn invite_users_to_team_enterprise_status_lookup_failure_precedes_persiste
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -2534,7 +2626,7 @@ async fn team_analytics_invite_users_emits_invited_events_with_team_id() {
     let service = build_service_with_analytics(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::new(events.clone()),
     );
@@ -2591,7 +2683,7 @@ async fn team_analytics_invite_users_does_not_emit_when_invite_creation_fails() 
     let service = build_service_with_analytics(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::new(events.clone()),
     );
@@ -2638,7 +2730,7 @@ async fn test_get_team_reports_crm_enabled() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress,
         NoOpCrmEnqueuer,
@@ -2723,7 +2815,7 @@ fn build_crm_enable_service(
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress,
         enqueuer,
@@ -2792,7 +2884,7 @@ fn build_service_with_repo_and_broker(
     TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -2817,7 +2909,7 @@ fn build_service_with_team(
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress,
         NoOpCrmEnqueuer,
@@ -3294,7 +3386,7 @@ async fn test_invite_users_to_team_backfills_legacy_team_subscription() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress,
         NoOpCrmEnqueuer,
@@ -3336,7 +3428,7 @@ async fn join_team_enterprise_bypasses_billing_and_preserves_membership_side_eff
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_join_team_repository(team_id, invite_id, &user_id);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -3374,10 +3466,10 @@ async fn join_team_enterprise_bypasses_billing_and_preserves_membership_side_eff
     );
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
     assert_eq!(
-        *channels_repository.add_calls.lock().unwrap(),
+        *channels_repository.auto_join_calls.lock().unwrap(),
         vec![(team_id, user_id.as_ref().to_string())]
     );
-    assert!(channels_repository.remove_calls.lock().unwrap().is_empty());
+    assert!(channels_repository.leave_calls.lock().unwrap().is_empty());
     assert_eq!(
         *crm_enqueuer.populated.lock().unwrap(),
         vec![user_id.as_ref().to_string()]
@@ -3400,7 +3492,7 @@ async fn join_team_enterprise_rolls_back_accepted_invite_when_role_assignment_fa
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_join_team_repository(team_id, invite_id, &user_id);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService {
         fail_upsert: true,
         ..Default::default()
@@ -3433,7 +3525,13 @@ async fn join_team_enterprise_rolls_back_accepted_invite_when_role_assignment_fa
     assert_no_enterprise_join_team_billing_calls(&team_repository, &customer_repository);
     assert_eq!(roles_service.upsert_calls.lock().unwrap().len(), 1);
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
 }
@@ -3445,8 +3543,8 @@ async fn join_team_enterprise_rolls_back_roles_and_invite_when_channel_add_fails
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_join_team_repository(team_id, invite_id, &user_id);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository {
-        fail_add: true,
+    let channels_repository = RecordingChannelService {
+        fail_auto_join: true,
         ..Default::default()
     };
     let roles_service = MockUserRolesAndPermissionsService::default();
@@ -3479,7 +3577,7 @@ async fn join_team_enterprise_rolls_back_roles_and_invite_when_channel_add_fails
     assert_eq!(roles_service.upsert_calls.lock().unwrap().len(), 1);
     assert_eq!(roles_service.remove_calls.lock().unwrap().len(), 1);
     assert_eq!(
-        *channels_repository.add_calls.lock().unwrap(),
+        *channels_repository.auto_join_calls.lock().unwrap(),
         vec![(team_id, user_id.as_ref().to_string())]
     );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
@@ -3494,7 +3592,7 @@ async fn join_team_enterprise_rolls_back_accepted_invite_when_status_read_fails(
     let mut team_repository = make_enterprise_join_team_repository(team_id, invite_id, &user_id);
     team_repository.fail_enterprise_status_lookup = true;
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -3524,7 +3622,13 @@ async fn join_team_enterprise_rolls_back_accepted_invite_when_status_read_fails(
     assert_no_enterprise_join_team_billing_calls(&team_repository, &customer_repository);
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
 }
@@ -3547,7 +3651,7 @@ async fn join_team_rolls_back_accepted_invite_when_billing_lookup_fails() {
         let service = TeamServiceImpl::new(
             team_repository.clone(),
             MockCustomerRepository::default(),
-            MockTeamChannelsRepository::default(),
+            RecordingChannelService::default(),
             MockUserRolesAndPermissionsService::default(),
             Arc::new(MockNotificationIngress::new(HashSet::new())),
             NoOpCrmEnqueuer,
@@ -3613,7 +3717,7 @@ async fn test_join_team_backfills_legacy_team_subscription() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -3661,7 +3765,7 @@ async fn test_join_team_rolls_back_accept_when_backfill_fails() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -3711,7 +3815,7 @@ async fn test_join_team_owner_without_subscription_joins_as_free_team() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         roles_service.clone(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -3746,8 +3850,8 @@ async fn test_join_team_increments_customer_seat_count() {
     let increment_calls = customer_repo.increment_calls.clone();
     let decrement_calls = customer_repo.decrement_calls.clone();
 
-    let channels_repo = MockTeamChannelsRepository::default();
-    let add_channel_calls = channels_repo.add_calls.clone();
+    let channels_repo = RecordingChannelService::default();
+    let add_channel_calls = channels_repo.auto_join_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let upsert_role_calls = roles_service.upsert_calls.clone();
 
@@ -3795,7 +3899,7 @@ async fn team_analytics_join_team_emits_joined_event_with_team_id() {
     let service = build_service_with_analytics(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::new(events.clone()),
     );
@@ -3830,7 +3934,7 @@ async fn team_event_invite_join_uses_accepted_invite_snapshot() {
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         RecordingCrmEnqueuer::failing(),
@@ -3877,8 +3981,8 @@ async fn test_join_team_rolls_back_accept_when_customer_increment_fails() {
         ..Default::default()
     };
     let increment_calls = customer_repo.increment_calls.clone();
-    let channels_repo = MockTeamChannelsRepository::default();
-    let add_channel_calls = channels_repo.add_calls.clone();
+    let channels_repo = RecordingChannelService::default();
+    let add_channel_calls = channels_repo.auto_join_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let upsert_role_calls = roles_service.upsert_calls.clone();
 
@@ -3931,8 +4035,8 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
     let increment_calls = customer_repo.increment_calls.clone();
     let decrement_calls = customer_repo.decrement_calls.clone();
 
-    let channels_repo = MockTeamChannelsRepository::default();
-    let remove_channel_calls = channels_repo.remove_calls.clone();
+    let channels_repo = RecordingChannelService::default();
+    let remove_channel_calls = channels_repo.leave_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let remove_role_calls = roles_service.remove_calls.clone();
 
@@ -3990,7 +4094,7 @@ async fn team_analytics_remove_user_from_team_emits_left_event_with_team_id() {
     let service = build_service_with_analytics(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         MockTeamAnalytics::new(events.clone()),
     );
@@ -4031,7 +4135,7 @@ async fn team_event_self_service_removal_uses_member_as_actor_and_previous_role(
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         RecordingCrmEnqueuer::failing(),
@@ -4080,8 +4184,8 @@ async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fa
         ..Default::default()
     };
     let decrement_calls = customer_repo.decrement_calls.clone();
-    let channels_repo = MockTeamChannelsRepository::default();
-    let remove_channel_calls = channels_repo.remove_calls.clone();
+    let channels_repo = RecordingChannelService::default();
+    let remove_channel_calls = channels_repo.leave_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let remove_role_calls = roles_service.remove_calls.clone();
 
@@ -4133,8 +4237,8 @@ async fn test_join_team_rolls_back_customer_roles_and_accept_when_channel_add_fa
     };
     let increment_calls = customer_repo.increment_calls.clone();
     let decrement_calls = customer_repo.decrement_calls.clone();
-    let channels_repo = MockTeamChannelsRepository {
-        fail_add: true,
+    let channels_repo = RecordingChannelService {
+        fail_auto_join: true,
         ..Default::default()
     };
     let roles_service = MockUserRolesAndPermissionsService::default();
@@ -4182,8 +4286,8 @@ async fn team_analytics_join_team_does_not_emit_when_join_is_rolled_back() {
         subscription_id,
         ..Default::default()
     };
-    let channels_repo = MockTeamChannelsRepository {
-        fail_add: true,
+    let channels_repo = RecordingChannelService {
+        fail_auto_join: true,
         ..Default::default()
     };
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -4224,8 +4328,8 @@ async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_
     };
     let increment_calls = customer_repo.increment_calls.clone();
     let decrement_calls = customer_repo.decrement_calls.clone();
-    let channels_repo = MockTeamChannelsRepository {
-        fail_remove: true,
+    let channels_repo = RecordingChannelService {
+        fail_leave: true,
         ..Default::default()
     };
     let roles_service = MockUserRolesAndPermissionsService::default();
@@ -4282,8 +4386,8 @@ async fn team_analytics_remove_user_from_team_does_not_emit_when_remove_is_rolle
         subscription_id,
         ..Default::default()
     };
-    let channels_repo = MockTeamChannelsRepository {
-        fail_remove: true,
+    let channels_repo = RecordingChannelService {
+        fail_leave: true,
         ..Default::default()
     };
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -4321,7 +4425,7 @@ async fn test_try_join_team_by_domain_no_matching_team_returns_none() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -4358,8 +4462,8 @@ async fn test_try_join_team_by_domain_adds_member_directly() {
     let increment_calls = customer_repo.increment_calls.clone();
     let decrement_calls = customer_repo.decrement_calls.clone();
 
-    let channels_repo = MockTeamChannelsRepository::default();
-    let add_channel_calls = channels_repo.add_calls.clone();
+    let channels_repo = RecordingChannelService::default();
+    let add_channel_calls = channels_repo.auto_join_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let upsert_role_calls = roles_service.upsert_calls.clone();
 
@@ -4413,7 +4517,7 @@ async fn test_try_join_team_by_domain_returns_none_when_already_member() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -4453,7 +4557,7 @@ async fn test_try_join_team_by_domain_skips_team_at_seat_cap() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -4500,7 +4604,7 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         roles_service,
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -4548,7 +4652,7 @@ async fn try_join_team_by_domain_rolls_back_membership_when_billing_lookup_fails
         let service = TeamServiceImpl::new(
             team_repository.clone(),
             MockCustomerRepository::default(),
-            MockTeamChannelsRepository::default(),
+            RecordingChannelService::default(),
             MockUserRolesAndPermissionsService::default(),
             Arc::new(MockNotificationIngress::new(HashSet::new())),
             NoOpCrmEnqueuer,
@@ -4586,7 +4690,7 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -4632,10 +4736,10 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
     );
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
     assert_eq!(
-        *channels_repository.add_calls.lock().unwrap(),
+        *channels_repository.auto_join_calls.lock().unwrap(),
         vec![(team_id, user_id.as_ref().to_string())]
     );
-    assert!(channels_repository.remove_calls.lock().unwrap().is_empty());
+    assert!(channels_repository.leave_calls.lock().unwrap().is_empty());
     assert_eq!(
         *crm_enqueuer.populated.lock().unwrap(),
         vec![user_id.as_ref().to_string()]
@@ -4662,7 +4766,7 @@ async fn try_join_team_by_domain_enterprise_still_enforces_local_seat_cap() {
     team_repository.team_plan = Some(TeamPlan::Idea);
     team_repository.seat_count = TeamPlan::Idea.seat_cap();
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -4692,7 +4796,13 @@ async fn try_join_team_by_domain_enterprise_still_enforces_local_seat_cap() {
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
     assert_no_enterprise_join_team_billing_calls(&team_repository, &customer_repository);
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
 }
@@ -4703,7 +4813,7 @@ async fn try_join_team_by_domain_enterprise_rolls_back_membership_when_roles_fai
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService {
         fail_upsert: true,
         ..Default::default()
@@ -4733,7 +4843,13 @@ async fn try_join_team_by_domain_enterprise_rolls_back_membership_when_roles_fai
     assert_no_enterprise_join_team_billing_calls(&team_repository, &customer_repository);
     assert_eq!(roles_service.upsert_calls.lock().unwrap().len(), 1);
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
 }
@@ -4744,8 +4860,8 @@ async fn try_join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail(
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository {
-        fail_add: true,
+    let channels_repository = RecordingChannelService {
+        fail_auto_join: true,
         ..Default::default()
     };
     let roles_service = MockUserRolesAndPermissionsService::default();
@@ -4775,7 +4891,7 @@ async fn try_join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail(
     assert_eq!(roles_service.upsert_calls.lock().unwrap().len(), 1);
     assert_eq!(roles_service.remove_calls.lock().unwrap().len(), 1);
     assert_eq!(
-        *channels_repository.add_calls.lock().unwrap(),
+        *channels_repository.auto_join_calls.lock().unwrap(),
         vec![(team_id, user_id.as_ref().to_string())]
     );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
@@ -4790,7 +4906,7 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
     let team_repository =
         make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Admin);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -4827,10 +4943,16 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
     assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
     assert_eq!(
-        *channels_repository.remove_calls.lock().unwrap(),
+        *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
     );
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
@@ -4871,8 +4993,8 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
     let team_repository =
         make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Member);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository {
-        fail_remove: true,
+    let channels_repository = RecordingChannelService {
+        fail_leave: true,
         ..Default::default()
     };
     let roles_service = MockUserRolesAndPermissionsService::default();
@@ -4906,10 +5028,16 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
     assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
     assert_eq!(
-        *channels_repository.remove_calls.lock().unwrap(),
+        *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
     );
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
     assert!(crm_enqueuer.depopulated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
@@ -4924,7 +5052,12 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_and_channels_whe
     let team_repository =
         make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Member);
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let left_channel_ids = vec![uuid::Uuid::from_u128(9301), uuid::Uuid::from_u128(9302)];
+    let channels_repository = RecordingChannelService {
+        leave_channel_ids: left_channel_ids.clone(),
+        fail_restore: true,
+        ..Default::default()
+    };
     let roles_service = MockUserRolesAndPermissionsService {
         fail_remove: true,
         ..Default::default()
@@ -4959,12 +5092,19 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_and_channels_whe
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
     assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
     assert_eq!(
-        *channels_repository.remove_calls.lock().unwrap(),
+        *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
     );
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
-        *channels_repository.add_calls.lock().unwrap(),
-        vec![(team_id, member_id.as_ref().to_string())]
+        *channels_repository.restore_calls.lock().unwrap(),
+        vec![(member_id.as_ref().to_string(), left_channel_ids)]
     );
     assert_eq!(roles_service.remove_calls.lock().unwrap().len(), 1);
     assert!(crm_enqueuer.depopulated.lock().unwrap().is_empty());
@@ -4980,7 +5120,7 @@ async fn remove_user_from_team_enterprise_status_read_precedes_membership_remova
         make_enterprise_remove_user_repository(team_id, &member_id, TeamRole::Member);
     team_repository.fail_enterprise_status_lookup = true;
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -5018,8 +5158,14 @@ async fn remove_user_from_team_enterprise_status_read_precedes_membership_remova
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
     assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
-    assert!(channels_repository.remove_calls.lock().unwrap().is_empty());
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(channels_repository.leave_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(roles_service.remove_calls.lock().unwrap().is_empty());
     assert!(crm_enqueuer.depopulated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
@@ -5055,7 +5201,7 @@ async fn team_contacts_invite_join_enqueues_distinct_owner_and_member_edges() {
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5098,7 +5244,7 @@ async fn team_contacts_invite_join_swallows_enqueue_failure_without_rollback() {
     let service = TeamServiceImpl::new(
         team_repository.clone(),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5123,7 +5269,7 @@ async fn team_contacts_invite_join_swallows_roster_failure() {
     let service = TeamServiceImpl::new(
         team_repository.clone(),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5158,7 +5304,7 @@ async fn team_contacts_invite_join_skips_empty_connection_batch() {
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5191,8 +5337,8 @@ async fn team_contacts_invite_join_does_not_enqueue_when_channel_work_rolls_back
     let service = TeamServiceImpl::new(
         team_repository.clone(),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository {
-            fail_add: true,
+        RecordingChannelService {
+            fail_auto_join: true,
             ..Default::default()
         },
         MockUserRolesAndPermissionsService::default(),
@@ -5235,7 +5381,7 @@ async fn team_contacts_domain_join_enqueues_distinct_owner_and_member_edges() {
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5273,7 +5419,7 @@ async fn team_contacts_domain_join_does_not_enqueue_without_matching_team() {
     let service = TeamServiceImpl::new(
         team_repository.clone(),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5303,7 +5449,7 @@ async fn team_contacts_domain_join_does_not_enqueue_for_existing_member() {
     let service = TeamServiceImpl::new(
         team_repository.clone(),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5339,7 +5485,7 @@ async fn team_contacts_domain_join_does_not_enqueue_at_seat_cap() {
     let service = TeamServiceImpl::new(
         team_repository.clone(),
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5362,7 +5508,7 @@ async fn try_join_team_by_domain_enterprise_status_read_precedes_membership_muta
     let mut team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
     team_repository.fail_enterprise_status_lookup = true;
     let customer_repository = MockCustomerRepository::default();
-    let channels_repository = MockTeamChannelsRepository::default();
+    let channels_repository = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let crm_enqueuer = RecordingCrmEnqueuer::default();
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -5395,7 +5541,13 @@ async fn try_join_team_by_domain_enterprise_status_read_precedes_membership_muta
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
     assert_no_enterprise_join_team_billing_calls(&team_repository, &customer_repository);
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
-    assert!(channels_repository.add_calls.lock().unwrap().is_empty());
+    assert!(
+        channels_repository
+            .auto_join_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     assert!(crm_enqueuer.populated.lock().unwrap().is_empty());
     assert!(events.lock().unwrap().is_empty());
 }
@@ -5414,7 +5566,7 @@ async fn create_team_without_subscription_skips_convert_and_defaults_auto_join()
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5449,7 +5601,7 @@ async fn create_team_with_subscription_converts_and_defaults_auto_join() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5479,7 +5631,7 @@ async fn create_team_generic_domain_does_not_default_auto_join() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5520,7 +5672,7 @@ async fn invite_users_to_team_free_team_under_cap_skips_billing() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         notification_ingress.clone(),
         NoOpCrmEnqueuer,
@@ -5567,7 +5719,7 @@ async fn invite_users_to_team_free_team_enforces_member_cap() {
     let service = TeamServiceImpl::new(
         team_repo,
         MockCustomerRepository::default(),
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         MockUserRolesAndPermissionsService::default(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,
@@ -5607,7 +5759,7 @@ async fn join_team_free_team_skips_billing_and_premium_roles() {
 
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
-    let channels_repo = MockTeamChannelsRepository::default();
+    let channels_repo = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let events = Arc::new(Mutex::new(Vec::new()));
 
@@ -5630,7 +5782,7 @@ async fn join_team_free_team_skips_billing_and_premium_roles() {
     // Free teams do not grant premium roles.
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
     assert_eq!(
-        *channels_repo.add_calls.lock().unwrap(),
+        *channels_repo.auto_join_calls.lock().unwrap(),
         vec![(team_id, user_id.as_ref().to_string())]
     );
     assert_eq!(events.lock().unwrap().len(), 1);
@@ -5651,7 +5803,7 @@ async fn join_team_free_team_over_cap_rolls_back() {
 
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
-    let channels_repo = MockTeamChannelsRepository::default();
+    let channels_repo = RecordingChannelService::default();
     let roles_service = MockUserRolesAndPermissionsService::default();
 
     let service = TeamServiceImpl::new(
@@ -5670,7 +5822,7 @@ async fn join_team_free_team_over_cap_rolls_back() {
     assert_eq!(*rollback_accept_calls.lock().unwrap(), 1);
     assert!(increment_calls.lock().unwrap().is_empty());
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
-    assert!(channels_repo.add_calls.lock().unwrap().is_empty());
+    assert!(channels_repo.auto_join_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -5700,7 +5852,7 @@ async fn try_join_team_by_domain_free_team_at_cap_skips() {
     let service = TeamServiceImpl::new(
         team_repo,
         customer_repo,
-        MockTeamChannelsRepository::default(),
+        RecordingChannelService::default(),
         roles_service.clone(),
         Arc::new(MockNotificationIngress::new(HashSet::new())),
         NoOpCrmEnqueuer,

@@ -52,6 +52,7 @@ async-stripe = { workspace = true, default-features = false, features = [
 ] }
 async-trait = { workspace = true, optional = true }
 chrono = { workspace = true }
+channels = { path = "../channels", default-features = false, features = ["ports"] }
 contacts = { path = "../contacts", default-features = false, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
@@ -98,6 +99,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+models_pagination = { path = "../models_pagination" }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
