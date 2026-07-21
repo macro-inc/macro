@@ -4,9 +4,11 @@ name = "broadcast"
 publish = false
 version = "0.1.0"
 
-
 [dependencies]
 dashmap = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { version = "0.7", optional = true, features = ["rt"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["time"] }
