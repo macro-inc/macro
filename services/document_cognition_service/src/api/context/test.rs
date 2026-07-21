@@ -446,6 +446,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 api_key: "testing".to_string(),
                 default_user_id: None,
             },
+            macro_authorization::NoBotAuthorizer,
         )));
 
     let user_permissions_service = Arc::new(

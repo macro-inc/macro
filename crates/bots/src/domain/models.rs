@@ -1,7 +1,6 @@
 //! Bot domain models.
 
 use chrono::{DateTime, Utc};
-use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -179,39 +178,6 @@ pub struct BotTokenCandidate {
     pub token: BotToken,
     /// Authenticated bot principal associated with the token.
     pub bot: AuthenticatedBot,
-}
-
-/// Unverified acting-user claims presented by a bot.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActingUserClaims {
-    /// Claimed Macro user id (`macro|<email>`).
-    pub user_id: Option<String>,
-    /// Claimed FusionAuth user id.
-    pub fusion_user_id: Option<String>,
-    /// Claimed organization id.
-    pub organization_id: Option<i32>,
-}
-
-/// Acting-user facts resolved from the user store.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActingUser {
-    /// Macro user id derived from the user's email.
-    pub macro_user_id: MacroUserIdStr<'static>,
-    /// FusionAuth user id.
-    pub fusion_user_id: String,
-    /// User organization id, when present.
-    pub organization_id: Option<i32>,
-}
-
-/// Authorized bot principal with its validated token and optional acting user.
-#[derive(Debug, Clone)]
-pub struct AuthorizedBotPrincipal {
-    /// Authenticated bot.
-    pub bot: AuthenticatedBot,
-    /// Validated token id.
-    pub token_id: Uuid,
-    /// Verified acting user, when one was claimed.
-    pub acting_user: Option<ActingUser>,
 }
 
 /// Request to create a bot.

@@ -70,6 +70,45 @@ impl MacroAuthorization {
     }
 }
 
+/// Ownership facts for a bot whose token has been validated.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BotAuthorizationOwner {
+    /// A bot owned by one Macro user.
+    User {
+        /// The owning Macro user identifier.
+        user_id: String,
+    },
+    /// A bot owned by a team.
+    Team {
+        /// The owning team identifier.
+        team_id: Uuid,
+    },
+    /// A first-party system bot with no user or team owner.
+    System,
+}
+
+/// Valid bot-token facts returned by the authorization repository.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BotTokenAuthorization {
+    /// The authenticated bot.
+    pub bot_id: BotId,
+    /// The token row used to authenticate.
+    pub token_id: Uuid,
+    /// The bot owner used by acting-user policy.
+    pub owner: BotAuthorizationOwner,
+}
+
+/// Acting-user facts resolved from the user store.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedBotActingUser {
+    /// The user's parsed Macro identifier.
+    pub macro_user_id: MacroUserIdStr<'static>,
+    /// The user's FusionAuth identifier.
+    pub fusion_user_id: String,
+    /// The user's organization, when present.
+    pub organization_id: Option<i32>,
+}
+
 /// Unverified acting-user claims presented by a bot.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BotActingUserClaims {

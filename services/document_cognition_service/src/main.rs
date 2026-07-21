@@ -152,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
                 api_key: internal_api_key.clone(),
                 default_user_id: None,
             },
+            macro_authorization::NoBotAuthorizer,
         )));
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(

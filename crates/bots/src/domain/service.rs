@@ -1,15 +1,11 @@
 //! Bot service implementation.
 
-#[cfg(test)]
-mod test;
-
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        ActingUser, ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, Bot, BotChannel,
-        BotId, BotKind, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest,
-        CreateBotTokenRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-        PatchBotRequest,
+        AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        CreateChannelScopedBotResponse, PatchBotRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -151,76 +147,6 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
         Ok(authenticated)
-    }
-
-    async fn authorize_acting_user(
-        &self,
-        bot: &AuthenticatedBot,
-        claims: &ActingUserClaims,
-    ) -> Result<ActingUser, BotError> {
-        if claims.user_id.is_none() && claims.fusion_user_id.is_none() {
-            return Err(BotError::ForbiddenActingUser);
-        }
-
-        let claimed_macro_user_id = claims
-            .user_id
-            .as_deref()
-            .map(MacroUserIdStr::parse_from_str)
-            .transpose()
-            .map_err(|_| BotError::ForbiddenActingUser)?;
-
-        if bot.kind == BotKind::System {
-            return Err(BotError::ForbiddenActingUser);
-        }
-
-        let acting_user = self
-            .repo
-            .find_acting_user(claims)
-            .await
-            .map_err(|err| BotError::Repo(err.into()))?
-            .ok_or(BotError::ForbiddenActingUser)?;
-
-        let macro_user_id_matches = claimed_macro_user_id
-            .as_ref()
-            .is_none_or(|claimed| claimed.as_ref() == acting_user.macro_user_id.as_ref());
-        let fusion_user_id_matches = claims
-            .fusion_user_id
-            .as_deref()
-            .is_none_or(|claimed| claimed == acting_user.fusion_user_id);
-        let organization_id_matches = claims
-            .organization_id
-            .is_none_or(|claimed| Some(claimed) == acting_user.organization_id);
-
-        if !macro_user_id_matches || !fusion_user_id_matches || !organization_id_matches {
-            return Err(BotError::ForbiddenActingUser);
-        }
-
-        let owned_bot = self
-            .repo
-            .get_bot(bot.bot_id)
-            .await
-            .map_err(|err| BotError::Repo(err.into()))?
-            .ok_or(BotError::ForbiddenActingUser)?;
-
-        if owned_bot.kind != BotKind::Owned {
-            return Err(BotError::ForbiddenActingUser);
-        }
-
-        let authorized = match owned_bot.owner {
-            Some(BotOwner::User { user_id }) => user_id == acting_user.macro_user_id.as_ref(),
-            Some(BotOwner::Team { team_id }) => self
-                .repo
-                .user_has_team(acting_user.macro_user_id.clone(), team_id)
-                .await
-                .map_err(|err| BotError::Repo(err.into()))?,
-            None => false,
-        };
-
-        if !authorized {
-            return Err(BotError::ForbiddenActingUser);
-        }
-
-        Ok(acting_user)
     }
 }
 
@@ -472,33 +398,6 @@ where
         } else {
             Err(BotError::NotFound("token not found".to_string()))
         }
-    }
-
-    async fn authorize_bot_request(
-        &self,
-        token: &str,
-        claims: Option<ActingUserClaims>,
-    ) -> Result<AuthorizedBotPrincipal, BotError> {
-        let candidate = self
-            .repo
-            .token_candidate(token)
-            .await
-            .map_err(|err| BotError::Repo(err.into()))?;
-        let authenticated = self.authenticate_candidate(candidate).await?;
-
-        let acting_user = match claims {
-            Some(claims) => Some(
-                self.authorize_acting_user(&authenticated.bot, &claims)
-                    .await?,
-            ),
-            None => None,
-        };
-
-        Ok(AuthorizedBotPrincipal {
-            bot: authenticated.bot,
-            token_id: authenticated.token_id,
-            acting_user,
-        })
     }
 
     async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {

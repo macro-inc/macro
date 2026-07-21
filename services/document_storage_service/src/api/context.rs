@@ -6,7 +6,6 @@ use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl,
     inbound::{axum_router::BotsRouterState, channel_webhook_router::ChannelBotWebhookRouterState},
-    macro_authorization_adapter::BotServiceAuthorizer,
     outbound::pg_bots_repo::PgBotsRepo,
 };
 use cal::{
@@ -71,7 +70,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
-    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+    MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState, PgBotAuthorizer,
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
@@ -269,7 +268,7 @@ pub(crate) type DssBotService =
 
 /// Type alias for the authorization service.
 pub(crate) type AuthorizationService =
-    MacroAuthorizationServiceImpl<MacroAuthJwtValidator, BotServiceAuthorizer<DssBotService>>;
+    MacroAuthorizationServiceImpl<MacroAuthJwtValidator, PgBotAuthorizer>;
 
 /// Type alias for the properties router state.
 pub(crate) type DssPropertiesHandlerState = PropertiesHandlerState<AuthorizationService>;

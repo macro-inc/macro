@@ -108,6 +108,7 @@ fn service_with_internal_auth(
             result: Err(MacroAuthorizationError::InvalidCredentials),
         },
         internal_auth_config(default_user_id),
+        NoBotAuthorizer,
     )
 }
 
@@ -183,7 +184,7 @@ async fn authorization_service_trait_rejects_bots_by_default() {
 }
 
 #[tokio::test]
-async fn authorization_service_impl_rejects_bots_without_an_authorizer() {
+async fn authorization_service_impl_rejects_bots_with_explicit_no_bot_authorizer() {
     let error = service_with_internal_auth(None)
         .authorize_bot("bot-token", None)
         .await
@@ -203,7 +204,13 @@ async fn authorize_bot_delegates_token_and_exact_acting_user_claims() {
         organization_id: Some(42),
     };
     let authorizer = FakeBotAuthorizer::new(Ok(bot_authentication()));
-    let service = service_with_internal_auth(None).with_bot_authorizer(authorizer.clone());
+    let service = MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator {
+            result: Err(MacroAuthorizationError::InvalidCredentials),
+        },
+        internal_auth_config(None),
+        authorizer.clone(),
+    );
 
     let bot = service
         .authorize_bot("bot-token", Some(claims.clone()))
@@ -227,8 +234,13 @@ async fn authorize_bot_passes_through_authorizer_errors() {
         MacroAuthorizationError::ActingUserNotAuthorized,
         MacroAuthorizationError::Unavailable,
     ] {
-        let service = service_with_internal_auth(None)
-            .with_bot_authorizer(FakeBotAuthorizer::new(Err(expected)));
+        let service = MacroAuthorizationServiceImpl::new(
+            FakeJwtValidator {
+                result: Err(MacroAuthorizationError::InvalidCredentials),
+            },
+            internal_auth_config(None),
+            FakeBotAuthorizer::new(Err(expected)),
+        );
 
         let error = service.authorize_bot("bot-token", None).await.unwrap_err();
 
@@ -249,6 +261,7 @@ async fn authorize_constructs_user_context_from_validated_identity() {
             }),
         },
         internal_auth_config(None),
+        NoBotAuthorizer,
     );
 
     let context = service.authorize("valid-jwt").await.unwrap();
@@ -332,6 +345,7 @@ async fn authorize_propagates_expired_credentials() {
             result: Err(MacroAuthorizationError::CredentialsExpired),
         },
         internal_auth_config(None),
+        NoBotAuthorizer,
     );
 
     let error = service.authorize("expired-jwt").await.unwrap_err();
@@ -349,6 +363,7 @@ async fn authorize_propagates_invalid_credentials() {
             result: Err(MacroAuthorizationError::InvalidCredentials),
         },
         internal_auth_config(None),
+        NoBotAuthorizer,
     );
 
     let error = service.authorize("invalid-jwt").await.unwrap_err();

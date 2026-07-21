@@ -14,10 +14,7 @@ use crate::{
 };
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
-use bots::{
-    domain::service::BotServiceImpl, macro_authorization_adapter::BotServiceAuthorizer,
-    outbound::pg_bots_repo::PgBotsRepo,
-};
+use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use cal::{
     domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
     inbound::cal_webhook_router::CalWebhookRouterState,
@@ -83,7 +80,7 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState,
+    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
@@ -280,8 +277,8 @@ async fn main() -> anyhow::Result<()> {
             api_key: dss_auth_key.as_ref().to_string(),
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
-    )
-    .with_bot_authorizer(BotServiceAuthorizer::new(bots_service.clone()));
+        PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
+    );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 
     // Initialize OpenSearch client

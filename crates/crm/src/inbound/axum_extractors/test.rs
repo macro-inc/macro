@@ -487,6 +487,7 @@ fn test_router(
             api_key: INTERNAL_KEY.to_string(),
             default_user_id: None,
         },
+        macro_authorization::NoBotAuthorizer,
     );
     let state: CrmRouterState<FakeCrmService, FakeEntityAccessService, TestAuthorizationService> =
         CrmRouterState {

@@ -1,12 +1,42 @@
-use std::future::Future;
+use std::{fmt::Debug, future::Future};
 
 use model_user::UserContext;
 use rootcause::Report;
 
 use super::models::{
-    BotActingUserClaims, BotAuthentication, InternalIdentityClaims, MacroAuthorizationError,
-    ValidatedIdentity,
+    BotActingUserClaims, BotAuthentication, BotTokenAuthorization, InternalIdentityClaims,
+    MacroAuthorizationError, ResolvedBotActingUser, ValidatedIdentity,
 };
+use uuid::Uuid;
+
+/// Persistence facts required to authorize bot credentials.
+pub trait BotAuthorizationRepo: Clone + Send + Sync + 'static {
+    /// Repository error.
+    type Err: Debug + Send;
+
+    /// Find a currently valid token and its bot ownership facts.
+    fn find_valid_bot_token(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<Option<BotTokenAuthorization>, Self::Err>> + Send;
+
+    /// Mark a validated token as used.
+    fn mark_token_used(&self, token_id: Uuid)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Resolve acting-user claims to user-store facts.
+    fn find_acting_user(
+        &self,
+        claims: &BotActingUserClaims,
+    ) -> impl Future<Output = Result<Option<ResolvedBotActingUser>, Self::Err>> + Send;
+
+    /// Check whether a user is a current member of a team.
+    fn user_has_team(
+        &self,
+        fusion_user_id: &str,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
 
 /// Validates bot credentials and resolves verified acting-user identities.
 pub trait BotAuthorizer: Clone + Send + Sync + 'static {

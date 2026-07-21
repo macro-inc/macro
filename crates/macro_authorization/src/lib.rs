@@ -3,6 +3,10 @@
 //!
 //! The domain layer validates user, bot, and internal service credentials and
 //! returns a typed principal with any authenticated or verified acting user.
+//! [`MacroAuthorizationServiceImpl::new`] requires bot authorization to be
+//! configured explicitly, just like internal authorization. Services backed by
+//! MacroDB should use `PgBotAuthorizer`; services that intentionally reject
+//! bot credentials must pass [`NoBotAuthorizer`].
 //!
 //! # Choosing an Axum extractor
 //!
@@ -39,16 +43,21 @@ pub mod domain;
 /// Inbound transport adapters backed by the authorization service.
 #[cfg(feature = "axum")]
 pub mod inbound;
-/// Adapters for validating credentials with external authentication systems.
-#[cfg(feature = "outbound")]
+/// Adapters for validating credentials with external authentication systems and PostgreSQL.
+#[cfg(any(feature = "outbound", feature = "postgres"))]
 pub mod outbound;
 
 pub use domain::{
+    bot_authorizer::BotAuthorizerService,
     models::{
-        BotActingUserClaims, BotAuthentication, InternalAuthConfig, InternalIdentityClaims,
-        MacroAuthorization, MacroAuthorizationError, MacroUserAuthentication, ValidatedIdentity,
+        BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotTokenAuthorization,
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
+        MacroUserAuthentication, ResolvedBotActingUser, ValidatedIdentity,
     },
-    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, NoBotAuthorizer},
+    ports::{
+        BotAuthorizationRepo, BotAuthorizer, JwtValidator, MacroAuthorizationService,
+        NoBotAuthorizer,
+    },
     service::MacroAuthorizationServiceImpl,
 };
 /// Service-backed Axum authorization extractors, state, headers, and rejection type.
@@ -66,3 +75,6 @@ pub use inbound::{
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
 pub use outbound::{MacroAuthJwtValidator, NoopMacroAuthJwtValidator};
+/// PostgreSQL bot authorization repository and concrete authorizer.
+#[cfg(feature = "postgres")]
+pub use outbound::{PgBotAuthorizationRepo, PgBotAuthorizer};

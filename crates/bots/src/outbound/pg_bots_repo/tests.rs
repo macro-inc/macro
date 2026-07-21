@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::{
     models::{
-        ActingUserClaims, BotChannelType, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, PatchBotRequest,
+        BotChannelType, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        PatchBotRequest,
     },
     ports::{BotError, BotService},
     service::BotServiceImpl,
@@ -17,9 +17,6 @@ const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
 const TEAM_MEMBER: &str = "macro|bot-team-member@example.com";
 const TEAM_OTHER: &str = "macro|bot-team-other@example.com";
-const ACTING_USER_EMAIL: &str = "bot-acting-user@example.com";
-const ACTING_USER_FUSION_ID: &str = "fusion-bot-acting-user";
-
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
@@ -141,40 +138,6 @@ fn assert_no_token_material(payload: &Value, known_token: Option<&str>) {
     }
 }
 
-async fn insert_acting_user(
-    pool: &PgPool,
-    fusion_user_id: &str,
-    email: &str,
-) -> anyhow::Result<()> {
-    let macro_user_id = Uuid::new_v4();
-    let stripe_customer_id = format!("stripe_{macro_user_id}");
-    sqlx::query!(
-        r#"
-        INSERT INTO macro_user (id, username, email, stripe_customer_id)
-        VALUES ($1, $2, $2, $3)
-        "#,
-        macro_user_id,
-        email,
-        stripe_customer_id,
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query!(
-        r#"
-        INSERT INTO "User" (id, email, macro_user_id)
-        VALUES ($1, $2, $3)
-        "#,
-        fusion_user_id,
-        email,
-        macro_user_id,
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
 async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
     let macro_user_id = Uuid::new_v4();
     let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
@@ -294,86 +257,6 @@ async fn token_last_used_at(
     .await?;
 
     Ok(last_used_at)
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_acting_user_resolves_email_and_prefers_it_to_fusion_id(
-    pool: PgPool,
-) -> anyhow::Result<()> {
-    insert_acting_user(&pool, ACTING_USER_FUSION_ID, ACTING_USER_EMAIL).await?;
-    let repo = PgBotsRepo::new(pool);
-    let claims = ActingUserClaims {
-        user_id: Some(format!("macro|{}", ACTING_USER_EMAIL.to_uppercase())),
-        fusion_user_id: Some("different-fusion-user".to_string()),
-        organization_id: None,
-    };
-
-    let acting_user = repo
-        .find_acting_user(&claims)
-        .await?
-        .expect("acting user should resolve by email");
-
-    assert_eq!(
-        acting_user.macro_user_id,
-        MacroUserIdStr::try_from_email(ACTING_USER_EMAIL)?
-    );
-    assert_eq!(acting_user.fusion_user_id, ACTING_USER_FUSION_ID);
-    assert_eq!(acting_user.organization_id, None);
-
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_acting_user_resolves_fusion_user_id(pool: PgPool) -> anyhow::Result<()> {
-    insert_acting_user(&pool, ACTING_USER_FUSION_ID, ACTING_USER_EMAIL).await?;
-    let repo = PgBotsRepo::new(pool);
-    let claims = ActingUserClaims {
-        user_id: None,
-        fusion_user_id: Some(ACTING_USER_FUSION_ID.to_string()),
-        organization_id: None,
-    };
-
-    let acting_user = repo
-        .find_acting_user(&claims)
-        .await?
-        .expect("acting user should resolve by FusionAuth id");
-
-    assert_eq!(
-        acting_user.macro_user_id,
-        MacroUserIdStr::try_from_email(ACTING_USER_EMAIL)?
-    );
-    assert_eq!(acting_user.fusion_user_id, ACTING_USER_FUSION_ID);
-    assert_eq!(acting_user.organization_id, None);
-
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_acting_user_returns_none_for_missing_users(pool: PgPool) -> anyhow::Result<()> {
-    let repo = PgBotsRepo::new(pool);
-    let missing_macro_claims = ActingUserClaims {
-        user_id: Some("macro|missing-acting-user@example.com".to_string()),
-        fusion_user_id: None,
-        organization_id: None,
-    };
-    let missing_fusion_claims = ActingUserClaims {
-        user_id: None,
-        fusion_user_id: Some("missing-fusion-user".to_string()),
-        organization_id: None,
-    };
-
-    assert!(
-        repo.find_acting_user(&missing_macro_claims)
-            .await?
-            .is_none()
-    );
-    assert!(
-        repo.find_acting_user(&missing_fusion_claims)
-            .await?
-            .is_none()
-    );
-
-    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

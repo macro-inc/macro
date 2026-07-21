@@ -912,6 +912,7 @@ fn authorization_state_with_default(
             api_key: VALID_INTERNAL_KEY.to_string(),
             default_user_id: default_user_id.map(str::to_string),
         },
+        macro_authorization::NoBotAuthorizer,
     );
     (MacroAuthorizationState::new(Arc::new(service)), validator)
 }

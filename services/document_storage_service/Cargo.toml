@@ -57,7 +57,7 @@ axum = { workspace = true, features = [
 ] }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
-bots = { path = "../../crates/bots", features = ["authorizer"] }
+bots = { path = "../../crates/bots" }
 bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
@@ -115,7 +115,7 @@ lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = ["postgres"] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_axum_utils = { path = "../../crates/macro_axum_utils" }
 macro_config = { path = "../../crates/macro_config" }

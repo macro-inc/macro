@@ -1,10 +1,9 @@
 //! Bot ports.
 
 use super::models::{
-    ActingUser, ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, Bot, BotChannel, BotId,
-    BotOwner, BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
-    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-    PatchBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken, BotTokenCandidate,
+    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
@@ -49,12 +48,6 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
-
-    /// Resolve acting-user claims to user-store facts.
-    fn find_acting_user(
-        &self,
-        claims: &ActingUserClaims,
-    ) -> impl Future<Output = Result<Option<ActingUser>, Self::Err>> + Send;
 
     /// Check whether a bot is an active channel participant.
     fn bot_active_in_channel(
@@ -235,13 +228,6 @@ pub trait BotService: Clone + Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
-    /// Authorize a bot token and optional acting-user claims.
-    fn authorize_bot_request(
-        &self,
-        token: &str,
-        claims: Option<ActingUserClaims>,
-    ) -> impl Future<Output = Result<AuthorizedBotPrincipal, BotError>> + Send;
-
     /// Ensure that a bot is an active participant in a channel.
     fn ensure_bot_in_channel(
         &self,
@@ -275,9 +261,6 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
-    /// The bot may not act for the claimed user.
-    #[error("forbidden")]
-    ForbiddenActingUser,
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

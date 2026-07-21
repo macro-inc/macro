@@ -5,12 +5,6 @@ publish = false
 version = "0.1.0"
 
 [features]
-authorizer = [
-  "dep:macro_authorization",
-  "dep:model_user",
-  "dep:rootcause",
-  "ports",
-]
 default = ["inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
@@ -42,9 +36,7 @@ macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
 rand = { workspace = true }
-rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }

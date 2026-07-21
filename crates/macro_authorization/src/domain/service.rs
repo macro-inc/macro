@@ -21,26 +21,12 @@ pub struct MacroAuthorizationServiceImpl<V, B = NoBotAuthorizer> {
     bot_authorizer: B,
 }
 
-impl<V> MacroAuthorizationServiceImpl<V, NoBotAuthorizer> {
-    /// Create an authorization service using the supplied validator and required internal authorization configuration.
-    pub fn new(validator: V, internal_auth: InternalAuthConfig) -> Self {
+impl<V, B> MacroAuthorizationServiceImpl<V, B> {
+    /// Create an authorization service with required user, internal, and bot authorization dependencies.
+    pub fn new(validator: V, internal_auth: InternalAuthConfig, bot_authorizer: B) -> Self {
         Self {
             validator,
             internal_auth,
-            bot_authorizer: NoBotAuthorizer,
-        }
-    }
-}
-
-impl<V, B> MacroAuthorizationServiceImpl<V, B> {
-    /// Replace the bot authorizer while preserving user and internal authorization configuration.
-    pub fn with_bot_authorizer<B2>(
-        self,
-        bot_authorizer: B2,
-    ) -> MacroAuthorizationServiceImpl<V, B2> {
-        MacroAuthorizationServiceImpl {
-            validator: self.validator,
-            internal_auth: self.internal_auth,
             bot_authorizer,
         }
     }

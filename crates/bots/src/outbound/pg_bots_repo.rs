@@ -5,9 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ActingUser, ActingUserClaims, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId,
-        BotKind, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, PatchBotRequest,
+        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotToken,
+        BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        PatchBotRequest,
     },
     ports::BotRepo,
 };
@@ -109,26 +109,6 @@ impl TryFrom<BotChannelRow> for BotChannel {
             name: row.name,
             channel_type,
             joined_at: row.joined_at,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct ActingUserRow {
-    fusion_user_id: String,
-    email: String,
-    organization_id: Option<i32>,
-}
-
-impl TryFrom<ActingUserRow> for ActingUser {
-    type Error = anyhow::Error;
-
-    fn try_from(row: ActingUserRow) -> Result<Self, Self::Error> {
-        Ok(Self {
-            macro_user_id: MacroUserIdStr::try_from_email(&row.email)
-                .context("user store contains an invalid email")?,
-            fusion_user_id: row.fusion_user_id,
-            organization_id: row.organization_id,
         })
     }
 }
@@ -437,53 +417,6 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to check team membership")?;
         Ok(has_team)
-    }
-
-    async fn find_acting_user(
-        &self,
-        claims: &ActingUserClaims,
-    ) -> Result<Option<ActingUser>, Self::Err> {
-        let row = if let Some(macro_user_id) = claims.user_id.as_deref() {
-            let Ok(macro_user_id) = MacroUserIdStr::try_from(macro_user_id) else {
-                return Ok(None);
-            };
-
-            sqlx::query_as!(
-                ActingUserRow,
-                r#"
-                SELECT
-                    id AS fusion_user_id,
-                    email,
-                    "organizationId" AS "organization_id?"
-                FROM "User"
-                WHERE email = $1
-                "#,
-                macro_user_id.email_str(),
-            )
-            .fetch_optional(&self.pool)
-            .await
-            .context("failed to find acting user by email")?
-        } else if let Some(fusion_user_id) = claims.fusion_user_id.as_deref() {
-            sqlx::query_as!(
-                ActingUserRow,
-                r#"
-                SELECT
-                    id AS fusion_user_id,
-                    email,
-                    "organizationId" AS "organization_id?"
-                FROM "User"
-                WHERE id = $1
-                "#,
-                fusion_user_id,
-            )
-            .fetch_optional(&self.pool)
-            .await
-            .context("failed to find acting user by FusionAuth id")?
-        } else {
-            None
-        };
-
-        row.map(ActingUser::try_from).transpose()
     }
 
     async fn bot_active_in_channel(

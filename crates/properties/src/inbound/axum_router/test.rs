@@ -235,6 +235,7 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
             api_key: INTERNAL_API_KEY.to_string(),
             default_user_id: Some(DEFAULT_INTERNAL_USER_ID.to_string()),
         },
+        macro_authorization::NoBotAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, BotChannel, BotChannelType,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    AuthenticatedBot, BotChannel, BotChannelType, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -18,7 +18,7 @@ use entity_access::domain::{
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_authorization::{
     InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, ValidatedIdentity,
+    MacroAuthorizationState, NoBotAuthorizer, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
@@ -179,14 +179,6 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
-    async fn authorize_bot_request(
-        &self,
-        _token: &str,
-        _claims: Option<ActingUserClaims>,
-    ) -> Result<AuthorizedBotPrincipal, BotError> {
-        unimplemented!()
-    }
-
     async fn ensure_bot_in_channel(
         &self,
         _bot_id: BotId,
@@ -343,6 +335,7 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
             api_key: "test-internal-key".to_string(),
             default_user_id: None,
         },
+        NoBotAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -475,18 +468,6 @@ async fn read_bot_channels(response: axum::response::Response) -> Vec<BotChannel
         .await
         .unwrap();
     serde_json::from_slice(&body).unwrap()
-}
-
-#[tokio::test]
-async fn forbidden_acting_user_maps_to_forbidden() {
-    let response = BotsHandlerErr::Bot(BotError::ForbiddenActingUser).into_response();
-
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(error.message, "forbidden");
 }
 
 #[tokio::test]

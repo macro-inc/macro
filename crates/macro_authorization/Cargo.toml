@@ -14,6 +14,7 @@ axum = [
 default = ["axum", "outbound"]
 local_auth = ["dep:macro_env_var"]
 outbound = ["dep:macro_auth"]
+postgres = ["dep:sqlx"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
@@ -26,6 +27,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
@@ -36,6 +38,7 @@ cookie = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

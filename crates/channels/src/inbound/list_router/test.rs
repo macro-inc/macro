@@ -113,6 +113,7 @@ fn test_router(default_user_id: Option<&str>) -> (Router, ServiceCallTracker) {
             api_key: VALID_INTERNAL_KEY.to_string(),
             default_user_id: default_user_id.map(str::to_owned),
         },
+        macro_authorization::NoBotAuthorizer,
     );
     let state = ChannelListRouterState::new(
         list_service,

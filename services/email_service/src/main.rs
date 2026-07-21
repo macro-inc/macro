@@ -131,6 +131,7 @@ async fn main() -> anyhow::Result<()> {
             api_key: config.internal_api_key.to_string(),
             default_user_id: Some("macro|INTERNAL@macro.com".to_string()),
         },
+        macro_authorization::NoBotAuthorizer,
     )));
 
     let sqs_client = Arc::new(sqs_client);
