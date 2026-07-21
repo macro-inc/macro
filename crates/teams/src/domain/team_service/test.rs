@@ -10,7 +10,8 @@ use std::{
 use channels::domain::{
     models::{
         AttachmentEntityReference, ChannelAttachmentType, ChannelMessageFilters,
-        ChannelParticipant, MessagePageDirection, ThreadReply,
+        ChannelParticipant, ChannelType, CreateChannelRequest, CreateChannelResponse,
+        MessagePageDirection, Sender, ThreadReply,
     },
     ports::{
         ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
@@ -846,12 +847,21 @@ impl CustomerRepository for MockCustomerRepository {
 
 // -- Recording ChannelService --
 
+#[derive(Clone)]
+struct RecordedCreateChannelCall {
+    actor: Sender,
+    actor_org_id: Option<i64>,
+    request: CreateChannelRequest,
+}
+
 #[derive(Clone, Default)]
 struct RecordingChannelService {
+    create_calls: Arc<Mutex<Vec<RecordedCreateChannelCall>>>,
     auto_join_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     leave_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     restore_calls: Arc<Mutex<Vec<(String, Vec<uuid::Uuid>)>>>,
     leave_channel_ids: Vec<uuid::Uuid>,
+    fail_create: bool,
     fail_auto_join: bool,
     fail_leave: bool,
     fail_restore: bool,
@@ -912,6 +922,34 @@ impl ChannelService for RecordingChannelService {
         _message_id: uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
         async move { unimplemented!("not needed for team service tests") }
+    }
+
+    fn create_channel(
+        &self,
+        actor: Sender,
+        actor_org_id: Option<i64>,
+        request: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        self.create_calls
+            .lock()
+            .unwrap()
+            .push(RecordedCreateChannelCall {
+                actor,
+                actor_org_id,
+                request,
+            });
+        let fail = self.fail_create;
+        async move {
+            if fail {
+                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
+                    "create channel failed"
+                )))
+            } else {
+                Ok(CreateChannelResponse {
+                    id: uuid::Uuid::from_u128(3000).to_string(),
+                })
+            }
+        }
     }
 
     fn auto_join_by_team_id(
@@ -1907,6 +1945,102 @@ async fn team_payment_patch_payment_status_delegates_to_repository() {
         *payment_update_calls.lock().unwrap(),
         vec![(team_id, false), (team_id, true)]
     );
+}
+
+#[tokio::test]
+async fn create_team_creates_default_team_channel() {
+    let owner = MacroUserIdStr::parse_from_str("macro|creator@example.com").unwrap();
+    let team_id = uuid::Uuid::from_u128(2000);
+    let team = Team::new(
+        team_id,
+        "Persisted Team Name".to_string(),
+        "PERSISTED_TEAM_NAME".to_string(),
+        owner.clone().into_owned(),
+        false,
+        false,
+    );
+    let mut team_repository = MockTeamRepository::new(
+        Vec::new(),
+        "Requested Team Name",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    team_repository.created_team = team;
+    let channel_service = RecordingChannelService::default();
+    let create_calls = channel_service.create_calls.clone();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        channel_service,
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .create_team(&owner, "Requested Team Name", None)
+        .await
+        .unwrap();
+
+    let create_calls = create_calls.lock().unwrap();
+    assert_eq!(create_calls.len(), 1);
+    let call = &create_calls[0];
+    assert_eq!(
+        call.actor,
+        Sender::new_from_user(owner.clone().into_owned())
+    );
+    assert_eq!(call.actor_org_id, None);
+    assert_eq!(call.request.name.as_deref(), Some("Persisted Team Name"));
+    assert_eq!(call.request.channel_type, ChannelType::Team);
+    assert_eq!(call.request.team_id, Some(team_id));
+    assert!(call.request.auto_join_team);
+    assert_eq!(
+        call.request.participants,
+        HashSet::from([owner.into_owned()])
+    );
+}
+
+#[tokio::test]
+async fn create_team_fails_when_default_team_channel_creation_fails() {
+    let owner = MacroUserIdStr::parse_from_str("macro|creator@example.com").unwrap();
+    let team = Team::new(
+        uuid::Uuid::from_u128(2001),
+        "Failed Channel Team".to_string(),
+        "FAILED_CHANNEL_TEAM".to_string(),
+        owner.clone().into_owned(),
+        false,
+        false,
+    );
+    let mut team_repository = MockTeamRepository::new(
+        Vec::new(),
+        "Failed Channel Team",
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    team_repository.created_team = team;
+    let analytics_events = Arc::new(Mutex::new(Vec::new()));
+    let event_broker = RecordingEventBroker::default();
+    let service = TeamServiceImpl::new_with_analytics(
+        team_repository,
+        MockCustomerRepository::default(),
+        RecordingChannelService {
+            fail_create: true,
+            ..Default::default()
+        },
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+        MockTeamAnalytics::new(analytics_events.clone()),
+    )
+    .with_event_broker(event_broker.clone());
+
+    let result = service
+        .create_team(&owner, "Failed Channel Team", None)
+        .await;
+
+    assert!(matches!(result, Err(CreateTeamError::StorageLayerError(_))));
+    assert!(analytics_events.lock().unwrap().is_empty());
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
