@@ -300,7 +300,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
-    #[tracing::instrument(skip(self, updates))]
+    #[tracing::instrument(skip(self, updates), err)]
     async fn bulk_update_entity_property_options(
         &self,
         entity_id: &str,
