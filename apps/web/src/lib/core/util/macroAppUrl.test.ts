@@ -72,6 +72,16 @@ describe('parseInternalAppLink', () => {
     );
   });
 
+  it('accepts staging macro links under Tauri', () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    expect(
+      parseInternalAppLink('https://staging.macro.com/app/component/abc')
+    ).toEqual({
+      path: '/component/abc',
+      query: '',
+    });
+  });
+
   it('rejects invalid urls', () => {
     expect(parseInternalAppLink('not a url')).toBeNull();
     expect(parseInternalAppLink('/app/component/abc')).toBeNull();
@@ -101,5 +111,23 @@ describe('maybeOpenInApp', () => {
     vi.mocked(isTauri).mockReturnValue(true);
     expect(maybeOpenInApp('https://github.com/macro-inc')).toBe(false);
     expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the system browser when the navigate event fails to dispatch', async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(emit).mockRejectedValueOnce(new Error('ipc down'));
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    expect(maybeOpenInApp('https://macro.com/app/channel/123')).toBe(true);
+    // The window.open fallback runs in the emit-rejection microtask.
+    await vi.waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://macro.com/app/channel/123',
+        '_blank',
+        'noopener,noreferrer'
+      )
+    );
+
+    openSpy.mockRestore();
   });
 });

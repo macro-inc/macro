@@ -4,6 +4,7 @@ import { isTauri } from './platform';
 const Hosts = {
   Prod: 'macro.com',
   Dev: 'dev.macro.com',
+  Staging: 'staging.macro.com',
   Localhost: 'localhost',
 } as const;
 
@@ -24,10 +25,13 @@ export function isValidMentionHostname(hostname: string): boolean {
     return true;
   }
   // On Tauri, window.location.hostname is 'localhost', but Macro links are
-  // built with the real web origin (macro.com or dev.macro.com). Accept any
-  // recognized Macro host when running inside the native Tauri app.
+  // built with the real web origin (macro.com, dev.macro.com, or
+  // staging.macro.com). Accept any recognized Macro host when running inside
+  // the native Tauri app (mirrors APP_LINK_HOSTS on the Rust side).
   if (isTauri() && current === Hosts.Localhost) {
-    return target === Hosts.Prod || target === Hosts.Dev;
+    return (
+      target === Hosts.Prod || target === Hosts.Dev || target === Hosts.Staging
+    );
   }
   return false;
 }
@@ -85,6 +89,10 @@ export function maybeOpenInApp(url: string): boolean {
   });
   emit('navigate', parsed).catch((e) => {
     console.error('[nav-debug] failed to emit navigate event', e);
+    // The navigate event never dispatched, so nothing routed in-app. Fall back
+    // to the system browser rather than leaving the link silently unhandled
+    // (openExternalUrl has already returned by the time this rejects).
+    window.open(url, '_blank', 'noopener,noreferrer')?.focus();
   });
   return true;
 }
