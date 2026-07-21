@@ -2151,6 +2151,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "rand 0.9.4",
  "rootcause",
  "serde",
