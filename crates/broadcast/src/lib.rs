@@ -68,7 +68,10 @@ enum ExitReason {
 
 /// An error returned when a value has no active subscribers.
 #[derive(Debug)]
-pub struct NoSubscribers<V>(V);
+pub struct NoSubscribers<V>(
+    /// The inner value which failed to send
+    pub V,
+);
 
 impl<K, V, T> BroadcastManager<T, K, V>
 where

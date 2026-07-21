@@ -533,6 +533,10 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "broadcast": [
+      "crates/broadcast",
+      "crates/workspace-hack"
+    ],
     "cache-core": [
       "crates/client/cache-core",
       "crates/maybe_send"
