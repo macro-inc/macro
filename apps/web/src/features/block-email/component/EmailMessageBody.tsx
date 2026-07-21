@@ -7,6 +7,7 @@ import {
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import DotsThree from '@phosphor/dots-three.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
@@ -23,7 +24,6 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
-import { interceptMailtoLinks } from '../util/interceptMailtoLinks';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import {
   fetchImagesViaPlatform,

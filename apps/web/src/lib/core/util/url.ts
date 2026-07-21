@@ -1,7 +1,4 @@
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { parseMailto } from '@block-email/util/mailto';
 import shortuuid from 'short-uuid';
-import { maybeOpenInApp } from './macroAppUrl';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -16,37 +13,40 @@ function unwrapShortId(id: string): string {
   return id;
 }
 
+/** Handles a URL before the default in-app / new-tab behavior. Returns true
+ * when it took ownership of the URL (so no further handling runs). */
+type ExternalUrlInterceptor = (url: string) => boolean;
+
+// Insertion-ordered; a Set dedupes a handler registered more than once (e.g.
+// if the registering component remounts).
+const externalUrlInterceptors = new Set<ExternalUrlInterceptor>();
+
 /**
- * The single entry point for opening a URL from user content or UI actions —
- * use this instead of `window.open`.
- * If Macro urls end up being called here (e.g. a bare markdown url) we open the link in-app when
- * running inside the native Tauri shell (where `window.open` would kick the
- * user out to the system browser); everything else opens a new tab on web or
- * the system browser.
+ * Registers a handler consulted by {@link openExternalUrl} before its default handling.
+ * Interceptors are tried in registration order and the first to return true takes ownership of the URL.
+ *
+ * Returns a function that unregisters the interceptor.
  */
-export function openExternalUrl(url: string) {
-  if (maybeOpenMailtoInComposer(url)) return;
-  if (maybeOpenInApp(url)) return;
-  window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+export function registerExternalUrlInterceptor(
+  interceptor: ExternalUrlInterceptor
+): () => void {
+  externalUrlInterceptors.add(interceptor);
+  return () => {
+    externalUrlInterceptors.delete(interceptor);
+  };
 }
 
 /**
- * Opens a `mailto:` URL in the in-app email composer, prefilling the recipients.
- * Returns false — so the caller falls through to the OS mail client — when the
- * URL isn't a mailto or the split manager isn't ready yet.
+ * The single entry point for opening a URL from user content or UI actions —
+ * use this instead of `window.open`. Registered interceptors are tried first,
+ * in registration order, and the first to claim the URL wins; anything left
+ * over opens a new tab on web / the system browser.
  */
-function maybeOpenMailtoInComposer(url: string): boolean {
-  const parsed = parseMailto(url);
-  if (!parsed) return false;
-  const manager = globalSplitManager();
-  if (!manager) return false;
-  manager.openWithSplit({
-    type: 'component',
-    id: 'email-compose',
-    params: parsed.to.length ? { initialTo: parsed.to } : undefined,
-    preserveParams: true,
-  });
-  return true;
+export function openExternalUrl(url: string) {
+  for (const interceptor of externalUrlInterceptors) {
+    if (interceptor(url)) return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 
 export function transformShortIdInUrlPathname(pathname: string) {

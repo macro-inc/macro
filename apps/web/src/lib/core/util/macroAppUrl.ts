@@ -1,4 +1,3 @@
-import { emit } from '@tauri-apps/api/event';
 import { isTauri } from './platform';
 
 const Hosts = {
@@ -9,10 +8,14 @@ const Hosts = {
 } as const;
 
 function cleanHostname(hostname: string): string {
-  return hostname.replace('www.', '').toLowerCase();
+  // Strip only a leading `www.` (parity with the Rust `strip_prefix("www.")`);
+  // a bare `replace('www.', '')` would also collapse a mid-string occurrence,
+  // e.g. `macro.www.com` -> `macro.com`, letting a foreign host masquerade as
+  // a Macro one.
+  return hostname.toLowerCase().replace(/^www\./, '');
 }
 
-export function isValidMentionHostname(hostname: string): boolean {
+export function isValidMacroAppHostname(hostname: string): boolean {
   const current = cleanHostname(window.location.hostname);
   const target = cleanHostname(hostname);
   if (current === target) {
@@ -60,39 +63,11 @@ export function parseInternalAppLink(url: string): InternalAppLink | null {
   if (pathname !== '/app' && !pathname.startsWith('/app/')) {
     return null;
   }
-  if (!isValidMentionHostname(parsed.hostname)) {
+  if (!isValidMacroAppHostname(parsed.hostname)) {
     return null;
   }
   return {
     path: pathname.slice('/app'.length) || '/',
     query: parsed.search.slice(1),
   };
-}
-
-/**
- * When running inside the native Tauri app, routes a Macro `/app` link
- * in-app via the same `navigate` event the deep-link handler emits —
- * `window.open` bypasses the webview's navigation hook and would open the
- * link in the system browser.
- *
- * Don't call this directly from UI code — use `openExternalUrl` from
- * `@core/util/url`, which composes this with the `window.open` fallback.
- */
-export function maybeOpenInApp(url: string): boolean {
-  if (!isTauri()) return false;
-  const parsed = parseInternalAppLink(url);
-  if (!parsed) return false;
-  console.info('[nav-debug] macro link intercepted', {
-    url,
-    path: parsed.path,
-    query: parsed.query,
-  });
-  emit('navigate', parsed).catch((e) => {
-    console.error('[nav-debug] failed to emit navigate event', e);
-    // The navigate event never dispatched, so nothing routed in-app. Fall back
-    // to the system browser rather than leaving the link silently unhandled
-    // (openExternalUrl has already returned by the time this rejects).
-    window.open(url, '_blank', 'noopener,noreferrer')?.focus();
-  });
-  return true;
 }

@@ -1,8 +1,8 @@
 import { openExternalUrl } from '@core/util/url';
 
 /**
- * Routes clicks on raw `mailto:` anchors inside rendered email HTML through
- * `openExternalUrl`, which opens the in-app composer. Scoped per email render
+ * Routes clicks on raw `mailto:` anchors inside a rendered-HTML root through
+ * `openExternalUrl` (which opens the in-app email composer). Scoped per render
  * root — replaces the former app-global mailto click interceptor.
  *
  * Modifier / non-primary-button clicks are left alone so the browser's default

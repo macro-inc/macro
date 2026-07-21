@@ -1,23 +1,17 @@
 import { isTauri } from '@core/util/platform';
-import { emit } from '@tauri-apps/api/event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { maybeOpenInApp, parseInternalAppLink } from './macroAppUrl';
+import { parseInternalAppLink } from './macroAppUrl';
 
 vi.mock('@core/util/platform', () => ({
   isTauri: vi.fn(() => false),
 }));
 
-vi.mock('@tauri-apps/api/event', () => ({
-  emit: vi.fn(() => Promise.resolve()),
-}));
-
 afterEach(() => {
   vi.mocked(isTauri).mockReturnValue(false);
-  vi.mocked(emit).mockClear();
 });
 
 // jsdom's window.location.hostname is 'localhost', which
-// isValidMentionHostname pairs with dev.macro.com outside of Tauri.
+// isValidMacroAppHostname pairs with dev.macro.com outside of Tauri.
 describe('parseInternalAppLink', () => {
   it('parses a macro app link into path and query', () => {
     expect(
@@ -43,6 +37,16 @@ describe('parseInternalAppLink', () => {
       path: '/x',
       query: '',
     });
+  });
+
+  it('does not treat a mid-string www. as a macro host', () => {
+    // Only a leading `www.` is stripped, so `macro.www.com` (a subdomain of
+    // the foreign `www.com`) must not collapse to `macro.com`. Checked under
+    // Tauri, where localhost is paired with the prod/dev/staging hosts.
+    vi.mocked(isTauri).mockReturnValue(true);
+    expect(
+      parseInternalAppLink('https://macro.www.com/app/component/abc')
+    ).toBeNull();
   });
 
   it('rejects non-/app paths on a macro host', () => {
@@ -85,49 +89,5 @@ describe('parseInternalAppLink', () => {
   it('rejects invalid urls', () => {
     expect(parseInternalAppLink('not a url')).toBeNull();
     expect(parseInternalAppLink('/app/component/abc')).toBeNull();
-  });
-});
-
-describe('maybeOpenInApp', () => {
-  it('does nothing outside of Tauri', () => {
-    expect(maybeOpenInApp('https://dev.macro.com/app/component/abc')).toBe(
-      false
-    );
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('emits a navigate event for app links under Tauri', () => {
-    vi.mocked(isTauri).mockReturnValue(true);
-    expect(
-      maybeOpenInApp('https://macro.com/app/channel/123?message=456')
-    ).toBe(true);
-    expect(emit).toHaveBeenCalledWith('navigate', {
-      path: '/channel/123',
-      query: 'message=456',
-    });
-  });
-
-  it('leaves external links alone under Tauri', () => {
-    vi.mocked(isTauri).mockReturnValue(true);
-    expect(maybeOpenInApp('https://github.com/macro-inc')).toBe(false);
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('falls back to the system browser when the navigate event fails to dispatch', async () => {
-    vi.mocked(isTauri).mockReturnValue(true);
-    vi.mocked(emit).mockRejectedValueOnce(new Error('ipc down'));
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
-
-    expect(maybeOpenInApp('https://macro.com/app/channel/123')).toBe(true);
-    // The window.open fallback runs in the emit-rejection microtask.
-    await vi.waitFor(() =>
-      expect(openSpy).toHaveBeenCalledWith(
-        'https://macro.com/app/channel/123',
-        '_blank',
-        'noopener,noreferrer'
-      )
-    );
-
-    openSpy.mockRestore();
   });
 });

@@ -14,7 +14,7 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use share_target::{
-    PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
+    PendingShareFilesState, clear_shared_files, get_pending_share_filenames, is_share_deep_link,
     maybe_handle_share_deep_link, pop_shared_files, read_shared_file_text,
 };
 use staged_upload::cleanup_stale_staged_files;
@@ -239,7 +239,7 @@ pub fn run() {
             }
         })
         .manage(PendingShareFilesState::default())
-        .manage(LaunchDeepLinkFlushed::default())
+        .manage(DeepLinkDelivery::default())
         .manage(graphql_cache_plugin::CacheState::default())
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
@@ -388,10 +388,30 @@ impl AppChain for tauri::App {
     }
 }
 
-/// Set once the launch deep link has been flushed to the frontend, so it is
-/// only ever delivered once.
+/// Buffers deep links until the frontend can receive them. `on_open_url`
+/// starts firing during startup, before the webview has registered its
+/// `navigate` listener, so an early link would be emitted into the void; it is
+/// held here instead (latest wins) and delivered when the frontend signals
+/// readiness by calling `flush_launch_deep_link`. After that, links emit
+/// directly.
 #[derive(Default)]
-struct LaunchDeepLinkFlushed(std::sync::atomic::AtomicBool);
+struct DeepLinkDelivery {
+    launch: std::sync::Mutex<LaunchState>,
+}
+
+enum LaunchState {
+    /// Frontend `navigate` listener not registered yet; hold the latest link
+    /// for the flush.
+    AwaitingFrontend { pending: Option<Url> },
+    /// Frontend is ready; links emit directly.
+    Ready,
+}
+
+impl Default for LaunchState {
+    fn default() -> Self {
+        Self::AwaitingFrontend { pending: None }
+    }
+}
 
 /// Convert a deep link url into a `navigate` event for the frontend router.
 #[tracing::instrument(err, skip(handle))]
@@ -416,10 +436,6 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     Ok(handle.emit("navigate", payload)?)
 }
 
-fn is_share_deep_link(url: &Url) -> bool {
-    url.scheme() == APP_SCHEME && url.host_str() == Some("share")
-}
-
 fn attach_deep_link_handler(app: &mut tauri::App) {
     app.deep_link().on_open_url({
         let handle = app.handle().clone();
@@ -433,35 +449,61 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
             if maybe_handle_share_deep_link(&handle, &url) {
                 return;
             }
-            emit_navigate_for_deep_link(url, &handle).log_and_consume();
+
+            let delivery = handle.state::<DeepLinkDelivery>();
+            let to_emit = {
+                let mut state = delivery.launch.lock().expect("deep link state poisoned");
+                match &mut *state {
+                    // Emitting now would be lost — hold the link for the flush.
+                    LaunchState::AwaitingFrontend { pending } => {
+                        tracing::trace!("frontend not ready; buffering deep link");
+                        *pending = Some(url);
+                        None
+                    }
+                    LaunchState::Ready => Some(url),
+                }
+            };
+            if let Some(url) = to_emit {
+                emit_navigate_for_deep_link(url, &handle).log_and_consume();
+            }
         }
     });
 }
 
-/// Re-delivers the deep link that launched the app, if any. `on_open_url`
-/// fires during startup before the webview has registered its `navigate`
-/// listener, so on a cold open the emitted event is lost; the frontend calls
-/// this once its listener exists. Share deep links are skipped — their
-/// native handling already ran at launch and the frontend pulls the files
-/// through the share commands.
+/// Delivers any deep link that arrived before the frontend registered its
+/// `navigate` listener, and switches subsequent links to direct delivery. The
+/// frontend calls this once its listener exists. Only the first call delivers —
+/// a later call (listener remount, SPA reload) must not re-navigate to a stale
+/// launch link.
 #[tauri::command]
-fn flush_launch_deep_link(app: AppHandle, flushed: tauri::State<'_, LaunchDeepLinkFlushed>) {
-    use std::sync::atomic::Ordering;
-
-    if flushed.0.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    let urls = match app.deep_link().get_current() {
-        Ok(Some(urls)) => urls,
-        Ok(None) => return,
+fn flush_launch_deep_link(app: AppHandle, delivery: tauri::State<'_, DeepLinkDelivery>) {
+    // The link that launched the app, as recorded by the deep-link plugin.
+    // Needed when the launch link's open-url event fires before our listener
+    // in setup() exists and so was never buffered — on Windows/Linux the
+    // plugin processes the launch argv during its own init, and on Android the
+    // native intent can arrive equally early. Share deep links are skipped:
+    // their native handling already ran at launch and the frontend pulls the
+    // files through the share commands.
+    let launch_url = match app.deep_link().get_current() {
+        Ok(Some(urls)) => urls.into_iter().find(|url| !is_share_deep_link(url)),
+        Ok(None) => None,
         Err(e) => {
             tracing::warn!(error=?e, "failed to read launch deep link");
-            return;
+            None
         }
     };
-    tracing::debug!("flushing launch deep link {urls:?}");
-    let Some(url) = urls.into_iter().find(|url| !is_share_deep_link(url)) else {
-        return;
+
+    let to_emit = {
+        let mut state = delivery.launch.lock().expect("deep link state poisoned");
+        match std::mem::replace(&mut *state, LaunchState::Ready) {
+            // A buffered link is newer than the launch link, so it wins.
+            LaunchState::AwaitingFrontend { pending } => pending.or(launch_url),
+            LaunchState::Ready => None,
+        }
     };
-    emit_navigate_for_deep_link(url, &app).log_and_consume();
+
+    if let Some(url) = to_emit {
+        tracing::debug!("flushing deep link {url}");
+        emit_navigate_for_deep_link(url, &app).log_and_consume();
+    }
 }

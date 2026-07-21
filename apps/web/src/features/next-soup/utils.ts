@@ -183,6 +183,13 @@ const isNewerEntity = (
   return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
+/**
+ * Opens an entity via {@link openExternalUrl}. On web this is a new browser
+ * tab; inside the native Tauri shell a same-origin Macro `/app` link is routed
+ * in-app (in place) instead — `window.open` there would kick the user out to
+ * the system browser. So despite the name, this does not guarantee a separate
+ * tab/pane under Tauri.
+ */
 export const openEntityInNewTab = ({
   entity,
   location,

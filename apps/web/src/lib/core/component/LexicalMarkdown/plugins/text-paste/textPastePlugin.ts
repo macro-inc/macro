@@ -4,7 +4,7 @@ import {
   type BlockName,
   BlockRegistry,
 } from '@core/block';
-import { isValidMentionHostname } from '@core/util/macroAppUrl';
+import { isValidMacroAppHostname } from '@core/util/macroAppUrl';
 import { mergeRegister } from '@lexical/utils';
 import { $createPasteNode, PasteNode } from '@macro-inc/lexical-core';
 import { parseThemeV2Json } from '@theme/utils/themeValidation';
@@ -45,7 +45,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
     const url: URL = new URL(text);
     if (
       !url.pathname.startsWith('/app/') ||
-      !isValidMentionHostname(url.hostname)
+      !isValidMacroAppHostname(url.hostname)
     ) {
       return {
         isValid: false,

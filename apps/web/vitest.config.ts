@@ -146,6 +146,13 @@ export default defineConfig({
         },
       },
       {
+        extends: './src/lib/core/vitest.config.ts',
+        test: {
+          include: ['src/lib/tauri/**/*.{test,spec}.{ts,tsx}'],
+          name: 'tauri',
+        },
+      },
+      {
         // App-shell and feature tests without a specialized environment.
         extends: './src/lib/core/vitest.config.ts',
         test: {
