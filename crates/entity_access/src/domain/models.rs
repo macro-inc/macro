@@ -87,6 +87,10 @@ pub struct AdminParticipantRole;
 #[derive(Debug, Clone, Copy)]
 pub struct MemberParticipantRole;
 
+/// Permission to view a channel without requiring an active participant role.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewOnly;
+
 /// Trait implemented by marker types that encode a permission requirement.
 pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
     /// Returns whether the provided permission satisfies this requirement.
@@ -96,7 +100,7 @@ pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
 /// A user's permission for an entity, discriminated by entity kind.
 ///
 /// Items (documents, chats, projects, threads) use access levels.
-/// Channels use participant roles.
+/// Channels use view-only permission or participant roles.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -106,7 +110,9 @@ pub enum EntityPermission {
         /// The access level the user has.
         access_level: AccessLevel,
     },
-    /// Permission for channel-based entities.
+    /// View-only permission for a channel without an active participant role.
+    ChannelViewOnly,
+    /// Permission for channel-based entities with an active participant role.
     ChannelRole {
         /// The role the user has in the channel.
         role: ParticipantRole,
@@ -188,6 +194,15 @@ impl RequiredPermission for OwnerAccessLevel {
     }
 }
 
+impl RequiredPermission for ViewOnly {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        matches!(
+            permission,
+            EntityPermission::ChannelViewOnly | EntityPermission::ChannelRole { .. }
+        )
+    }
+}
+
 impl RequiredPermission for OwnerParticipantRole {
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_participant_role(ParticipantRole::Owner)
@@ -235,12 +250,14 @@ pub struct UserTeamInfo {
 
 /// Result of resolving a user's role in a channel.
 ///
-/// Distinguishes between "user has a role", "channel exists but user
-/// has no access", and "channel does not exist" — all from a single query.
+/// Distinguishes between an active participant role, view-only access,
+/// no access to an existing channel, and a channel that does not exist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelRoleResult {
     /// User has a role in the channel.
     Role(ParticipantRole),
+    /// User can view the channel without an active participant role.
+    ViewOnly,
     /// Channel exists but user has no access.
     NoAccess,
     /// Channel does not exist.

@@ -131,7 +131,8 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     /// Get the user's role in a channel.
     ///
     /// Returns a [`ChannelRoleResult`] that distinguishes between:
-    /// - User has a role (considering channel type rules)
+    /// - User has an active participant role (considering channel type rules)
+    /// - User has view-only access without an active participant role
     /// - Channel exists but user has no access
     /// - Channel does not exist
     fn get_channel_role(
@@ -282,8 +283,9 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
 
     /// Get the user's permission for an entity.
     ///
-    /// Returns `EntityPermission::AccessLevel` for items (documents, chats, projects, threads)
-    /// and `EntityPermission::ChannelRole` for channels.
+    /// Returns `EntityPermission::AccessLevel` for items (documents, chats, projects, threads).
+    /// Channels return `EntityPermission::ChannelRole` for active participants or
+    /// `EntityPermission::ChannelViewOnly` for view-only access.
     ///
     /// Returns `AccessError::Unauthorized` if the user has no access.
     fn get_entity_permission(
