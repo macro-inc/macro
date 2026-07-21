@@ -439,7 +439,9 @@ where
 fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAuthorizationRejection {
     let message = match error.current_context() {
         MacroAuthorizationError::CredentialsExpired => "jwt expired",
-        MacroAuthorizationError::InvalidCredentials => "unauthorized",
+        MacroAuthorizationError::InvalidCredentials
+        | MacroAuthorizationError::ActingUserNotAuthorized
+        | MacroAuthorizationError::Unavailable => "unauthorized",
     };
     tracing::error!(error=?error, "credential authorization failed");
     rejection(message)

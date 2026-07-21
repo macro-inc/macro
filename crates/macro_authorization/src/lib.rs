@@ -42,7 +42,8 @@ pub mod outbound;
 
 pub use domain::{
     models::{
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError, ValidatedIdentity,
+        BotActingUserClaims, BotAuthentication, InternalAuthConfig, InternalIdentityClaims,
+        MacroAuthorization, MacroAuthorizationError, MacroUserAuthentication, ValidatedIdentity,
     },
     ports::{JwtValidator, MacroAuthorizationService},
     service::MacroAuthorizationServiceImpl,

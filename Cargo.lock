@@ -8236,6 +8236,7 @@ name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bot_id",
  "constant_time_eq",
  "cookie",
  "http-body-util",
@@ -8254,6 +8255,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "urlencoding",
+ "uuid",
  "workspace-hack",
 ]
 

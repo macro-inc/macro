@@ -1,6 +1,85 @@
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
+use bot_id::BotId;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_user::UserContext;
 use thiserror::Error;
+use uuid::Uuid;
+
+/// A user identity that has been authenticated or verified for a bot.
+#[derive(Clone, Debug)]
+pub struct MacroUserAuthentication {
+    /// The user's parsed Macro identifier.
+    pub macro_user_id: MacroUserIdStr<'static>,
+    /// The authenticated user context.
+    pub user_context: UserContext,
+}
+
+/// A bot principal whose token has been validated.
+///
+/// The raw token is deliberately excluded so it cannot flow into handlers,
+/// tracing spans, or logs after authentication.
+#[derive(Clone, Debug)]
+pub struct BotAuthentication {
+    /// The validated bot.
+    pub bot_id: BotId,
+    /// The token row used to authenticate, for audit and telemetry.
+    pub token_id: Uuid,
+    /// The verified acting user, when one was requested and authorized.
+    pub acting_user: Option<MacroUserAuthentication>,
+}
+
+/// How the caller authenticated.
+///
+/// This enum is exhaustive so adding an authentication source requires every
+/// authorization decision to account for it explicitly.
+#[derive(Clone, Debug)]
+pub enum MacroAuthorization {
+    /// A caller authenticated directly with user credentials.
+    User(MacroUserAuthentication),
+    /// A caller authenticated with a bot token.
+    Bot(BotAuthentication),
+    /// An internally authenticated service, optionally acting for a user.
+    Internal(Option<MacroUserAuthentication>),
+}
+
+impl MacroAuthorization {
+    /// Return the authenticated or verified user the caller is acting for.
+    pub fn acting_user(&self) -> Option<&MacroUserAuthentication> {
+        match self {
+            Self::User(user) => Some(user),
+            Self::Bot(bot) => bot.acting_user.as_ref(),
+            Self::Internal(user) => user.as_ref(),
+        }
+    }
+
+    /// Return whether the caller authenticated as an internal service.
+    pub fn is_internal(&self) -> bool {
+        matches!(self, Self::Internal(_))
+    }
+
+    /// Return the authenticated bot principal, when the caller is a bot.
+    pub fn bot(&self) -> Option<&BotAuthentication> {
+        match self {
+            Self::Bot(bot) => Some(bot),
+            Self::User(_) | Self::Internal(_) => None,
+        }
+    }
+}
+
+/// Unverified acting-user claims presented by a bot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BotActingUserClaims {
+    /// The claimed Macro user identifier.
+    pub user_id: Option<String>,
+    /// The claimed FusionAuth user identifier.
+    pub fusion_user_id: Option<String>,
+    /// The claimed organization identifier.
+    pub organization_id: Option<i32>,
+}
 
 /// Identity claims presented by an internally authenticated caller.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -50,4 +129,10 @@ pub enum MacroAuthorizationError {
     /// The supplied credential is otherwise invalid.
     #[error("invalid credentials")]
     InvalidCredentials,
+    /// The authenticated bot is not authorized to act for the claimed user.
+    #[error("acting user not authorized")]
+    ActingUserNotAuthorized,
+    /// Authorization could not be completed because a required service failed.
+    #[error("authorization unavailable")]
+    Unavailable,
 }
