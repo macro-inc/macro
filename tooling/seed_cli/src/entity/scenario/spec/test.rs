@@ -52,7 +52,7 @@ fn scenario_marker_shape() {
 fn example_scenario_parses() {
     let spec = example();
     assert_eq!(spec.scenario, "team-perms");
-    assert_eq!(spec.users.len(), 5);
+    assert_eq!(spec.users.len(), 6);
     assert_eq!(spec.user_id("alice"), "macro|alice@seed.macro.local");
 }
 
@@ -66,7 +66,7 @@ fn team_and_channel_derivations() {
 
     let mut hq_members = spec.channel_members("acme-hq");
     hq_members.sort();
-    assert_eq!(hq_members, vec!["alice", "bob", "carol"]);
+    assert_eq!(hq_members, vec!["alice", "bob", "carol", "erin"]);
     assert_eq!(spec.channel_owner("acme-hq"), "alice");
 
     assert_eq!(spec.channel_owner("dm-alice-dave"), "alice");
