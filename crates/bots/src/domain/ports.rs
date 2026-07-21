@@ -1,9 +1,9 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken, BotTokenCandidate,
-    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, PatchBotRequest,
+    ActingUser, ActingUserClaims, AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken,
+    BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
@@ -47,6 +47,19 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'static>,
         team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Resolve acting-user claims to user-store facts.
+    fn find_acting_user(
+        &self,
+        claims: &ActingUserClaims,
+    ) -> impl Future<Output = Result<Option<ActingUser>, Self::Err>> + Send;
+
+    /// Check whether a bot is an active channel participant.
+    fn bot_active_in_channel(
+        &self,
+        channel_id: Uuid,
+        bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Patch an active bot.
