@@ -1,6 +1,7 @@
 use axum::{Router, routing::post};
+use macro_authorization::MacroAuthorizationService;
 
-use crate::api::context::SearchHandlerState;
+use crate::api::context::{SearchAuthorizationService, SearchRouterState};
 
 pub(in crate::api) mod call_record;
 pub(in crate::api) mod channel;
@@ -14,11 +15,18 @@ pub mod simple;
 pub(in crate::api::search) mod terms;
 pub mod unified;
 
-pub fn router() -> Router<SearchHandlerState> {
+pub fn router() -> Router<SearchRouterState> {
+    router_with_authorization::<SearchAuthorizationService>()
+}
+
+pub(crate) fn router_with_authorization<Auth>() -> Router<SearchRouterState<Auth>>
+where
+    Auth: MacroAuthorizationService,
+{
     Router::new()
-        .route("/", post(unified::handler))
-        .nest("/simple", simple::router())
-        .nest("/channel", channel::router())
+        .route("/", post(unified::handler::<Auth>))
+        .nest("/simple", simple::router_with_authorization::<Auth>())
+        .nest("/channel", channel::router_with_authorization::<Auth>())
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

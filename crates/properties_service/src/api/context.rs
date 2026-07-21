@@ -23,5 +23,5 @@ pub type PropertiesService = PropertiesServiceImpl<
 >;
 
 /// Minimal state required by properties handlers.
-pub type PropertiesHandlerState =
-    PropertiesRouterState<PropertiesService, EntityAccessServiceType, AuthorizationServiceType>;
+pub type PropertiesHandlerState<Auth = AuthorizationServiceType> =
+    PropertiesRouterState<PropertiesService, EntityAccessServiceType, Auth>;

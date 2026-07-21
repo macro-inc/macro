@@ -6,6 +6,7 @@ use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl,
     inbound::{axum_router::BotsRouterState, channel_webhook_router::ChannelBotWebhookRouterState},
+    macro_authorization_adapter::BotServiceAuthorizer,
     outbound::pg_bots_repo::PgBotsRepo,
 };
 use cal::{
@@ -90,7 +91,7 @@ use properties::{
 };
 use properties_service::PropertiesHandlerState;
 use readonly_pool::ReadOnlyPool;
-use search_service::SearchHandlerState;
+use search_service::{SearchHandlerState, SearchRouterState};
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -262,8 +263,19 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
+/// Type alias for the bots service wired into DSS.
+pub(crate) type DssBotService =
+    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
+
 /// Type alias for the authorization service.
-pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+pub(crate) type AuthorizationService =
+    MacroAuthorizationServiceImpl<MacroAuthJwtValidator, BotServiceAuthorizer<DssBotService>>;
+
+/// Type alias for the properties router state.
+pub(crate) type DssPropertiesHandlerState = PropertiesHandlerState<AuthorizationService>;
+
+/// Type alias for the search router state.
+pub(crate) type DssSearchRouterState = SearchRouterState<AuthorizationService>;
 
 /// Type alias for the documents router state.
 pub(crate) type DocumentsState =
@@ -312,10 +324,6 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
-
-/// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -462,9 +470,9 @@ env_var! {
     pub struct DocumentStorageServiceAuthKey;
 }
 
-impl From<&ApiContext> for PropertiesHandlerState {
+impl From<&ApiContext> for DssPropertiesHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        PropertiesHandlerState::new(
+        DssPropertiesHandlerState::new(
             ctx.properties_service.clone(),
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
@@ -472,26 +480,28 @@ impl From<&ApiContext> for PropertiesHandlerState {
     }
 }
 
-impl FromRef<ApiContext> for PropertiesHandlerState {
+impl FromRef<ApiContext> for DssPropertiesHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
-        PropertiesHandlerState::from(ctx)
+        DssPropertiesHandlerState::from(ctx)
     }
 }
 
-impl From<&ApiContext> for SearchHandlerState {
+impl From<&ApiContext> for DssSearchRouterState {
     fn from(ctx: &ApiContext) -> Self {
-        SearchHandlerState {
-            db: ctx.readonly_db.clone(),
-            opensearch_client: ctx.opensearch_client.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
+        Self {
+            handler_state: SearchHandlerState {
+                db: ctx.readonly_db.clone(),
+                opensearch_client: ctx.opensearch_client.clone(),
+                entity_access_service: ctx.entity_access_service.clone(),
+            },
             authorization_state: ctx.authorization_state.clone(),
         }
     }
 }
 
-impl FromRef<ApiContext> for SearchHandlerState {
+impl FromRef<ApiContext> for DssSearchRouterState {
     fn from_ref(ctx: &ApiContext) -> Self {
-        SearchHandlerState::from(ctx)
+        DssSearchRouterState::from(ctx)
     }
 }
 

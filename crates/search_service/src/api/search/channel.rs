@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use crate::api::context::{SearchAuthorizationService, SearchHandlerState};
+use crate::api::context::{SearchHandlerState, SearchRouterState};
 use crate::api::search::SearchPaginationParams;
 use axum::{
     Router,
@@ -13,7 +13,7 @@ use axum::{
     routing::post,
 };
 use channels::domain::models::ChannelHistoryInfo;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
@@ -292,19 +292,25 @@ pub fn construct_search_result(
     Ok(result)
 }
 
-pub fn router() -> Router<SearchHandlerState> {
+pub(super) fn router_with_authorization<Auth>() -> Router<SearchRouterState<Auth>>
+where
+    Auth: MacroAuthorizationService,
+{
     Router::new()
-        .route("/", post(handler))
-        .route("/name", post(name_handler))
+        .route("/", post(handler::<Auth>))
+        .route("/name", post(name_handler::<Auth>))
 }
 
 /// Internal viewer-aware channel name search used by AI NameSearch.
-pub async fn name_handler(
+pub async fn name_handler<Auth>(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelNameSearchRequest>,
-) -> Result<Json<ChannelNameSearchResponse>, SearchError> {
+) -> Result<Json<ChannelNameSearchResponse>, SearchError>
+where
+    Auth: MacroAuthorizationService,
+{
     if !authorization.is_internal_access {
         return Err(SearchError::InternalAccessRequired);
     }
@@ -373,12 +379,15 @@ pub async fn name_handler(
         (status = 500, body=model::response::ErrorResponse),
     )
 )]
-pub async fn handler(
+pub async fn handler<Auth>(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
-) -> Result<Json<ChannelSearchResponse>, SearchError> {
+) -> Result<Json<ChannelSearchResponse>, SearchError>
+where
+    Auth: MacroAuthorizationService,
+{
     let user_id = authorization.user_context.user_id.clone();
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);

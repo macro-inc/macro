@@ -1,6 +1,6 @@
 use super::SearchPaginationParams;
 use crate::api::{
-    context::{SearchAuthorizationService, SearchHandlerState},
+    context::SearchHandlerState,
     search::{
         crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
         enrich::enrich_search_response,
@@ -11,7 +11,7 @@ use axum::{
     extract::{self, State},
     response::Json,
 };
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::response::ErrorResponse;
 use models_search::unified::{
     UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
@@ -37,12 +37,15 @@ use std::cmp::Ordering;
             (status = 500, body=ErrorResponse),
     )
 )]
-pub async fn handler(
+pub async fn handler<Auth>(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
-) -> Result<Json<UnifiedSearchResponse>, SearchError> {
+) -> Result<Json<UnifiedSearchResponse>, SearchError>
+where
+    Auth: MacroAuthorizationService,
+{
     let user_context = &authorization.user_context;
 
     tracing::info!(

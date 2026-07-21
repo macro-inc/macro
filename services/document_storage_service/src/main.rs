@@ -14,6 +14,10 @@ use crate::{
 };
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
+use bots::{
+    domain::service::BotServiceImpl, macro_authorization_adapter::BotServiceAuthorizer,
+    outbound::pg_bots_repo::PgBotsRepo,
+};
 use cal::{
     domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
     inbound::cal_webhook_router::CalWebhookRouterState,
@@ -77,7 +81,10 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -259,13 +266,23 @@ async fn main() -> anyhow::Result<()> {
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
-    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
+    let bots_repo = PgBotsRepo::new(db.clone());
+    let bots_service = BotServiceImpl::new(bots_repo, macro_event_broker.clone());
+
+    let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
         InternalAuthConfig {
             api_key: dss_auth_key.as_ref().to_string(),
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
-    )));
+    )
+    .with_bot_authorizer(BotServiceAuthorizer::new(bots_service.clone()));
+    let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -423,11 +440,6 @@ async fn main() -> anyhow::Result<()> {
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
-
-    let macro_event_broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-    );
 
     let project_service = Arc::new(ProjectServiceImpl::new(
         PgProjectRepo::new(db.clone()),
@@ -783,9 +795,6 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
-    let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
-    let bots_service =
-        bots::domain::service::BotServiceImpl::new(bots_repo.clone(), macro_event_broker.clone());
     let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(

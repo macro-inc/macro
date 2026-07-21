@@ -3,7 +3,7 @@ use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 use crate::api::search::crm_company;
 use crate::api::search::simple::simple_chat;
 use crate::api::{
-    context::{SearchAuthorizationService, SearchHandlerState},
+    context::SearchHandlerState,
     search::{SearchPaginationParams, simple::SearchError},
 };
 use axum::{
@@ -12,7 +12,7 @@ use axum::{
 };
 use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
-use macro_authorization::MacroAuthorizationExtractor;
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
@@ -645,12 +645,15 @@ pub(in crate::api::search) async fn perform_unified_search(
             (status = 500, body=ErrorResponse),
     )
 )]
-pub async fn handler(
+pub async fn handler<Auth>(
     State(ctx): State<SearchHandlerState>,
-    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
+    authorization: MacroAuthorizationExtractor<Auth>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
-) -> Result<Json<SimpleSearchResponse>, SearchError> {
+) -> Result<Json<SimpleSearchResponse>, SearchError>
+where
+    Auth: MacroAuthorizationService,
+{
     let user_context = &authorization.user_context;
 
     tracing::info!(
