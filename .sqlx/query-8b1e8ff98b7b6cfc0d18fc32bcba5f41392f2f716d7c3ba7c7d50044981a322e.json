@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,\n                t.allow_non_admin_invites,\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE t.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "auto_join_domain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "enterprise",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "allow_non_admin_invites",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "crm_enabled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8b1e8ff98b7b6cfc0d18fc32bcba5f41392f2f716d7c3ba7c7d50044981a322e"
+}

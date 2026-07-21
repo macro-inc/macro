@@ -36,6 +36,12 @@ export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
   return VALID_MARK_DONE_LIST_VIEWS.includes(`${view}-${tabId}`);
 };
 
+/** Already-done emails are skipped by mark-done (they appear alongside
+ *  not-done rows in views that show done content, e.g. mail "All"). done
+ *  state is email-specific; other entity types are never filtered. */
+const isMarkDoneTarget = (e: EntityData) =>
+  !(e.type === 'email' && e.done === true);
+
 type MakeMarkDoneOptions = {
   userId?: () => string | undefined;
   notificationSource: () => NotificationSource;
@@ -55,9 +61,15 @@ type MarkDoneVariables = {
   /** Receives the undo handle once the mark-done is pushed onto the undo
    *  stack, so callers (e.g. undo-send) can reverse it programmatically. */
   onUndoHandle?: (handle: UndoHandle) => void;
+  /** Navigates the view back to the marked entity on undo, when marking done
+   *  navigated away to the next item. */
+  navigateBack?: () => void;
 };
 
-type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
+type MarkDoneExecuteOpts = Pick<
+  MarkDoneVariables,
+  'silent' | 'onUndoHandle' | 'navigateBack'
+>;
 
 type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
   nextEntityId?: string;
@@ -169,6 +181,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           if (toastId !== undefined) toast.dismiss(toastId);
           variables.restoreFocus?.();
           restoreSoupFocus(firstEntityId, inPreview);
+          variables.navigateBack?.();
         },
         onRedone: showToast,
       };
@@ -201,18 +214,24 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     restoreFocus?: () => void,
     opts?: MarkDoneExecuteOpts
   ) => {
+    // Skip already-done emails so a mixed selection (e.g. done + not-done rows
+    // in mail "All") doesn't re-archive the done ones or overcount the toast.
+    const targets = entities.filter(isMarkDoneTarget);
+    if (targets.length === 0) return;
+
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
-      entities,
+      entities: targets,
       notificationSource: notificationSource(),
       scopeChannelNotificationsToEntity: scopeChannelNotificationsToEntity(),
     });
     await mutation.mutateAsync({
-      entities,
+      entities: targets,
       emailIds,
       notificationIds,
       restoreFocus,
       silent: opts?.silent,
       onUndoHandle: opts?.onUndoHandle,
+      navigateBack: opts?.navigateBack,
     });
   };
 
@@ -222,8 +241,14 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     onNavigate?: (entity: EntityData) => void,
     opts?: MarkDoneExecuteWithSoupOpts
   ) => {
+    // Apply execute's already-done filter up front so navigation, selection
+    // clearing, collapse, and the undo target all reflect what's actually
+    // marked (and nothing happens when nothing will be).
+    const targets = entities.filter(isMarkDoneTarget);
+    if (targets.length === 0) return;
+
     const focusedIdBeforeMarkDone = soup.focus.id();
-    const markedEntityIds = new Set(entities.map((entity) => entity.id));
+    const markedEntityIds = new Set(targets.map((entity) => entity.id));
     const adjacentRow = (direction: 1 | -1) => {
       let previousCandidateIndex: number | undefined;
 
@@ -257,7 +282,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     if (soup.collapseEntity.shouldCollapse()) {
       const collapse = soup.collapseEntity.callback();
       if (collapse) {
-        await Promise.all(entities.map((entity) => collapse(entity.id)));
+        await Promise.all(targets.map((entity) => collapse(entity.id)));
       }
     }
 
@@ -272,7 +297,16 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       onNavigate?.(nextRow.original);
     }
 
-    await execute(entities, restoreFocus, opts);
+    // When marking done navigated the view to the next item, undo navigates
+    // back to the marked entity through the same callback.
+    const firstEntity = targets[0];
+    const navigateBack =
+      opts?.navigateBack ??
+      (nextRow && onNavigate && firstEntity
+        ? () => onNavigate(firstEntity)
+        : undefined);
+
+    await execute(targets, restoreFocus, { ...opts, navigateBack });
   };
 
   return { canExecute, execute, executeWithSoup };

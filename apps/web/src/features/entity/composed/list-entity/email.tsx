@@ -1,5 +1,6 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { useEmailLinksContext } from '@core/context/emailLinks';
 import { cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import { DraftBadge } from '../../components/Badges';
@@ -11,7 +12,6 @@ import {
   type EntityData,
   isEmailEntity,
 } from '../../types/entity';
-import { useEmailLinks } from './email-links-context';
 
 /**
  * Resolves the linked inbox a thread belongs to, but only when the user has
@@ -20,7 +20,7 @@ import { useEmailLinks } from './email-links-context';
  * thread shared with the user that isn't one of their own/delegated inboxes.
  */
 export function useOwningInbox(entity: Accessor<EmailEntity | undefined>) {
-  const links = useEmailLinks();
+  const { links } = useEmailLinksContext();
   return createMemo(() => {
     const linkId = entity()?.linkId;
     if (!linkId) return undefined;

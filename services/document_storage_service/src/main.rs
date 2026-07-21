@@ -780,7 +780,8 @@ async fn main() -> anyhow::Result<()> {
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
     let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
-    let bots_service = bots::domain::service::BotServiceImpl::new(bots_repo.clone());
+    let bots_service =
+        bots::domain::service::BotServiceImpl::new(bots_repo.clone(), macro_event_broker.clone());
     let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(

@@ -38,6 +38,7 @@ ports = [
   "dep:model_notifications",
   "dep:notification",
   "dep:tokio",
+  "macro_event_broker/ports",
 ]
 
 [dependencies]
@@ -55,6 +56,8 @@ contacts = { path = "../contacts", default-features = false, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
 ] }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 non_empty = { path = "../non_empty" }

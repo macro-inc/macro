@@ -1,5 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import type { EntityItem } from '@core/context/quickAccess';
+import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
 import {
   type SearchSoupQueryArgs,
@@ -8,6 +8,8 @@ import {
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 
+const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
+
 type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
   enabled?: Accessor<boolean | undefined>;
@@ -15,18 +17,30 @@ type UseEmailSearchMentionOptions = {
 
 type UseEmailSearchMentionResult = {
   emails: Accessor<EntityItem[]>;
-  emailSearchQuery: ReturnType<typeof useSearchSoupQuery>;
+  totalCount: Accessor<number>;
+  hasMore: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
 };
 
 /**
- * Hook for managing email mentions in the mentions menu with query-based search.
+ * Provides email mentions through unified search by default. The Quick Access
+ * path remains available behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
 ): UseEmailSearchMentionResult {
   const { searchTerm, enabled } = options;
+  const listEnabled = () => enabled?.() !== false;
+  const quickAccess = useQuickAccess();
+  const usesQuickAccess = () =>
+    USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS && quickAccess.usesRecordSelection();
+  const cachedEmails = quickAccess.useList({
+    buckets: ['email'],
+    searchTerm,
+    enabled: () => usesQuickAccess() && listEnabled(),
+  });
 
-  // Build search query args for remote email search
   const args = createLazyMemo((): SearchSoupQueryArgs => {
     return {
       params: {
@@ -46,10 +60,10 @@ export function useEmailSearchMention(
   });
 
   const emailSearchQuery = useSearchSoupQuery(args, () => ({
-    enabled: enabled?.(),
+    enabled: !usesQuickAccess() && listEnabled(),
   }));
 
-  const emailList = createLazyMemo((): EntityItem[] => {
+  const remoteEmailList = createLazyMemo((): EntityItem[] => {
     if (emailSearchQuery.status !== 'success') return [];
     return emailSearchQuery.data
       .filter((e) => e.type === 'email')
@@ -76,13 +90,32 @@ export function useEmailSearchMention(
   });
 
   const emails = createLazyMemo((): EntityItem[] => {
+    if (usesQuickAccess()) return cachedEmails.items();
+
     const term = searchTerm();
-    if (!term) return emailList();
-    return emailSearch(emailList(), term).map(({ item }) => item);
+    const remoteEmails = remoteEmailList();
+    if (!term) return remoteEmails;
+    return emailSearch(remoteEmails, term).map(({ item }) => item);
   });
 
   return {
     emails,
-    emailSearchQuery,
+    totalCount: () =>
+      usesQuickAccess() ? cachedEmails.totalCount() : emails().length,
+    hasMore: () =>
+      usesQuickAccess()
+        ? cachedEmails.hasMore()
+        : Boolean(emailSearchQuery.hasNextPage),
+    isLoadingMore: () =>
+      usesQuickAccess()
+        ? cachedEmails.isLoadingMore()
+        : emailSearchQuery.isFetching,
+    loadMore: async () => {
+      if (usesQuickAccess()) {
+        await cachedEmails.loadMore();
+      } else if (emailSearchQuery.hasNextPage) {
+        await emailSearchQuery.fetchNextPage();
+      }
+    },
   };
 }

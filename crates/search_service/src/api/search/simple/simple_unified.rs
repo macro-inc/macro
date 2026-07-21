@@ -3,16 +3,16 @@ use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 use crate::api::search::crm_company;
 use crate::api::search::simple::simple_chat;
 use crate::api::{
-    context::SearchHandlerState,
+    context::{SearchAuthorizationService, SearchHandlerState},
     search::{SearchPaginationParams, simple::SearchError},
 };
 use axum::{
-    Extension,
     extract::{self, State},
     response::Json,
 };
 use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
+use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
@@ -647,10 +647,12 @@ pub(in crate::api::search) async fn perform_unified_search(
 )]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
-    user_context: Extension<UserContext>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
+    let user_context = &authorization.user_context;
+
     tracing::info!(
         user_id = user_context.user_id,
         query = ?req.query,
@@ -660,7 +662,7 @@ pub async fn handler(
 
     // CRM opt-in is wired through the unified `/search` endpoint only.
     let (results, _next_cursor) =
-        perform_unified_search(&ctx, &user_context, None, query_params, req).await?;
+        perform_unified_search(&ctx, user_context, None, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 

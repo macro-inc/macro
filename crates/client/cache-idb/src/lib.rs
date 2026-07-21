@@ -4,7 +4,8 @@
 //! One stable IndexedDB database per cache scope. Disposable normalized
 //! records are versioned through metadata, while queued mutations and their
 //! optimistic layers remain discoverable across record-schema changes.
-//! Postcard payloads are stored as `Uint8Array` values.
+//! Postcard payloads are stored in indexable record envelopes whose `value`
+//! property is a `Uint8Array`.
 //!
 //! wasm32-only; on other targets this crate is an empty shell so workspace
 //! `cargo test` stays green.

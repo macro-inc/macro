@@ -138,7 +138,7 @@ impl TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -148,12 +148,12 @@ impl TeamRepositoryImpl {
             r#"
             INSERT INTO team (id, name, owner_id, seat_count, subscription_id, paying)
             VALUES ($1, $2, $3, 1, $4, TRUE)
-            RETURNING id, name, slug, owner_id, enterprise
+            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites
             "#,
             id,
             team_name,
             user_id.as_ref(),
-            subscription_id.to_string(),
+            subscription_id.map(|s| s.to_string()),
         )
         .try_map(|row| {
             Ok(Team {
@@ -168,6 +168,7 @@ impl TeamRepositoryImpl {
                 // New teams start without an auto-join domain.
                 auto_join_domain: None,
                 enterprise: row.enterprise,
+                allow_non_admin_invites: row.allow_non_admin_invites,
             })
         })
         .fetch_one(&mut *transaction)
@@ -376,7 +377,7 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
-        subscription_id: &stripe::SubscriptionId,
+        subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
@@ -1080,6 +1081,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let team = sqlx::query!(
             r#"
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
+                t.allow_non_admin_invites,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1098,6 +1100,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 crm_enabled: row.crm_enabled,
                 auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
+                allow_non_admin_invites: row.allow_non_admin_invites,
             })
         })
         .fetch_one(&self.pool)
@@ -1136,6 +1139,7 @@ impl TeamRepository for TeamRepositoryImpl {
         let teams = sqlx::query!(
             r#"
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
+                t.allow_non_admin_invites,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1155,6 +1159,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 crm_enabled: row.crm_enabled,
                 auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
+                allow_non_admin_invites: row.allow_non_admin_invites,
             })
         })
         .fetch_all(&self.pool)
@@ -1479,6 +1484,43 @@ impl TeamRepository for TeamRepositoryImpl {
         transaction.commit().await.map_err(TeamError::from)?;
 
         Ok(new_domain)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<bool, TeamError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT allow_non_admin_invites
+            FROM team
+            WHERE id = $1
+            "#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(TeamError::TeamDoesNotExist)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn toggle_allow_non_admin_invites(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<bool, TeamError> {
+        sqlx::query_scalar!(
+            r#"
+            UPDATE team
+            SET allow_non_admin_invites = NOT allow_non_admin_invites
+            WHERE id = $1
+            RETURNING allow_non_admin_invites
+            "#,
+            team_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(TeamError::TeamDoesNotExist)
     }
 
     #[tracing::instrument(skip(self), err)]

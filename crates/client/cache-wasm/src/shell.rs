@@ -4,6 +4,7 @@ use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
+use cache_core::record_selection::{RecordCursor, RecordSelection};
 use cache_core::value::EntityKey;
 use cache_idb::IdbStorage;
 use serde::{Deserialize, Serialize};
@@ -189,6 +190,16 @@ fn parse_variables(
     serde_wasm_bindgen::from_value(variables).map_err(err_js)
 }
 
+fn parse_record_cursor(cursor: JsValue) -> Result<Option<RecordCursor>, JsValue> {
+    if cursor.is_undefined() || cursor.is_null() {
+        Ok(None)
+    } else {
+        serde_wasm_bindgen::from_value(cursor)
+            .map(Some)
+            .map_err(err_js)
+    }
+}
+
 fn parse_vec<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<Vec<T>, JsValue> {
     if value.is_undefined() || value.is_null() {
         return Ok(Vec::new());
@@ -223,6 +234,29 @@ impl CacheEngine {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
             })
+        })
+    }
+
+    /// Projects normalized records through a named GraphQL fragment.
+    #[wasm_bindgen(js_name = readRecords)]
+    pub fn read_records(
+        &self,
+        document: String,
+        fragment_name: String,
+        cursor: JsValue,
+        limit: u32,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
+            let cursor = parse_record_cursor(cursor)?;
+            let page = engine
+                .lock()
+                .await
+                .read_records(&selection, cursor.as_ref(), limit as usize)
+                .await
+                .map_err(err_js)?;
+            to_js(&page)
         })
     }
 

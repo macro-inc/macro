@@ -4522,6 +4522,162 @@ export const getBatchPreviewHandlerResponse = zod.object({
 
 /**
  * Returns document metadata, user access level, and view location.
+ * @summary Handler for `GET /documents/slug/{slug}`.
+ */
+export const getDocumentByTeamSlugParams = zod.object({
+  slug: zod.string().describe('Team-task reference, such as ENG-42'),
+});
+
+export const getDocumentByTeamSlugResponse = zod.object({
+  data: zod
+    .object({
+      items: zod
+        .array(
+          zod.union([
+            zod.object({
+              branchedFromId: zod
+                .string()
+                .nullish()
+                .describe('The id of the document this document branched from'),
+              branchedFromVersionId: zod
+                .number()
+                .nullish()
+                .describe(
+                  'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+                ),
+              createdAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the document was created'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the document was deleted'),
+              documentFamilyId: zod
+                .number()
+                .nullish()
+                .describe(
+                  'The id of the document family this document belongs to'
+                ),
+              documentVersionId: zod
+                .number()
+                .describe(
+                  'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+                ),
+              fileType: zod
+                .string()
+                .nullish()
+                .describe('The file type of the document (e.g. pdf, docx)'),
+              id: zod.string().describe('The document id'),
+              name: zod.string().describe('The name of the document'),
+              owner: zod.string().describe('The owner of the document'),
+              projectId: zod
+                .string()
+                .nullish()
+                .describe(
+                  'The id of the project that this document belongs to'
+                ),
+              sha: zod
+                .string()
+                .nullish()
+                .describe(
+                  'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+                ),
+              subType: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          is_completed: zod
+                            .boolean()
+                            .describe(
+                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                            ),
+                          type: zod.enum(['task']),
+                        })
+                        .describe(
+                          'A task document with its associated properties'
+                        ),
+                      zod
+                        .object({
+                          type: zod.enum(['snippet']),
+                        })
+                        .describe('A snippet document — reusable markdown'),
+                    ])
+                    .describe(
+                      'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
+                    ),
+                ])
+                .optional(),
+              updatedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'The time the document instance \/ document BOM was updated'
+                ),
+              type: zod.enum(['document']),
+            }),
+            zod.object({
+              createdAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was created'),
+              deletedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was deleted'),
+              id: zod.string().describe('The chat uuid'),
+              isPersistent: zod.boolean(),
+              model: zod
+                .string()
+                .nullish()
+                .describe('The model used to generate the chat'),
+              name: zod.string().describe('The name of the chat'),
+              projectId: zod
+                .string()
+                .nullish()
+                .describe('The project id of the chat'),
+              tokenCount: zod.number().nullish(),
+              updatedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was last updated'),
+              userId: zod.string().describe('Who the chat belongs to'),
+              type: zod.enum(['chat']),
+            }),
+            zod.object({
+              createdAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the project was created'),
+              deletedAt: zod.iso.datetime({}).nullish(),
+              id: zod.string().describe('The id of the project'),
+              name: zod.string().describe('The name of the project'),
+              parentId: zod
+                .string()
+                .nullish()
+                .describe('The parent project id'),
+              updatedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe('The time the project was updated'),
+              userId: zod
+                .string()
+                .describe('The user id of who created the project'),
+              type: zod.enum(['project']),
+            }),
+          ])
+        )
+        .describe('The items returned from the call'),
+    })
+    .describe('Data to be returned'),
+  error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/{document_id}`.
  */
 export const getDocumentParams = zod.object({

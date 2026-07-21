@@ -51,6 +51,11 @@ impl TeamPlan {
     }
 }
 
+/// Maximum number of members (including the owner) a team may have without a
+/// Stripe subscription. Teams at or under this size are free; growing past it
+/// requires the owner to subscribe.
+pub const FREE_TEAM_MAX_MEMBERS: i32 = 5;
+
 #[derive(
     Eq,
     PartialEq,
@@ -334,6 +339,9 @@ pub struct Team {
     /// billed out-of-band; membership changes skip all Stripe subscription
     /// bookkeeping (no seat counts, no subscription backfill, no paying check).
     pub(crate) enterprise: bool,
+    /// Whether non-admin members may invite users to the team. Defaults to
+    /// true; admins can turn it off so only admins/owners may invite.
+    pub(crate) allow_non_admin_invites: bool,
 }
 
 impl Team {
@@ -355,6 +363,7 @@ impl Team {
             crm_enabled,
             auto_join_domain: None,
             enterprise,
+            allow_non_admin_invites: true,
         }
     }
 }
@@ -393,6 +402,11 @@ impl Team {
     /// Whether this team is on an enterprise license
     pub fn enterprise(&self) -> bool {
         self.enterprise
+    }
+
+    /// Whether non-admin members may invite users to the team
+    pub fn allow_non_admin_invites(&self) -> bool {
+        self.allow_non_admin_invites
     }
 }
 
@@ -515,6 +529,9 @@ pub enum InviteUsersToTeamError {
     /// Not enough open seats
     #[error("Not enough open seats")]
     NotEnoughOpenSeats,
+    /// The team only allows admins to invite and the caller is not an admin
+    #[error("only team admins may invite users to this team")]
+    NonAdminInvitesDisabled,
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),
@@ -641,6 +658,9 @@ pub enum JoinTeamError {
     #[error("Underlying user roles and permissions error")]
     /// Underlying user roles and permissions error
     AddRolesToUserError(#[from] UserRolesAndPermissionsError),
+    /// The team has no subscription and is already at the free member limit
+    #[error("Team is at the free member limit of {FREE_TEAM_MAX_MEMBERS}")]
+    FreeTeamLimitReached,
 }
 
 /// Errors for toggling a team's auto-join domain

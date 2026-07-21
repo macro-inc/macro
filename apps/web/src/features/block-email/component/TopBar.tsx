@@ -38,6 +38,7 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import CheckIcon from '@phosphor/check.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
 import TrashIcon from '@phosphor/trash.svg';
+import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
@@ -86,15 +87,21 @@ export function TopBar(props: {
     return links.some((link) => link.id === thread.link_id);
   };
 
-  const markDone = () => {
-    // Prefer the active Mark done command so it drives soup navigation and
-    // notifications; fall back to archiving the thread directly.
-    const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
-    if (command) {
-      runCommand(command);
-    } else {
-      emailCtx.archiveThread();
+  const isDone = () => emailCtx.isThreadDone();
+
+  const toggleMarkDone = () => {
+    if (isDone()) {
+      emailCtx.markThreadNotDone();
+      return;
     }
+    // Prefer the active Mark done command so it drives soup navigation and
+    // notifications; fall back to archiving the thread directly. A command
+    // can be found but still decline (condition/handler returns false, e.g.
+    // the triage registration when not opened from inbox/mail), so gate on
+    // it actually capturing.
+    const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
+    if (command && runCommand(command).commandCaptured) return;
+    emailCtx.archiveThread();
   };
 
   const trashThread = () => {
@@ -164,12 +171,6 @@ export function TopBar(props: {
       icon: AnimatedTaskIcon,
       action: () => props.onCreateTask?.(),
       condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
-    },
-    {
-      label: 'Mark done',
-      icon: CheckIcon,
-      action: markDone,
-      condition: isOwnThread,
     },
     {
       label: 'Delete',
@@ -245,17 +246,24 @@ export function TopBar(props: {
       </SplitTitleFileMenu>
 
       {/* Desktop-only Mark done button, sitting just left of the Previous item
-          caret. On mobile this action lives in the bottom reply bar instead. */}
+          caret. On mobile this action lives in the bottom reply bar instead.
+          A done thread shows a bold accent check and unarchives on click. */}
       <Show when={!isMobile()}>
         <SplitHeaderRight>
           <Show when={isOwnThread()}>
             <Button
               class="p-1 rounded-lg"
-              label="Mark done"
-              hotkey={TOKENS.entity.action.markDone}
-              onClick={markDone}
+              label={isDone() ? 'Mark as not done' : 'Mark done'}
+              hotkey={
+                isDone()
+                  ? TOKENS.entity.action.markNotDone
+                  : TOKENS.entity.action.markDone
+              }
+              onClick={toggleMarkDone}
             >
-              <CheckIcon class="size-4" />
+              <Show when={isDone()} fallback={<CheckIcon class="size-4" />}>
+                <CheckBoldIcon class="size-4 text-accent" />
+              </Show>
             </Button>
           </Show>
         </SplitHeaderRight>

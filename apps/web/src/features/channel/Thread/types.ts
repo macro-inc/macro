@@ -60,6 +60,8 @@ export type ThreadProps = {
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
   targetNavigation?: ThreadTargetNavigation;
+  /** Whether the channel's Cmd+F find bar is currently open. */
+  isFindBarOpen: Accessor<boolean>;
   /** The unified input's reply binding */
   unifiedReplyTarget?: { threadId: string; replyId?: string };
   isNewMessage?: (reply: NewMessageCheckable) => boolean;

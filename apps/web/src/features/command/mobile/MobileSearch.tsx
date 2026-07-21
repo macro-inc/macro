@@ -8,6 +8,7 @@ import {
   isAskAiItem,
   isCommandItem,
   isEntityItem,
+  type PaginationControls,
   useCommandItems,
 } from '@app/features/command/useCommandItems';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
@@ -41,8 +42,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { VList } from 'virtua/solid';
+import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SearchState } from './mobileSearchState';
+
+const LOAD_MORE_THRESHOLD = 120;
 
 const CATEGORIES: PillTabItem<CategoryFilter>[] = [
   { value: 'all', label: 'All' },
@@ -67,9 +70,10 @@ function MobileSearchInner() {
 
   const query = debouncedDependent(SearchState.query, 60);
 
-  const filteredItems = useCommandItems(query, SearchState.categoryFilter, {
+  const commandItems = useCommandItems(query, SearchState.categoryFilter, {
     showSearchRow: false,
     commandScopeCommands: SearchState.commandScopeCommands,
+    searchActive: SearchState.isOpen,
   });
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);
@@ -185,7 +189,8 @@ function MobileSearchInner() {
       <Layer depth={0}>
         <div class="fixed inset-0 z-mobile-search flex flex-col bg-surface pt-(--safe-top) pr-(--safe-right) pb-[calc(var(--virtual-keyboard-height)+var(--mobile-content-inset-bottom))] pl-(--safe-left)">
           <ResultsContainer
-            nameMatchItems={filteredItems()}
+            nameMatchItems={commandItems.items()}
+            pagination={commandItems.pagination}
             fullTextItems={fullTextResults()}
             onSelectNameMatch={(item, openInNewSplit) =>
               handleItemAction(item, openInNewSplit)
@@ -267,6 +272,7 @@ function SearchInputBar(props: { onBack: () => void }) {
 
 function ResultsContainer(props: {
   nameMatchItems: CommandMenuItem[];
+  pagination: PaginationControls;
   fullTextItems: WithSearch<EntityData>[];
   onSelectNameMatch: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onSelectFullText: (entity: WithSearch<EntityData>) => void;
@@ -362,6 +368,7 @@ function ResultsContainer(props: {
               items={props.nameMatchItems}
               onSelect={props.onSelectNameMatch}
               onRowHeightMeasured={setRowHeight}
+              pagination={props.pagination}
             />
           </div>
         </Match>
@@ -402,12 +409,32 @@ function VirtualizedCommandList(props: {
   items: CommandMenuItem[];
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onRowHeightMeasured?: (height: number) => void;
+  pagination: PaginationControls;
 }) {
+  let virtualizerHandle: VirtualizerHandle | undefined;
+  const loadMoreNearEnd = () => {
+    if (
+      !virtualizerHandle ||
+      !props.pagination.hasMore() ||
+      props.pagination.isLoadingMore()
+    )
+      return;
+    const remaining =
+      virtualizerHandle.scrollSize -
+      virtualizerHandle.scrollOffset -
+      virtualizerHandle.viewportSize;
+    if (remaining <= LOAD_MORE_THRESHOLD) void props.pagination.loadMore();
+  };
+
   return (
     <VList
+      ref={(handle) => {
+        virtualizerHandle = handle;
+      }}
       data={props.items}
       style={{ height: '100%' }}
       class="scrollbar-hidden overscroll-none"
+      onScroll={loadMoreNearEnd}
     >
       {(item, index) => (
         <div

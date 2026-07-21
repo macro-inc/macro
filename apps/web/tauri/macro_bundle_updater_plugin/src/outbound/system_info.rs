@@ -2,22 +2,22 @@ use tauri::{Manager, Runtime};
 use tauri_plugin_device_info::DeviceInfoExt;
 
 use crate::domain::{
-    models::{AppInfo, Arch, Target},
+    models::{Arch, NativeAppInfo, Target},
     ports::SystemQuery,
 };
 
 /// Queries the running Tauri app for version, architecture, and OS target.
 pub struct SystemInfo<R: Runtime> {
     app_handle: tauri::AppHandle<R>,
-    embedded_bundle_build: u64,
+    native_build: u64,
 }
 
 impl<R: Runtime> SystemInfo<R> {
     /// Create a new system info query bound to the given app handle.
-    pub fn new(app_handle: tauri::AppHandle<R>, embedded_bundle_build: u64) -> Self {
+    pub fn new(app_handle: tauri::AppHandle<R>, native_build: u64) -> Self {
         Self {
             app_handle,
-            embedded_bundle_build,
+            native_build,
         }
     }
 
@@ -32,21 +32,6 @@ impl<R: Runtime> SystemInfo<R> {
         }
     }
 
-    async fn current_bundle_build(&self) -> u64 {
-        // If an OTA update has been applied, read the bundle build from its
-        // manifest; otherwise report the build embedded with this native app.
-        if let Some(s) = self
-            .app_handle
-            .try_state::<tokio::sync::Mutex<crate::inbound::plugin::PluginService>>()
-        {
-            let service = s.lock().await;
-            if let Some(build) = service.bundle_build().await {
-                return build;
-            }
-        }
-        self.embedded_bundle_build
-    }
-
     fn get_arch(&self) -> Arch {
         match std::env::consts::ARCH {
             "aarch64" => Arch::Aarch64,
@@ -59,10 +44,9 @@ impl<R: Runtime> SystemInfo<R> {
 }
 
 impl<R: Runtime> SystemQuery for SystemInfo<R> {
-    async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
-        Ok(AppInfo {
-            current_bundle_build: self.current_bundle_build().await,
-            native_build: native_build(),
+    async fn get_native_app_info(&self) -> Result<NativeAppInfo, rootcause::Report> {
+        Ok(NativeAppInfo {
+            native_build: self.native_build,
             arch: self.get_arch(),
             target: self.get_target(),
         })

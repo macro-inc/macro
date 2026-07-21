@@ -829,6 +829,7 @@ export const mapApiSoupItemToEntity = (
         hidden: item.data.hidden,
         createdAt: item.data.createdAt,
         updatedAt: item.data.updatedAt,
+        viewedAt: item.data.viewedAt,
         sortTs: item.data.updatedAt,
         frecencyScore: item.frecency_score,
         domains: item.data.domains.map((d) => ({

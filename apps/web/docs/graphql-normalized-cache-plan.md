@@ -192,10 +192,14 @@ Topology:
 | SQLite     | Tauri native | records, mutation queue, optimistic layers, and meta; WAL mode |
 | IndexedDB  | browser      | via the `idb` crate; stable per-scope DB with object stores for records, mutation queue, optimistic layers, and meta |
 
-`Storage` trait (async): `get_batch`, `put_batch`, `delete_batch`,
-`scan_prefix`, `approx_size`. Records serialized with `postcard` (stored as
-`Uint8Array` values in IDB / blobs in SQLite). Note: wasm futures are not
-`Send`, so the trait's futures are bound by `MaybeSend` (`crates/maybe_send`):
+Normalized records are serialized with `postcard`. SQLite stores the bytes in
+`records.value`; IndexedDB stores the bytes directly in the records object
+store. Both backends implement schema-neutral, entity-key-ordered record scans.
+`Storage::scan_records` selects concrete normalized types by their key ranges;
+`Engine::read_records` applies a validated named fragment, loads linked records
+in batches, includes optimistic layers, and omits incomplete projections.
+Note: wasm futures are not `Send`, so the `Storage` trait's futures
+are bound by `MaybeSend` (`crates/maybe_send`):
 `Send` on native targets — the Tauri host drives the engine directly from its
 multi-threaded runtime — and unbounded on wasm, implementable by `idb`.
 

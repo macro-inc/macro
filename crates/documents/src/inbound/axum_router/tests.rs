@@ -10,7 +10,7 @@ use embedding::embedding_provider::openai::TextEmbedding3Small;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
-        EntityType, RequiredPermission, UserTeamInfo,
+        EntityType, MemberTeamRole, RequiredPermission, TeamRole, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -22,7 +22,7 @@ use macro_authorization::{
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{
-    document::{DocumentBasic, response::DocumentResponseMetadata},
+    document::{DocumentBasic, DocumentMetadata, response::DocumentResponseMetadata},
     sync_service::SyncServiceVersionID,
 };
 use model_entity::Entity;
@@ -54,8 +54,8 @@ use crate::{
         },
         ports::{DocumentService, create::DocumentCreationService},
         response::{
-            CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
-            GetDocumentResponseData, LocationResponseV3,
+            CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
+            DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
         },
     },
     outbound::{
@@ -72,6 +72,9 @@ const LEGACY_INTERNAL_KEY: &str = "legacy-internal-key";
 const LEGACY_INTERNAL_USER_ID: &str = "macro|legacy-internal@example.com";
 const LEGACY_INTERNAL_API_KEY_HEADER: &str = "x-document-storage-service-auth-key";
 const LEGACY_INTERNAL_USER_ID_HEADER: &str = "x-document-storage-service-user-id";
+const TEST_ORGANIZATION_ID: i32 = 42;
+const TEAM_ID: Uuid = Uuid::from_u128(0x82c6f359_691f_4ff3_965a_016a2970b1a2);
+const RESOLVED_DOCUMENT_ID: &str = "resolved-document";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CreateDocumentCall {
@@ -85,10 +88,28 @@ struct UploadSnapshotCall {
     bytes: Vec<u8>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TeamSlugCall {
+    team_id: String,
+    user_id: String,
+    slug: String,
+}
+
+#[derive(Clone, Debug)]
+enum TeamSlugResult {
+    Success(String),
+    BadRequest(String),
+    NotFound(String),
+}
+
 #[derive(Default)]
 struct FakeDocumentService {
     create_calls: Mutex<Vec<CreateDocumentCall>>,
     upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
+    internal_get_calls: Mutex<Vec<String>>,
+    team_slug_calls: Mutex<Vec<TeamSlugCall>>,
+    team_slug_result: Mutex<Option<TeamSlugResult>>,
+    get_document_calls: Mutex<Vec<String>>,
 }
 
 impl FakeDocumentService {
@@ -105,6 +126,34 @@ impl FakeDocumentService {
             .expect("upload snapshot calls lock poisoned")
             .clone()
     }
+
+    fn set_team_slug_result(&self, result: TeamSlugResult) {
+        *self
+            .team_slug_result
+            .lock()
+            .expect("team slug result lock poisoned") = Some(result);
+    }
+
+    fn internal_get_calls(&self) -> Vec<String> {
+        self.internal_get_calls
+            .lock()
+            .expect("internal get calls lock poisoned")
+            .clone()
+    }
+
+    fn team_slug_calls(&self) -> Vec<TeamSlugCall> {
+        self.team_slug_calls
+            .lock()
+            .expect("team slug calls lock poisoned")
+            .clone()
+    }
+
+    fn get_document_calls(&self) -> Vec<String> {
+        self.get_document_calls
+            .lock()
+            .expect("get document calls lock poisoned")
+            .clone()
+    }
 }
 
 impl DocumentService for FakeDocumentService {
@@ -112,6 +161,11 @@ impl DocumentService for FakeDocumentService {
         &self,
         document_id: &str,
     ) -> Result<DocumentBasic, DocumentError> {
+        self.internal_get_calls
+            .lock()
+            .expect("internal get calls lock poisoned")
+            .push(document_id.to_string());
+
         Ok(DocumentBasic {
             document_id: document_id.to_string(),
             document_name: "test document".to_string(),
@@ -127,11 +181,48 @@ impl DocumentService for FakeDocumentService {
         })
     }
 
+    async fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> Result<String, DocumentError> {
+        self.team_slug_calls
+            .lock()
+            .expect("team slug calls lock poisoned")
+            .push(TeamSlugCall {
+                team_id: team_receipt.entity().entity_id.clone(),
+                user_id: team_receipt
+                    .get_authenticated_user()
+                    .expect("team receipt should have an authenticated user")
+                    .as_ref()
+                    .to_string(),
+                slug: slug.to_string(),
+            });
+
+        match self
+            .team_slug_result
+            .lock()
+            .expect("team slug result lock poisoned")
+            .clone()
+            .expect("team slug result should be configured")
+        {
+            TeamSlugResult::Success(document_id) => Ok(document_id),
+            TeamSlugResult::BadRequest(message) => Err(DocumentError::BadRequest(message)),
+            TeamSlugResult::NotFound(message) => Err(DocumentError::NotFound(message)),
+        }
+    }
+
     async fn get_document(
         &self,
-        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<GetDocumentResponseData, DocumentError> {
-        panic!("unexpected get_document call")
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+        self.get_document_calls
+            .lock()
+            .expect("get document calls lock poisoned")
+            .push(document_id.clone());
+
+        Ok(get_document_response(&document_id))
     }
 
     async fn get_document_location(
@@ -359,18 +450,118 @@ fn create_document_response(user_id: MacroUserIdStr<'static>) -> CreateDocumentR
     }
 }
 
-#[derive(Clone, Default)]
-struct FakeEntityAccessService;
+fn get_document_response(document_id: &str) -> GetDocumentResponseData {
+    GetDocumentResponseData {
+        document_metadata: DocumentMetadataWithContent::new(
+            DocumentMetadata {
+                document_id: document_id.to_string(),
+                document_version_id: 1,
+                owner: MacroUserIdStr::try_from(JWT_USER_ID.to_string())
+                    .expect("test user id should be valid"),
+                document_name: "resolved document".to_string(),
+                file_type: Some("pdf".to_string()),
+                sha: Some("test-sha".to_string()),
+                project_id: None,
+                project_name: None,
+                branched_from_id: None,
+                branched_from_version_id: None,
+                document_family_id: None,
+                document_bom: None,
+                modification_data: None,
+                created_at: None,
+                updated_at: None,
+                deleted_at: None,
+                sub_type: None,
+            },
+            DocumentContent::pending(),
+        ),
+        user_access_level: AccessLevel::View,
+        view_location: None,
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DocumentAccessCall {
+    user_id: String,
+    organization_id: Option<i64>,
+    entity_id: String,
+    entity_type: EntityType,
+}
+
+#[derive(Clone)]
+struct FakeEntityAccessService {
+    team_info: Arc<Mutex<Option<UserTeamInfo>>>,
+    deny_document_access: Arc<Mutex<bool>>,
+    document_access_calls: Arc<Mutex<Vec<DocumentAccessCall>>>,
+}
+
+impl Default for FakeEntityAccessService {
+    fn default() -> Self {
+        Self {
+            team_info: Arc::new(Mutex::new(None)),
+            deny_document_access: Arc::new(Mutex::new(false)),
+            document_access_calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
+impl FakeEntityAccessService {
+    fn set_team(&self, team_info: Option<UserTeamInfo>) {
+        *self.team_info.lock().expect("team info lock poisoned") = team_info;
+    }
+
+    fn deny_document_access(&self) {
+        *self
+            .deny_document_access
+            .lock()
+            .expect("document access result lock poisoned") = true;
+    }
+
+    fn document_access_calls(&self) -> Vec<DocumentAccessCall> {
+        self.document_access_calls
+            .lock()
+            .expect("document access calls lock poisoned")
+            .clone()
+    }
+}
 
 impl EntityAccessService for FakeEntityAccessService {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _user_id: &MacroUserId<Lowercase<'_>>,
-        _user_org_id: Option<i64>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        panic!("unexpected generate_entity_access_receipt call")
+        self.document_access_calls
+            .lock()
+            .expect("document access calls lock poisoned")
+            .push(DocumentAccessCall {
+                user_id: user_id.as_ref().to_string(),
+                organization_id: user_org_id,
+                entity_id: entity_id.to_string(),
+                entity_type,
+            });
+
+        if *self
+            .deny_document_access
+            .lock()
+            .expect("document access result lock poisoned")
+        {
+            return Err(AccessError::Unauthorized);
+        }
+
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr::try_from(user_id.as_ref().to_string())
+                .expect("test user id should be valid"),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
@@ -455,7 +646,7 @@ impl EntityAccessService for FakeEntityAccessService {
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
-        panic!("unexpected get_user_team call")
+        Ok(*self.team_info.lock().expect("team info lock poisoned"))
     }
 }
 
@@ -519,7 +710,7 @@ fn user_context(user_id: &str) -> UserContext {
         user_id: user_id.to_string(),
         fusion_user_id: "test-fusion-user".to_string(),
         permissions: None,
-        organization_id: None,
+        organization_id: Some(TEST_ORGANIZATION_ID),
     }
 }
 
@@ -541,12 +732,18 @@ impl TaskDedupNotifier for FakeTaskDedupNotifier {
     }
 }
 
-fn test_router() -> (Router, Arc<FakeDocumentService>, FakeAuthorizationService) {
+fn test_router() -> (
+    Router,
+    Arc<FakeDocumentService>,
+    FakeEntityAccessService,
+    FakeAuthorizationService,
+) {
     let pool = PgPoolOptions::new()
         .connect_lazy("postgres://postgres:postgres@localhost/documents-router-test")
         .expect("test database URL should be valid");
     let document_service = Arc::new(FakeDocumentService::default());
     let authorization_service = FakeAuthorizationService::default();
+    let access_service = FakeEntityAccessService::default();
     let lexical_client = Arc::new(LexicalClient::new(
         "unused-internal-key".to_string(),
         "http://localhost/lexical".to_string(),
@@ -572,7 +769,7 @@ fn test_router() -> (Router, Arc<FakeDocumentService>, FakeAuthorizationService)
     );
     let state = DocumentRouterState {
         service: document_service.clone(),
-        access_service: Arc::new(FakeEntityAccessService),
+        access_service: Arc::new(access_service.clone()),
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         pool,
         task_dedup_service,
@@ -587,7 +784,12 @@ fn test_router() -> (Router, Arc<FakeDocumentService>, FakeAuthorizationService)
         (),
     >(state);
 
-    (router, document_service, authorization_service)
+    (
+        router,
+        document_service,
+        access_service,
+        authorization_service,
+    )
 }
 
 fn create_request() -> Builder {
@@ -630,10 +832,137 @@ async fn send_status(router: &Router, request: Request<Body>) -> StatusCode {
     router.clone().oneshot(request).await.unwrap().status()
 }
 
+fn team_slug_request(slug: &str) -> Builder {
+    Request::get(format!("/slug/{slug}"))
+}
+
+fn team_member() -> UserTeamInfo {
+    UserTeamInfo {
+        team_id: TEAM_ID,
+        role: TeamRole::Member,
+    }
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_succeeds_without_document_id_middleware() {
+    let (router, document_service, access_service, _authorization_service) = test_router();
+    access_service.set_team(Some(team_member()));
+    document_service
+        .set_team_slug_result(TeamSlugResult::Success(RESOLVED_DOCUMENT_ID.to_string()));
+    let request = team_slug_request("ENG-42")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::empty())
+        .expect("request should build");
+
+    assert_eq!(send_status(&router, request).await, StatusCode::OK);
+    assert_eq!(
+        document_service.team_slug_calls(),
+        [TeamSlugCall {
+            team_id: TEAM_ID.to_string(),
+            user_id: JWT_USER_ID.to_string(),
+            slug: "ENG-42".to_string(),
+        }]
+    );
+    assert_eq!(
+        access_service.document_access_calls(),
+        [DocumentAccessCall {
+            user_id: JWT_USER_ID.to_string(),
+            organization_id: Some(i64::from(TEST_ORGANIZATION_ID)),
+            entity_id: RESOLVED_DOCUMENT_ID.to_string(),
+            entity_type: EntityType::Document,
+        }]
+    );
+    assert_eq!(
+        document_service.get_document_calls(),
+        [RESOLVED_DOCUMENT_ID.to_string()]
+    );
+    assert!(document_service.internal_get_calls().is_empty());
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_requires_credentials_and_team_membership() {
+    let (router, document_service, _access_service, _authorization_service) = test_router();
+    let missing_credentials = team_slug_request("ENG-42")
+        .body(Body::empty())
+        .expect("request should build");
+
+    assert_eq!(
+        send_status(&router, missing_credentials).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(document_service.team_slug_calls().is_empty());
+    assert!(document_service.internal_get_calls().is_empty());
+
+    let (router, document_service, _access_service, _authorization_service) = test_router();
+    let missing_team = team_slug_request("ENG-42")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::empty())
+        .expect("request should build");
+
+    assert_eq!(
+        send_status(&router, missing_team).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(document_service.team_slug_calls().is_empty());
+    assert!(document_service.internal_get_calls().is_empty());
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_preserves_document_access_denial() {
+    let (router, document_service, access_service, _authorization_service) = test_router();
+    access_service.set_team(Some(team_member()));
+    access_service.deny_document_access();
+    document_service
+        .set_team_slug_result(TeamSlugResult::Success(RESOLVED_DOCUMENT_ID.to_string()));
+    let request = team_slug_request("ENG-42")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::empty())
+        .expect("request should build");
+
+    assert_eq!(
+        send_status(&router, request).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(document_service.get_document_calls().is_empty());
+    assert!(document_service.internal_get_calls().is_empty());
+}
+
+#[tokio::test]
+async fn get_document_by_team_slug_preserves_domain_error_statuses() {
+    let (router, document_service, access_service, _authorization_service) = test_router();
+    access_service.set_team(Some(team_member()));
+    document_service.set_team_slug_result(TeamSlugResult::BadRequest(
+        "invalid team-task slug".to_string(),
+    ));
+    let malformed_request = team_slug_request("invalid")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::empty())
+        .expect("request should build");
+
+    assert_eq!(
+        send_status(&router, malformed_request).await,
+        StatusCode::BAD_REQUEST
+    );
+
+    document_service.set_team_slug_result(TeamSlugResult::NotFound("ENG-999".to_string()));
+    let missing_request = team_slug_request("ENG-999")
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .body(Body::empty())
+        .expect("request should build");
+
+    assert_eq!(
+        send_status(&router, missing_request).await,
+        StatusCode::NOT_FOUND
+    );
+    assert!(access_service.document_access_calls().is_empty());
+    assert!(document_service.get_document_calls().is_empty());
+    assert!(document_service.internal_get_calls().is_empty());
+}
+
 #[tokio::test]
 async fn snapshot_upload_requires_internal_api_key() {
     let snapshot = b"snapshot bytes";
-    let (router, document_service, authorization_service) = test_router();
+    let (router, document_service, _access_service, authorization_service) = test_router();
 
     let jwt_request = Request::put("/snapshot-document/snapshot")
         .header("authorization", format!("Bearer {JWT_TOKEN}"))
@@ -670,7 +999,7 @@ async fn snapshot_upload_requires_internal_api_key() {
 #[tokio::test]
 async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
     let email_attachment_id = Uuid::new_v4();
-    let (router, document_service, authorization_service) = test_router();
+    let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
         create_request()
             .header(LEGACY_INTERNAL_API_KEY_HEADER, LEGACY_INTERNAL_KEY)
@@ -698,7 +1027,7 @@ async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
 
 #[tokio::test]
 async fn standard_internal_headers_reach_the_document_service() {
-    let (router, document_service, authorization_service) = test_router();
+    let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
         create_request()
             .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
@@ -726,7 +1055,7 @@ async fn standard_internal_headers_reach_the_document_service() {
 
 #[tokio::test]
 async fn standard_internal_headers_take_precedence_over_legacy_headers() {
-    let (router, document_service, authorization_service) = test_router();
+    let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
         create_request()
             .header(INTERNAL_API_KEY_HEADER, STANDARD_INTERNAL_KEY)
@@ -762,7 +1091,7 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
 #[tokio::test]
 async fn jwt_user_cannot_create_a_document_for_an_email_attachment() {
     let email_attachment_id = Uuid::new_v4();
-    let (router, document_service, _authorization_service) = test_router();
+    let (router, document_service, _access_service, _authorization_service) = test_router();
     let request = finish_request(
         create_request().header("authorization", format!("Bearer {JWT_TOKEN}")),
         Some(email_attachment_id),

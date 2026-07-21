@@ -12,7 +12,7 @@ use axum::{
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, AdminTeamRole, BotId, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        EntityPermission, EntityType, MemberTeamRole, RequiredPermission, TeamRole, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -123,6 +123,19 @@ async fn invite_to_team_validation_error_response_is_preserved() {
 }
 
 #[tokio::test]
+async fn invite_to_free_team_at_capacity_returns_bad_request() {
+    let error =
+        InviteToTeamError::InviteUsersToTeamError(InviteUsersToTeamError::NotEnoughOpenSeats);
+    let (status, body_text, _) = response_parts(error).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body_text,
+        r#"{"message":"free team member limit reached; upgrade to invite more members"}"#
+    );
+}
+
+#[tokio::test]
 async fn remove_team_invite_not_found_response_is_preserved() {
     let (status, body_text, _) =
         response_parts(RemoveTeamInviteError::TeamInviteDoesNotExist).await;
@@ -212,7 +225,7 @@ impl TeamService for FakeTeamService {
         &self,
         _user_id: &MacroUserIdStr<'_>,
         _team_name: &str,
-        _subscription_id: &stripe::SubscriptionId,
+        _subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         panic!("unexpected create_team call")
     }
@@ -226,7 +239,7 @@ impl TeamService for FakeTeamService {
 
     async fn invite_users_to_team(
         &self,
-        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
         _invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         panic!("unexpected invite_users_to_team call")
@@ -374,6 +387,13 @@ impl TeamService for FakeTeamService {
         _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<Option<String>, ToggleAutoJoinDomainError> {
         panic!("unexpected toggle_auto_join_domain call")
+    }
+
+    async fn toggle_allow_non_admin_invites(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<bool, TeamError> {
+        panic!("unexpected toggle_allow_non_admin_invites call")
     }
 
     async fn try_join_team_by_domain(

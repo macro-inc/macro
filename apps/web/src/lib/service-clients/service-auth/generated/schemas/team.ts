@@ -10,6 +10,9 @@ import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
  * The Team struct
  */
 export interface Team {
+  /** Whether non-admin members may invite users to the team. Defaults to
+true; admins can turn it off so only admins/owners may invite. */
+  allow_non_admin_invites: boolean;
   /** The email domain new users are automatically joined to this team
 with, when automatic domain joining is enabled (None otherwise). */
   auto_join_domain?: TeamAutoJoinDomain;

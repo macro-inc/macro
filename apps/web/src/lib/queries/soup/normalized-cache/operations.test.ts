@@ -51,6 +51,7 @@ import {
   optimisticUpdateSoupItemUpdatedAt,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromDoneFilteredQueries,
 } from './operations';
 
 // -- Fixtures --
@@ -330,6 +331,58 @@ describe('removeSoupEntities', () => {
     const restored = getSoupQuery()!;
     expect(restored.pages[0].items).toHaveLength(2);
     expect(getSoupItemId(restored.pages[0].items[0])).toBe('d-1');
+  });
+});
+
+describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
+  const emailItem = (id: string): SoupApiItem =>
+    ({
+      tag: 'emailThread',
+      data: { id, inboxVisible: true },
+      frecency_score: 1,
+    }) as unknown as SoupApiItem;
+
+  // Query keys carry the compiled filter body; done-excluding views embed
+  // `emailView: 'inbox'` or a compiled `*Done: false` literal.
+  const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
+  const doneFilterKey = [
+    ...soupKeys.items._def,
+    { ef: [{ l: { NotificationDone: false } }] },
+  ];
+  const ndFilterKey = [...soupKeys.items._def, { df: [{ l: { nd: false } }] }];
+  const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
+
+  const itemsAt = (key: unknown[]) =>
+    testQueryClient
+      .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
+      .pages[0].items.map(getSoupItemId);
+
+  it('removes from done-filtered queries and keeps done-inclusive ones', () => {
+    const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
+    testQueryClient.setQueryData(inboxViewKey, data());
+    testQueryClient.setQueryData(doneFilterKey, data());
+    testQueryClient.setQueryData(ndFilterKey, data());
+    testQueryClient.setQueryData(allViewKey, data());
+
+    removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+
+    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
+    expect(itemsAt(doneFilterKey)).toEqual(['c-1']);
+    expect(itemsAt(ndFilterKey)).toEqual(['c-1']);
+    expect(itemsAt(allViewKey)).toEqual(['e-1', 'c-1']);
+  });
+
+  it('rollback restores removed rows', () => {
+    testQueryClient.setQueryData(
+      inboxViewKey,
+      mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]])
+    );
+
+    const tx = removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+    expect(itemsAt(inboxViewKey)).toEqual(['c-1']);
+
+    tx.rollback();
+    expect(itemsAt(inboxViewKey)).toEqual(['e-1', 'c-1']);
   });
 });
 

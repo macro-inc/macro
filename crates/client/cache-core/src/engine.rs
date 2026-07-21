@@ -2,7 +2,9 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
-use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormalize};
+use crate::denormalize::{
+    DenormalizeError, ReadOutcome, RecordSource, denormalize, denormalize_record,
+};
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
 use crate::link_patch::{
@@ -18,6 +20,9 @@ use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, OptimisticSource, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
     decode_optimistic_source, encode_optimistic_source,
+};
+use crate::record_selection::{
+    RecordCursor, RecordSelection, RecordSelectionError, SelectedRecordPage, validate_limit,
 };
 use crate::store::Storage;
 use crate::value::{EntityKey, Record, canonical_json};
@@ -39,6 +44,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
     LinkPatch(#[from] LinkPatchError),
     #[error(transparent)]
     QueryInspection(#[from] QueryInspectionError),
+    #[error(transparent)]
+    RecordSelection(#[from] RecordSelectionError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
@@ -414,6 +421,206 @@ impl<S: Storage> Engine<S> {
             self.deps.set_op_deps(op_id, deps);
         }
         Ok(outcome)
+    }
+
+    /// Reads complete cached records selected by a named fragment.
+    ///
+    /// Durable and optimistic-only records are merged in ascending entity-key
+    /// order. Incomplete projections are omitted, and one complete record is
+    /// read ahead before a continuation cursor is returned.
+    pub async fn read_records(
+        &mut self,
+        selection: &RecordSelection,
+        cursor: Option<&RecordCursor>,
+        limit: usize,
+    ) -> Result<SelectedRecordPage, EngineError<S::Error>> {
+        validate_limit(limit)?;
+        self.hydrate_optimistic().await?;
+
+        const SCAN_BATCH_SIZE: usize = 128;
+        let after = cursor.map(RecordCursor::entity_key).cloned();
+        let type_names: BTreeSet<_> = selection.type_names().iter().map(String::as_str).collect();
+        let optimistic = merged_optimistic(&self.optimistic);
+        let mut optimistic_candidates: BTreeSet<_> = optimistic
+            .keys()
+            .filter(|key| {
+                after.as_ref().is_none_or(|after| *key > after)
+                    && record_key_type(key).is_some_and(|name| type_names.contains(name))
+            })
+            .cloned()
+            .collect();
+        let mut storage_after = after;
+        let mut selected = Vec::new();
+        let target = limit.saturating_add(1);
+
+        loop {
+            let rows = self
+                .storage
+                .scan_records(
+                    selection.type_names(),
+                    storage_after.as_ref(),
+                    SCAN_BATCH_SIZE,
+                )
+                .await
+                .map_err(EngineError::Storage)?;
+            let storage_exhausted = rows.len() < SCAN_BATCH_SIZE;
+            let high_key = rows.last().map(|(key, _)| key.clone());
+            if let Some(high_key) = &high_key {
+                storage_after = Some(high_key.clone());
+            }
+
+            let mut candidates: BTreeMap<EntityKey, Option<Record>> = rows
+                .into_iter()
+                .map(|(key, record)| (key, Some(record)))
+                .collect();
+            let optimistic_in_batch: Vec<_> = if storage_exhausted {
+                optimistic_candidates.iter().cloned().collect()
+            } else {
+                optimistic_candidates
+                    .iter()
+                    .take_while(|key| high_key.as_ref().is_some_and(|high| *key <= high))
+                    .cloned()
+                    .collect()
+            };
+            for key in optimistic_in_batch {
+                optimistic_candidates.remove(&key);
+                candidates.entry(key).or_insert(None);
+            }
+
+            let projected = self
+                .project_record_batch(selection, candidates, &optimistic)
+                .await?;
+            selected.extend(projected);
+            if selected.len() >= target || storage_exhausted {
+                break;
+            }
+        }
+
+        let has_more = selected.len() > limit;
+        selected.truncate(limit);
+        let next_cursor = has_more.then(|| {
+            RecordCursor::new(
+                selected
+                    .last()
+                    .expect("a page with lookahead contains a record")
+                    .0
+                    .clone(),
+            )
+        });
+        Ok(SelectedRecordPage {
+            records: selected.into_iter().map(|(_, record)| record).collect(),
+            next_cursor,
+        })
+    }
+
+    async fn project_record_batch(
+        &mut self,
+        selection: &RecordSelection,
+        candidates: BTreeMap<EntityKey, Option<Record>>,
+        optimistic: &BTreeMap<EntityKey, Record>,
+    ) -> Result<Vec<(EntityKey, Json)>, EngineError<S::Error>> {
+        let candidate_keys: Vec<_> = candidates.keys().cloned().collect();
+        let optimistic_only_candidates: BTreeSet<_> = candidates
+            .iter()
+            .filter_map(|(key, record)| record.is_none().then_some(key.clone()))
+            .collect();
+        let mut fetched_base: HashMap<_, _> = candidates
+            .into_iter()
+            .filter_map(|(key, record)| record.map(|record| (key, record)))
+            .collect();
+        let mut composed = HashMap::new();
+        for (key, update) in optimistic {
+            let base = fetched_base.get(key).or_else(|| self.hot.peek(key));
+            if let Some(base) = base {
+                let mut effective = base.clone();
+                effective.merge(update.clone());
+                composed.insert(key.clone(), effective);
+            } else if optimistic_only_candidates.contains(key) {
+                composed.insert(key.clone(), update.clone());
+            }
+        }
+
+        let variables = serde_json::Map::new();
+        let mut pending: BTreeSet<_> = candidate_keys.iter().cloned().collect();
+        let mut completed = BTreeMap::new();
+        let mut known_absent = BTreeSet::new();
+        while !pending.is_empty() {
+            let mut missing = BTreeSet::new();
+            let source = EngineSource {
+                hot: &self.hot,
+                fetched: &fetched_base,
+                composed: &composed,
+            };
+            let current: Vec<_> = pending.iter().cloned().collect();
+            for key in current {
+                let type_name = record_key_type(&key).unwrap_or_default();
+                let mut dependencies = BTreeSet::new();
+                match denormalize_record(
+                    &key,
+                    type_name,
+                    selection.selection_set(),
+                    &variables,
+                    &source,
+                    &mut dependencies,
+                )? {
+                    ReadOutcome::Complete(record) => {
+                        pending.remove(&key);
+                        completed.insert(key, record);
+                    }
+                    ReadOutcome::Miss { .. } => {
+                        pending.remove(&key);
+                    }
+                    ReadOutcome::NeedRecords(keys) => missing.extend(keys),
+                }
+            }
+            if pending.is_empty() {
+                break;
+            }
+
+            let to_fetch: Vec<_> = missing
+                .into_iter()
+                .filter(|key| {
+                    !known_absent.contains(key)
+                        && !fetched_base.contains_key(key)
+                        && !composed.contains_key(key)
+                })
+                .collect();
+            if to_fetch.is_empty() {
+                break;
+            }
+            let fetched = self
+                .storage
+                .get_batch(&to_fetch)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, record) in to_fetch.into_iter().zip(fetched) {
+                match record {
+                    Some(record) => {
+                        if let Some(update) = optimistic.get(&key) {
+                            let mut effective = record.clone();
+                            effective.merge(update.clone());
+                            composed.insert(key.clone(), effective);
+                        }
+                        fetched_base.insert(key, record);
+                    }
+                    None => {
+                        if let Some(update) = optimistic.get(&key) {
+                            composed.insert(key, update.clone());
+                        } else {
+                            known_absent.insert(key);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (key, record) in fetched_base {
+            self.hot.put(key, record);
+        }
+        Ok(candidate_keys
+            .into_iter()
+            .filter_map(|key| completed.remove(&key).map(|record| (key, record)))
+            .collect())
     }
 
     /// Normalizes and stores a network response. Returns changed records and
@@ -1098,6 +1305,10 @@ fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey> {
         .iter()
         .flat_map(|layer| layer.updates.keys().cloned())
         .collect()
+}
+
+fn record_key_type(key: &EntityKey) -> Option<&str> {
+    key.0.split_once(':').map(|(type_name, _)| type_name)
 }
 
 fn deduplicate_revalidations(

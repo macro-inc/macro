@@ -27,6 +27,13 @@ describe('createWorkerCacheHost', () => {
     await expect(
       host.writeQuery({ query: '{ x }', data: { x: 1 } })
     ).resolves.toEqual({ changed: [], affectedOps: [], reset: false });
+    await expect(
+      host.readRecords({
+        document: 'fragment Item on GraphqlSoupItem { id }',
+        fragmentName: 'Item',
+        limit: 20,
+      })
+    ).resolves.toEqual({ records: [], nextCursor: null });
   });
 
   it('round-trips generated query inspection through the worker protocol', async () => {
@@ -67,6 +74,45 @@ describe('createWorkerCacheHost', () => {
     expect(requests).toContainEqual(
       expect.objectContaining({ kind: 'inspect-query', ...request })
     );
+    host.dispose();
+  });
+
+  it('delivers queued mutation settlements pushed by the worker', async () => {
+    let push: (message: unknown) => void = () => {
+      throw new Error('worker not initialized');
+    };
+    class FakeSharedWorker {
+      port = {
+        onmessage: null as ((event: MessageEvent) => void) | null,
+        start() {},
+        close() {},
+        postMessage: (request: { id?: number }) => {
+          if (request.id === undefined) return;
+          queueMicrotask(() => {
+            this.port.onmessage?.({
+              data: { id: request.id, ok: true, result: null },
+            } as MessageEvent);
+          });
+        },
+      };
+
+      constructor() {
+        push = (message) =>
+          this.port.onmessage?.({ data: message } as MessageEvent);
+      }
+    }
+    vi.stubGlobal('SharedWorker', FakeSharedWorker);
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const seen: unknown[] = [];
+    host.onMutationSettled((settlement) => seen.push(settlement));
+    const settlement = {
+      transactionId: '12',
+      status: 'committed' as const,
+    };
+
+    push({ kind: 'mutation-settled', settlement });
+
+    expect(seen).toEqual([settlement]);
     host.dispose();
   });
 

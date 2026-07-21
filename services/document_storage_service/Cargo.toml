@@ -29,7 +29,7 @@ default = [
 delete_document_worker = []
 graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:complete_graph"]
 local = ["local_auth"]
-local_auth = ["macro_authorization/local_auth", "macro_middleware/local_auth"]
+local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
@@ -116,9 +116,7 @@ macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
   "cloud_storage",
-  "user_permissions",
 ] }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
@@ -143,9 +141,9 @@ models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
 opensearch_client = { path = "../../crates/opensearch_client" }
+projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }
 properties_service = { path = "../../crates/properties_service" }
-projects_hex = { path = "../../crates/projects", package = "projects" }
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = [
   "axum",
 ] }

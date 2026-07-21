@@ -84,6 +84,7 @@ macro_db_client = { path = "../../crates/macro_db_client", default-features = fa
 ] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [

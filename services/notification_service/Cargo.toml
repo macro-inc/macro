@@ -40,9 +40,7 @@ macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
-  "auth",
-] }
+macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }

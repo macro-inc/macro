@@ -313,6 +313,36 @@ export async function bulkMarkNotificationsAsUndone(
   );
 }
 
+/**
+ * Fetch the ids of the given event items' DONE notifications from the server.
+ * The live user-notifications stream only carries not-done notifications, so
+ * a done thread's ids age out of the local cache — mark-not-done resolves
+ * them server-side to restore reliably. Throws on failure.
+ */
+export async function fetchDoneNotificationIdsByEventItemIds(
+  eventItemIds: string[]
+): Promise<string[]> {
+  if (eventItemIds.length === 0) return [];
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await throwOnErr(
+      async () =>
+        await notificationServiceClient.bulkGetUserNotificationsByEventItemId({
+          eventItemIds,
+          // Server max page size; bulk selections can span many threads, so
+          // follow the cursor through every page rather than capping.
+          limit: 500,
+          done: true,
+          cursor,
+        })
+    );
+    ids.push(...response.items.map((n) => n.id));
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+  return ids;
+}
+
 export function invalidateEntityNotifications(eventItemId: string) {
   return queryClient.invalidateQueries({
     queryKey: [...notificationKeys.entity._def, eventItemId],

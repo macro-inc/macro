@@ -305,7 +305,8 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;
+pub(crate) type DssBotService =
+    BotServiceImpl<PgBotsRepo, MacroEventBrokerService<KafkaEventPublisher>>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -474,6 +475,7 @@ impl From<&ApiContext> for SearchHandlerState {
             db: ctx.readonly_db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
+            authorization_state: ctx.authorization_state.clone(),
         }
     }
 }

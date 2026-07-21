@@ -8,7 +8,10 @@ use cache_core::queue::{
 };
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
-use idb::{Database, DatabaseEvent, Factory, ObjectStoreParams, TransactionMode};
+use idb::{
+    CursorDirection, Database, DatabaseEvent, Factory, KeyRange, ObjectStoreParams, Query,
+    TransactionMode,
+};
 use thiserror::Error;
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -234,6 +237,65 @@ impl Storage for IdbStorage {
         }
         tx.commit()?.await?;
         Ok(())
+    }
+
+    async fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+        if type_names.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut type_names = type_names.to_vec();
+        type_names.sort();
+        type_names.dedup();
+        let mut records = Vec::with_capacity(limit);
+        for type_name in type_names {
+            if records.len() == limit {
+                break;
+            }
+            let prefix = format!("{type_name}:");
+            let upper = format!("{type_name};");
+            if after.is_some_and(|after| after.0.as_str() >= upper.as_str()) {
+                continue;
+            }
+            let (lower, lower_open) = match after {
+                Some(after) if after.0.as_str() >= prefix.as_str() => (after.0.as_str(), true),
+                _ => (prefix.as_str(), false),
+            };
+            let range = KeyRange::bound(
+                &JsValue::from_str(lower),
+                &JsValue::from_str(&upper),
+                Some(lower_open),
+                Some(true),
+            )?;
+            let tx = self
+                .db
+                .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
+            let store = tx.object_store(RECORDS_STORE)?;
+            let Some(cursor) = store
+                .open_cursor(Some(Query::from(range)), Some(CursorDirection::Next))?
+                .await?
+            else {
+                continue;
+            };
+            let mut cursor = cursor.into_managed();
+            while records.len() < limit {
+                let Some(key) = cursor.key()? else {
+                    break;
+                };
+                let Some(value) = cursor.value()? else {
+                    break;
+                };
+                let key = key.as_string().ok_or(IdbStorageError::NotString)?;
+                records.push((EntityKey(key), decode_record(&bytes_from_js(value)?)?));
+                cursor.next(None).await?;
+            }
+        }
+        Ok(records)
     }
 
     async fn enqueue_mutation(

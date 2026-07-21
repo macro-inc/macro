@@ -24,6 +24,7 @@ import {
   makeDeleteAction,
   makeFavoriteAction,
   makeMarkDoneAction,
+  makeMarkNotDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
   makeSetCompanyPropertyAction,
@@ -54,6 +55,10 @@ export const useEntityActionHotkeys = (
     userId: () => userId(),
     notificationSource: () => notificationSource,
     hotkeyGroup: group,
+  });
+
+  const markNotDone = makeMarkNotDoneAction({
+    notificationSource: () => notificationSource,
   });
 
   const deleteAction = makeDeleteAction({
@@ -167,6 +172,40 @@ export const useEntityActionHotkeys = (
 
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mark as not done - 'shift+e', reverses mark done on archived emails
+  registerHotkey({
+    hotkey: ['shift+e'],
+    hotkeyToken: TOKENS.entity.action.markNotDone,
+    scopeId,
+    description: 'Mark as not done',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(markNotDone.canExecute)) return false;
+
+      markNotDone.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+
+      const contentId = splitHandle?.content().id;
+
+      const soupViewTab = options.activeSoupViewTab?.();
+
+      if (
+        !isListViewID(contentId) ||
+        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
+      )
+        return false;
+
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(markNotDone.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

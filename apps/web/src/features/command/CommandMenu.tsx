@@ -57,6 +57,7 @@ import {
   isCommandItem,
   isEntityItem,
   isSearchItem,
+  type PaginationControls,
   useCommandItems,
 } from './useCommandItems';
 
@@ -73,6 +74,7 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
 const LIST_PADDING = 16; // p-2 = 8px top + 8px bottom
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
+const LOAD_MORE_THRESHOLD = VIRTUAL_ITEM_HEIGHT * 3;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5 + LIST_PADDING;
 
 export function CommandMenu() {
@@ -145,10 +147,13 @@ export function CommandMenuInner(props: {
 
   const query = debouncedDependent(CommandState.query, 60);
 
-  const defaultFilteredItems = props.items
+  const defaultCommandItems = props.items
     ? undefined
-    : useCommandItems(query, CommandState.categoryFilter);
-  const filteredItems = props.items ?? defaultFilteredItems!;
+    : useCommandItems(query, CommandState.categoryFilter, {
+        searchActive: CommandState.isOpen,
+      });
+  const filteredItems = props.items ?? defaultCommandItems!.items;
+  const pagination = defaultCommandItems?.pagination;
   const listController = createCommandListController({
     items: filteredItems,
     selectedIndex: CommandState.selectedIndex,
@@ -377,6 +382,13 @@ export function CommandMenuInner(props: {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
+      if (
+        CommandState.selectedIndex() >= items.length - 1 &&
+        (pagination?.hasMore() || pagination?.isLoadingMore())
+      ) {
+        if (!pagination?.isLoadingMore()) void pagination?.loadMore();
+        return true;
+      }
       return listController.selectNext();
     },
     runWithInputFocused: true,
@@ -627,6 +639,7 @@ export function CommandMenuInner(props: {
               }
               onItemMouseMove={listController.setSelectedIndexFromPointer}
               scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+              pagination={pagination}
             />
           </Show>
         </div>
@@ -729,8 +742,24 @@ function VirtualizedCommandList(props: {
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onItemMouseMove: (index: number) => void;
   scrollSelectedIntoView: boolean;
+  pagination?: PaginationControls;
 }) {
   let virtualizerHandle: VirtualizerHandle | undefined;
+
+  const loadMoreNearEnd = () => {
+    const pagination = props.pagination;
+    if (
+      !virtualizerHandle ||
+      !pagination?.hasMore() ||
+      pagination.isLoadingMore()
+    )
+      return;
+    const remaining =
+      virtualizerHandle.scrollSize -
+      virtualizerHandle.scrollOffset -
+      virtualizerHandle.viewportSize;
+    if (remaining <= LOAD_MORE_THRESHOLD) void pagination.loadMore();
+  };
 
   createEffect(() => {
     const index = props.selectedIndex;
@@ -765,6 +794,7 @@ function VirtualizedCommandList(props: {
       data={props.items}
       style={{ height: '100%' }}
       class="scrollbar-hidden"
+      onScroll={loadMoreNearEnd}
     >
       {(item, index) => (
         <CommandItem

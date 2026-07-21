@@ -48,10 +48,6 @@ mod threads;
 
 // Constants
 // auth based constants
-pub static MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY: &str =
-    "x-document-storage-service-auth-key";
-pub static MACRO_INTERNAL_USER_ID_HEADER_KEY: &str = "x-document-storage-service-user-id";
-
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
@@ -201,6 +197,7 @@ fn api_router(state: ApiContext) -> Router {
             sync_service_hex::inbound::axum_router::sync_service_router(
                 sync_service_hex::inbound::axum_router::SyncServiceRouterState {
                     service: state.sync_service_client.clone(),
+                    authorization_state: state.authorization_state.clone(),
                 },
             ),
         )
@@ -243,18 +240,6 @@ fn api_router(state: ApiContext) -> Router {
             "/crm",
             crm::inbound::axum_router::crm_router(state.crm_state.clone()),
         )
-        .layer(
-            // NOTE: this will still be needed until we add in `MacroAuthorizationExtractor` support for all crates
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(
-                    macro_middleware::auth::initialize_user_context::handler,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.jwt_validation_args.clone(),
-                    macro_middleware::auth::attach_user::handler,
-                )),
-        )
-        // Merge after the user-auth layer so webhook calls authenticate only with the bot token.
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(
                 state.channel_bot_webhook_state.clone(),
@@ -274,19 +259,13 @@ fn api_router(state: ApiContext) -> Router {
                     sync_service_hex::inbound::axum_router::sync_service_router(
                         sync_service_hex::inbound::axum_router::SyncServiceRouterState {
                             service: state.sync_service_client.clone(),
+                            authorization_state: state.authorization_state.clone(),
                         },
                     ),
                 )
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(axum::middleware::from_fn_with_state(
-                            state.clone(),
-                            middleware::internal_access::handler,
-                        ))
-                        .layer(axum::middleware::from_fn(
-                            macro_middleware::connection_drop_prevention_handler,
-                        )),
-                ),
+                .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+                    macro_middleware::connection_drop_prevention_handler,
+                ))),
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())

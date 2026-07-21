@@ -1,0 +1,11 @@
+# Project-local Helix configuration when Helix is launched from apps/web.
+# Scope rust-analyzer to the nested Tauri workspace instead of letting it walk
+# up to the repository-wide backend workspace.
+
+[language-server.rust-analyzer.config]
+linkedProjects = ["Cargo.toml"]
+
+# Consider iOS-gated code active without changing the compilation/link target
+# on Linux.
+[language-server.rust-analyzer.config.cargo]
+cfgs = ["target_os=ios"]

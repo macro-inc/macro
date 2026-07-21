@@ -24,8 +24,8 @@ export function ItemBin(
 
   const viewAllText = () => {
     if (
-      props.totalCount &&
-      props.showingCount &&
+      props.totalCount !== undefined &&
+      props.showingCount !== undefined &&
       props.totalCount > props.showingCount
     ) {
       return `View all (${props.totalCount})`;

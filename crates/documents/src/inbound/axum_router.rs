@@ -3,6 +3,7 @@
 //! Provides routes:
 //! - `POST /` — create a new document
 //! - `GET /{document_id}` — get document metadata
+//! - `GET /slug/{slug}` - get document by team slug
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
@@ -27,6 +28,7 @@ pub mod edit_document;
 pub mod get_branch_name;
 pub mod get_cached_snapshot_url;
 pub mod get_document;
+pub mod get_document_by_team_slug;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
@@ -65,6 +67,7 @@ use self::{
     get_branch_name::get_branch_name_handler,
     get_cached_snapshot_url::get_cached_snapshot_url_handler,
     get_document::get_document_handler,
+    get_document_by_team_slug::get_document_by_team_slug_handler,
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
@@ -269,6 +272,10 @@ where
 
     let router = Router::new()
         .merge(document_id_routes)
+        .route(
+            "/slug/{slug}",
+            axum::routing::get(get_document_by_team_slug_handler::<T, Svc, Auth>),
+        )
         .route(
             "/",
             axum::routing::post(create_document_handler::<T, Svc, Auth>),
