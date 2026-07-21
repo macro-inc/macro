@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt, marker::PhantomData, sync::Arc};
 
 use ::axum::{
     Json,
-    extract::{FromRef, FromRequestParts, Query},
+    extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Query},
     http::{HeaderMap, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
@@ -19,9 +19,18 @@ use rootcause::Report;
 use serde::Deserialize;
 
 use crate::{
-    InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
-    MacroUserAuthentication,
+    BotActingUserClaims, BotAuthentication, InternalIdentityClaims, MacroAuthorization,
+    MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication,
 };
+
+/// Header carrying a bot authentication token.
+pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
+/// Header carrying the Macro user ID a bot claims to act for.
+pub const BOT_FOR_MACRO_USER_ID_HEADER: &str = "x-macro-bot-for-macro-user-id";
+/// Header carrying the FusionAuth user ID a bot claims to act for.
+pub const BOT_FOR_FUSIONAUTH_USER_ID_HEADER: &str = "x-macro-bot-for-fusionauth-user-id";
+/// Header carrying the organization ID a bot claims to act for.
+pub const BOT_FOR_ORGANIZATION_ID_HEADER: &str = "x-macro-bot-for-organization-id";
 
 /// Header carrying the shared key for standard internal service authorization.
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -120,14 +129,12 @@ static INTERNAL_HEADER_CONVENTIONS: [InternalHeaderConvention; 2] = [
 
 /// Extracts and authorizes a required acting user.
 ///
-/// This extractor automatically supports both direct user access and internal
-/// service access. Internal credentials are checked first and must resolve to
-/// an acting user through an identity header or the configured default user.
-/// User credentials are read from the `macro-api-token` query parameter,
-/// followed by a bearer header or access-token cookie. Use
-/// [`InternalMacroAuthorizationExtractor`] instead only when the endpoint must
-/// be exclusively internal and does not require an acting user. The
-/// authorization service is resolved from Axum state.
+/// This extractor supports direct user, bot, and internal service credentials.
+/// A bot or internal caller must resolve to an acting user. Supplying more than
+/// one explicit credential type is rejected; an access-token cookie is ambient
+/// and is used only when no explicit credential is present. Use a dedicated
+/// extractor instead when being bot-only or internal-only is part of the
+/// endpoint's contract. The authorization service is resolved from Axum state.
 #[non_exhaustive]
 pub struct MacroAuthorizationExtractor<Svc> {
     /// The typed authorization principal established for the request.
@@ -228,16 +235,80 @@ where
     }
 }
 
+/// Authorizes an exclusively bot-token endpoint.
+///
+/// Use this extractor only when bot-only access is part of the endpoint's
+/// security contract. User and internal credentials are not substitutes. The
+/// extractor validates only the bot credential, ignores other credential
+/// types, and carries the validated bot principal without retaining its token.
+#[non_exhaustive]
+pub struct BotMacroAuthorizationExtractor<Svc> {
+    /// The validated bot principal.
+    pub bot: BotAuthentication,
+    _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> Clone for BotMacroAuthorizationExtractor<Svc> {
+    fn clone(&self) -> Self {
+        Self {
+            bot: self.bot.clone(),
+            _service: PhantomData,
+        }
+    }
+}
+
+impl<S, Svc> FromRequestParts<S> for BotMacroAuthorizationExtractor<Svc>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = MacroAuthorizationRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
+            .await?
+            .ok_or_else(|| rejection("unauthorized"))?;
+
+        Ok(Self {
+            bot,
+            _service: PhantomData,
+        })
+    }
+}
+
+impl<S, Svc> OptionalFromRequestParts<S> for BotMacroAuthorizationExtractor<Svc>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = MacroAuthorizationRejection;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let Some(bot) = authorize_optional_bot_request::<S, Svc>(parts, state).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self {
+            bot,
+            _service: PhantomData,
+        }))
+    }
+}
+
 /// Extracts and authorizes an optional acting user.
 ///
-/// This extractor automatically supports anonymous callers, direct user
-/// credentials, and internal service credentials. Internal credentials are
-/// checked first and set `is_internal_access` even when they establish no user
-/// identity. Requests without credentials succeed with an empty
-/// [`UserContext`]. Any supplied credential must still pass authorization; an
-/// invalid credential is never treated as anonymous. Use
-/// [`InternalMacroAuthorizationExtractor`] instead only when the endpoint must
-/// be exclusively internal.
+/// This extractor supports anonymous, direct user, bot, and internal service
+/// callers. Requests without credentials succeed with an empty [`UserContext`].
+/// Supplying more than one explicit credential type is rejected; an ambient
+/// access-token cookie is considered only when no explicit credential exists.
+/// Any supplied credential must pass authorization and is never treated as
+/// anonymous. Identityless internal and bot principals remain visible through
+/// `authorization` even though their user convenience fields are empty.
 #[non_exhaustive]
 pub struct OptionalMacroAuthorizationExtractor<Svc> {
     /// The typed authorization principal, or `None` for an anonymous request.
@@ -306,8 +377,38 @@ where
     Svc: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
-    if let Some(convention) = internal_header_convention(&parts.headers) {
+    let query_token = extract_query_token(parts, state).await;
+    let internal_convention = internal_header_convention(&parts.headers);
+    let has_bot_token = parts.headers.contains_key(BOT_TOKEN_HEADER);
+    let has_explicit_user_credential =
+        query_user_credential_present(parts) || parts.headers.contains_key(header::AUTHORIZATION);
+    let explicit_credential_count = usize::from(internal_convention.is_some())
+        + usize::from(has_bot_token)
+        + usize::from(has_explicit_user_credential);
+
+    if explicit_credential_count > 1 {
+        return Err(status_rejection(
+            StatusCode::BAD_REQUEST,
+            "ambiguous credentials",
+        ));
+    }
+
+    if let Some(convention) = internal_convention {
         return authorize_internal_request::<S, Svc>(parts, state, convention).await;
+    }
+
+    if has_bot_token {
+        let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
+            .await?
+            .expect("bot token presence was checked");
+        return Ok(Some(MacroAuthorization::Bot(bot)));
+    }
+
+    if has_explicit_user_credential {
+        let token = extract_explicit_user_token(parts, state, query_token).await?;
+        return authorize_user_token::<S, Svc>(state, &token)
+            .await
+            .map(Some);
     }
 
     #[cfg(feature = "local_auth")]
@@ -317,19 +418,12 @@ where
             .map(Some);
     }
 
-    let Some(token) = extract_token(parts, state).await? else {
+    let Some(token) = extract_ambient_user_token(parts, state).await else {
         return Ok(None);
     };
 
-    let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
-    let user_context = authorization
-        .service
-        .authorize(&token)
+    authorize_user_token::<S, Svc>(state, &token)
         .await
-        .map_err(authorization_rejection)?;
-
-    authenticated_user(user_context)
-        .map(MacroAuthorization::User)
         .map(Some)
 }
 
@@ -412,29 +506,145 @@ fn local_user_context() -> Option<UserContext> {
     })
 }
 
-async fn extract_token<S>(
-    parts: &mut Parts,
+async fn authorize_user_token<S, Svc>(
     state: &S,
-) -> Result<Option<String>, MacroAuthorizationRejection>
+    token: &str,
+) -> Result<MacroAuthorization, MacroAuthorizationRejection>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+{
+    let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
+    let user_context = authorization
+        .service
+        .authorize(token)
+        .await
+        .map_err(authorization_rejection)?;
+
+    authenticated_user(user_context).map(MacroAuthorization::User)
+}
+
+async fn authorize_optional_bot_request<S, Svc>(
+    parts: &Parts,
+    state: &S,
+) -> Result<Option<BotAuthentication>, MacroAuthorizationRejection>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+{
+    let Some(token) = bot_token(&parts.headers)? else {
+        return Ok(None);
+    };
+    let claims = bot_acting_user_claims(&parts.headers)?;
+    let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
+    let bot = authorization
+        .service
+        .authorize_bot(&token, claims)
+        .await
+        .map_err(bot_authorization_rejection)?;
+
+    Ok(Some(bot))
+}
+
+fn bot_token(headers: &HeaderMap) -> Result<Option<String>, MacroAuthorizationRejection> {
+    let Some(header) = headers.get(BOT_TOKEN_HEADER) else {
+        return Ok(None);
+    };
+    let token = header.to_str().map_err(|_| rejection("unauthorized"))?;
+    if token.trim().is_empty() {
+        return Err(rejection("unauthorized"));
+    }
+
+    Ok(Some(token.to_owned()))
+}
+
+fn bot_acting_user_claims(
+    headers: &HeaderMap,
+) -> Result<Option<BotActingUserClaims>, MacroAuthorizationRejection> {
+    let user_id = bot_claim_header(headers, BOT_FOR_MACRO_USER_ID_HEADER)?;
+    let fusion_user_id = bot_claim_header(headers, BOT_FOR_FUSIONAUTH_USER_ID_HEADER)?;
+    let organization_id = bot_claim_header(headers, BOT_FOR_ORGANIZATION_ID_HEADER)?
+        .map(|organization_id| organization_id.parse::<i32>())
+        .transpose()
+        .map_err(|_| invalid_bot_claims_rejection())?;
+
+    if user_id.is_none() && fusion_user_id.is_none() && organization_id.is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(BotActingUserClaims {
+        user_id,
+        fusion_user_id,
+        organization_id,
+    }))
+}
+
+fn bot_claim_header(
+    headers: &HeaderMap,
+    name: &'static str,
+) -> Result<Option<String>, MacroAuthorizationRejection> {
+    headers
+        .get(name)
+        .map(|header| {
+            header
+                .to_str()
+                .map(str::to_owned)
+                .map_err(|_| invalid_bot_claims_rejection())
+        })
+        .transpose()
+}
+
+fn invalid_bot_claims_rejection() -> MacroAuthorizationRejection {
+    status_rejection(StatusCode::BAD_REQUEST, "invalid bot claims")
+}
+
+fn query_user_credential_present(parts: &Parts) -> bool {
+    parts.uri.query().is_some_and(|query| {
+        query.split('&').any(|parameter| {
+            parameter
+                .split_once('=')
+                .map_or(parameter, |(name, _value)| name)
+                == "macro-api-token"
+        })
+    })
+}
+
+async fn extract_query_token<S>(parts: &mut Parts, state: &S) -> Option<String>
 where
     S: Send + Sync,
 {
-    let query_token = Query::<AuthorizationQuery>::from_request_parts(parts, state)
+    Query::<AuthorizationQuery>::from_request_parts(parts, state)
         .await
         .ok()
-        .and_then(|Query(query)| query.macro_api_token);
+        .and_then(|Query(query)| query.macro_api_token)
+}
 
+async fn extract_explicit_user_token<S>(
+    parts: &mut Parts,
+    state: &S,
+    query_token: Option<String>,
+) -> Result<String, MacroAuthorizationRejection>
+where
+    S: Send + Sync,
+{
     if let Some(token) = query_token {
-        return Ok(Some(token));
+        return Ok(token);
     }
 
     match AccessTokenExtractor::from_request_parts(parts, state).await {
-        Ok(token) => Ok(Some(token.as_ref().to_owned())),
-        Err(_) if parts.headers.contains_key(header::AUTHORIZATION) => {
-            Err(rejection("unauthorized"))
-        }
-        Err(_) => Ok(None),
+        Ok(token @ AccessTokenExtractor::Header(_)) => Ok(token.as_ref().to_owned()),
+        Ok(AccessTokenExtractor::Cookie(_)) | Err(_) => Err(rejection("unauthorized")),
     }
+}
+
+async fn extract_ambient_user_token<S>(parts: &mut Parts, state: &S) -> Option<String>
+where
+    S: Send + Sync,
+{
+    AccessTokenExtractor::from_request_parts(parts, state)
+        .await
+        .ok()
+        .map(|token| token.as_ref().to_owned())
 }
 
 fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAuthorizationRejection {
@@ -448,6 +658,23 @@ fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAutho
     rejection(message)
 }
 
+fn bot_authorization_rejection(
+    error: Report<MacroAuthorizationError>,
+) -> MacroAuthorizationRejection {
+    let rejection = match error.current_context() {
+        MacroAuthorizationError::CredentialsExpired
+        | MacroAuthorizationError::InvalidCredentials => rejection("unauthorized"),
+        MacroAuthorizationError::ActingUserNotAuthorized => {
+            status_rejection(StatusCode::FORBIDDEN, "forbidden")
+        }
+        MacroAuthorizationError::Unavailable => {
+            status_rejection(StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+        }
+    };
+    tracing::error!(error=?error, "bot authorization failed");
+    rejection
+}
+
 fn internal_authorization_rejection(
     error: Report<MacroAuthorizationError>,
 ) -> MacroAuthorizationRejection {
@@ -456,8 +683,12 @@ fn internal_authorization_rejection(
 }
 
 fn rejection(message: &'static str) -> MacroAuthorizationRejection {
+    status_rejection(StatusCode::UNAUTHORIZED, message)
+}
+
+fn status_rejection(status: StatusCode, message: &'static str) -> MacroAuthorizationRejection {
     MacroAuthorizationRejection {
-        status: StatusCode::UNAUTHORIZED,
+        status,
         message: message.into(),
     }
 }
