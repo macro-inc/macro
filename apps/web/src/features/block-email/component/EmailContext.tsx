@@ -650,6 +650,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     const thread = threadQuery.data;
     if (!thread?.db_id) return false;
     if (threadMarkedUnread()) return false;
+    // A toggle mid-flight would race the pending request; ignore it.
+    if (markUnreadMutation.isPending || markSeenMutation.isPending) {
+      return false;
+    }
 
     const threadId = thread.db_id;
     setThreadMarkedUnread(true);
@@ -677,6 +681,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     const thread = threadQuery.data;
     if (!thread?.db_id) return false;
     if (!threadMarkedUnread()) return false;
+    // A toggle mid-flight would race the pending request; ignore it.
+    if (markUnreadMutation.isPending || markSeenMutation.isPending) {
+      return false;
+    }
 
     const threadId = thread.db_id;
     setThreadMarkedUnread(false);

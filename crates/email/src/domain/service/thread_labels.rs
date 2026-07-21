@@ -54,6 +54,31 @@ where
 
         let all_ids: Vec<Uuid> = messages.iter().map(|m| m.db_id).collect();
 
+        // Snapshot which messages actually gain/lose the label, so an
+        // enqueue-failure revert restores only what this call changed — the
+        // batch writes are idempotent, and blindly inverting every message
+        // would strip pre-existing state. Best effort: if the snapshot read
+        // fails, fall back to treating all messages as changed.
+        let changed_ids: Vec<Uuid> = match self.email_repo.labels_by_message_ids(&all_ids).await {
+            Ok(labels_by_id) => all_ids
+                .iter()
+                .filter(|id| {
+                    let has_label = labels_by_id.get(id).is_some_and(|labels| {
+                        labels
+                            .iter()
+                            .any(|l| l.provider_label_id == provider_label_id)
+                    });
+                    has_label != add
+                })
+                .copied()
+                .collect(),
+            Err(e) => {
+                let err = anyhow::Error::from(e);
+                tracing::warn!(error=?err, "failed to snapshot message labels; revert would cover all messages");
+                all_ids.clone()
+            }
+        };
+
         // Optimistic DB update: update all messages first
         self.apply_label_db_changes(link, thread_id, &all_ids, &provider_label_id, add)
             .await?;
@@ -92,15 +117,15 @@ where
             {
                 let err = anyhow::Error::from(e);
                 tracing::error!(error=?err, "failed to enqueue gmail ops label sync, reverting database changes");
-                // The mutation is symmetric in `add`, so the revert is the
-                // inverse application. Best effort: revert failures are
-                // logged inside and the enqueue error is surfaced regardless.
-                if let Err(revert_err) = self
-                    .apply_label_db_changes(link, thread_id, &all_ids, &provider_label_id, !add)
-                    .await
-                {
-                    tracing::error!(error=?revert_err, "failed to revert label changes after enqueue failure");
-                }
+                self.revert_label_db_changes(
+                    link,
+                    thread_id,
+                    &all_ids,
+                    &changed_ids,
+                    &provider_label_id,
+                    add,
+                )
+                .await;
                 return Err(EmailErr::EnqueueErr(err));
             }
         }
@@ -144,11 +169,80 @@ where
         })
     }
 
+    /// Best-effort revert of the optimistic label write after the Gmail sync
+    /// could not be enqueued. Only `changed_ids` — the messages that actually
+    /// gained/lost the label — are inverted, so messages that already held
+    /// the requested state keep it; the denormalized thread read flag is
+    /// restored to its derived pre-op value. Every step logs and continues on
+    /// failure: the caller surfaces the enqueue error regardless.
+    async fn revert_label_db_changes(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        all_ids: &[Uuid],
+        changed_ids: &[Uuid],
+        provider_label_id: &str,
+        add: bool,
+    ) {
+        if !changed_ids.is_empty() {
+            let db_result = if add {
+                self.email_repo
+                    .delete_message_labels_batch(changed_ids, provider_label_id, link.id)
+                    .await
+            } else {
+                self.email_repo
+                    .insert_message_labels_batch(changed_ids, provider_label_id, link.id)
+                    .await
+            };
+            if let Err(e) = db_result {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to revert message labels after enqueue failure");
+            }
+        }
+
+        if provider_label_id == system_labels::UNREAD {
+            // Restore is_read on the flipped messages: they were read before
+            // an UNREAD add (`add` == true) and unread before a removal.
+            if !changed_ids.is_empty()
+                && let Err(e) = self
+                    .email_repo
+                    .update_message_read_status_batch(changed_ids, link.id, add)
+                    .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to revert message read status after enqueue failure");
+            }
+            // Pre-op unread set: everything outside `changed_ids` for an add,
+            // `changed_ids` itself for a removal — the thread was read iff
+            // that set was empty.
+            let original_is_read = if add {
+                changed_ids.len() == all_ids.len()
+            } else {
+                changed_ids.is_empty()
+            };
+            if let Err(e) = self
+                .email_repo
+                .update_thread_read_status(thread_id, link.id, original_is_read)
+                .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to revert thread read status after enqueue failure");
+            }
+        } else if provider_label_id == system_labels::STARRED
+            && !changed_ids.is_empty()
+            && let Err(e) = self
+                .email_repo
+                .update_message_starred_status_batch(changed_ids, link.id, !add)
+                .await
+        {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to revert message starred status after enqueue failure");
+        }
+    }
+
     /// Apply a thread label change to the DB: the label rows plus the
     /// denormalized read/starred state for system labels. The label write is
     /// a hard error; the denormalized side effects are logged and skipped.
-    /// The whole mutation is its own inverse under `!add`, which the enqueue
-    /// failure path uses to revert.
     async fn apply_label_db_changes(
         &self,
         link: &Link,
