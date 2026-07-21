@@ -57,4 +57,4 @@ scenario *ARGS:
   LEXICAL_SERVICE_URL="${LEXICAL_SERVICE_URL:-http://localhost:8096}" \
   INTERNAL_API_SECRET_KEY="${INTERNAL_API_SECRET_KEY:-local}" \
   FRONTEND_PORT="${FRONTEND_PORT:-3000}" \
-  cargo r -q -- scenario "$@"
+  cargo r -- scenario "$@"
