@@ -40,6 +40,19 @@ fn expected_matrix_covers_owner_team_channel_public_edges() {
     );
     assert_eq!(level(&rows, "document:q3-plan", "dave"), None);
     assert_eq!(level(&rows, "document:q3-plan", "eve"), None);
+    // erin is a full-edit-access teammate: direct edit share on Alice's docs.
+    assert_eq!(
+        level(&rows, "document:q3-plan", "erin"),
+        Some(AccessLevel::Edit)
+    );
+    assert_eq!(
+        level(&rows, "document:design-doc", "erin"),
+        Some(AccessLevel::Edit)
+    );
+    assert_eq!(
+        level(&rows, "document:handbook", "erin"),
+        Some(AccessLevel::Edit)
+    );
 
     // design-doc: dave has a direct edit share; channel share + mention give
     // eng members view; carol/eve see nothing.
@@ -200,6 +213,8 @@ fn task_expectations_cover_team_share_and_inheritance() {
 
     // ship-tags: alice owns it; the team gets comment via share_with_team;
     // the project's team view is subsumed by comment; dave/eve see nothing.
+    // erin is an assignee, but her edit comes from the direct share, not the
+    // assignment.
     assert_eq!(
         level(&rows, "task:ship-tags", "alice"),
         Some(AccessLevel::Owner)
@@ -214,6 +229,11 @@ fn task_expectations_cover_team_share_and_inheritance() {
     );
     assert_eq!(level(&rows, "task:ship-tags", "dave"), None);
     assert_eq!(level(&rows, "task:ship-tags", "eve"), None);
+    // erin has a direct edit share, which wins over the team's comment.
+    assert_eq!(
+        level(&rows, "task:ship-tags", "erin"),
+        Some(AccessLevel::Edit)
+    );
 
     // fix-perms: dave's personal task shared to the eng channel; assigning
     // alice grants nothing by itself — her view comes from the channel.
@@ -238,4 +258,8 @@ fn task_expectations_cover_team_share_and_inheritance() {
         Some(AccessLevel::Comment)
     );
     assert_eq!(level(&rows, "task:write-docs", "dave"), None);
+    assert_eq!(
+        level(&rows, "task:write-docs", "erin"),
+        Some(AccessLevel::Edit)
+    );
 }
