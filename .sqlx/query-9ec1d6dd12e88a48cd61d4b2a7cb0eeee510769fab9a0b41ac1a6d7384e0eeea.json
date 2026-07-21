@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO comms_channels (id, name, owner_id, org_id, team_id, channel_type)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ",
+  "query": "\n            INSERT INTO comms_channels (\n                id, name, owner_id, org_id, team_id, channel_type, auto_join_team\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -22,10 +22,11 @@
               ]
             }
           }
-        }
+        },
+        "Bool"
       ]
     },
     "nullable": []
   },
-  "hash": "10843b4044bca618301e755b0b6b5aeca5fd398adc48ed9f755490fa25e7f3f9"
+  "hash": "9ec1d6dd12e88a48cd61d4b2a7cb0eeee510769fab9a0b41ac1a6d7384e0eeea"
 }

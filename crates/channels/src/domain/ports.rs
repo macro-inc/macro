@@ -274,6 +274,29 @@ pub trait ChannelRepo: Send + Sync + 'static {
         req: CreateChannelRequest,
     ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 
+    /// Add or reactivate a user in every auto-join channel for a team.
+    fn auto_join_by_team_id<'a>(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Soft-leave a user from every active channel membership for a team.
+    ///
+    /// Returns the channel ids whose memberships changed.
+    fn leave_by_team_id<'a>(
+        &self,
+        team_id: &Uuid,
+        user_id: &MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Roll back a team leave by restoring a user's memberships in the exact channels provided.
+    fn restore_by_channel_ids<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        channel_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Fetch an existing direct message channel.
     fn maybe_get_dm<'a>(
         &self,
@@ -627,6 +650,47 @@ pub trait ChannelService: Send + Sync + 'static {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Add or reactivate a user in every auto-join channel for a team.
+    fn auto_join_by_team_id(
+        &self,
+        _team_id: &Uuid,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "team channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Soft-leave a user from every active channel membership for a team.
+    ///
+    /// Returns the channel ids whose memberships changed.
+    fn leave_by_team_id(
+        &self,
+        _team_id: &Uuid,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "team channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Roll back a team leave by restoring a user's memberships in the exact channels provided.
+    fn restore_by_channel_ids(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _channel_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "team channel mutations are not configured".to_string(),
             ))
         }
     }

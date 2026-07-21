@@ -700,6 +700,10 @@ pub struct CreateChannelRequest {
     pub channel_type: ChannelType,
     /// Team id for team channels.
     pub team_id: Option<Uuid>,
+    /// Whether team members automatically join this channel. Defaults to false.
+    #[serde(default)]
+    #[cfg_attr(feature = "inbound", schema(default = false))]
+    pub auto_join_team: bool,
     /// Participants to add, excluding the owner.
     #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
     pub participants: HashSet<MacroUserIdStr<'static>>,
