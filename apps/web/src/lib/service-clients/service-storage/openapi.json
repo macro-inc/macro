@@ -14677,7 +14677,18 @@
           },
           {
             "type": "object",
-            "description": "Permission for channel-based entities.",
+            "description": "View-only permission for a channel without an active participant role.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["channel_view_only"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Permission for channel-based entities with an active participant role.",
             "required": ["role", "type"],
             "properties": {
               "role": {
@@ -14706,7 +14717,7 @@
             }
           }
         ],
-        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use view-only permission or participant roles."
       },
       "EntityPermissionResponse": {
         "oneOf": [

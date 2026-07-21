@@ -6527,12 +6527,21 @@ export const getEntityPermissionResponse = zod
             ),
           zod
             .object({
+              type: zod.enum(['channel_view_only']),
+            })
+            .describe(
+              'View-only permission for a channel without an active participant role.'
+            ),
+          zod
+            .object({
               role: zod
                 .enum(['owner', 'admin', 'member'])
                 .describe('The role a user has within a channel.'),
               type: zod.enum(['channel_role']),
             })
-            .describe('Permission for channel-based entities.'),
+            .describe(
+              'Permission for channel-based entities with an active participant role.'
+            ),
           zod
             .object({
               role: zod
@@ -6545,7 +6554,7 @@ export const getEntityPermissionResponse = zod
             .describe('Permission for team-based entities.'),
         ])
         .describe(
-          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use view-only permission or participant roles."
         ),
       status: zod.enum(['access']),
     }),

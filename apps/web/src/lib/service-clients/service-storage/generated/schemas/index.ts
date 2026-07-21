@@ -495,6 +495,8 @@ export * from './entityPermission';
 export * from './entityPermissionOneOf';
 export * from './entityPermissionOneOfFive';
 export * from './entityPermissionOneOfFiveType';
+export * from './entityPermissionOneOfSeven';
+export * from './entityPermissionOneOfSevenType';
 export * from './entityPermissionOneOfThree';
 export * from './entityPermissionOneOfThreeType';
 export * from './entityPermissionOneOfType';

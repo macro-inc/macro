@@ -6,13 +6,13 @@
  */
 
 import type { EntityPermissionOneOfFiveType } from './entityPermissionOneOfFiveType';
-import type { TeamRole } from './teamRole';
+import type { ParticipantRole } from './participantRole';
 
 /**
- * Permission for team-based entities.
+ * Permission for channel-based entities with an active participant role.
  */
 export type EntityPermissionOneOfFive = {
-  /** The role the user has in the team. */
-  role: TeamRole;
+  /** The role the user has in the channel. */
+  role: ParticipantRole;
   type: EntityPermissionOneOfFiveType;
 };
