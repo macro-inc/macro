@@ -437,6 +437,7 @@ impl IntoResponse for BotsHandlerErr {
             Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
             Self::Bot(BotError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
+            Self::Bot(BotError::ForbiddenActingUser) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::Repo(_)) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {

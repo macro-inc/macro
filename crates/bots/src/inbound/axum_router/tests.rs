@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, BotChannel, BotChannelType, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse,
+    ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, BotChannel, BotChannelType,
+    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -175,6 +175,22 @@ impl BotService for TestBotService {
         _caller: MacroUserIdStr<'static>,
         _bot_id: BotId,
         _token_id: Uuid,
+    ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn authorize_bot_request(
+        &self,
+        _token: &str,
+        _claims: Option<ActingUserClaims>,
+    ) -> Result<AuthorizedBotPrincipal, BotError> {
+        unimplemented!()
+    }
+
+    async fn ensure_bot_in_channel(
+        &self,
+        _bot_id: BotId,
+        _channel_id: Uuid,
     ) -> Result<(), BotError> {
         unimplemented!()
     }
@@ -459,6 +475,18 @@ async fn read_bot_channels(response: axum::response::Response) -> Vec<BotChannel
         .await
         .unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn forbidden_acting_user_maps_to_forbidden() {
+    let response = BotsHandlerErr::Bot(BotError::ForbiddenActingUser).into_response();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "forbidden");
 }
 
 #[tokio::test]

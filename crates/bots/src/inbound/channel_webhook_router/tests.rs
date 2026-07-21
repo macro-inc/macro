@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotChannel, BotKind, BotOwner, BotToken, CreateBotRequest,
-    CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+    ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, Bot, BotChannel, BotKind, BotOwner,
+    BotToken, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use axum::{
     Router,
@@ -213,6 +213,22 @@ impl BotService for TestBotService {
         _caller: MacroUserIdStr<'static>,
         _bot_id: BotId,
         _token_id: Uuid,
+    ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn authorize_bot_request(
+        &self,
+        _token: &str,
+        _claims: Option<ActingUserClaims>,
+    ) -> Result<AuthorizedBotPrincipal, BotError> {
+        unimplemented!()
+    }
+
+    async fn ensure_bot_in_channel(
+        &self,
+        _bot_id: BotId,
+        _channel_id: Uuid,
     ) -> Result<(), BotError> {
         unimplemented!()
     }
@@ -517,6 +533,18 @@ fn scoped_bot_request_body() -> Body {
         })
         .to_string(),
     )
+}
+
+#[tokio::test]
+async fn forbidden_acting_user_maps_to_forbidden() {
+    let response = ChannelBotWebhookHandlerErr::Bot(BotError::ForbiddenActingUser).into_response();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "forbidden");
 }
 
 #[tokio::test]

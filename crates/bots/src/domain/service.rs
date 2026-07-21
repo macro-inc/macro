@@ -1,11 +1,15 @@
 //! Bot service implementation.
 
+#[cfg(test)]
+mod test;
+
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        CreateChannelScopedBotResponse, PatchBotRequest,
+        ActingUser, ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, Bot, BotChannel,
+        BotId, BotKind, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest,
+        CreateBotTokenRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+        PatchBotRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -50,6 +54,11 @@ fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) 
             .expires_at
             .as_ref()
             .is_none_or(|expires_at| expires_at > now)
+}
+
+struct ValidatedBotToken {
+    bot: AuthenticatedBot,
+    token_id: Uuid,
 }
 
 impl<R, B> BotServiceImpl<R, B>
@@ -123,7 +132,7 @@ where
     async fn authenticate_candidate(
         &self,
         candidate: Option<BotTokenCandidate>,
-    ) -> Result<AuthenticatedBot, BotError> {
+    ) -> Result<ValidatedBotToken, BotError> {
         let Some(candidate) = candidate else {
             return Err(BotError::Unauthorized);
         };
@@ -133,13 +142,85 @@ where
             return Err(BotError::Unauthorized);
         }
 
-        let token_id = candidate.token.id;
-        let bot = candidate.bot;
+        let authenticated = ValidatedBotToken {
+            bot: candidate.bot,
+            token_id: candidate.token.id,
+        };
         self.repo
-            .mark_token_used(token_id)
+            .mark_token_used(authenticated.token_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        Ok(bot)
+        Ok(authenticated)
+    }
+
+    async fn authorize_acting_user(
+        &self,
+        bot: &AuthenticatedBot,
+        claims: &ActingUserClaims,
+    ) -> Result<ActingUser, BotError> {
+        if claims.user_id.is_none() && claims.fusion_user_id.is_none() {
+            return Err(BotError::ForbiddenActingUser);
+        }
+
+        let claimed_macro_user_id = claims
+            .user_id
+            .as_deref()
+            .map(MacroUserIdStr::parse_from_str)
+            .transpose()
+            .map_err(|_| BotError::ForbiddenActingUser)?;
+
+        if bot.kind == BotKind::System {
+            return Err(BotError::ForbiddenActingUser);
+        }
+
+        let acting_user = self
+            .repo
+            .find_acting_user(claims)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or(BotError::ForbiddenActingUser)?;
+
+        let macro_user_id_matches = claimed_macro_user_id
+            .as_ref()
+            .is_none_or(|claimed| claimed.as_ref() == acting_user.macro_user_id.as_ref());
+        let fusion_user_id_matches = claims
+            .fusion_user_id
+            .as_deref()
+            .is_none_or(|claimed| claimed == acting_user.fusion_user_id);
+        let organization_id_matches = claims
+            .organization_id
+            .is_none_or(|claimed| Some(claimed) == acting_user.organization_id);
+
+        if !macro_user_id_matches || !fusion_user_id_matches || !organization_id_matches {
+            return Err(BotError::ForbiddenActingUser);
+        }
+
+        let owned_bot = self
+            .repo
+            .get_bot(bot.bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or(BotError::ForbiddenActingUser)?;
+
+        if owned_bot.kind != BotKind::Owned {
+            return Err(BotError::ForbiddenActingUser);
+        }
+
+        let authorized = match owned_bot.owner {
+            Some(BotOwner::User { user_id }) => user_id == acting_user.macro_user_id.as_ref(),
+            Some(BotOwner::Team { team_id }) => self
+                .repo
+                .user_has_team(acting_user.macro_user_id.clone(), team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+            None => false,
+        };
+
+        if !authorized {
+            return Err(BotError::ForbiddenActingUser);
+        }
+
+        Ok(acting_user)
     }
 }
 
@@ -393,13 +474,53 @@ where
         }
     }
 
+    async fn authorize_bot_request(
+        &self,
+        token: &str,
+        claims: Option<ActingUserClaims>,
+    ) -> Result<AuthorizedBotPrincipal, BotError> {
+        let candidate = self
+            .repo
+            .token_candidate(token)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        let authenticated = self.authenticate_candidate(candidate).await?;
+
+        let acting_user = match claims {
+            Some(claims) => Some(
+                self.authorize_acting_user(&authenticated.bot, &claims)
+                    .await?,
+            ),
+            None => None,
+        };
+
+        Ok(AuthorizedBotPrincipal {
+            bot: authenticated.bot,
+            token_id: authenticated.token_id,
+            acting_user,
+        })
+    }
+
+    async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        if self
+            .repo
+            .bot_active_in_channel(channel_id, bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            Ok(())
+        } else {
+            Err(BotError::Unauthorized)
+        }
+    }
+
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
         let candidate = self
             .repo
             .token_candidate(token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidate(candidate).await
+        Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 
     async fn authenticate_channel_token(
@@ -412,6 +533,6 @@ where
             .channel_token_candidate(channel_id, token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidate(candidate).await
+        Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 }

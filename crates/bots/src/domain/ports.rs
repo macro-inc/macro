@@ -1,9 +1,10 @@
 //! Bot ports.
 
 use super::models::{
-    ActingUser, ActingUserClaims, AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken,
-    BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+    ActingUser, ActingUserClaims, AuthenticatedBot, AuthorizedBotPrincipal, Bot, BotChannel, BotId,
+    BotOwner, BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
+    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
@@ -234,6 +235,20 @@ pub trait BotService: Clone + Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
+    /// Authorize a bot token and optional acting-user claims.
+    fn authorize_bot_request(
+        &self,
+        token: &str,
+        claims: Option<ActingUserClaims>,
+    ) -> impl Future<Output = Result<AuthorizedBotPrincipal, BotError>> + Send;
+
+    /// Ensure that a bot is an active participant in a channel.
+    fn ensure_bot_in_channel(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<(), BotError>> + Send;
+
     /// Authenticate a raw bearer token.
     fn authenticate_token(
         &self,
@@ -260,6 +275,9 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The bot may not act for the claimed user.
+    #[error("forbidden")]
+    ForbiddenActingUser,
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),
