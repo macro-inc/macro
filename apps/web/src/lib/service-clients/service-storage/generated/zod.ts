@@ -2883,9 +2883,14 @@ export const postChannelBotWebhookParams = zod.object({
 });
 
 export const postChannelBotWebhookHeader = zod.object({
+  'x-macro-bot-token': zod
+    .string()
+    .nullish()
+    .describe('Preferred bot authentication token'),
   'x-macro-channel-bot-token': zod
     .string()
-    .describe('Bot authentication token'),
+    .nullish()
+    .describe('Legacy channel-scoped bot authentication token'),
 });
 
 export const postChannelBotWebhookBody = zod

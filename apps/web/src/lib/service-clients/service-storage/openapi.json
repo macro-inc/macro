@@ -3883,12 +3883,22 @@
             }
           },
           {
+            "name": "x-macro-bot-token",
+            "in": "header",
+            "description": "Preferred bot authentication token",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
             "name": "x-macro-channel-bot-token",
             "in": "header",
-            "description": "Bot authentication token",
-            "required": true,
+            "description": "Legacy channel-scoped bot authentication token",
+            "required": false,
+            "deprecated": true,
             "schema": {
-              "type": "string"
+              "type": ["string", "null"]
             }
           }
         ],
@@ -3924,6 +3934,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
