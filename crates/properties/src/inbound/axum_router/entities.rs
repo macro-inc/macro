@@ -31,6 +31,9 @@ use crate::domain::model::EntityPropertyOptionUpdate;
 use crate::domain::model::PropertyAccessReceiptExt;
 use crate::domain::service::PropertiesService;
 
+#[cfg(test)]
+mod test;
+
 // Re-export EntityQueryParams from models_properties for convenience
 pub use models_properties::api::EntityQueryParams;
 
@@ -540,6 +543,66 @@ pub struct BulkUpdateEntityPropertyOptionsResponse {
     pub properties: Vec<EntityPropertyOptionSelectionResponse>,
 }
 
+/// Maximum properties changeable in one bulk option request.
+const MAX_BULK_OPTION_PROPERTIES: usize = 100;
+/// Maximum option ids (added plus removed) per property in one bulk request.
+const MAX_OPTION_IDS_PER_PROPERTY: usize = 500;
+
+#[derive(Debug, Error)]
+pub enum BulkUpdateEntityPropertyOptionsErr {
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
+    #[error("Duplicate property id in request")]
+    DuplicateProperty,
+    #[error("Cannot update more than {MAX_BULK_OPTION_PROPERTIES} properties at once")]
+    TooManyProperties,
+    #[error("Cannot change more than {MAX_OPTION_IDS_PER_PROPERTY} options for a property at once")]
+    TooManyOptions,
+}
+
+impl IntoResponse for BulkUpdateEntityPropertyOptionsErr {
+    fn into_response(self) -> Response {
+        let status_code = match &self {
+            BulkUpdateEntityPropertyOptionsErr::Properties(e) => properties_err_status(e),
+            BulkUpdateEntityPropertyOptionsErr::DuplicateProperty
+            | BulkUpdateEntityPropertyOptionsErr::TooManyProperties
+            | BulkUpdateEntityPropertyOptionsErr::TooManyOptions => StatusCode::BAD_REQUEST,
+        };
+
+        if status_code.is_server_error() {
+            tracing::error!(
+                error = ?self,
+                error_type = "BulkUpdateEntityPropertyOptionsErr",
+                "Internal server error"
+            );
+        }
+
+        (status_code, self.to_string()).into_response()
+    }
+}
+
+/// Reject oversized or duplicate-property requests before any database work, so
+/// one authenticated call can't force unbounded query and lock work.
+fn validate_bulk_option_request(
+    request: &BulkUpdateEntityPropertyOptionsRequest,
+) -> Result<(), BulkUpdateEntityPropertyOptionsErr> {
+    if request.properties.len() > MAX_BULK_OPTION_PROPERTIES {
+        return Err(BulkUpdateEntityPropertyOptionsErr::TooManyProperties);
+    }
+    let mut seen = std::collections::HashSet::with_capacity(request.properties.len());
+    for property in &request.properties {
+        if !seen.insert(property.property_id) {
+            return Err(BulkUpdateEntityPropertyOptionsErr::DuplicateProperty);
+        }
+        if property.add_option_ids.len() + property.remove_option_ids.len()
+            > MAX_OPTION_IDS_PER_PROPERTY
+        {
+            return Err(BulkUpdateEntityPropertyOptionsErr::TooManyOptions);
+        }
+    }
+    Ok(())
+}
+
 /// Apply a complete tag-picker selection across an entity's multi-select
 /// properties in one request.
 ///
@@ -573,8 +636,10 @@ pub async fn bulk_update_entity_property_options<
     State(state): State<PropertiesRouterState<S, A, Auth>>,
     access: EditReceiptExtractor,
     Json(request): Json<BulkUpdateEntityPropertyOptionsRequest>,
-) -> Result<Json<BulkUpdateEntityPropertyOptionsResponse>, EntityPropertyOptionErr> {
+) -> Result<Json<BulkUpdateEntityPropertyOptionsResponse>, BulkUpdateEntityPropertyOptionsErr> {
     tracing::info!("bulk updating entity property options");
+
+    validate_bulk_option_request(&request)?;
 
     let updates = request
         .properties
