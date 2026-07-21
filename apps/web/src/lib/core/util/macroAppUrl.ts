@@ -5,6 +5,9 @@ const Hosts = {
   Dev: 'dev.macro.com',
   Staging: 'staging.macro.com',
   Localhost: 'localhost',
+  // The webview's own origin under the http asset scheme (e.g. Windows/Android),
+  // where `window.location.hostname` is `tauri.localhost` rather than `localhost`.
+  TauriLocalhost: 'tauri.localhost',
 } as const;
 
 function cleanHostname(hostname: string): string {
@@ -27,11 +30,15 @@ export function isValidMacroAppHostname(hostname: string): boolean {
   ) {
     return true;
   }
-  // On Tauri, window.location.hostname is 'localhost', but Macro links are
-  // built with the real web origin (macro.com, dev.macro.com, or
+  // On Tauri, window.location.hostname is 'localhost' (custom tauri:// scheme)
+  // or 'tauri.localhost' (http asset scheme, e.g. Windows/Android), but Macro
+  // links are built with the real web origin (macro.com, dev.macro.com, or
   // staging.macro.com). Accept any recognized Macro host when running inside
   // the native Tauri app (mirrors APP_LINK_HOSTS on the Rust side).
-  if (isTauri() && current === Hosts.Localhost) {
+  if (
+    isTauri() &&
+    (current === Hosts.Localhost || current === Hosts.TauriLocalhost)
+  ) {
     return (
       target === Hosts.Prod || target === Hosts.Dev || target === Hosts.Staging
     );

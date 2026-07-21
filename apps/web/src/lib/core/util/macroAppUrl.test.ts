@@ -86,6 +86,27 @@ describe('parseInternalAppLink', () => {
     });
   });
 
+  it('accepts macro links under Tauri when served from tauri.localhost', () => {
+    // Under the http asset scheme (e.g. Windows/Android) the webview origin is
+    // tauri.localhost, not localhost.
+    vi.mocked(isTauri).mockReturnValue(true);
+    const original = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { hostname: 'tauri.localhost' },
+    });
+    try {
+      expect(
+        parseInternalAppLink('https://macro.com/app/component/abc')
+      ).toEqual({ path: '/component/abc', query: '' });
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
   it('rejects invalid urls', () => {
     expect(parseInternalAppLink('not a url')).toBeNull();
     expect(parseInternalAppLink('/app/component/abc')).toBeNull();

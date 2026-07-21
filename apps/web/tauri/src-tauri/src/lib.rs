@@ -399,18 +399,16 @@ struct DeepLinkDelivery {
     launch: std::sync::Mutex<LaunchState>,
 }
 
+#[derive(Default)]
 enum LaunchState {
-    /// Frontend `navigate` listener not registered yet; hold the latest link
-    /// for the flush.
-    AwaitingFrontend { pending: Option<Url> },
+    /// Frontend `navigate` listener not registered yet; no link has arrived.
+    #[default]
+    NotReady,
+    /// Frontend listener not registered yet and a link arrived; held for the
+    /// flush (latest wins).
+    PendingNavigation(Url),
     /// Frontend is ready; links emit directly.
     Ready,
-}
-
-impl Default for LaunchState {
-    fn default() -> Self {
-        Self::AwaitingFrontend { pending: None }
-    }
 }
 
 /// Convert a deep link url into a `navigate` event for the frontend router.
@@ -452,12 +450,15 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
 
             let delivery = handle.state::<DeepLinkDelivery>();
             let to_emit = {
-                let mut state = delivery.launch.lock().expect("deep link state poisoned");
-                match &mut *state {
+                let Ok(mut state) = delivery.launch.lock() else {
+                    tracing::error!("deep link state mutex poisoned; dropping deep link");
+                    return;
+                };
+                match &*state {
                     // Emitting now would be lost — hold the link for the flush.
-                    LaunchState::AwaitingFrontend { pending } => {
+                    LaunchState::NotReady | LaunchState::PendingNavigation(_) => {
                         tracing::trace!("frontend not ready; buffering deep link");
-                        *pending = Some(url);
+                        *state = LaunchState::PendingNavigation(url);
                         None
                     }
                     LaunchState::Ready => Some(url),
@@ -484,8 +485,12 @@ fn flush_launch_deep_link(app: AppHandle, delivery: tauri::State<'_, DeepLinkDel
     // native intent can arrive equally early. Share deep links are skipped:
     // their native handling already ran at launch and the frontend pulls the
     // files through the share commands.
+    // The plugin's vec is not a history: it holds the URLs of the most recent
+    // open event only (usually one; macOS can batch several in one event) and
+    // is replaced wholesale per event. Within a batch, prefer the last entry
+    // as the most recent, falling back past any share links.
     let launch_url = match app.deep_link().get_current() {
-        Ok(Some(urls)) => urls.into_iter().find(|url| !is_share_deep_link(url)),
+        Ok(Some(urls)) => urls.into_iter().rev().find(|url| !is_share_deep_link(url)),
         Ok(None) => None,
         Err(e) => {
             tracing::warn!(error=?e, "failed to read launch deep link");
@@ -494,10 +499,14 @@ fn flush_launch_deep_link(app: AppHandle, delivery: tauri::State<'_, DeepLinkDel
     };
 
     let to_emit = {
-        let mut state = delivery.launch.lock().expect("deep link state poisoned");
+        let Ok(mut state) = delivery.launch.lock() else {
+            tracing::error!("deep link state mutex poisoned; dropping launch deep link");
+            return;
+        };
         match std::mem::replace(&mut *state, LaunchState::Ready) {
             // A buffered link is newer than the launch link, so it wins.
-            LaunchState::AwaitingFrontend { pending } => pending.or(launch_url),
+            LaunchState::PendingNavigation(url) => Some(url),
+            LaunchState::NotReady => launch_url,
             LaunchState::Ready => None,
         }
     };
