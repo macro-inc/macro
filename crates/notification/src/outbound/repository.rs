@@ -44,6 +44,25 @@ type UserNotificationListRow = (
     Option<String>,
 );
 
+#[derive(sqlx::FromRow)]
+struct EntityNotificationListRow {
+    owner_id: String,
+    notification_id: Uuid,
+    event_item_id: String,
+    event_item_type: String,
+    secondary_event_item_id: Option<String>,
+    secondary_event_item_type: Option<String>,
+    sent: bool,
+    done: bool,
+    created_at: DateTime<Utc>,
+    viewed_at: Option<DateTime<Utc>>,
+    updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    notification_metadata: serde_json::Value,
+    notification_event_type: String,
+    sender_id: Option<String>,
+}
+
 struct UserNotificationsQueryArgs<'a> {
     user_id: &'a str,
     event_item_ids: Option<&'a [String]>,
@@ -243,6 +262,10 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
 
         builder.push("('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY(");
         builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.secondary_event_item_type = 'channel_message' AND 'message:' || n.secondary_event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
         builder.push("))");
 
         builder.push(")");
@@ -253,15 +276,21 @@ fn notification_ref_matches_row(
     entity_ref: &NotificationEntityRef,
     event_item_id: &str,
     event_item_type: &str,
+    secondary_event_item_id: Option<&str>,
+    secondary_event_item_type: Option<&str>,
     notification_event_type: &str,
     metadata: &serde_json::Value,
 ) -> bool {
     if entity_ref.entity_type == NotificationItemType::Message {
-        return metadata
+        let directly_targets_message = metadata
             .get("messageId")
             .or_else(|| metadata.get("message_id"))
             .and_then(|value| value.as_str())
             .is_some_and(|message_id| message_id == entity_ref.id);
+        let targets_message_as_thread = secondary_event_item_type == Some("channel_message")
+            && secondary_event_item_id == Some(entity_ref.id.as_str());
+
+        return directly_targets_message || targets_message_as_thread;
     }
 
     if entity_ref.id != event_item_id {
@@ -1112,6 +1141,8 @@ impl NotificationDbOps for PgPool {
                 un.notification_id,
                 n.event_item_id,
                 n.event_item_type,
+                n.secondary_event_item_id,
+                n.secondary_event_item_type,
                 un.sent,
                 un.done,
                 un.created_at::timestamptz as created_at,
@@ -1131,16 +1162,18 @@ impl NotificationDbOps for PgPool {
         builder.push(" ORDER BY un.created_at DESC, un.notification_id DESC");
 
         let rows = builder
-            .build_query_as::<UserNotificationListRow>()
+            .build_query_as::<EntityNotificationListRow>()
             .fetch_all(self)
             .await?;
 
         for row in rows {
-            let (
+            let EntityNotificationListRow {
                 owner_id,
                 notification_id,
                 event_item_id,
                 event_item_type,
+                secondary_event_item_id,
+                secondary_event_item_type,
                 sent,
                 done,
                 created_at,
@@ -1150,7 +1183,7 @@ impl NotificationDbOps for PgPool {
                 notification_metadata,
                 notification_event_type,
                 sender_id,
-            ) = row;
+            } = row;
 
             let entity = match EntityType::from_str(&event_item_type) {
                 Ok(entity_type) => entity_type.with_entity_string(event_item_id.clone()),
@@ -1198,6 +1231,8 @@ impl NotificationDbOps for PgPool {
                     entity_ref,
                     &event_item_id,
                     &event_item_type,
+                    secondary_event_item_id.as_deref(),
+                    secondary_event_item_type.as_deref(),
                     &notification_event_type,
                     &notification_metadata,
                 ) {
