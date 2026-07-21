@@ -8,7 +8,7 @@ use email::domain::models::{
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotId, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
-    EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
+    EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 use graphql_common::GraphqlSoupRequestParts;
 use macro_authorization::{
@@ -34,7 +34,9 @@ const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 #[derive(Clone, Default)]
 struct CountingSoupService {
     raw_calls: Arc<AtomicUsize>,
+    raw_team_receipts: Arc<AtomicUsize>,
     frecency_calls: Arc<AtomicUsize>,
+    frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
 }
 
@@ -67,13 +69,16 @@ impl SoupService for CountingSoupService {
     async fn get_user_soup<T>(
         &self,
         _req: soup::domain::models::SoupRequest<T>,
-        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
     ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
     where
         soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
         T: Clone + serde::Serialize + Send,
     {
         self.raw_calls.fetch_add(1, Ordering::SeqCst);
+        if team_receipt.is_some() {
+            self.raw_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
         Err(test_soup_err())
     }
 
@@ -95,7 +100,7 @@ impl SoupService for CountingSoupService {
     async fn get_user_soup_with_frecency<T>(
         &self,
         _req: soup::domain::models::SoupRequest<T>,
-        _team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
     ) -> Result<
         soup::domain::ports::SoupOutput<T, soup::domain::models::EnrichedSoupItem>,
         soup::domain::models::SoupErr,
@@ -105,6 +110,9 @@ impl SoupService for CountingSoupService {
         T: Clone + serde::Serialize + Send,
     {
         self.frecency_calls.fetch_add(1, Ordering::SeqCst);
+        if team_receipt.is_some() {
+            self.frecency_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
         Err(test_soup_err())
     }
 
@@ -290,8 +298,7 @@ impl EmailService for CountingEmailService {
     }
 }
 
-/// Entity access service whose team lookups are counted. The user has no
-/// team, so CRM-scoped queries are rejected after the (counted) lookup.
+/// Entity access service whose team lookups are counted and return a team.
 #[derive(Clone, Default)]
 struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
@@ -391,7 +398,10 @@ impl EntityAccessService for CountingEntityAccessService {
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         self.team_calls.fetch_add(1, Ordering::SeqCst);
-        Ok(None)
+        Ok(Some(UserTeamInfo {
+            team_id: Uuid::from_u128(42),
+            role: TeamRole::Member,
+        }))
     }
 }
 
@@ -477,7 +487,9 @@ struct TestHarness {
     inbox_calls: Arc<AtomicUsize>,
     team_calls: Arc<AtomicUsize>,
     raw_soup_calls: Arc<AtomicUsize>,
+    raw_soup_team_receipts: Arc<AtomicUsize>,
     frecency_soup_calls: Arc<AtomicUsize>,
+    frecency_soup_team_receipts: Arc<AtomicUsize>,
     grouped_soup_calls: Arc<AtomicUsize>,
 }
 
@@ -490,7 +502,9 @@ fn harness() -> TestHarness {
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let team_calls = Arc::clone(&entity_access.team_calls);
     let raw_soup_calls = Arc::clone(&soup.raw_calls);
+    let raw_soup_team_receipts = Arc::clone(&soup.raw_team_receipts);
     let frecency_soup_calls = Arc::clone(&soup.frecency_calls);
+    let frecency_soup_team_receipts = Arc::clone(&soup.frecency_team_receipts);
     let grouped_soup_calls = Arc::clone(&soup.grouped_calls);
     TestHarness {
         schema: build_schema_with_service(soup),
@@ -503,7 +517,9 @@ fn harness() -> TestHarness {
         inbox_calls,
         team_calls,
         raw_soup_calls,
+        raw_soup_team_receipts,
         frecency_soup_calls,
+        frecency_soup_team_receipts,
         grouped_soup_calls,
     }
 }
@@ -584,7 +600,7 @@ async fn internal_authorization_uses_the_acting_user_claim() {
 }
 
 #[tokio::test]
-async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
+async fn soup_passes_team_receipt_to_raw_path() {
     let harness = harness();
 
     let _response = harness
@@ -592,9 +608,14 @@ async fn soup_resolves_inboxes_but_skips_team_lookup_without_crm_scope() {
         .await;
 
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.raw_soup_team_receipts.load(Ordering::SeqCst), 1);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
+        0
+    );
 }
 
 #[tokio::test]
@@ -615,7 +636,7 @@ async fn soup_input_rejects_initial_and_continuation_together() {
 }
 
 #[tokio::test]
-async fn soup_requests_frecency_only_when_selected() {
+async fn soup_passes_team_receipt_to_frecency_enriched_path() {
     let harness = harness();
 
     let _response = harness
@@ -623,9 +644,14 @@ async fn soup_requests_frecency_only_when_selected() {
         .await;
 
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_team_receipts.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
+        1
+    );
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -664,8 +690,8 @@ async fn crm_scoped_soup_resolves_team_membership_lazily() {
     let harness = harness();
 
     // The membership/role authorization itself lives in the soup domain
-    // and CRM service (covered by their tests); this asserts the GraphQL
-    // layer resolves the team receipt only for CRM-scoped input.
+    // and CRM service (covered by their tests); this asserts CRM-scoped
+    // input still receives the always-resolved team receipt.
     let response = harness
         .execute(
             r#"{ user { soup(input: {initial: {filters: {emailFilter: {crmScope: {domains: ["example.com"]}}}}}) { hasMore } } }"#,
