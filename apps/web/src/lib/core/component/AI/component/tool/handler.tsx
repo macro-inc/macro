@@ -26,6 +26,7 @@ import {
   markNotificationsSeenHandler,
 } from './Notifications';
 import {
+  bulkSetEntityPropertyOptionsHandler,
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
@@ -96,6 +97,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SendChannelMessage: sendChannelMessageHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
+  BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,
   TextEditorCodeExecution: textEditorCodeExecutionHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,

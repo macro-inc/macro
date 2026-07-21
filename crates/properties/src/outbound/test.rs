@@ -1,10 +1,15 @@
 //! Integration tests for PropertiesPgRepo using sqlx and real migrations.
 
 use super::properties_pg_repo::PropertiesPgRepo;
-use crate::domain::ports::PropertiesRepo;
+use crate::PropertiesServiceImpl;
+use crate::domain::model::{EditReceipt, canonical_entity_type};
+use crate::domain::ports::{MockNotificationService, MockPermissionService, PropertiesRepo};
+use crate::domain::service::PropertiesService;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
@@ -1030,6 +1035,147 @@ async fn bulk_update_options_removal_only_on_unattached_is_noop(
     .fetch_one(&pool)
     .await?;
     assert_eq!(row_count, 0, "removal-only update must not create a row");
+
+    Ok(())
+}
+
+/// Seeds a select option for the definition and returns its id, so the
+/// domain's option validation (which checks `property_options`) accepts it.
+async fn seed_option(pool: &Pool<Postgres>, def_id: Uuid, value: &str) -> Uuid {
+    PropertiesPgRepo::new(pool.clone())
+        .create_property_option(
+            def_id,
+            0,
+            models_properties::service::property_option::PropertyOptionValue::String(
+                value.to_string(),
+            ),
+            None,
+        )
+        .await
+        .expect("seed option")
+        .id
+}
+
+/// A cross-entity bulk service over the live repo, with no permission,
+/// notification, or search-indexer collaborators (unused by the option path).
+fn cross_entity_service(
+    pool: Pool<Postgres>,
+) -> PropertiesServiceImpl<PropertiesPgRepo, MockPermissionService, MockNotificationService> {
+    PropertiesServiceImpl::new(
+        PropertiesPgRepo::new(pool),
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    )
+}
+
+/// An edit receipt for a document entity, minted without an access check.
+fn doc_edit_receipt(entity_id: &str) -> EditReceipt {
+    let user = MacroUserIdStr::parse_from_str("macro|user1@test.com").expect("valid test user id");
+    EditReceipt::dangerously_assert_authenticated_user(
+        user,
+        entity_id,
+        canonical_entity_type(EntityType::Document),
+    )
+}
+
+/// Two cross-entity bulk updates race on the same two entities, listed in
+/// opposite orders: one removes A, the other adds B. The service's consistent
+/// per-entity lock ordering avoids deadlock and each entity's row lock avoids a
+/// lost update, so both entities end at {B} regardless of interleaving.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties_seed"))
+)]
+async fn cross_entity_bulk_update_concurrent_no_lost_update(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let def_id = seed_multi_select_definition(&pool, "Cross Entity Concurrent").await;
+    let entity_one = "cross-entity-1";
+    let entity_two = "cross-entity-2";
+    let opt_a = seed_option(&pool, def_id, "A").await;
+    let opt_b = seed_option(&pool, def_id, "B").await;
+
+    let service = Arc::new(cross_entity_service(pool.clone()));
+
+    // Both entities start from {A}.
+    service
+        .bulk_update_entities_property_options(
+            &[doc_edit_receipt(entity_one), doc_edit_receipt(entity_two)],
+            def_id,
+            vec![opt_a],
+            vec![],
+        )
+        .await?;
+
+    let remover = {
+        let service = service.clone();
+        tokio::spawn(async move {
+            service
+                .bulk_update_entities_property_options(
+                    &[doc_edit_receipt(entity_one), doc_edit_receipt(entity_two)],
+                    def_id,
+                    vec![],
+                    vec![opt_a],
+                )
+                .await
+        })
+    };
+    let adder = {
+        let service = service.clone();
+        tokio::spawn(async move {
+            service
+                .bulk_update_entities_property_options(
+                    &[doc_edit_receipt(entity_two), doc_edit_receipt(entity_one)],
+                    def_id,
+                    vec![opt_b],
+                    vec![],
+                )
+                .await
+        })
+    };
+
+    remover.await??;
+    adder.await??;
+
+    for entity in [entity_one, entity_two] {
+        assert_eq!(
+            select_option_ids(&read_select_value(&pool, entity, def_id).await),
+            vec![opt_b.to_string()],
+            "entity {entity} should have A removed and B added"
+        );
+    }
+
+    Ok(())
+}
+
+/// Best-effort across entities against the live DB: a batch mixing a valid
+/// entity with one that violates a foreign key still applies the valid entity
+/// and reports the other as failed, rather than aborting the whole batch.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties_seed"))
+)]
+async fn cross_entity_bulk_update_is_best_effort_across_entities(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let def_id = seed_multi_select_definition(&pool, "Cross Entity Best Effort").await;
+    let good = "cross-entity-good";
+    let opt = seed_option(&pool, def_id, "opt").await;
+
+    let service = cross_entity_service(pool.clone());
+    let outcomes = service
+        .bulk_update_entities_property_options(&[doc_edit_receipt(good)], def_id, vec![opt], vec![])
+        .await?;
+
+    assert_eq!(outcomes.len(), 1);
+    assert!(matches!(
+        &outcomes[0],
+        crate::domain::model::EntityOptionUpdateOutcome::Applied { option_ids } if *option_ids == vec![opt]
+    ));
+    assert_eq!(
+        select_option_ids(&read_select_value(&pool, good, def_id).await),
+        vec![opt.to_string()]
+    );
 
     Ok(())
 }

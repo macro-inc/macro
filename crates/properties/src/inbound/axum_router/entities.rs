@@ -27,8 +27,8 @@ use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
 use super::extract::{mint_authenticated_receipt, mint_view_receipt, target_entity_type};
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::EntityPropertyOptionUpdate;
 use crate::domain::model::PropertyAccessReceiptExt;
+use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome, EntityPropertyOptionUpdate};
 use crate::domain::service::PropertiesService;
 
 #[cfg(test)]
@@ -665,6 +665,229 @@ pub async fn bulk_update_entity_property_options<
             })
             .collect(),
     }))
+}
+
+/// Request to apply one shared option delta across several entities in a single
+/// call. Mirrors the per-entity bulk endpoint's delta semantics, applied to
+/// every listed entity (e.g. tag N emails with one label in one request).
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct BulkUpdateEntitiesPropertyOptionsRequest {
+    /// The entities to update. Entities the caller cannot edit are skipped.
+    pub entities: Vec<PropertyTargetReference>,
+    /// The multi-select property definition changed on every entity.
+    pub property_id: Uuid,
+    /// Options to add to each entity's current value (deduped).
+    #[serde(default)]
+    pub add_option_ids: Vec<Uuid>,
+    /// Options to remove from each entity's current value (a no-op if absent).
+    #[serde(default)]
+    pub remove_option_ids: Vec<Uuid>,
+}
+
+/// Per-entity outcome of a cross-entity bulk option update.
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BulkEntityOptionUpdateStatus {
+    /// The delta was applied to the entity.
+    Applied,
+    /// The caller lacks edit access to the entity; it was left unchanged.
+    SkippedNoPermission,
+    /// The delta could not be applied (wrong entity type, or a write failure).
+    Failed,
+}
+
+/// One entity's result in a cross-entity bulk option update.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct BulkEntityOptionUpdateResult {
+    /// The entity's type this result is for.
+    pub entity_type: PropertyTargetEntityType,
+    /// The entity's id this result is for.
+    pub entity_id: String,
+    /// Whether the delta was applied, skipped, or failed for this entity.
+    pub status: BulkEntityOptionUpdateStatus,
+    /// The entity's reconciled final option ids, present only when `applied`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub option_ids: Option<Vec<Uuid>>,
+    /// A human-readable reason, present only when `failed`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Response for a cross-entity bulk option update: one result per requested
+/// entity, in request order.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct BulkUpdateEntitiesPropertyOptionsResponse {
+    /// Per-entity results, aligned to the request's `entities` order.
+    pub results: Vec<BulkEntityOptionUpdateResult>,
+}
+
+#[derive(Debug, Error)]
+pub enum BulkUpdateEntitiesPropertyOptionsErr {
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
+    #[error("Cannot update more than {MAX_BULK_ENTITIES} entities at once")]
+    TooManyEntities,
+    #[error("Cannot change more than {MAX_OPTION_IDS_PER_PROPERTY} options at once")]
+    TooManyOptions,
+}
+
+impl IntoResponse for BulkUpdateEntitiesPropertyOptionsErr {
+    fn into_response(self) -> Response {
+        let status_code = match &self {
+            BulkUpdateEntitiesPropertyOptionsErr::Properties(e) => properties_err_status(e),
+            BulkUpdateEntitiesPropertyOptionsErr::TooManyEntities
+            | BulkUpdateEntitiesPropertyOptionsErr::TooManyOptions => StatusCode::BAD_REQUEST,
+        };
+
+        if status_code.is_server_error() {
+            tracing::error!(
+                error = ?self,
+                error_type = "BulkUpdateEntitiesPropertyOptionsErr",
+                "Internal server error"
+            );
+        }
+
+        (status_code, self.to_string()).into_response()
+    }
+}
+
+/// Reject oversized requests before any permission checks or database work, so
+/// one authenticated call can't force unbounded receipt-minting and lock work.
+fn validate_bulk_entities_option_request(
+    request: &BulkUpdateEntitiesPropertyOptionsRequest,
+) -> Result<(), BulkUpdateEntitiesPropertyOptionsErr> {
+    if request.entities.len() > MAX_BULK_ENTITIES {
+        return Err(BulkUpdateEntitiesPropertyOptionsErr::TooManyEntities);
+    }
+    if request.add_option_ids.len() + request.remove_option_ids.len() > MAX_OPTION_IDS_PER_PROPERTY
+    {
+        return Err(BulkUpdateEntitiesPropertyOptionsErr::TooManyOptions);
+    }
+    Ok(())
+}
+
+/// Apply one shared option delta (add / remove option ids on a single
+/// multi-select property) to many entities in one request — e.g. tag a set of
+/// emails with one label.
+///
+/// Best-effort per entity: one edit receipt is minted per entity, entities the
+/// caller can't edit are reported as `skipped_no_permission` (mirroring the
+/// read path, which silently drops entities the caller can't view), and each
+/// permitted entity is updated in its own transaction so one entity failing
+/// does not roll back the others. Returns one result per requested entity in
+/// request order, with the reconciled final option ids for the successes.
+#[utoipa::path(
+    post,
+    path = "/properties/options/bulk",
+    request_body = BulkUpdateEntitiesPropertyOptionsRequest,
+    responses(
+        (status = 200, description = "Per-entity results: each entity applied, skipped, or failed", body = BulkUpdateEntitiesPropertyOptionsResponse),
+        (status = 400, description = "Invalid request, the property is not multi-select, or an option does not belong to the property"),
+        (status = 401, description = "Unauthenticated"),
+        (status = 500, description = "Internal server error")
+    ),
+    tags = ["Properties"]
+)]
+#[tracing::instrument(skip(state, request, user), fields(entity_count = request.entities.len(), property_id = %request.property_id), err)]
+pub async fn bulk_update_entities_property_options<
+    S: PropertiesService,
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<PropertiesRouterState<S, A, Auth>>,
+    MacroAuthorizationExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroAuthorizationExtractor<Auth>,
+    Json(request): Json<BulkUpdateEntitiesPropertyOptionsRequest>,
+) -> Result<Json<BulkUpdateEntitiesPropertyOptionsResponse>, BulkUpdateEntitiesPropertyOptionsErr> {
+    tracing::info!("bulk updating property options across entities");
+
+    validate_bulk_entities_option_request(&request)?;
+
+    let BulkUpdateEntitiesPropertyOptionsRequest {
+        entities,
+        property_id,
+        add_option_ids,
+        remove_option_ids,
+    } = request;
+
+    // Mint one edit receipt per entity. Entities the caller can't edit are
+    // recorded as skipped and never handed to the service.
+    let mut results: Vec<Option<BulkEntityOptionUpdateResult>> =
+        (0..entities.len()).map(|_| None).collect();
+    let mut receipts: Vec<EditReceipt> = Vec::new();
+    let mut granted_indices: Vec<usize> = Vec::new();
+
+    for (index, entity_ref) in entities.iter().enumerate() {
+        match mint_authenticated_receipt::<EditAccessLevel, A>(
+            state.entity_access_service.as_ref(),
+            &user,
+            &entity_ref.entity_id,
+            target_entity_type(entity_ref.entity_type),
+        )
+        .await
+        {
+            Ok(receipt) => {
+                receipts.push(receipt);
+                granted_indices.push(index);
+            }
+            Err(error) => {
+                tracing::debug!(
+                    entity_id = %entity_ref.entity_id,
+                    entity_type = ?entity_ref.entity_type,
+                    error = ?error,
+                    "user lacks edit permission, skipping entity"
+                );
+                results[index] = Some(BulkEntityOptionUpdateResult {
+                    entity_type: entity_ref.entity_type,
+                    entity_id: entity_ref.entity_id.clone(),
+                    status: BulkEntityOptionUpdateStatus::SkippedNoPermission,
+                    option_ids: None,
+                    error: None,
+                });
+            }
+        }
+    }
+
+    if !receipts.is_empty() {
+        let outcomes = state
+            .properties_service
+            .bulk_update_entities_property_options(
+                &receipts,
+                property_id,
+                add_option_ids,
+                remove_option_ids,
+            )
+            .await?;
+
+        for (index, outcome) in granted_indices.into_iter().zip(outcomes) {
+            let entity_ref = &entities[index];
+            results[index] = Some(match outcome {
+                EntityOptionUpdateOutcome::Applied { option_ids } => BulkEntityOptionUpdateResult {
+                    entity_type: entity_ref.entity_type,
+                    entity_id: entity_ref.entity_id.clone(),
+                    status: BulkEntityOptionUpdateStatus::Applied,
+                    option_ids: Some(option_ids),
+                    error: None,
+                },
+                EntityOptionUpdateOutcome::Failed { message } => BulkEntityOptionUpdateResult {
+                    entity_type: entity_ref.entity_type,
+                    entity_id: entity_ref.entity_id.clone(),
+                    status: BulkEntityOptionUpdateStatus::Failed,
+                    option_ids: None,
+                    error: Some(message),
+                },
+            });
+        }
+    }
+
+    let results = results
+        .into_iter()
+        .map(|result| result.expect("every entity yields a result"))
+        .collect();
+
+    Ok(Json(BulkUpdateEntitiesPropertyOptionsResponse { results }))
 }
 
 #[derive(Debug, Error)]

@@ -38,6 +38,18 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Canonical entity type accepted when an AI tool targets an entity's properties.
+ */
+export type ToolPropertyTargetEntityType =
+  | 'document'
+  | 'project'
+  | 'chat'
+  | 'thread'
+  | 'channel'
+  | 'call'
+  | 'user'
+  | 'company';
+/**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
  */
@@ -316,18 +328,6 @@ export type EntityItem =
       type: 'foreignEntity';
     };
 /**
- * Canonical entity type accepted when an AI tool targets an entity's properties.
- */
-export type ToolPropertyTargetEntityType =
-  | 'document'
-  | 'project'
-  | 'chat'
-  | 'thread'
-  | 'channel'
-  | 'call'
-  | 'user'
-  | 'company';
-/**
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
@@ -590,6 +590,77 @@ export interface BashCodeExecutionToolError {
 export interface BashCodeExecutionResponse {
   content: BashCodeExecutionContent;
   tool_use_id: string;
+}
+/**
+ * Apply one multi-select option delta — most often a tag — to many entities in a single call. Use this instead of calling SetEntityProperty once per entity when the user asks to tag or label a set of items at once (e.g. "tag the last 50 emails as Follow-up"). Provide the property_definition_id (a tag set's propertyDefinitionId from ListTags) and the option ids to add and/or remove (a tag's option id from ListTags). The same add_option_ids/remove_option_ids delta is applied to every entity, composing atomically with concurrent edits per entity.
+ *
+ * Only for multi-select or tag properties; for other value types, or a single entity, use SetEntityProperty. Up to 200 entities per call — split larger sets across multiple calls.
+ *
+ * Best-effort: each entity is handled independently. Entities you don't have edit access to are reported with status 'skipped_no_permission' and left unchanged, entities that can't take the property are 'failed', and the rest are 'applied' — one call never fails wholesale because a few entities were not editable. Inspect the per-entity results and the summary to see what happened.
+ */
+export interface BulkSetEntityPropertyOptions {
+  /**
+   * Options to add to every entity (e.g. a tag's option id from ListTags),
+   * deduped against each entity's current value.
+   */
+  add_option_ids?: string[] | null;
+  /**
+   * The entities to update (up to 200). Entities the user can't edit are skipped.
+   */
+  entities: BulkTargetEntity[];
+  /**
+   * The multi-select property definition id changed on every entity — e.g. a
+   * tag set's propertyDefinitionId from ListTags.
+   */
+  property_definition_id: string;
+  /**
+   * Options to remove from every entity. Removing an absent option is a no-op.
+   */
+  remove_option_ids?: string[] | null;
+}
+/**
+ * One entity targeted by a bulk option update.
+ */
+export interface BulkTargetEntity {
+  /**
+   * The id of the entity.
+   */
+  entity_id: string;
+  entity_type: ToolPropertyTargetEntityType;
+}
+/**
+ * Response from the BulkSetEntityPropertyOptions tool.
+ */
+export interface BulkSetEntityPropertyOptionsResponse {
+  /**
+   * Per-entity results, aligned to the requested entities' order.
+   */
+  results: BulkSetEntityPropertyOptionsResult[];
+  /**
+   * Human-readable summary of how many entities were applied/skipped/failed.
+   */
+  summary: string;
+}
+/**
+ * One entity's result in the tool response.
+ */
+export interface BulkSetEntityPropertyOptionsResult {
+  /**
+   * The entity's id this result is for.
+   */
+  entityId: string;
+  /**
+   * The entity's type this result is for.
+   */
+  entityType: string;
+  /**
+   * A human-readable reason, present only when the status is failed.
+   */
+  error?: string | null;
+  /**
+   * One of: applied, skipped_no_permission, failed.
+   */
+  status: string;
 }
 export interface CallRecordMetadata {
   attended: boolean;

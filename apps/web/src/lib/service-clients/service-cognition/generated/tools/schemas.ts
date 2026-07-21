@@ -71,6 +71,41 @@ export const BashCodeExecutionResponse = z.object({
   tool_use_id: z.string(),
 });
 
+export const BulkSetEntityPropertyOptions = z.object({
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
+  entities: z.array(
+    z.object({
+      entity_id: z.string(),
+      entity_type: z.enum([
+        'document',
+        'project',
+        'chat',
+        'thread',
+        'channel',
+        'call',
+        'user',
+        'company',
+      ]),
+    })
+  ),
+  property_definition_id: z.string().uuid(),
+  remove_option_ids: z
+    .union([z.array(z.string().uuid()), z.null()])
+    .default(null),
+});
+
+export const BulkSetEntityPropertyOptionsResponse = z.object({
+  results: z.array(
+    z.object({
+      entityId: z.string(),
+      entityType: z.string(),
+      error: z.union([z.string(), z.null()]).optional(),
+      status: z.string(),
+    })
+  ),
+  summary: z.string(),
+});
+
 export const ContentSearch = z.object({
   entityTypes: z
     .array(

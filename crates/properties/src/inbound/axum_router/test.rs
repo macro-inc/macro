@@ -93,6 +93,12 @@ impl EntityAccessService for FakeEntityAccessService {
             entity_type,
         });
 
+        // Entities whose id contains "denied" model the caller lacking access,
+        // so receipt-minting fails for them (used by the bulk skip test).
+        if entity_id.contains("denied") {
+            return Err(AccessError::Unauthorized);
+        }
+
         let user_id = MacroUserIdStr::try_from(user_id.as_ref().to_string())
             .expect("authorized test user id should be valid");
         Ok(EntityAccessReceipt::dangerously_assert_authenticated_user(
@@ -458,4 +464,104 @@ async fn malformed_typed_path_is_rejected_before_missing_authentication() {
         response_body(response).await,
         "Missing or invalid entity_type / entity_id in path"
     );
+}
+
+fn multi_select_def(
+    id: Uuid,
+) -> models_properties::service::property_definition::PropertyDefinition {
+    models_properties::service::property_definition::PropertyDefinition {
+        id,
+        owner: models_properties::PropertyOwner::System,
+        display_name: "Tags".to_string(),
+        data_type: models_properties::DataType::SelectString,
+        is_multi_select: true,
+        specific_entity_type: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        is_system: false,
+        is_metadata: false,
+    }
+}
+
+/// Builds the full properties router over a mock-repo service so the bulk
+/// cross-entity endpoint can be exercised end to end.
+fn properties_router(
+    service: TestPropertiesService,
+    entity_access_service: FakeEntityAccessService,
+) -> Router {
+    let state = PropertiesRouterState::new(
+        Arc::new(service),
+        Arc::new(entity_access_service),
+        authorization_state(),
+    );
+    super::router::<TestPropertiesService, FakeEntityAccessService, TestAuthorizationService>()
+        .with_state(state)
+}
+
+#[tokio::test]
+async fn bulk_options_across_entities_skips_denied_and_applies_granted() {
+    use crate::domain::model::EntityPropertyOptionSelection;
+
+    let property_id = Uuid::new_v4();
+    let option_id = Uuid::new_v4();
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition()
+        .returning(move |_| Box::pin(async move { Ok(Some(multi_select_def(property_id))) }));
+    repo.expect_count_valid_property_options()
+        .returning(|_, _| Box::pin(async { Ok(1) }));
+    // Only the granted entity reaches the write path.
+    repo.expect_bulk_update_entity_property_options()
+        .times(1)
+        .withf(|entity_id, _, _| entity_id == "doc-granted")
+        .returning(move |_, _, _| {
+            Box::pin(async move {
+                Ok(vec![EntityPropertyOptionSelection {
+                    property_definition_id: property_id,
+                    option_ids: vec![option_id],
+                }])
+            })
+        });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    let router = properties_router(service, FakeEntityAccessService::default());
+
+    let body = serde_json::json!({
+        "entities": [
+            {"entity_type": "DOCUMENT", "entity_id": "doc-denied"},
+            {"entity_type": "DOCUMENT", "entity_id": "doc-granted"},
+        ],
+        "property_id": property_id,
+        "add_option_ids": [option_id],
+        "remove_option_ids": [],
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/options/bulk")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid");
+
+    let response = router
+        .oneshot(request)
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&response_body(response).await).expect("json body");
+    let results = json["results"].as_array().expect("results array");
+    assert_eq!(results.len(), 2, "one result per requested entity");
+
+    // Results are returned in request order.
+    assert_eq!(results[0]["entity_id"], "doc-denied");
+    assert_eq!(results[0]["status"], "skipped_no_permission");
+    assert_eq!(results[1]["entity_id"], "doc-granted");
+    assert_eq!(results[1]["status"], "applied");
+    assert_eq!(results[1]["option_ids"], serde_json::json!([option_id]));
 }

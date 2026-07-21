@@ -721,6 +721,45 @@
         }
       }
     },
+    "/properties/options/bulk": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Apply one shared option delta (add / remove option ids on a single\nmulti-select property) to many entities in one request — e.g. tag a set of\nemails with one label.",
+        "description": "Best-effort per entity: one edit receipt is minted per entity, entities the\ncaller can't edit are reported as `skipped_no_permission` (mirroring the\nread path, which silently drops entities the caller can't view), and each\npermitted entity is updated in its own transaction so one entity failing\ndoes not roll back the others. Returns one result per requested entity in\nrequest order, with the reconciled final option ids for the successes.",
+        "operationId": "bulk_update_entities_property_options",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateEntitiesPropertyOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Per-entity results: each entity applied, skipped, or failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUpdateEntitiesPropertyOptionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, the property is not multi-select, or an option does not belong to the property"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/properties/tags": {
       "get": {
         "tags": ["Properties"],
@@ -847,6 +886,42 @@
           }
         }
       },
+      "BulkEntityOptionUpdateResult": {
+        "type": "object",
+        "description": "One entity's result in a cross-entity bulk option update.",
+        "required": ["entity_type", "entity_id", "status"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "The entity's id this result is for."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/PropertyTargetEntityType",
+            "description": "The entity's type this result is for."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "A human-readable reason, present only when `failed`."
+          },
+          "option_ids": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The entity's reconciled final option ids, present only when `applied`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/BulkEntityOptionUpdateStatus",
+            "description": "Whether the delta was applied, skipped, or failed for this entity."
+          }
+        }
+      },
+      "BulkEntityOptionUpdateStatus": {
+        "type": "string",
+        "description": "Per-entity outcome of a cross-entity bulk option update.",
+        "enum": ["applied", "skipped_no_permission", "failed"]
+      },
       "BulkEntityPropertiesRequest": {
         "type": "object",
         "description": "Request for getting properties for multiple entities in bulk",
@@ -866,6 +941,55 @@
               "format": "uuid"
             },
             "description": "Optional: only return properties with these definition IDs. If empty, returns all."
+          }
+        }
+      },
+      "BulkUpdateEntitiesPropertyOptionsRequest": {
+        "type": "object",
+        "description": "Request to apply one shared option delta across several entities in a single\ncall. Mirrors the per-entity bulk endpoint's delta semantics, applied to\nevery listed entity (e.g. tag N emails with one label in one request).",
+        "required": ["entities", "property_id"],
+        "properties": {
+          "add_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Options to add to each entity's current value (deduped)."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyTargetReference"
+            },
+            "description": "The entities to update. Entities the caller cannot edit are skipped."
+          },
+          "property_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The multi-select property definition changed on every entity."
+          },
+          "remove_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Options to remove from each entity's current value (a no-op if absent)."
+          }
+        }
+      },
+      "BulkUpdateEntitiesPropertyOptionsResponse": {
+        "type": "object",
+        "description": "Response for a cross-entity bulk option update: one result per requested\nentity, in request order.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkEntityOptionUpdateResult"
+            },
+            "description": "Per-entity results, aligned to the request's `entities` order."
           }
         }
       },

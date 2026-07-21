@@ -203,6 +203,29 @@ pub struct EntityPropertyOptionSelection {
     pub option_ids: Vec<Uuid>,
 }
 
+/// The outcome of applying one shared option delta to a single entity in a
+/// cross-entity bulk update.
+///
+/// The batch is best-effort per entity: each entity gets its own transaction,
+/// so one entity failing does not roll back the others. An entity the caller
+/// could not edit never reaches the domain (its receipt was never minted), so
+/// the "skipped, no permission" case lives only at the transport/tool boundary
+/// and is not represented here.
+#[derive(Debug, Clone)]
+pub enum EntityOptionUpdateOutcome {
+    /// The delta was applied; carries the entity's reconciled final option ids.
+    Applied {
+        /// The final option ids stored for the entity's property, in stored order.
+        option_ids: Vec<Uuid>,
+    },
+    /// The delta was not applied to this entity (the property does not apply to
+    /// its type, or the write failed). Carries a human-readable reason.
+    Failed {
+        /// Why the delta was not applied.
+        message: String,
+    },
+}
+
 /// Outcome of an in-place property option update.
 #[derive(Debug, Clone)]
 pub enum UpdatePropertyOptionOutcome {

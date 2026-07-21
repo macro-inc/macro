@@ -23,5 +23,25 @@ const setHandler = createToolRenderer({
   ),
 });
 
+const bulkSetHandler = createToolRenderer({
+  name: 'BulkSetEntityPropertyOptions',
+  render: (ctx) => {
+    const count = ctx.tool.data.entities.length;
+    return (
+      <BaseTool
+        icon={PencilSimple}
+        renderContext={ctx.renderContext}
+        type="call"
+      >
+        Update a property on{' '}
+        <span class="text-ink">
+          {count} {count === 1 ? 'item' : 'items'}
+        </span>
+      </BaseTool>
+    );
+  },
+});
+
 export const getEntityPropertiesHandler = getHandler;
 export const setEntityPropertyHandler = setHandler;
+export const bulkSetEntityPropertyOptionsHandler = bulkSetHandler;
