@@ -25,13 +25,9 @@ use crate::domain::{events::WebhookTopicEvent, ingestion::WebhookEventIngestionS
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
-use macro_env::Environment;
-use macro_event_broker::outbound::msk_iam::configure_sasl_iam;
-use macro_event_broker::{Event, EventBrokerError, MskIamClientContext, Topic as _};
+use macro_event_broker::{Event, EventBrokerError, KafkaEventConsumer, Topic as _};
 use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroWebhooksTopic};
-use rdkafka::ClientConfig;
-use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
-use rdkafka::error::KafkaResult;
+use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use std::future::Future;
 use std::time::Duration;
@@ -90,85 +86,20 @@ impl WebhookConsumerEvent {
     }
 }
 
-/// The underlying consumer, split by transport (mirrors `KafkaEventPublisher`).
-enum WebhookKafkaConsumer {
-    /// Unauthenticated plaintext connection (local docker broker).
-    Plaintext(StreamConsumer),
-    /// TLS + SASL/OAUTHBEARER with AWS MSK IAM auth (deployed clusters).
-    MskIam(StreamConsumer<MskIamClientContext>),
-}
-
-impl WebhookKafkaConsumer {
-    /// Build a consumer for the given brokers, choosing the transport from the
-    /// `ENVIRONMENT` variable exactly like the publisher does.
-    fn from_env(brokers: &str) -> anyhow::Result<Self> {
-        let mut config = ClientConfig::new();
-        config
-            .set("bootstrap.servers", brokers)
-            .set("group.id", GROUP_ID)
-            // Offsets are committed manually after successful ingestion.
-            .set("enable.auto.commit", "false")
-            // Start from the beginning of the topics on the first ever run.
-            .set("auto.offset.reset", "earliest");
-
-        let consumer = match Environment::new_or_prod() {
-            Environment::Local => Self::Plaintext(
-                config
-                    .create()
-                    .context("failed to create plaintext kafka consumer")?,
-            ),
-            Environment::Develop | Environment::Production => {
-                configure_sasl_iam(&mut config);
-                Self::MskIam(
-                    config
-                        .create_with_context(MskIamClientContext::from_env())
-                        .context("failed to create MSK IAM kafka consumer")?,
-                )
-            }
-        };
-
-        Ok(consumer)
-    }
-
-    fn subscribe(&self) -> KafkaResult<()> {
-        let topics = subscribed_topics();
-        match self {
-            Self::Plaintext(consumer) => consumer.subscribe(&topics),
-            Self::MskIam(consumer) => consumer.subscribe(&topics),
-        }
-    }
-
-    /// Receive the next message. `StreamConsumer::recv` is cancel-safe, so it
-    /// can sit in a `select!` without losing messages.
-    async fn recv(&self) -> KafkaResult<BorrowedMessage<'_>> {
-        match self {
-            Self::Plaintext(consumer) => consumer.recv().await,
-            Self::MskIam(consumer) => consumer.recv().await,
-        }
-    }
-
-    fn commit(&self, message: &BorrowedMessage<'_>) -> KafkaResult<()> {
-        match self {
-            Self::Plaintext(consumer) => consumer.commit_message(message, CommitMode::Async),
-            Self::MskIam(consumer) => consumer.commit_message(message, CommitMode::Async),
-        }
-    }
-
-    /// Commit `message`'s offset, logging the outcome.
-    fn commit_logged(&self, message: &BorrowedMessage<'_>) {
-        match self.commit(message) {
-            Ok(()) => tracing::trace!(
-                partition = message.partition(),
-                offset = message.offset(),
-                "committed offset"
-            ),
-            Err(e) => tracing::error!(
-                error = ?e,
-                partition = message.partition(),
-                offset = message.offset(),
-                "failed to commit offset"
-            ),
-        }
+/// Commit `message`'s offset, logging the outcome.
+fn commit_logged(consumer: &KafkaEventConsumer, message: &BorrowedMessage<'_>) {
+    match consumer.commit_message(message, CommitMode::Async) {
+        Ok(()) => tracing::trace!(
+            partition = message.partition(),
+            offset = message.offset(),
+            "committed offset"
+        ),
+        Err(error) => tracing::error!(
+            error = ?error,
+            partition = message.partition(),
+            offset = message.offset(),
+            "failed to commit offset"
+        ),
     }
 }
 
@@ -259,9 +190,9 @@ pub async fn run_webhook_event_consumer<S>(
 where
     S: WebhookEventIngestionService,
 {
-    let consumer = WebhookKafkaConsumer::from_env(brokers)?;
+    let consumer = KafkaEventConsumer::from_env(brokers, GROUP_ID)?;
     consumer
-        .subscribe()
+        .subscribe(&subscribed_topics())
         .context("failed to subscribe to webhook event topics")?;
     tracing::info!(
         topics = ?subscribed_topics(),
@@ -298,7 +229,7 @@ where
                         offset = message.offset(),
                         "skipping message with empty payload"
                     );
-                    consumer.commit_logged(&message);
+                    commit_logged(&consumer, &message);
                     continue;
                 };
 
@@ -330,7 +261,7 @@ where
 
                 // Commit only after the event was ingested or permanently
                 // rejected: at-least-once, retried across restarts.
-                consumer.commit_logged(&message);
+                commit_logged(&consumer, &message);
             }
         }
     }

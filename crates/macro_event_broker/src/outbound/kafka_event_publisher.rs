@@ -16,7 +16,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 
 use crate::domain::models::EventBrokerError;
 use crate::domain::ports::EventPublisher;
-use crate::outbound::msk_iam::{MskIamClientContext, configure_sasl_iam};
+use crate::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
 
 /// How long a record may sit in the producer queue before delivery is considered failed.
 const MESSAGE_TIMEOUT_MS: &str = "5000";

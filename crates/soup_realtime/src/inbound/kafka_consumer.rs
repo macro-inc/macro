@@ -10,14 +10,10 @@ mod test;
 use std::{future::Future, time::Duration};
 
 use documents::domain::events::DocumentTopicEvent;
-use macro_env::Environment;
-use macro_event_broker::outbound::msk_iam::configure_sasl_iam;
-use macro_event_broker::{Event, EventBrokerError, MskIamClientContext, Topic as _};
+use macro_event_broker::{Event, EventBrokerError, KafkaEventConsumer, Topic as _};
 use macro_event_topics::MacroDocumentsTopic;
 use model_entity::{Entity, EntityType};
-use rdkafka::ClientConfig;
-use rdkafka::consumer::{CommitMode, Consumer as _, StreamConsumer};
-use rdkafka::error::KafkaResult;
+use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
 
@@ -135,76 +131,19 @@ async fn notify_with_retry<S: SoupRealtimeService>(
     }
 }
 
-/// Kafka consumer transport selected to mirror the production event publisher.
-enum DocumentKafkaConsumer {
-    /// Unauthenticated local Kafka.
-    Plaintext(StreamConsumer),
-    /// TLS and MSK IAM authenticated Kafka.
-    MskIam(StreamConsumer<MskIamClientContext>),
-}
-
-impl DocumentKafkaConsumer {
-    fn from_env(brokers: &str) -> Result<Self, Report> {
-        let mut config = ClientConfig::new();
-        config
-            .set("bootstrap.servers", brokers)
-            .set("group.id", GROUP_ID)
-            .set("enable.auto.commit", "false")
-            .set("auto.offset.reset", "earliest");
-
-        match Environment::new_or_prod() {
-            Environment::Local => config
-                .create()
-                .map(Self::Plaintext)
-                .context("failed to create plaintext realtime Soup consumer")
-                .map_err(Into::into),
-            Environment::Develop | Environment::Production => {
-                configure_sasl_iam(&mut config);
-                config
-                    .create_with_context(MskIamClientContext::from_env())
-                    .map(Self::MskIam)
-                    .context("failed to create MSK IAM realtime Soup consumer")
-                    .map_err(Into::into)
-            }
-        }
-    }
-
-    fn subscribe(&self) -> KafkaResult<()> {
-        let topics = subscribed_topics();
-        match self {
-            Self::Plaintext(consumer) => consumer.subscribe(&topics),
-            Self::MskIam(consumer) => consumer.subscribe(&topics),
-        }
-    }
-
-    async fn recv(&self) -> KafkaResult<BorrowedMessage<'_>> {
-        match self {
-            Self::Plaintext(consumer) => consumer.recv().await,
-            Self::MskIam(consumer) => consumer.recv().await,
-        }
-    }
-
-    fn commit(&self, message: &BorrowedMessage<'_>) -> KafkaResult<()> {
-        match self {
-            Self::Plaintext(consumer) => consumer.commit_message(message, CommitMode::Async),
-            Self::MskIam(consumer) => consumer.commit_message(message, CommitMode::Async),
-        }
-    }
-
-    fn commit_logged(&self, message: &BorrowedMessage<'_>) {
-        match self.commit(message) {
-            Ok(()) => tracing::trace!(
-                partition = message.partition(),
-                offset = message.offset(),
-                "committed realtime Soup input offset"
-            ),
-            Err(error) => tracing::error!(
-                error = ?error,
-                partition = message.partition(),
-                offset = message.offset(),
-                "failed to commit realtime Soup input offset"
-            ),
-        }
+fn commit_logged(consumer: &KafkaEventConsumer, message: &BorrowedMessage<'_>) {
+    match consumer.commit_message(message, CommitMode::Async) {
+        Ok(()) => tracing::trace!(
+            partition = message.partition(),
+            offset = message.offset(),
+            "committed realtime Soup input offset"
+        ),
+        Err(error) => tracing::error!(
+            error = ?error,
+            partition = message.partition(),
+            offset = message.offset(),
+            "failed to commit realtime Soup input offset"
+        ),
     }
 }
 
@@ -224,9 +163,9 @@ pub async fn run_document_update_consumer<S>(
 where
     S: SoupRealtimeService,
 {
-    let consumer = DocumentKafkaConsumer::from_env(brokers)?;
+    let consumer = KafkaEventConsumer::from_env(brokers, GROUP_ID)?;
     consumer
-        .subscribe()
+        .subscribe(&subscribed_topics())
         .context("failed to subscribe to document update topic")?;
     tracing::info!(
         topics = ?subscribed_topics(),
@@ -263,7 +202,7 @@ where
                         offset = message.offset(),
                         "skipping document event with empty payload"
                     );
-                    consumer.commit_logged(&message);
+                    commit_logged(&consumer, &message);
                     continue;
                 };
 
@@ -285,7 +224,7 @@ where
                     ),
                 }
 
-                consumer.commit_logged(&message);
+                commit_logged(&consumer, &message);
             }
         }
     }
