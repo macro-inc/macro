@@ -13386,6 +13386,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "soup_realtime"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "documents",
+ "entity_access",
+ "futures",
+ "macro_env",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "model-entity",
+ "models_properties",
+ "models_soup",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
