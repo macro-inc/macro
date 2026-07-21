@@ -310,7 +310,6 @@ impl EmailService for MockEmail {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &email::domain::models::Link,
         _thread_id: uuid::Uuid,
         _label_id: uuid::Uuid,
@@ -729,7 +728,6 @@ impl EmailService for MockEmailLinkResult {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &email::domain::models::Link,
         _thread_id: uuid::Uuid,
         _label_id: uuid::Uuid,

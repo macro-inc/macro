@@ -256,7 +256,6 @@ impl EmailService for CountingEmailService {
 
     async fn update_thread_labels(
         &self,
-        _access_token: &str,
         _link: &Link,
         _thread_id: Uuid,
         _label_id: Uuid,

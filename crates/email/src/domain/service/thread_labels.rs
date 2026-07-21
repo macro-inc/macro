@@ -21,10 +21,9 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
-    #[tracing::instrument(err, skip(self, _access_token, link))]
+    #[tracing::instrument(err, skip(self, link))]
     pub(crate) async fn update_thread_labels_impl(
         &self,
-        _access_token: &str,
         link: &Link,
         thread_id: Uuid,
         label_id: Uuid,
@@ -56,43 +55,60 @@ where
         let all_ids: Vec<Uuid> = messages.iter().map(|m| m.db_id).collect();
 
         // Optimistic DB update: update all messages first
-        let db_result = if add {
-            self.email_repo
-                .insert_message_labels_batch(&all_ids, &provider_label_id, link.id)
-                .await
-        } else {
-            self.email_repo
-                .delete_message_labels_batch(&all_ids, &provider_label_id, link.id)
-                .await
-        };
+        self.apply_label_db_changes(link, thread_id, &all_ids, &provider_label_id, add)
+            .await?;
 
-        if let Err(e) = db_result {
-            let err = anyhow::Error::from(e);
-            tracing::error!(error=?err, "failed to update message labels in database");
-            return Err(EmailErr::RepoErr(err));
-        }
+        // Enqueue Gmail API calls via the gmail_ops worker (provider messages
+        // only). Enqueue failure means Gmail would never learn about this
+        // change (there is no worker to retry a message that was never
+        // queued), so revert the optimistic DB writes and fail — mirroring
+        // the worker's revert on permanent Gmail errors.
+        let provider_messages: Vec<(Uuid, String)> = messages
+            .iter()
+            .filter_map(|msg| {
+                msg.provider_id
+                    .as_ref()
+                    .filter(|pid| !pid.is_empty())
+                    .map(|pid| (msg.db_id, pid.clone()))
+            })
+            .collect();
 
-        // Side effects for system labels
-        if provider_label_id == system_labels::UNREAD {
+        if !provider_messages.is_empty() {
+            let (labels_to_add, labels_to_remove) = if add {
+                (vec![provider_label_id.clone()], vec![])
+            } else {
+                (vec![], vec![provider_label_id.clone()])
+            };
+
             if let Err(e) = self
-                .email_repo
-                .update_message_read_status_batch(&all_ids, link.id, !add)
+                .enqueuer
+                .enqueue_gmail_ops_modify_labels_batch(
+                    link.id,
+                    provider_messages,
+                    labels_to_add,
+                    labels_to_remove,
+                )
                 .await
             {
                 let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update message read status");
+                tracing::error!(error=?err, "failed to enqueue gmail ops label sync, reverting database changes");
+                // The mutation is symmetric in `add`, so the revert is the
+                // inverse application. Best effort: revert failures are
+                // logged inside and the enqueue error is surfaced regardless.
+                if let Err(revert_err) = self
+                    .apply_label_db_changes(link, thread_id, &all_ids, &provider_label_id, !add)
+                    .await
+                {
+                    tracing::error!(error=?revert_err, "failed to revert label changes after enqueue failure");
+                }
+                return Err(EmailErr::EnqueueErr(err));
             }
-        } else if provider_label_id == system_labels::STARRED
-            && let Err(e) = self
-                .email_repo
-                .update_message_starred_status_batch(&all_ids, link.id, add)
-                .await
-        {
-            let err = anyhow::Error::from(e);
-            tracing::error!(error=?err, "failed to update message starred status");
         }
 
-        // When trashing a thread, cancel any pending scheduled sends for drafts
+        // When trashing a thread, cancel any pending scheduled sends for
+        // drafts. After the enqueue, so an enqueue failure can't strand
+        // cancelled sends (macro drafts have no provider id and are never in
+        // the enqueue payload).
         let mut cancelled_send_ids: Vec<Uuid> = Vec::new();
         if add && provider_label_id == system_labels::TRASH {
             let draft_message_ids: Vec<_> = messages
@@ -117,43 +133,76 @@ where
         }
 
         // Publish semantic macro.email events now that the optimistic DB
-        // writes are committed. The provider echo of this change finds no
-        // label diff during inbox sync, so each change publishes only once.
+        // writes are committed and the provider sync is queued. The provider
+        // echo of this change finds no label diff during inbox sync, so each
+        // change publishes only once.
         self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids);
-
-        // Enqueue Gmail API calls via the gmail_ops worker (provider messages only)
-        let provider_messages: Vec<(Uuid, String)> = messages
-            .iter()
-            .filter_map(|msg| {
-                msg.provider_id
-                    .as_ref()
-                    .filter(|pid| !pid.is_empty())
-                    .map(|pid| (msg.db_id, pid.clone()))
-            })
-            .collect();
-
-        if !provider_messages.is_empty() {
-            let (labels_to_add, labels_to_remove) = if add {
-                (vec![provider_label_id.clone()], vec![])
-            } else {
-                (vec![], vec![provider_label_id.clone()])
-            };
-
-            self.enqueuer
-                .enqueue_gmail_ops_modify_labels_batch(
-                    link.id,
-                    provider_messages,
-                    labels_to_add,
-                    labels_to_remove,
-                )
-                .await
-                .map_err(|e| EmailErr::EnqueueErr(anyhow::Error::from(e)))?;
-        }
 
         Ok(UpdateThreadLabelsResult {
             successful_ids: all_ids,
             failed_ids: vec![],
         })
+    }
+
+    /// Apply a thread label change to the DB: the label rows plus the
+    /// denormalized read/starred state for system labels. The label write is
+    /// a hard error; the denormalized side effects are logged and skipped.
+    /// The whole mutation is its own inverse under `!add`, which the enqueue
+    /// failure path uses to revert.
+    async fn apply_label_db_changes(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        message_ids: &[Uuid],
+        provider_label_id: &str,
+        add: bool,
+    ) -> Result<(), EmailErr> {
+        let db_result = if add {
+            self.email_repo
+                .insert_message_labels_batch(message_ids, provider_label_id, link.id)
+                .await
+        } else {
+            self.email_repo
+                .delete_message_labels_batch(message_ids, provider_label_id, link.id)
+                .await
+        };
+
+        if let Err(e) = db_result {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to update message labels in database");
+            return Err(EmailErr::RepoErr(err));
+        }
+
+        // Side effects for system labels
+        if provider_label_id == system_labels::UNREAD {
+            if let Err(e) = self
+                .email_repo
+                .update_message_read_status_batch(message_ids, link.id, !add)
+                .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to update message read status");
+            }
+            // Keep the denormalized thread flag in sync — soup previews read it.
+            if let Err(e) = self
+                .email_repo
+                .update_thread_read_status(thread_id, link.id, !add)
+                .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to update thread read status");
+            }
+        } else if provider_label_id == system_labels::STARRED
+            && let Err(e) = self
+                .email_repo
+                .update_message_starred_status_batch(message_ids, link.id, add)
+                .await
+        {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to update message starred status");
+        }
+
+        Ok(())
     }
 
     /// Map a user-initiated thread label change onto the semantic
