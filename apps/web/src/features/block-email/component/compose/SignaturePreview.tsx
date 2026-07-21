@@ -4,6 +4,7 @@ import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Tooltip } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
+import { interceptMailtoLinks } from '../../util/interceptMailtoLinks';
 
 // Rendered inside a shadow root so the signature's structural markup (lists,
 // headings, bold) keeps its default styling instead of being flattened by the
@@ -49,6 +50,8 @@ export function SignaturePreview(props: {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
     }
+    // Raw mailto: anchors open the in-app composer instead of the OS mail client
+    interceptMailtoLinks(root);
   });
 
   return (

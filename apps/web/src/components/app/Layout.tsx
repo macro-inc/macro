@@ -36,7 +36,6 @@ import {
   GoToHotkeys,
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
-import { mountMailtoInterceptor } from '@components/app/mailto-interceptor';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
@@ -348,8 +347,6 @@ function LayoutInner(props: RouteSectionProps) {
   });
 
   mountGlobalFocusListener();
-
-  mountMailtoInterceptor();
 
   attachGlobalDOMScope(document.body);
 

@@ -1,3 +1,5 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { parseMailto } from '@block-email/util/mailto';
 import shortuuid from 'short-uuid';
 import { maybeOpenInApp } from './macroAppUrl';
 import { getWebOrigin } from './webOrigin';
@@ -23,8 +25,28 @@ function unwrapShortId(id: string): string {
  * the system browser.
  */
 export function openExternalUrl(url: string) {
+  if (maybeOpenMailtoInComposer(url)) return;
   if (maybeOpenInApp(url)) return;
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+}
+
+/**
+ * Opens a `mailto:` URL in the in-app email composer, prefilling the recipients.
+ * Returns false — so the caller falls through to the OS mail client — when the
+ * URL isn't a mailto or the split manager isn't ready yet.
+ */
+function maybeOpenMailtoInComposer(url: string): boolean {
+  const parsed = parseMailto(url);
+  if (!parsed) return false;
+  const manager = globalSplitManager();
+  if (!manager) return false;
+  manager.openWithSplit({
+    type: 'component',
+    id: 'email-compose',
+    params: parsed.to.length ? { initialTo: parsed.to } : undefined,
+    preserveParams: true,
+  });
+  return true;
 }
 
 export function transformShortIdInUrlPathname(pathname: string) {

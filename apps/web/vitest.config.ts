@@ -129,6 +129,10 @@ export default defineConfig({
         },
       },
       {
+        // tsconfigPaths so tests can resolve `@`-aliased imports (e.g. a util
+        // that imports `@core/util/url`). Per-file `@vitest-environment jsdom`
+        // opts a test into a DOM; the default here stays node.
+        plugins: [tsconfigPaths()],
         test: {
           include: ['src/features/block-email/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-email',

@@ -23,6 +23,7 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
+import { interceptMailtoLinks } from '../util/interceptMailtoLinks';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import {
   fetchImagesViaPlatform,
@@ -172,6 +173,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
     }
+    // Raw mailto: anchors open the in-app composer instead of the OS mail client
+    interceptMailtoLinks(messageDiv);
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'auto';
     shadow.appendChild(messageDiv);
