@@ -35,12 +35,11 @@ function addItem(
   }
 }
 
-/** Creates a locally filtered and paginated Quick Access record list. */
+/** Creates a locally filtered Quick Access record list. */
 export function createRecordSelectionQuickAccessItems(options: {
   buckets: Bucket[];
   searchTerm: Accessor<string>;
   enabled: Accessor<boolean>;
-  pageSize: number;
   selectedItems: Accessor<EntityItem[]>;
   localItems: Accessor<QuickAccessItem[]>;
   instructionsId: Accessor<string | undefined>;
@@ -102,19 +101,12 @@ export function createRecordSelectionQuickAccessItems(options: {
     return result;
   });
 
-  const items = createMemo(() => allItems());
-
-  // No more items since we show all
-  const hasMore = createMemo(() => false);
-
   return {
-    items,
+    items: allItems,
     totalCount: () => allItems().length,
-    hasMore,
+    hasMore: () => false,
     isLoadingMore: () => false,
-    loadMore: () => {
-      // Noop since we load all the items anyway, leaving for later
-    },
+    loadMore: async () => undefined,
     entityBuckets,
   };
 }
