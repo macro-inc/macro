@@ -38,6 +38,8 @@ enum Cmd {
     DoctorLocal(InstanceArgs),
     /// Show an instance's endpoints and container states without starting anything.
     StatusLocal(InstanceArgs),
+    /// Emit host-facing connection env for seeding an instance (eval in a shell).
+    SeedEnv(InstanceArgs),
     /// Stop an instance's containers (keep volumes).
     StopLocal(InstanceArgs),
     /// Drop, recreate, and migrate the instance database.
@@ -181,6 +183,10 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::StatusLocal(a) => {
             let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
             super::status::run(&instance)
+        }
+        Cmd::SeedEnv(a) => {
+            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            super::seed_env::emit(&instance)
         }
         Cmd::StopLocal(a) => super::stop(&a),
         Cmd::ResetLocal(a) => super::reset(&a),

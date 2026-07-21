@@ -35,6 +35,7 @@ pub mod mailpit;
 pub mod opensearch;
 pub mod proxy;
 pub mod resources;
+pub mod seed_env;
 pub mod snapshot;
 pub mod stack;
 pub mod stage;
