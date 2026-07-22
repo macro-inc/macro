@@ -8,8 +8,9 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
-    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, INTERNAL_API_KEY_HEADER,
+    INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use model_user::UserContext;
 use rootcause::Report;
@@ -19,7 +20,8 @@ use super::*;
 use crate::{
     domain::models::{EditAccessLevel, EntityAccessAuth, ViewAccessLevel},
     inbound::axum_extractors::test_support::{
-        AccessCall, FakeEntityAccessService, INTERNAL_KEY, USER_ID,
+        AccessCall, FakeEntityAccessService, INTERNAL_KEY, USER_ID, VALID_BOT_TOKEN,
+        valid_bot_authentication,
     },
 };
 
@@ -52,6 +54,18 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
+    }
+
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(valid_bot_authentication())
     }
 
     async fn authorize_internal(
@@ -292,6 +306,24 @@ async fn default_internal_user_uses_the_users_acl() {
         state.entity_access.calls(),
         [expected_call(Some(NORMALIZED_DEFAULT_INTERNAL_USER_ID))]
     );
+}
+
+#[tokio::test]
+async fn bot_thread_access_is_forbidden_before_acl_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let response = view_router(state.clone())
+        .oneshot(
+            request()
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response_body(response).await, r#"{"message":"forbidden"}"#);
+    assert!(state.entity_access.calls().is_empty());
 }
 
 #[tokio::test]

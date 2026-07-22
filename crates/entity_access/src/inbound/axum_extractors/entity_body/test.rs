@@ -4,7 +4,9 @@ use axum::{
     http::{Request, StatusCode, header, request::Builder},
     routing::post,
 };
-use macro_authorization::{INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER};
+use macro_authorization::{
+    BOT_TOKEN_HEADER, INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
+};
 use serde::Deserialize;
 use tower::ServiceExt;
 
@@ -13,7 +15,7 @@ use crate::{
     domain::models::{AccessLevel, EditAccessLevel, EntityAccessAuth, EntityType, ViewAccessLevel},
     inbound::axum_extractors::test_support::{
         AccessCall, FakeAuthorizationService, FakeEntityAccessService, INTERNAL_KEY, TestState,
-        USER_ID,
+        USER_ID, VALID_BOT_TOKEN,
     },
 };
 
@@ -168,6 +170,24 @@ async fn identity_less_internal_access_is_rejected_before_body_and_acl_lookup() 
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_access_is_forbidden_before_body_and_acl_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let response = router(state.clone())
+        .oneshot(
+            request("/view")
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .body(body("document", ENTITY_ID))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response_body(response).await, r#"{"message":"forbidden"}"#);
     assert!(state.entity_access.calls().is_empty());
 }
 

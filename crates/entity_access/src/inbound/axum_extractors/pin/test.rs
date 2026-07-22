@@ -4,7 +4,9 @@ use axum::{
     http::{Request, StatusCode, header},
     routing::post,
 };
-use macro_authorization::{INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER};
+use macro_authorization::{
+    BOT_TOKEN_HEADER, INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
+};
 use serde::Deserialize;
 use tower::ServiceExt;
 
@@ -13,7 +15,7 @@ use crate::{
     domain::models::{AccessLevel, EntityAccessAuth, EntityType, ViewAccessLevel},
     inbound::axum_extractors::test_support::{
         AccessCall, FakeAuthorizationService, FakeEntityAccessService, INTERNAL_KEY, TestState,
-        USER_ID,
+        USER_ID, VALID_BOT_TOKEN,
     },
 };
 
@@ -148,6 +150,24 @@ async fn internal_pin_act_as_identity_uses_acl() {
         state.entity_access.calls()[0].user_id.as_deref(),
         Some(USER_ID)
     );
+}
+
+#[tokio::test]
+async fn bot_pin_access_is_forbidden_before_acl_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let response = router(state.clone())
+        .oneshot(
+            request()
+                .header(BOT_TOKEN_HEADER, VALID_BOT_TOKEN)
+                .body(body())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response_body(response).await, r#"{"message":"forbidden"}"#);
+    assert!(state.entity_access.calls().is_empty());
 }
 
 #[tokio::test]

@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use axum::extract::FromRef;
 use macro_authorization::{
-    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
-    MacroAuthorizationState,
+    BotActingUserClaims, BotAuthentication, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -24,6 +24,7 @@ use crate::domain::{
 
 pub(super) const INTERNAL_KEY: &str = "valid-internal-key";
 pub(super) const USER_ID: &str = "macro|user@example.com";
+pub(super) const VALID_BOT_TOKEN: &str = "valid-bot-token";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct AccessCall {
@@ -169,6 +170,18 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_bot(
+        &self,
+        token: &str,
+        _claims: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if token != VALID_BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(valid_bot_authentication())
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -179,6 +192,14 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
 
         Ok(claims.user_id.as_deref().map(user_context))
+    }
+}
+
+pub(super) fn valid_bot_authentication() -> BotAuthentication {
+    BotAuthentication {
+        bot_id: BotId::new_from_uuid(Uuid::from_u128(1)),
+        token_id: Uuid::from_u128(2),
+        acting_user: None,
     }
 }
 
