@@ -1,4 +1,5 @@
-//! Kafka adapter for the [`EventConsumer`] port.
+//! Kafka adapters for configuring topic-aware grouped and ungrouped consumers
+//! and implementing the [`EventConsumer`] port.
 
 use std::{marker::PhantomData, time::Duration};
 
@@ -7,12 +8,22 @@ use rdkafka::message::{BorrowedMessage, Message as _};
 
 use crate::{EventConsumer, MacroEventCollection, MessageWrapper};
 
+/// Topic-aware wrapper around a [`KafkaEventConsumer`].
+///
+/// `T` selects grouped or [`Ungrouped`] consumption. `M` records the
+/// [`MacroEventCollection`] whose topics were assigned or subscribed, so the
+/// configured topic set remains visible in the adapter's type.
 pub struct KafkaConsumerAdapter<T, M> {
     inner: KafkaEventConsumer<T>,
     topics: PhantomData<M>,
 }
 
 impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
+    /// Creates an ungrouped adapter and manually assigns every topic in `M`.
+    ///
+    /// Every current partition starts at `initial_offset`. Topic metadata must
+    /// be fetched within `metadata_timeout`; failures are returned to the
+    /// caller.
     pub fn new(
         consumer: KafkaEventConsumer<Ungrouped>,
         initial_offset: InitialOffset,
@@ -27,6 +38,7 @@ impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
 }
 
 impl<T: GroupName> KafkaConsumerAdapter<T, ()> {
+    /// Wraps a grouped consumer before its event topics are subscribed.
     pub fn new(consumer: KafkaEventConsumer<T>) -> Self {
         KafkaConsumerAdapter {
             inner: consumer,
@@ -36,6 +48,11 @@ impl<T: GroupName> KafkaConsumerAdapter<T, ()> {
 }
 
 impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
+    /// Subscribes the grouped consumer to every topic declared by `M2`.
+    ///
+    /// Kafka subscription is synchronous, replaces the previous subscription,
+    /// and causes the group coordinator to rebalance asynchronously while the
+    /// consumer is polled. The returned adapter records `M2` in its type.
     pub fn subscribe<M2: MacroEventCollection>(
         self,
     ) -> Result<KafkaConsumerAdapter<T, M2>, rootcause::Report> {
