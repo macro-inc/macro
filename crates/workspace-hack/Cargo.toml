@@ -51,7 +51,6 @@ fastrand = { version = "2" }
 flate2 = { version = "1", features = ["zlib-rs"] }
 foldhash = { version = "0.2" }
 form_urlencoded = { version = "1" }
-futures = { version = "0.3" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-executor = { version = "0.3" }
@@ -175,7 +174,6 @@ fastrand = { version = "2" }
 flate2 = { version = "1", features = ["zlib-rs"] }
 foldhash = { version = "0.2" }
 form_urlencoded = { version = "1" }
-futures = { version = "0.3" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-executor = { version = "0.3" }

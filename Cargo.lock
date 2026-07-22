@@ -16178,7 +16178,6 @@ dependencies = [
  "flate2",
  "foldhash 0.2.0",
  "form_urlencoded",
- "futures",
  "futures-channel",
  "futures-core",
  "futures-executor",
