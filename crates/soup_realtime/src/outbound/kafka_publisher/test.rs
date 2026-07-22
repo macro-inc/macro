@@ -111,6 +111,24 @@ async fn publishes_user_keyed_full_message_to_realtime_topic() {
 }
 
 #[tokio::test]
+async fn rejects_invalid_typed_message_before_publication() {
+    let records = Arc::new(Mutex::new(Vec::new()));
+    let adapter = KafkaSoupRealtimePublisher::new(RecordingPublisher {
+        records: records.clone(),
+        fail: false,
+    });
+    let mut message = message();
+    message.schema_version = SoupRealtimeMessage::SCHEMA_VERSION + 1;
+
+    adapter
+        .publish(message)
+        .await
+        .expect_err("invalid typed message is rejected");
+
+    assert!(records.lock().expect("records lock").is_empty());
+}
+
+#[tokio::test]
 async fn propagates_delivery_failures() {
     let adapter = KafkaSoupRealtimePublisher::new(RecordingPublisher {
         records: Arc::new(Mutex::new(Vec::new())),

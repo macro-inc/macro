@@ -4,6 +4,52 @@ use macro_event_topics::Topic;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
+/// A directly serialized message that is statically bound to one [`Topic`].
+///
+/// Unlike [`TopicEvent`], a topic message is not wrapped in an [`Event`]
+/// envelope. Its associated topic drives both typed publication and typed
+/// consumption, preventing those paths from selecting a topic independently of
+/// the payload type.
+pub trait TopicMessage: Serialize + DeserializeOwned + Send + Sync + Sized {
+    /// The only topic to which this message type may be published.
+    type Topic: Topic;
+
+    /// Kafka record key used when publishing this message.
+    fn key(&self) -> &str;
+
+    /// Validates message-specific wire-contract invariants.
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Serializes and validates this message for typed publication.
+    fn encode(&self) -> Result<Vec<u8>, EventBrokerError> {
+        self.validate()
+            .map_err(|reason| EventBrokerError::InvalidMessage {
+                topic: Self::Topic::default().as_str(),
+                reason,
+            })?;
+        Ok(serde_json::to_vec(self)?)
+    }
+
+    /// Deserializes a message only when `topic` matches its associated topic.
+    fn decode(topic: &str, payload: &[u8]) -> Result<Self, EventBrokerError> {
+        let expected_topic = Self::Topic::default();
+        if topic != expected_topic.as_str() {
+            return Err(EventBrokerError::UnknownTopic(topic.to_string()));
+        }
+
+        let message: Self = serde_json::from_slice(payload)?;
+        message
+            .validate()
+            .map_err(|reason| EventBrokerError::InvalidMessage {
+                topic: expected_topic.as_str(),
+                reason,
+            })?;
+        Ok(message)
+    }
+}
+
 /// Event payload enum for a single [`Topic`].
 ///
 /// Implement this trait for each topic-specific event enum. The enum should use
@@ -113,6 +159,14 @@ pub enum EventBrokerError {
     /// The Kafka topic name is not handled by a consumer-specific event enum.
     #[error("unknown event topic: {0}")]
     UnknownTopic(String),
+    /// A typed topic message violated its wire-contract invariants.
+    #[error("invalid message for topic {topic}: {reason}")]
+    InvalidMessage {
+        /// Topic associated with the typed message.
+        topic: &'static str,
+        /// Description of the violated invariant.
+        reason: String,
+    },
     /// The broker rejected or failed to deliver the message.
     #[error("failed to publish event: {0}")]
     Publish(String),

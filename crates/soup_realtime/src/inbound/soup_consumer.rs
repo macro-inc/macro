@@ -10,8 +10,7 @@ mod test;
 use std::time::Duration;
 
 use kafka_consumer_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::Topic as _;
-use macro_event_topics::MacroSoupRealtimeTopic;
+use macro_event_broker::{EventBrokerError, Topic as _, TopicMessage};
 use rdkafka::message::Message as _;
 use rootcause::prelude::{Report, ResultExt as _};
 
@@ -23,22 +22,11 @@ const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 type IndependentKafkaConsumer = KafkaEventConsumer<Ungrouped>;
 
 fn assigned_topics() -> [&'static str; 1] {
-    [MacroSoupRealtimeTopic.as_str()]
+    [<SoupRealtimeMessage as TopicMessage>::Topic::default().as_str()]
 }
 
-fn decode_message(payload: &[u8]) -> Result<SoupRealtimeMessage, Report> {
-    let message: SoupRealtimeMessage =
-        serde_json::from_slice(payload).context("failed to deserialize realtime Soup message")?;
-
-    if message.schema_version != SoupRealtimeMessage::SCHEMA_VERSION {
-        rootcause::bail!(
-            "unsupported realtime Soup schema version {}; expected {}",
-            message.schema_version,
-            SoupRealtimeMessage::SCHEMA_VERSION
-        );
-    }
-
-    Ok(message)
+fn decode_message(topic: &str, payload: &[u8]) -> Result<SoupRealtimeMessage, EventBrokerError> {
+    <SoupRealtimeMessage as TopicMessage>::decode(topic, payload)
 }
 
 /// Independent consumer of recipient-targeted realtime Soup messages.
@@ -105,12 +93,31 @@ impl SoupTopicConsumer {
                 )
             })?;
 
-        Ok(decode_message(payload).context_with(|| {
+        let decoded = decode_message(message.topic(), payload).context_with(|| {
             format!(
                 "failed to decode realtime Soup message from partition {} offset {}",
                 message.partition(),
                 message.offset()
             )
-        })?)
+        })?;
+
+        let key = message.key().ok_or_else(|| {
+            rootcause::report!(
+                "realtime Soup message had no recipient key (partition {} offset {})",
+                message.partition(),
+                message.offset()
+            )
+        })?;
+        let key = std::str::from_utf8(key)
+            .context("realtime Soup message had a non-UTF-8 recipient key")?;
+
+        if key != decoded.key() {
+            rootcause::bail!(
+                "realtime Soup message key {key} did not match payload recipient {}",
+                decoded.key()
+            );
+        }
+
+        Ok(decoded)
     }
 }

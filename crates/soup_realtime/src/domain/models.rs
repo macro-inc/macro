@@ -1,5 +1,7 @@
 //! Versioned realtime Soup output models.
 
+use macro_event_broker::TopicMessage;
+use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,26 @@ impl SoupRealtimeMessage {
             schema_version: Self::SCHEMA_VERSION,
             user_id,
             item,
+        }
+    }
+}
+
+impl TopicMessage for SoupRealtimeMessage {
+    type Topic = MacroSoupRealtimeTopic;
+
+    fn key(&self) -> &str {
+        self.user_id.as_ref()
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if self.schema_version == Self::SCHEMA_VERSION {
+            Ok(())
+        } else {
+            Err(format!(
+                "unsupported schema version {}; expected {}",
+                self.schema_version,
+                Self::SCHEMA_VERSION
+            ))
         }
     }
 }

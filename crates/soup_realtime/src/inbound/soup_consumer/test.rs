@@ -46,7 +46,7 @@ fn assigns_only_the_soup_topic() {
 fn decodes_current_schema_message() {
     let payload = serde_json::to_vec(&message()).expect("serializable message");
 
-    let decoded = decode_message(&payload).expect("message decodes");
+    let decoded = decode_message("macro.soup", &payload).expect("message decodes");
 
     assert_eq!(decoded.schema_version, SoupRealtimeMessage::SCHEMA_VERSION);
     assert_eq!(decoded.user_id.as_ref(), "macro|recipient@example.com");
@@ -62,10 +62,20 @@ fn rejects_unsupported_schema_version() {
     json["schema_version"] = serde_json::json!(SoupRealtimeMessage::SCHEMA_VERSION + 1);
     let payload = serde_json::to_vec(&json).expect("serializable JSON");
 
-    decode_message(&payload).expect_err("unsupported schema is rejected");
+    decode_message("macro.soup", &payload).expect_err("unsupported schema is rejected");
 }
 
 #[test]
 fn rejects_malformed_payload() {
-    decode_message(b"not json").expect_err("malformed payload is rejected");
+    decode_message("macro.soup", b"not json").expect_err("malformed payload is rejected");
+}
+
+#[test]
+fn rejects_payload_from_a_different_topic() {
+    let payload = serde_json::to_vec(&message()).expect("serializable message");
+
+    assert!(matches!(
+        decode_message("macro.documents", &payload),
+        Err(EventBrokerError::UnknownTopic(topic)) if topic == "macro.documents"
+    ));
 }

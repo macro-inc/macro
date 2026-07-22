@@ -3,8 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use macro_event_broker::EventPublisher;
-use macro_event_topics::MacroSoupRealtimeTopic;
+use macro_event_broker::{EventPublisher, TopicMessagePublisher as _};
 use rootcause::prelude::{Report, ResultExt as _};
 
 use crate::domain::{models::SoupRealtimeMessage, ports::SoupRealtimePublisher};
@@ -31,11 +30,8 @@ where
         err
     )]
     async fn publish(&self, message: SoupRealtimeMessage) -> Result<(), Report> {
-        let payload =
-            serde_json::to_vec(&message).context("failed to serialize realtime Soup message")?;
-
         self.publisher
-            .publish(MacroSoupRealtimeTopic, message.user_id.as_ref(), &payload)
+            .publish_message(&message)
             .await
             .context("failed to publish realtime Soup message")?;
 
