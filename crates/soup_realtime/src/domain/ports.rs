@@ -11,7 +11,7 @@ use super::models::SoupRealtimeMessage;
 
 /// Inbound use-case port driven by entity update transports.
 pub trait SoupRealtimeService: Send + Sync + 'static {
-    /// Hydrates and publishes a full Soup item for every current accessor.
+    /// Hydrates one normalized Soup item and publishes it to every current accessor.
     fn notify_users(
         &self,
         entity: Entity<'static>,
@@ -30,9 +30,9 @@ pub trait UserAccessExpander: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
-/// Reads complete Soup items under an individual user's visibility scope.
+/// Reads a complete Soup item under an individual user's visibility scope.
 pub trait SoupItemReader: Send + Sync + 'static {
-    /// Reads `entity` as visible to `user_id`.
+    /// Reads `entity` through the visibility scope of `user_id`.
     fn read_for_user(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -40,7 +40,7 @@ pub trait SoupItemReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<SoupItem<()>>, Report>> + Send;
 }
 
-/// Publishes complete user-scoped Soup messages.
+/// Publishes complete recipient-targeted Soup messages.
 pub trait SoupRealtimePublisher: Send + Sync + 'static {
     /// Publishes one realtime Soup message and awaits delivery.
     fn publish(

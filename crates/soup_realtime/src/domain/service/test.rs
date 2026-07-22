@@ -206,7 +206,7 @@ async fn one_user_receives_one_full_versioned_message() {
             assert_eq!(document.name, "Full document");
             assert_eq!(document.document_version_id, 42);
             assert_eq!(document.sha.as_deref(), Some("document-sha"));
-            assert_eq!(document.viewed_at, viewed_at);
+            assert_eq!(document.viewed_at, None);
         }
         _ => panic!("expected document item"),
     }
@@ -232,6 +232,7 @@ async fn three_unique_users_receive_exactly_three_messages() {
         .await
         .expect("fan-out succeeds");
 
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
     let messages = harness.messages.lock().expect("messages lock");
     assert_eq!(messages.len(), 3);
     let recipients: HashSet<_> = messages
@@ -267,26 +268,25 @@ async fn duplicate_accessors_are_deduplicated() {
         .await
         .expect("fan-out succeeds");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.messages.lock().expect("messages lock").len(), 2);
 }
 
 #[tokio::test]
-async fn each_recipient_gets_their_user_scoped_item() {
+async fn all_recipients_get_the_first_item_with_no_viewed_at() {
     let one = user("one");
     let two = user("two");
-    let one_viewed = Some(timestamp(10));
-    let two_viewed = Some(timestamp(20));
     let responses = HashMap::from([
-        item_response(&one, document_item(DOCUMENT_ID, "One", one_viewed)),
-        item_response(&two, document_item(DOCUMENT_ID, "Two", two_viewed)),
+        item_response(
+            &one,
+            document_item(DOCUMENT_ID, "Representative", Some(timestamp(10))),
+        ),
+        item_response(
+            &two,
+            document_item(DOCUMENT_ID, "Should not be read", Some(timestamp(20))),
+        ),
     ]);
-    let harness = harness(
-        vec![one.clone(), two.clone()],
-        responses,
-        false,
-        HashSet::new(),
-    );
+    let harness = harness(vec![one, two], responses, false, HashSet::new());
 
     harness
         .service
@@ -294,19 +294,15 @@ async fn each_recipient_gets_their_user_scoped_item() {
         .await
         .expect("fan-out succeeds");
 
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
     let messages = harness.messages.lock().expect("messages lock");
+    assert_eq!(messages.len(), 2);
     for message in messages.iter() {
         let SoupItem::Document(document) = &message.item else {
             panic!("expected document item")
         };
-        let expected = if message.user_id == one {
-            one_viewed
-        } else if message.user_id == two {
-            two_viewed
-        } else {
-            panic!("unexpected recipient")
-        };
-        assert_eq!(document.viewed_at, expected);
+        assert_eq!(document.name, "Representative");
+        assert_eq!(document.viewed_at, None);
     }
 }
 
@@ -358,13 +354,10 @@ async fn mismatched_item_prevents_all_publication() {
 }
 
 #[tokio::test]
-async fn any_reader_failure_prevents_all_publication() {
+async fn representative_reader_failure_prevents_all_publication() {
     let one = user("one");
     let two = user("two");
-    let responses = HashMap::from([
-        item_response(&one, document_item(DOCUMENT_ID, "One", None)),
-        (two.as_ref().to_string(), ReadResponse::Failure),
-    ]);
+    let responses = HashMap::from([(one.as_ref().to_string(), ReadResponse::Failure)]);
     let harness = harness(vec![one, two], responses, false, HashSet::new());
 
     harness
@@ -373,7 +366,7 @@ async fn any_reader_failure_prevents_all_publication() {
         .await
         .expect_err("reader failure propagates");
 
-    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(harness.read_calls.load(Ordering::SeqCst), 1);
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 

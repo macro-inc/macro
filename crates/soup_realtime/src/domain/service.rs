@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 use futures::{StreamExt as _, stream};
 use model_entity::Entity;
+use models_soup::item::SoupItem;
 use rootcause::prelude::{Report, ResultExt as _};
 
 use super::{
@@ -17,7 +18,7 @@ use super::{
 /// Maximum number of Kafka publications polled concurrently.
 const PUBLISH_CONCURRENCY: usize = 16;
 
-/// Domain service that expands access, hydrates user-scoped items, and fans out.
+/// Domain service that expands access, hydrates one normalized item, and fans out.
 pub struct SoupRealtimeServiceImpl<A, R, P> {
     access_expander: A,
     item_reader: R,
@@ -65,38 +66,46 @@ where
             return Ok(());
         }
 
-        // Complete every read before publication so a later read failure cannot
-        // cause an avoidable partial fan-out.
-        let mut messages = Vec::with_capacity(users.len());
-        for user_id in users {
-            let item = self
-                .item_reader
-                .read_for_user(user_id.clone(), &entity)
-                .await
-                .context_with(|| format!("failed to hydrate Soup item for user {user_id}"))?
-                .ok_or_else(|| {
-                    rootcause::report!(
-                        "Soup item for {} {} was missing for user {}",
-                        entity.entity_type,
-                        entity.entity_id,
-                        user_id
-                    )
-                })?;
-
-            let hydrated_entity = item.entity();
-            if hydrated_entity != entity {
-                return Err(rootcause::report!(
-                    "Soup reader returned {} {} while hydrating {} {} for user {}",
-                    hydrated_entity.entity_type,
-                    hydrated_entity.entity_id,
+        let hydration_user_id = users[0].clone();
+        let item = self
+            .item_reader
+            .read_for_user(hydration_user_id.clone(), &entity)
+            .await
+            .context_with(|| {
+                format!("failed to hydrate Soup item through accessor {hydration_user_id}")
+            })?
+            .ok_or_else(|| {
+                rootcause::report!(
+                    "Soup item for {} {} was missing for accessor {}",
                     entity.entity_type,
                     entity.entity_id,
-                    user_id
-                ));
-            }
+                    hydration_user_id
+                )
+            })?;
 
-            messages.push(SoupRealtimeMessage::new(user_id, item));
+        let hydrated_entity = item.entity();
+        if hydrated_entity != entity {
+            return Err(rootcause::report!(
+                "Soup reader returned {} {} while hydrating {} {} through accessor {}",
+                hydrated_entity.entity_type,
+                hydrated_entity.entity_id,
+                entity.entity_type,
+                entity.entity_id,
+                hydration_user_id
+            ));
         }
+
+        let SoupItem::Document(mut document) = item else {
+            return Err(rootcause::report!(
+                "realtime Soup fan-out currently supports document items only"
+            ));
+        };
+        document.viewed_at = None;
+
+        let messages = users
+            .into_iter()
+            .map(|user_id| SoupRealtimeMessage::new(user_id, SoupItem::Document(document.clone())))
+            .collect::<Vec<_>>();
 
         let results = stream::iter(
             messages
