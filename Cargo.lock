@@ -1006,6 +1006,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "maud",
+ "mention_utils",
  "miniserde",
  "mobile_welcome_email_db_client",
  "mockall",

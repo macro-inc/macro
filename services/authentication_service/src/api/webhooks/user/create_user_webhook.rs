@@ -16,6 +16,7 @@ use crate::{
     rate_limit_config::RATE_LIMIT_CONFIG,
 };
 use authentication_service::service::user::create_user::create_user;
+use authentication_service::service::user::support_channel_welcome::post_support_channel_welcome;
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest, Sender},
     ports::ChannelService,
@@ -37,7 +38,6 @@ const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
     format!("Macro Support x {}", email.local_part())
 }
-
 /// FusionAuth create user webhook
 #[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
 pub async fn handler(
@@ -370,6 +370,16 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             {
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
+
+            let _ = post_support_channel_welcome(
+                channel_service.as_ref(),
+                &channel.id,
+                owner_id,
+            )
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");
+            });
         }
     });
 

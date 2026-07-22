@@ -794,6 +794,16 @@ pub struct SimpleMention {
     pub entity_id: String,
 }
 
+impl SimpleMention {
+    /// Construct a tracked mention of a Macro user.
+    pub fn user(user_id: &MacroUserIdStr<'_>) -> Self {
+        Self {
+            entity_type: "user".to_string(),
+            entity_id: user_id.as_ref().to_string(),
+        }
+    }
+}
+
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferencedShareItemType {
