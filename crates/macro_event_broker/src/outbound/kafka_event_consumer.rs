@@ -5,29 +5,7 @@ use rdkafka::message::{BorrowedMessage, Message as _};
 
 use crate::{EventConsumer, MacroEventCollection, MessageWrapper};
 
-/// Adapts a [`KafkaEventConsumer`] to the broker's [`EventConsumer`] port.
-pub struct KafkaEventConsumerAdapter<T> {
-    consumer: KafkaEventConsumer<T>,
-}
-
-impl<T> KafkaEventConsumerAdapter<T> {
-    /// Creates an adapter around a configured Kafka consumer.
-    pub fn new(consumer: KafkaEventConsumer<T>) -> Self {
-        Self { consumer }
-    }
-
-    /// Borrows the underlying Kafka consumer.
-    pub fn inner(&self) -> &KafkaEventConsumer<T> {
-        &self.consumer
-    }
-
-    /// Returns the underlying Kafka consumer.
-    pub fn into_inner(self) -> KafkaEventConsumer<T> {
-        self.consumer
-    }
-}
-
-impl<T, M> EventConsumer<M> for KafkaEventConsumerAdapter<T>
+impl<T, M> EventConsumer<M> for KafkaEventConsumer<T>
 where
     T: Send + Sync + 'static,
     M: MacroEventCollection + 'static,
@@ -37,7 +15,7 @@ where
     async fn recv<'a>(
         &'a self,
     ) -> Result<MessageWrapper<Self::MessageType<'a>, M>, rootcause::Report> {
-        let message = self.consumer.recv().await?;
+        let message = KafkaEventConsumer::recv(self).await?;
 
         tracing::trace!(
             topic = message.topic(),

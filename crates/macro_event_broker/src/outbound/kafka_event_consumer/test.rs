@@ -15,5 +15,5 @@ fn assert_event_consumer<T: EventConsumer<TestEvents>>() {}
 
 #[test]
 fn kafka_adapter_implements_event_consumer_port() {
-    assert_event_consumer::<KafkaEventConsumerAdapter<Ungrouped>>();
+    assert_event_consumer::<KafkaEventConsumer<Ungrouped>>();
 }

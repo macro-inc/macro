@@ -10,7 +10,7 @@ mod test;
 use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{KafkaEventConsumerAdapter, MacroEvent, MacroEventConsumerService, Topic};
+use macro_event_broker::{MacroEvent, MacroEventConsumerService, Topic};
 #[cfg(test)]
 use macro_event_broker::{MessageParts, MessageWrapper};
 use macro_event_topics::MacroSoupRealtimeTopic;
@@ -22,8 +22,7 @@ use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
 const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 
 type IndependentKafkaConsumer = KafkaEventConsumer<Ungrouped>;
-type SoupEventConsumer =
-    MacroEventConsumerService<DeclaredMacroEvent, KafkaEventConsumerAdapter<Ungrouped>>;
+type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
 macro_event_broker::declare_topics!(SoupMacroEvent);
 
@@ -110,7 +109,7 @@ impl SoupTopicConsumer {
         );
 
         Ok(Self {
-            consumer: SoupEventConsumer::new(KafkaEventConsumerAdapter::new(consumer)),
+            consumer: SoupEventConsumer::new(consumer),
         })
     }
 
