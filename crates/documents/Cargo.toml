@@ -152,7 +152,6 @@ embedding = { path = "../embedding" }
 http-body-util = { workspace = true }
 kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }
-macro_env = { path = "../macro_env" }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
 macro_event_broker = { path = "../macro_event_broker" }
 mockall = { workspace = true }
