@@ -25,7 +25,7 @@ use crate::domain::{events::WebhookTopicEvent, ingestion::WebhookEventIngestionS
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
-use kafka_consumer_util::KafkaEventConsumer;
+use kafka_consumer_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{Event, EventBrokerError, Topic as _};
 use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroWebhooksTopic};
 use rdkafka::consumer::CommitMode;
@@ -33,9 +33,15 @@ use rdkafka::message::{BorrowedMessage, Message};
 use std::future::Future;
 use std::time::Duration;
 
-/// Consumer group id for webhook event ingestion. Offsets are committed under
+/// Consumer group for webhook event ingestion. Offsets are committed under
 /// this group, so restarts resume where the previous run left off.
-const GROUP_ID: &str = "webhook-event-ingestion";
+struct WebhookEventIngestionConsumerGroup;
+
+impl GroupName for WebhookEventIngestionConsumerGroup {
+    const GROUP_NAME: &'static str = "webhook-event-ingestion";
+}
+
+type WebhookKafkaConsumer = KafkaEventConsumer<WebhookEventIngestionConsumerGroup>;
 
 /// Maximum in-process ingestion attempts per event before the consumer bails
 /// out and lets a restart redeliver from the last committed offset.
@@ -88,7 +94,7 @@ impl WebhookConsumerEvent {
 }
 
 /// Commit `message`'s offset, logging the outcome.
-fn commit_logged(consumer: &KafkaEventConsumer, message: &BorrowedMessage<'_>) {
+fn commit_logged(consumer: &WebhookKafkaConsumer, message: &BorrowedMessage<'_>) {
     match consumer.commit_message(message, CommitMode::Async) {
         Ok(()) => tracing::trace!(
             partition = message.partition(),
@@ -191,13 +197,13 @@ pub async fn run_webhook_event_consumer<S>(
 where
     S: WebhookEventIngestionService,
 {
-    let consumer = KafkaEventConsumer::from_env(brokers, GROUP_ID)?;
+    let consumer = WebhookKafkaConsumer::from_env(brokers)?;
     consumer
         .subscribe(&subscribed_topics())
         .context("failed to subscribe to webhook event topics")?;
     tracing::info!(
         topics = ?subscribed_topics(),
-        group = GROUP_ID,
+        group = WebhookEventIngestionConsumerGroup::GROUP_NAME,
         "webhook event consumer listening"
     );
 

@@ -64,8 +64,7 @@ impl KafkaEventPublisher {
                 Producer::Plaintext(base_config(brokers).create().map_err(create_error)?)
             }
             Environment::Develop | Environment::Production => {
-                let mut config = base_config(brokers);
-                configure_sasl_iam(&mut config);
+                let config = configure_sasl_iam(base_config(brokers));
 
                 Producer::MskIam(
                     config

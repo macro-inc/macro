@@ -10,7 +10,7 @@ mod test;
 use std::{future::Future, time::Duration};
 
 use documents::domain::events::DocumentTopicEvent;
-use kafka_consumer_util::KafkaEventConsumer;
+use kafka_consumer_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{Event, EventBrokerError, Topic as _};
 use macro_event_topics::MacroDocumentsTopic;
 use model_entity::{Entity, EntityType};
@@ -21,7 +21,14 @@ use rootcause::prelude::{Report, ResultExt as _};
 use crate::domain::ports::SoupRealtimeService;
 
 /// Consumer group used for document update fan-out offsets.
-const GROUP_ID: &str = "soup-realtime";
+struct SoupRealtimeConsumerGroup;
+
+impl GroupName for SoupRealtimeConsumerGroup {
+    const GROUP_NAME: &'static str = "soup-realtime";
+}
+
+type SoupRealtimeKafkaConsumer = KafkaEventConsumer<SoupRealtimeConsumerGroup>;
+
 /// Total service attempts before returning for supervisor-driven redelivery.
 const MAX_SERVICE_ATTEMPTS: u32 = 5;
 /// Delay before the first retry; each subsequent delay doubles.
@@ -132,7 +139,7 @@ async fn notify_with_retry<S: SoupRealtimeService>(
     }
 }
 
-fn commit_logged(consumer: &KafkaEventConsumer, message: &BorrowedMessage<'_>) {
+fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
     match consumer.commit_message(message, CommitMode::Async) {
         Ok(()) => tracing::trace!(
             partition = message.partition(),
@@ -164,13 +171,13 @@ pub async fn run_document_update_consumer<S>(
 where
     S: SoupRealtimeService,
 {
-    let consumer = KafkaEventConsumer::from_env(brokers, GROUP_ID)?;
+    let consumer = SoupRealtimeKafkaConsumer::from_env(brokers)?;
     consumer
         .subscribe(&subscribed_topics())
         .context("failed to subscribe to document update topic")?;
     tracing::info!(
         topics = ?subscribed_topics(),
-        group = GROUP_ID,
+        group = SoupRealtimeConsumerGroup::GROUP_NAME,
         "realtime Soup document consumer listening"
     );
 
