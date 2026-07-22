@@ -1,6 +1,6 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
@@ -8,7 +8,7 @@ use crate::domain::{
     team_repo::TeamService,
 };
 
-use super::{TeamRouterState, required_user};
+use super::TeamRouterState;
 
 /// Response containing a list of team invites
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -32,11 +32,11 @@ pub struct TeamInvitesResponse {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<TeamRouterState<T, Eas, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<TeamInvitesResponse>, TeamError> {
     let invites = state
         .service
-        .get_user_invites(&required_user(&authorization.authorization).macro_user_id)
+        .get_user_invites(&authorization.authorization.user.macro_user_id)
         .await?;
     Ok(Json(TeamInvitesResponse { invites }))
 }

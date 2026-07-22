@@ -11,13 +11,14 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
+    UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 
 use crate::domain::{model::TeamError, team_repo::TeamService};
 
-use super::{TeamRouterState, required_user};
+use super::TeamRouterState;
 
 /// Extractor that ensures the authenticated user is a premium user
 /// (has an active stripe subscription).
@@ -84,9 +85,10 @@ where
         parts: &mut Parts,
         state: &TeamRouterState<T, Eas, Auth>,
     ) -> Result<Self, Self::Rejection> {
-        let user = MacroAuthorizationExtractor::<Auth>::from_request_parts(parts, state).await?;
-
-        let user = required_user(&user.authorization);
+        let authorization =
+            MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
+                .await?;
+        let user = &authorization.authorization.user;
         let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
         else {
             return Err(PremiumUserRejection::NotPremium);

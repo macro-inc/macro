@@ -1,11 +1,11 @@
 use axum::extract::{Path, State};
 use entity_access::domain::ports::EntityAccessService;
-use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService};
+use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{model::RemoveTeamInviteError, team_repo::TeamService};
 
-use super::{TeamRouterState, required_user};
+use super::TeamRouterState;
 
 /// Path parameters for reject invitation endpoint.
 #[derive(serde::Deserialize)]
@@ -32,13 +32,13 @@ pub struct TeamInvitePathParam {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<TeamRouterState<T, Eas, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(TeamInvitePathParam { team_invite_id }): Path<TeamInvitePathParam>,
 ) -> Result<(), RemoveTeamInviteError> {
     state
         .service
         .reject_invitation(
-            &required_user(&authorization.authorization).macro_user_id,
+            &authorization.authorization.user.macro_user_id,
             &team_invite_id,
         )
         .await?;
