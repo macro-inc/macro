@@ -46,7 +46,11 @@ type WebhookKafkaAdapter =
     KafkaConsumerAdapter<WebhookEventIngestionConsumerGroup, DeclaredMacroEvent>;
 type WebhookKafkaConsumer = MacroEventConsumerService<DeclaredMacroEvent, WebhookKafkaAdapter>;
 
-macro_event_broker::declare_topics!(DocumentMacroEvent, ChannelMacroEvent, WebhookMacroEvent);
+macro_event_broker::declare_topics!(
+    DeclaredMacroEvent: DocumentMacroEvent,
+    ChannelMacroEvent,
+    WebhookMacroEvent,
+);
 
 /// Maximum in-process ingestion attempts per event before the consumer bails
 /// out and lets a restart redeliver from the last committed offset.

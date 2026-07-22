@@ -188,21 +188,29 @@ impl<T: MessageParts, M: MacroEventCollection> MessageWrapper<T, M> {
 
 /// Declares the [`MacroEvent`] types accepted by a consumer.
 ///
-/// The macro creates a `DeclaredMacroEvent` enum with one variant per supplied
-/// event type and implements topic-based decoding for it. Event types must be
-/// identifiers and must implement [`MacroEvent`].
+/// The first identifier names the generated event collection enum. Each
+/// identifier after the colon becomes a variant and must implement
+/// [`MacroEvent`]. The generated enum implements topic-based decoding.
+///
+/// ```text
+/// declare_topics!(ConsumerEvents: DocumentMacroEvent, ChannelMacroEvent);
+/// ```
 #[macro_export]
 macro_rules! declare_topics {
-    ($($event:ident),+ $(,)?) => {
-        /// An event decoded from one of the topics declared by `declare_topics!`.
-        pub enum DeclaredMacroEvent {
+    ($collection:ident: $($event:ident),+ $(,)?) => {
+        #[doc = concat!(
+            "An event decoded from one of the topics declared for `",
+            stringify!($collection),
+            "`."
+        )]
+        pub enum $collection {
             $(
                 #[doc = concat!("A decoded `", stringify!($event), "` event.")]
                 $event($event),
             )+
         }
 
-        impl $crate::MacroEventCollection for DeclaredMacroEvent {
+        impl $crate::MacroEventCollection for $collection {
             fn decode<T: $crate::MessageParts>(
                 message: &T,
             ) -> Result<Self, $crate::EventBrokerError> {
@@ -227,7 +235,7 @@ macro_rules! declare_topics {
                                 actual,
                             });
                         }
-                        return Ok(DeclaredMacroEvent::$event(event));
+                        return Ok($collection::$event(event));
                     }
                 )+
 

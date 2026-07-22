@@ -136,7 +136,7 @@ impl MacroEvent for ExampleMacroEvent {
     }
 }
 
-crate::declare_topics!(ExampleMacroEvent);
+crate::declare_topics!(DeclaredMacroEvent: ExampleMacroEvent);
 
 struct TestMessage {
     topic: &'static str,

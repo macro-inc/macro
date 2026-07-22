@@ -21,7 +21,7 @@ const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 type IndependentKafkaConsumer = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent>;
 type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
-macro_event_broker::declare_topics!(SoupMacroEvent);
+macro_event_broker::declare_topics!(DeclaredMacroEvent: SoupMacroEvent);
 
 /// Independent consumer of recipient-targeted Soup messages.
 ///

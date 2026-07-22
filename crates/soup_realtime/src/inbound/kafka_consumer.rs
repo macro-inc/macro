@@ -32,7 +32,7 @@ type SoupRealtimeKafkaAdapter = KafkaConsumerAdapter<SoupRealtimeConsumerGroup, 
 type SoupRealtimeKafkaConsumer =
     MacroEventConsumerService<DeclaredMacroEvent, SoupRealtimeKafkaAdapter>;
 
-macro_event_broker::declare_topics!(DocumentMacroEvent);
+macro_event_broker::declare_topics!(DeclaredMacroEvent: DocumentMacroEvent);
 
 /// Total service attempts before returning for supervisor-driven redelivery.
 const MAX_SERVICE_ATTEMPTS: u32 = 5;

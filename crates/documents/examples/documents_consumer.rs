@@ -50,7 +50,7 @@ impl GroupName for DocumentsConsumerGroup {
 /// Bounded capacity of the channel between the poll loop and the processor.
 const CHANNEL_CAPACITY: usize = 128;
 
-macro_event_broker::declare_topics!(DocumentMacroEvent);
+macro_event_broker::declare_topics!(DeclaredMacroEvent: DocumentMacroEvent);
 
 type DocumentsKafkaAdapter = KafkaConsumerAdapter<DocumentsConsumerGroup, DeclaredMacroEvent>;
 type DocumentsConsumerService =
