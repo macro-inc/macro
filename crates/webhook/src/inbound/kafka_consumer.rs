@@ -25,7 +25,7 @@ use crate::domain::{events::WebhookTopicEvent, ingestion::WebhookEventIngestionS
 use anyhow::Context as _;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
-use kafka_consumer_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{Event, EventBrokerError, Topic as _};
 use macro_event_topics::{MacroChannelsTopic, MacroDocumentsTopic, MacroWebhooksTopic};
 use rdkafka::consumer::CommitMode;

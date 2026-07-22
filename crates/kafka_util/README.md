@@ -1,4 +1,4 @@
-# kafka_consumer_util
+# kafka_util
 
 Shared environment-aware Kafka consumer transport for backend inbound adapters.
 

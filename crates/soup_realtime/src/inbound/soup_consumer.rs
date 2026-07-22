@@ -9,7 +9,7 @@ mod test;
 
 use std::time::Duration;
 
-use kafka_consumer_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
+use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 #[cfg(test)]
 use macro_event_broker::MessageParts;
 use macro_event_broker::{
