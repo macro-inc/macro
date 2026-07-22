@@ -30,12 +30,12 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    BOT_TOKEN_HEADER, BotAuthentication, BotMacroAuthorizationExtractor,
-    MacroAuthorizationRejection, MacroAuthorizationService, MacroAuthorizationState,
+    BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use std::{future::Future, sync::Arc};
+use std::{future::Future, marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
 /// Header used to authenticate channel bot webhook requests.
@@ -132,7 +132,10 @@ impl<BotSvc, ChannelPoster, AccessSvc, Auth>
     }
 }
 
-struct ChannelWebhookAuthorizationExtractor<Auth>(Option<BotMacroAuthorizationExtractor<Auth>>);
+struct ChannelWebhookAuthorizationExtractor<Auth> {
+    authentication: Option<BotAuthentication>,
+    _service: PhantomData<fn() -> Auth>,
+}
 
 impl<S, Auth> FromRequestParts<S> for ChannelWebhookAuthorizationExtractor<Auth>
 where
@@ -153,9 +156,13 @@ where
         }
 
         let authorization =
-            Option::<BotMacroAuthorizationExtractor<Auth>>::from_request_parts(parts, state)
-                .await?;
-        Ok(Self(authorization))
+            OptionalMacroAuthorizationExtractor::<Auth, BotOnly>::from_request_parts(parts, state)
+                .await?
+                .authorization;
+        Ok(Self {
+            authentication: authorization,
+            _service: PhantomData,
+        })
     }
 }
 
@@ -290,7 +297,10 @@ where
 pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
     Path(path): Path<ChannelPath>,
-    ChannelWebhookAuthorizationExtractor(preferred_authorization): ChannelWebhookAuthorizationExtractor<Auth>,
+    ChannelWebhookAuthorizationExtractor {
+        authentication: preferred_authentication,
+        ..
+    }: ChannelWebhookAuthorizationExtractor<Auth>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<(StatusCode, Json<ChannelWebhookResponse>), ChannelBotWebhookHandlerErr>
@@ -303,14 +313,14 @@ where
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
     let content = parse_webhook_content(&headers, body)?;
-    let bot_id = match preferred_authorization {
-        Some(authorization) => {
-            record_preferred_bot(&authorization.bot);
+    let bot_id = match preferred_authentication {
+        Some(authentication) => {
+            record_preferred_bot(&authentication);
             state
                 .bot_service
-                .ensure_bot_in_channel(authorization.bot.bot_id, path.channel_id)
+                .ensure_bot_in_channel(authentication.bot_id, path.channel_id)
                 .await?;
-            authorization.bot.bot_id
+            authentication.bot_id
         }
         None => {
             let bot_auth_token = channel_bot_token(&headers)?;

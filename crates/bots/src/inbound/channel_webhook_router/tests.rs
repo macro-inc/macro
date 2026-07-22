@@ -20,9 +20,8 @@ use macro_authorization::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
     BOT_FOR_ORGANIZATION_ID_HEADER, BOT_TOKEN_HEADER,
     BotActingUserClaims as AuthorizationBotActingUserClaims, BotAuthentication, BotAuthorizer,
-    INTERNAL_API_KEY_HEADER, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, MacroAuthorizationState, MacroUserAuthentication,
-    ValidatedIdentity,
+    InternalAuthConfig, JwtValidator, MacroAuthorizationError, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState, MacroUserAuthentication, ValidatedIdentity,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
@@ -768,8 +767,6 @@ async fn channel_webhook_router_preferred_token_posts_as_bot() {
     let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
     let request = webhook_request(channel_id)
         .header(BOT_TOKEN_HEADER, token)
-        .header(header::AUTHORIZATION, "Bearer ignored-user-token")
-        .header(INTERNAL_API_KEY_HEADER, "ignored-internal-key")
         .body(Body::from(
             serde_json::json!({ "content": "hello preferred" }).to_string(),
         ))
@@ -861,6 +858,84 @@ async fn channel_webhook_router_verified_acting_user_is_not_used_for_attribution
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].actor, Sender::new_from_bot(bot_id));
     assert!(calls[0].req.triggered_by.is_none());
+}
+
+#[tokio::test]
+async fn channel_webhook_router_cookie_only_user_is_forbidden_without_posting() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
+        .header("cookie", "macro-access-token=macro|cookie-user@example.com")
+        .body(Body::from(
+            serde_json::json!({ "content": "user request" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "forbidden");
+    assert_eq!(authorizer.call_count(), 0);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_bot_token_and_user_are_ambiguous_without_posting() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let authorizer = rejecting_bot_authorizer();
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, "mbot_test_preferred")
+        .header(
+            header::AUTHORIZATION,
+            "Bearer macro|explicit-user@example.com",
+        )
+        .body(Body::from(
+            serde_json::json!({ "content": "ambiguous" }).to_string(),
+        ))
+        .unwrap();
+
+    let response =
+        webhook_router_with_authorizer(service.clone(), poster.clone(), authorizer.clone())
+            .oneshot(request)
+            .await
+            .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
+    assert_eq!(error.message, "ambiguous credentials");
+    assert_eq!(authorizer.call_count(), 0);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -1120,8 +1195,6 @@ async fn channel_webhook_router_missing_token_header_returns_unauthorized_withou
     let poster = TestChannelPoster::new();
     let authorizer = rejecting_bot_authorizer();
     let request = webhook_request(channel_id)
-        .header(header::AUTHORIZATION, "Bearer valid-user-token")
-        .header(INTERNAL_API_KEY_HEADER, "valid-internal-key")
         .body(Body::from(
             serde_json::json!({ "content": "hello" }).to_string(),
         ))
