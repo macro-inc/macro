@@ -431,8 +431,13 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/setup',
+    // Flag-gated at the route, not just the redirect: with the flag off a
+    // direct /setup visit must not touch the onboarding backend (reading
+    // it creates the flow's row and starts gathers).
     component: () =>
-      isNativeMobilePlatform() ? (
+      !ENABLE_NEW_ONBOARDING ? (
+        <Navigate href="/" />
+      ) : isNativeMobilePlatform() ? (
         <Navigate href="/onboarding" />
       ) : (
         <SetupPage />
