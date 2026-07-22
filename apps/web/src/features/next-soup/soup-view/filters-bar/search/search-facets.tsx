@@ -19,7 +19,6 @@ import type {
   SearchIndexId,
   SearchTypeValue,
 } from './search-filters-state';
-import { useSearchTagsFlag } from './search-tags-flag';
 
 export const SEARCH_INDEX_OPTIONS: {
   value: SearchIndexId;
@@ -300,7 +299,6 @@ export function useSearchFacets(
   });
 
   const tagSource = useTagOptions();
-  const searchTags = useSearchTagsFlag();
 
   const type = singleFacet({
     id: 'type',
@@ -484,10 +482,8 @@ export function useSearchFacets(
   };
 
   // Tags show only where tagging applies (all/documents/tasks/emails/agents/
-  // folders), gated behind both the broad tags flag and the search-view
-  // rollout flag, and hidden when the caller has no tags defined.
-  const tagFacets = (): SearchFacetVM[] =>
-    searchTags() && tagSource.enabled() && tagSource.hasTags() ? [tags] : [];
+  // folders), and hidden when the caller has no tags defined.
+  const tagFacets = (): SearchFacetVM[] => (tagSource.hasTags() ? [tags] : []);
 
   return createMemo(() => {
     switch (controller.type()) {

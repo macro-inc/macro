@@ -1,4 +1,3 @@
-import { useRowTagsVisible } from '@app/features/next-soup/soup-view/filters-bar/search/search-tags-flag';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
@@ -61,7 +60,6 @@ function RowTags(props: {
 
 export function WideLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
-  const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = useOwningInboxForEntity(() => props.entity);
@@ -161,11 +159,7 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
-        <Show
-          when={
-            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
-          }
-        >
+        <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
@@ -175,11 +169,7 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show
-          when={
-            rowTagsVisible() && isDocumentEntity(props.entity) && props.entity
-          }
-        >
+        <Show when={isDocumentEntity(props.entity) && props.entity}>
           {(entity) => {
             const properties = () => {
               const doc = entity();
@@ -197,9 +187,7 @@ export function WideLayout(props: LayoutProps) {
             );
           }}
         </Show>
-        <Show
-          when={rowTagsVisible() && isEmailEntity(props.entity) && props.entity}
-        >
+        <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => (
             // No filter-by-tag affordance. The soup email path does not apply
             // tag filters, so filtering would leave email rows unfiltered.
@@ -210,9 +198,7 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show
-          when={rowTagsVisible() && isChatEntity(props.entity) && props.entity}
-        >
+        <Show when={isChatEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
@@ -222,9 +208,7 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show
-          when={rowTagsVisible() && isCallEntity(props.entity) && props.entity}
-        >
+        <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
