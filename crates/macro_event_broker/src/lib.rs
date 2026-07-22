@@ -7,8 +7,8 @@
 //! [`MacroEventBroker`](domain::ports::MacroEventBroker) API, the outbound
 //! [`EventPublisher`](domain::ports::EventPublisher) port, the producing
 //! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService), and the
-//! single-topic typed
-//! [`MacroEventConsumerService`](domain::service::MacroEventConsumerService).
+//! typed [`MacroEventConsumerService`](domain::service::MacroEventConsumerService),
+//! which receives messages through the [`EventConsumer`](domain::ports::EventConsumer) port.
 //! Kafka topic definitions live in the `macro_event_topics` crate.
 //! The [`outbound`] layer provides the Kafka publisher adapter.
 
