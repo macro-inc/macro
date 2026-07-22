@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::call_record::CallRecordSearchResponseItemWithMetadata;
-use crate::channel::ChannelMessageSearchResponseItem;
+use crate::channel::{ChannelMessageSearchResponseItem, ChannelNameSearchResponseItem};
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
@@ -210,6 +210,7 @@ pub enum UnifiedSearchResponseItem {
     Chat(ChatSearchResponseItemWithMetadata),
     Email(EmailSearchResponseItemWithMetadata),
     ChannelMessage(ChannelMessageSearchResponseItem),
+    Channel(ChannelNameSearchResponseItem),
     Project(ProjectSearchResponseItemWithMetadata),
     Call(CallRecordSearchResponseItemWithMetadata),
     Company(crate::crm_company::CrmCompanySearchResponseItem),
@@ -222,6 +223,7 @@ impl UnifiedSearchResponseItem {
             Self::Chat(item) => item.extra.id,
             Self::Email(item) => item.extra.id,
             Self::ChannelMessage(item) => item.channel_id,
+            Self::Channel(item) => item.channel_id,
             Self::Project(item) => item.extra.id,
             Self::Call(item) => item.extra.id,
             Self::Company(item) => item.id,
@@ -234,6 +236,7 @@ impl UnifiedSearchResponseItem {
             Self::Chat(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Email(item) => Some(item.updated_at),
             Self::ChannelMessage(item) => Some(item.updated_at),
+            Self::Channel(item) => item.metadata.as_ref().map(|metadata| metadata.updated_at),
             Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Call(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Company(item) => Some(item.updated_at),
@@ -270,3 +273,6 @@ pub struct SimpleUnifiedSearchBaseResponse<T> {
 
 pub type SimpleUnifiedSearchResponse =
     SimpleUnifiedSearchBaseResponse<crate::HumanReadableTimestamp>;
+
+#[cfg(test)]
+mod test;

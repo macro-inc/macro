@@ -9350,6 +9350,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cached",
+ "channels",
  "chrono",
  "macro_db_migrator",
  "macro_user_id",

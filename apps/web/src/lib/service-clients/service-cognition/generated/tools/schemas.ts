@@ -404,6 +404,46 @@ export const SearchToolResponse = z.object({
             ),
             z.intersection(
               z.object({
+                channel_id: z.string().uuid(),
+                channel_type: z.string(),
+                highlight: z.object({
+                  bcc: z.array(z.string()).optional(),
+                  cc: z.array(z.string()).optional(),
+                  content: z.array(z.string()).optional(),
+                  name: z.union([z.string(), z.null()]).optional(),
+                  recipients: z.array(z.string()).optional(),
+                  sender: z.union([z.string(), z.null()]).optional(),
+                  user_id: z.union([z.string(), z.null()]).optional(),
+                }),
+                id: z.string().uuid(),
+                metadata: z
+                  .union([
+                    z.object({
+                      created_at: z.string().datetime({ offset: true }),
+                      interacted_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                owner_id: z.union([z.string(), z.null()]).optional(),
+                score: z.union([z.number(), z.null()]).optional(),
+              }),
+              z.object({ type: z.literal('channel') })
+            ),
+            z.intersection(
+              z.object({
                 created_at: z.string().datetime({ offset: true }),
                 id: z.string().uuid(),
                 metadata: z

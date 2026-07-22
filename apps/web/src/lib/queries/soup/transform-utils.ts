@@ -450,6 +450,38 @@ export const useSearchResponseItemMapper = () => {
           },
         ];
       }
+      case 'channel': {
+        if (!result.metadata) return [];
+        const nameHighlight = result.highlight.name
+          ? mergeAdjacentMacroEmTags(result.highlight.name)
+          : null;
+        const search: SearchData = {
+          nameHighlight,
+          senderHighlightTerms: null,
+          contentHitData: null,
+          source: 'service',
+        };
+        const channelName =
+          channels().find((channel) => channel.id === result.channel_id)
+            ?.name ??
+          (search.nameHighlight
+            ? extractSearchSnippet(search.nameHighlight)
+            : blockNameToDefaultFile('channel'));
+        return [
+          {
+            type: 'channel',
+            id: result.channel_id,
+            name: channelName,
+            ownerId: result.owner_id ?? '',
+            channelType: result.channel_type as ChannelType,
+            createdAt: result.metadata.created_at,
+            updatedAt: result.metadata.updated_at,
+            viewedAt: result.metadata.viewed_at,
+            interactedAt: result.metadata.interacted_at,
+            search,
+          },
+        ];
+      }
       case 'channelMessage': {
         const channelName =
           channels().find((c) => c.id === result.channel_id)?.name ??

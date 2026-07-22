@@ -520,6 +520,51 @@
           }
         }
       },
+      "ChannelNameSearchResponseItem": {
+        "type": "object",
+        "description": "A channel-name hit in the unified search response.",
+        "required": ["id", "channel_type", "channel_id", "highlight"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel id."
+          },
+          "channel_type": {
+            "type": "string",
+            "description": "The type of channel."
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The matched channel-name highlight."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized id field shared by all item types; the channel id."
+          },
+          "metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelMetadata",
+                "description": "Metadata for the channel."
+              }
+            ]
+          },
+          "owner_id": {
+            "type": ["string", "null"],
+            "description": "The channel owner."
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result."
+          }
+        }
+      },
       "ChannelSearchRequest": {
         "allOf": [
           {
@@ -3939,6 +3984,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["channelMessage"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChannelNameSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["channel"]
                   }
                 }
               }

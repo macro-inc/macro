@@ -17,9 +17,9 @@ use macro_authorization::MacroAuthorizationExtractor;
 use macro_user_id::user_id::MacroUserId;
 use models_search::MatchType;
 use models_search::channel::{
-    ChannelMessageSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
-    ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
-    ChannelSortTimestamp,
+    ChannelMessageSearchResponseItem, ChannelNameSearchResponseItem, ChannelSearchRequest,
+    ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata,
+    ChannelSearchResult, ChannelSortTimestamp,
 };
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
@@ -125,6 +125,47 @@ pub(in crate::api::search) async fn enrich_channel_messages(
         channel_histories,
         message_states,
     ))
+}
+
+/// Enriches channel name hits with channel metadata.
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_channel_names(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: Vec<opensearch_client::search::model::SearchHit>,
+) -> Result<Vec<ChannelNameSearchResponseItem>, SearchError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let (channel_histories, _) = fetch_channel_enrichment(ctx, user_id, &results).await?;
+    Ok(construct_channel_name_items(results, channel_histories))
+}
+
+fn construct_channel_name_items(
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
+    channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
+) -> Vec<ChannelNameSearchResponseItem> {
+    search_results
+        .into_iter()
+        .filter_map(|hit| {
+            let info = channel_histories.get(&hit.entity_id)?;
+            Some(ChannelNameSearchResponseItem {
+                metadata: Some(models_search::channel::ChannelMetadata {
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
+                    interacted_at: info.interacted_at,
+                }),
+                id: hit.entity_id,
+                owner_id: Some(info.user_id.clone()),
+                channel_type: info.channel_type.clone(),
+                channel_id: hit.entity_id,
+                highlight: hit.highlight.into(),
+                score: hit.score,
+            })
+        })
+        .collect()
 }
 
 /// Builds one per-message item per content hit. Drops hits whose channel has

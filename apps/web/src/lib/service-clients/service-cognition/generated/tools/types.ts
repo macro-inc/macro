@@ -422,6 +422,9 @@ export type TaggedSearchResult1 =
   | (ChannelMessageSearchResponseItem & {
       type: 'channelMessage';
     })
+  | (ChannelNameSearchResponseItem & {
+      type: 'channel';
+    })
   | (ProjectSearchResponseItemWithMetadata & {
       type: 'project';
     })
@@ -751,6 +754,45 @@ export interface ChannelMessageSearchResponseItem {
    * When the channel message was last updated
    */
   updated_at: string;
+}
+/**
+ * Metadata for a channel fetched from the database
+ */
+export interface ChannelMetadata {
+  created_at: string;
+  interacted_at?: string | null;
+  updated_at: string;
+  viewed_at?: string | null;
+}
+/**
+ * A channel-name hit in the unified search response.
+ */
+export interface ChannelNameSearchResponseItem {
+  /**
+   * The channel id.
+   */
+  channel_id: string;
+  /**
+   * The type of channel.
+   */
+  channel_type: string;
+  highlight: SearchHighlight;
+  /**
+   * Standardized id field shared by all item types; the channel id.
+   */
+  id: string;
+  /**
+   * Metadata for the channel.
+   */
+  metadata?: ChannelMetadata | null;
+  /**
+   * The channel owner.
+   */
+  owner_id?: string | null;
+  /**
+   * The score of the result.
+   */
+  score?: number | null;
 }
 /**
  * A single message in the tool response.
@@ -2307,7 +2349,7 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
   /**
