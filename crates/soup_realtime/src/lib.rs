@@ -12,5 +12,5 @@ pub mod domain;
 pub mod inbound;
 
 /// Outbound infrastructure adapters.
-#[cfg(feature = "outbound")]
+#[cfg(any(feature = "consumer", feature = "outbound"))]
 pub mod outbound;

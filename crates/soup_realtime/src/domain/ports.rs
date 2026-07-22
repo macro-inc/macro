@@ -1,4 +1,4 @@
-//! Ports used by realtime Soup fan-out.
+//! Ports used by realtime Soup services.
 
 use std::future::Future;
 
@@ -16,6 +16,12 @@ pub trait SoupRealtimeService: Send + Sync + 'static {
         &self,
         entity: Entity<'static>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Receives complete recipient-targeted Soup messages.
+pub trait SoupRealtimeConsumer: Send + Sync + 'static {
+    /// Waits for and returns the next realtime Soup message.
+    fn recv(&self) -> impl Future<Output = Result<SoupRealtimeMessage, Report>> + Send;
 }
 
 /// Resolves the users who currently have access to an entity.

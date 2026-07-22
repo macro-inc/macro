@@ -1,4 +1,4 @@
-//! Realtime Soup hydration and fan-out orchestration.
+//! Realtime Soup orchestration.
 
 #[cfg(test)]
 mod test;
@@ -12,8 +12,31 @@ use rootcause::prelude::{Report, ResultExt as _};
 
 use super::{
     models::SoupRealtimeMessage,
-    ports::{SoupItemReader, SoupRealtimePublisher, SoupRealtimeService, UserAccessExpander},
+    ports::{
+        SoupItemReader, SoupRealtimeConsumer, SoupRealtimePublisher, SoupRealtimeService,
+        UserAccessExpander,
+    },
 };
+
+/// Stub service for processing recipient-targeted realtime Soup messages.
+pub struct SoupRealtimeConsumerService<C>
+where
+    C: SoupRealtimeConsumer,
+{
+    _consumer: C,
+}
+
+impl<C> SoupRealtimeConsumerService<C>
+where
+    C: SoupRealtimeConsumer,
+{
+    /// Creates a realtime Soup consumer service backed by `consumer`.
+    pub const fn new(consumer: C) -> Self {
+        Self {
+            _consumer: consumer,
+        }
+    }
+}
 
 /// Maximum number of Kafka publications polled concurrently.
 const PUBLISH_CONCURRENCY: usize = 16;

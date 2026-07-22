@@ -13,7 +13,10 @@ use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
 use rootcause::prelude::{Report, ResultExt as _};
 
-use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
+use crate::domain::{
+    models::{SoupMacroEvent, SoupRealtimeMessage},
+    ports::SoupRealtimeConsumer,
+};
 
 /// Maximum time to wait for Soup topic metadata during partition assignment.
 const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
@@ -71,5 +74,11 @@ impl SoupTopicConsumer {
         match event {
             DeclaredMacroEvent::SoupMacroEvent(event) => Ok(event.into_message()),
         }
+    }
+}
+
+impl SoupRealtimeConsumer for SoupTopicConsumer {
+    async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
+        SoupTopicConsumer::recv(self).await
     }
 }
