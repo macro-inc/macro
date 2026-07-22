@@ -9,9 +9,10 @@ mod test;
 
 use macro_env::Environment;
 use rdkafka::ClientConfig;
+use rdkafka::TopicPartitionList;
 use rdkafka::consumer::{CommitMode, Consumer as _, StreamConsumer};
 use rdkafka::error::{KafkaError, KafkaResult};
-use rdkafka::message::BorrowedMessage;
+use rdkafka::message::{BorrowedMessage, Message as _};
 
 use crate::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
 
@@ -90,6 +91,19 @@ impl KafkaEventConsumer {
         match &self.consumer {
             ConsumerTransport::Plaintext(consumer) => consumer.recv().await,
             ConsumerTransport::MskIam(consumer) => consumer.recv().await,
+        }
+    }
+
+    /// Pauses the partition containing `message`.
+    ///
+    /// This allows an application to continue consuming other partitions
+    /// without later commits advancing past a failed record.
+    pub fn pause_message_partition(&self, message: &BorrowedMessage<'_>) -> KafkaResult<()> {
+        let mut partitions = TopicPartitionList::new();
+        partitions.add_partition(message.topic(), message.partition());
+        match &self.consumer {
+            ConsumerTransport::Plaintext(consumer) => consumer.pause(&partitions),
+            ConsumerTransport::MskIam(consumer) => consumer.pause(&partitions),
         }
     }
 

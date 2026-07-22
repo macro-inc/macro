@@ -206,14 +206,34 @@ where
                     continue;
                 };
 
-                match process_document_payload(
+                let outcome = match process_document_payload(
                     &service,
                     payload,
                     message.partition(),
                     message.offset(),
                 )
-                .await?
+                .await
                 {
+                    Ok(outcome) => outcome,
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            topic = message.topic(),
+                            partition = message.partition(),
+                            offset = message.offset(),
+                            "realtime Soup fan-out retries exhausted; pausing partition for redelivery"
+                        );
+                        // Kafka commits are cumulative within a partition, so
+                        // pause it before any later record can advance the
+                        // committed offset past this failure.
+                        consumer
+                            .pause_message_partition(&message)
+                            .context("failed to pause Kafka partition after fan-out failure")?;
+                        continue;
+                    }
+                };
+
+                match outcome {
                     DocumentPayloadOutcome::Notified | DocumentPayloadOutcome::Ignored => {}
                     DocumentPayloadOutcome::Malformed(error) => tracing::error!(
                         error = ?error,
