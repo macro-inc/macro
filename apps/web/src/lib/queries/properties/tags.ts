@@ -1,5 +1,6 @@
+import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { AddPropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/addPropertyOptionRequest';
@@ -12,13 +13,18 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
+const EMPTY_TAG_SETS: TagSetResponse[] = [];
+
 /** The caller's tag sets: their personal set, plus their team's set when on a team. */
 export function useTagsQuery() {
+  const isAuthenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: propertiesKeys.tags.queryKey,
     queryFn: async () =>
       await throwOnErr(async () => await propertiesServiceClient.listTags()),
     staleTime: 1000 * 60 * 5,
+    enabled: isAuthenticated(),
+    placeholderData: EMPTY_TAG_SETS,
   }));
 }
 
@@ -68,6 +74,12 @@ export function useEnsureTagSetMutation(
     ...withCallbacks<TagSetResponse, Error, EnsureTagSetParams>(
       {
         onError(error) {
+          if (
+            thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+            thrownResultErrorHasCode(error, 'FORBIDDEN')
+          ) {
+            return;
+          }
           console.error('Failed to provision tag set', error);
           toast.failure('Failed to set up tags');
         },

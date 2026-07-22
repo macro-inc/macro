@@ -1997,7 +1997,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}.
+   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}. Supports filtering by thread timestamp: {"l":{"ca":{"gte":"<start>"}}} matches created_at, {"l":{"ua":{"gte":"<start>","lt":"<end>"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For "emails from the last 7 days", AND a ua (or ca) gte bound set to 7 days before now, e.g. {"l":{"ua":{"gte":"<7-days-ago-ISO>"}}}.
    */
   ef?: {
     [k: string]: unknown;

@@ -551,6 +551,7 @@ export function MarkdownEditor(props: {
         menu: tagsMenuOperations,
         peerIdValidator: peerIdValidator(),
         onCreateTag: (tag) => {
+          if (!canEdit()) return;
           void documentTags.applyTag(tag.scope, tag.optionId);
         },
       })
