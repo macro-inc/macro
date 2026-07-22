@@ -4442,7 +4442,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_contact"],
-        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\nemail's domain must be one of the company's domains (400), the\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
         "operationId": "create_crm_contact",
         "parameters": [
           {
@@ -12766,7 +12766,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "The contact's email address, e.g. \"jane@acme.com\". Any domain is\naccepted (including generic providers like gmail.com)."
+            "description": "The contact's email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company's domains (400 otherwise)."
           },
           "name": {
             "type": "string",

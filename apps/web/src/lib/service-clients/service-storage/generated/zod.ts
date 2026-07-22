@@ -3440,6 +3440,7 @@ export const listCompanyContactsResponse = zod.array(
 [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
 that owns the company (hidden companies are reachable for
 admin/owner only, and the new contact then inherits `hidden`). The
+email's domain must be one of the company's domains (400), the
 company must not already track the email (409), and the team's CRM
 killswitch must be on (403).
  */
@@ -3452,7 +3453,7 @@ export const createCrmContactBody = zod
     email: zod
       .string()
       .describe(
-        'The contact\'s email address, e.g. \"jane@acme.com\". Any domain is\naccepted (including generic providers like gmail.com).'
+        'The contact\'s email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company\'s domains (400 otherwise).'
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
