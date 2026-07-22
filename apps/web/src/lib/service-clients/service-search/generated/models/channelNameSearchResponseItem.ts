@@ -11,7 +11,7 @@ import type { ChannelNameSearchResponseItemScore } from './channelNameSearchResp
 import type { SearchHighlight } from './searchHighlight';
 
 /**
- * A channel-name hit in the unified search response.
+ * A channel-name search hit.
  */
 export interface ChannelNameSearchResponseItem {
   /** The channel id. */

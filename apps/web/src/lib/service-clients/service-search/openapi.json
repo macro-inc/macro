@@ -522,7 +522,7 @@
       },
       "ChannelNameSearchResponseItem": {
         "type": "object",
-        "description": "A channel-name hit in the unified search response.",
+        "description": "A channel-name search hit.",
         "required": ["id", "channel_type", "channel_id", "highlight"],
         "properties": {
           "channel_id": {

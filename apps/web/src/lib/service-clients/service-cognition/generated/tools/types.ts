@@ -765,7 +765,7 @@ export interface ChannelMetadata {
   viewed_at?: string | null;
 }
 /**
- * A channel-name hit in the unified search response.
+ * A channel-name search hit.
  */
 export interface ChannelNameSearchResponseItem {
   /**
