@@ -14,7 +14,7 @@ use entity_access::{
     inbound::axum_extractors::EntityBodyAccessLevelExtractor,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_entity::EntityType;
 use model_error_response::ErrorResponse;
@@ -165,18 +165,17 @@ pub struct ReorderFavoritesRequest {
 #[tracing::instrument(err, skip_all)]
 pub async fn list_favorites_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<FavoritesList>, FavoritesError>
 where
     S: FavoritesService,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let user = user
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
-    let favorites = state.service.list_favorites(&user.macro_user_id).await?;
+    let favorites = state
+        .service
+        .list_favorites(&user.authorization.user.macro_user_id)
+        .await?;
     Ok(Json(FavoritesList { favorites }))
 }
 
@@ -229,7 +228,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn remove_favorite_by_entity_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(params): Path<RemoveFavoriteByEntityParams>,
 ) -> Result<Json<()>, FavoritesError>
 where
@@ -237,14 +236,10 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let user = user
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
     let entity = params.entity_type.with_entity_str(&params.entity_id);
     state
         .service
-        .remove_favorite_by_entity(&user.macro_user_id, &entity)
+        .remove_favorite_by_entity(&user.authorization.user.macro_user_id, &entity)
         .await?;
     Ok(Json(()))
 }
@@ -266,7 +261,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn reorder_favorites_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<ReorderFavoritesRequest>,
 ) -> Result<Json<()>, FavoritesError>
 where
@@ -274,10 +269,6 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let user = user
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
     let ordered: Vec<_> = req
         .favorites
         .iter()
@@ -285,7 +276,7 @@ where
         .collect();
     state
         .service
-        .reorder_favorites(&user.macro_user_id, &ordered)
+        .reorder_favorites(&user.authorization.user.macro_user_id, &ordered)
         .await?;
     Ok(Json(()))
 }
