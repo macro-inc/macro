@@ -10,7 +10,7 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -244,7 +244,7 @@ impl IntoResponse for McpHandlerErr {
 #[tracing::instrument(skip_all, err)]
 pub async fn list_servers<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<Vec<ServerResponse>>, McpHandlerErr>
 where
     S: McpServerStore,
@@ -252,10 +252,7 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = &authorization.authorization.user;
     let records = state
         .store
         .list(&user.macro_user_id)
@@ -283,7 +280,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<AddServerRequest>,
 ) -> Result<(StatusCode, Json<ServerResponse>), McpHandlerErr>
 where
@@ -292,10 +289,7 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = &authorization.authorization.user;
     let record = McpServerRecord {
         user_id: user.macro_user_id.clone(),
         url: body.url,
@@ -333,7 +327,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn update_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<UpdateServerRequest>,
 ) -> Result<Json<ServerResponse>, McpHandlerErr>
 where
@@ -342,10 +336,7 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = &authorization.authorization.user;
     let mut record = state
         .store
         .load(&user.macro_user_id, &body.url)
@@ -385,7 +376,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn delete_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(params): Query<DeleteServerParams>,
 ) -> Result<StatusCode, McpHandlerErr>
 where
@@ -394,10 +385,7 @@ where
     Auth: MacroAuthorizationService,
     anyhow::Error: From<S::Err>,
 {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = &authorization.authorization.user;
     state
         .store
         .delete(&user.macro_user_id, &params.url)
@@ -423,7 +411,7 @@ where
 #[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(body): Json<StartAuthRequest>,
 ) -> Result<Json<StartAuthResponse>, McpHandlerErr>
 where
@@ -431,10 +419,7 @@ where
     O: OAuthClient,
     Auth: MacroAuthorizationService,
 {
-    let user = authorization
-        .authorization
-        .acting_user()
-        .expect("required authorization guarantees an acting user");
+    let user = &authorization.authorization.user;
     let authorization_url = state
         .oauth
         .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
