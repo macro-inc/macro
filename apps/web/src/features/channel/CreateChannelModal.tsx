@@ -78,9 +78,6 @@ export function CreateChannelModal() {
   const channelName = createMemo(() => name().trim());
   const team = createMemo(() => currentTeamQuery.data?.team);
   const teamMembers = createMemo(() => currentTeamQuery.data?.members ?? []);
-  const teamMemberIds = createMemo(() =>
-    teamMembers().map((member) => member.user_id)
-  );
   const canSubmit = createMemo(
     () => channelName().length > 0 && !createChannelMutation.isPending
   );
@@ -122,14 +119,12 @@ export function CreateChannelModal() {
       return;
     }
 
-    let participants = destination.users;
-    if (isTeamChannel && autoJoinTeam()) {
-      participants = [...new Set([...participants, ...teamMemberIds()])];
-    } else if (isTeamChannel && participants.length === 0 && userId()) {
-      // Team channels currently require a non-empty participant list. The
-      // repository filters out the owner after satisfying that validation.
-      participants = [userId()!];
-    }
+    // Team channels currently require a non-empty participant list. The
+    // repository filters out the owner after satisfying that validation.
+    const participants =
+      isTeamChannel && destination.users.length === 0 && userId()
+        ? [userId()!]
+        : destination.users;
 
     try {
       const { id } = await createChannelMutation.mutateAsync({
