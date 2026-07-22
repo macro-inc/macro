@@ -1,26 +1,16 @@
-import { toast } from '@core/component/Toast/Toast';
 import LogoIcon from '@icon/macro-logo.svg';
-import { authKeys } from '@queries/auth/keys';
-import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
 import { usePrimaryEmailLinkId } from '@queries/email/link';
-import {
-  type ImportSource,
-  useImportQuery,
-  useRunImportMutation,
-} from '@queries/import';
-import {
-  useCompleteOnboardingMutation,
-  useOnboardingQuery,
-} from '@queries/onboarding';
-import { importClient } from '@service-cognition/import';
-import { useNavigate, useSearchParams } from '@solidjs/router';
+import { useImportQuery } from '@queries/import';
+import { useOnboardingQuery } from '@queries/onboarding';
+import { useNavigate } from '@solidjs/router';
 import { Button, Layer } from '@ui';
-import { createEffect, createSignal, Suspense } from 'solid-js';
+import { createEffect, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { ConnectorsSection } from './ConnectorsSection';
-import { ImportPanel, stagedSelection } from './ImportPanel';
+import { createSetupFinish } from './createSetupFinish';
+import { ImportPanel } from './ImportPanel';
+import type { SkippedSources } from './selection';
 
 /**
  * The split-screen onboarding page (`/setup`): connect tools on the left,
@@ -28,7 +18,7 @@ import { ImportPanel, stagedSelection } from './ImportPanel';
  * server-side — reads of an active onboarding start due gather runs,
  * connector OAuth completions hook in instantly, and `POST /import/run`
  * copies accepted items in — so this page only renders state and decides
- * when the user is done.
+ * when the user is done (the finish workflow lives in createSetupFinish).
  */
 export function SetupPage() {
   // The page owns its Suspense boundary: /setup renders under the app's
@@ -49,26 +39,11 @@ export function SetupPage() {
   );
 }
 
-/**
- * How long "Continue to Macro" holds for in-flight imports before letting
- * the user through anyway (imports keep landing server-side; the ledger is
- * never lost to navigation).
- */
-const FINISH_IMPORT_WAIT_MS = 90_000;
-const FINISH_POLL_INTERVAL_MS = 1_500;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function SetupPageContent() {
   const navigate = useNavigate();
   const userInfoQuery = useUserInfoQuery();
-  const completeOnboarding = useCompleteOnboardingMutation();
-  const completeTutorial = useCompleteTutorialMutation();
   const onboardingQuery = useOnboardingQuery();
   const importQuery = useImportQuery();
-  const runImport = useRunImportMutation();
   // The user's own primary inbox link — present once email is connected
   // (drives the welcome copy: inbox processing vs plain setup).
   const emailConnected = usePrimaryEmailLinkId();
@@ -77,21 +52,12 @@ function SetupPageContent() {
   // flips its whole source off). Lives here so the footer's "Continue to
   // Macro" imports exactly the sections still toggled on. Keyed by source
   // so re-gathers and refetches keep the user's picks.
-  const [skippedSources, setSkippedSources] = createStore<
-    Partial<Record<ImportSource, boolean>>
-  >({});
+  const [skippedSources, setSkippedSources] = createStore<SkippedSources>({});
 
-  // Where to land after setup: the deep link the redirect preserved
-  // (?next=/md/…), or home. Same-app relative paths only.
-  const [searchParams] = useSearchParams();
-  const afterSetupTarget = () => {
-    const next = searchParams.next;
-    return typeof next === 'string' &&
-      next.startsWith('/') &&
-      !next.startsWith('//')
-      ? next
-      : '/';
-  };
+  const setupFinish = createSetupFinish({
+    entities: () => importQuery.data?.entities,
+    skippedSources,
+  });
 
   // Redirect out when there is nothing to set up (unauthenticated, or the
   // flow was already completed elsewhere).
@@ -101,85 +67,9 @@ function SetupPageContent() {
       return;
     }
     if (onboardingQuery.data?.row.status === 'completed') {
-      navigate(afterSetupTarget(), { replace: true });
+      navigate(setupFinish.afterSetupTarget(), { replace: true });
     }
   });
-
-  /**
-   * Import the current selection and hold until the rows settle (the pills
-   * animate importing → "in Macro" live while this waits). Returns how many
-   * accepted items had NOT landed as imported when the wait ended — failed
-   * rows fall back to `staged` with an error, and a capped wait counts the
-   * stragglers too.
-   */
-  const runSelectedImports = async (): Promise<number> => {
-    const { importIds, discardIds } = stagedSelection(
-      importQuery.data?.entities,
-      skippedSources
-    );
-    if (importIds.length === 0 && discardIds.length === 0) return 0;
-    await runImport.mutateAsync({ importIds, discardIds });
-    if (importIds.length === 0) return 0;
-
-    const accepted = new Set(importIds);
-    const deadline = Date.now() + FINISH_IMPORT_WAIT_MS;
-    while (Date.now() < deadline) {
-      const state = await importClient.getState();
-      const entities = state.isOk() ? state.value.entities : undefined;
-      if (entities) {
-        const inFlight = entities.some(
-          (entity) => accepted.has(entity.id) && entity.status === 'importing'
-        );
-        if (!inFlight) {
-          return entities.filter(
-            (entity) => accepted.has(entity.id) && entity.status !== 'imported'
-          ).length;
-        }
-      }
-      await sleep(FINISH_POLL_INTERVAL_MS);
-    }
-    return 0; // Timed out waiting — imports continue server-side.
-  };
-
-  // Finishing: import whatever is still selected (holding while the pills
-  // land), then mark the flow completed server-side (which removes leftover
-  // onboarding-staged candidates) and the legacy tutorial done (suppressing
-  // the old modal), then land in the app.
-  const [finishing, setFinishing] = createSignal(false);
-  const finish = async (skipped: boolean) => {
-    if (finishing()) return;
-    setFinishing(true);
-    try {
-      if (!skipped) {
-        const failed = await runSelectedImports().catch(() => 0);
-        if (failed > 0) {
-          toast.failure(`${failed} items failed to import`);
-        }
-      }
-      await Promise.allSettled([
-        completeOnboarding.mutateAsync({ skipped }),
-        completeTutorial.mutateAsync(),
-      ]);
-      // NewOnboardingRedirect keys off userInfo.tutorialComplete: navigating
-      // before the cache reflects the PATCH would bounce straight back here.
-      // Refetch and verify — if the PATCH failed (allSettled hides it) or
-      // the refetch missed, stay put and let the user retry.
-      await queryClient
-        .refetchQueries({ queryKey: authKeys.userInfo.queryKey })
-        .catch(() => {});
-      if (userInfoQuery.data?.tutorialComplete !== true) {
-        toast.failure("Couldn't finish setup — please try again");
-        return;
-      }
-      navigate(afterSetupTarget(), { replace: true });
-    } finally {
-      setFinishing(false);
-    }
-  };
-
-  const selectedCount = () =>
-    stagedSelection(importQuery.data?.entities, skippedSources).importIds
-      .length;
 
   return (
     // Same chrome as fullscreen settings: the left rail sits directly on the
@@ -208,20 +98,20 @@ function SetupPageContent() {
           <Button
             variant="active"
             depth={3}
-            disabled={finishing()}
-            onClick={() => void finish(false)}
+            disabled={setupFinish.finishing()}
+            onClick={() => void setupFinish.finish(false)}
           >
-            {finishing()
+            {setupFinish.finishing()
               ? 'Setting up your workspace…'
-              : selectedCount() > 0
-                ? `Import ${selectedCount()} & continue`
+              : setupFinish.selectedCount() > 0
+                ? `Import ${setupFinish.selectedCount()} & continue`
                 : 'Continue to Macro'}
           </Button>
           <button
             type="button"
             class="text-xs text-ink-extra-muted transition-colors hover:text-ink-muted"
-            disabled={finishing()}
-            onClick={() => void finish(true)}
+            disabled={setupFinish.finishing()}
+            onClick={() => void setupFinish.finish(true)}
           >
             Set up later
           </button>
