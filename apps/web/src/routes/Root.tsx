@@ -35,6 +35,7 @@ import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ENABLE_NEW_ONBOARDING } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -46,7 +47,6 @@ import {
 } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
-import { ENABLE_NEW_ONBOARDING } from '@core/constant/featureFlags';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';

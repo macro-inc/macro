@@ -906,7 +906,9 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             team_id,
             // The creator is always included (the service requires a
             // non-empty participant list and the repo filters out the
-            // owner), plus any teammates matched by email above.
+            // owner), plus any teammates matched by email above. Explicit
+            // membership mirrors the source channel — never the whole team.
+            auto_join_team: false,
             participants,
         };
         let response = self
