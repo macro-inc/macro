@@ -1,9 +1,52 @@
 //! Kafka adapter for the [`EventConsumer`] port.
 
-use kafka_util::KafkaEventConsumer;
+use std::{marker::PhantomData, time::Duration};
+
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, Ungrouped};
 use rdkafka::message::{BorrowedMessage, Message as _};
 
 use crate::{EventConsumer, MacroEventCollection, MessageWrapper};
+
+pub struct KafkaConsumerAdapter<T, M> {
+    inner: KafkaEventConsumer<T>,
+    topics: PhantomData<M>,
+}
+
+impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
+    pub fn new(
+        consumer: KafkaEventConsumer<Ungrouped>,
+        initial_offset: InitialOffset,
+        metadata_timeout: Duration,
+    ) -> Result<Self, rootcause::Report> {
+        consumer.assign_topics(M::topics(), initial_offset, metadata_timeout)?;
+        Ok(KafkaConsumerAdapter {
+            inner: consumer,
+            topics: PhantomData,
+        })
+    }
+}
+
+impl<T: GroupName> KafkaConsumerAdapter<T, ()> {
+    pub fn new(consumer: KafkaEventConsumer<T>) -> Self {
+        KafkaConsumerAdapter {
+            inner: consumer,
+            topics: PhantomData,
+        }
+    }
+}
+
+impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
+    pub fn subscribe<M2: MacroEventCollection>(
+        self,
+    ) -> Result<KafkaConsumerAdapter<T, M2>, rootcause::Report> {
+        let KafkaConsumerAdapter { inner, topics } = self;
+        inner.subscribe(M2::topics())?;
+        Ok(KafkaConsumerAdapter {
+            inner,
+            topics: PhantomData,
+        })
+    }
+}
 
 impl<T, M> EventConsumer<M> for KafkaEventConsumer<T>
 where
