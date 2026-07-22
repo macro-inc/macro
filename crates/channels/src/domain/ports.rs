@@ -6,13 +6,13 @@ use crate::domain::models::{
     BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
     ChannelJoinCodeResponse, ChannelMessageFilters, ChannelMetadata, ChannelParticipant,
     ChannelPreview, ChannelPreviewRow, CountedReaction, CreateChannelRequest,
-    CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery, EntityMention,
-    GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment,
-    MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-    PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-    PostReactionRequest, PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest,
-    ResolvedChannelMessage, Sender, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow,
-    TopLevelMessageRow,
+    CreateChannelResponse, CreateEntityMentionOptions, CreatedChannel, DeleteMessageQuery,
+    EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+    MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+    NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
+    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
+    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -266,13 +266,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Create a channel.
+    /// Create a channel and return its complete active participant set.
     fn create_channel<'a>(
         &self,
         owner_id: MacroUserIdStr<'a>,
         org_id: Option<i64>,
         req: CreateChannelRequest,
-    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreatedChannel, Self::Err>> + Send;
 
     /// Add or reactivate a user in every auto-join channel for a team.
     fn auto_join_by_team_id<'a>(

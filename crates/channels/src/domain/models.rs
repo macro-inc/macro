@@ -709,6 +709,15 @@ pub struct CreateChannelRequest {
     pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
+/// Persisted channel data returned by channel creation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedChannel {
+    /// Created channel id.
+    pub id: Uuid,
+    /// All active user participants added during creation.
+    pub participant_user_ids: Vec<MacroUserIdStr<'static>>,
+}
+
 /// Response containing a channel's reusable join code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
