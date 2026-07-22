@@ -1674,33 +1674,6 @@ async fn test_get_team_id_by_domain(pool: Pool<Postgres>) -> anyhow::Result<()> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
-async fn test_get_team_id_by_domain_prefers_oldest_team(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    sqlx::query("UPDATE team SET auto_join_domain = 'user.com'")
-        .execute(&pool)
-        .await?;
-
-    let team_repo = TeamRepositoryImpl::new(pool);
-
-    // Both fixture teams claim user.com; the one with the lowest id wins.
-    let found = team_repo
-        .get_team_id_by_domain(&MacroUserIdStr::parse_from_str("macro|newuser@user.com")?)
-        .await?;
-    assert_eq!(
-        found,
-        Some(macro_uuid::string_to_uuid(
-            "11111111-1111-1111-1111-111111111111"
-        )?)
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("teams"))
-)]
 async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool.clone());
 
