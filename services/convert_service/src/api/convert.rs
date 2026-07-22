@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use macro_authorization::InternalMacroAuthorizationExtractor;
+use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::{
     convert::ConvertRequest,
     document::FileType,
@@ -45,7 +45,7 @@ use super::context::{ApiContext, AuthorizationService};
 #[tracing::instrument(skip(ctx, _internal_authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    _internal_authorization: InternalMacroAuthorizationExtractor<AuthorizationService>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<ConvertRequest>,
 ) -> Result<Response, Response> {
     let job_id = macro_uuid::generate_uuid_v7().to_string();
