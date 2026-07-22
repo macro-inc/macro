@@ -29,7 +29,9 @@ pub use domain::service::{
     MacroEventBrokerService, MacroEventConsumerService, NoopMacroEventBroker,
 };
 #[cfg(feature = "outbound")]
-pub use outbound::kafka_event_publisher::KafkaEventPublisher;
+pub use outbound::{
+    kafka_event_consumer::KafkaConsumerAdapter, kafka_event_publisher::KafkaEventPublisher,
+};
 
 /// Outbound adapters for the macro event broker's required ports.
 #[cfg(feature = "outbound")]

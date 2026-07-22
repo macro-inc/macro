@@ -15,7 +15,7 @@ use crate::{EventConsumer, MacroEventCollection, MessageWrapper};
 /// configured topic set remains visible in the adapter's type.
 pub struct KafkaConsumerAdapter<T, M> {
     inner: KafkaEventConsumer<T>,
-    topics: PhantomData<M>,
+    topics: PhantomData<fn() -> M>,
 }
 
 impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
@@ -65,7 +65,7 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
     }
 }
 
-impl<T, M> EventConsumer<M> for KafkaEventConsumer<T>
+impl<T, M> EventConsumer<M> for KafkaConsumerAdapter<T, M>
 where
     T: Send + Sync + 'static,
     M: MacroEventCollection + 'static,
@@ -75,7 +75,7 @@ where
     async fn recv<'a>(
         &'a self,
     ) -> Result<MessageWrapper<Self::MessageType<'a>, M>, rootcause::Report> {
-        let message = KafkaEventConsumer::recv(self).await?;
+        let message = self.inner.recv().await?;
 
         tracing::trace!(
             topic = message.topic(),

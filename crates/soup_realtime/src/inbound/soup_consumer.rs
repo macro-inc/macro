@@ -10,7 +10,9 @@ mod test;
 use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{MacroEvent, MacroEventCollection, MacroEventConsumerService};
+use macro_event_broker::{
+    KafkaConsumerAdapter, MacroEvent, MacroEventCollection, MacroEventConsumerService,
+};
 #[cfg(test)]
 use macro_event_broker::{MessageParts, MessageWrapper};
 use rootcause::prelude::{Report, ResultExt as _};
@@ -20,59 +22,10 @@ use crate::domain::models::{SoupMacroEvent, SoupRealtimeMessage};
 /// Maximum time to wait for Soup topic metadata during partition assignment.
 const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 
-type IndependentKafkaConsumer = KafkaEventConsumer<Ungrouped>;
+type IndependentKafkaConsumer = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent>;
 type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
 macro_event_broker::declare_topics!(SoupMacroEvent);
-
-#[cfg(test)]
-struct TestMessage<'a> {
-    topic: &'a str,
-    key: &'a str,
-    payload: &'a [u8],
-}
-
-#[cfg(test)]
-impl MessageParts for TestMessage<'_> {
-    fn key(&self) -> Option<&str> {
-        Some(self.key)
-    }
-
-    fn payload(&self) -> Option<&[u8]> {
-        Some(self.payload)
-    }
-
-    fn topic(&self) -> &str {
-        self.topic
-    }
-}
-
-fn into_message(event: DeclaredMacroEvent) -> Result<SoupRealtimeMessage, Report> {
-    let DeclaredMacroEvent::SoupMacroEvent(event) = event;
-    let event_key = event.key().to_string();
-    let message = event.into_message();
-    if event_key != message.user_id.as_ref() {
-        rootcause::bail!(
-            "realtime Soup event key {event_key} did not match payload recipient {}",
-            message.user_id
-        );
-    }
-
-    Ok(message)
-}
-
-#[cfg(test)]
-fn decode_message(topic: &str, key: &str, payload: &[u8]) -> Result<SoupRealtimeMessage, Report> {
-    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
-        topic,
-        key,
-        payload,
-    });
-    let event = message
-        .decode_payload()
-        .context("failed to decode Soup event")?;
-    into_message(event)
-}
 
 /// Independent consumer of recipient-targeted Soup messages.
 ///
@@ -88,15 +41,11 @@ impl SoupTopicConsumer {
     /// Creates a consumer and assigns every current Soup topic partition.
     #[tracing::instrument(fields(brokers), err)]
     pub fn from_env(brokers: &str) -> Result<Self, Report> {
-        let consumer = IndependentKafkaConsumer::from_env(brokers)
+        let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
             .context("failed to create independent realtime Soup consumer")?;
-        consumer
-            .assign_topics(
-                DeclaredMacroEvent::topics(),
-                InitialOffset::Latest,
-                TOPIC_METADATA_TIMEOUT,
-            )
-            .context("failed to assign realtime Soup topic partitions")?;
+        let consumer =
+            IndependentKafkaConsumer::new(consumer, InitialOffset::Latest, TOPIC_METADATA_TIMEOUT)
+                .context("failed to assign realtime Soup topic partitions")?;
 
         tracing::info!(
             topics = ?DeclaredMacroEvent::topics(),
@@ -113,13 +62,15 @@ impl SoupTopicConsumer {
     /// This operation is cancel-safe. Missing keys and malformed or unsupported
     /// payloads are returned as errors; because the consumer is ungrouped, a
     /// subsequent call proceeds to the next locally assigned record.
-    #[tracing::instrument(skip(self), err)]
     pub async fn recv(&self) -> Result<SoupRealtimeMessage, Report> {
         let event = self
             .consumer
             .recv()
             .await
             .context("failed to decode realtime Soup event")?;
-        into_message(event)
+
+        match event {
+            DeclaredMacroEvent::SoupMacroEvent(soup_macro_event) => todo!(),
+        }
     }
 }
