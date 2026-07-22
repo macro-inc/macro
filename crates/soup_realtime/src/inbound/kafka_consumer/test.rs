@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use documents::domain::events::{
     DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentUpdatedMetadata,
+    DocumentInteractionMetadata, DocumentUpdatedMetadata, InteractionReason,
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -77,6 +77,10 @@ fn ignored_events() -> Vec<DocumentTopicEvent> {
             project_id: None,
             sub_type: None,
         }),
+        DocumentTopicEvent::Interaction(DocumentInteractionMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            reason: InteractionReason::Edited,
+        }),
     ]
 }
 
@@ -131,7 +135,7 @@ async fn updated_payload_maps_to_document_entity() {
 }
 
 #[tokio::test]
-async fn created_deleted_and_copied_events_are_ignored() {
+async fn non_update_events_are_ignored() {
     let service = flaky_service(0);
     for event in ignored_events() {
         let event = DocumentMacroEvent::with_event(DOCUMENT_ID, Event::new(event));

@@ -56,6 +56,13 @@ fn entity_from_document_event(event: &DocumentMacroEvent) -> Option<Entity<'stat
             tracing::trace!(event_type = "document.copied", "ignoring document event");
             None
         }
+        DocumentTopicEvent::Interaction(_) => {
+            tracing::trace!(
+                event_type = "document.interaction",
+                "ignoring document event"
+            );
+            None
+        }
     }
 }
 
