@@ -7543,11 +7543,15 @@ dependencies = [
 name = "kafka_util"
 version = "0.1.0"
 dependencies = [
+ "aws-msk-iam-sasl-signer",
+ "aws-types",
  "either",
  "macro_env",
- "macro_event_broker",
+ "macro_env_var",
  "rdkafka",
  "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -8369,10 +8373,7 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
- "aws-msk-iam-sasl-signer",
- "aws-types",
- "macro_env",
- "macro_env_var",
+ "kafka_util",
  "macro_event_topics",
  "rdkafka",
  "rootcause",

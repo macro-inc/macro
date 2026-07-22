@@ -1,7 +1,7 @@
 #![deny(missing_docs)]
-//! Environment-aware Kafka consumer transport.
+//! Environment-aware Kafka producer and consumer transports.
 //!
-//! This adapter centralizes the repository's plaintext-local versus MSK-IAM
+//! These adapters centralize the repository's plaintext-local versus MSK-IAM
 //! transport setup. Application inbound adapters retain responsibility for
 //! decoding, retries, poison-message handling, and deciding when to commit.
 
@@ -16,12 +16,17 @@ use macro_env::Environment;
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, StreamConsumer};
 use rdkafka::error::{KafkaError, KafkaResult};
 use rdkafka::message::{BorrowedMessage, Message as _};
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::{ClientConfig, Offset, TopicPartitionList};
 use uuid::Uuid;
 
-use macro_event_broker::kafka::msk_iam::{MskIamClientContext, configure_sasl_iam};
+pub use msk_iam::{MskIamClientContext, configure_sasl_iam};
+
+mod msk_iam;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
+const MESSAGE_TIMEOUT_MS: &str = "5000";
+const SEND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Failure to construct an environment-specific Kafka consumer.
 #[derive(Debug, thiserror::Error)]
@@ -34,8 +39,23 @@ pub enum KafkaConsumerError {
     MskIam(#[source] KafkaError),
 }
 
+/// Failure to construct an environment-specific Kafka producer.
+#[derive(Debug, thiserror::Error)]
+pub enum KafkaProducerError {
+    /// Failed to create the unauthenticated local producer.
+    #[error("failed to create plaintext Kafka producer")]
+    Plaintext(#[source] KafkaError),
+    /// Failed to create the TLS and MSK-IAM authenticated producer.
+    #[error("failed to create MSK IAM Kafka producer")]
+    MskIam(#[source] KafkaError),
+}
+
 /// Underlying Kafka consumer transport selected from the runtime environment.
 struct ConsumerTransport(Either<StreamConsumer, StreamConsumer<MskIamClientContext>>);
+
+/// Underlying Kafka producer transport selected from the runtime environment.
+#[derive(Clone)]
+struct ProducerTransport(Either<FutureProducer, FutureProducer<MskIamClientContext>>);
 
 /// Type-level name for a durable Kafka consumer group.
 ///
@@ -81,16 +101,32 @@ pub struct KafkaEventConsumer<T> {
     marker: PhantomData<T>,
 }
 
+/// Shared Kafka producer with environment-aware transport.
+#[derive(Clone)]
+pub struct KafkaEventProducer {
+    producer: ProducerTransport,
+}
+
 fn base_config(brokers: &str) -> ClientConfig {
     let mut config = ClientConfig::new();
+    config.set("bootstrap.servers", brokers);
     config
-        .set("bootstrap.servers", brokers)
-        .set("enable.auto.commit", "false");
+}
+
+fn consumer_config(brokers: &str) -> ClientConfig {
+    let mut config = base_config(brokers);
+    config.set("enable.auto.commit", "false");
+    config
+}
+
+fn producer_config(brokers: &str) -> ClientConfig {
+    let mut config = base_config(brokers);
+    config.set("message.timeout.ms", MESSAGE_TIMEOUT_MS);
     config
 }
 
 fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
-    let mut config = base_config(brokers);
+    let mut config = consumer_config(brokers);
     config
         .set("group.id", T::GROUP_NAME)
         .set("auto.offset.reset", "earliest");
@@ -98,7 +134,7 @@ fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
 }
 
 fn ungrouped_config(brokers: &str) -> ClientConfig {
-    let mut config = base_config(brokers);
+    let mut config = consumer_config(brokers);
     let group_id = format!("{UNGROUPED_GROUP_PREFIX}-{}", Uuid::new_v4());
     config
         .set("group.id", group_id)
@@ -106,7 +142,9 @@ fn ungrouped_config(brokers: &str) -> ClientConfig {
     config
 }
 
-fn create_from_env<T>(config: ClientConfig) -> Result<KafkaEventConsumer<T>, KafkaConsumerError> {
+fn create_consumer_from_env<T>(
+    config: ClientConfig,
+) -> Result<KafkaEventConsumer<T>, KafkaConsumerError> {
     let consumer = match Environment::new_or_prod() {
         Environment::Local => Either::Left(config.create().map_err(KafkaConsumerError::Plaintext)?),
         Environment::Develop | Environment::Production => {
@@ -122,6 +160,26 @@ fn create_from_env<T>(config: ClientConfig) -> Result<KafkaEventConsumer<T>, Kaf
     Ok(KafkaEventConsumer {
         consumer: ConsumerTransport(consumer),
         marker: PhantomData,
+    })
+}
+
+fn create_producer_from_env(
+    config: ClientConfig,
+) -> Result<KafkaEventProducer, KafkaProducerError> {
+    let producer = match Environment::new_or_prod() {
+        Environment::Local => Either::Left(config.create().map_err(KafkaProducerError::Plaintext)?),
+        Environment::Develop | Environment::Production => {
+            let config = configure_sasl_iam(config);
+            Either::Right(
+                config
+                    .create_with_context(MskIamClientContext::from_env())
+                    .map_err(KafkaProducerError::MskIam)?,
+            )
+        }
+    };
+
+    Ok(KafkaEventProducer {
+        producer: ProducerTransport(producer),
     })
 }
 
@@ -178,6 +236,25 @@ where
     Ok(assignment)
 }
 
+impl KafkaEventProducer {
+    /// Creates a producer, selecting plaintext or MSK IAM transport from the runtime environment.
+    ///
+    /// Producer creation is lazy: no broker connection or IAM token is created
+    /// until a message is sent.
+    pub fn from_env(brokers: &str) -> Result<Self, KafkaProducerError> {
+        create_producer_from_env(producer_config(brokers))
+    }
+
+    /// Sends a keyed payload to `topic` and waits for delivery confirmation.
+    #[tracing::instrument(err, skip(self, payload), fields(topic, key))]
+    pub async fn send(&self, topic: &str, key: &str, payload: &[u8]) -> KafkaResult<()> {
+        let record = FutureRecord::to(topic).key(key).payload(payload);
+        either::for_both!(&self.producer.0, producer => producer.send(record, SEND_TIMEOUT).await)
+            .map(|_| ())
+            .map_err(|(error, _)| error)
+    }
+}
+
 impl<T> KafkaEventConsumer<T> {
     /// Receives the next Kafka message.
     ///
@@ -202,7 +279,7 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     /// Creates a named-group consumer, selecting plaintext or MSK IAM transport
     /// from the runtime environment.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_from_env(grouped_config::<T>(brokers))
+        create_consumer_from_env(grouped_config::<T>(brokers))
     }
 
     /// Subscribes the consumer to exactly the provided topics.
@@ -226,7 +303,7 @@ impl KafkaEventConsumer<Ungrouped> {
     ///
     /// Call [`Self::assign_topics`] before receiving messages.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_from_env(ungrouped_config(brokers))
+        create_consumer_from_env(ungrouped_config(brokers))
     }
 
     /// Manually assigns every current partition of `topics` at `initial_offset`.

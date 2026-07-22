@@ -9,8 +9,8 @@ consumer = [
   "dep:documents",
   "dep:kafka_util",
   "dep:rdkafka",
-  "macro_event_broker/outbound",
   "dep:tokio",
+  "macro_event_broker/kafka",
   "ports",
 ]
 default = ["consumer", "outbound", "ports"]

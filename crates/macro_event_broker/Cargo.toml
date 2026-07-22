@@ -6,20 +6,11 @@ version = "0.1.0"
 
 [features]
 default = ["outbound"]
-kafka = [
-  "dep:aws-msk-iam-sasl-signer",
-  "dep:aws-types",
-  "dep:macro_env",
-  "dep:macro_env_var",
-  "dep:rdkafka",
-]
+kafka = ["dep:kafka_util", "dep:rdkafka"]
 outbound = ["kafka"]
 
 [dependencies]
-aws-msk-iam-sasl-signer = { workspace = true, optional = true }
-aws-types = { workspace = true, optional = true }
-macro_env = { path = "../macro_env", optional = true }
-macro_env_var = { path = "../macro_env_var", optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
 rootcause = { workspace = true }
 rdkafka = { workspace = true, optional = true }
 serde = { workspace = true }

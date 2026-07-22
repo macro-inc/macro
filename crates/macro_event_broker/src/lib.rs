@@ -9,8 +9,9 @@
 //! [`MacroEventBrokerService`](domain::service::MacroEventBrokerService), and the
 //! typed [`MacroEventConsumerService`](domain::service::MacroEventConsumerService),
 //! which receives messages through the [`EventConsumer`](domain::ports::EventConsumer) port.
-//! Kafka topic definitions live in the `macro_event_topics` crate.
-//! The [`outbound`] layer provides the Kafka publisher adapter.
+//! Kafka topic definitions live in the `macro_event_topics` crate. Shared Kafka
+//! producer and consumer transports live in `kafka_util`, while the [`outbound`]
+//! layer adapts its producer to [`EventPublisher`](domain::ports::EventPublisher).
 
 /// Domain layer: models, ports, and service.
 pub mod domain;
@@ -32,9 +33,9 @@ pub use kafka::msk_iam::MskIamClientContext;
 #[cfg(feature = "outbound")]
 pub use outbound::kafka_event_publisher::KafkaEventPublisher;
 
-/// Kafka transport support shared by inbound and outbound adapters.
+/// Kafka message integration and authentication support shared by adapters.
 #[cfg(feature = "kafka")]
 pub mod kafka;
-/// Outbound layer: Kafka publishing adapters.
+/// Outbound adapters for the macro event broker's required ports.
 #[cfg(feature = "outbound")]
 pub mod outbound;

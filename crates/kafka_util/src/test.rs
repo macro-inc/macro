@@ -7,6 +7,18 @@ impl GroupName for TestConsumerGroup {
 }
 
 #[test]
+fn producer_config_uses_brokers_and_message_timeout() {
+    let config = producer_config("broker-a:9092,broker-b:9092");
+
+    assert_eq!(
+        config.get("bootstrap.servers"),
+        Some("broker-a:9092,broker-b:9092")
+    );
+    assert_eq!(config.get("message.timeout.ms"), Some(MESSAGE_TIMEOUT_MS));
+    assert_eq!(config.get("enable.auto.commit"), None);
+}
+
+#[test]
 fn grouped_config_uses_named_group_manual_commits_and_earliest_offsets() {
     let config = grouped_config::<TestConsumerGroup>("broker-a:9092,broker-b:9092");
 
