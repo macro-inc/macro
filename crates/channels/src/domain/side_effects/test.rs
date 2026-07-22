@@ -1053,7 +1053,6 @@ impl MacroEventBroker for TestEventBroker {
         tokio::task::JoinHandle<Result<(), macro_event_broker::EventBrokerError>>,
         macro_event_broker::EventBrokerError,
     > {
-        use macro_event_topics::Topic as _;
         self.published.lock().unwrap().push(PublishedEvent {
             topic: event.topic().to_string(),
             key: event.key().to_string(),

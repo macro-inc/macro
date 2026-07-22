@@ -8,9 +8,7 @@ use crate::domain::{
     service::BotServiceImpl,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_event_broker::{
-    EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker, Topic as _,
-};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};

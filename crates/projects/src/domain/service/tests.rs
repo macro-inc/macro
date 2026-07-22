@@ -6,7 +6,7 @@ use entity_access::domain::models::{
 };
 use entity_access_management::domain::models::EntityAccessManagementError;
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentMetadata, FileType};
 use model::folder::{

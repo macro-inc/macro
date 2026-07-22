@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use macro_event_topics::Topic as _;
 use tracing::Instrument as _;
 
 use crate::domain::models::{EventBrokerError, MacroEvent, TopicEvent};

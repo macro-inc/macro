@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent};
-use macro_event_topics::Topic;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 use uuid::Uuid;
