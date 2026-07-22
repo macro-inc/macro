@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { TabsInset } from '@core/component/TabsInset';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -17,6 +18,13 @@ import { createMemo, createSignal, Show } from 'solid-js';
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
 const newChannelModalFocusLock = useFocusLock('create-channel');
 
+const CHANNEL_TYPE_TABS = [
+  { value: 'private', label: 'Private' },
+  { value: 'team', label: 'Team' },
+];
+
+type CreatableChannelType = 'private' | 'team';
+
 export function openNewChannelModal() {
   newChannelModalFocusLock.acquire();
   setNewChannelModalOpen(true);
@@ -29,6 +37,8 @@ export function CreateChannelModal() {
   const createChannelMutation = useCreateChannelMutation();
   const userTeamsQuery = useUserTeamsQuery();
   const [name, setName] = createSignal('');
+  const [channelType, setChannelType] =
+    createSignal<CreatableChannelType>('private');
   const [autoJoinTeam, setAutoJoinTeam] = createSignal(false);
   const [selectedRecipients, setSelectedRecipients] = createSignal<
     WithCustomUserInput<'user' | 'contact'>[]
@@ -42,6 +52,7 @@ export function CreateChannelModal() {
 
   function reset() {
     setName('');
+    setChannelType('private');
     setAutoJoinTeam(false);
     setSelectedRecipients([]);
     setError(undefined);
@@ -68,27 +79,28 @@ export function CreateChannelModal() {
 
     setError(undefined);
     const destination = getDestinationFromOptions(selectedRecipients());
-    const shouldAutoJoinTeam = autoJoinTeam();
+    const selectedChannelType = channelType();
+    const isTeamChannel = selectedChannelType === 'team';
     const selectedTeam = team();
-    if (shouldAutoJoinTeam && !selectedTeam) {
-      setError('Select a team to enable auto join');
+    if (isTeamChannel && !selectedTeam) {
+      setError('Select a team to create a team channel');
       return;
     }
 
     // Team channels currently require a non-empty participant list. The
     // repository filters out the owner after satisfying that validation.
     const participants =
-      shouldAutoJoinTeam && destination.users.length === 0 && userId()
+      isTeamChannel && destination.users.length === 0 && userId()
         ? [userId()!]
         : destination.users;
 
     try {
       const { id } = await createChannelMutation.mutateAsync({
-        channel_type: shouldAutoJoinTeam ? 'team' : 'private',
+        channel_type: selectedChannelType,
         name: trimmedName,
         participants,
-        team_id: shouldAutoJoinTeam ? selectedTeam?.id : undefined,
-        auto_join_team: shouldAutoJoinTeam,
+        team_id: isTeamChannel ? selectedTeam?.id : undefined,
+        auto_join_team: isTeamChannel && autoJoinTeam(),
       });
       resetAndClose();
       replaceOrInsertSplit({ type: 'channel', id });
@@ -108,6 +120,18 @@ export function CreateChannelModal() {
         <Panel.Body>
           <form class="flex flex-col gap-4 p-4" onSubmit={handleSubmit}>
             <div class="flex items-center gap-1">
+              <Show when={team()}>
+                <TabsInset
+                  depth={2}
+                  list={CHANNEL_TYPE_TABS}
+                  value={channelType()}
+                  onChange={(value) => {
+                    if (value !== 'private' && value !== 'team') return;
+                    setChannelType(value);
+                    setError(undefined);
+                  }}
+                />
+              </Show>
               <div class="flex-1" />
               <Dialog.CloseButton
                 as={Button}
@@ -175,7 +199,12 @@ export function CreateChannelModal() {
             </Show>
 
             <div class="flex shrink-0 items-center justify-end gap-3 px-2">
-              <Show when={team()}>
+              <Show when={channelType() === 'private'}>
+                <p class="mr-auto text-xs text-ink-extra-muted">
+                  Only people you invite can see this channel.
+                </p>
+              </Show>
+              <Show when={channelType() === 'team' && team()}>
                 <div class="mr-auto flex items-center gap-1.5">
                   <ToggleSwitch
                     labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
@@ -185,8 +214,12 @@ export function CreateChannelModal() {
                   />
                   <Tooltip
                     as="span"
-                    placement="top"
-                    label="New team members automatically join this channel."
+                    placement="bottom"
+                    label={
+                      autoJoinTeam()
+                        ? 'New team members will automatically join this channel.'
+                        : 'Team members can choose whether to join this channel.'
+                    }
                   >
                     <InfoIcon class="size-3.5 text-ink-extra-muted" />
                   </Tooltip>
