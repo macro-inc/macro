@@ -1,0 +1,178 @@
+use std::marker::PhantomData;
+
+use ::axum::{
+    extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
+    http::{HeaderMap, StatusCode, request::Parts},
+};
+use rootcause::Report;
+
+use crate::{
+    BotActingUserClaims, BotAuthentication, MacroAuthorizationError, MacroAuthorizationService,
+};
+
+use super::{MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection};
+
+/// Header carrying a bot authentication token.
+pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
+/// Header carrying the Macro user ID a bot claims to act for.
+pub const BOT_FOR_MACRO_USER_ID_HEADER: &str = "x-macro-bot-for-macro-user-id";
+/// Header carrying the FusionAuth user ID a bot claims to act for.
+pub const BOT_FOR_FUSIONAUTH_USER_ID_HEADER: &str = "x-macro-bot-for-fusionauth-user-id";
+/// Header carrying the organization ID a bot claims to act for.
+pub const BOT_FOR_ORGANIZATION_ID_HEADER: &str = "x-macro-bot-for-organization-id";
+
+/// Authorizes an exclusively bot-token endpoint.
+///
+/// Use this extractor only when bot-only access is part of the endpoint's
+/// security contract. User and internal credentials are not substitutes. The
+/// extractor validates only the bot credential, ignores other credential
+/// types, and carries the validated bot principal without retaining its token.
+#[non_exhaustive]
+pub struct BotMacroAuthorizationExtractor<Svc> {
+    /// The validated bot principal.
+    pub bot: BotAuthentication,
+    _service: PhantomData<fn() -> Svc>,
+}
+
+impl<Svc> Clone for BotMacroAuthorizationExtractor<Svc> {
+    fn clone(&self) -> Self {
+        Self {
+            bot: self.bot.clone(),
+            _service: PhantomData,
+        }
+    }
+}
+
+impl<S, Svc> FromRequestParts<S> for BotMacroAuthorizationExtractor<Svc>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = MacroAuthorizationRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let bot = authorize_optional_bot_request::<S, Svc>(parts, state)
+            .await?
+            .ok_or_else(|| rejection("unauthorized"))?;
+
+        Ok(Self {
+            bot,
+            _service: PhantomData,
+        })
+    }
+}
+
+impl<S, Svc> OptionalFromRequestParts<S> for BotMacroAuthorizationExtractor<Svc>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = MacroAuthorizationRejection;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let Some(bot) = authorize_optional_bot_request::<S, Svc>(parts, state).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self {
+            bot,
+            _service: PhantomData,
+        }))
+    }
+}
+
+pub(super) async fn authorize_optional_bot_request<S, Svc>(
+    parts: &Parts,
+    state: &S,
+) -> Result<Option<BotAuthentication>, MacroAuthorizationRejection>
+where
+    MacroAuthorizationState<Svc>: FromRef<S>,
+    Svc: MacroAuthorizationService,
+{
+    let Some(token) = bot_token(&parts.headers)? else {
+        return Ok(None);
+    };
+    let claims = bot_acting_user_claims(&parts.headers)?;
+    let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
+    let bot = authorization
+        .service
+        .authorize_bot(&token, claims)
+        .await
+        .map_err(bot_authorization_rejection)?;
+
+    Ok(Some(bot))
+}
+
+fn bot_token(headers: &HeaderMap) -> Result<Option<String>, MacroAuthorizationRejection> {
+    let Some(header) = headers.get(BOT_TOKEN_HEADER) else {
+        return Ok(None);
+    };
+    let token = header.to_str().map_err(|_| rejection("unauthorized"))?;
+    if token.trim().is_empty() {
+        return Err(rejection("unauthorized"));
+    }
+
+    Ok(Some(token.to_owned()))
+}
+
+fn bot_acting_user_claims(
+    headers: &HeaderMap,
+) -> Result<Option<BotActingUserClaims>, MacroAuthorizationRejection> {
+    let user_id = bot_claim_header(headers, BOT_FOR_MACRO_USER_ID_HEADER)?;
+    let fusion_user_id = bot_claim_header(headers, BOT_FOR_FUSIONAUTH_USER_ID_HEADER)?;
+    let organization_id = bot_claim_header(headers, BOT_FOR_ORGANIZATION_ID_HEADER)?
+        .map(|organization_id| organization_id.parse::<i32>())
+        .transpose()
+        .map_err(|_| invalid_bot_claims_rejection())?;
+
+    if user_id.is_none() && fusion_user_id.is_none() && organization_id.is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(BotActingUserClaims {
+        user_id,
+        fusion_user_id,
+        organization_id,
+    }))
+}
+
+fn bot_claim_header(
+    headers: &HeaderMap,
+    name: &'static str,
+) -> Result<Option<String>, MacroAuthorizationRejection> {
+    headers
+        .get(name)
+        .map(|header| {
+            header
+                .to_str()
+                .map(str::to_owned)
+                .map_err(|_| invalid_bot_claims_rejection())
+        })
+        .transpose()
+}
+
+fn invalid_bot_claims_rejection() -> MacroAuthorizationRejection {
+    status_rejection(StatusCode::BAD_REQUEST, "invalid bot claims")
+}
+
+fn bot_authorization_rejection(
+    error: Report<MacroAuthorizationError>,
+) -> MacroAuthorizationRejection {
+    let rejection = match error.current_context() {
+        MacroAuthorizationError::CredentialsExpired
+        | MacroAuthorizationError::InvalidCredentials => rejection("unauthorized"),
+        MacroAuthorizationError::ActingUserNotAuthorized => {
+            status_rejection(StatusCode::FORBIDDEN, "forbidden")
+        }
+        MacroAuthorizationError::Unavailable => {
+            status_rejection(StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+        }
+    };
+    tracing::error!(error=?error, "bot authorization failed");
+    rejection
+}

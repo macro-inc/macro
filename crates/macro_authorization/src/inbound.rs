@@ -12,4 +12,5 @@ pub use axum::{
     InternalMacroAuthorizationExtractor, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
     MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserMacroAuthorizationExtractor,
 };

@@ -19,7 +19,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::*;
-use crate::InternalIdentityClaims;
+use crate::{
+    BotActingUserClaims, BotAuthentication, InternalIdentityClaims, MacroAuthorization,
+    MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication,
+};
 
 const VALID_USER_ID: &str = "macro|valid@example.com";
 const COOKIE_USER_ID: &str = "macro|cookie@example.com";
@@ -221,6 +224,17 @@ async fn optional_handler(
     }))
 }
 
+async fn user_handler(
+    extractor: UserMacroAuthorizationExtractor<FakeAuthorizationService>,
+) -> Json<Value> {
+    let extractor = extractor.clone();
+
+    Json(json!({
+        "macro_user_id": extractor.user.macro_user_id.to_string(),
+        "user_context": extractor.user.user_context,
+    }))
+}
+
 async fn internal_handler(
     extractor: InternalMacroAuthorizationExtractor<FakeAuthorizationService>,
 ) -> Json<Value> {
@@ -265,6 +279,7 @@ fn test_router() -> (Router, FakeAuthorizationService) {
     let router = Router::new()
         .route("/required", get(required_handler))
         .route("/optional", get(optional_handler))
+        .route("/user", get(user_handler))
         .route("/internal", get(internal_handler))
         .route("/bot", get(bot_handler))
         .route("/optional-bot", get(optional_bot_handler))
@@ -345,6 +360,7 @@ fn state_and_extractors_are_clone_without_requiring_service_clone() {
     assert_clone_without_service_clone::<InternalMacroAuthorizationExtractor<NotClone>>();
     assert_clone_without_service_clone::<MacroAuthorizationExtractor<NotClone>>();
     assert_clone_without_service_clone::<OptionalMacroAuthorizationExtractor<NotClone>>();
+    assert_clone_without_service_clone::<UserMacroAuthorizationExtractor<NotClone>>();
 }
 
 #[allow(deprecated)]
@@ -458,6 +474,93 @@ async fn internal_standard_key_takes_precedence_over_legacy_key() {
             provided_key: "invalid-standard-key".to_string(),
             claims: InternalIdentityClaims::default(),
         }]
+    );
+}
+
+#[tokio::test]
+async fn user_accepts_query_bearer_and_cookie_credentials() {
+    let (router, service) = test_router();
+    let requests = [
+        (
+            empty_body(request("/user?macro-api-token=query")),
+            QUERY_USER_ID,
+        ),
+        (
+            empty_body(request("/user").header("authorization", "Bearer bearer")),
+            BEARER_USER_ID,
+        ),
+        (
+            empty_body(request("/user").header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie"))),
+            COOKIE_USER_ID,
+        ),
+    ];
+
+    for (request, expected_user_id) in requests {
+        let (status, body) = send(&router, request).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["macro_user_id"], expected_user_id);
+        assert_eq!(body["user_context"]["user_id"], expected_user_id);
+    }
+
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::Jwt("query".to_string()),
+            AuthorizationCall::Jwt("bearer".to_string()),
+            AuthorizationCall::Jwt("cookie".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn user_rejects_missing_and_invalid_user_credentials() {
+    let (router, service) = test_router();
+
+    let (status, body) = send(&router, empty_body(request("/user"))).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+
+    let (status, body) = send(
+        &router,
+        empty_body(request("/user").header("authorization", "Bearer expired")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "jwt expired" }));
+
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Jwt("expired".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn user_validates_only_user_credentials() {
+    let (router, service) = test_router();
+
+    let user_request = empty_body(
+        request("/user")
+            .header("authorization", "Bearer valid")
+            .header(BOT_TOKEN_HEADER, "bot-invalid")
+            .header(INTERNAL_API_KEY_HEADER, "invalid-internal"),
+    );
+    let (status, body) = send(&router, user_request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], VALID_USER_ID);
+
+    for request in [
+        empty_body(request("/user").header(BOT_TOKEN_HEADER, "bot-acting")),
+        empty_body(request("/user").header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)),
+    ] {
+        let (status, body) = send(&router, request).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body, json!({ "message": "unauthorized" }));
+    }
+
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Jwt("valid".to_string())]
     );
 }
 

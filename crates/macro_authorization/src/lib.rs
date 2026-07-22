@@ -10,7 +10,7 @@
 //!
 //! # Choosing an Axum extractor
 //!
-//! The `axum` feature provides four request extractors:
+//! The `axum` feature provides five request extractors:
 //!
 //! - [`MacroAuthorizationExtractor`] requires an acting user. It accepts user,
 //!   bot, or internal service credentials and exposes only the typed
@@ -19,6 +19,9 @@
 //! - [`OptionalMacroAuthorizationExtractor`] additionally supports anonymous,
 //!   identityless bot, and identityless internal callers. Its optional
 //!   [`MacroAuthorization`] distinguishes those security states.
+//! - [`UserMacroAuthorizationExtractor`] guards direct-user-only endpoints. It
+//!   validates only user query, bearer, or access-token cookie credentials and
+//!   carries the authenticated user.
 //! - [`InternalMacroAuthorizationExtractor`] guards internal-only endpoints. It
 //!   validates only an internal API key and exposes no user identity.
 //! - [`BotMacroAuthorizationExtractor`] guards bot-only endpoints. It validates
@@ -29,10 +32,10 @@
 //! with `400 Bad Request` rather than choosing a principal. Query and bearer
 //! credentials are one user type, while access-token cookies are ambient; an
 //! explicit credential wins over a cookie. Local-auth fallback and cookies are
-//! considered only when no explicit credential is present. Dedicated bot and
-//! internal extractors are exempt and never substitute another credential
-//! type. Use them only when that exclusive caller type is part of the
-//! endpoint's security contract.
+//! considered only when no explicit credential is present. Dedicated user,
+//! bot, and internal extractors are exempt and never substitute another
+//! credential type. Use them only when that exclusive caller type is part of
+//! the endpoint's security contract.
 //!
 //! These extractors authenticate the caller; they do not decide whether that
 //! caller may act on a particular entity. Entity authorization and business
@@ -71,6 +74,7 @@ pub use inbound::{
     InternalMacroAuthorizationExtractor, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
     MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    UserMacroAuthorizationExtractor,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
