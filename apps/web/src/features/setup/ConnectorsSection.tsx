@@ -39,6 +39,13 @@ function ConnectorRow(props: {
   const handleConnect = async () => {
     if (props.authenticated || busy()) return;
     setBusy(true);
+    // Open the popup synchronously, while the click's transient activation
+    // is still live — opening after the awaited mutations gets rejected by
+    // strict popup blockers. The OAuth URL is assigned once it's known;
+    // severing `opener` keeps the provider page from reaching back into
+    // the app (reverse tabnabbing).
+    const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
     try {
       if (!props.connected) {
         await addMutation.mutateAsync({
@@ -50,8 +57,15 @@ function ConnectorRow(props: {
         server_name: props.server.server_name,
         server_url: props.server.url,
       });
-      window.open(result.authorization_url, '_blank');
+      if (popup) {
+        popup.location.href = result.authorization_url;
+      } else {
+        // Popup was blocked outright — fall back to a plain open (may
+        // still be blocked, but nothing else to try).
+        window.open(result.authorization_url, '_blank', 'noopener,noreferrer');
+      }
     } catch {
+      popup?.close();
       toast.failure(`Failed to connect ${props.server.server_name}`);
     } finally {
       setBusy(false);

@@ -99,7 +99,7 @@ where
                 continue;
             }
             if let Err(e) = self.import.start_gather(user.clone(), source).await {
-                tracing::warn!(%user, source = source.as_ref(), error = ?e, "failed to start gather run");
+                tracing::warn!(source = source.as_ref(), error = ?e, "failed to start gather run");
             }
         }
     }
@@ -111,7 +111,7 @@ where
     S: McpServerStore,
     I: ImportService,
 {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn get_state(&self, user: MacroUserIdStr<'static>) -> Result<OnboardingState> {
         let row = self.repo.ensure_row(&user).await?;
         let connected_servers = self.connected_servers(&user).await?;
@@ -124,7 +124,7 @@ where
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn reconcile(&self, user: MacroUserIdStr<'static>) -> Result<()> {
         // get_row, NOT ensure_row: this runs from the generic MCP post-auth
         // hook, and a user connecting a server outside onboarding must not
@@ -133,6 +133,17 @@ where
             return Ok(());
         };
         if row.status != OnboardingStatus::Active {
+            // Self-heal the completion race: a reconcile (or a gather
+            // session it started) can outlive complete()'s cleanup and
+            // stage rows after it ran. Any later tick for a finished flow
+            // sweeps those leftovers, best-effort.
+            let _ = self
+                .import
+                .delete_staged_by_initiator(user, Initiator::Onboarding)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error = ?e, "failed to sweep post-completion staged rows");
+                });
             return Ok(());
         }
         let servers = self.connected_servers(&user).await?;
@@ -140,7 +151,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn complete(
         &self,
         user: MacroUserIdStr<'static>,
@@ -152,10 +163,16 @@ where
         // re-staging forever, which is wrong for items they never looked at
         // ("Set up later" skips the whole review). Explicit declines (a
         // section toggled off) were already discarded by run_import.
-        // Chat-staged rows are untouched.
-        self.import
+        // Chat-staged rows are untouched. Best-effort: the completion above
+        // is durable, so a cleanup failure must not fail the call — the
+        // next reconcile tick sweeps leftovers anyway.
+        let _ = self
+            .import
             .delete_staged_by_initiator(user, Initiator::Onboarding)
-            .await?;
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(error = ?e, "failed to delete leftover onboarding-staged candidates");
+            });
         Ok(row)
     }
 }

@@ -78,6 +78,20 @@ function invalidateImportState() {
 }
 
 /**
+ * Imperatively fetch the import aggregate through the shared cache — for
+ * non-component polling loops (the setup finish hold). Keeps every read on
+ * the TanStack path so concurrent `useImportQuery` subscribers see the same
+ * data.
+ */
+export function fetchImportState(): Promise<ImportState> {
+  return queryClient.fetchQuery({
+    queryKey: KEYS.state,
+    queryFn: async () => throwOnErr(() => importClient.getState()),
+    staleTime: 0,
+  });
+}
+
+/**
  * Accept and/or decline staged rows. The server flips accepted rows to
  * `importing` and returns immediately; completion arrives via
  * `import_updated` pushes and polling.

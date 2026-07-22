@@ -314,7 +314,7 @@ where
                         .await
                 }
                 Err(e) => {
-                    tracing::warn!(%user, source = source.as_ref(), error = ?e, "gather session failed");
+                    tracing::warn!(source = source.as_ref(), error = ?e, "gather session failed");
                     service
                         .repo
                         .finish_run(&user, source, RunStatus::Failed, Some(&e.to_string()))
@@ -322,7 +322,7 @@ where
                 }
             };
             if let Err(e) = finished {
-                tracing::error!(%user, source = source.as_ref(), error = ?e, "failed to persist gather outcome");
+                tracing::error!(source = source.as_ref(), error = ?e, "failed to persist gather outcome");
             }
             service.notify(&user).await;
         });
@@ -331,7 +331,7 @@ where
     /// Run one gather session: connector MCP tools plus the locked
     /// `CreateImportEntity`. Staged rows land as the session runs; the final
     /// text is ignored.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn run_gather_session(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -362,7 +362,7 @@ where
     /// finalize. The fallback Haiku session exists for pages this can't
     /// handle — routing page content through a model means re-emitting the
     /// whole page as output tokens, which is an order of magnitude slower.
-    #[tracing::instrument(skip(self, mcp_tools, row), fields(id = %row.id), err)]
+    #[tracing::instrument(skip(self, user, mcp_tools, row), fields(id = %row.id), err)]
     async fn import_notion_page_direct(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -417,7 +417,7 @@ where
 
     /// Fallback: run a single-page Haiku session over the shared connector
     /// tools. Rows the agent fails to finalize are handled by the caller.
-    #[tracing::instrument(skip(self, mcp_tools, rows), fields(pages = rows.len()), err)]
+    #[tracing::instrument(skip(self, user, mcp_tools, rows), fields(pages = rows.len()), err)]
     async fn run_notion_import_session(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -553,13 +553,23 @@ where
         };
 
         let persisted = match created {
-            Ok((entity_id, team_id)) => self
+            Ok((entity_id, team_id)) => match self
                 .repo
                 .mark_imported(user, row.id, &entity_id, row.source.entity_type(), team_id)
                 .await
-                .map(|_| ()),
+            {
+                Ok(Some(_)) => Ok(()),
+                // The CAS missed: the entity exists but the row left
+                // `importing` under us (reaped, or another mover). Surface
+                // it loudly — re-accepting the row would duplicate the
+                // entity — matching finalize_document's behavior.
+                Ok(None) => Err(ImportError::Other(anyhow::anyhow!(
+                    "created entity {entity_id} but row was no longer importing; possible orphan"
+                ))),
+                Err(e) => Err(e),
+            },
             Err(e) => {
-                tracing::warn!(%user, id = %row.id, source = row.source.as_ref(), error = ?e, "deterministic import failed");
+                tracing::warn!(id = %row.id, source = row.source.as_ref(), error = ?e, "deterministic import failed");
                 self.repo
                     .mark_import_failed(user, row.id, &e.to_string())
                     .await
@@ -567,7 +577,7 @@ where
             }
         };
         if let Err(e) = persisted {
-            tracing::error!(%user, id = %row.id, error = ?e, "failed to persist import outcome");
+            tracing::error!(id = %row.id, error = ?e, "failed to persist import outcome");
         }
         self.notify(user).await;
     }
@@ -579,12 +589,12 @@ where
             match self.repo.get(user, *id).await {
                 Ok(Some(row)) if row.status == ImportStatus::Importing => {
                     if let Err(e) = self.repo.mark_import_failed(user, *id, reason).await {
-                        tracing::error!(%user, id = %id, error = ?e, "failed to mark unfinished import");
+                        tracing::error!(id = %id, error = ?e, "failed to mark unfinished import");
                     }
                 }
                 Ok(_) => {}
                 Err(e) => {
-                    tracing::error!(%user, id = %id, error = ?e, "failed to check unfinished import")
+                    tracing::error!(id = %id, error = ?e, "failed to check unfinished import")
                 }
             }
         }
@@ -597,7 +607,7 @@ where
     S: McpServerStore,
     C: EntityCreator,
 {
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn state(&self, user: MacroUserIdStr<'static>) -> Result<ImportState> {
         // Self-heal on read: import jobs are in-process tasks, so a service
         // restart mid-job orphans its `importing` rows — nothing else would
@@ -611,10 +621,10 @@ where
         {
             Ok(0) => {}
             Ok(reaped) => {
-                tracing::warn!(%user, reaped, "reaped orphaned importing rows")
+                tracing::warn!(reaped, "reaped orphaned importing rows")
             }
             // A read must never fail because the reap did.
-            Err(e) => tracing::warn!(%user, error = ?e, "failed to reap stale imports"),
+            Err(e) => tracing::warn!(error = ?e, "failed to reap stale imports"),
         }
 
         let runs = self.repo.list_runs(&user).await?;
@@ -622,7 +632,7 @@ where
         Ok(ImportState { runs, entities })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn start_gather(
         &self,
         user: MacroUserIdStr<'static>,
@@ -638,7 +648,7 @@ where
         Ok(won)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn retry_gather(
         &self,
         user: MacroUserIdStr<'static>,
@@ -655,7 +665,7 @@ where
         Ok(won)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn dismiss_run(&self, user: MacroUserIdStr<'static>, source: ImportSource) -> Result<()> {
         self.repo
             .transition_run(
@@ -668,7 +678,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, import_ids, discard_ids), fields(imports = import_ids.len(), discards = discard_ids.len()), err)]
+    #[tracing::instrument(skip(self, user, import_ids, discard_ids), fields(imports = import_ids.len(), discards = discard_ids.len()), err)]
     async fn run_import(
         &self,
         user: MacroUserIdStr<'static>,
@@ -710,7 +720,7 @@ where
                         loop {
                             tokio::time::sleep(IMPORT_HEARTBEAT).await;
                             if let Err(e) = service.repo.touch_importing(&user, &ids).await {
-                                tracing::warn!(%user, error = ?e, "import heartbeat failed");
+                                tracing::warn!(error = ?e, "import heartbeat failed");
                             }
                         }
                     }
@@ -730,7 +740,7 @@ where
                     {
                         Ok(tools) => tools,
                         Err(e) => {
-                            tracing::warn!(%user, error = ?e, "notion connector unavailable");
+                            tracing::warn!(error = ?e, "notion connector unavailable");
                             let ids: Vec<Uuid> = notion_rows.iter().map(|r| r.id).collect();
                             service
                                 .fail_unfinished(&user, &ids, &format!("notion unavailable: {e}"))
@@ -755,7 +765,7 @@ where
                                         {
                                             Ok(()) => Ok(()),
                                             Err(direct_error) => {
-                                                tracing::info!(%user, id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
+                                                tracing::info!(id = %row.id, error = ?direct_error, "direct notion import failed; trying the agent");
                                                 service
                                                     .run_notion_import_session(
                                                         &user,
@@ -772,7 +782,7 @@ where
                                     Err(anyhow::anyhow!("notion import timed out"))
                                 });
                                 if let Err(e) = outcome {
-                                    tracing::warn!(%user, id = %row.id, error = ?e, "notion page import failed");
+                                    tracing::warn!(id = %row.id, error = ?e, "notion page import failed");
                                 }
                                 service
                                     .fail_unfinished(
@@ -795,7 +805,7 @@ where
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn discard_staged_by_initiator(
         &self,
         user: MacroUserIdStr<'static>,
@@ -811,7 +821,7 @@ where
         Ok(discarded)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn delete_staged_by_initiator(
         &self,
         user: MacroUserIdStr<'static>,
@@ -834,7 +844,7 @@ where
     S: McpServerStore,
     C: EntityCreator,
 {
-    #[tracing::instrument(skip(self, metadata), err)]
+    #[tracing::instrument(skip(self, user, metadata), err)]
     async fn stage(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -907,7 +917,7 @@ where
         }
     }
 
-    #[tracing::instrument(skip(self, metadata), err)]
+    #[tracing::instrument(skip(self, user, metadata), err)]
     async fn record_imported(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -945,7 +955,7 @@ where
         Ok(row)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn discard_entity(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -977,7 +987,7 @@ where
     S: McpServerStore,
     C: EntityCreator,
 {
-    #[tracing::instrument(skip(self, content_markdown), err)]
+    #[tracing::instrument(skip(self, user, content_markdown), err)]
     async fn finalize_document(
         &self,
         user: &MacroUserIdStr<'static>,

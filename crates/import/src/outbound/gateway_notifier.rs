@@ -25,7 +25,7 @@ pub fn gateway_import_notify(gateway: Arc<ConnectionGatewayClient>) -> ImportNot
                 .send_message(entity, IMPORT_UPDATED_MESSAGE_TYPE.to_string(), payload)
                 .await
             {
-                tracing::warn!(%user, error = ?e, "failed to push import update");
+                tracing::warn!(error = ?e, "failed to push import update");
             }
         })
     })

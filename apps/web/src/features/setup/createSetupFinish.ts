@@ -3,9 +3,12 @@ import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { type ImportEntity, useRunImportMutation } from '@queries/import';
+import {
+  fetchImportState,
+  type ImportEntity,
+  useRunImportMutation,
+} from '@queries/import';
 import { useCompleteOnboardingMutation } from '@queries/onboarding';
-import { importClient } from '@service-cognition/import';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { type SkippedSources, stagedSelection } from './selection';
@@ -73,8 +76,12 @@ export function createSetupFinish(options: {
     const accepted = new Set(importIds);
     const deadline = Date.now() + FINISH_IMPORT_WAIT_MS;
     while (Date.now() < deadline) {
-      const state = await importClient.getState();
-      const entities = state.isOk() ? state.value.entities : undefined;
+      // Through the shared cache, so concurrent subscribers stay in sync;
+      // a single failed poll is not fatal (the next tick retries).
+      const entities = await fetchImportState().then(
+        (state) => state.entities,
+        () => undefined
+      );
       if (entities) {
         const inFlight = entities.some(
           (entity) => accepted.has(entity.id) && entity.status === 'importing'
@@ -99,9 +106,18 @@ export function createSetupFinish(options: {
     setFinishing(true);
     try {
       if (!skipped) {
-        const failed = await runSelectedImports().catch(() => 0);
-        if (failed > 0) {
-          toast.failure(`${failed} items failed to import`);
+        // A hard failure here means the import request never took: don't
+        // complete onboarding over the user's dropped selection. (A settle
+        // timeout is different — runSelectedImports resolves 0 for it and
+        // the imports keep landing server-side.)
+        try {
+          const failed = await runSelectedImports();
+          if (failed > 0) {
+            toast.failure(`${failed} items failed to import`);
+          }
+        } catch {
+          toast.failure('Importing failed — please try again');
+          return;
         }
       }
       await Promise.allSettled([
