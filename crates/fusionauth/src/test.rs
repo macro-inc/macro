@@ -19,9 +19,22 @@ fn test_transform_local_fusionauth_url() {
 }
 
 #[test]
-fn named_instance_fusionauth_urls_are_local() {
-    assert!(is_local_fusionauth("http://localhost:28005"));
-    assert!(is_local_fusionauth("http://127.0.0.1:28005"));
-    assert!(is_local_fusionauth("http://[::1]:28005"));
-    assert!(!is_local_fusionauth("https://fusionauth-dev.macro.com"));
+fn named_instance_ports_are_not_inferred_as_fusionauth() {
+    assert!(is_default_local_fusionauth("http://fusionauth:9011"));
+    assert!(is_default_local_fusionauth("http://localhost:9011"));
+
+    assert!(!is_default_local_fusionauth("http://localhost:28005"));
+    assert!(!is_default_local_fusionauth("http://localhost:28006"));
+    assert!(!is_default_local_fusionauth("http://localhost:28008"));
+    assert!(!is_default_local_fusionauth("http://localhost:28009"));
+    assert!(!is_default_local_fusionauth("http://localhost:28010"));
+}
+
+#[test]
+fn tenant_header_is_explicitly_configurable() {
+    let without_tenant = auth_headers("api-key".into(), "tenant-id".into(), false);
+    assert!(!without_tenant.contains_key(FUSIONAUTH_TENANT_ID_HEADER));
+
+    let with_tenant = auth_headers("api-key".into(), "tenant-id".into(), true);
+    assert_eq!(with_tenant[FUSIONAUTH_TENANT_ID_HEADER], "tenant-id");
 }
