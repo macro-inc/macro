@@ -35,7 +35,7 @@ import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_NEW_ONBOARDING } from '@core/constant/featureFlags';
+import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -435,7 +435,7 @@ const ROUTES: RouteDefinition[] = [
     // direct /setup visit must not touch the onboarding backend (reading
     // it creates the flow's row and starts gathers).
     component: () =>
-      !ENABLE_NEW_ONBOARDING ? (
+      !ENABLE_NEW_ONBOARDING_V3 ? (
         <Navigate href="/" />
       ) : isNativeMobilePlatform() ? (
         <Navigate href="/onboarding" />
@@ -568,7 +568,7 @@ function InitialInteractiveOnboardingModal() {
     open() &&
     // The new split-screen onboarding replaces this modal on desktop; the
     // Layout redirect sends first-time users to /setup instead.
-    (!ENABLE_NEW_ONBOARDING || isMobile()) &&
+    (!ENABLE_NEW_ONBOARDING_V3 || isMobile()) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());

@@ -45,7 +45,7 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import { ENABLE_NEW_ONBOARDING } from '@core/constant/featureFlags';
+import { ENABLE_NEW_ONBOARDING_V3 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -294,7 +294,7 @@ function NewOnboardingRedirect() {
   const location = useLocation();
 
   createEffect(() => {
-    if (!ENABLE_NEW_ONBOARDING || isMobile() || isNativeMobilePlatform()) {
+    if (!ENABLE_NEW_ONBOARDING_V3 || isMobile() || isNativeMobilePlatform()) {
       return;
     }
     const data = userInfoQuery.data;

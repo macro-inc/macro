@@ -556,8 +556,8 @@ export const BOT_MANAGEMENT_OVERRIDE =
 
 // New split-screen onboarding (/setup): connect tools on the left, pick
 // what to import on the right. Dev-mode default; override with
-// VITE_ENABLE_NEW_ONBOARDING.
-export const ENABLE_NEW_ONBOARDING = resolveFeatureFlag(
-  'ENABLE_NEW_ONBOARDING',
+// VITE_ENABLE_NEW_ONBOARDING_V3.
+export const ENABLE_NEW_ONBOARDING_V3 = resolveFeatureFlag(
+  'ENABLE_NEW_ONBOARDING_V3',
   DEV_MODE_ENV
 );
