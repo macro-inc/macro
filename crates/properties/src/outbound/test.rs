@@ -1148,14 +1148,19 @@ async fn cross_entity_bulk_update_concurrent_no_lost_update(
     Ok(())
 }
 
-/// Best-effort across entities against the live DB: a batch mixing a valid
-/// entity with one that violates a foreign key still applies the valid entity
-/// and reports the other as failed, rather than aborting the whole batch.
+/// The cross-entity path applies the shared delta and persists it against the
+/// live DB for a permitted entity. Per-entity failures can't be provoked here:
+/// `entity_properties.entity_id` carries no existence/foreign-key constraint (the
+/// entity lives in another database), and the one real FK — `property_definition_id`
+/// — is shared, so violating it fails the whole call up front (covered by
+/// `bulk_update_options_partial_failure_rolls_back`). Best-effort continuation
+/// past a per-entity failure is covered at the service level by
+/// `crate::domain::test::test_bulk_update_entities_is_best_effort_on_per_entity_write_failure`.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties_seed"))
 )]
-async fn cross_entity_bulk_update_is_best_effort_across_entities(
+async fn cross_entity_bulk_update_applies_and_persists_via_live_db(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let def_id = seed_multi_select_definition(&pool, "Cross Entity Best Effort").await;
