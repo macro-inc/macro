@@ -164,6 +164,7 @@ export default defineConfig({
           include: [
             'src/components/**/*.{test,spec}.{ts,tsx}',
             'src/features/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/analytics/**/*.{test,spec}.{ts,tsx}',
             'src/routes/**/*.{test,spec}.{ts,tsx}',
           ],
           name: 'app',

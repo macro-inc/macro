@@ -495,6 +495,7 @@ function UserInfoSideEffects() {
   systemThemeEffect();
 
   let identified = false;
+  let syncedPlanKey: string | undefined;
   createEffect(
     on(userInfo, (user) => {
       // Keep Datadog log user context in sync with auth state: set on every
@@ -508,7 +509,10 @@ function UserInfoSideEffects() {
         clearDatadogUser();
       }
 
-      if (!user || !user.authenticated) return;
+      if (!user || !user.authenticated) {
+        syncedPlanKey = undefined;
+        return;
+      }
 
       if (!posthog.instance._isIdentified() && !identified) {
         identified = true;
@@ -520,6 +524,12 @@ function UserInfoSideEffects() {
           email: user.email,
           os,
         });
+      }
+
+      const planKey = `${user.id}:${user.licenseStatus}`;
+      if (syncedPlanKey !== planKey) {
+        syncedPlanKey = planKey;
+        analytics.setPlanProperties(user.licenseStatus);
       }
 
       // Fires sign_up + ad conversions once when the auth service flagged this
